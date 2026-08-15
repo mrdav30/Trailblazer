@@ -12,6 +12,17 @@ public static class PathTestFactory
 {
     private static int _generatedChartId;
 
+    public static NavigationAgentProfile DefaultNavigationProfile { get; } = new(
+        new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Quarter),
+        Fixed64.One,
+        Fixed64.One,
+        Fixed64.Half,
+        TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid,
+        TraversalCapability.Jump
+            | TraversalCapability.Climb
+            | TraversalCapability.Swim
+            | TraversalCapability.Fly);
+
     public static TrailblazerWorldContext CreateContextWithGrid()
     {
         return CreateContextWithGrid(
@@ -218,14 +229,6 @@ public static class PathTestFactory
             TraversalTransitionAnchor.Solid(RequireVoxel(context, source).WorldIndex),
             TraversalTransitionAnchor.Solid(RequireVoxel(context, destination).WorldIndex),
             pathCostModifier);
-    }
-
-    public static AStarPathRequest CreateAStarRequest(
-        TrailblazerWorldContext context,
-        Vector3d source,
-        Vector3d destination)
-    {
-        return TestRequire.NotNull(AStarPathRequest.Create(context, source, destination, Fixed64.One));
     }
 
     public static Voxel RequireVoxel(TrailblazerWorldContext context, Vector3d position)

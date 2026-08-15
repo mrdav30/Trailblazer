@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using System.Threading;
 using SwiftCollections;
 
@@ -101,13 +102,27 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
                 || WouldExceedRetiredCapacityAfterLease(Current))
                 return null;
             NavigationWorldGraph current = Current;
-            _activeLeaseCount++;
-            if (_leasePool.Count == 0)
-                return new NavigationWorldGraphLease(this, current);
-            NavigationWorldGraphLease lease = _leasePool[_leasePool.Count - 1];
-            _leasePool.RemoveAt(_leasePool.Count - 1);
-            lease.Reinitialize(this, current);
-            return lease;
+            return RentLeaseUnderLock(current);
+        }
+    }
+
+    internal int TryAcquirePrefix(Span<NavigationWorldGraphLease?> output)
+    {
+        lock (_sync)
+        {
+            output.Clear();
+            CollectReleased();
+            if (_disposed || _safetyPending || output.Length == 0)
+                return 0;
+            NavigationWorldGraph current = Current;
+            if (WouldExceedRetiredCapacityAfterLease(current))
+                return 0;
+            int count = System.Math.Min(
+                output.Length,
+                _maxConcurrentLeases - _activeLeaseCount);
+            for (int i = 0; i < count; i++)
+                output[i] = RentLeaseUnderLock(current);
+            return count;
         }
     }
 
@@ -197,6 +212,18 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
         }
         while (_retired.Count > destination)
             _retired.RemoveAt(_retired.Count - 1);
+    }
+
+    private NavigationWorldGraphLease RentLeaseUnderLock(
+        NavigationWorldGraph current)
+    {
+        _activeLeaseCount++;
+        if (_leasePool.Count == 0)
+            return new NavigationWorldGraphLease(this, current);
+        NavigationWorldGraphLease lease = _leasePool[_leasePool.Count - 1];
+        _leasePool.RemoveAt(_leasePool.Count - 1);
+        lease.Reinitialize(this, current);
+        return lease;
     }
 
     private bool WouldExceedRetiredCapacity(NavigationWorldGraph current)

@@ -72,6 +72,26 @@ public sealed class NavigationWorldGraphStoreTests
     }
 
     [Fact]
+    public void TryAcquirePrefix_ShouldReturnOneRootAndCapacitySuffix()
+    {
+        using var store = CreateStore(maxConcurrentLeases: 2);
+        var leases = new NavigationWorldGraphLease?[3];
+
+        store.TryAcquirePrefix(leases).Should().Be(2);
+        leases[0].Should().NotBeNull();
+        leases[1].Should().NotBeNull();
+        leases[2].Should().BeNull();
+        leases[0]!.Graph.Should().BeSameAs(leases[1]!.Graph);
+        store.ActiveLeaseCount.Should().Be(2);
+
+        leases[0]!.Dispose();
+        leases[1]!.Dispose();
+        store.ActiveLeaseCount.Should().Be(0);
+        using NavigationWorldGraphLease recovered = store.TryAcquire()!;
+        recovered.Should().NotBeNull();
+    }
+
+    [Fact]
     public void GraphAccounting_ShouldIncludeCatalogDirectoryMapIndexAndCompositionRoots()
     {
         NavigationAreaCatalog emptyCatalog = NavigationAreaCatalog.Empty;

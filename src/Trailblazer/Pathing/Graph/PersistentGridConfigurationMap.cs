@@ -40,6 +40,8 @@ internal sealed class PersistentGridConfigurationMap<T>
         return false;
     }
 
+    internal T GetValueAt(int ordinal) => GetNodeAt(ordinal).Value;
+
     internal PersistentGridConfigurationMap<T> Set(GridConfigurationKey key, T value) =>
         new(Set(_root, key, value));
 
@@ -196,7 +198,7 @@ internal sealed class PersistentGridConfigurationMap<T>
         if (value != 0) return value;
         value = left.BoundsMax.Z.CompareTo(right.BoundsMax.Z);
         if (value != 0) return value;
-        value = left.TopologyKind.CompareTo(right.TopologyKind);
+        value = ((int)left.TopologyKind).CompareTo((int)right.TopologyKind);
         if (value != 0) return value;
         value = left.TopologyMetrics.CellRadius.CompareTo(right.TopologyMetrics.CellRadius);
         if (value != 0) return value;
@@ -205,7 +207,10 @@ internal sealed class PersistentGridConfigurationMap<T>
         value = left.TopologyMetrics.LayerHeight.CompareTo(right.TopologyMetrics.LayerHeight);
         if (value != 0) return value;
         value = left.TopologyMetrics.CellLength.CompareTo(right.TopologyMetrics.CellLength);
-        return value != 0 ? value : left.TopologyMetrics.HexOrientation.CompareTo(right.TopologyMetrics.HexOrientation);
+        return value != 0
+            ? value
+            : ((int)left.TopologyMetrics.HexOrientation).CompareTo(
+                (int)right.TopologyMetrics.HexOrientation);
     }
 
     private static Node Balance(Node node)
@@ -307,6 +312,26 @@ internal sealed class PersistentGridConfigurationMap<T>
 
     private static int CountOf(Node? node) => node?.Count ?? 0;
     private static int HeightOf(Node? node) => node?.Height ?? 0;
+
+    private Node GetNodeAt(int ordinal)
+    {
+        if ((uint)ordinal >= (uint)Count)
+            throw new ArgumentOutOfRangeException(nameof(ordinal));
+        Node node = _root!;
+        while (true)
+        {
+            int leftCount = CountOf(node.Left);
+            if (ordinal < leftCount)
+            {
+                node = node.Left!;
+                continue;
+            }
+            if (ordinal == leftCount)
+                return node;
+            ordinal -= leftCount + 1;
+            node = node.Right!;
+        }
+    }
 
     private sealed class Node
     {

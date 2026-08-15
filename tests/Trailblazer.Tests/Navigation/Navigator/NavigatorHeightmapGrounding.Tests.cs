@@ -62,8 +62,10 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
     public void TryApplyHeightmapGrounding_SurfaceLevelAndPosition_ShouldProjectRootToGroundFootAndOffset()
     {
         RegisterSurface("Ground", height: 3, -Fixed64.One, (Fixed64)8);
-        HeightmapTestNavigator navigator = CreateNavigator(new Vector3d(0, 1, 0), surfaceLevel: Fixed64.Zero);
-        navigator.FootPositionAdjust = Fixed64.Half;
+        HeightmapTestNavigator navigator = CreateNavigator(
+            new Vector3d(0, 1, 0),
+            surfaceLevel: Fixed64.Zero,
+            rootToFootOffsetY: Fixed64.Half);
 
         navigator.ConfigureHeightmapGrounding(
             HeightmapGroundingMode.SurfaceLevelAndPosition,
@@ -83,7 +85,7 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         navigator.ApplyHeightmapGroundingAfterConfig(HeightmapGroundingMode.SurfaceLevelAndPosition)
             .Should().BeTrue();
 
-        Fixed64 expectedRootY = (Fixed64)5 + Navigator.DefaultFootPositionAdjust;
+        Fixed64 expectedRootY = (Fixed64)5 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY;
         navigator.Position.Y.Should().Be(expectedRootY);
         navigator.LastPosition.Y.Should().Be(expectedRootY);
     }
@@ -126,7 +128,10 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
     {
         RegisterSurface("Ground", height: 0, Fixed64.Zero, (Fixed64)5);
         RegisterSurface("Platform", height: 3, Fixed64.Zero, (Fixed64)5);
-        HeightmapTestNavigator navigator = CreateNavigator(new Vector3d(Fixed64.Zero, (Fixed64)3 + Navigator.DefaultFootPositionAdjust, Fixed64.Zero));
+        HeightmapTestNavigator navigator = CreateNavigator(new Vector3d(
+            Fixed64.Zero,
+            (Fixed64)3 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY,
+            Fixed64.Zero));
 
         navigator.ConfigureHeightmapGrounding(
             HeightmapGroundingMode.SurfaceLevelOnly,
@@ -146,7 +151,10 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
     {
         RegisterSurface("LowerPlatform", height: 1, Fixed64.Zero, (Fixed64)2, minBounds: Vector3d.Zero);
         RegisterSurface("UpperPlatform", height: 4, (Fixed64)3, (Fixed64)5, minBounds: new Vector3d(2, 0, 0));
-        HeightmapTestNavigator navigator = CreateNavigator(new Vector3d(Fixed64.Zero, (Fixed64)1 + Navigator.DefaultFootPositionAdjust, Fixed64.Zero));
+        HeightmapTestNavigator navigator = CreateNavigator(new Vector3d(
+            Fixed64.Zero,
+            (Fixed64)1 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY,
+            Fixed64.Zero));
 
         navigator.ConfigureHeightmapGrounding(HeightmapGroundingMode.SurfaceLevelAndPosition);
         navigator.ApplyHeightmapGrounding().Should().BeTrue();
@@ -154,7 +162,10 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         navigator.HeightmapGrounding.ActiveLayerName.Should().Be("LowerPlatform");
 
         navigator.SetAirborne(surfaceLevel: (Fixed64)1);
-        navigator.SetRootPosition(new Vector3d((Fixed64)2, (Fixed64)4 + Navigator.DefaultFootPositionAdjust, Fixed64.Zero));
+        navigator.SetRootPosition(new Vector3d(
+            (Fixed64)2,
+            (Fixed64)4 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY,
+            Fixed64.Zero));
 
         navigator.ApplyHeightmapGrounding().Should().BeFalse();
         navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Gas);
@@ -164,16 +175,30 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
 
         navigator.ApplyHeightmapGrounding().Should().BeTrue();
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)4);
-        navigator.Position.Y.Should().Be((Fixed64)4 + Navigator.DefaultFootPositionAdjust);
-        navigator.LastPosition.Y.Should().Be((Fixed64)4 + Navigator.DefaultFootPositionAdjust);
+        navigator.Position.Y.Should().Be(
+            (Fixed64)4 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY);
+        navigator.LastPosition.Y.Should().Be(
+            (Fixed64)4 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY);
         navigator.HeightmapGrounding.ActiveLayerName.Should().Be("UpperPlatform");
     }
 
     private static HeightmapTestNavigator CreateNavigator(
         Vector3d position,
         TraversalMedium medium = TraversalMedium.Solid,
-        Fixed64? surfaceLevel = null)
+        Fixed64? surfaceLevel = null,
+        Fixed64? rootToFootOffsetY = null)
     {
+        NavigationAgentProfile defaultProfile = PathTestFactory.DefaultNavigationProfile;
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(
+                defaultProfile.Shape.Radius,
+                defaultProfile.Shape.Height,
+                rootToFootOffsetY ?? defaultProfile.Shape.RootToFootOffsetY),
+            defaultProfile.MaxStepUp,
+            defaultProfile.MaxDropDown,
+            defaultProfile.ArrivalRadius,
+            defaultProfile.AllowedMedia,
+            defaultProfile.Capabilities);
         var navigator = new HeightmapTestNavigator(TestWorld.Context);
         navigator.Activate(
             new TrekCondition
@@ -181,7 +206,8 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
                 Medium = medium,
                 SurfaceLevel = surfaceLevel ?? Fixed64.Zero
             },
-            position);
+            position,
+            profile);
 
         return navigator;
     }

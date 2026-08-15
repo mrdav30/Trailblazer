@@ -16,6 +16,14 @@
 		<DisableMemoryPack>true</DisableMemoryPack>
 		<DefineConstants>$(DefineConstants);TRAILBLAZER_DISABLE_MEMORYPACK</DefineConstants>
 	</PropertyGroup>
+	<PropertyGroup>
+		<TrailblazerPackageVersion Condition="'$(GitVersion_FullSemVer)' != ''">$(GitVersion_FullSemVer)</TrailblazerPackageVersion>
+		<TrailblazerPackageVersion Condition="'$(TrailblazerPackageVersion)' == '' And '$(SemVer)' != ''">$(SemVer)</TrailblazerPackageVersion>
+		<TrailblazerPackageVersion Condition="'$(TrailblazerPackageVersion)' == ''">0.0.0</TrailblazerPackageVersion>
+	</PropertyGroup>
+	<ItemGroup>
+		<AssemblyMetadata Include="TrailblazerPackageVersion" Value="$(TrailblazerPackageVersion)" />
+	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />
 		<PackageReference Include="FluentAssertions" Version="8.10.0" />

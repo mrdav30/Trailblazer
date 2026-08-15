@@ -112,16 +112,6 @@ public class SolidChartPartition : IVoxelPartition
 
     #endregion
 
-    #region Reachability Snapshot
-
-    private int _reachabilitySnapshotKey;
-
-    private int _reachabilityVersion = -1;
-
-    private int _reachabilityComponentId;
-
-    #endregion
-
     #region Chart Properties
 
     /// <summary>
@@ -215,10 +205,6 @@ public class SolidChartPartition : IVoxelPartition
         ChartOwners?.Clear();
         EffectiveChartOwner = null;
 
-        _reachabilitySnapshotKey = 0;
-        _reachabilityVersion = -1;
-        _reachabilityComponentId = 0;
-
         IsPartitioned = false;
     }
 
@@ -233,7 +219,6 @@ public class SolidChartPartition : IVoxelPartition
         IsWalkable = eventInfo.VoxelIndex != default && eventInfo.ObstacleCount == 0;
         _clearanceRadiusInVoxels = DefaultDegreeCap;
         _isClearanceValid = false;
-        SolidPartitionReachability.Invalidate(RequireOwnerState());
     }
 
     /// <summary>
@@ -477,31 +462,6 @@ public class SolidChartPartition : IVoxelPartition
     public bool BelongsTo(string mapName) => ChartOwners?.Contains(mapName) == true;
 
     #endregion
-
-    /// <summary>
-    /// Records the reachability component assigned by the latest matching solid-partition snapshot.
-    /// </summary>
-    internal void SetReachabilityComponent(int snapshotKey, int version, int componentId)
-    {
-        _reachabilitySnapshotKey = snapshotKey;
-        _reachabilityVersion = version;
-        _reachabilityComponentId = componentId;
-    }
-
-    /// <summary>
-    /// Tries to read the component recorded for the requested solid-partition reachability snapshot.
-    /// </summary>
-    internal bool TryGetReachabilityComponent(int snapshotKey, int version, out int componentId)
-    {
-        if (_reachabilitySnapshotKey == snapshotKey && _reachabilityVersion == version)
-        {
-            componentId = _reachabilityComponentId;
-            return true;
-        }
-
-        componentId = 0;
-        return false;
-    }
 
     /// <inheritdoc/>
     public override int GetHashCode()

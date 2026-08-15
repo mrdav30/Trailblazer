@@ -24,23 +24,65 @@ public sealed class TrailblazerGuideService
         _state = state;
     }
 
-    /// <inheritdoc cref="PathGuideFactory.TotalAStarGuideCount"/>
-    public int TotalAStarGuideCount
+    /// <summary>
+    /// Requests one graph-backed surface A* guide for immutable query intent.
+    /// </summary>
+    public NavigationGuideStatus RequestGuide(
+        PathQuery query,
+        out NavigationGuideLease? result)
     {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.TotalAStarGuideCount;
-        }
-    }
+        EnsureUsable();
+        result = null;
 
-    /// <inheritdoc cref="PathGuideFactory.InUseAStarGuideCount"/>
-    public int InUseAStarGuideCount
-    {
-        get
+        if (query.Algorithm != PathAlgorithm.AStar
+            || query.AllowTransitions
+            || query.Traversal.StartDomain == TraversalDomain.Volume
+            || query.Traversal.TargetDomain == TraversalDomain.Volume
+            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
         {
-            using (EnterUsableState())
-                return PathGuideFactory.InUseAStarGuideCount;
+            return NavigationGuideStatus.Unsupported;
+        }
+
+        NavigationAStarAdmissionGate gate = _context.Pathing.NavigationAStarAdmissionGate;
+        NavigationAStarQueryStatus beginStatus = gate.Begin(query, out NavigationAStarBatchWork work);
+        if (beginStatus != NavigationAStarQueryStatus.Pending)
+            return NavigationGuideStatusMapper.ToPublic(beginStatus);
+
+        using (work)
+        {
+            work.AdvanceAdmission(
+                query.Budget.MaxLookupProbes,
+                query.Budget.MaxEndpointCandidates);
+            if (!work.IsAdmissionComplete)
+                return NavigationGuideStatus.BudgetExceeded;
+
+            if (!work.IsReadyToPublish(inputIndex: 0))
+            {
+                work.AdvanceSearch(
+                    inputIndex: 0,
+                    query.Budget.MaxLookupProbes,
+                    nodeStepLimit: int.MaxValue,
+                    query.Budget.MaxEvaluatedEdges,
+                    query.Budget.MaxConnectionLegs);
+                if (!work.IsReadyToPublish(inputIndex: 0))
+                    return NavigationGuideStatus.BudgetExceeded;
+            }
+
+            work.PublishReadyPrefix(maximumCount: 1);
+            NavigationAStarQueryStatus status = work.GetStatus(inputIndex: 0);
+            if (status != NavigationAStarQueryStatus.Success)
+                return NavigationGuideStatusMapper.ToPublic(status);
+
+            NavigationAStarPayloadLease payloadLease = work.TakeResult(inputIndex: 0);
+            NavigationAStarQueryStatus guideStatus = gate.PayloadCache.TryCreateGuide(
+                _context.Pathing.NavigationGraphStore,
+                payloadLease,
+                out NavigationAStarGuideLease? guide);
+            if (guideStatus != NavigationAStarQueryStatus.Success || guide == null)
+                return NavigationGuideStatusMapper.ToPublic(guideStatus);
+
+            result = new NavigationGuideLease(guide);
+            return NavigationGuideStatus.Success;
         }
     }
 
@@ -187,47 +229,6 @@ public sealed class TrailblazerGuideService
     {
         using (EnterUsableState())
             PathGuideFactory.InvalidateVolumeCache();
-    }
-
-    internal SolidPartitionReachability.SolidPartitionReachabilityStats CaptureReachabilityStats()
-    {
-        using (EnterUsableState())
-            return SolidPartitionReachability.CaptureStats();
-    }
-
-    internal bool TrySeedAStarCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        using (EnterUsableState())
-            return PathGuideFactory.TrySeedAStarCacheForBenchmark(requestKey, chartKeys, checkout);
-    }
-
-    internal bool TrySeedFlowFieldCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        using (EnterUsableState())
-            return PathGuideFactory.TrySeedFlowFieldCacheForBenchmark(requestKey, chartKeys, checkout);
-    }
-
-    internal bool TrySeedVolumeCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        using (EnterUsableState())
-            return PathGuideFactory.TrySeedVolumeCacheForBenchmark(requestKey, chartKeys, checkout);
-    }
-
-    internal bool TrySeedHybridRoutePlanCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        using (EnterUsableState())
-        {
-            return PathGuideFactory.TrySeedHybridRoutePlanCacheForBenchmark(
-                requestKey,
-                chartKeys,
-                checkout);
-        }
-    }
-
-    internal int CountIndexedCacheEntriesForBenchmark(string chartKey)
-    {
-        using (EnterUsableState())
-            return PathGuideFactory.CountIndexedCacheEntriesForBenchmark(chartKey);
     }
 
     private IDisposable EnterUsableState()

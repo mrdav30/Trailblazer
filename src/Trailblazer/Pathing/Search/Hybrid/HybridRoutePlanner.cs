@@ -331,68 +331,6 @@ internal static class HybridRoutePlanner
         [NotNullWhen(true)] out HybridRouteStep? step,
         out int pathCost)
     {
-        if (request.ChartRequestKind == HybridChartRequestKind.FlowField)
-        {
-            return TryCreateFlowFieldStep(
-                origin,
-                destination,
-                request,
-                out step,
-                out pathCost);
-        }
-
-        return TryCreateAStarStep(
-            origin,
-            destination,
-            request,
-            out step,
-            out pathCost);
-    }
-
-    private static bool TryCreateAStarStep(
-        Vector3d origin,
-        Vector3d destination,
-        HybridPathRequest request,
-        [NotNullWhen(true)] out HybridRouteStep? step,
-        out int pathCost)
-    {
-        step = null;
-        pathCost = 0;
-
-        AStarPathRequest? chartRequest = AStarPathRequest.Create(
-            request.Context,
-            origin,
-            destination,
-            request.UnitSize,
-            request.Heuristic,
-            request.AllowUnwalkableEndpoints);
-        if (chartRequest == null)
-            return false;
-
-        chartRequest.MaxClimbHeight = request.MaxClimbHeight;
-
-        if (chartRequest.HasZeroDisplacement)
-        {
-            step = HybridRouteStep.Waypoint(request.Context, destination);
-            return true;
-        }
-
-        AStarSurveyResult surveyResult = request.Context.Pathing.State.GuideState.AStarSurveyor.FindPath(chartRequest);
-        if (!surveyResult.HasPath)
-            return false;
-
-        pathCost = surveyResult.Waypoints[^1].PathCost;
-        step = HybridRouteStep.Segment(chartRequest, chartKeys: surveyResult.ChartsUtilized);
-        return true;
-    }
-
-    private static bool TryCreateFlowFieldStep(
-        Vector3d origin,
-        Vector3d destination,
-        HybridPathRequest request,
-        [NotNullWhen(true)] out HybridRouteStep? step,
-        out int pathCost)
-    {
         step = null;
         pathCost = 0;
 
@@ -444,7 +382,7 @@ internal static class HybridRoutePlanner
             origin,
             destination,
             request.UnitSize,
-            request.Heuristic,
+            HeuristicMethod.Manhattan,
             request.AllowUnwalkableEndpoints,
             medium);
         if (volumeRequest == null)

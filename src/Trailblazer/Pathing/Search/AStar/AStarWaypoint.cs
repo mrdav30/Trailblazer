@@ -16,7 +16,7 @@ namespace Trailblazer.Pathing;
 /// <remarks>
 /// This struct is typically used to store intermediate or final results during A* pathfinding operations.
 /// </remarks>
-public struct AStarWaypoint
+internal struct AStarWaypoint
 {
     /// <summary>
     /// Smoothed world position

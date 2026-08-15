@@ -13,21 +13,65 @@ namespace Trailblazer.Pathing;
 /// <summary>Captures exact immutable component and page dependencies without a global graph version.</summary>
 internal sealed class GraphDependencyStamp
 {
+    private const long ObjectHeaderBytes = 16L;
+    private const long ArrayHeaderBytes = 24L;
+    private const long ReferenceSlotBytes = 8L;
+    private const long Int64Bytes = 8L;
+    private const long NavigationAreaPolicyKeyBytes = ReferenceSlotBytes + Int64Bytes;
+    private const long GraphComponentDependencyBytes = ReferenceSlotBytes + Int64Bytes;
+    private const long GraphPageDependencyBytes = 48L;
+    private static readonly long BaseRetainedBytes = Align8(
+        ObjectHeaderBytes
+        + Int64Bytes
+        + NavigationAreaPolicyKeyBytes
+        + (2L * ReferenceSlotBytes));
+
     internal GraphDependencyStamp(
+        long compositionVersion,
         NavigationAreaPolicyKey areaPolicy,
         GraphComponentDependency[] components,
         GraphPageDependency[] pages)
     {
+        CompositionVersion = compositionVersion;
         AreaPolicy = areaPolicy;
         Components = components;
         Pages = pages;
     }
+
+    internal long CompositionVersion { get; }
 
     internal NavigationAreaPolicyKey AreaPolicy { get; }
 
     internal GraphComponentDependency[] Components { get; }
 
     internal GraphPageDependency[] Pages { get; }
+
+    internal long RetainedBytes => checked(
+        BaseRetainedBytes
+        + GetArrayRetainedBytes(Components, GraphComponentDependencyBytes)
+        + GetArrayRetainedBytes(Pages, GraphPageDependencyBytes));
+
+    internal static long GetRetainedBytes(int componentCount, int pageCount)
+    {
+        SwiftThrowHelper.ThrowIfNegative(componentCount, nameof(componentCount));
+        SwiftThrowHelper.ThrowIfNegative(pageCount, nameof(pageCount));
+        return checked(
+            BaseRetainedBytes
+            + GetArrayRetainedBytes(componentCount, GraphComponentDependencyBytes)
+            + GetArrayRetainedBytes(pageCount, GraphPageDependencyBytes));
+    }
+
+    private static long GetArrayRetainedBytes<T>(T[] values, long elementBytes) =>
+        values.Length == 0
+            ? 0L
+            : Align8(checked(ArrayHeaderBytes + ((long)values.Length * elementBytes)));
+
+    private static long GetArrayRetainedBytes(int length, long elementBytes) =>
+        length == 0
+            ? 0L
+            : Align8(checked(ArrayHeaderBytes + ((long)length * elementBytes)));
+
+    private static long Align8(long value) => checked((value + 7L) & ~7L);
 }
 
 /// <summary>Identifies one structural component generation.</summary>

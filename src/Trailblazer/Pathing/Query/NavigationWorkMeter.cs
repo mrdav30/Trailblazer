@@ -1,0 +1,87 @@
+//=======================================================================
+// NavigationWorkMeter.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+namespace Trailblazer.Pathing;
+
+/// <summary>Tracks deterministic work consumed by one complete navigation query.</summary>
+internal sealed class NavigationWorkMeter
+{
+    private NavigationWorkBudget _budget;
+
+    internal NavigationWorkMeter(NavigationWorkBudget budget) => Reset(budget);
+
+    internal int LookupProbes { get; private set; }
+
+    internal int EndpointCandidates { get; private set; }
+
+    internal int ExpandedNodes { get; private set; }
+
+    internal int EvaluatedEdges { get; private set; }
+
+    internal int ConnectionLegs { get; private set; }
+
+    internal int RemainingLookupProbes => _budget.MaxLookupProbes - LookupProbes;
+
+    internal int RemainingEndpointCandidates =>
+        _budget.MaxEndpointCandidates - EndpointCandidates;
+
+    internal int RemainingExpandedNodes => _budget.MaxExpandedNodes - ExpandedNodes;
+
+    internal int RemainingEvaluatedEdges => _budget.MaxEvaluatedEdges - EvaluatedEdges;
+
+    internal int RemainingConnectionLegs => _budget.MaxConnectionLegs - ConnectionLegs;
+
+    internal bool TryConsumeLookupProbes(int count)
+    {
+        if (count < 0 || count > RemainingLookupProbes)
+            return false;
+        LookupProbes += count;
+        return true;
+    }
+
+    internal bool TryConsumeEndpointCandidates(int count)
+    {
+        if (count < 0 || count > RemainingEndpointCandidates)
+            return false;
+        EndpointCandidates += count;
+        return true;
+    }
+
+    internal bool TryConsumeExpandedNodes(int count)
+    {
+        if (count < 0 || count > RemainingExpandedNodes)
+            return false;
+        ExpandedNodes += count;
+        return true;
+    }
+
+    internal bool TryConsumeEvaluatedEdges(int count)
+    {
+        if (count < 0 || count > RemainingEvaluatedEdges)
+            return false;
+        EvaluatedEdges += count;
+        return true;
+    }
+
+    internal bool TryConsumeConnectionLegs(int count)
+    {
+        if (count < 0 || count > RemainingConnectionLegs)
+            return false;
+        ConnectionLegs += count;
+        return true;
+    }
+
+    internal void Reset(NavigationWorkBudget budget)
+    {
+        _budget = budget;
+        LookupProbes = 0;
+        EndpointCandidates = 0;
+        ExpandedNodes = 0;
+        EvaluatedEdges = 0;
+        ConnectionLegs = 0;
+    }
+}

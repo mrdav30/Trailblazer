@@ -1,7 +1,15 @@
 using System;
+using System.Reflection;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
+using GridForge.Grids;
+using GridForge.Grids.Topology;
+using GridForge.Spatial;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
@@ -23,56 +31,378 @@ public class NavigatorTests : IDisposable
 
     public void Dispose()
     {
-        PathManager.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
     [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateAStarRequest_FromNavigatorDefaults()
+    public void Setup_ShouldUseTheExactNavigationProfileAsBodyAuthority()
     {
-        var data = new bool[1, 6, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorAStar", data, Vector3d.Zero);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(
+                radius: Fixed64.Half,
+                height: (Fixed64)2,
+                rootToFootOffsetY: Fixed64.Quarter),
+            maxStepUp: Fixed64.Half,
+            maxDropDown: Fixed64.One,
+            arrivalRadius: Fixed64.Quarter,
+            allowedMedia: TraversalMedia.Solid,
+            capabilities: TraversalCapability.Climb);
+        var navigator = new TestNavigator(TestWorld.Context);
+        Vector3d rootPosition = new(2, 3, 4);
 
+        navigator.Setup(rootPosition, profile);
+
+        navigator.NavigationProfile.Should().Be(profile);
+        navigator.BodyShape.Should().Be(profile.Shape);
+        navigator.Radius.Should().Be(profile.Shape.Radius);
+        navigator.FootPosition.Should().Be(
+            rootPosition + Vector3d.Down * profile.Shape.RootToFootOffsetY);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_ShouldRejectAQueryWithADifferentAgentProfile()
+    {
         var navigator = CreateNavigator(Vector3d.Zero);
+        NavigationAgentProfile ownerProfile = navigator.NavigationProfile;
+        var mismatchedProfile = new NavigationAgentProfile(
+            ownerProfile.Shape,
+            ownerProfile.MaxStepUp,
+            ownerProfile.MaxDropDown,
+            ownerProfile.ArrivalRadius + Fixed64.One,
+            ownerProfile.AllowedMedia,
+            ownerProfile.Capabilities);
+        PathQuery query = CreateSurfaceQuery(
+            navigator.FootPosition,
+            Vector3d.Right,
+            mismatchedProfile);
+
+        Action apply = () => navigator.ApplyGuidedTrekRequest(query);
+
+        apply.Should().Throw<ArgumentException>()
+            .WithParameterName("query");
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_ShouldStoreTheExactSurfaceAStarQuery()
+    {
+        var navigator = CreateNavigator(new Vector3d(2, 3, 4));
+        PathQuery query = CreateSurfaceQuery(
+            navigator.FootPosition,
+            new Vector3d(7, 1, 2),
+            navigator.NavigationProfile);
+
+        navigator.ApplyGuidedTrekRequest(query, rate: TrekRate.Moderate, groupId: 8);
+
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.AStar,
-            allowUnwalkableEndpoints: true,
-            allowTraversalTransitions: true,
-            aStarHeuristic: HeuristicMethod.Euclidean,
-            maxClimbHeight: (Fixed64)2
-        );
-
-        Vector3d target = new(4, 0, 0);
-        navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Moderate, groupId: 4, canAffordJump: false);
-
         navigator.IsGuideded.Should().BeTrue();
-        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
+        steering.CurrentQuery.Should().Be(query);
+        steering.MovementGroupID.Should().Be(8);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
-        navigator.FrameRequest.CanAffordJump.Should().BeFalse();
-        steering.MovementGroupID.Should().Be(4);
+    }
 
-        var request = steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
-        request.Origin.Should().Be(navigator.Position);
-        request.TargetPosition.Should().Be(target);
-        request.UnitSize.Should().Be(navigator.Size);
-        request.AllowUnwalkableEndpoints.Should().BeTrue();
-        request.AllowTraversalTransitions.Should().BeTrue();
-        request.Heuristic.Should().Be(HeuristicMethod.Euclidean);
-        request.MaxClimbHeight.Should().Be((Fixed64)2);
+    [Fact]
+    public void NavSteering_ShouldNotExposeDirectPublicPathQueryEntryPoint()
+    {
+        typeof(NavSteering).GetMethod(
+                "ApplyPathQuery",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Should().BeNull();
+    }
 
-        PathManager.UnloadChart("NavigatorAStar");
+    [Fact]
+    public void ApplyGuidedTrekRequest_ShouldRejectANonSurfaceAStarShape()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        PathQuery query = CreateSurfaceQuery(
+            navigator.FootPosition,
+            Vector3d.Right,
+            navigator.NavigationProfile,
+            algorithm: PathAlgorithm.FlowField);
+
+        Action apply = () => navigator.ApplyGuidedTrekRequest(query);
+
+        apply.Should().Throw<ArgumentException>()
+            .WithParameterName("query");
+    }
+
+    [Fact]
+    public void GetHeading_ShouldRepathAStaleLeaseByChangingOnlyTheQueryStart()
+    {
+        (Vector3d start, Vector3d middle, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        Vector3d startRoot = start + Vector3d.Up * profile.Shape.RootToFootOffsetY;
+        var navigator = CreateNavigator(startRoot);
+        PathQuery query = CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph");
+        navigator.ApplyGuidedTrekRequest(query);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+
+        Vector3d firstHeading = steering.GetHeading(navigator);
+        steering.ShouldMove.Should().BeTrue();
+        firstHeading.Should().NotBe(Vector3d.Zero);
+
+        Vector3d middleRoot = middle + Vector3d.Up * profile.Shape.RootToFootOffsetY;
+        navigator.SetTestPosition(middleRoot);
+        PublishGraphLine(bakeVersion: 2, publicationSequence: 3);
+
+        steering.GetHeading(navigator).Should().Be(Vector3d.Zero);
+        steering.CurrentQuery.Should().Be(query);
+
+        Vector3d secondHeading = steering.GetHeading(navigator);
+        secondHeading.Should().NotBe(Vector3d.Zero);
+
+        PathQuery expected = new(
+            new NavigationEndpoint(
+                middle,
+                query.Start.MapId,
+                query.Start.Resolution,
+                query.Start.MaxResolutionDistance),
+            query.End,
+            query.Agent,
+            query.AreaPolicy,
+            query.Traversal,
+            query.Algorithm,
+            query.Budget,
+            query.AllowTransitions,
+            query.FlowField);
+        steering.CurrentQuery.Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetHeading_ShouldArriveAndReleaseIntentAtTheFinalGraphWaypoint()
+    {
+        (Vector3d start, _, _) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        PathQuery query = CreateSurfaceQuery(start, start, profile, mapId: "navigator-graph");
+        navigator.ApplyGuidedTrekRequest(query);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+
+        steering.GetHeading(navigator).Should().Be(Vector3d.Zero);
+
+        steering.ShouldMove.Should().BeFalse();
+        steering.IsAtDestination.Should().BeTrue();
+        steering.CurrentQuery.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetHeading_ShouldAdvanceAcrossGraphWaypointsBeforeArrivingAndReleasingTheLease()
+    {
+        (Vector3d start, Vector3d middle, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            maxStepUp: Fixed64.Zero,
+            maxDropDown: Fixed64.Zero,
+            arrivalRadius: Fixed64.Zero,
+            allowedMedia: TraversalMedia.Solid,
+            capabilities: TraversalCapability.None);
+        var navigator = CreateNavigator(start, profile: profile);
+        navigator.ApplyGuidedTrekRequest(
+            CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph"));
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        NavigationAStarPayloadCache cache = TestWorld.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
+
+        steering.GetHeading(navigator).Should().Be(Vector3d.Right);
+        steering.HasTrailGuide.Should().BeTrue();
+        ReadGraphWaypointIndex(JsonRecordSerializer.Serialize(navigator)).Should().Be(1);
+        cache.ActiveLeaseCount.Should().Be(1);
+
+        navigator.SetTestPosition(middle);
+        steering.GetHeading(navigator).Should().Be(Vector3d.Right);
+        steering.HasTrailGuide.Should().BeTrue();
+        ReadGraphWaypointIndex(JsonRecordSerializer.Serialize(navigator)).Should().Be(2);
+        cache.ActiveLeaseCount.Should().Be(1);
+
+        navigator.SetTestPosition(end);
+        steering.GetHeading(navigator).Should().Be(Vector3d.Zero);
+        steering.HasTrailGuide.Should().BeFalse();
+        steering.ShouldMove.Should().BeFalse();
+        steering.IsAtDestination.Should().BeTrue();
+        steering.CurrentQuery.Should().BeNull();
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void PathQueryRecord_ShouldRejectAnUnboundedSerializedWaypointCursor()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        PathQuery query = CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph");
+        TestWorld.Context.Guides.RequestGuide(query, out NavigationGuideLease? acquired)
+            .Should().Be(NavigationGuideStatus.Success);
+        NavigationGuideLease lease = TestRequire.NotNull(acquired);
+        lease.WaypointCount.Should().BeGreaterThan(0);
+        var record = new PathQueryRecord();
+        record.Capture(query, lease);
+        record.WaypointIndex = int.MaxValue;
+        lease.Dispose();
+
+        record.TryCreateGuide(TestWorld.Context, query, out NavigationGuideLease? restored)
+            .Should().BeFalse();
+
+        restored.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetHeading_ShouldRetryAfterGraphGuideAcquisitionCapacityIsAvailable()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        PathQuery query = CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph");
+        navigator.ApplyGuidedTrekRequest(query);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        NavigationAStarAdmissionGate gate = TestWorld.Context.Pathing.NavigationAStarAdmissionGate;
+        gate.Begin(query, out NavigationAStarBatchWork blockingWork)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+
+        using (blockingWork)
+        {
+            steering.GetHeading(navigator).Should().Be(Vector3d.Zero);
+            steering.CurrentQuery.Should().Be(query);
+            steering.ShouldMove.Should().BeTrue();
+            steering.IsAtDestination.Should().BeFalse();
+        }
+
+        steering.GetHeading(navigator).Should().NotBe(Vector3d.Zero);
+        steering.CurrentQuery.Should().Be(query);
+        steering.ShouldMove.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetHeading_ShouldRetryAfterGraphGuideAcquisitionBecomesStale()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        PathQuery query = CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph");
+        navigator.ApplyGuidedTrekRequest(query);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        NavigationAStarAdmissionGate gate = TestWorld.Context.Pathing.NavigationAStarAdmissionGate;
+        NavigationWorldGraphStore store = TestWorld.Context.Pathing.NavigationGraphStore;
+        FieldInfo cacheSyncField = TestRequire.NotNull(
+            typeof(NavigationAStarPayloadCache).GetField(
+                "_sync",
+                BindingFlags.Instance | BindingFlags.NonPublic));
+        object cacheSync = TestRequire.NotNull(cacheSyncField.GetValue(gate.PayloadCache));
+        Task<Vector3d> acquisition;
+
+        Monitor.Enter(cacheSync);
+        try
+        {
+            acquisition = Task.Run(() => steering.GetHeading(navigator));
+            SpinWait.SpinUntil(
+                    () => store.ActiveLeaseCount > 0,
+                    TimeSpan.FromSeconds(5))
+                .Should().BeTrue();
+            NavigationWorldGraph current = store.Current;
+            NavigationWorldGraph changed = current.WithComposition(
+                current.Composition.WithVersion(current.Composition.Version + 1));
+            store.TryPublish(changed).Should().Be(NavigationCandidatePublication.Published);
+        }
+        finally
+        {
+            Monitor.Exit(cacheSync);
+        }
+
+        (await acquisition).Should().Be(Vector3d.Zero);
+        steering.CurrentQuery.Should().Be(query);
+        steering.ShouldMove.Should().BeTrue();
+        steering.IsAtDestination.Should().BeFalse();
+
+        steering.GetHeading(navigator).Should().NotBe(Vector3d.Zero);
+        steering.CurrentQuery.Should().Be(query);
+        steering.ShouldMove.Should().BeTrue();
+    }
+
+    [Fact]
+    public void JsonRoundTrip_ShouldRestoreExactGraphQueryProfileAndCursor()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var source = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        PathQuery query = CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph");
+        source.ApplyGuidedTrekRequest(query);
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.GetHeading(source).Should().NotBe(Vector3d.Zero);
+
+        string json = JsonRecordSerializer.Serialize(source, writeIndented: true);
+        int sourceWaypointIndex = ReadGraphWaypointIndex(json);
+        sourceWaypointIndex.Should().BeGreaterThan(0);
+        source.Reset();
+        var target = CreateNavigator(new Vector3d(-2, 0, -2), profile: profile);
+        JsonRecordSerializer.Populate(target, json);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
+
+        target.NavigationProfile.Should().Be(profile);
+        targetSteering.CurrentQuery.Should().Be(query);
+        targetSteering.CurrentRequest.Should().BeNull();
+        ReadGraphWaypointIndex(JsonRecordSerializer.Serialize(target))
+            .Should().Be(sourceWaypointIndex);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldRejectRestoredGraphQueryWithMismatchedAgentAndReleaseLease(bool useMemoryPack)
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var source = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        source.ApplyGuidedTrekRequest(CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph"));
+        TestRequire.NotNull(source.Steering).GetHeading(source).Should().NotBe(Vector3d.Zero);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.SetPayloadValue(
+            payload,
+            useMemoryPack,
+            (Fixed64)2,
+            "Steering",
+            "PathQuery",
+            "Agent",
+            "MaxStepUp");
+        source.Reset();
+
+        NavigationAStarPayloadCache cache = TestWorld.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
+        cache.ActiveLeaseCount.Should().Be(0);
+        var target = CreateNavigator(new Vector3d(-2, 0, -2), profile: profile);
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        TestRequire.NotNull(target.Steering).CurrentQuery.Should().BeNull();
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void PathRequestRecord_ShouldRejectLegacyAStarDiscriminator()
+    {
+        PathTestFactory.RegisterFromData(
+            TestWorld.Context,
+            "LegacySerializedAStar",
+            new bool[1, 2, 1] { { { true }, { true } } },
+            Vector3d.Zero);
+        var record = new PathRequestRecord
+        {
+            Kind = (PathRequestRecordKind)1,
+            Origin = Vector3d.Zero,
+            TargetPosition = Vector3d.Right,
+            UnitSize = Fixed64.One
+        };
+
+        record.TryCreateRequest(TestWorld.Context, out IPathRequest? request).Should().BeFalse();
+        request.Should().BeNull();
     }
 
     [Fact]
@@ -81,7 +411,7 @@ public class NavigatorTests : IDisposable
         Guid explicitId = new("11111111-2222-3333-4444-555555555555");
         var navigator = new TestNavigator(TestWorld.Context);
 
-        navigator.Setup(Vector3d.Zero, size: Fixed64.One, globalId: explicitId);
+        navigator.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile, globalId: explicitId);
 
         navigator.GlobalId.Should().Be(explicitId);
     }
@@ -92,8 +422,8 @@ public class NavigatorTests : IDisposable
         var first = new TestNavigator(TestWorld.Context);
         var second = new TestNavigator(TestWorld.Context);
 
-        first.Setup(Vector3d.Zero, size: Fixed64.One);
-        second.Setup(Vector3d.Right, size: Fixed64.One);
+        first.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
+        second.Setup(Vector3d.Right, PathTestFactory.DefaultNavigationProfile);
 
         Guid firstId = first.GlobalId;
         Guid secondId = second.GlobalId;
@@ -106,8 +436,8 @@ public class NavigatorTests : IDisposable
         var replayFirst = new TestNavigator(TestWorld.Context);
         var replaySecond = new TestNavigator(TestWorld.Context);
 
-        replayFirst.Setup(Vector3d.Zero, size: Fixed64.One);
-        replaySecond.Setup(Vector3d.Right, size: Fixed64.One);
+        replayFirst.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
+        replaySecond.Setup(Vector3d.Right, PathTestFactory.DefaultNavigationProfile);
 
         replayFirst.GlobalId.Should().Be(firstId);
         replaySecond.GlobalId.Should().Be(secondId);
@@ -118,10 +448,58 @@ public class NavigatorTests : IDisposable
     {
         var navigator = new TestNavigator(TestWorld.Context);
 
-        Action act = () => navigator.Setup(Vector3d.Zero, size: Fixed64.One, globalId: Guid.Empty);
+        Action act = () => navigator.Setup(
+            Vector3d.Zero,
+            PathTestFactory.DefaultNavigationProfile,
+            globalId: Guid.Empty);
 
         act.Should().Throw<ArgumentException>()
             .WithParameterName("globalId");
+    }
+
+    [Fact]
+    public void Setup_ShouldRejectRepeatedLifecycleEntryUntilReset()
+    {
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = new TestNavigator(TestWorld.Context);
+        navigator.Setup(Vector3d.Zero, profile);
+        Guid initialId = navigator.GlobalId;
+
+        Action repeatedSetup = () => navigator.Setup(Vector3d.Right, profile);
+        Action activateAfterSetup = () => navigator.Activate(new TrekCondition(), Vector3d.Forward, profile);
+
+        repeatedSetup.Should().Throw<InvalidOperationException>();
+        activateAfterSetup.Should().Throw<InvalidOperationException>();
+        navigator.Position.Should().Be(Vector3d.Zero);
+        navigator.GlobalId.Should().Be(initialId);
+
+        navigator.Reset();
+        navigator.Setup(TestWorld.Context, Vector3d.Right, profile);
+        navigator.Context.Should().BeSameAs(TestWorld.Context);
+        navigator.Position.Should().Be(Vector3d.Right);
+    }
+
+    [Fact]
+    public void Activate_ShouldRejectRepeatedLifecycleEntryUntilReset()
+    {
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = new TestNavigator(TestWorld.Context);
+        navigator.Activate(new TrekCondition(), Vector3d.Zero, profile);
+        NavSteering initialSteering = TestRequire.NotNull(navigator.Steering);
+
+        Action repeatedActivation = () => navigator.Activate(new TrekCondition(), Vector3d.Right, profile);
+        Action setupAfterActivation = () => navigator.Setup(Vector3d.Forward, profile);
+
+        repeatedActivation.Should().Throw<InvalidOperationException>();
+        setupAfterActivation.Should().Throw<InvalidOperationException>();
+        navigator.Position.Should().Be(Vector3d.Zero);
+        navigator.Steering.Should().BeSameAs(initialSteering);
+
+        navigator.Reset();
+        navigator.Activate(TestWorld.Context, new TrekCondition(), Vector3d.Right, profile);
+        navigator.Context.Should().BeSameAs(TestWorld.Context);
+        navigator.Position.Should().Be(Vector3d.Right);
+        navigator.IsActive.Should().BeTrue();
     }
 
     [Fact]
@@ -143,7 +521,6 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: true,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2,
@@ -159,7 +536,7 @@ public class NavigatorTests : IDisposable
         var request = steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
-        request.UnitSize.Should().Be(navigator.Size);
+        request.UnitSize.Should().Be(navigator.Radius + navigator.Radius);
         request.AllowUnwalkableEndpoints.Should().BeTrue();
         request.AllowTraversalTransitions.Should().BeTrue();
         request.MaxClimbHeight.Should().Be((Fixed64)2);
@@ -191,8 +568,8 @@ public class NavigatorTests : IDisposable
         var request = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
-        request.UnitSize.Should().Be(navigator.Size);
-        request.Heuristic.Should().Be(navigator.GuidedAStarHeuristic);
+        request.UnitSize.Should().Be(navigator.Radius + navigator.Radius);
+        request.Heuristic.Should().Be(navigator.GuidedVolumeHeuristic);
         request.Medium.Should().Be(TraversalMedium.Gas);
     }
 
@@ -205,9 +582,7 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.AStar,
-            allowTraversalTransitions: true,
-            aStarHeuristic: HeuristicMethod.Euclidean
+            allowTraversalTransitions: true
         );
         navigator.SetAirborne();
         navigator.ApplyGuidedTrekRequest(
@@ -221,50 +596,26 @@ public class NavigatorTests : IDisposable
         initialRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
 
-        navigator.SetTestPosition(new Vector3d(1, 0, 0));
+        navigator.SetTestPosition(
+            new Vector3d(1, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
         TestWorld.Context.Simulate();
         navigator.Simulate();
 
-        AStarPathRequest followupRequest = steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
+        FlowFieldPathRequest followupRequest = steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
         followupRequest.TargetPosition.X.Should().Be((Fixed64)4);
         followupRequest.TargetPosition.Y.Should().Be(Fixed64.Zero);
         followupRequest.TargetPosition.Z.Should().Be(Fixed64.Zero);
         followupRequest.AllowTraversalTransitions.Should().BeTrue();
-        steering.TrailGuide.Should().BeOfType<AStarGuide>();
+        steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
         steering.Destination.X.Should().Be((Fixed64)4);
         steering.MovementGroupID.Should().Be(9);
         steering.ShouldMove.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
 
         UnloadAerialLandingHandoffScene(sceneKey);
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateTransitionAwareAStarGuide_WhenNavigatorOptInIsEnabled()
-    {
-        RegisterTransitionFallbackScene();
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.AStar,
-            allowTraversalTransitions: true,
-            aStarHeuristic: HeuristicMethod.Euclidean
-        );
-
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
-
-        steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
-            .Which.AllowTraversalTransitions.Should().BeTrue();
-
-        TestWorld.Context.Simulate();
-        steering.GetHeading(navigator);
-
-        steering.TrailGuide.Should().BeOfType<AStarGuide>();
-        steering.ShouldMove.Should().BeTrue();
     }
 
     [Fact]
@@ -275,7 +626,6 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.FlowField,
             allowTraversalTransitions: true,
             flowFieldExtraFloodRange: 8
         );
@@ -308,7 +658,6 @@ public class NavigatorTests : IDisposable
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
 
         navigator.ApplyGuidedTrekRequest(
             new Vector3d(3, 0, 0),
@@ -322,25 +671,6 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void ApplyGuidedTrekRequest_ShouldEnableClimb_WhenTransitionAwareRouteRequestsIt()
-    {
-        GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.AStar,
-            allowTraversalTransitions: true
-        );
-
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-        steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
-            .Which.AllowTraversalTransitions.Should().BeTrue();
-    }
-
-    [Fact]
     public void ApplyGuidedTrekRequest_ShouldPreserveClimbAcrossSwimExitHandoff_WhenGeneratedSwimExitTargetsLiquidClimbShoreline()
     {
         const string chartKey = "NavigatorLiquidClimbExit";
@@ -350,7 +680,6 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.FlowField,
             allowTraversalTransitions: true
         );
 
@@ -362,7 +691,8 @@ public class NavigatorTests : IDisposable
         VolumePathRequest initialRequest = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
         initialRequest.TargetPosition.Should().Be(new Vector3d(3, 0, 0));
 
-        navigator.SetTestPosition(new Vector3d(4, 0, 0));
+        navigator.SetTestPosition(
+            new Vector3d(4, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
@@ -431,7 +761,6 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.AStar,
             allowTraversalTransitions: true
         );
         navigator.SetAirborne();
@@ -443,14 +772,15 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
-        navigator.SetTestPosition(new Vector3d(1, 0, 0));
+        navigator.SetTestPosition(
+            new Vector3d(1, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
         TestWorld.Context.Simulate();
         navigator.Simulate();
 
-        steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
@@ -497,7 +827,6 @@ public class NavigatorTests : IDisposable
             navigator.Radius,
             new ScriptedRouteTopologyFrame(Vector3d.Right, RequestsClimbIntent: false)));
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.AStar,
             allowTraversalTransitions: true
         );
 
@@ -550,7 +879,6 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.FlowField,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2
         );
@@ -565,7 +893,8 @@ public class NavigatorTests : IDisposable
         initialRequest.Medium.Should().Be(TraversalMedium.Liquid);
         initialRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
 
-        navigator.SetTestPosition(new Vector3d(2, 0, 0));
+        navigator.SetTestPosition(
+            new Vector3d(2, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
@@ -595,7 +924,6 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.AStar,
             allowTraversalTransitions: true
         );
 
@@ -607,16 +935,17 @@ public class NavigatorTests : IDisposable
         steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
             .Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
 
-        navigator.SetTestPosition(new Vector3d(2, 0, 0));
+        navigator.SetTestPosition(
+            new Vector3d(2, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
         TestWorld.Context.Simulate();
         navigator.Simulate();
 
-        steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
+        steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>()
             .Which.AllowTraversalTransitions.Should().BeTrue();
-        steering.TrailGuide.Should().BeOfType<AStarGuide>();
+        steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
         PathManager.UnloadChart(chartKey);
@@ -631,7 +960,6 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.FlowField,
             allowTraversalTransitions: false
         );
 
@@ -1266,7 +1594,6 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         navigator.ConfigureForGuidedTraversal(
-            pathAlgorithm: SolidPathAlgorithm.FlowField,
             allowTraversalTransitions: true
         );
 
@@ -1328,10 +1655,13 @@ public class NavigatorTests : IDisposable
         navigator.Acceleration.Should().Be(Vector3d.Zero);
     }
 
-    private static TestNavigator CreateNavigator(Vector3d position, FixedQuaternion? rotation = null)
+    private static TestNavigator CreateNavigator(
+        Vector3d position,
+        FixedQuaternion? rotation = null,
+        NavigationAgentProfile? profile = null)
     {
         var navigator = new TestNavigator(TestWorld.Context);
-        navigator.Setup(position, rotation: rotation, size: Fixed64.One);
+        navigator.Setup(position, profile ?? PathTestFactory.DefaultNavigationProfile, rotation: rotation);
         navigator.Initialize(new TrekCondition()
         {
             Medium = TraversalMedium.Solid,
@@ -1339,6 +1669,93 @@ public class NavigatorTests : IDisposable
             GroundState = new GroundCondition()
         });
         return navigator;
+    }
+
+    private static PathQuery CreateSurfaceQuery(
+        Vector3d start,
+        Vector3d end,
+        NavigationAgentProfile profile,
+        PathAlgorithm algorithm = PathAlgorithm.AStar,
+        string? mapId = null) => new(
+            new NavigationEndpoint(start, mapId),
+            new NavigationEndpoint(end, mapId),
+            profile,
+            new NavigationAreaPolicyKey("navigator-test", 1),
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            algorithm,
+            new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 0, 0, 0),
+            allowTransitions: false);
+
+    private static int ReadGraphWaypointIndex(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        return document.RootElement
+            .GetProperty("Steering")
+            .GetProperty("PathQuery")
+            .GetProperty("WaypointIndex")
+            .GetInt32();
+    }
+
+    private static (Vector3d Start, Vector3d Middle, Vector3d End) PublishGraphLine(
+        int bakeVersion,
+        long publicationSequence = 1)
+    {
+        var configuration = new GridConfiguration(
+            new Vector3d(-4, -4, -4),
+            new Vector3d(8, 8, 8));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        var cell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        var startIndex = new VoxelIndex(4, 4, 4);
+        var middleIndex = new VoxelIndex(5, 4, 4);
+        var endIndex = new VoxelIndex(6, 4, 4);
+        NavigationMap map = new NavigationMapBuilder("navigator-graph", binding)
+            .AddCell(startIndex, cell)
+            .AddCell(middleIndex, cell)
+            .AddCell(endIndex, cell)
+            .Build();
+        var mapOperation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(map, bakeVersion),
+            OverlayReplacementPolicy.Clear,
+            publicationSequence,
+            TestWorld.Context.FrameCount + 1);
+        TestWorld.Context.Pathing.Admit(mapOperation).Should().BeTrue();
+
+        if (bakeVersion == 1)
+        {
+            var policy = new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey("navigator-test", 1),
+                new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+            var policyOperation = new NavigationAreaPolicyCommitOperation(
+                policy,
+                publicationSequence: publicationSequence + 1,
+                effectiveFrame: TestWorld.Context.FrameCount + 1);
+            TestWorld.Context.Pathing.Admit(policyOperation).Should().BeTrue();
+        }
+
+        TestWorld.Context.Simulate();
+        mapOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        return (
+            GetGraphFoot(binding, startIndex),
+            GetGraphFoot(binding, middleIndex),
+            GetGraphFoot(binding, endIndex));
+    }
+
+    private static Vector3d GetGraphFoot(
+        NormalizedGridConfiguration binding,
+        VoxelIndex index)
+    {
+        binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
+        return new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z);
     }
 
     private static void RegisterTransitionFallbackScene()

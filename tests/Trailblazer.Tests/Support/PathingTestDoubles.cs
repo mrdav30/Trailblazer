@@ -58,16 +58,15 @@ internal sealed class TestPathRequest : IPathRequest
     {
         WorldVoxelIndex origin = new(1, 0, 1, new VoxelIndex(identity, 0, 0));
         WorldVoxelIndex destination = new(1, 0, 1, new VoxelIndex(identity, 0, 1));
-        return PathRequestCacheKey.CreateAStar(
+        return PathRequestCacheKey.CreateVolume(
             origin,
             destination,
             Fixed64.One,
             allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: false,
             HeuristicMethod.Manhattan,
-            Fixed64.One,
+            TraversalMedium.Gas,
             maxPathSearchRange: 1,
-            transitionRegistryVersion: 0);
+            volumeRulesRegistryVersion: 0);
     }
 
     public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;

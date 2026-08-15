@@ -124,8 +124,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 upper = middle;
         }
 
-        lower.Should().Be(13_344L,
-            "the exact retained peak is a deterministic accounting boundary");
+        lower.Should().Be(13_360L,
+            "the exact retained peak includes both 8-byte GridHighWaterSequence owners");
 
         RunSeamWork(world, candidate, changes, lower, out bool exactExceeded)
             .Should().BeTrue();
@@ -662,7 +662,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             maxAreaPolicies: 1,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
-            defaults.MaxConcurrentSnapshotLeases);
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
         TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
         NavigationMap a = AddGridAndCreateMap(context, "A", 0, "B", 3, "ab");
         NavigationMap b = AddGridAndCreateMap(context, "B", 3, "C", 6, "bc");

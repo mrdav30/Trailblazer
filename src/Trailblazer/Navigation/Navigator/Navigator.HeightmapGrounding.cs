@@ -62,13 +62,13 @@ public abstract partial class Navigator
     {
         return new Vector3d(
             _position.X,
-            _position.Y - _footPositionAdjust - _heightmapGrounding.GroundOffset,
+            _position.Y - BodyShape.RootToFootOffsetY - _heightmapGrounding.GroundOffset,
             _position.Z);
     }
 
     private void TryProjectRootToHeightmapSample(HeightmapSample sample)
     {
-        Fixed64 targetRootY = sample.GroundY + _footPositionAdjust + _heightmapGrounding.GroundOffset;
+        Fixed64 targetRootY = sample.GroundY + BodyShape.RootToFootOffsetY + _heightmapGrounding.GroundOffset;
         Fixed64 correctionY = targetRootY - _position.Y;
         if (correctionY == Fixed64.Zero)
             return;

@@ -207,10 +207,6 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
         using TrailblazerWorldContext contextB = PathTestFactory.CreateContextWithGrid();
         PathTestFactory.RegisterSolidLine(contextA, "LifecycleResetChartA", Vector3d.Zero, 2);
         PathTestFactory.RegisterSolidLine(contextB, "LifecycleResetChartB", Vector3d.Zero, 2);
-        PathTestFactory.RegisterSolidPoint(contextA, "LifecycleReachabilityStartA", new Vector3d(0, 2, 0));
-        PathTestFactory.RegisterSolidPoint(contextA, "LifecycleReachabilityEndA", new Vector3d(3, 2, 0));
-        PathTestFactory.RegisterSolidPoint(contextB, "LifecycleReachabilityStartB", new Vector3d(0, 2, 0));
-        PathTestFactory.RegisterSolidPoint(contextB, "LifecycleReachabilityEndB", new Vector3d(3, 2, 0));
         contextA.Transitions.Register(PathTestFactory.CreateJumpTransition(contextA, "lifecycle-reset-transition-a", Vector3d.Zero, new Vector3d(1, 0, 0)))
             .Should()
             .BeTrue();
@@ -219,41 +215,26 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
             .BeTrue();
         contextA.VolumeRules.SetGasVoxelRule(static _ => true);
         contextB.VolumeRules.SetGasVoxelRule(static _ => true);
-        contextA.Guides.TrySeedAStarCacheForBenchmark(1111, new[] { "LifecycleResetChartA" }, checkout: false)
-            .Should()
-            .BeTrue();
-        contextB.Guides.TrySeedAStarCacheForBenchmark(2222, new[] { "LifecycleResetChartB" }, checkout: false)
-            .Should()
-            .BeTrue();
-
-        contextA.Guides.RequestGuide(
-            PathTestFactory.CreateAStarRequest(contextA, new Vector3d(0, 2, 0), new Vector3d(3, 2, 0)),
-            out AStarGuide? contextAGuide).Should().BeFalse();
-        contextB.Guides.RequestGuide(
-            PathTestFactory.CreateAStarRequest(contextB, new Vector3d(0, 2, 0), new Vector3d(3, 2, 0)),
-            out AStarGuide? contextBGuide).Should().BeFalse();
-        contextAGuide.Should().BeNull();
-        contextBGuide.Should().BeNull();
-        SolidPartitionReachability.SolidPartitionReachabilityStats contextAReachabilityBefore =
-            contextA.Guides.CaptureReachabilityStats();
-        SolidPartitionReachability.SolidPartitionReachabilityStats contextBReachabilityBefore =
-            contextB.Guides.CaptureReachabilityStats();
+        FlowFieldPathRequest requestA = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            contextA, Vector3d.Zero, Vector3d.Right, Fixed64.One));
+        FlowFieldPathRequest requestB = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            contextB, Vector3d.Zero, Vector3d.Right, Fixed64.One));
+        contextA.Guides.RequestGuide(requestA, out FlowFieldGuide? guideA).Should().BeTrue();
+        contextB.Guides.RequestGuide(requestB, out FlowFieldGuide? guideB).Should().BeTrue();
+        contextA.Guides.ReturnGuide(guideA);
+        contextB.Guides.ReturnGuide(guideB);
 
         contextA.Pathing.Reset();
 
         contextA.Pathing.IsChartRegistered("LifecycleResetChartA").Should().BeFalse();
         contextA.Transitions.IsRegistered("lifecycle-reset-transition-a").Should().BeFalse();
         contextA.VolumeRules.HasGasVoxelRule.Should().BeFalse();
-        contextA.Guides.TotalAStarGuideCount.Should().Be(0);
-        contextA.Guides.CaptureReachabilityStats().Version.Should().BeGreaterThan(contextAReachabilityBefore.Version);
+        contextA.Guides.TotalFlowGuideCount.Should().Be(0);
 
         contextB.Pathing.IsChartRegistered("LifecycleResetChartB").Should().BeTrue();
         contextB.Transitions.IsRegistered("lifecycle-reset-transition-b").Should().BeTrue();
         contextB.VolumeRules.HasGasVoxelRule.Should().BeTrue();
-        contextB.Guides.TotalAStarGuideCount.Should().Be(1);
-        contextB.Guides.CaptureReachabilityStats().SnapshotBuildCount
-            .Should()
-            .Be(contextBReachabilityBefore.SnapshotBuildCount);
+        contextB.Guides.TotalFlowGuideCount.Should().Be(1);
     }
 
     [Fact]
@@ -261,28 +242,17 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
     {
         TrailblazerWorldContext context = PathTestFactory.CreateContextWithGrid();
         PathingWorldState state = context.Pathing.State;
-        AStarSurveyResult result = AStarSurveyResult.Create(
-            context,
-            new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } },
-            new[] { "LifecycleDisposedCache" },
-            TestPathRequest.CreateCacheKey(3333));
-        context.Guides.TrySeedAStarCacheForBenchmark(3333, new[] { "LifecycleDisposedCache" }, checkout: false)
-            .Should()
-            .BeTrue();
 
         context.Dispose();
         context.Dispose();
 
         Action chartLockUse = () => state.NavigationChartMapLock.EnterReadLock();
         Action transitionLockUse = () => state.TransitionRegistryState.TransitionLock.EnterReadLock();
+        Action guideCacheUse = () => state.GuideState.CachedFlowResults.InvalidateAll();
 
         chartLockUse.Should().Throw<ObjectDisposedException>();
         transitionLockUse.Should().Throw<ObjectDisposedException>();
-        using (PathManager.EnterState(state))
-        {
-            Action guideCacheUse = () => state.GuideState.CachedAStarResults.TrySeed(result, checkout: false);
-            guideCacheUse.Should().Throw<ObjectDisposedException>();
-        }
+        guideCacheUse.Should().Throw<ObjectDisposedException>();
     }
 
     [Fact]

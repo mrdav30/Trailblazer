@@ -193,6 +193,11 @@ public sealed class NavigationWorldGraphLifecycleTests
                     new[] { new GraphPageDependencyAddress("A", 0) },
                     out stamp)
                 .Should().BeTrue();
+            stamp.CompositionVersion.Should().Be(compositionVersion);
+            NavigationWorldGraph topologyChanged = lease.Graph.WithComposition(
+                lease.Graph.Composition.WithVersion(compositionVersion + 1));
+            topologyChanged.IsDependencyCurrent(stamp).Should().BeFalse(
+                "an overlapping map or automatic seam can create an unexpanded alternative");
         }
 
         AdmitCellOverlay(
@@ -339,9 +344,15 @@ public sealed class NavigationWorldGraphLifecycleTests
         AdmitMap(context, CreateMap("map", configuration, default), 1, 1);
         context.Simulate();
         grid.TryAddVoxel(dynamic, out _).Should().BeTrue();
-        AdmitCellOverlay(context, NavigationCellOverlayOperation.Set(dynamic, SolidCell), 2);
+        NavigationOverlayCommitOperation overlay = AdmitCellOverlay(
+            context,
+            NavigationCellOverlayOperation.Set(dynamic, SolidCell),
+            2);
 
-        context.Simulate();
+        SimulateUntil(
+            context,
+            () => overlay.Receipt.Status != NavigationOperationStatus.Pending);
+        overlay.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
 
         NavigationGraphCellState state = GetState(context, dynamic);
         state.HasCell.Should().BeTrue();

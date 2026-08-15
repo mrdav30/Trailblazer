@@ -143,7 +143,7 @@ public partial class NavSteering
             travelMode: IsInGroup ? MovementGroupTravelMode.Individual : MovementGroupTravelMode.None,
             destination: _requestedDestination);
 
-        if (IsInGroup && _currentRequest != null)
+        if (IsInGroup && (_currentRequest != null || _currentQuery.HasValue))
         {
             target = MovementGroups.UpdateTarget(
                 _movementGroupSession,

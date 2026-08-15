@@ -26,75 +26,6 @@ public sealed class WaypointGuideTests : IDisposable
     }
 
     [Fact]
-    public void AStarGuide_ShouldHandleWaypointQueriesAndArrival()
-    {
-        var guide = new AStarGuide();
-        guide.Initialize(AStarSurveyResult.Empty).Should().BeFalse();
-
-        AStarSurveyResult survey = AStarSurveyResult.Create(
-            TestWorld.Context,
-            BuildWaypoints(
-                Vector3d.Zero,
-                new Vector3d(1, 0, 0),
-                new Vector3d(2, 0, 0)),
-            Array.Empty<string>(),
-            TestPathRequest.CreateCacheKey(1));
-
-        guide.Initialize(survey).Should().BeTrue();
-        guide.CurrentWaypointIndex.Should().Be(0);
-        guide.HasArrived().Should().BeFalse();
-
-        guide.GetIndex(new Vector3d(1, 0, 0)).Should().Be(1);
-        guide.TryGetMovementDirection(new Vector3d(3, 0, 0), out Vector3d movement).Should().BeTrue();
-        movement.X.Should().BeLessThan(Fixed64.Zero);
-
-        guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero);
-
-        guide.AdvanceWaypoint();
-        guide.GetCurrentWaypointDirection(Vector3d.Zero).X.Should().BeGreaterThan(Fixed64.Zero);
-        guide.TryGetFallbackDirection(new Vector3d(3, 0, 0), out Vector3d fallback).Should().BeTrue();
-        fallback.X.Should().BeLessThan(Fixed64.Zero);
-
-        guide.TryGetWaypointAt(1, out AStarWaypoint waypoint).Should().BeTrue();
-        waypoint.Position.Should().Be(new Vector3d(1, 0, 0));
-        guide.TryGetWaypointAt(5, out _).Should().BeFalse();
-
-        guide.AdvanceWaypoint();
-        guide.HasArrived().Should().BeTrue();
-    }
-
-    [Fact]
-    public void AStarGuide_ShouldOnlySmooth_WhenEnoughWaypointsExist()
-    {
-        var shortGuide = new AStarGuide { UseSplineSmoothing = true };
-        shortGuide.Initialize(AStarSurveyResult.Create(
-            TestWorld.Context,
-            BuildWaypoints(
-                Vector3d.Zero,
-                new Vector3d(1, 0, 0),
-                new Vector3d(2, 0, 0)),
-            Array.Empty<string>(),
-            TestPathRequest.CreateCacheKey(2))).Should().BeTrue();
-
-        shortGuide.ActiveWaypoints.Should().HaveCount(3);
-
-        var smoothedGuide = new AStarGuide { UseSplineSmoothing = true };
-        smoothedGuide.Initialize(AStarSurveyResult.Create(
-            TestWorld.Context,
-            BuildWaypoints(
-                Vector3d.Zero,
-                new Vector3d(1, 0, 0),
-                new Vector3d(2, 0, 0),
-                new Vector3d(3, 0, 0)),
-            Array.Empty<string>(),
-            TestPathRequest.CreateCacheKey(3))).Should().BeTrue();
-
-        smoothedGuide.ActiveWaypoints.Should().HaveCount(5);
-        smoothedGuide.ActiveWaypoints[0].Position.Should().Be(Vector3d.Zero);
-        smoothedGuide.ActiveWaypoints[^1].Position.Should().Be(new Vector3d(3, 0, 0));
-    }
-
-    [Fact]
     public void VolumeGuide_ShouldHandleWaypointQueriesAndFallback()
     {
         var guide = new VolumeGuide();
@@ -167,61 +98,6 @@ public sealed class WaypointGuideTests : IDisposable
 
         guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero,
             "index past end triggers the out-of-range guard");
-    }
-
-
-    [Fact]
-    public void HybridGuide_ShouldHandleInitializationAndWaypointQueries()
-    {
-        var guide = new HybridGuide();
-        guide.Initialize(null!).Should().BeFalse();
-        guide.Initialize(Array.Empty<AStarWaypoint>()).Should().BeFalse();
-
-        AStarWaypoint[] waypoints = BuildWaypoints(
-            Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            new Vector3d(2, 0, 0));
-
-        guide.Initialize(waypoints).Should().BeTrue();
-        guide.CurrentWaypointIndex.Should().Be(1);
-        guide.GetIndex(new Vector3d(1, 0, 0)).Should().Be(1);
-
-        guide.TryGetMovementDirection(new Vector3d(3, 0, 0), out Vector3d movement).Should().BeTrue();
-        movement.X.Should().BeLessThan(Fixed64.Zero);
-
-        guide.GetCurrentWaypointDirection(Vector3d.Zero).X.Should().BeGreaterThan(Fixed64.Zero);
-        guide.TryGetFallbackDirection(new Vector3d(3, 0, 0), out Vector3d fallback).Should().BeTrue();
-        fallback.X.Should().BeLessThan(Fixed64.Zero);
-
-        guide.TryGetWaypointAt(0, out AStarWaypoint waypoint).Should().BeTrue();
-        waypoint.Position.Should().Be(Vector3d.Zero);
-        guide.TryGetWaypointAt(99, out _).Should().BeFalse();
-    }
-
-    [Fact]
-    public void HybridGuide_ShouldReturnFalseAndZero_WhenActiveWaypointsAreNullOrExhausted()
-    {
-        // Before initialization ActiveWaypoints is null — covers the null/empty guards in
-        // TryGetMovementDirection, GetCurrentWaypointDirection, and TryGetFallbackDirection.
-        var fresh = new HybridGuide();
-        fresh.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse();
-        fresh.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
-        fresh.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero);
-
-        // A single-waypoint guide whose only waypoint is at Vector3d.Zero:
-        // CurrentWaypointIndex stays 0, and waypoint == Zero triggers the zero-direction guard.
-        var zeroGuide = new HybridGuide();
-        zeroGuide.Initialize(BuildWaypoints(Vector3d.Zero)).Should().BeTrue();
-        zeroGuide.GetCurrentWaypointDirection(new Vector3d(1, 0, 0)).Should().Be(Vector3d.Zero);
-
-        // Advancing past the end of the waypoint list exhausts the index, triggering the
-        // out-of-range guard in GetCurrentWaypointDirection.
-        var guide = new HybridGuide();
-        guide.Initialize(BuildWaypoints(new Vector3d(1, 0, 0), new Vector3d(2, 0, 0))).Should().BeTrue();
-        guide.AdvanceWaypoint();
-        guide.AdvanceWaypoint();
-        guide.AdvanceWaypoint();
-        guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero);
     }
 
     private static AStarWaypoint[] BuildWaypoints(params Vector3d[] positions)

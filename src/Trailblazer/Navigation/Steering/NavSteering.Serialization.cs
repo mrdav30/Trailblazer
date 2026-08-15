@@ -20,8 +20,14 @@ public partial class NavSteering
     public virtual void RecordData(IChronicler chronicler)
     {
         var requestRecord = new PathRequestRecord();
+        var queryRecord = new PathQueryRecord();
         if (chronicler.Mode == SerializationMode.Saving)
-            requestRecord.Capture(_currentRequest, _trailGuide);
+        {
+            if (_currentQuery.HasValue)
+                queryRecord.Capture(_currentQuery, _navigationGuideLease);
+            else
+                requestRecord.Capture(_currentRequest, _trailGuide);
+        }
 
         int movementGroupId = _movementGroupSession.GroupId;
 
@@ -55,6 +61,7 @@ public partial class NavSteering
         RecordValues.Look(chronicler, ref BrakingPower, "BrakingPower", DefaultBrakingPower);
         RecordValues.Look(chronicler, ref movementGroupId, "MovementGroupId", 0);
         RecordValues.Look(chronicler, ref _movementGroupMode, "MovementGroupMode", MovementGroupTravelMode.None);
+        RecordDeep.Look(chronicler, ref queryRecord, "PathQuery");
         RecordDeep.Look(chronicler, ref requestRecord, "PathRequest");
 
         if (chronicler.Mode == SerializationMode.Loading)
@@ -63,7 +70,15 @@ public partial class NavSteering
             ResetMovementGroupSession();
 
             _currentRequest = null;
-            if (!requestRecord.TryCreateRequest(ResolveContext(), out IPathRequest? request))
+            _currentQuery = null;
+            bool restored = queryRecord.TryCreateQuery(out PathQuery? query);
+            IPathRequest? request = null;
+            if (restored && query.HasValue)
+                _currentQuery = query;
+            else if (restored)
+                restored = requestRecord.TryCreateRequest(ResolveContext(), out request);
+
+            if (!restored)
             {
                 _shouldMove = false;
                 _isStuck = false;
@@ -86,7 +101,27 @@ public partial class NavSteering
             if (movementGroupId < 0)
                 _movementGroupMode = MovementGroupTravelMode.None;
 
-            if (_currentRequest != null
+            if (_currentQuery.HasValue
+                && ShouldMove
+                && queryRecord.WaypointIndex >= 0
+                && !_shouldRequestPathThisFrame
+                && !HasLineOfSightPath)
+            {
+                if (!queryRecord.TryCreateGuide(
+                    ResolveContext(),
+                    _currentQuery.Value,
+                    out _navigationGuideLease))
+                {
+                    _shouldRequestPathThisFrame = ShouldMove;
+                }
+            }
+            else if (_currentQuery.HasValue
+                && ShouldMove
+                && !HasLineOfSightPath)
+            {
+                _shouldRequestPathThisFrame = true;
+            }
+            else if (_currentRequest != null
                 && ShouldMove
                 && requestRecord.HasGuide
                 && !_shouldRequestPathThisFrame
@@ -106,6 +141,9 @@ public partial class NavSteering
 
     private void ReleaseTrailGuide(bool dispose = false)
     {
+        _navigationGuideLease?.Dispose();
+        _navigationGuideLease = null;
+
         if (_trailGuide == null)
             return;
 

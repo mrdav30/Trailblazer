@@ -49,6 +49,17 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxAreaRulesPerPolicy.Should().Be(4_096);
         settings.MaxAreaRules.Should().Be(65_536);
         settings.MaxConcurrentSnapshotLeases.Should().Be(8);
+        settings.QueryLimits.MaxBatchItems.Should().Be(8);
+        settings.QueryLimits.MaxBatchDescriptorBytes.Should().Be(65_536);
+        settings.QueryLimits.MaxConcurrentAStarQueries.Should().Be(8);
+        settings.QueryLimits.AStarWorkspaceMapCapacity.Should().Be(16);
+        settings.QueryLimits.AStarWorkspaceEndpointPageCapacity.Should().Be(512);
+        settings.QueryLimits.AStarWorkspaceNodeCapacity.Should().Be(4_096);
+        settings.QueryLimits.MaxAStarCacheEntries.Should().Be(128);
+        settings.QueryLimits.MaxAStarReusablePayloadBytes.Should().Be(16_777_216);
+        settings.QueryLimits.MaxAStarSinglePayloadBytes.Should().Be(262_144);
+        settings.QueryLimits.MaxAStarActivePayloadBytes.Should().Be(2_097_152);
+        settings.QueryLimits.MaxAStarActivePayloadLeases.Should().Be(8);
     }
 
     [Fact]
@@ -56,6 +67,7 @@ public sealed class TrailblazerWorldContextSettingsTests
     {
         NavigationOperationLimits operationLimits = CreateOperationLimits();
         var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 5, 7, 21);
+        NavigationQueryLimits queryLimits = CreateQueryLimits(maxConcurrentQueries: 2);
 
         var settings = new TrailblazerWorldContextSettings(
             operationLimits,
@@ -73,7 +85,8 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxAreaPolicies: 20,
             maxAreaRulesPerPolicy: 21,
             maxAreaRules: 22,
-            maxConcurrentSnapshotLeases: 23);
+            maxConcurrentSnapshotLeases: 23,
+            queryLimits);
 
         settings.OperationLimits.Should().Be(operationLimits);
         settings.MaintenanceBudget.Should().Be(maintenanceBudget);
@@ -93,6 +106,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxAreaRulesPerPolicy.Should().Be(21);
         settings.MaxAreaRules.Should().Be(22);
         settings.MaxConcurrentSnapshotLeases.Should().Be(23);
+        settings.QueryLimits.Should().Be(queryLimits);
     }
 
     [Fact]
@@ -137,6 +151,11 @@ public sealed class TrailblazerWorldContextSettingsTests
         Action areaRulesPerPolicy = () => _ = CreateSettings(maxAreaRulesPerPolicy: 0);
         Action areaRules = () => _ = CreateSettings(maxAreaRules: 0);
         Action concurrentLeases = () => _ = CreateSettings(maxConcurrentSnapshotLeases: 0);
+        Action defaultQueries = () => _ = CreateSettings(
+            queryLimits: new NavigationQueryLimits());
+        Action queryLeaseMismatch = () => _ = CreateSettings(
+            maxConcurrentSnapshotLeases: 1,
+            queryLimits: CreateQueryLimits(maxConcurrentQueries: 2));
         Action areaPolicyWork = () => _ = CreateSettings(
             maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1));
         Action catalogCopyWork = () => _ = CreateSettings(
@@ -161,6 +180,8 @@ public sealed class TrailblazerWorldContextSettingsTests
         areaRulesPerPolicy.Should().Throw<ArgumentOutOfRangeException>();
         areaRules.Should().Throw<ArgumentOutOfRangeException>();
         concurrentLeases.Should().Throw<ArgumentOutOfRangeException>();
+        defaultQueries.Should().Throw<ArgumentException>();
+        queryLeaseMismatch.Should().Throw<ArgumentException>();
         areaPolicyWork.Should().Throw<ArgumentException>();
         catalogCopyWork.Should().Throw<ArgumentException>();
     }
@@ -218,7 +239,8 @@ public sealed class TrailblazerWorldContextSettingsTests
         int maxAreaPolicies = 1,
         int maxAreaRulesPerPolicy = 1,
         int maxAreaRules = 1,
-        int maxConcurrentSnapshotLeases = 1) => new(
+        int maxConcurrentSnapshotLeases = 1,
+        NavigationQueryLimits? queryLimits = null) => new(
             operationLimits ?? CreateOperationLimits(),
             maintenanceBudget ?? new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 3),
             maxIngressEntries,
@@ -234,7 +256,8 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxAreaPolicies,
             maxAreaRulesPerPolicy,
             maxAreaRules,
-            maxConcurrentSnapshotLeases);
+            maxConcurrentSnapshotLeases,
+            queryLimits ?? CreateQueryLimits(maxConcurrentSnapshotLeases));
 
     private static NavigationOperationLimits CreateOperationLimits() => new(
         maxPendingOperations: 1,
@@ -252,4 +275,18 @@ public sealed class TrailblazerWorldContextSettingsTests
         maxOverlayCells: 0,
         maxOverlayConnections: 0,
         maxOverlayTransitions: 0);
+
+    private static NavigationQueryLimits CreateQueryLimits(
+        int maxConcurrentQueries) => new(
+            maxBatchItems: 1,
+            maxBatchDescriptorBytes: 264,
+            maxConcurrentAStarQueries: maxConcurrentQueries,
+            aStarWorkspaceMapCapacity: 1,
+            aStarWorkspaceEndpointPageCapacity: 1,
+            aStarWorkspaceNodeCapacity: 1,
+            maxAStarCacheEntries: 1,
+            maxAStarReusablePayloadBytes: 1,
+            maxAStarSinglePayloadBytes: 1,
+            maxAStarActivePayloadBytes: 1,
+            maxAStarActivePayloadLeases: 1);
 }

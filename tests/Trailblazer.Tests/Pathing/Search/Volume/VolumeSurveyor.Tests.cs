@@ -296,12 +296,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         meta[neighbor.WorldIndex].MovementCost.Should().Be(175);
         meta[neighbor.WorldIndex].NextTrailIndex.Should().Be(current.WorldIndex);
         heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
-        updatedPathCost.Should().Be(
-            175
-            + AStarSurveyor.CalculateHeuristic(
-                neighbor.WorldPosition,
-                TestRequire.NotNull(request.EndNode).WorldPosition,
-                request.Heuristic));
+        updatedPathCost.Should().Be(275);
     }
 
     /// <summary>

@@ -14,14 +14,47 @@ namespace Trailblazer.Navigation;
 
 public abstract partial class Navigator
 {
+    private enum SerializedGuidedPathMode
+    {
+        Invalid = -1,
+        FlowField = 1
+    }
+
     #region Serialization
 
     /// <inheritdoc />
     public virtual void RecordData(IChronicler chronicler)
     {
+        var navigationProfileRecord = chronicler.Mode == SerializationMode.Loading
+            ? new NavigationAgentProfileRecord()
+            : new NavigationAgentProfileRecord(_navigationProfile);
+        SerializedGuidedPathMode serializedGuidedPathMode = chronicler.Mode == SerializationMode.Loading
+            ? SerializedGuidedPathMode.Invalid
+            : SerializedGuidedPathMode.FlowField;
         GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
         if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
             pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
+
+        RecordDeep.Look(chronicler, ref navigationProfileRecord, "NavigationProfile");
+        if (chronicler.Mode == SerializationMode.Loading
+            && (!navigationProfileRecord.TryCreate(out NavigationAgentProfile recordedProfile)
+                || recordedProfile != _navigationProfile))
+        {
+            throw new InvalidOperationException(
+                "Serialized navigation profile must exactly match the configured Navigator shell.");
+        }
+
+        RecordValues.Look(
+            chronicler,
+            ref serializedGuidedPathMode,
+            "GuidedPathMode",
+            SerializedGuidedPathMode.Invalid);
+        if (chronicler.Mode == SerializationMode.Loading
+            && serializedGuidedPathMode != SerializedGuidedPathMode.FlowField)
+        {
+            throw new InvalidOperationException(
+                "Serialized guided path mode is missing, retired, or unsupported.");
+        }
 
         RecordValues.Look(chronicler, ref _position, "Position", Vector3d.Zero);
         RecordValues.Look(chronicler, ref _lastPosition, "LastPosition", Vector3d.Zero);
@@ -29,13 +62,10 @@ public abstract partial class Navigator
         RecordValues.Look(chronicler, ref _velocity, "Velocity", Vector3d.Zero);
         RecordValues.Look(chronicler, ref _speed, "Speed", Fixed64.Zero);
         RecordValues.Look(chronicler, ref _acceleration, "Acceleration", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _size, "Size", Fixed64.One);
-        RecordValues.Look(chronicler, ref _footPositionAdjust, "FootPositionAdjust", DefaultFootPositionAdjust);
-        RecordValues.Look(chronicler, ref _guidedPathMode, "GuidedPathMode", SolidPathAlgorithm.AStar);
         RecordValues.Look(chronicler, ref _guidedAllowUnwalkableEndpoints, "GuidedAllowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref _guidedAllowTraversalTransitions, "GuidedAllowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref _guidedMaxClimbHeight, "GuidedMaxClimbHeight", Fixed64.One);
-        RecordValues.Look(chronicler, ref _guidedAStarHeuristic, "GuidedAStarHeuristic", HeuristicMethod.Manhattan);
+        RecordValues.Look(chronicler, ref _guidedVolumeHeuristic, "GuidedAStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref _guidedFlowFieldExtraFloodRange, "GuidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref _globalId, "GlobalId", Guid.Empty);
         RecordValues.Look(chronicler, ref _occupantGroupId, "OccupantGroupId", (byte)1);
@@ -50,7 +80,17 @@ public abstract partial class Navigator
         RecordDeep.Look(chronicler, ref _heightmapGrounding, "HeightmapGrounding");
         RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff!, "PendingGuidedVolumeExitHandoff");
         if (_steering != null)
+        {
             RecordDeep.Look(chronicler, ref _steering, "Steering");
+            if (chronicler.Mode == SerializationMode.Loading
+                && _steering.CurrentQuery is PathQuery restoredQuery
+                && restoredQuery.Agent != _navigationProfile)
+            {
+                _steering.Reset();
+                throw new InvalidOperationException(
+                    "Serialized graph query profile must exactly match the configured Navigator shell.");
+            }
+        }
         if (_turning != null)
             RecordDeep.Look(chronicler, ref _turning, "Turning");
         if (_motor != null)

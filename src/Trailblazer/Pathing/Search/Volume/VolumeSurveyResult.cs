@@ -17,7 +17,7 @@ public sealed class VolumeSurveyResult : SurveyResult
     /// <summary>
     /// Gets the sequence of waypoints calculated by the A* pathfinding algorithm.
     /// </summary>
-    public AStarWaypoint[]? Waypoints { get; private set; }
+    internal AStarWaypoint[]? Waypoints { get; private set; }
 
     /// <inheritdoc/>
     public override bool HasPath => IsValid && Waypoints != null && Waypoints.Length > 0;
@@ -38,7 +38,7 @@ public sealed class VolumeSurveyResult : SurveyResult
     /// <param name="chartsUtilized">An array of chart names that were utilized in the survey. If null, an empty array is used.</param>
     /// <param name="key">A key used to identify or hash the request associated with this survey result.</param>
     /// <returns>A new VolumeSurveyResult instance initialized with the provided waypoints, charts, and key.</returns>
-    public static VolumeSurveyResult Create(
+    internal static VolumeSurveyResult Create(
         TrailblazerWorldContext context,
         AStarWaypoint[] waypoints,
         string[] chartsUtilized,

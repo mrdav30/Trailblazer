@@ -28,6 +28,10 @@ internal struct VolumeVoxelMeta
 /// </summary>
 public sealed class VolumeSurveyor
 {
+    private const int StraightCost = 100;
+
+    private const int DiagonalCost = 141;
+
     private static readonly Lazy<VolumeSurveyor> _instance =
         new(() => new VolumeSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -130,7 +134,7 @@ public sealed class VolumeSurveyor
         if (TryProcessDirections(
             current,
             RectangularDirectionUtility.Perpendicular,
-            data.MovementCost + AStarSurveyor.StraightCost))
+            data.MovementCost + StraightCost))
         {
             return true;
         }
@@ -138,7 +142,7 @@ public sealed class VolumeSurveyor
         if (TryProcessDirections(
             current,
             RectangularDirectionUtility.Diagonal,
-            data.MovementCost + AStarSurveyor.DiagonalCost,
+            data.MovementCost + DiagonalCost,
             checkEdges: true))
         {
             return true;
@@ -327,10 +331,39 @@ public sealed class VolumeSurveyor
     private int CalculatePathCost(Vector3d currentVoxel, int movementCost)
     {
         VolumePathRequest request = _request!;
-        return movementCost + AStarSurveyor.CalculateHeuristic(
+        return movementCost + CalculateHeuristic(
             currentVoxel,
             request.EndNode!.WorldPosition,
             request.Heuristic);
+    }
+
+    private static int CalculateHeuristic(
+        Vector3d currentPosition,
+        Vector3d targetPosition,
+        HeuristicMethod heuristicMethod)
+    {
+        Vector3d distance = Vector3d.Abs(currentPosition - targetPosition);
+        Fixed64 heuristicCost = heuristicMethod switch
+        {
+            HeuristicMethod.Manhattan =>
+                (distance.X + distance.Y + distance.Z) * StraightCost,
+            HeuristicMethod.Octile => CalculateOctileHeuristic(distance),
+            HeuristicMethod.Euclidean => FixedMath.Sqrt(
+                distance.X * distance.X
+                + distance.Y * distance.Y
+                + distance.Z * distance.Z) * StraightCost,
+            _ => Fixed64.MaxValue
+        };
+
+        return heuristicCost.CeilToInt();
+    }
+
+    private static Fixed64 CalculateOctileHeuristic(Vector3d distance)
+    {
+        Fixed64 maximum = FixedMath.Max(FixedMath.Max(distance.X, distance.Y), distance.Z);
+        Fixed64 minimum = FixedMath.Min(FixedMath.Min(distance.X, distance.Y), distance.Z);
+        Fixed64 middle = distance.X + distance.Y + distance.Z - maximum - minimum;
+        return (middle * DiagonalCost) + ((maximum - middle) * StraightCost);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

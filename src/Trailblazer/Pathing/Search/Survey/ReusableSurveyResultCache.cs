@@ -321,68 +321,6 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     }
 
     /// <summary>
-    /// Seeds a valid result directly into the cache for internal benchmark and test fixtures.
-    /// </summary>
-    /// <remarks>
-    /// This intentionally does not evict entries; callers use it to create exact cache-pressure
-    /// shapes and should choose unique request keys up to the cache capacity.
-    /// </remarks>
-    internal bool TrySeed(T result, bool checkout)
-    {
-        if (result == null || !result.HasPath || !result.RequestCacheKey.IsInitialized || result.Context == null)
-            return false;
-
-        PathRequestCacheKey key = result.RequestCacheKey;
-
-        _lock.EnterWriteLock();
-        try
-        {
-            bool replacesExisting = _cache.TryGetValue(key, out T existing);
-            if (!replacesExisting && _cache.Count >= MaxCacheSize)
-                return false;
-
-            if (_uncachedActiveResults.Remove(result))
-                CountInUse -= result.ActiveCheckoutCount;
-
-            if (replacesExisting)
-            {
-                CountInUse -= existing.ActiveCheckoutCount;
-
-                RemoveCachedResult(key, existing);
-                if (!ReferenceEquals(existing, result))
-                    existing.Reset();
-            }
-
-            result.ReleaseAllCheckouts();
-
-            if (checkout)
-            {
-                result.Checkout();
-                CountInUse++;
-            }
-
-            AddCachedResult(key, result);
-            return true;
-        }
-        finally { _lock.ExitWriteLock(); }
-    }
-
-    internal int CountIndexedEntriesForChart(string chartKey)
-    {
-        if (string.IsNullOrEmpty(chartKey))
-            return 0;
-
-        _lock.EnterReadLock();
-        try
-        {
-            return _chartIndex.TryGetValue(chartKey, out SwiftList<PathRequestCacheKey> keys)
-                ? keys.Count
-                : 0;
-        }
-        finally { _lock.ExitReadLock(); }
-    }
-
-    /// <summary>
     /// Invalidates cached results that reference the specified chart key by using the chart reverse index.
     /// </summary>
     /// <param name="chartKey">The chart key whose dependent cached results should be removed.</param>

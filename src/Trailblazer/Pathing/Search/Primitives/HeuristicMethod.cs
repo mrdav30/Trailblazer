@@ -16,7 +16,7 @@ namespace Trailblazer.Pathing;
 /// Manhattan is typically used for four-directional grids, Octile for eight-directional
 /// grids, and Euclidean for continuous or diagonal movement scenarios.
 /// </remarks>
-public enum HeuristicMethod
+internal enum HeuristicMethod
 {
     /// <summary>
     /// Represents the Manhattan distance metric, also known as the L1 norm, used to calculate the distance between

@@ -29,7 +29,7 @@ public sealed class VolumeGuide : IWaypointGuide
     /// Gets the collection of currently active waypoints used for pathfinding.
     /// </summary>
     /// <remarks>Returns an empty array if no trail map is available or if there are no active waypoints.</remarks>
-    public AStarWaypoint[] ActiveWaypoints => TrailMap?.Waypoints ?? Array.Empty<AStarWaypoint>();
+    internal AStarWaypoint[] ActiveWaypoints => TrailMap?.Waypoints ?? Array.Empty<AStarWaypoint>();
 
     /// <summary>
     /// Initializes the navigation state using the specified survey result.
@@ -146,7 +146,7 @@ public sealed class VolumeGuide : IWaypointGuide
     /// the default value for <see cref="AStarWaypoint"/>.
     /// </param>
     /// <returns>true if the waypoint at the specified index was successfully retrieved; otherwise, false.</returns>
-    public bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
+    internal bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
     {
         if (TrailMap == null || !TrailMap.HasPath || index < 0 || index >= ActiveWaypoints.Length)
         {

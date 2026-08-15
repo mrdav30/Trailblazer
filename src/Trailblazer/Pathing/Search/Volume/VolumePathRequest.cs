@@ -55,7 +55,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
     /// the algorithm. Refer to the documentation for HeuristicMethod for available options and their intended use
     /// cases.
     /// </remarks>
-    public HeuristicMethod Heuristic { get; set; }
+    internal HeuristicMethod Heuristic { get; set; }
 
     /// <summary>
     /// Gets the medium used for traversal operations.
@@ -109,7 +109,6 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Vector3d destination,
         Fixed64 unitSize,
         [NotNullWhen(true)] out VolumePathRequest? request,
-        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
         bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
@@ -118,7 +117,6 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             origin,
             destination,
             unitSize,
-            heuristic,
             allowUnwalkableEndpoints,
             medium);
 
@@ -133,7 +131,23 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
-        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
+        bool allowUnwalkableEndpoints = false,
+        TraversalMedium medium = TraversalMedium.Gas) =>
+        Create(
+            context,
+            origin,
+            destination,
+            unitSize,
+            HeuristicMethod.Euclidean,
+            allowUnwalkableEndpoints,
+            medium);
+
+    internal static VolumePathRequest? Create(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        HeuristicMethod heuristic,
         bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {

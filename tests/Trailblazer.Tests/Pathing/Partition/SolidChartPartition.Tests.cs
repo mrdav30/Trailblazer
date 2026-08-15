@@ -128,30 +128,6 @@ public sealed class SolidChartPartitionTests : IDisposable
         left.Neighbors![(int)RectangularDirection.East].Should().BeSameAs(right);
     }
 
-    [Fact]
-    public void HandleChange_ShouldInvalidateOwningContext_WhenObstacleEventFiresWithoutActivePathingState()
-    {
-        TestWorld.Reset();
-
-        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
-        context.World.TryAddGrid(
-            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
-            out ushort gridIndex).Should().BeTrue();
-        context.World.TryGetGrid(gridIndex, out VoxelGrid? grid).Should().BeTrue();
-        context.Pathing.Register(PathTestFactory.BuildSinglePointMap("OwnerScopedObstacle", Vector3d.Zero))
-            .Should()
-            .BeTrue();
-        context.World.TryGetVoxel(Vector3d.Zero, out Voxel? voxel).Should().BeTrue();
-        SolidPartitionReachability.SolidPartitionReachabilityStats before =
-            context.Guides.CaptureReachabilityStats();
-
-        ObstacleToken obstacleToken = context.World.AllocateObstacleToken();
-        Action act = () => grid!.TryAddObstacle(voxel!, obstacleToken).Should().BeTrue();
-
-        act.Should().NotThrow();
-        context.Guides.CaptureReachabilityStats().Version.Should().BeGreaterThan(before.Version);
-    }
-
     /// <summary>
     /// Covers the <c>ChartOwners?.Clear()</c> null-conditional branch in <c>Reset</c>.
     /// A freshly constructed <c>SolidChartPartition</c> never has <c>ApplyAuthoredState</c>

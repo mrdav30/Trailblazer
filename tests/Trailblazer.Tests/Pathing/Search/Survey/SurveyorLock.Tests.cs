@@ -33,15 +33,11 @@ public sealed class SurveyorLockTests : IDisposable
             .GetField("GlobalLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Should().BeNull();
 
-        object? aStarLock = GetScratchLock(AStarSurveyor.Shared);
         object? flowFieldLock = GetScratchLock(FlowFieldSurveyor.Shared);
         object? volumeLock = GetScratchLock(VolumeSurveyor.Shared);
 
-        aStarLock?.GetType().Name.Should().Be(nameof(SurveyorLock));
         flowFieldLock?.GetType().Name.Should().Be(nameof(SurveyorLock));
         volumeLock?.GetType().Name.Should().Be(nameof(SurveyorLock));
-        aStarLock.Should().NotBeSameAs(flowFieldLock);
-        aStarLock.Should().NotBeSameAs(volumeLock);
         flowFieldLock.Should().NotBeSameAs(volumeLock);
     }
 
@@ -56,9 +52,6 @@ public sealed class SurveyorLockTests : IDisposable
         NavigationChart chart = NavigationChart.From3D("ConcurrentSurveyors", data, Vector3d.Zero, Fixed64.One);
         PathManager.Register(chart);
 
-        AStarPathRequest aStarRequest = TestRequire.Created(
-            AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(7, 0, 7), Fixed64.One, out AStarPathRequest? createdAStar),
-            createdAStar);
         FlowFieldPathRequest flowFieldRequest = TestRequire.Created(
             FlowFieldPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(7, 0, 7), out FlowFieldPathRequest? createdFlowField),
             createdFlowField);
@@ -67,21 +60,12 @@ public sealed class SurveyorLockTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        Task<AStarSurveyResult[]> aStarTask = Task.Run(() => RunAStar(aStarRequest));
         Task<FlowFieldSurveyResult[]> flowFieldTask = Task.Run(() => RunFlowField(flowFieldRequest));
         Task<VolumeSurveyResult[]> volumeTask = Task.Run(() => RunVolume(volumeRequest));
 
-        AStarSurveyResult[] aStarResults = await aStarTask;
         FlowFieldSurveyResult[] flowFieldResults = await flowFieldTask;
         VolumeSurveyResult[] volumeResults = await volumeTask;
 
-        aStarResults.Should().AllSatisfy(result =>
-        {
-            result.HasPath.Should().BeTrue();
-            AStarWaypoint[] waypoints = TestRequire.NotNull(result.Waypoints);
-            waypoints[0].Position.Should().Be(Vector3d.Zero);
-            waypoints[waypoints.Length - 1].Position.Should().Be(new Vector3d(7, 0, 7));
-        });
         flowFieldResults.Should().AllSatisfy(result =>
         {
             result.HasPath.Should().BeTrue();
@@ -103,15 +87,6 @@ public sealed class SurveyorLockTests : IDisposable
         return surveyor.GetType()
             .GetField("_scratchLock", BindingFlags.Instance | BindingFlags.NonPublic)
             ?.GetValue(surveyor);
-    }
-
-    private static AStarSurveyResult[] RunAStar(AStarPathRequest request)
-    {
-        var results = new AStarSurveyResult[8];
-        for (int i = 0; i < results.Length; i++)
-            results[i] = AStarSurveyor.Shared.FindPath(request);
-
-        return results;
     }
 
     private static FlowFieldSurveyResult[] RunFlowField(FlowFieldPathRequest request)

@@ -7,6 +7,7 @@
 
 using FixedMathSharp;
 using GridForge.Spatial;
+using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
 
@@ -37,15 +38,17 @@ public interface ISteer : IVoxelOccupant
     Fixed64 StuckThresholdSpeed { get; }
 
     /// <summary>
-    /// The size of object in worldspace.
+    /// Gets the exact immutable navigation profile that owns the agent body shape.
     /// </summary>
-    /// <remarks>
-    /// Note: Add a little padding to manevour around blockers
-    /// </remarks>
-    Fixed64 Size { get; }
+    NavigationAgentProfile NavigationProfile { get; }
 
     /// <summary>
-    /// Half the unit size, used for radius-based spatial checks.
+    /// Gets the authoritative body shape from <see cref="NavigationProfile"/>.
+    /// </summary>
+    KinematicBodyShape BodyShape { get; }
+
+    /// <summary>
+    /// Body radius used for spatial checks.
     /// </summary>
     Fixed64 Radius { get; }
 }

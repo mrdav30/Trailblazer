@@ -22,12 +22,11 @@ public static class NavigatorPathRequestFactory
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        SolidPathAlgorithm pathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
         TraversalMedium traversalMedium,
-        HeuristicMethod aStarHeuristic,
+        HeuristicMethod volumeHeuristic,
         int flowFieldExtraFloodRange,
         [NotNullWhen(true)] out IPathRequest? request,
         out GuidedVolumeExitHandoff? handoff)
@@ -48,7 +47,7 @@ public static class NavigatorPathRequestFactory
                 origin,
                 targetPosition,
                 unitSize,
-                aStarHeuristic,
+                volumeHeuristic,
                 allowUnwalkableEndpoints,
                 traversalMedium);
             if (volume == null)
@@ -58,11 +57,10 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     traversalMedium,
-                    pathMode,
                     allowUnwalkableEndpoints,
                     allowTraversalTransitions,
                     maxClimbHeight,
-                    aStarHeuristic,
+                    volumeHeuristic,
                     flowFieldExtraFloodRange,
                     out request,
                     out handoff,
@@ -73,11 +71,10 @@ public static class NavigatorPathRequestFactory
                 targetPosition,
                 traversalMedium,
                 volume,
-                pathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 maxClimbHeight,
-                aStarHeuristic,
+                volumeHeuristic,
                 flowFieldExtraFloodRange,
                 out request,
                 out handoff))
@@ -89,26 +86,11 @@ public static class NavigatorPathRequestFactory
             return true;
         }
 
-        switch (pathMode)
-        {
-            case SolidPathAlgorithm.AStar:
-                return TryCreateAStarRequest(
-                    context,
-                    origin, targetPosition, unitSize,
-                    aStarHeuristic, allowUnwalkableEndpoints, allowTraversalTransitions,
-                    maxClimbHeight, out request);
-
-            case SolidPathAlgorithm.FlowField:
-                return TryCreateFlowFieldRequest(
-                    context,
-                    origin, targetPosition, unitSize,
-                    allowUnwalkableEndpoints, allowTraversalTransitions,
-                    maxClimbHeight, flowFieldExtraFloodRange, out request);
-
-            default:
-                request = null;
-                return false;
-        }
+        return TryCreateFlowFieldRequest(
+            context,
+            origin, targetPosition, unitSize,
+            allowUnwalkableEndpoints, allowTraversalTransitions,
+            maxClimbHeight, flowFieldExtraFloodRange, out request);
     }
 
     private static bool TryCreateVolumeExitHandoff(
@@ -117,11 +99,10 @@ public static class NavigatorPathRequestFactory
         Vector3d targetPosition,
         Fixed64 unitSize,
         TraversalMedium medium,
-        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
+        HeuristicMethod volumeHeuristic,
         int flowFieldExtraFloodRange,
         [NotNullWhen(true)] out IPathRequest? request,
         out GuidedVolumeExitHandoff? handoff,
@@ -140,11 +121,10 @@ public static class NavigatorPathRequestFactory
             targetPosition,
             unitSize,
             medium,
-            chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
             maxClimbHeight,
-            aStarHeuristic,
+            volumeHeuristic,
             flowFieldExtraFloodRange,
             out VolumePathRequest? volumeRequest,
             out handoff,
@@ -158,11 +138,10 @@ public static class NavigatorPathRequestFactory
         Vector3d targetPosition,
         TraversalMedium medium,
         VolumePathRequest directRequest,
-        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
+        HeuristicMethod volumeHeuristic,
         int flowFieldExtraFloodRange,
         [NotNullWhen(true)] out IPathRequest? request,
         out GuidedVolumeExitHandoff? handoff)
@@ -187,11 +166,10 @@ public static class NavigatorPathRequestFactory
                 context,
                 targetPosition,
                 medium,
-                chartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 maxClimbHeight,
-                aStarHeuristic,
+                volumeHeuristic,
                 flowFieldExtraFloodRange,
                 out request,
                 out handoff))
@@ -208,11 +186,10 @@ public static class NavigatorPathRequestFactory
             targetPosition,
             directRequest.UnitSize,
             medium,
-            chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
             maxClimbHeight,
-            aStarHeuristic,
+            volumeHeuristic,
             flowFieldExtraFloodRange,
             out request,
             out handoff,
@@ -243,11 +220,10 @@ public static class NavigatorPathRequestFactory
         TrailblazerWorldContext context,
         Vector3d targetPosition,
         TraversalMedium medium,
-        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
+        HeuristicMethod volumeHeuristic,
         int flowFieldExtraFloodRange,
         [NotNullWhen(true)] out IPathRequest? request,
         out GuidedVolumeExitHandoff? handoff)
@@ -264,11 +240,10 @@ public static class NavigatorPathRequestFactory
             targetPosition,
             directRequest.UnitSize,
             medium,
-            chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
             maxClimbHeight,
-            aStarHeuristic,
+            volumeHeuristic,
             flowFieldExtraFloodRange,
             out IPathRequest? plannedRequest,
             out GuidedVolumeExitHandoff? plannedHandoff,
@@ -295,36 +270,6 @@ public static class NavigatorPathRequestFactory
         }
 
         return false;
-    }
-
-    private static bool TryCreateAStarRequest(
-        TrailblazerWorldContext context,
-        Vector3d origin,
-        Vector3d targetPosition,
-        Fixed64 unitSize,
-        HeuristicMethod heuristic,
-        bool allowUnwalkableEndpoints,
-        bool allowTraversalTransitions,
-        Fixed64 maxClimbHeight,
-        [NotNullWhen(true)] out IPathRequest? request)
-    {
-        AStarPathRequest? aStar = AStarPathRequest.Create(
-            context,
-            origin,
-            targetPosition,
-            unitSize,
-            heuristic,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions);
-        if (aStar == null)
-        {
-            request = null;
-            return false;
-        }
-
-        aStar.MaxClimbHeight = maxClimbHeight;
-        request = aStar;
-        return true;
     }
 
     private static bool TryCreateFlowFieldRequest(

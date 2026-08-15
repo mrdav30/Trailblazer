@@ -34,10 +34,10 @@ public sealed class ContextBoundNavigatorTests : IDisposable
         var contextBFirst = new TestNavigator(contextB);
         var contextBSecond = new TestNavigator(contextB);
 
-        contextAFirst.Setup(Vector3d.Zero);
-        contextASecond.Setup(new Vector3d(1, 0, 0));
-        contextBFirst.Setup(Vector3d.Zero);
-        contextBSecond.Setup(new Vector3d(1, 0, 0));
+        contextAFirst.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
+        contextASecond.Setup(new Vector3d(1, 0, 0), PathTestFactory.DefaultNavigationProfile);
+        contextBFirst.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
+        contextBSecond.Setup(new Vector3d(1, 0, 0), PathTestFactory.DefaultNavigationProfile);
 
         contextBFirst.GlobalId.Should().Be(contextAFirst.GlobalId);
         contextBSecond.GlobalId.Should().Be(contextASecond.GlobalId);
@@ -51,8 +51,12 @@ public sealed class ContextBoundNavigatorTests : IDisposable
         var setupNavigator = new TestNavigator();
         var activeNavigator = new TestNavigator();
 
-        setupNavigator.Setup(context, Vector3d.Zero);
-        activeNavigator.Activate(context, new TrekCondition(), new Vector3d(1, 0, 0));
+        setupNavigator.Setup(context, Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
+        activeNavigator.Activate(
+            context,
+            new TrekCondition(),
+            new Vector3d(1, 0, 0),
+            PathTestFactory.DefaultNavigationProfile);
 
         setupNavigator.Context.Should().BeSameAs(context);
         setupNavigator.IsActive.Should().BeFalse();
@@ -69,8 +73,8 @@ public sealed class ContextBoundNavigatorTests : IDisposable
 
         var originalA = new TestNavigator(contextA);
         var originalB = new TestNavigator(contextB);
-        originalA.Setup(Vector3d.Zero);
-        originalB.Setup(Vector3d.Zero);
+        originalA.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
+        originalB.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
 
         Guid originalAId = originalA.GlobalId;
         Guid originalBId = originalB.GlobalId;
@@ -79,8 +83,8 @@ public sealed class ContextBoundNavigatorTests : IDisposable
 
         var replayA = new TestNavigator(contextA);
         var nextB = new TestNavigator(contextB);
-        replayA.Setup(Vector3d.Zero);
-        nextB.Setup(new Vector3d(1, 0, 0));
+        replayA.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
+        nextB.Setup(new Vector3d(1, 0, 0), PathTestFactory.DefaultNavigationProfile);
 
         replayA.GlobalId.Should().Be(originalAId);
         nextB.GlobalId.Should().NotBe(originalBId);
@@ -91,7 +95,7 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     {
         var navigator = new TestNavigator();
 
-        navigator.Invoking(n => n.Setup(Vector3d.Zero))
+        navigator.Invoking(n => n.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile))
             .Should()
             .Throw<InvalidOperationException>()
             .WithMessage("*context*");
@@ -103,7 +107,7 @@ public sealed class ContextBoundNavigatorTests : IDisposable
         using TrailblazerWorldContext contextA = CreateContextWithGrid();
 
         var navigator = new TestNavigator(contextA);
-        navigator.Setup(Vector3d.Zero);
+        navigator.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
         navigator.Initialize(new TrekCondition());
 
         ScanNavigatorCount(contextA, Vector3d.Zero).Should().Be(1);
@@ -120,21 +124,20 @@ public sealed class ContextBoundNavigatorTests : IDisposable
         PathTestFactory.RegisterSolidLine(context, "ContextNavigatorResetGuide", Vector3d.Zero, 3);
 
         var navigator = new TestNavigator(context);
-        navigator.Setup(Vector3d.Zero, size: Fixed64.One);
+        navigator.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
         navigator.Initialize(new TrekCondition());
-        navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
         navigator.ApplyGuidedTrekRequest(new Vector3d(2, 0, 0), rate: TrekRate.Moderate);
 
-        AStarPathRequest request = navigator.Steering!.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
-        context.Guides.RequestGuide(request, out AStarGuide? guide).Should().BeTrue();
+        FlowFieldPathRequest request = navigator.Steering!.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
+        context.Guides.RequestGuide(request, out FlowFieldGuide? guide).Should().BeTrue();
         navigator.Steering.SetTrailGuide(guide);
 
         navigator.Steering.TrailGuide.Should().NotBeNull();
-        context.Guides.InUseAStarGuideCount.Should().Be(1);
+        context.Guides.InUseFlowGuideCount.Should().Be(1);
 
         navigator.Reset();
 
-        context.Guides.InUseAStarGuideCount.Should().Be(0);
+        context.Guides.InUseFlowGuideCount.Should().Be(0);
         navigator.Steering.TrailGuide.Should().BeNull();
         navigator.Steering.CurrentRequest.Should().BeNull();
     }
@@ -146,7 +149,7 @@ public sealed class ContextBoundNavigatorTests : IDisposable
         PathTestFactory.RegisterSolidLine(contextA, "ContextA-GuidedNavigator", Vector3d.Zero, 3);
 
         var navigator = new TestNavigator(contextA);
-        navigator.Setup(Vector3d.Zero, size: Fixed64.One);
+        navigator.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
         navigator.Initialize(new TrekCondition());
 
         navigator.ApplyGuidedTrekRequest(new Vector3d(2, 0, 0));

@@ -417,6 +417,7 @@ public sealed class NavigationAreaCatalogProcessorTests
             maxAreaPolicies,
             navigationAreaCount,
             maxAreaRules,
-            defaults.MaxConcurrentSnapshotLeases);
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
     }
 }

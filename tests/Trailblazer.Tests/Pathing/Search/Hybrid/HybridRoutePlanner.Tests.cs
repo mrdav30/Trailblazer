@@ -27,28 +27,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
     }
 
     /// <summary>
-    /// Exercises the direct A* chart path branch in TryPlanDirect/TryCreateAStarStep.
-    /// </summary>
-    [Fact]
-    public void TryPlan_AStarKind_ShouldBuildDirectPlanWithAStarSegment()
-    {
-        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerAStar", Vector3d.Zero, 3);
-
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(2, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? hybridRequest).Should().BeTrue();
-
-        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
-        routePlan.DirectedTransitions.Should().BeEmpty();
-        routePlan.Steps.Should().HaveCount(1);
-        routePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.PathSegment);
-        routePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
-    }
-
-    /// <summary>
-    /// Exercises TryCreateFlowFieldStep via HybridPathRequest.CreateFromFlowField. When a FlowFieldPathRequest
-    /// is converted to a HybridPathRequest, TryPlan routes chart steps through TryCreateFlowFieldStep
+    /// Exercises the FlowField chart step via HybridPathRequest.CreateFromFlowField. When a FlowFieldPathRequest
+    /// is converted to a HybridPathRequest, TryPlan resolves chart steps directly
     /// instead of the A* path.
     /// </summary>
     [Fact]
@@ -84,22 +64,18 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(5, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? hybridRequest).Should().BeTrue();
-
-        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        HybridPathRequest hybridRequest = CreateFlowHybrid(Vector3d.Zero, new Vector3d(5, 0, 0));
+        HybridRoutePlan routePlan = TestRequire.NotNull(hybridRequest.RoutePlan);
         routePlan.DirectedTransitions.Should().ContainSingle();
         routePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-solid-hop");
         routePlan.Steps.Should().HaveCount(3);
-        routePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
+        routePlan.Steps[0].SegmentRequest.Should().BeOfType<FlowFieldPathRequest>();
         routePlan.Steps[1].Kind.Should().Be(HybridRouteStepKind.Waypoint);
-        routePlan.Steps[2].SegmentRequest.Should().BeOfType<AStarPathRequest>();
+        routePlan.Steps[2].SegmentRequest.Should().BeOfType<FlowFieldPathRequest>();
     }
 
     /// <summary>
-    /// Exercises TryCreateVolumeStep (Liquid medium) and the TryCreateAStarStep zero-displacement path.
+    /// Exercises TryCreateVolumeStep (Liquid medium) and the chart-step zero-displacement path.
     /// Origin→entry and exit→target are zero-displacement chart hops (same position) which hit the
     /// HybridRouteStep.Waypoint shortcut. The liquid volume segment between them hits TryCreateVolumeStep.
     /// </summary>
@@ -126,12 +102,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? hybridRequest).Should().BeTrue();
-
-        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        HybridPathRequest hybridRequest = CreateFlowHybrid(Vector3d.Zero, new Vector3d(4, 0, 0));
+        HybridRoutePlan routePlan = TestRequire.NotNull(hybridRequest.RoutePlan);
         routePlan.DirectedTransitions.Should().HaveCount(2);
 
         // Plan must include a volume (liquid) segment step
@@ -176,12 +148,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? hybridRequest).Should().BeTrue();
-
-        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        HybridPathRequest hybridRequest = CreateFlowHybrid(Vector3d.Zero, new Vector3d(4, 0, 0));
+        HybridRoutePlan routePlan = TestRequire.NotNull(hybridRequest.RoutePlan);
         routePlan.DirectedTransitions.Should().HaveCount(2);
 
         bool hasGasSegment = false;
@@ -243,12 +211,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(6, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(6, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? hybridRequest).Should().BeTrue();
-
-        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        HybridPathRequest hybridRequest = CreateFlowHybrid(Vector3d.Zero, new Vector3d(6, 0, 0));
+        HybridRoutePlan routePlan = TestRequire.NotNull(hybridRequest.RoutePlan);
         routePlan.DirectedTransitions.Should().HaveCount(2);
         routePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-dual-liquid-entry");
         routePlan.DirectedTransitions[1].Id.Should().Be("hybridplanner-dual-liquid-exit");
@@ -277,57 +241,15 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(20, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(20, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? hybridRequest).Should().BeTrue();
-
-        HybridPathRequest actualRequest = TestRequire.NotNull(hybridRequest);
+        HybridPathRequest actualRequest = CreateFlowHybrid(Vector3d.Zero, new Vector3d(20, 0, 0));
         TestRequire.NotNull(actualRequest.StartNode).GridIndex.Should().NotBe(TestRequire.NotNull(actualRequest.EndNode).GridIndex);
         HybridRoutePlan routePlan = TestRequire.NotNull(actualRequest.RoutePlan);
         routePlan.DirectedTransitions.Should().ContainSingle();
         routePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-cross-grid-hop");
     }
 
-    [Fact]
-    public void TryPlan_ShouldBuildChainedClimbRoute_ForAuthoredParkourTopology()
-    {
-        PathTestFactory.RegisterAuthoredClimbRoute(TestWorld.Context, "HybridPlannerClimbChain");
-
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(3, 0, 1),
-            Fixed64.One,
-            HeuristicMethod.Manhattan,
-            allowUnwalkableEndpoints: true));
-        request.MaxClimbHeight = Fixed64.Zero;
-
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(3, 0, 1),
-            Fixed64.One,
-            out HybridPathRequest? hybridRequest,
-            maxClimbHeight: Fixed64.Zero,
-            allowUnwalkableEndpoints: true).Should().BeTrue();
-
-        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
-        routePlan.DirectedTransitions.Should().HaveCount(5);
-        routePlan.DirectedTransitions.Should().OnlyContain(t => t.Type == TraversalTransitionType.Climb);
-        routePlan.DirectedTransitions[^1].RequestsClimbIntent.Should().BeFalse();
-        routePlan.Steps.Should().HaveCount(7);
-        routePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.Waypoint);
-        routePlan.Steps[^1].Kind.Should().Be(HybridRouteStepKind.PathSegment);
-        routePlan.Steps.Should().Contain(step =>
-            step.Kind == HybridRouteStepKind.Waypoint
-            && step.WaypointPosition == new Vector3d(1, 1, 0));
-        routePlan.Steps.Should().Contain(step =>
-            step.Kind == HybridRouteStepKind.Waypoint
-            && step.WaypointPosition == new Vector3d(1, 1, 1));
-        routePlan.Steps.Should().Contain(step =>
-            step.Kind == HybridRouteStepKind.Waypoint
-            && step.WaypointPosition == new Vector3d(2, 0, 1));
-    }
-
     /// <summary>
-    /// Exercises TryCreateFlowFieldStep with zero displacement: when origin == destination, the step
+    /// Exercises the chart step with zero displacement: when origin == destination, the step
     /// becomes a waypoint rather than a path segment.
     /// </summary>
     [Fact]
@@ -351,31 +273,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     }
 
     [Fact]
-    public void TryCreateAStarStep_ShouldReturnFalse_WhenChartRequestCannotResolve()
-    {
-        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerAStarInvalid", Vector3d.Zero, 2);
-
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? request).Should().BeTrue();
-
-        object[] args =
-        {
-            new Vector3d(64, 0, 0),
-            new Vector3d(65, 0, 0),
-            TestRequire.NotNull(request),
-            null!,
-            0
-        };
-
-        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateAStarStep", args).Should().BeFalse();
-        args[3].Should().BeNull();
-        args[4].Should().Be(0);
-    }
-
-    [Fact]
-    public void TryCreateFlowFieldStep_ShouldReturnFalse_WhenChartRequestCannotResolve()
+    public void TryCreateChartStep_ShouldReturnFalse_WhenChartRequestCannotResolve()
     {
         PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerFlowInvalid", Vector3d.Zero, 2);
 
@@ -394,7 +292,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             0
         };
 
-        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateFlowFieldStep", args).Should().BeFalse();
+        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateChartStep", args).Should().BeFalse();
         args[3].Should().BeNull();
         args[4].Should().Be(0);
     }
@@ -404,16 +302,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerVolumeInvalid", Vector3d.Zero, 2);
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? request).Should().BeTrue();
+        HybridPathRequest request = CreateFlowHybrid(Vector3d.Zero, new Vector3d(1, 0, 0));
 
         object[] args =
         {
             new Vector3d(64, 0, 0),
             new Vector3d(65, 0, 0),
-            TestRequire.NotNull(request),
+            request,
             TraversalMedium.Gas,
             null!,
             0
@@ -430,16 +325,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
         PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerVolumeZeroSolid", Vector3d.Zero, 2);
         PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeZeroGas");
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? request).Should().BeTrue();
+        HybridPathRequest request = CreateFlowHybrid(Vector3d.Zero, new Vector3d(1, 0, 0));
 
         object[] args =
         {
             new Vector3d(4, 0, 0),
             new Vector3d(4, 0, 0),
-            TestRequire.NotNull(request),
+            request,
             TraversalMedium.Gas,
             null!,
             0
@@ -458,16 +350,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasA");
         PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(6, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasB");
 
-        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            out HybridPathRequest? request).Should().BeTrue();
+        HybridPathRequest request = CreateFlowHybrid(Vector3d.Zero, new Vector3d(1, 0, 0));
 
         object[] args =
         {
             new Vector3d(4, 0, 0),
             new Vector3d(6, 0, 0),
-            request!,
+            request,
             TraversalMedium.Gas,
             null!,
             0
@@ -483,6 +372,18 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         HybridRoutePlanner.TryPlan(null!, out HybridRoutePlan? plan).Should().BeFalse();
         plan.Should().BeNull();
+    }
+
+    private static HybridPathRequest CreateFlowHybrid(Vector3d origin, Vector3d destination)
+    {
+        FlowFieldPathRequest flowRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            TestWorld.Context,
+            origin,
+            destination,
+            Fixed64.One,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true));
+        return TestRequire.NotNull(HybridPathRequest.CreateFromFlowField(flowRequest));
     }
 
 }

@@ -35,7 +35,7 @@
 		<IncludeSymbols>true</IncludeSymbols>
 		<DebugType>portable</DebugType>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-		<DocumentationFile>bin\$(Configuration)\$(TargetFramework)\GridForge.xml</DocumentationFile>
+		<DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Trailblazer.xml</DocumentationFile>
 	</PropertyGroup>
 
 	<!-- Output Settings -->

@@ -37,11 +37,6 @@ public class SolidVoxelFinderTests : IDisposable
             Fixed64.One,
             allowUnwalkableEndpoints: false).Should().BeFalse();
 
-        AStarPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
-            new Vector3d(2, 0, 0),
-            Fixed64.One,
-            allowUnwalkableEndpoints: false).Should().BeNull();
-
         FlowFieldPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
@@ -63,53 +58,12 @@ public class SolidVoxelFinderTests : IDisposable
         TestRequire.NotNull(startVoxel).WorldPosition.Should().Be(Vector3d.Zero);
         TestRequire.NotNull(endVoxel).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
 
-        AStarPathRequest aStarRequest = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
-            new Vector3d(2, 0, 0),
-            Fixed64.One,
-            allowUnwalkableEndpoints: true));
-        TestRequire.NotNull(aStarRequest.StartNode).WorldPosition.Should().Be(Vector3d.Zero);
-        TestRequire.NotNull(aStarRequest.EndNode).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
-
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
             allowUnwalkableEndpoints: true));
         TestRequire.NotNull(flowFieldRequest.StartNode).WorldPosition.Should().Be(Vector3d.Zero);
         TestRequire.NotNull(flowFieldRequest.EndNode).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
-    }
-
-    [Fact]
-    public void AStarRequest_ShouldResolveInvalidEndpointsConsistently_AcrossCreateUpdateAndSetters()
-    {
-        RegisterTwoPointChart("AStarConsistency");
-
-        AStarPathRequest created = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
-            new Vector3d(2, 0, 0),
-            Fixed64.One,
-            allowUnwalkableEndpoints: true));
-        Voxel createdStart = TestRequire.NotNull(created.StartNode);
-        Voxel createdEnd = TestRequire.NotNull(created.EndNode);
-        createdStart.WorldPosition.Should().Be(Vector3d.Zero);
-        createdEnd.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
-
-        AStarPathRequest updated = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            allowUnwalkableEndpoints: true));
-
-        updated.UpdateRequest(new Vector3d(-1, 0, 0), new Vector3d(2, 0, 0), Fixed64.One).Should().BeTrue();
-        TestRequire.NotNull(updated.StartNode).WorldPosition.Should().Be(createdStart.WorldPosition);
-        TestRequire.NotNull(updated.EndNode).WorldPosition.Should().Be(createdEnd.WorldPosition);
-
-        AStarPathRequest setters = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            allowUnwalkableEndpoints: true));
-
-        setters.TrySetOrigin(new Vector3d(-1, 0, 0)).Should().BeTrue();
-        setters.TrySetDestination(new Vector3d(2, 0, 0)).Should().BeTrue();
-        TestRequire.NotNull(setters.StartNode).WorldPosition.Should().Be(createdStart.WorldPosition);
-        TestRequire.NotNull(setters.EndNode).WorldPosition.Should().Be(createdEnd.WorldPosition);
     }
 
     [Fact]

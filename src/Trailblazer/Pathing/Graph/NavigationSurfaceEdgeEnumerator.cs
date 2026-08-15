@@ -9,8 +9,16 @@ using System;
 
 namespace Trailblazer.Pathing;
 
+internal enum NavigationSurfaceEdgeAdvanceStatus : byte
+{
+    Pending = 0,
+    Edge = 1,
+    Complete = 2,
+    Blocked = 3
+}
+
 /// <summary>Merges native, explicit, and automatic-seam edges in durable canonical order.</summary>
-internal ref struct NavigationSurfaceEdgeEnumerator
+internal struct NavigationSurfaceEdgeEnumerator
 {
     private readonly NavigationWorldGraph? _graph;
     private readonly NavigationCellAddress _origin;
@@ -18,12 +26,17 @@ internal ref struct NavigationSurfaceEdgeEnumerator
     private NavigationNativeSurfaceEdgeEnumerator _native;
     private NavigationAutomaticSeamIndex.EndpointEnumerator _seam;
     private readonly bool _incoming;
-    private readonly bool _includeNative;
-    private readonly bool _includeAutomaticSeams;
     private bool _nativeComplete;
+    private bool _explicitComplete;
+    private bool _seamComplete;
     private bool _hasNative;
     private bool _hasExplicit;
     private bool _hasSeam;
+    private bool _nativeNeedsDebit;
+    private bool _hasPendingExplicitOwner;
+    private bool _hasPendingSeam;
+    private NavigationConnectionOwnerKey _pendingExplicitOwner;
+    private NavigationAutomaticSeamRef _pendingSeam;
     private NavigationGraphEdge _nativeEdge;
     private NavigationGraphEdge _explicitEdge;
     private NavigationGraphEdge _seamEdge;
@@ -40,12 +53,17 @@ internal ref struct NavigationSurfaceEdgeEnumerator
     {
         _graph = graph;
         _incoming = incoming;
-        _includeNative = includeNative;
-        _includeAutomaticSeams = includeAutomaticSeams;
         _nativeComplete = !includeNative;
+        _explicitComplete = false;
+        _seamComplete = !includeAutomaticSeams;
         _hasNative = false;
         _hasExplicit = false;
         _hasSeam = false;
+        _nativeNeedsDebit = false;
+        _hasPendingExplicitOwner = false;
+        _hasPendingSeam = false;
+        _pendingExplicitOwner = default;
+        _pendingSeam = default;
         _nativeEdge = default;
         _explicitEdge = default;
         _seamEdge = default;
@@ -77,15 +95,110 @@ internal ref struct NavigationSurfaceEdgeEnumerator
 
     internal bool MoveNext()
     {
+        int unbounded = int.MaxValue;
+        while (true)
+        {
+            NavigationSurfaceEdgeAdvanceStatus status = AdvanceOne(null, ref unbounded);
+            if (status == NavigationSurfaceEdgeAdvanceStatus.Edge)
+                return true;
+            if (status == NavigationSurfaceEdgeAdvanceStatus.Complete)
+                return false;
+        }
+    }
+
+    internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
+        NavigationWorkMeter? meter,
+        ref int edgeStepRemaining)
+    {
         if (_graph == null)
-            return false;
-        FillNative();
-        FillExplicit();
-        FillSeam();
+            return NavigationSurfaceEdgeAdvanceStatus.Complete;
+
+        if (!_hasNative && !_nativeComplete)
+        {
+            if (!_nativeNeedsDebit)
+            {
+                if (!_native.MoveNext())
+                    _nativeComplete = true;
+                else
+                {
+                    _nativeEdge = _native.Current;
+                    _graph.TryGetNodeAddress(_nativeEdge.Target, out _nativeEndpoint);
+                    _nativeNeedsDebit = true;
+                }
+            }
+            if (_nativeNeedsDebit)
+            {
+                if (!TryConsumeCandidate(meter, ref edgeStepRemaining))
+                    return NavigationSurfaceEdgeAdvanceStatus.Blocked;
+                _nativeNeedsDebit = false;
+                _hasNative = true;
+                return TrySelectReadyEdge();
+            }
+        }
+
+        if (!_hasExplicit && !_explicitComplete)
+        {
+            if (!_hasPendingExplicitOwner)
+            {
+                if (!_incident.MoveNext())
+                    _explicitComplete = true;
+                else
+                {
+                    _pendingExplicitOwner = _incident.Current;
+                    _hasPendingExplicitOwner = true;
+                }
+            }
+            if (_hasPendingExplicitOwner)
+            {
+                if (!TryConsumeCandidate(meter, ref edgeStepRemaining))
+                    return NavigationSurfaceEdgeAdvanceStatus.Blocked;
+                NavigationConnectionOwnerKey owner = _pendingExplicitOwner;
+                _pendingExplicitOwner = default;
+                _hasPendingExplicitOwner = false;
+                FillExplicit(owner);
+                return TrySelectReadyEdge();
+            }
+        }
+
+        if (!_hasSeam && !_seamComplete)
+        {
+            if (!_hasPendingSeam)
+            {
+                if (!_seam.MoveNext())
+                    _seamComplete = true;
+                else
+                {
+                    _pendingSeam = _seam.Current;
+                    _hasPendingSeam = true;
+                }
+            }
+            if (_hasPendingSeam)
+            {
+                if (!TryConsumeCandidate(meter, ref edgeStepRemaining))
+                    return NavigationSurfaceEdgeAdvanceStatus.Blocked;
+                NavigationAutomaticSeamRef seam = _pendingSeam;
+                _pendingSeam = default;
+                _hasPendingSeam = false;
+                FillSeam(seam);
+                return TrySelectReadyEdge();
+            }
+        }
+
+        return TrySelectReadyEdge();
+    }
+
+    private NavigationSurfaceEdgeAdvanceStatus TrySelectReadyEdge()
+    {
+        if ((!_hasNative && !_nativeComplete)
+            || (!_hasExplicit && !_explicitComplete)
+            || (!_hasSeam && !_seamComplete))
+        {
+            return NavigationSurfaceEdgeAdvanceStatus.Pending;
+        }
         if (!_hasNative && !_hasExplicit && !_hasSeam)
         {
             Current = default;
-            return false;
+            return NavigationSurfaceEdgeAdvanceStatus.Complete;
         }
         NavigationGraphEdge selected = default;
         NavigationCellAddress selectedEndpoint = default;
@@ -126,78 +239,62 @@ internal ref struct NavigationSurfaceEdgeEnumerator
             _hasExplicit = false;
         else
             _hasSeam = false;
+        return NavigationSurfaceEdgeAdvanceStatus.Edge;
+    }
+
+    private void FillExplicit(NavigationConnectionOwnerKey owner)
+    {
+        if (!_graph!.ExplicitConnections.TryGet(
+                owner,
+                out NavigationExplicitConnectionRecord record)
+            || !record.IsActive)
+        {
+            return;
+        }
+        NavigationCellAddress endpoint;
+        if (_incoming)
+        {
+            if (!record.Destination.Equals(_origin))
+                return;
+            endpoint = record.Source;
+        }
+        else
+        {
+            if (!record.Source.Equals(_origin))
+                return;
+            endpoint = record.Destination;
+        }
+        if (!_graph.TryGetNodeRef(endpoint, out NavigationNodeRef target))
+            return;
+        _explicitEndpoint = endpoint;
+        _explicitEdge = new NavigationGraphEdge(target, record);
+        _hasExplicit = true;
+    }
+
+    private void FillSeam(NavigationAutomaticSeamRef seam)
+    {
+        NavigationCellAddress endpoint = seam.Destination;
+        if (!_graph!.TryGetNodeRef(endpoint, out NavigationNodeRef target)
+            || !_graph.TryGetNodeState(target, out NavigationNodeState state)
+            || !state.IsPresent)
+        {
+            return;
+        }
+        _seamEndpoint = endpoint;
+        _seamEdge = new NavigationGraphEdge(target, seam);
+        _hasSeam = true;
+    }
+
+    private static bool TryConsumeCandidate(
+        NavigationWorkMeter? meter,
+        ref int edgeStepRemaining)
+    {
+        if (meter == null)
+            return true;
+        if (edgeStepRemaining == 0 || !meter.TryConsumeEvaluatedEdges(1))
+            return false;
+        edgeStepRemaining--;
         return true;
-    }
-
-    private void FillNative()
-    {
-        if (_hasNative || _nativeComplete || !_includeNative)
-            return;
-        if (!_native.MoveNext())
-        {
-            _nativeComplete = true;
-            return;
-        }
-        _nativeEdge = _native.Current;
-        _graph!.TryGetNodeAddress(_nativeEdge.Target, out _nativeEndpoint);
-        _hasNative = true;
-    }
-
-    private void FillExplicit()
-    {
-        if (_hasExplicit)
-            return;
-        while (_incident.MoveNext())
-        {
-            NavigationConnectionOwnerKey owner = _incident.Current;
-            if (!_graph!.ExplicitConnections.TryGet(
-                    owner,
-                    out NavigationExplicitConnectionRecord record)
-                || !record.IsActive)
-            {
-                continue;
-            }
-            NavigationCellAddress endpoint;
-            if (_incoming)
-            {
-                if (!record.Destination.Equals(_origin))
-                    continue;
-                endpoint = record.Source;
-            }
-            else
-            {
-                if (!record.Source.Equals(_origin))
-                    continue;
-                endpoint = record.Destination;
-            }
-            if (!_graph.TryGetNodeRef(endpoint, out NavigationNodeRef target))
-                continue;
-            _explicitEndpoint = endpoint;
-            _explicitEdge = new NavigationGraphEdge(target, record);
-            _hasExplicit = true;
-            return;
-        }
-    }
-
-    private void FillSeam()
-    {
-        if (_hasSeam || !_includeAutomaticSeams)
-            return;
-        while (_seam.MoveNext())
-        {
-            NavigationAutomaticSeamRef seam = _seam.Current;
-            NavigationCellAddress endpoint = seam.Destination;
-            if (!_graph!.TryGetNodeRef(endpoint, out NavigationNodeRef target)
-                || !_graph.TryGetNodeState(target, out NavigationNodeState state)
-                || !state.IsPresent)
-            {
-                continue;
-            }
-            _seamEndpoint = endpoint;
-            _seamEdge = new NavigationGraphEdge(target, seam);
-            _hasSeam = true;
-            return;
-        }
     }
 
     private static int Compare(

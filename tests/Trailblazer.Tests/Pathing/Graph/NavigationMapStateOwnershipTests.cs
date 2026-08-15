@@ -205,7 +205,7 @@ public sealed class NavigationMapStateOwnershipTests
 
         work.Advance(meter).Should().BeTrue();
 
-        work.AdditionalExclusiveRetainedBytes.Should().Be(192L + 32L + 72L + 4_400L);
+        work.AdditionalExclusiveRetainedBytes.Should().Be(200L + 32L + 72L + 4_400L);
         work.AdditionalExclusivePersistentPages.Should().Be(6 + 1 + 1);
     }
 
@@ -442,8 +442,8 @@ public sealed class NavigationMapStateOwnershipTests
             combinedCandidate,
             combinedChanges);
 
-        sequential.RetainedBytes.Should().Be(5_176L);
-        combined.RetainedBytes.Should().Be(5_176L);
+        sequential.RetainedBytes.Should().Be(5_184L);
+        combined.RetainedBytes.Should().Be(5_184L);
         sequential.PersistentPageCount.Should().Be(combined.PersistentPageCount);
     }
 
@@ -541,7 +541,8 @@ public sealed class NavigationMapStateOwnershipTests
             defaults.MaxAreaPolicies,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
-            defaults.MaxConcurrentSnapshotLeases);
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
         var configuration = new GridConfiguration(
             Vector3d.Zero,
             new Vector3d(63, 0, 0),

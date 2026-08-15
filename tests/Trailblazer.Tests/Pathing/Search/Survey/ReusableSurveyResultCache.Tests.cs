@@ -308,85 +308,6 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     }
 
     [Fact]
-    public void TrySeed_ShouldPopulateChartIndexAndTrackCheckedOutEntries()
-    {
-        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
-
-        FakeSurveyResult released = FakeSurveyResult.Create(
-            10,
-            chartsUtilized: new[] { "chart-a", "chart-b", "chart-a" });
-        FakeSurveyResult active = FakeSurveyResult.Create(
-            11,
-            chartsUtilized: new[] { "chart-a" });
-
-        cache.TrySeed(released, checkout: false).Should().BeTrue();
-        cache.TrySeed(active, checkout: true).Should().BeTrue();
-
-        cache.Count.Should().Be(2);
-        cache.CountInUse.Should().Be(1);
-        released.IsInUse.Should().BeFalse();
-        active.IsInUse.Should().BeTrue();
-        cache.CountIndexedEntriesForChart("chart-a").Should().Be(2);
-        cache.CountIndexedEntriesForChart("chart-b").Should().Be(1);
-
-        cache.InvalidateForChart("chart-a");
-
-        cache.Count.Should().Be(0);
-        cache.CountInUse.Should().Be(0);
-        released.ResetCount.Should().Be(1);
-        active.ResetCount.Should().Be(1);
-    }
-
-    [Fact]
-    public void TrySeed_ShouldRejectInvalidInputs_ReplaceExistingEntries_AndRespectCapacity()
-    {
-        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
-
-        FakeSurveyResult missingPath = FakeSurveyResult.Create(1, hasPath: false);
-        FakeSurveyResult missingContext = FakeSurveyResult.Create(2);
-        missingContext.Context = null;
-
-        cache.TrySeed(null!, checkout: false).Should().BeFalse();
-        cache.TrySeed(missingPath, checkout: false).Should().BeFalse();
-        cache.TrySeed(FakeSurveyResult.Create(default(PathRequestCacheKey)), checkout: false).Should().BeFalse();
-        cache.TrySeed(missingContext, checkout: false).Should().BeFalse();
-        cache.CountIndexedEntriesForChart(string.Empty).Should().Be(0);
-
-        FakeSurveyResult active = FakeSurveyResult.Create(10, chartsUtilized: new[] { "old-chart" });
-        cache.TrySeed(active, checkout: true).Should().BeTrue();
-        cache.CountInUse.Should().Be(1);
-
-        FakeSurveyResult replacement = FakeSurveyResult.Create(10, chartsUtilized: new[] { "new-chart" });
-        cache.TrySeed(replacement, checkout: false).Should().BeTrue();
-
-        active.ResetCount.Should().Be(1);
-        cache.Count.Should().Be(1);
-        cache.CountInUse.Should().Be(0);
-        cache.CountIndexedEntriesForChart("old-chart").Should().Be(0);
-        cache.CountIndexedEntriesForChart("new-chart").Should().Be(1);
-
-        replacement.Checkout();
-        cache.TrySeed(replacement, checkout: false).Should().BeTrue();
-        replacement.IsInUse.Should().BeFalse();
-
-        FakeSurveyResult directReplacement = FakeSurveyResult.Create(10, chartsUtilized: new[] { "direct-chart" });
-        ReflectionUtility.InvokePrivate<object?>(
-            cache,
-            "AddCachedResult",
-            TestPathRequest.CreateCacheKey(10),
-            directReplacement);
-        cache.CountIndexedEntriesForChart("new-chart").Should().Be(0);
-        cache.CountIndexedEntriesForChart("direct-chart").Should().Be(1);
-
-        using var fullCache = new ReusableSurveyResultCache<FakeSurveyResult>();
-        for (int i = 0; i < 128; i++)
-            fullCache.TrySeed(FakeSurveyResult.Create(i), checkout: false).Should().BeTrue();
-
-        fullCache.TrySeed(FakeSurveyResult.Create(500), checkout: false).Should().BeFalse();
-        fullCache.Count.Should().Be(128);
-    }
-
-    [Fact]
     public void EvictStaleEntries_ShouldNotAllocate_WhenNoEntriesAreStale()
     {
         using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
@@ -505,33 +426,6 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
             cache.Return(checkedOut[i], dispose: false);
 
         cache.CountInUse.Should().Be(0);
-    }
-
-    [Fact]
-    public void FailedSeed_ShouldPreserveActiveUncachedTracking()
-    {
-        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
-
-        for (int i = 0; i < 128; i++)
-            cache.TrySeed(FakeSurveyResult.Create(i), checkout: false).Should().BeTrue();
-
-        var request = new TestPathRequest(500);
-        cache.TryCreateUncached(
-                request,
-                () => FakeSurveyResult.Create(500, chartsUtilized: new[] { "uncached-chart" }),
-                out FakeSurveyResult uncached)
-            .Should()
-            .BeTrue();
-
-        cache.TrySeed(uncached, checkout: false).Should().BeFalse();
-        cache.CountInUse.Should().Be(1);
-        uncached.IsInUse.Should().BeTrue();
-
-        cache.InvalidateForChart("uncached-chart");
-
-        cache.CountInUse.Should().Be(0);
-        uncached.IsInUse.Should().BeFalse();
-        uncached.IsValid.Should().BeFalse();
     }
 
     [Fact]

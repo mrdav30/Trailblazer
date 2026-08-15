@@ -157,9 +157,19 @@ public partial class NavSteering : IRecordable
     public IPathRequest? CurrentRequest => _currentRequest;
 
     /// <summary>
+    /// Gets the immutable graph-backed surface query owned by the current steering session.
+    /// </summary>
+    private PathQuery? _currentQuery;
+
+    /// <inheritdoc cref="_currentQuery"/>
+    public PathQuery? CurrentQuery => _currentQuery;
+
+    /// <summary>
     /// Current guide used to compute the desired path or flow.
     /// </summary>
     private IGuide? _trailGuide;
+
+    private NavigationGuideLease? _navigationGuideLease;
 
     /// <inheritdoc cref="_trailGuide"/>
     public IGuide? TrailGuide => _trailGuide;
@@ -209,7 +219,8 @@ public partial class NavSteering : IRecordable
     /// <summary>
     /// Indicates whether the agent is actively following a guide path with queued waypoints.
     /// </summary>
-    public bool HasTrailGuide => !HasLineOfSightPath && _trailGuide != null;
+    public bool HasTrailGuide => !HasLineOfSightPath
+        && (_navigationGuideLease != null || _trailGuide != null);
 
     /// <inheritdoc cref="_isAtDestination"/>
     public bool IsAtDestination => _isAtDestination;

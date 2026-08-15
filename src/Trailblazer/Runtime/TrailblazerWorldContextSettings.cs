@@ -40,7 +40,8 @@ public sealed class TrailblazerWorldContextSettings
         int maxAreaPolicies,
         int maxAreaRulesPerPolicy,
         int maxAreaRules,
-        int maxConcurrentSnapshotLeases)
+        int maxConcurrentSnapshotLeases,
+        NavigationQueryLimits queryLimits)
     {
         SwiftThrowHelper.ThrowIfArgument(
             operationLimits.MaxPendingOperations <= 0,
@@ -107,6 +108,14 @@ public sealed class TrailblazerWorldContextSettings
             nameof(maintenanceBudget),
             "Dependency work must fit one exact area-policy publication.");
         ThrowIfNonPositive(maxConcurrentSnapshotLeases, nameof(maxConcurrentSnapshotLeases));
+        SwiftThrowHelper.ThrowIfArgument(
+            queryLimits.MaxConcurrentAStarQueries <= 0,
+            nameof(queryLimits),
+            "Query limits must be explicitly initialized.");
+        SwiftThrowHelper.ThrowIfArgument(
+            queryLimits.MaxConcurrentAStarQueries > maxConcurrentSnapshotLeases,
+            nameof(queryLimits),
+            "Concurrent queries cannot exceed the context snapshot-lease ceiling.");
 
         OperationLimits = operationLimits;
         MaintenanceBudget = maintenanceBudget;
@@ -124,6 +133,7 @@ public sealed class TrailblazerWorldContextSettings
         MaxAreaRulesPerPolicy = maxAreaRulesPerPolicy;
         MaxAreaRules = maxAreaRules;
         MaxConcurrentSnapshotLeases = maxConcurrentSnapshotLeases;
+        QueryLimits = queryLimits;
     }
 
     /// <summary>Gets the map-operation, preparation, and semantic-overlay ceilings.</summary>
@@ -174,6 +184,9 @@ public sealed class TrailblazerWorldContextSettings
     /// <summary>Gets the maximum concurrently checked-out immutable graph snapshots.</summary>
     public int MaxConcurrentSnapshotLeases { get; }
 
+    /// <summary>Gets the context-owned A* query admission and retention ceilings.</summary>
+    public NavigationQueryLimits QueryLimits { get; }
+
     private static TrailblazerWorldContextSettings CreateDefault() => new(
         new NavigationOperationLimits(
             maxPendingOperations: 32,
@@ -212,7 +225,8 @@ public sealed class TrailblazerWorldContextSettings
         maxAreaPolicies: 64,
         maxAreaRulesPerPolicy: 4_096,
         maxAreaRules: 65_536,
-        maxConcurrentSnapshotLeases: 8);
+        maxConcurrentSnapshotLeases: 8,
+        queryLimits: NavigationQueryLimits.Default);
 
     private static void ThrowIfNonPositive(int value, string parameterName) =>
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, value, parameterName);

@@ -61,8 +61,6 @@ internal sealed class PathingWorldState : IDisposable
 
     internal VolumeMediumRulesState VolumeRulesState { get; } = new();
 
-    internal SolidPartitionReachabilityState ReachabilityState { get; } = new();
-
     internal TrailblazerGuideState GuideState { get; } = new();
 
     internal AlternativeVoxelFinder AlternativeVoxelFinder { get; } = new();

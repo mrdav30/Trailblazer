@@ -31,6 +31,7 @@ internal sealed partial class NavigationMapInstance
         private PersistentIntMap<NavigationPhysicalPage> _physicalPages;
         private NavigationGridGenerationIdentity _gridIdentity;
         private ulong _baselineHighWater;
+        private ulong _gridHighWaterSequence;
         private int _copiedSemanticPages;
         private int _retainedCopiedSemanticPages;
         private int _newAddressCount;
@@ -91,6 +92,7 @@ internal sealed partial class NavigationMapInstance
             _physicalPages = previous._physicalPages;
             _gridIdentity = previous.GridIdentity;
             _baselineHighWater = previous.BaselineHighWater;
+            _gridHighWaterSequence = previous.GridHighWaterSequence;
         }
 
         internal ComposeWork(
@@ -116,6 +118,7 @@ internal sealed partial class NavigationMapInstance
             _physicalPages = previous._physicalPages;
             _gridIdentity = previous.GridIdentity;
             _baselineHighWater = previous.BaselineHighWater;
+            _gridHighWaterSequence = previous.GridHighWaterSequence;
         }
 
         internal NavigationMapInstance Result { get; private set; } = null!;
@@ -125,7 +128,7 @@ internal sealed partial class NavigationMapInstance
         internal int PersistentPageCount => checked(1 + AdditionalExclusivePersistentPages);
 
         internal long AdditionalExclusiveRetainedBytes => checked(
-            192L
+            200L
             + GetAdditionalRootBytes(
                 _dynamicSlots,
                 _previous?._dynamicSlots,
@@ -212,6 +215,7 @@ internal sealed partial class NavigationMapInstance
             {
                 _gridIdentity = default;
                 _baselineHighWater = 0;
+                _gridHighWaterSequence = 0;
                 _physicalPages = PersistentIntMap<NavigationPhysicalPage>.Empty;
             }
             Result = new NavigationMapInstance(
@@ -229,6 +233,7 @@ internal sealed partial class NavigationMapInstance
                 _state.PreparedMapRetainedBytes,
                 _gridIdentity,
                 _baselineHighWater,
+                _gridHighWaterSequence,
                 _version,
                 semanticVersion: _version,
                 physicalVersion: _isOverlayCompose && _newAddressCount == 0

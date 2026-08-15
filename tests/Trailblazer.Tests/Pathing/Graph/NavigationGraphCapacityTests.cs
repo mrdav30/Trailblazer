@@ -488,11 +488,12 @@ public sealed class NavigationGraphCapacityTests
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
-        diagnostics.ActiveSnapshotBytes.Should().Be(12_954_080,
+        diagnostics.ActiveSnapshotBytes.Should().Be(12_954_112,
             "endpoint incidence adds a 32-byte index field block, a 288-byte outer root, "
             + "262,528 bytes for four 1,025-address inner maps, and 885,600 bytes for "
             + "4,100 one-page owner rows; the automatic seam index adds its 224-byte "
-            + "empty immutable root");
+            + "empty immutable root; four published map instances each retain one new "
+            + "8-byte grid high-water sequence (32 bytes total)");
         diagnostics.PersistentGraphPageCount.Should().Be(127_626,
             "the endpoint index adds one root page, 4 outer/4,100 inner nodes, and "
             + "12,300 fixed-row pages for the 4,100 distinct endpoint addresses; the "
@@ -1708,8 +1709,24 @@ public sealed class NavigationGraphCapacityTests
             maxAreaPolicies: 8,
             maxAreaRulesPerPolicy: 32,
             maxAreaRules: 64,
-            maxConcurrentSnapshotLeases);
+            maxConcurrentSnapshotLeases,
+            CreateQueryLimits(defaults.QueryLimits, maxConcurrentSnapshotLeases));
     }
+
+    private static NavigationQueryLimits CreateQueryLimits(
+        NavigationQueryLimits source,
+        int maxConcurrentQueries) => new(
+            source.MaxBatchItems,
+            source.MaxBatchDescriptorBytes,
+            maxConcurrentQueries,
+            source.AStarWorkspaceMapCapacity,
+            source.AStarWorkspaceEndpointPageCapacity,
+            source.AStarWorkspaceNodeCapacity,
+            source.MaxAStarCacheEntries,
+            source.MaxAStarReusablePayloadBytes,
+            source.MaxAStarSinglePayloadBytes,
+            source.MaxAStarActivePayloadBytes,
+            source.MaxAStarActivePayloadLeases);
 
     private static TrailblazerWorldContext CreateChunkedBaselineContext(
         int maxPersistentGraphPages,

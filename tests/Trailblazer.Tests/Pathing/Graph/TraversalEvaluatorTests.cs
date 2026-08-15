@@ -26,7 +26,26 @@ public sealed class TraversalEvaluatorTests
         default(NavigationAreaRule));
 
     [Fact]
-    public void EvaluateNativeEdge_ShouldUseExactTargetEnterCostsAndRemainDirectionAsymmetric()
+    public void NavigationDistanceMath_ShouldBoundFractionalDistanceExactly()
+    {
+        Vector3d start = Vector3d.Zero;
+        var end = new Vector3d(Fixed64.One, Fixed64.One, Fixed64.Zero);
+
+        NavigationDistanceMath.TryFloor(start, end, out Fixed64 floor).Should().BeTrue();
+        NavigationDistanceMath.TryCeiling(start, end, out Fixed64 ceiling).Should().BeTrue();
+
+        Vector3d floorScalar = new(floor, Fixed64.Zero, Fixed64.Zero);
+        Vector3d ceilingScalar = new(ceiling, Fixed64.Zero, Fixed64.Zero);
+        Vector3d.CompareDistanceSquared(start, end, Vector3d.Zero, floorScalar)
+            .Should().BeGreaterThanOrEqualTo(0);
+        Vector3d.CompareDistanceSquared(start, end, Vector3d.Zero, ceilingScalar)
+            .Should().BeLessThanOrEqualTo(0);
+        Fixed64.TrySubtract(ceiling, floor, out Fixed64 width).Should().BeTrue();
+        width.Should().Be(Fixed64.MinIncrement);
+    }
+
+    [Fact]
+    public void EvaluateEdge_ShouldUseExactTargetEnterCostsAndRemainDirectionAsymmetric()
     {
         NavigationCell west = Cell(enterCost: Fixed64.One);
         NavigationCell east = Cell(area: new NavigationAreaId(1), enterCost: (Fixed64)7);
@@ -45,9 +64,9 @@ public sealed class TraversalEvaluatorTests
             policy,
             TraversalMedium.Solid);
 
-        evaluator.EvaluateNativeEdge(westNode, westToEast, out Fixed64 forward)
+        evaluator.EvaluateEdge(westNode, westToEast, out Fixed64 forward)
             .Should().Be(TraversalEvaluationStatus.Passable);
-        evaluator.EvaluateNativeEdge(eastNode, eastToWest, out Fixed64 reverse)
+        evaluator.EvaluateEdge(eastNode, eastToWest, out Fixed64 reverse)
             .Should().Be(TraversalEvaluationStatus.Passable);
 
         // The anisotropic cells are two world units apart; native portal legs sum to two.
@@ -77,7 +96,7 @@ public sealed class TraversalEvaluatorTests
                     capabilities: TraversalCapability.Jump | TraversalCapability.Climb),
                 allowed,
                 TraversalMedium.Liquid)
-            .IsNodePassable(targetNode).Should().BeFalse();
+            .TryGetPassableNodeState(targetNode, out _).Should().BeFalse();
         new TraversalEvaluator(
                 lease.Graph,
                 Profile(
@@ -85,7 +104,7 @@ public sealed class TraversalEvaluatorTests
                     capabilities: TraversalCapability.Jump),
                 allowed,
                 TraversalMedium.Liquid)
-            .IsNodePassable(targetNode).Should().BeFalse();
+            .TryGetPassableNodeState(targetNode, out _).Should().BeFalse();
         new TraversalEvaluator(
                 lease.Graph,
                 Profile(
@@ -93,7 +112,7 @@ public sealed class TraversalEvaluatorTests
                     capabilities: TraversalCapability.Jump | TraversalCapability.Climb),
                 allowed,
                 TraversalMedium.Liquid)
-            .IsNodePassable(targetNode).Should().BeTrue();
+            .TryGetPassableNodeState(targetNode, out _).Should().BeTrue();
         new TraversalEvaluator(
                 lease.Graph,
                 Profile(
@@ -101,7 +120,7 @@ public sealed class TraversalEvaluatorTests
                     capabilities: TraversalCapability.Jump | TraversalCapability.Climb),
                 denied,
                 TraversalMedium.Liquid)
-            .IsNodePassable(targetNode).Should().BeFalse();
+            .TryGetPassableNodeState(targetNode, out _).Should().BeFalse();
         new TraversalEvaluator(
                 lease.Graph,
                 Profile(
@@ -109,7 +128,7 @@ public sealed class TraversalEvaluatorTests
                     capabilities: TraversalCapability.Jump | TraversalCapability.Climb),
                 DefaultPolicy,
                 TraversalMedium.Liquid)
-            .IsNodePassable(targetNode).Should().BeFalse();
+            .TryGetPassableNodeState(targetNode, out _).Should().BeFalse();
 
         NavigationNodeRef sourceNode = Resolve(lease.Graph, default);
         new TraversalEvaluator(
@@ -117,7 +136,7 @@ public sealed class TraversalEvaluatorTests
                 Profile(allowedMedia: TraversalMedia.Solid),
                 DefaultPolicy,
                 TraversalMedium.Solid)
-            .IsNodePassable(sourceNode).Should().BeTrue();
+            .TryGetPassableNodeState(sourceNode, out _).Should().BeTrue();
     }
 
     [Fact]
@@ -135,7 +154,7 @@ public sealed class TraversalEvaluatorTests
                 false,
                 lease.Graph.GraphVersion + 1);
             new TraversalEvaluator(closed, Profile(), DefaultPolicy, TraversalMedium.Solid)
-                .IsNodePassable(target).Should().BeFalse();
+                .TryGetPassableNodeState(target, out _).Should().BeFalse();
 
             VoxelGrid grid = context.World.ActiveGrids[0];
             grid.TryGetVoxel(new VoxelIndex(1, 0, 0), out Voxel? voxel).Should().BeTrue();
@@ -143,14 +162,18 @@ public sealed class TraversalEvaluatorTests
             context.Simulate();
             using NavigationWorldGraphLease blockedLease = context.Pathing.TryAcquireNavigationGraph()!;
             new TraversalEvaluator(blockedLease.Graph, Profile(), DefaultPolicy, TraversalMedium.Solid)
-                .IsNodePassable(Resolve(blockedLease.Graph, new VoxelIndex(1, 0, 0))).Should().BeFalse();
+                .TryGetPassableNodeState(
+                    Resolve(blockedLease.Graph, new VoxelIndex(1, 0, 0)),
+                    out _).Should().BeFalse();
         }
 
         using (TrailblazerWorldContext context = CreateContext(cell, cell, targetPhysicallyPresent: false))
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
             new TraversalEvaluator(lease.Graph, Profile(), DefaultPolicy, TraversalMedium.Solid)
-                .IsNodePassable(Resolve(lease.Graph, new VoxelIndex(1, 0, 0))).Should().BeFalse();
+                .TryGetPassableNodeState(
+                    Resolve(lease.Graph, new VoxelIndex(1, 0, 0)),
+                    out _).Should().BeFalse();
         }
 
         using (TrailblazerWorldContext context = CreateContext(cell, cell))
@@ -158,7 +181,9 @@ public sealed class TraversalEvaluatorTests
             CommitCellOverlay(context, NavigationCellOverlayOperation.Suppress(new VoxelIndex(1, 0, 0)));
             using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
             new TraversalEvaluator(lease.Graph, Profile(), DefaultPolicy, TraversalMedium.Solid)
-                .IsNodePassable(Resolve(lease.Graph, new VoxelIndex(1, 0, 0))).Should().BeFalse();
+                .TryGetPassableNodeState(
+                    Resolve(lease.Graph, new VoxelIndex(1, 0, 0)),
+                    out _).Should().BeFalse();
         }
 
         using (TrailblazerWorldContext context = CreateContext(cell, cell))
@@ -168,7 +193,9 @@ public sealed class TraversalEvaluatorTests
             context.Simulate();
             using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
             new TraversalEvaluator(lease.Graph, Profile(), DefaultPolicy, TraversalMedium.Solid)
-                .IsNodePassable(Resolve(lease.Graph, new VoxelIndex(1, 0, 0))).Should().BeFalse();
+                .TryGetPassableNodeState(
+                    Resolve(lease.Graph, new VoxelIndex(1, 0, 0)),
+                    out _).Should().BeFalse();
         }
     }
 
@@ -194,7 +221,7 @@ public sealed class TraversalEvaluatorTests
                 Profile(radius: Fixed64.One, height: Fixed64.One),
                 DefaultPolicy,
                 TraversalMedium.Solid);
-            inclusive.EvaluateNativeEdge(source, edge, out _)
+            inclusive.EvaluateEdge(source, edge, out _)
                 .Should().Be(TraversalEvaluationStatus.Passable);
 
             Fixed64.TryAdd(Fixed64.One, Fixed64.MinIncrement, out Fixed64 justOver).Should().BeTrue();
@@ -203,14 +230,14 @@ public sealed class TraversalEvaluatorTests
                     Profile(radius: justOver, height: Fixed64.One),
                     DefaultPolicy,
                     TraversalMedium.Solid)
-                .EvaluateNativeEdge(source, edge, out _)
+                .EvaluateEdge(source, edge, out _)
                 .Should().Be(TraversalEvaluationStatus.Impassable);
             new TraversalEvaluator(
                     lease.Graph,
                     Profile(radius: Fixed64.One, height: justOver),
                     DefaultPolicy,
                     TraversalMedium.Solid)
-                .EvaluateNativeEdge(source, edge, out _)
+                .EvaluateEdge(source, edge, out _)
                 .Should().Be(TraversalEvaluationStatus.Impassable);
         }
 
@@ -232,7 +259,7 @@ public sealed class TraversalEvaluatorTests
                         maxDropDown: Fixed64.Zero),
                     DefaultPolicy,
                     TraversalMedium.Solid)
-                .EvaluateNativeEdge(source, edge, out _)
+                .EvaluateEdge(source, edge, out _)
                 .Should().Be(TraversalEvaluationStatus.Passable);
 
             Fixed64.TryAdd(
@@ -248,14 +275,14 @@ public sealed class TraversalEvaluatorTests
                     Profile(radius: radiusOver, height: portal.MaximumBodyHeight),
                     DefaultPolicy,
                     TraversalMedium.Solid)
-                .EvaluateNativeEdge(source, edge, out _)
+                .EvaluateEdge(source, edge, out _)
                 .Should().Be(TraversalEvaluationStatus.Impassable);
             new TraversalEvaluator(
                     lease.Graph,
                     Profile(radius: portal.MaximumHorizontalRadius, height: heightOver),
                     DefaultPolicy,
                     TraversalMedium.Solid)
-                .EvaluateNativeEdge(source, edge, out _)
+                .EvaluateEdge(source, edge, out _)
                 .Should().Be(TraversalEvaluationStatus.Impassable);
         }
     }
@@ -296,14 +323,14 @@ public sealed class TraversalEvaluatorTests
             TraversalCapability.None);
 
         new TraversalEvaluator(lease.Graph, zeroRadiusProfile, DefaultPolicy, TraversalMedium.Solid)
-            .EvaluateNativeEdge(source, edge, out _)
+            .EvaluateEdge(source, edge, out Fixed64 traversalCost)
             .Should().Be(TraversalEvaluationStatus.Passable);
         new TraversalEvaluator(
                 lease.Graph,
                 Profile(radius: Fixed64.MinIncrement),
                 DefaultPolicy,
                 TraversalMedium.Solid)
-            .EvaluateNativeEdge(source, edge, out _)
+            .EvaluateEdge(source, edge, out _)
             .Should().Be(TraversalEvaluationStatus.Impassable);
         edge.NativePortal.TryTranslate(sourcePrism.Center, out GridNavigationPortal portal)
             .Should().BeTrue();
@@ -315,10 +342,23 @@ public sealed class TraversalEvaluatorTests
             .Should().BeTrue();
         sourcePrism.Contains(sourceAnchor).Should().BeTrue();
         targetPrism.Contains(targetAnchor).Should().BeTrue();
+        NavigationDistanceMath.TryCeiling(
+                new Vector3d(sourcePrism.Center.X, sourcePrism.VerticalMin, sourcePrism.Center.Z),
+                sourceAnchor,
+                out Fixed64 sourceDistance)
+            .Should().BeTrue();
+        NavigationDistanceMath.TryCeiling(
+                targetAnchor,
+                new Vector3d(targetPrism.Center.X, targetPrism.VerticalMin, targetPrism.Center.Z),
+                out Fixed64 targetDistance)
+            .Should().BeTrue();
+        Fixed64.TryAdd(sourceDistance, targetDistance, out Fixed64 expectedCost)
+            .Should().BeTrue();
+        traversalCost.Should().Be(expectedCost);
     }
 
     [Fact]
-    public void EvaluateNativeEdge_ShouldReportCheckedOverflowAfterPassabilityOnly()
+    public void EvaluateEdge_ShouldReportCheckedOverflowAfterPassabilityOnly()
     {
         NavigationCell sourceCell = Cell();
         NavigationCell targetCell = Cell(enterCost: Fixed64.MaxValue);
@@ -336,7 +376,7 @@ public sealed class TraversalEvaluatorTests
                 DefaultPolicy,
                 TraversalMedium.Solid);
 
-            evaluator.EvaluateNativeEdge(source, edge, out Fixed64 cost)
+            evaluator.EvaluateEdge(source, edge, out Fixed64 cost)
                 .Should().Be(TraversalEvaluationStatus.CostOverflow);
             cost.Should().Be(Fixed64.Zero);
         }
@@ -357,7 +397,7 @@ public sealed class TraversalEvaluatorTests
                 Profile(),
                 DefaultPolicy,
                 TraversalMedium.Solid)
-            .EvaluateNativeEdge(blockedSource, blockedEdge, out _)
+            .EvaluateEdge(blockedSource, blockedEdge, out _)
             .Should().Be(TraversalEvaluationStatus.Impassable);
     }
 
@@ -381,7 +421,7 @@ public sealed class TraversalEvaluatorTests
         {
             for (int i = 0; i < 10_000; i++)
             {
-                checksum += (int)evaluator.EvaluateNativeEdge(source, edge, out Fixed64 cost);
+                checksum += (int)evaluator.EvaluateEdge(source, edge, out Fixed64 cost);
                 checksum += cost.GetHashCode();
             }
         };
@@ -470,7 +510,8 @@ public sealed class TraversalEvaluatorTests
             defaults.MaxAreaPolicies,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
-            defaults.MaxConcurrentSnapshotLeases);
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
     }
 
     private static NavigationCell Cell(

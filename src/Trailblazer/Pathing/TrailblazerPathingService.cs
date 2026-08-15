@@ -23,12 +23,17 @@ public sealed class TrailblazerPathingService
     private bool _disposed;
 
     private readonly NavigationGraphRuntime _navigationGraph;
+    private readonly NavigationAStarAdmissionGate _navigationAStarAdmissionGate;
 
     internal TrailblazerPathingService(TrailblazerWorldContext context)
     {
         _context = context;
         State = new PathingWorldState(context);
         _navigationGraph = new NavigationGraphRuntime(context.World, context.Settings);
+        _navigationAStarAdmissionGate = new NavigationAStarAdmissionGate(
+            context.World,
+            _navigationGraph.Store,
+            context.Settings.QueryLimits);
         context.World.OnChangeCommitted += HandleCommittedChange;
     }
 
@@ -39,6 +44,9 @@ public sealed class TrailblazerPathingService
 
     internal NavigationWorldGraphStore NavigationGraphStore =>
         _navigationGraph.Store;
+
+    internal NavigationAStarAdmissionGate NavigationAStarAdmissionGate =>
+        _navigationAStarAdmissionGate;
 
     internal int RetainedCompositionWorkCount =>
         _navigationGraph.RetainedCompositionWorkCount;
@@ -333,6 +341,7 @@ public sealed class TrailblazerPathingService
     public void Reset()
     {
         EnsureUsable();
+        _navigationAStarAdmissionGate.CancelActive();
         _navigationGraph.Reset();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
     }
@@ -340,6 +349,7 @@ public sealed class TrailblazerPathingService
     internal void ResetNavigationGraph()
     {
         EnsureUsable();
+        _navigationAStarAdmissionGate.CancelActive();
         _navigationGraph.Reset();
     }
 
@@ -349,6 +359,7 @@ public sealed class TrailblazerPathingService
             return;
 
         _context.World.OnChangeCommitted -= HandleCommittedChange;
+        _navigationAStarAdmissionGate.Dispose();
         State.ExternalGridBridge.Dispose();
         _navigationGraph.Dispose();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);

@@ -77,6 +77,7 @@ internal sealed partial class NavigationCompositionIndex
         private bool _buildNodeConsumed;
         private bool _componentActive;
         private bool _componentTraversalComplete;
+        private bool _componentCertified;
         private int _publishMemberIndex;
         private NavigationStructuralComponent? _pendingComponent;
         private int _copiedNodes;
@@ -591,7 +592,8 @@ internal sealed partial class NavigationCompositionIndex
                     _pendingComponent = NavigationStructuralComponent.CreateFlat(
                         members,
                         _componentIdentity!,
-                        _componentVersion);
+                        _componentVersion,
+                        _componentCertified);
                     _pendingMemberEnumerator = members.GetEnumerator();
                     _componentBuilder = null;
                     _componentIdentity = null;
@@ -612,6 +614,7 @@ internal sealed partial class NavigationCompositionIndex
                         _buildRead = 0;
                         _buildWrite = 1;
                         _componentActive = true;
+                        _componentCertified = true;
                         break;
                     }
                 }
@@ -667,7 +670,9 @@ internal sealed partial class NavigationCompositionIndex
                         if (!meter.TryConsumeExplicitEdges(1))
                             return false;
                         _buildEdges.MoveNext();
-                        string neighbor = _buildEdges.Current.DestinationMapId;
+                        NavigationStructuralLink link = _buildEdges.Current;
+                        string neighbor = link.DestinationMapId;
+                        _componentCertified &= link.UncertifiedCount == 0;
                         _buildEdgesRemaining--;
                         if (_domain.Contains(neighbor) && TryVisitBuild(neighbor))
                         {
@@ -917,10 +922,13 @@ internal sealed partial class NavigationCompositionIndex
         private readonly NavigationAutomaticSeamIndex _automaticSeams;
         private readonly NavigationStructuralNode? _oldNode;
         private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _oldLinks;
-        private PersistentStringMap<int> _counts = PersistentStringMap<int>.Empty;
+        private PersistentStringMap<StructuralLinkCounts> _counts =
+            PersistentStringMap<StructuralLinkCounts>.Empty;
         private int _index;
         private int _seamRemaining;
+        private int _seamUncertifiedRemaining;
         private int _seamCurrent;
+        private int _seamUncertifiedCurrent;
         private string? _seamDestination;
         private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _seamLinks;
         private bool _ownersCaptured;
@@ -946,7 +954,7 @@ internal sealed partial class NavigationCompositionIndex
         internal NavigationStructuralNode Result { get; private set; } = null!;
 
         internal long RetainedBytes => checked(
-            40L
+            48L
             + _counts.RetainedBytes
             + (_links?.RetainedBytes
                 ?? (Result != null && !ReferenceEquals(Result, _oldNode)
@@ -975,8 +983,13 @@ internal sealed partial class NavigationCompositionIndex
                     if (!record.IsActive)
                         continue;
                     string destination = record.Destination.MapId;
-                    _counts.TryGetValue(destination, out int current);
-                    _counts = _counts.Set(destination, checked(current + 1));
+                    _counts.TryGetValue(destination, out StructuralLinkCounts current);
+                    _counts = _counts.Set(
+                        destination,
+                        new StructuralLinkCounts(
+                            checked(current.Count + 1),
+                            checked(current.UncertifiedCount
+                                + (record.IsLowerBoundCertified ? 0 : 1))));
                 }
                 _ownersCaptured = true;
                 _index = 0;
@@ -994,15 +1007,30 @@ internal sealed partial class NavigationCompositionIndex
                         NavigationStructuralLink seamLink = _seamLinks.Current;
                         _seamDestination = seamLink.DestinationMapId;
                         _seamRemaining = seamLink.Count;
-                        _counts.TryGetValue(_seamDestination, out _seamCurrent);
+                        _seamUncertifiedRemaining = seamLink.UncertifiedCount;
+                        _counts.TryGetValue(
+                            _seamDestination,
+                            out StructuralLinkCounts current);
+                        _seamCurrent = current.Count;
+                        _seamUncertifiedCurrent = current.UncertifiedCount;
                     }
                     while (_seamRemaining > 0)
                     {
                         if (!meter.TryConsumeExplicitEdges(1))
                             return false;
                         _seamCurrent = checked(_seamCurrent + 1);
+                        if (_seamUncertifiedRemaining > 0)
+                        {
+                            _seamUncertifiedCurrent = checked(
+                                _seamUncertifiedCurrent + 1);
+                            _seamUncertifiedRemaining--;
+                        }
                         _seamRemaining--;
-                        _counts = _counts.Set(_seamDestination, _seamCurrent);
+                        _counts = _counts.Set(
+                            _seamDestination,
+                            new StructuralLinkCounts(
+                                _seamCurrent,
+                                _seamUncertifiedCurrent));
                     }
                     _seamDestination = null;
                 }
@@ -1014,9 +1042,11 @@ internal sealed partial class NavigationCompositionIndex
                 if (!meter.TryConsumeDependencyEntries(1))
                     return false;
                 _links ??= new NavigationPagedSequence<NavigationStructuralLink>.Builder(16);
+                StructuralLinkCounts counts = _counts.GetValueAt(_index);
                 var link = new NavigationStructuralLink(
                     _counts.GetKeyAt(_index),
-                    _counts.GetValueAt(_index));
+                    counts.Count,
+                    counts.UncertifiedCount);
                 _links.Append(link);
                 if (_matchesOld
                     && (!_oldLinks.MoveNext() || !_oldLinks.Current.Equals(link)))
@@ -1040,6 +1070,19 @@ internal sealed partial class NavigationCompositionIndex
                 _links = null;
             }
             return true;
+        }
+
+        private readonly struct StructuralLinkCounts
+        {
+            internal StructuralLinkCounts(int count, int uncertifiedCount)
+            {
+                Count = count;
+                UncertifiedCount = uncertifiedCount;
+            }
+
+            internal int Count { get; }
+
+            internal int UncertifiedCount { get; }
         }
     }
 

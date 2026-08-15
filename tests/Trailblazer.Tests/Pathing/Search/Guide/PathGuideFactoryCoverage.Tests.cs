@@ -61,52 +61,17 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     }
 
     [Fact]
-    public void RequestAStar_ShouldFastFailReachabilityBlockedRequests()
-    {
-        bool[,,] data = PathTestFactory.BuildSingleVoxelChoke();
-        PathTestFactory.RegisterFromData(TestWorld.Context, "GuideFactoryChokeFastFail", data, Vector3d.Zero);
-
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
-            new Vector3d(6, 0, 2),
-            Fixed64.Two));
-
-        SolidPartitionReachability.IsProvablyUnreachable(request).Should().BeTrue();
-
-        PathGuideFactory.RequestAStar(request).Should().BeNull();
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
-    }
-
-    [Fact]
-    public void PathGuideFactory_ShouldBuildHybridGuide_FromTransitionAwareRoute()
-    {
-        GuidedPathTestScene.RegisterTransitionFallbackScene(TestWorld.Context);
-
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            HeuristicMethod.Euclidean,
-            allowTraversalTransitions: true));
-
-        HybridPathRequest hybridRequest = TestRequire.NotNull(HybridPathRequest.CreateFromAStar(request));
-        HybridGuide guide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(hybridRequest, out HybridGuide? createdGuide),
-            createdGuide);
-        guide.ActiveWaypoints.Should().NotBeEmpty();
-        guide.ActiveWaypoints[^1].IsGoal.Should().BeTrue();
-    }
-
-    [Fact]
     public void RequestGuideTyped_ShouldReturnFalseAndReleaseGuide_WhenGuideTypeDoesNotMatch()
     {
         PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryTypedMismatch", Vector3d.Zero, 3);
-        AStarPathRequest request = TestRequire.NotNull(
-            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+        FlowFieldPathRequest request = TestRequire.NotNull(
+            FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
 
-        PathGuideFactory.RequestGuide<FlowFieldGuide>(request, out FlowFieldGuide? mismatchedGuide).Should().BeFalse();
+        PathGuideFactory.RequestGuide<VolumeGuide>(request, out VolumeGuide? mismatchedGuide).Should().BeFalse();
 
         mismatchedGuide.Should().BeNull();
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
-        PathGuideFactory.InUseAStarGuideCount.Should().Be(0);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(1);
+        PathGuideFactory.InUseFlowGuideCount.Should().Be(0);
     }
 
     [Fact]
@@ -114,45 +79,33 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     {
         PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryFlush", Vector3d.Zero, 3);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
 
         PathGuideFactory.RequestGuide(request, out _).Should().BeTrue();
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(1);
         PathGuideFactory.AnyInUse.Should().BeTrue();
 
         PathGuideFactory.FlushCache();
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(1);
 
         PathGuideFactory.FlushCache(force: true);
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(0);
         PathGuideFactory.AnyInUse.Should().BeFalse();
 
-        AStarGuide guide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
+        FlowFieldGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdGuide),
             createdGuide);
         PathGuideFactory.ReturnGuide(guide);
         PathGuideFactory.IsPooling.Should().BeTrue();
 
         PathGuideFactory.CullExpiredGuides(currentFrame: 601);
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(0);
         PathGuideFactory.IsPooling.Should().BeFalse();
     }
 
     [Fact]
     public void PathGuideFactory_ShouldInvalidateChartAndVolumeCaches()
     {
-        PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryInvalidateSolid", Vector3d.Zero, 3);
-        AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
-        AStarGuide aStarGuide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(aStarRequest, out AStarGuide? createdAStarGuide),
-            createdAStarGuide);
-        PathGuideFactory.ReturnGuide(aStarGuide);
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
-
-        PathGuideFactory.InvalidateCacheFor("GuideFactoryInvalidateSolid");
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
-
         PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 2), TraversalMedium.Gas, 3, "GuideFactoryInvalidateVolume");
         VolumePathRequest volumeRequest = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
@@ -173,21 +126,21 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     {
         PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryEmptyInvalidate", Vector3d.Zero, 3);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
-        AStarGuide guide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
+        FlowFieldGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdGuide),
             createdGuide);
         PathGuideFactory.ReturnGuide(guide);
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(1);
 
         PathGuideFactory.InvalidateCacheFor(string.Empty);
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(1);
 
         PathGuideFactory.InvalidateCacheFor(null!);
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(1);
     }
 
     [Fact]
@@ -340,71 +293,11 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     }
 
     [Fact]
-    public void AStarTransitionFallbackResult_ShouldInvalidateForVolumeSegmentChart()
-    {
-        PathTestFactory.RegisterSolidPoint(TestWorld.Context, "GuideFactoryAStarFallbackStart", new Vector3d(-1, 0, 0));
-        PathTestFactory.RegisterSolidPoint(TestWorld.Context, "GuideFactoryAStarFallbackEnd", new Vector3d(3, 0, 0));
-        RegisterVolumePoint("GuideFactoryAStarFallbackWaterEntry", new Vector3d(0, 0, 0), TraversalMedia.Liquid);
-        RegisterVolumePoint("GuideFactoryAStarFallbackWaterMiddle", new Vector3d(1, 0, 0), TraversalMedia.Liquid);
-        RegisterVolumePoint("GuideFactoryAStarFallbackWaterExit", new Vector3d(2, 0, 0), TraversalMedia.Liquid);
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: "guide-factory-water-entry",
-            type: TraversalTransitionType.SwimEntry,
-            source: TraversalTransitionAnchor.Solid(new Vector3d(-1, 0, 0)),
-            destination: TraversalTransitionAnchor.Liquid(new Vector3d(0, 0, 0)),
-            pathCostModifier: 2)).Should().BeTrue();
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: "guide-factory-water-exit",
-            type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
-            pathCostModifier: 1)).Should().BeTrue();
-
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
-            new Vector3d(3, 0, 0),
-            Fixed64.One,
-            HeuristicMethod.Manhattan,
-            allowTraversalTransitions: true));
-
-        AStarGuide guide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
-            createdGuide);
-        PathGuideFactory.ReturnGuide(guide);
-
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
-
-        PathGuideFactory.InvalidateCacheFor("GuideFactoryAStarFallbackWaterMiddle");
-
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
-    }
-
-    [Fact]
-    public void FlowFieldCacheHit_ShouldAllocateWithinFiftyBytesOfAStarHit()
-    {
-        PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryWarmHitAllocation", Vector3d.Zero, 4);
-
-        AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
-        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
-            FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
-
-        const int iterations = 256;
-        long aStarAllocated = MeasureWarmHitAllocation<AStarGuide>(aStarRequest, iterations);
-        long flowFieldAllocated = MeasureWarmHitAllocation<FlowFieldGuide>(flowFieldRequest, iterations);
-
-        flowFieldAllocated.Should().BeLessThanOrEqualTo(aStarAllocated + (50L * iterations));
-    }
-
-    [Fact]
     public void WarmGuideHits_ShouldAllocateNearZero_WhenReturnedGuidesCanBeReused()
     {
         PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryWarmReuseSolid", Vector3d.Zero, 4);
         PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 4), TraversalMedium.Gas, 4, "GuideFactoryWarmReuseVolume");
 
-        AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
             FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         VolumePathRequest volumeRequest = TestRequire.NotNull(
@@ -412,12 +305,10 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
 
         const int iterations = 256;
 
-        long aStarAllocated = MeasureWarmHitAllocation<AStarGuide>(aStarRequest, iterations);
         long flowFieldAllocated = MeasureWarmHitAllocation<FlowFieldGuide>(flowFieldRequest, iterations);
         long volumeAllocated = MeasureWarmHitAllocation<VolumeGuide>(volumeRequest, iterations);
 
-        string allocationSummary = $"A*={aStarAllocated}, FlowField={flowFieldAllocated}, Volume={volumeAllocated} bytes.";
-        aStarAllocated.Should().BeLessThan(1_024, allocationSummary);
+        string allocationSummary = $"FlowField={flowFieldAllocated}, Volume={volumeAllocated} bytes.";
         flowFieldAllocated.Should().BeLessThan(1_024, allocationSummary);
         volumeAllocated.Should().BeLessThan(1_024, allocationSummary);
     }
@@ -428,8 +319,6 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryRequestKeySolid", Vector3d.Zero, 4);
         PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 4), TraversalMedium.Gas, 4, "GuideFactoryRequestKeyVolume");
 
-        AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
             FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         VolumePathRequest volumeRequest = TestRequire.NotNull(
@@ -442,7 +331,6 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         {
             for (int i = 0; i < iterations; i++)
             {
-                aggregate += aStarRequest.RequestCacheKey.GetHashCode();
                 aggregate += flowFieldRequest.RequestCacheKey.GetHashCode();
                 aggregate += volumeRequest.RequestCacheKey.GetHashCode();
             }

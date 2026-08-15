@@ -25,11 +25,8 @@ internal static class GuidedClimbIntentResolver
 
         return pathRequest switch
         {
-            AStarPathRequest aStar when aStar.AllowTraversalTransitions =>
-                RequestsClimbIntent(HybridPathRequest.CreateFromAStar(aStar)),
             FlowFieldPathRequest flowField when flowField.AllowTraversalTransitions =>
                 RequestsClimbIntent(HybridPathRequest.CreateFromFlowField(flowField)),
-            HybridPathRequest hybrid => RequestsClimbIntent(hybrid),
             _ => false
         };
     }

@@ -84,6 +84,11 @@ public readonly struct KinematicBodyShape : IEquatable<KinematicBodyShape>
     /// </summary>
     public static bool operator !=(KinematicBodyShape left, KinematicBodyShape right) => !left.Equals(right);
 
+    internal bool IsValid =>
+        Radius >= Fixed64.Zero
+        && Height > Fixed64.Zero
+        && RootToFootOffsetY >= Fixed64.Zero;
+
     internal void Validate(string parameterName)
     {
         SwiftThrowHelper.ThrowIfArgument(

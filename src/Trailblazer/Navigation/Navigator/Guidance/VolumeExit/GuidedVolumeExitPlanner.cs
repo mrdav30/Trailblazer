@@ -26,11 +26,10 @@ internal static class GuidedVolumeExitPlanner
     /// <param name="targetPosition"></param>
     /// <param name="unitSize"></param>
     /// <param name="medium"></param>
-    /// <param name="chartPathMode"></param>
     /// <param name="allowUnwalkableEndpoints"></param>
     /// <param name="allowTraversalTransitions"></param>
     /// <param name="maxClimbHeight"></param>
-    /// <param name="aStarHeuristic"></param>
+    /// <param name="volumeHeuristic"></param>
     /// <param name="flowFieldExtraFloodRange"></param>
     /// <param name="request"></param>
     /// <param name="handoff"></param>
@@ -42,11 +41,10 @@ internal static class GuidedVolumeExitPlanner
         Vector3d targetPosition,
         Fixed64 unitSize,
         TraversalMedium medium,
-        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
+        HeuristicMethod volumeHeuristic,
         int flowFieldExtraFloodRange,
         [NotNullWhen(true)] out VolumePathRequest? request,
         out GuidedVolumeExitHandoff? handoff,
@@ -56,12 +54,6 @@ internal static class GuidedVolumeExitPlanner
         request = null;
         handoff = null;
         totalPathCost = 0;
-
-        if (chartPathMode != SolidPathAlgorithm.AStar
-            && chartPathMode != SolidPathAlgorithm.FlowField)
-        {
-            return false;
-        }
 
         TraversalTransition bestTransition = default;
         VolumePathRequest? bestRequest = null;
@@ -73,11 +65,10 @@ internal static class GuidedVolumeExitPlanner
                 origin,
                 targetPosition,
                 unitSize,
-                chartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 maxClimbHeight,
-                aStarHeuristic,
+                volumeHeuristic,
                 flowFieldExtraFloodRange,
                 ref bestTransition,
                 ref bestRequest,
@@ -88,11 +79,10 @@ internal static class GuidedVolumeExitPlanner
                 origin,
                 targetPosition,
                 unitSize,
-                chartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 maxClimbHeight,
-                aStarHeuristic,
+                volumeHeuristic,
                 flowFieldExtraFloodRange,
                 ref bestTransition,
                 ref bestRequest,
@@ -108,13 +98,10 @@ internal static class GuidedVolumeExitPlanner
         totalPathCost = bestTotalCost;
         handoff = CreateHandoff(
             bestTransition,
-            context,
             targetPosition,
-            chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
             maxClimbHeight,
-            aStarHeuristic,
             flowFieldExtraFloodRange);
         return true;
     }
@@ -126,11 +113,10 @@ internal static class GuidedVolumeExitPlanner
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
+        HeuristicMethod volumeHeuristic,
         int flowFieldExtraFloodRange,
         ref TraversalTransition bestTransition,
         ref VolumePathRequest? bestRequest,
@@ -149,7 +135,7 @@ internal static class GuidedVolumeExitPlanner
                 origin,
                 transition.Source.Position,
                 unitSize,
-                aStarHeuristic,
+                volumeHeuristic,
                 allowUnwalkableEndpoints,
                 transition.Source.Medium);
             if (volumeRequest == null)
@@ -170,11 +156,9 @@ internal static class GuidedVolumeExitPlanner
                 transition.Destination.Position,
                 targetPosition,
                 unitSize,
-                chartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 maxClimbHeight,
-                aStarHeuristic,
                 flowFieldExtraFloodRange,
                 out int chartCost))
             {
@@ -211,26 +195,20 @@ internal static class GuidedVolumeExitPlanner
 
     private static GuidedVolumeExitHandoff CreateHandoff(
         TraversalTransition transition,
-        TrailblazerWorldContext context,
         Vector3d targetPosition,
-        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange)
     {
         return new GuidedVolumeExitHandoff
         {
             TransitionId = transition.Id,
-            Context = context,
             ChartOriginPosition = transition.Destination.Position,
             TargetPosition = targetPosition,
-            ChartPathMode = chartPathMode,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
             MaxClimbHeight = maxClimbHeight,
-            AStarHeuristic = aStarHeuristic,
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange,
             IsRequestingClimb = transition.PreserveClimbIntentOnFollowup
         };
@@ -241,78 +219,39 @@ internal static class GuidedVolumeExitPlanner
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
         out int chartCost)
     {
         chartCost = 0;
 
-        switch (chartPathMode)
-        {
-            case SolidPathAlgorithm.FlowField:
-                FlowFieldPathRequest? flowFieldRequest = FlowFieldPathRequest.Create(
-                    context,
-                    origin,
-                    targetPosition,
-                    unitSize,
-                    allowUnwalkableEndpoints,
-                    allowTraversalTransitions);
-                if (flowFieldRequest == null)
-                    return false;
+        FlowFieldPathRequest? flowFieldRequest = FlowFieldPathRequest.Create(
+            context,
+            origin,
+            targetPosition,
+            unitSize,
+            allowUnwalkableEndpoints,
+            allowTraversalTransitions);
+        if (flowFieldRequest == null)
+            return false;
 
-                flowFieldRequest.MaxClimbHeight = maxClimbHeight;
-                flowFieldRequest.ExtraFloodRange = flowFieldExtraFloodRange;
-                if (flowFieldRequest.HasZeroDisplacement)
-                    return true;
+        flowFieldRequest.MaxClimbHeight = maxClimbHeight;
+        flowFieldRequest.ExtraFloodRange = flowFieldExtraFloodRange;
+        if (flowFieldRequest.HasZeroDisplacement)
+            return true;
 
-                if (TryGetDirectFlowFieldCost(flowFieldRequest, out chartCost))
-                    return true;
+        if (TryGetDirectFlowFieldCost(flowFieldRequest, out chartCost))
+            return true;
 
-                if (!allowTraversalTransitions)
-                    return false;
+        if (!allowTraversalTransitions)
+            return false;
 
-                return TryGetTransitionAwareChartCost(flowFieldRequest, out chartCost);
-
-            case SolidPathAlgorithm.AStar:
-            default:
-                AStarPathRequest? aStarRequest = AStarPathRequest.Create(
-                    context,
-                    origin,
-                    targetPosition,
-                    unitSize,
-                    aStarHeuristic,
-                    allowUnwalkableEndpoints,
-                    allowTraversalTransitions);
-                if (aStarRequest == null)
-                    return false;
-
-                aStarRequest.MaxClimbHeight = maxClimbHeight;
-                if (aStarRequest.HasZeroDisplacement)
-                    return true;
-
-                if (TryGetDirectAStarCost(aStarRequest, out chartCost))
-                    return true;
-
-                if (!allowTraversalTransitions)
-                    return false;
-
-                return TryGetTransitionAwareChartCost(aStarRequest, out chartCost);
-        }
-    }
-
-    private static bool TryGetDirectAStarCost(
-        AStarPathRequest request,
-        out int chartCost)
-    {
-        chartCost = 0;
-
-        AStarSurveyResult aStarResult = request.Context.Pathing.State.GuideState.AStarSurveyor.FindPath(request);
-        return aStarResult.HasPath
-            && TryAssignChartCost(aStarResult.Waypoints[^1].PathCost, out chartCost);
+        HybridRoutePlan? routePlan = HybridPathRequest.CreateFromFlowField(flowFieldRequest)?.RoutePlan;
+        return routePlan != null
+            && routePlan.DirectedTransitions.Length > 0
+            && TryAssignChartCost(routePlan.TotalPathCost, out chartCost);
     }
 
     private static bool TryGetDirectFlowFieldCost(
@@ -327,32 +266,6 @@ internal static class GuidedVolumeExitPlanner
             && request.StartNode != null
             && flowFieldResult.Fields.TryGetValue(request.StartNode.WorldIndex, out FlowField startField)
             && TryAssignChartCost(startField.PathCost, out chartCost);
-    }
-
-    private static bool TryGetTransitionAwareChartCost(
-        AStarPathRequest request,
-        out int chartCost)
-    {
-        return TryGetTransitionAwareChartCost(HybridPathRequest.CreateFromAStar(request), out chartCost);
-    }
-
-    private static bool TryGetTransitionAwareChartCost(
-        FlowFieldPathRequest request,
-        out int chartCost)
-    {
-        return TryGetTransitionAwareChartCost(HybridPathRequest.CreateFromFlowField(request), out chartCost);
-    }
-
-    internal static bool TryGetTransitionAwareChartCost(
-        HybridPathRequest? hybridRequest,
-        out int chartCost)
-    {
-        chartCost = 0;
-
-        HybridRoutePlan? routePlan = hybridRequest?.RoutePlan;
-        return routePlan != null
-            && routePlan.DirectedTransitions.Length > 0
-            && TryAssignChartCost(routePlan.TotalPathCost, out chartCost);
     }
 
     private static bool TryAssignChartCost(int cost, out int chartCost)

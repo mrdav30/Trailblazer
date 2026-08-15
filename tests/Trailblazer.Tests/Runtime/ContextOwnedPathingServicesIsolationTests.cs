@@ -71,13 +71,16 @@ public sealed class ContextOwnedPathingServicesIsolationTests : IDisposable
     {
         using TrailblazerWorldContext contextA = PathTestFactory.CreateContextWithGrid();
         using TrailblazerWorldContext contextB = PathTestFactory.CreateContextWithGrid();
-
-        contextA.Guides.TrySeedVolumeCacheForBenchmark(1234, new[] { "SharedVolumeChart" }, checkout: false)
-            .Should()
-            .BeTrue();
-        contextB.Guides.TrySeedVolumeCacheForBenchmark(1234, new[] { "SharedVolumeChart" }, checkout: false)
-            .Should()
-            .BeTrue();
+        PathTestFactory.RegisterVolumeLine(contextA, Vector3d.Zero, TraversalMedium.Gas, 2, "SharedVolumeChart");
+        PathTestFactory.RegisterVolumeLine(contextB, Vector3d.Zero, TraversalMedium.Gas, 2, "SharedVolumeChart");
+        VolumePathRequest requestA = TestRequire.NotNull(VolumePathRequest.Create(
+            contextA, Vector3d.Zero, Vector3d.Right, Fixed64.One, medium: TraversalMedium.Gas));
+        VolumePathRequest requestB = TestRequire.NotNull(VolumePathRequest.Create(
+            contextB, Vector3d.Zero, Vector3d.Right, Fixed64.One, medium: TraversalMedium.Gas));
+        contextA.Guides.RequestGuide(requestA, out VolumeGuide? guideA).Should().BeTrue();
+        contextB.Guides.RequestGuide(requestB, out VolumeGuide? guideB).Should().BeTrue();
+        contextA.Guides.ReturnGuide(guideA);
+        contextB.Guides.ReturnGuide(guideB);
 
         contextA.VolumeRules.SetGasVoxelRule(static _ => true);
 
@@ -88,40 +91,25 @@ public sealed class ContextOwnedPathingServicesIsolationTests : IDisposable
     }
 
     [Fact]
-    public void ContextGuides_ShouldInvalidateOnlyOwningGuideCaches()
+    public void ContextFlowGuides_ShouldInvalidateOnlyOwningGuideCaches()
     {
         using TrailblazerWorldContext contextA = PathTestFactory.CreateContextWithGrid();
         using TrailblazerWorldContext contextB = PathTestFactory.CreateContextWithGrid();
-
-        contextA.Guides.TrySeedAStarCacheForBenchmark(2222, new[] { "SharedGuideChart" }, checkout: false)
-            .Should()
-            .BeTrue();
-        contextB.Guides.TrySeedAStarCacheForBenchmark(2222, new[] { "SharedGuideChart" }, checkout: false)
-            .Should()
-            .BeTrue();
+        PathTestFactory.RegisterSolidLine(contextA, "SharedGuideChart", Vector3d.Zero, 2);
+        PathTestFactory.RegisterSolidLine(contextB, "SharedGuideChart", Vector3d.Zero, 2);
+        FlowFieldPathRequest requestA = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            contextA, Vector3d.Zero, Vector3d.Right, Fixed64.One));
+        FlowFieldPathRequest requestB = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            contextB, Vector3d.Zero, Vector3d.Right, Fixed64.One));
+        contextA.Guides.RequestGuide(requestA, out FlowFieldGuide? guideA).Should().BeTrue();
+        contextB.Guides.RequestGuide(requestB, out FlowFieldGuide? guideB).Should().BeTrue();
+        contextA.Guides.ReturnGuide(guideA);
+        contextB.Guides.ReturnGuide(guideB);
 
         contextA.Guides.InvalidateCacheFor("SharedGuideChart");
 
-        contextA.Guides.TotalAStarGuideCount.Should().Be(0);
-        contextB.Guides.TotalAStarGuideCount.Should().Be(1);
-    }
-
-    [Fact]
-    public void ContextReachabilitySnapshots_ShouldBuildOnlyForOwningContext()
-    {
-        using TrailblazerWorldContext contextA = PathTestFactory.CreateContextWithGrid();
-        using TrailblazerWorldContext contextB = PathTestFactory.CreateContextWithGrid();
-        PathTestFactory.RegisterSolidPoint(contextA, "WorldAReachabilityStart", Vector3d.Zero);
-        PathTestFactory.RegisterSolidPoint(contextA, "WorldAReachabilityEnd", new Vector3d(3, 0, 0));
-        PathTestFactory.RegisterSolidPoint(contextB, "WorldBReachabilityStart", Vector3d.Zero);
-        PathTestFactory.RegisterSolidPoint(contextB, "WorldBReachabilityEnd", new Vector3d(3, 0, 0));
-        AStarPathRequest requestA = PathTestFactory.CreateAStarRequest(contextA, Vector3d.Zero, new Vector3d(3, 0, 0));
-
-        contextA.Guides.RequestGuide(requestA, out AStarGuide? guide).Should().BeFalse();
-        guide.Should().BeNull();
-
-        contextA.Guides.CaptureReachabilityStats().SnapshotBuildCount.Should().Be(1);
-        contextB.Guides.CaptureReachabilityStats().SnapshotBuildCount.Should().Be(0);
+        contextA.Guides.TotalFlowGuideCount.Should().Be(0);
+        contextB.Guides.TotalFlowGuideCount.Should().Be(1);
     }
 
 }

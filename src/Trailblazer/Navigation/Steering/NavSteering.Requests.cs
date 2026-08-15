@@ -7,6 +7,7 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using FixedMathSharp;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 
@@ -36,29 +37,58 @@ public partial class NavSteering
         else if (!ReferenceEquals(_context, pathRequest.Context))
             throw new InvalidOperationException("NavSteering cannot accept a path request from a different TrailblazerWorldContext.");
 
+        BeginPathSession(
+            pathRequest.TargetPosition,
+            pathRequest.Origin,
+            groupId,
+            pathRequest,
+            query: null);
+    }
+
+    /// <summary>
+    /// Starts or replaces one graph-backed surface A* steering request.
+    /// </summary>
+    internal virtual void ApplyPathQuery(PathQuery query, int groupId = -1)
+    {
+        BeginPathSession(
+            query.End.Position,
+            query.Start.Position,
+            groupId,
+            request: null,
+            query);
+    }
+
+    private void BeginPathSession(
+        Vector3d destination,
+        Vector3d origin,
+        int groupId,
+        IPathRequest? request,
+        PathQuery? query)
+    {
         _hasLineOfSightPath = false;
         _isAtDestination = false;
-
         _stoppedFrameCount = 0;
         _isStuck = false;
         _stuckFrameCount = 0;
-
         _shouldMove = true;
-        // NOTE: destination can be an exact point within a voxel, not neccesarily the voxel position
-        _requestedDestination = pathRequest.TargetPosition;
-        _destination = _requestedDestination;
+        _requestedDestination = destination;
+        _destination = destination;
 
         ReleaseTrailGuide();
-        _currentRequest = pathRequest;
-        _lastUnitSize = pathRequest.UnitSize;
+        _currentRequest = request;
+        _currentQuery = query;
+        if (request != null)
+            _lastUnitSize = request.UnitSize;
 
         _repathTries = 0;
         _shouldRequestPathThisFrame = true;
-        PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false, force: true);
-
+        PublishRouteTopology(
+            hasResolvedTopology: false,
+            usesGuideTopology: false,
+            requestsClimbIntent: false,
+            force: true);
         AddToMovementGroup(groupId);
-        UpdateMovementGroupState(pathRequest.Origin, true);
-
+        UpdateMovementGroupState(origin, true);
         Events.OnMoveRequestApplied?.Invoke();
     }
 
@@ -122,7 +152,7 @@ public partial class NavSteering
     {
         SwiftThrowHelper.ThrowIfNull(vessel, nameof(vessel));
 
-        if (!ShouldMove || !IsInGroup || _currentRequest == null)
+        if (!ShouldMove || !IsInGroup || (_currentRequest == null && !_currentQuery.HasValue))
             return;
 
         MovementGroups.Prewarm(

@@ -223,37 +223,6 @@ public sealed class FlowFieldGuideTests : IDisposable
         dir.Should().Be(Vector3d.Zero);
     }
 
-    /// <summary>
-    /// Covers the staged FlowFieldContainsPosition path where the active stage guide is not a FlowFieldGuide.
-    /// When the active stage is backed by an AStarGuide, the cast to FlowFieldGuide fails and the method
-    /// short-circuits to false without delegating to the inner guide.
-    /// </summary>
-    [Fact]
-    public void FlowFieldGuide_StagedWithAStarSegment_FlowFieldContainsPosition_ShouldReturnFalse()
-    {
-        PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldGuideStagedAStar", Vector3d.Zero, 3);
-
-        var aStarRequest = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(2, 0, 0),
-            Fixed64.One);
-        Assert.NotNull(aStarRequest);
-
-        var plan = new HybridRoutePlan(
-            new[] { HybridRouteStep.Segment(aStarRequest) },
-            Array.Empty<TraversalTransition>(),
-            0);
-
-        var guide = new FlowFieldGuide();
-        guide.InitializeStaged(plan).Should().BeTrue();
-
-        // Prime the active stage guide by requesting a movement direction first
-        guide.TryGetMovementDirection(Vector3d.Zero, out _);
-
-        // Active stage guide is AStarGuide, not FlowFieldGuide — returns false
-        guide.FlowFieldContainsPosition(Vector3d.Zero).Should().BeFalse();
-        guide.ReleaseStagedResources(dispose: true);
-    }
-
     [Fact]
     public void FlowFieldGuide_ShouldFailGracefully_WhenStagedSegmentCannotCreateAnInnerGuide()
     {

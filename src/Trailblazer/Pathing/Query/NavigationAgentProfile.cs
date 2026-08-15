@@ -134,6 +134,14 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
     /// </summary>
     public static bool operator !=(NavigationAgentProfile left, NavigationAgentProfile right) => !left.Equals(right);
 
+    internal bool IsValid =>
+        Shape.IsValid
+        && MaxStepUp >= Fixed64.Zero
+        && MaxDropDown >= Fixed64.Zero
+        && ArrivalRadius >= Fixed64.Zero
+        && (AllowedMedia & ~KnownMedia) == 0
+        && (Capabilities & ~KnownCapabilities) == 0;
+
     internal void Validate(string parameterName)
     {
         Shape.Validate(parameterName);

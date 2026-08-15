@@ -133,6 +133,43 @@ internal sealed partial class NavigationWorldGraph
 
     internal int MapCount => _instances.Count;
 
+    internal bool TryGetCoveredAddressGeneration(
+        int configurationOrdinal,
+        out string mapId,
+        out GridCoveredAddressGeneration generation)
+    {
+        if ((uint)configurationOrdinal >= (uint)_mapIndex.Count)
+        {
+            mapId = string.Empty;
+            generation = default;
+            return false;
+        }
+        mapId = _mapIndex.GetValueAt(configurationOrdinal);
+        return TryGetCoveredAddressGeneration(mapId, out generation);
+    }
+
+    internal bool TryGetCoveredAddressGeneration(
+        string mapId,
+        out GridCoveredAddressGeneration generation)
+    {
+        if (_instances.TryGet(mapId, out NavigationMapInstance instance)
+            && instance.IsMaterialized)
+        {
+            NavigationGridGenerationIdentity identity = instance.GridIdentity;
+            generation = new GridCoveredAddressGeneration(
+                identity.ConfigurationKey,
+                identity.GridIndex,
+                identity.GridSpawnToken,
+                instance.GridHighWaterSequence);
+            return true;
+        }
+        generation = default;
+        return false;
+    }
+
+    internal bool TryGetComponentKey(string mapId, out string componentKey) =>
+        Composition.TryGetComponentKey(mapId, out componentKey!);
+
     internal long RetainedBytes { get; }
 
     internal int PersistentPageCount { get; }
@@ -721,18 +758,13 @@ internal sealed partial class NavigationWorldGraph
         {
             string representative = componentRepresentativeMapIds[i];
             if (string.IsNullOrEmpty(representative)
-                || IsStructuralScopeClosed(representative)
                 || (priorComponent != null
                     && string.CompareOrdinal(priorComponent, representative) >= 0)
-                || !Composition.TryGetComponentRecord(
-                    representative,
-                    out NavigationStructuralComponent component)
-                || !string.Equals(component.Key, representative, StringComparison.Ordinal))
+                || !TryGetComponentDependency(representative, out components[i]))
             {
                 stamp = null!;
                 return false;
             }
-            components[i] = new GraphComponentDependency(representative, component.Version);
             priorComponent = representative;
         }
 
@@ -749,33 +781,75 @@ internal sealed partial class NavigationWorldGraph
                 || address.PageIndex < 0
                 || mapComparison < 0
                 || (mapComparison == 0 && address.PageIndex <= priorPageIndex)
-                || !TryGetMap(address.MapId, out NavigationMapInstance? instance)
-                || instance == null
-                || !Composition.TryGetComponentRecord(
-                    address.MapId,
-                    out NavigationStructuralComponent pageComponent)
-                || !ContainsOrdinal(
+                || !TryGetPageDependency(
+                    address,
                     componentRepresentativeMapIds,
-                    pageComponent.Key))
+                    out pages[i]))
             {
                 stamp = null!;
                 return false;
             }
-            pages[i] = instance.GetPageDependency(address.PageIndex);
             priorMapId = address.MapId;
             priorPageIndex = address.PageIndex;
         }
 
         stamp = new GraphDependencyStamp(
+            Composition.Version,
             areaPolicy,
             components,
             pages);
         return true;
     }
 
+    internal bool TryGetComponentDependency(
+        string representativeMapId,
+        out GraphComponentDependency dependency)
+    {
+        if (!string.IsNullOrEmpty(representativeMapId)
+            && !IsStructuralScopeClosed(representativeMapId)
+            && Composition.TryGetComponentRecord(
+                representativeMapId,
+                out NavigationStructuralComponent component)
+            && string.Equals(
+                component.Key,
+                representativeMapId,
+                StringComparison.Ordinal))
+        {
+            dependency = new GraphComponentDependency(
+                representativeMapId,
+                component.Version);
+            return true;
+        }
+        dependency = default;
+        return false;
+    }
+
+    internal bool TryGetPageDependency(
+        GraphPageDependencyAddress address,
+        ReadOnlySpan<string> componentRepresentativeMapIds,
+        out GraphPageDependency dependency)
+    {
+        if (!string.IsNullOrEmpty(address.MapId)
+            && address.PageIndex >= 0
+            && TryGetMap(address.MapId, out NavigationMapInstance? instance)
+            && instance != null
+            && Composition.TryGetComponentRecord(
+                address.MapId,
+                out NavigationStructuralComponent pageComponent)
+            && ContainsOrdinal(componentRepresentativeMapIds, pageComponent.Key))
+        {
+            dependency = instance.GetPageDependency(address.PageIndex);
+            return true;
+        }
+        dependency = default;
+        return false;
+    }
+
     internal bool IsDependencyCurrent(GraphDependencyStamp stamp)
     {
-        if (stamp == null || !AreaCatalog.TryGet(stamp.AreaPolicy, out _))
+        if (stamp == null
+            || stamp.CompositionVersion != Composition.Version
+            || !AreaCatalog.TryGet(stamp.AreaPolicy, out _))
             return false;
         for (int component = 0; component < stamp.Components.Length; component++)
         {

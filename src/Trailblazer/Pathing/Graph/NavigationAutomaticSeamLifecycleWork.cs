@@ -38,9 +38,6 @@ internal sealed class NavigationAutomaticSeamLifecycleWork
             fullRebuild);
     }
 
-    internal bool IsComplete => _refresh.IsComplete
-        && (!_refresh.StructuralLinksChanged || (_update?.IsComplete ?? false));
-
     internal long RetainedBytes => checked(
         BaseRetainedBytes
         + _refresh.RetainedBytes

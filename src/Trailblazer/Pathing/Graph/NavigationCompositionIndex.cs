@@ -136,7 +136,8 @@ internal sealed partial class NavigationCompositionIndex
         NavigationStructuralComponent next = NavigationStructuralComponent.CreateFlat(
             current.FlatMembers,
             current.Key,
-            version);
+            version,
+            current.AllSurfaceEdgesEuclideanCertified);
         PersistentStringMap<NavigationStructuralComponent> components = _components.Set(
             current.Key,
             next);

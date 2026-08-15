@@ -529,7 +529,10 @@ public sealed class NavigationMapBuilder
             && Fixed64.TryAdd(traversalCost, departureCost, out traversalCost)
             && Fixed64.TryAdd(traversalCost, connection.AdditionalCost, out traversalCost)
             && Fixed64.TryAdd(traversalCost, destinationEnterCost, out traversalCost)
-            && Vector3d.TryGetDistance(sourceAnchor, destinationAnchor, out Fixed64 directCost)
+            && NavigationDistanceMath.TryCeiling(
+                sourceAnchor,
+                destinationAnchor,
+                out Fixed64 directCost)
             && traversalCost >= directCost;
     }
 

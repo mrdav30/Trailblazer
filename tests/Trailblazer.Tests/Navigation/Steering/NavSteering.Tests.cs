@@ -68,7 +68,7 @@ public class NavSteeringTests : IDisposable
         var end = new Vector3d(1, 0, 0);
         var agent = new MockSteerAgent(start);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(TestWorld.Context, start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
         steer.CanMove = false;
 
@@ -137,7 +137,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(start);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, start, end, Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
 
         steer.ShouldMove.Should().BeTrue();
@@ -161,7 +161,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(start);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, start, end, Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
 
         steer.GetHeading(agent);
@@ -188,7 +188,7 @@ public class NavSteeringTests : IDisposable
         var end = new Vector3d(2, 0, 0);
         var agent = new MockSteerAgent(start);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, start, end, Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
 
         steer.CurrentRouteTopologyVersion.Should().Be(1);
@@ -200,37 +200,6 @@ public class NavSteeringTests : IDisposable
         steer.CurrentRouteTopologyVersion.Should().Be(2);
 
         PathManager.UnloadChart("SteeringRouteTopologyDirect");
-    }
-
-    [Fact]
-    public void GetHeading_ShouldPublishGuideBackedRouteTopologyMetadata_WhenTransitionAwareFallbackRequestsClimb()
-    {
-        GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
-
-        var agent = new MockSteerAgent(Vector3d.Zero);
-        var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
-
-        AStarPathRequest request = AStarPathRequest.Create(TestWorld.Context, agent.Position,
-            new Vector3d(4, 0, 0),
-            agent.Size,
-            HeuristicMethod.Manhattan,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: true)!;
-
-        steer.ApplyPathRequest(request);
-        int versionAfterApply = steer.CurrentRouteTopologyVersion;
-
-        steer.GetHeading(agent);
-
-        steer.HasLineOfSightPath.Should().BeFalse();
-        steer.TrailGuide.Should().BeOfType<AStarGuide>();
-        steer.CurrentRouteRequestsClimbIntent.Should().BeTrue();
-        steer.CurrentRouteTopologyVersion.Should().BeGreaterThan(versionAfterApply);
-
-        int versionBeforeStop = steer.CurrentRouteTopologyVersion;
-        steer.StopMove();
-        steer.CurrentRouteRequestsClimbIntent.Should().BeFalse();
-        steer.CurrentRouteTopologyVersion.Should().BeGreaterThan(versionBeforeStop);
     }
 
     [Fact]
@@ -404,7 +373,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, agent.Position, agent.Position, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, agent.Position, agent.Position, Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         request!.IsValid.Should().BeTrue();
 
@@ -434,7 +403,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Speed = Fixed64.Zero };
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, agent.Position, new Vector3d(1, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, agent.Position, new Vector3d(1, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
 
         var stuck = false;
@@ -464,7 +433,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, agent.Position, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, agent.Position, new Vector3d(2, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
 
         var invalid = false;
@@ -849,7 +818,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, agent.Position, new Vector3d(1, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, agent.Position, new Vector3d(1, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         request!.IsValid.Should().BeTrue();
 
@@ -877,7 +846,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, agent.Position, new Vector3d(2, 0, 2), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, agent.Position, new Vector3d(2, 0, 2), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
         steer.StopMove();
 
@@ -918,7 +887,7 @@ public class NavSteeringTests : IDisposable
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
         // Ensure larger than voxel size
-        var request = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.Two);
+        var request = FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.Two);
 
         request!.IsValid.Should().BeTrue();
 
@@ -941,7 +910,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         request!.IsValid.Should().BeTrue();
 
@@ -986,7 +955,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
 
         // get a guide
@@ -1020,7 +989,7 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request);
 
         // simulate successful guide retrieval
@@ -1078,10 +1047,10 @@ public class NavSteeringTests : IDisposable
 
         var neighborSteer = new NavSteering(TestWorld.Context, neighbor.Radius);
 
-        AStarPathRequest leaderRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, leader.Position, new Vector3d(4, 0, 0), Fixed64.One, out AStarPathRequest? createdleaderRequest), createdleaderRequest);
+        FlowFieldPathRequest leaderRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, leader.Position, new Vector3d(4, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdleaderRequest), createdleaderRequest);
         leaderSteer.ApplyPathRequest(leaderRequest, groupId: 1);
 
-        AStarPathRequest neighborRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, neighbor.Position, new Vector3d(4, 0, 0), Fixed64.One, out AStarPathRequest? createdneighborRequest), createdneighborRequest);
+        FlowFieldPathRequest neighborRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, neighbor.Position, new Vector3d(4, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdneighborRequest), createdneighborRequest);
         neighborSteer.ApplyPathRequest(neighborRequest, groupId: 2);
 
         TestWorld.World.TryGetGrid(neighbor.Position, out var grid);
@@ -1099,7 +1068,7 @@ public class NavSteeringTests : IDisposable
 
         force.Should().Be(Vector3d.Zero);
 
-        AStarPathRequest neighborRequest2 = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, neighbor.Position, new Vector3d(4, 0, 0), Fixed64.One, out AStarPathRequest? createdneighborRequest2), createdneighborRequest2);
+        FlowFieldPathRequest neighborRequest2 = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, neighbor.Position, new Vector3d(4, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdneighborRequest2), createdneighborRequest2);
         neighborSteer.ApplyPathRequest(neighborRequest2, groupId: 1);
         neighborSteer.GetHeading(neighbor);
 
@@ -1142,10 +1111,10 @@ public class NavSteeringTests : IDisposable
         var secondSteer = new NavSteering(TestWorld.Context, secondAgent.Radius);
 
         var sharedDestination = new Vector3d(4, 0, 0);
-        AStarPathRequest firstRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, firstAgent.Position, sharedDestination, Fixed64.One, out AStarPathRequest? createdfirstRequest), createdfirstRequest);
+        FlowFieldPathRequest firstRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, firstAgent.Position, sharedDestination, Fixed64.One, out FlowFieldPathRequest? createdfirstRequest), createdfirstRequest);
         firstSteer.ApplyPathRequest(firstRequest, groupId: 5);
 
-        AStarPathRequest secondRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, secondAgent.Position, sharedDestination, Fixed64.One, out AStarPathRequest? createdsecondRequest), createdsecondRequest);
+        FlowFieldPathRequest secondRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, secondAgent.Position, sharedDestination, Fixed64.One, out FlowFieldPathRequest? createdsecondRequest), createdsecondRequest);
         secondSteer.ApplyPathRequest(secondRequest, groupId: 5);
 
         firstSteer.GetHeading(firstAgent);
@@ -1183,10 +1152,10 @@ public class NavSteeringTests : IDisposable
         var secondSteer = new NavSteering(TestWorld.Context, secondAgent.Radius);
 
         var sharedDestination = new Vector3d(7, 0, 0);
-        AStarPathRequest firstRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, firstAgent.Position, sharedDestination, Fixed64.One, out AStarPathRequest? createdfirstRequest), createdfirstRequest);
+        FlowFieldPathRequest firstRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, firstAgent.Position, sharedDestination, Fixed64.One, out FlowFieldPathRequest? createdfirstRequest), createdfirstRequest);
         firstSteer.ApplyPathRequest(firstRequest, groupId: 7);
 
-        AStarPathRequest secondRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, secondAgent.Position, sharedDestination, Fixed64.One, out AStarPathRequest? createdsecondRequest), createdsecondRequest);
+        FlowFieldPathRequest secondRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, secondAgent.Position, sharedDestination, Fixed64.One, out FlowFieldPathRequest? createdsecondRequest), createdsecondRequest);
         secondSteer.ApplyPathRequest(secondRequest, groupId: 7);
 
         firstSteer.GetHeading(firstAgent);
@@ -1239,10 +1208,10 @@ public class NavSteeringTests : IDisposable
 
         var neighborSteer = new NavSteering(TestWorld.Context, neighbor.Radius);
 
-        AStarPathRequest leaderRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, leader.Position, new Vector3d(4, 0, 0), Fixed64.One, out AStarPathRequest? createdleaderRequest), createdleaderRequest);
+        FlowFieldPathRequest leaderRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, leader.Position, new Vector3d(4, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdleaderRequest), createdleaderRequest);
         leaderSteer.ApplyPathRequest(leaderRequest, groupId: 9);
 
-        AStarPathRequest neighborRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, neighbor.Position, new Vector3d(4, 0, 0), Fixed64.One, out AStarPathRequest? createdneighborRequest), createdneighborRequest);
+        FlowFieldPathRequest neighborRequest = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, neighbor.Position, new Vector3d(4, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdneighborRequest), createdneighborRequest);
         neighborSteer.ApplyPathRequest(neighborRequest, groupId: 9);
 
         TestWorld.World.TryGetGrid(neighbor.Position, out var grid);
@@ -1294,7 +1263,14 @@ public class NavSteeringTests : IDisposable
 
         var agent = new MockSteerAgent(start);
         var source = new NavSteering(TestWorld.Context, agent.Radius);
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreateWithSize(
+                TestWorld.Context,
+                start,
+                end,
+                Fixed64.One,
+                out FlowFieldPathRequest? createdRequest),
+            createdRequest);
         source.ApplyPathRequest(request);
 
         TestWorld.Context.Simulate();
@@ -1304,7 +1280,7 @@ public class NavSteeringTests : IDisposable
 
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        // Unload chart so TryCreateRequest will fail to rebuild the AStar request
+        // Unload chart so TryCreateRequest will fail to rebuild the flow-field request.
         PathManager.UnloadChart("RecordDataIdleChart");
 
         // Act: populate into a fresh NavSteering — request factory returns null → reset branch
@@ -1344,7 +1320,7 @@ public class NavSteeringTests : IDisposable
 
         var agent = new MockSteerAgent(start);
         var source = new NavSteering(TestWorld.Context, agent.Radius);
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(TestWorld.Context, start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
         source.ApplyPathRequest(request);
 
         // ShouldMove = true, _currentRequest != null, no guide, no LOS
@@ -1353,7 +1329,7 @@ public class NavSteeringTests : IDisposable
 
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        // Act: populate — Kind=AStar, HasGuide=false → else-if branch sets _shouldRequestPathThisFrame=true
+        // Act: populate with no guide so the loaded request schedules a repath.
         var target = new NavSteering(TestWorld.Context, agent.Radius);
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
@@ -1396,7 +1372,7 @@ public class NavSteeringTests : IDisposable
         bool fired = false;
         steer.Events.OnMoveRequestApplied += () => fired = true;
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
         steer.ApplyPathRequest(request, groupId: 3);
 
         fired.Should().BeTrue();
@@ -1433,7 +1409,7 @@ public class NavSteeringTests : IDisposable
 
         var owner = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, owner.Radius);
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, owner.Position, new Vector3d(4, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, owner.Position, new Vector3d(4, 0, 0), Fixed64.One, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         steer.ApplyPathRequest(request, groupId: 12);
         steer.PrewarmMovementGroup(owner);
@@ -1577,7 +1553,7 @@ public class NavSteeringTests : IDisposable
 
         var agent = new MockSteerAgent(start);
         var source = new NavSteering(TestWorld.Context, agent.Radius);
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(TestWorld.Context, start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
         source.ApplyPathRequest(request);
         TestWorld.Context.Simulate();
         source.GetHeading(agent);

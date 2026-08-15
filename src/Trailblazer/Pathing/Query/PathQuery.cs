@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using FixedMathSharp;
 using SwiftCollections.Utility;
 
 namespace Trailblazer.Pathing;
@@ -85,6 +86,21 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         AllowTransitions = allowTransitions;
         FlowField = flowField;
     }
+
+    internal PathQuery WithStartPosition(Vector3d position) => new(
+        new NavigationEndpoint(
+            position,
+            Start.MapId,
+            Start.Resolution,
+            Start.MaxResolutionDistance),
+        End,
+        Agent,
+        AreaPolicy,
+        Traversal,
+        Algorithm,
+        Budget,
+        AllowTransitions,
+        FlowField);
 
     /// <inheritdoc/>
     public bool Equals(PathQuery other) =>

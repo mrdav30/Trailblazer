@@ -183,14 +183,6 @@ public class FlowFieldTransitionFallbackTests : IDisposable
         changedOriginRequest.HybridFallbackCacheKey.Should().NotBe(firstRequest.HybridFallbackCacheKey);
         changedTargetRequest.HybridFallbackCacheKey.Should().NotBe(firstRequest.HybridFallbackCacheKey);
 
-        HybridPathRequest firstHybrid = TestRequire.NotNull(HybridPathRequest.CreateFromFlowField(firstRequest));
-        HybridPathRequest changedOriginHybrid = TestRequire.NotNull(
-            HybridPathRequest.CreateFromFlowField(changedOriginRequest));
-        HybridPathRequest changedTargetHybrid = TestRequire.NotNull(
-            HybridPathRequest.CreateFromFlowField(changedTargetRequest));
-        changedOriginHybrid.RequestCacheKey.Should().NotBe(firstHybrid.RequestCacheKey);
-        changedTargetHybrid.RequestCacheKey.Should().NotBe(firstHybrid.RequestCacheKey);
-
         FlowFieldGuide firstGuide = TestRequire.Created(
             PathGuideFactory.RequestGuide(firstRequest, out FlowFieldGuide? createdFirstGuide),
             createdFirstGuide);
@@ -214,7 +206,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
     }
 
     [Fact]
-    public void HybridRequestKey_ShouldChange_WhenSameTransitionIdIsReregistered()
+    public void FlowFieldFallbackKey_ShouldChange_WhenSameTransitionIdIsReregistered()
     {
         RegisterTwoPointChart("RegistryStart", Vector3d.Zero);
         RegisterTwoPointChart("RegistryEnd", new Vector3d(3, 0, 0));
@@ -232,9 +224,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
-        HybridPathRequest firstHybridRequest = TestRequire.NotNull(
-            HybridPathRequest.CreateFromFlowField(firstFlowRequest));
-        PathRequestCacheKey firstKey = firstHybridRequest.RequestCacheKey;
+        PathRequestCacheKey firstKey = firstFlowRequest.HybridFallbackCacheKey;
 
         TraversalTransitionRegistry.Unregister(transitionId).Should().BeTrue();
         TraversalTransitionRegistry.Register(new TraversalTransition(
@@ -249,14 +239,8 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
-        HybridPathRequest secondHybridRequest = TestRequire.NotNull(
-            HybridPathRequest.CreateFromFlowField(secondFlowRequest));
 
-        firstHybridRequest.RoutePlan!.DirectedTransitions[0].Id.Should().Be(transitionId);
-        secondHybridRequest.RoutePlan!.DirectedTransitions[0].Id.Should().Be(transitionId);
-        firstHybridRequest.RequestCacheKey.Should().Be(firstKey,
-            "a built hybrid request keeps its registry snapshot");
-        secondHybridRequest.RequestCacheKey.Should().NotBe(firstKey);
+        secondFlowRequest.HybridFallbackCacheKey.Should().NotBe(firstKey);
     }
 
     [Fact]

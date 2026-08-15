@@ -75,6 +75,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     private bool _currentGeometryChanged;
     private bool _currentActiveChanged;
     private bool _currentActiveRowChanged;
+    private bool _currentStructuralLinkChanged;
 
     private AddressDelta? _currentAddressDelta;
     private NavigationCellAddress _currentAddress;
@@ -756,7 +757,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
                     return true;
                 case 9:
                 case 10:
-                    if (!_currentActiveChanged)
+                    if (!_currentStructuralLinkChanged)
                     {
                         _pairApplyStage = 11;
                         continue;
@@ -766,7 +767,14 @@ internal sealed class NavigationAutomaticSeamRefreshWork
                     bool reverse = _pairApplyStage == 10;
                     string source = reverse ? _currentPairKey.Second.MapId : _currentPairKey.First.MapId;
                     string destination = reverse ? _currentPairKey.First.MapId : _currentPairKey.Second.MapId;
-                    AddLinkDelta(source, destination, delta.FinalActive ? 1 : -1);
+                    NavigationAutomaticSeamPair? sourcePair = delta.SourceRecord?.Pair;
+                    bool sourceActive = delta.SourceRecord?.IsActive ?? false;
+                    AddLinkDelta(
+                        source,
+                        destination,
+                        (delta.FinalActive ? 1 : 0) - (sourceActive ? 1 : 0),
+                        GetUncertifiedCount(delta.FinalPair, delta.FinalActive)
+                            - GetUncertifiedCount(sourcePair, sourceActive));
                     _pairApplyStage++;
                     return true;
                 case 11:
@@ -806,9 +814,19 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         _currentActiveChanged = sourceActive != delta.FinalActive;
         _currentActiveRowChanged = _currentActiveChanged
             || (_currentGeometryChanged && (sourceActive || delta.FinalActive));
+        _currentStructuralLinkChanged = _currentActiveChanged
+            || GetUncertifiedCount(sourcePair, sourceActive)
+                != GetUncertifiedCount(delta.FinalPair, delta.FinalActive);
         GeometryChanged |= _currentGeometryChanged;
-        StructuralLinksChanged |= _currentActiveChanged;
+        StructuralLinksChanged |= _currentStructuralLinkChanged;
     }
+
+    private static int GetUncertifiedCount(
+        NavigationAutomaticSeamPair? pair,
+        bool active) => active
+            && pair!.Portal.FaceKind != VoxelContactFaceKind.Vertical
+                ? 1
+                : 0;
 
     private void TouchAddress(NavigationCellAddress address, bool dependency, bool active)
     {
@@ -839,7 +857,11 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         RecordAddressPayloadChange(delta, beforeBytes, beforePages);
     }
 
-    private void AddLinkDelta(string sourceMapId, string destinationMapId, int change)
+    private void AddLinkDelta(
+        string sourceMapId,
+        string destinationMapId,
+        int countChange,
+        int uncertifiedCountChange)
     {
         EnsureLinkEditor();
         var key = new NavigationAutomaticSeamLinkKey(sourceMapId, destinationMapId);
@@ -850,8 +872,10 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             _linkDeltaPayloadBytes = checked(_linkDeltaPayloadBytes + LinkDeltaBytes);
             _linkDeltaPayloadPages++;
         }
-        delta.Count = checked(delta.Count + change);
-        if (delta.Count != 0)
+        delta.Count = checked(delta.Count + countChange);
+        delta.UncertifiedCount = checked(
+            delta.UncertifiedCount + uncertifiedCountChange);
+        if (delta.Count != 0 || delta.UncertifiedCount != 0)
             return;
         _linkEditor.Remove(key);
         _linkDeltaPayloadBytes -= LinkDeltaBytes;
@@ -1152,7 +1176,8 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             {
                 _pendingLinkOutput = new NavigationStructuralLink(
                     _currentLinkKey.DestinationMapId,
-                    _currentLinkDelta.Count);
+                    _currentLinkDelta.Count,
+                    _currentLinkDelta.UncertifiedCount);
             }
             ConsumeCurrentLinkDelta();
             return true;
@@ -1179,14 +1204,22 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             {
                 _pendingLinkOutput = new NavigationStructuralLink(
                     _currentLinkKey.DestinationMapId,
-                    _currentLinkDelta.Count);
+                    _currentLinkDelta.Count,
+                    _currentLinkDelta.UncertifiedCount);
             }
             ConsumeCurrentLinkDelta();
             return true;
         }
         int count = checked(_sourceLink.Count + _currentLinkDelta!.Count);
+        int uncertifiedCount = checked(
+            _sourceLink.UncertifiedCount + _currentLinkDelta.UncertifiedCount);
         if (count > 0)
-            _pendingLinkOutput = new NavigationStructuralLink(_sourceLink.DestinationMapId, count);
+        {
+            _pendingLinkOutput = new NavigationStructuralLink(
+                _sourceLink.DestinationMapId,
+                count,
+                uncertifiedCount);
+        }
         _sourceLinkReady = false;
         _sourceLink = default;
         ConsumeCurrentLinkDelta();
@@ -1388,6 +1421,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         _pendingMutation = MutationKind.None;
         _mutationStage = 0;
         _currentPairDelta = null;
+        _currentStructuralLinkChanged = false;
         _currentAddressDelta = null;
         _rowBuilder = null;
         _linkBuilder = null;
@@ -1514,6 +1548,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     private sealed class LinkDelta
     {
         internal int Count;
+        internal int UncertifiedCount;
     }
 
     private enum WorkPhase : byte

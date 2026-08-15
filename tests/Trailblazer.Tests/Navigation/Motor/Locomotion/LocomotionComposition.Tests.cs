@@ -39,7 +39,7 @@ public class LocomotionCompositionTests : IDisposable
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
         var navigator = new MinimalProfileNavigator(context);
-        navigator.Setup(Vector3d.Zero);
+        navigator.Setup(Vector3d.Zero, PathTestFactory.DefaultNavigationProfile);
         navigator.Initialize(new TrekCondition
         {
             Medium = TraversalMedium.Solid,

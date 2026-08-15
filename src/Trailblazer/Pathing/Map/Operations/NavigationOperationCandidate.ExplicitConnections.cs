@@ -154,7 +154,10 @@ internal sealed partial class NavigationOperationCandidate
             && Fixed64.TryAdd(total, departure, out total)
             && Fixed64.TryAdd(total, connection.AdditionalCost, out total)
             && Fixed64.TryAdd(total, destinationCell.EnterCost, out total)
-            && Vector3d.TryGetDistance(sourceFoot, destinationFoot, out Fixed64 direct)
+            && NavigationDistanceMath.TryCeiling(
+                sourceFoot,
+                destinationFoot,
+                out Fixed64 direct)
             && total >= direct;
     }
 

@@ -16,22 +16,15 @@ internal sealed class TrailblazerGuideState : IDisposable
 {
     private bool _disposed;
 
-    internal AStarSurveyor AStarSurveyor { get; } = new();
-
     internal FlowFieldSurveyor FlowFieldSurveyor { get; } = new();
 
     internal VolumeSurveyor VolumeSurveyor { get; } = new();
-
-    internal ReusableSurveyResultCache<AStarSurveyResult> CachedAStarResults { get; } = new();
 
     internal ReusableSurveyResultCache<FlowFieldSurveyResult> CachedFlowResults { get; } = new();
 
     internal ReusableSurveyResultCache<VolumeSurveyResult> CachedVolumeResults { get; } = new();
 
     internal ReusableSurveyResultCache<HybridRoutePlanSurveyResult> CachedHybridRoutePlans { get; } = new();
-
-    internal GuidePool<AStarGuide> AStarGuides { get; } =
-        new(static () => new AStarGuide(), static guide => guide.ResetForReuse());
 
     internal GuidePool<FlowFieldGuide> FlowFieldGuides { get; } =
         new(static () => new FlowFieldGuide(), static guide => guide.ResetForReuse());
@@ -45,7 +38,6 @@ internal sealed class TrailblazerGuideState : IDisposable
             return;
 
         _disposed = true;
-        CachedAStarResults.Dispose();
         CachedFlowResults.Dispose();
         CachedVolumeResults.Dispose();
         CachedHybridRoutePlans.Dispose();

@@ -17,12 +17,14 @@ internal sealed class NavigationStructuralComponent
     private NavigationStructuralComponent(
         string key,
         long version,
-        NavigationPagedSequence<string> members)
+        NavigationPagedSequence<string> members,
+        bool allSurfaceEdgesEuclideanCertified)
     {
         Key = key;
         Id = SwiftHashTools.GetDeterministicStringEqualityComparer().GetHashCode(key);
         Version = version;
         _members = members;
+        AllSurfaceEdgesEuclideanCertified = allSurfaceEdgesEuclideanCertified;
         RetainedBytes = checked(48L + members.RetainedBytes);
     }
 
@@ -31,6 +33,8 @@ internal sealed class NavigationStructuralComponent
     internal int Id { get; }
 
     internal long Version { get; }
+
+    internal bool AllSurfaceEdgesEuclideanCertified { get; }
 
     internal int MemberCount => _members.Count;
 
@@ -43,5 +47,10 @@ internal sealed class NavigationStructuralComponent
     internal static NavigationStructuralComponent CreateFlat(
         NavigationPagedSequence<string> members,
         string identityKey,
-        long version) => new(identityKey, version, members);
+        long version,
+        bool allSurfaceEdgesEuclideanCertified) => new(
+            identityKey,
+            version,
+            members,
+            allSurfaceEdgesEuclideanCertified);
 }

@@ -748,7 +748,8 @@ public sealed class NavigationAutomaticSeamTests
             budgeted.MaxAreaPolicies,
             budgeted.MaxAreaRulesPerPolicy,
             budgeted.MaxAreaRules,
-            budgeted.MaxConcurrentSnapshotLeases);
+            budgeted.MaxConcurrentSnapshotLeases,
+            budgeted.QueryLimits);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: settings);
         GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
@@ -869,7 +870,8 @@ public sealed class NavigationAutomaticSeamTests
             maxAreaPolicies: 1,
             maxAreaRulesPerPolicy: 1,
             maxAreaRules: 1,
-            defaults.MaxConcurrentSnapshotLeases);
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
         GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
         GridConfiguration sourceConfiguration = CreateConfiguration(
@@ -1018,6 +1020,8 @@ public sealed class NavigationAutomaticSeamTests
             AdmitMap(context, "target", targetBinding, new[] { default(VoxelIndex) }, 2);
         SimulateUntilTerminal(context, targetOperation.Receipt);
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.Composition.GetComponentRecord("source")
+            .AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
         var sourceAddress = new NavigationCellAddress("source", default);
         NavigationGraphEdge edge = FindCrossMapEdge(lease.Graph, sourceAddress, "target");
         lease.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef sourceNode).Should().BeTrue();
@@ -1080,6 +1084,9 @@ public sealed class NavigationAutomaticSeamTests
             AdmitMap(context, "upper", upper, new[] { default(VoxelIndex) }, 2);
         SimulateUntilTerminal(context, upperOperation.Receipt);
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.Composition.GetComponentRecord("lower")
+            .AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
+                "horizontal seam evaluation omits the portal-foot vertical span");
         var lowerAddress = new NavigationCellAddress("lower", default);
         var upperAddress = new NavigationCellAddress("upper", default);
         NavigationGraphEdge up = FindCrossMapEdge(lease.Graph, lowerAddress, "upper");
@@ -1108,6 +1115,77 @@ public sealed class NavigationAutomaticSeamTests
         upCost.Should().Be(Fixed64.One);
         downCost.Should().Be(upCost,
             "reverse traversal must swap the one canonical portal's resolved feet");
+    }
+
+    [Fact]
+    public void ActiveSeamGeometryReplacement_ShouldRebuildCertificationWithoutCountChange()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(
+            (Fixed64)2,
+            (Fixed64)2,
+            (Fixed64)2);
+        GridConfiguration sourceConfiguration = CreateConfiguration(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            metrics,
+            GridStorageKind.Dense);
+        var rightCenter = new Vector3d((Fixed64)2, Fixed64.Zero, Fixed64.Zero);
+        GridConfiguration rightConfiguration = CreateConfiguration(
+            rightCenter,
+            rightCenter,
+            metrics,
+            GridStorageKind.Dense);
+        var upperCenter = new Vector3d(Fixed64.Zero, (Fixed64)2, Fixed64.Zero);
+        GridConfiguration upperConfiguration = CreateConfiguration(
+            upperCenter,
+            upperCenter,
+            metrics,
+            GridStorageKind.Dense);
+        NormalizedGridConfiguration source = AddDenseGrid(context, sourceConfiguration);
+        NormalizedGridConfiguration right = AddDenseGrid(context, rightConfiguration);
+        NormalizedGridConfiguration upper = AddDenseGrid(context, upperConfiguration);
+        AdmitMap(context, "source", source, new[] { default(VoxelIndex) }, 1);
+        NavigationMapCommitOperation install =
+            AdmitMap(context, "target", right, new[] { default(VoxelIndex) }, 2);
+        SimulateUntilTerminal(context, install.Receipt);
+        using (NavigationWorldGraphLease vertical = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            vertical.Graph.AutomaticSeams.PairCount.Should().Be(1);
+            vertical.Graph.Composition.GetComponentRecord("source")
+                .AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
+        }
+
+        NavigationMap replacementMap = new NavigationMapBuilder("target", upper)
+            .AddCell(default, SeamCell)
+            .Build();
+        var replace = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(replacementMap, bakeVersion: 2),
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 3,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(replace).Should().BeTrue();
+        SimulateUntilTerminal(context, replace.Receipt);
+        replace.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        using NavigationWorldGraphLease horizontal = context.Pathing.TryAcquireNavigationGraph()!;
+        horizontal.Graph.TryGetMap("target", out NavigationMapInstance? targetInstance)
+            .Should().BeTrue();
+        targetInstance!.Map.GridBinding.Key.Should().Be(upper.Key);
+        horizontal.Graph.AutomaticSeams.PairCount.Should().Be(1,
+            "the durable endpoint pair remains active across the geometry-only replacement");
+        horizontal.Graph.AutomaticSeams.TryGetPair(
+                new NavigationCellAddress("source", default),
+                new NavigationCellAddress("target", default),
+                out NavigationAutomaticSeamPair horizontalPair)
+            .Should().BeTrue();
+        horizontalPair.Portal.FaceKind.Should().Be(VoxelContactFaceKind.Horizontal);
+        NavigationPagedSequence<NavigationStructuralLink>.Enumerator links =
+            horizontal.Graph.AutomaticSeams.GetStructuralLinks("source").GetEnumerator();
+        links.MoveNext().Should().BeTrue();
+        links.Current.UncertifiedCount.Should().Be(1);
+        horizontal.Graph.Composition.GetComponentRecord("source")
+            .AllSurfaceEdgesEuclideanCertified.Should().BeFalse();
     }
 
     [Fact]
@@ -1680,7 +1758,8 @@ public sealed class NavigationAutomaticSeamTests
             maxAreaPolicies: 1,
             maxAreaRulesPerPolicy: 1,
             maxAreaRules: 1,
-            defaults.MaxConcurrentSnapshotLeases);
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
     }
 
     private readonly struct SeamScenario

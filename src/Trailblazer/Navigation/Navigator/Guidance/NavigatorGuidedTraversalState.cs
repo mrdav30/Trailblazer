@@ -104,8 +104,8 @@ internal static class NavigatorGuidedTraversalState
     public static bool TryActivatePendingVolumeExitHandoff(
         bool isGuided,
         TrailblazerWorldContext context,
-        Vector3d position,
-        Fixed64 size,
+        Vector3d currentFootPosition,
+        NavigationAgentProfile profile,
         ref TrekRequest frameRequest,
         NavSteering? steering,
         ref GuidedVolumeExitHandoff? pendingVolumeExitHandoff,
@@ -119,12 +119,17 @@ internal static class NavigatorGuidedTraversalState
             || pendingVolumeExitHandoff == null
             || steering == null
             || steering.ShouldMove
-            || steering.CurrentRequest != null)
+            || steering.CurrentRequest != null
+            || steering.CurrentQuery.HasValue)
         {
             return false;
         }
 
-        if (!pendingVolumeExitHandoff.TryCreateFollowupRequest(context, position, size, out IPathRequest? followupRequest)
+        if (!pendingVolumeExitHandoff.TryCreateFollowupRequest(
+                context,
+                currentFootPosition,
+                profile,
+                out IPathRequest? followupRequest)
             || followupRequest == null)
         {
             return false;
@@ -186,6 +191,7 @@ internal static class NavigatorGuidedTraversalState
         ref int lastSeenRouteTopologyVersion)
     {
         if (steering?.CurrentRequest != null
+            || steering?.CurrentQuery.HasValue == true
             || pendingVolumeExitHandoff != null)
         {
             return false;

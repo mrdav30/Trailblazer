@@ -40,6 +40,7 @@ internal sealed partial class NavigationMapInstance
         long preparedMapRetainedBytes,
         NavigationGridGenerationIdentity gridIdentity,
         ulong baselineHighWater,
+        ulong gridHighWaterSequence,
         long instanceVersion,
         long semanticVersion,
         long physicalVersion,
@@ -63,6 +64,7 @@ internal sealed partial class NavigationMapInstance
         _preparedMapRetainedBytes = preparedMapRetainedBytes;
         GridIdentity = gridIdentity;
         BaselineHighWater = baselineHighWater;
+        GridHighWaterSequence = gridHighWaterSequence;
         InstanceVersion = instanceVersion;
         SemanticVersion = semanticVersion;
         PhysicalVersion = physicalVersion;
@@ -85,6 +87,8 @@ internal sealed partial class NavigationMapInstance
     internal NavigationGridGenerationIdentity GridIdentity { get; }
 
     internal ulong BaselineHighWater { get; }
+
+    internal ulong GridHighWaterSequence { get; }
 
     internal long InstanceVersion { get; }
 
@@ -234,19 +238,21 @@ internal sealed partial class NavigationMapInstance
 
         if (eventInfo.ChangeKind == GridEventKind.GridRemoved)
             return MakeDormant(instanceVersion);
-        if (!IsMaterialized
-            || !eventInfo.HasVoxelState
+        if (!IsMaterialized)
+            return this;
+        if (!eventInfo.HasVoxelState
             || !TryGetSlot(eventInfo.VoxelIndex, out int slot)
             || eventInfo.ChangeSequence <= GetBaselineHighWater(slot))
         {
-            return this;
+            return WithGridHighWater(eventInfo.ChangeSequence, instanceVersion);
         }
 
         return WithPhysicalState(
             slot,
             eventInfo.IsVoxelPresent,
             eventInfo.ObstacleCount,
-            instanceVersion);
+            instanceVersion,
+            eventInfo.ChangeSequence);
     }
 
     internal NavigationMapInstance ApplyBatch(
@@ -316,6 +322,7 @@ internal sealed partial class NavigationMapInstance
                 _preparedMapRetainedBytes,
                 previous.GridIdentity,
                 previous.BaselineHighWater,
+                capture.GridHighWaterSequence,
                 instanceVersion,
                 SemanticVersion,
                 previous.PhysicalVersion,
@@ -374,6 +381,7 @@ internal sealed partial class NavigationMapInstance
                 baseline.GridSpawnToken,
                 baseline.ConfigurationKey),
             previous.BaselineHighWater,
+            baseline.GridHighWaterSequence,
             instanceVersion,
             SemanticVersion,
             physicalVersion: capturedCount > 0 ? instanceVersion : PhysicalVersion,
@@ -465,6 +473,7 @@ internal sealed partial class NavigationMapInstance
                 capture.GridSpawnToken,
                 capture.ConfigurationKey),
             capture.HighWaterSequence,
+            capture.GridHighWaterSequence,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -573,6 +582,7 @@ internal sealed partial class NavigationMapInstance
             _preparedMapRetainedBytes,
             default,
             baselineHighWater: 0,
+            gridHighWaterSequence: 0,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -586,23 +596,18 @@ internal sealed partial class NavigationMapInstance
         int slot,
         bool isPresent,
         byte obstacleCount,
-        long instanceVersion)
+        long instanceVersion,
+        ulong gridHighWaterSequence)
     {
-        int pageIndex = slot / NavigationPhysicalPage.SlotCount;
-        int offset = slot % NavigationPhysicalPage.SlotCount;
-        _physicalPages.TryGetValue(pageIndex, out NavigationPhysicalPage? current);
-        if (current != null
-            && current.IsPresent[offset] == isPresent
-            && current.ObstacleCounts[offset] == obstacleCount)
-        {
-            return this;
-        }
-        NavigationPhysicalPage page = current?.Clone(instanceVersion)
-            ?? new NavigationPhysicalPage(pageIndex, instanceVersion);
-        PersistentIntMap<NavigationPhysicalPage> pages = _physicalPages.Set(pageIndex, page);
+        PersistentIntMap<NavigationPhysicalPage> pages = ApplyPhysicalState(
+            _physicalPages,
+            slot,
+            isPresent,
+            obstacleCount,
+            instanceVersion);
+        if (ReferenceEquals(pages, _physicalPages))
+            return WithGridHighWater(gridHighWaterSequence, instanceVersion);
 
-        page.IsPresent[offset] = isPresent;
-        page.ObstacleCounts[offset] = isPresent ? obstacleCount : (byte)0;
         return new NavigationMapInstance(
             Map,
             BakeVersion,
@@ -618,6 +623,7 @@ internal sealed partial class NavigationMapInstance
             _preparedMapRetainedBytes,
             GridIdentity,
             BaselineHighWater,
+            gridHighWaterSequence,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -659,15 +665,21 @@ internal sealed partial class NavigationMapInstance
             return this;
 
         PersistentIntMap<NavigationPhysicalPage>? pages = null;
+        ulong gridHighWaterSequence = GridHighWaterSequence;
         int copiedPhysicalPages = 0;
         for (int i = 0; i < events.Length; i++)
         {
             GridEventInfo eventInfo = events[i];
-            if (!eventInfo.HasVoxelState
-                || !GridIdentity.Matches(
+            if (!GridIdentity.Matches(
                     eventInfo.WorldSpawnToken,
                     eventInfo.GridIndex,
-                    eventInfo.GridSpawnToken)
+                    eventInfo.GridSpawnToken))
+            {
+                continue;
+            }
+            if (eventInfo.ChangeSequence > gridHighWaterSequence)
+                gridHighWaterSequence = eventInfo.ChangeSequence;
+            if (!eventInfo.HasVoxelState
                 || !TryGetSlot(eventInfo.VoxelIndex, out int slot)
                 || eventInfo.ChangeSequence <= GetBaselineHighWater(slot))
             {
@@ -698,7 +710,7 @@ internal sealed partial class NavigationMapInstance
                 : (byte)0;
         }
 
-        return pages == null
+        return pages == null && gridHighWaterSequence == GridHighWaterSequence
             ? this
             : new NavigationMapInstance(
                 Map,
@@ -709,15 +721,16 @@ internal sealed partial class NavigationMapInstance
                 _dynamicSlotIndexes,
                 _nextDynamicSlot,
                 _semanticPages,
-                pages,
+                pages ?? _physicalPages,
                 _dynamicBaselineHighWater,
                 _bakedLookup,
                 _preparedMapRetainedBytes,
                 GridIdentity,
                 BaselineHighWater,
+                gridHighWaterSequence,
                 instanceVersion,
                 SemanticVersion,
-                physicalVersion: instanceVersion,
+                physicalVersion: pages == null ? PhysicalVersion : instanceVersion,
                 lastBaselineAddressCount: 0,
                 lastCopiedSemanticPages: 0,
                 lastCopiedPhysicalPages: copiedPhysicalPages,
@@ -837,7 +850,7 @@ internal sealed partial class NavigationMapInstance
         || kind == GridEventKind.GridChanged;
 
     private long EstimateRetainedBytes() => checked(
-        192L
+        200L
         + Overlay.RetainedBytes
         + _dynamicSlots.RetainedBytes
         + _dynamicAddresses.RetainedBytes
@@ -848,4 +861,35 @@ internal sealed partial class NavigationMapInstance
         + ((long)_physicalPages.Count * 320L)
         + _dynamicBaselineHighWater.RetainedBytes
         + _preparedMapRetainedBytes);
+
+    private NavigationMapInstance WithGridHighWater(
+        ulong gridHighWaterSequence,
+        long instanceVersion)
+    {
+        if (gridHighWaterSequence <= GridHighWaterSequence)
+            return this;
+        return new NavigationMapInstance(
+            Map,
+            BakeVersion,
+            Overlay,
+            DynamicSlotGeneration,
+            _dynamicSlots,
+            _dynamicSlotIndexes,
+            _nextDynamicSlot,
+            _semanticPages,
+            _physicalPages,
+            _dynamicBaselineHighWater,
+            _bakedLookup,
+            _preparedMapRetainedBytes,
+            GridIdentity,
+            BaselineHighWater,
+            gridHighWaterSequence,
+            instanceVersion,
+            SemanticVersion,
+            PhysicalVersion,
+            lastBaselineAddressCount: 0,
+            lastCopiedSemanticPages: 0,
+            lastCopiedPhysicalPages: 0,
+            dynamicAddresses: _dynamicAddresses);
+    }
 }

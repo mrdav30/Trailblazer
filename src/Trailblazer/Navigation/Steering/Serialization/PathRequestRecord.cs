@@ -14,11 +14,9 @@ namespace Trailblazer.Navigation.Steering;
 
 internal enum PathRequestRecordKind
 {
-    None,
-    AStar,
-    FlowField,
-    Volume,
-    Hybrid
+    None = 0,
+    FlowField = 2,
+    Volume = 3
 }
 
 /// <summary>
@@ -44,7 +42,7 @@ internal sealed class PathRequestRecord : IRecordable
 
     public Fixed64 MaxClimbHeight = Fixed64.One;
 
-    public HeuristicMethod AStarHeuristic = HeuristicMethod.Manhattan;
+    public HeuristicMethod VolumeHeuristic = HeuristicMethod.Manhattan;
 
     public int FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
@@ -69,13 +67,6 @@ internal sealed class PathRequestRecord : IRecordable
 
         switch (request)
         {
-            case AStarPathRequest aStar:
-                Kind = PathRequestRecordKind.AStar;
-                AllowTraversalTransitions = aStar.AllowTraversalTransitions;
-                AStarHeuristic = aStar.Heuristic;
-                MaxClimbHeight = aStar.MaxClimbHeight;
-                break;
-
             case FlowFieldPathRequest flowField:
                 Kind = PathRequestRecordKind.FlowField;
                 AllowTraversalTransitions = flowField.AllowTraversalTransitions;
@@ -85,14 +76,8 @@ internal sealed class PathRequestRecord : IRecordable
 
             case VolumePathRequest volume:
                 Kind = PathRequestRecordKind.Volume;
-                AStarHeuristic = volume.Heuristic;
+                VolumeHeuristic = volume.Heuristic;
                 Medium = volume.Medium;
-                break;
-
-            case HybridPathRequest hybrid:
-                Kind = PathRequestRecordKind.Hybrid;
-                AStarHeuristic = hybrid.Heuristic;
-                MaxClimbHeight = hybrid.MaxClimbHeight;
                 break;
 
             default:
@@ -112,25 +97,6 @@ internal sealed class PathRequestRecord : IRecordable
         switch (Kind)
         {
             case PathRequestRecordKind.None:
-                return true;
-
-            case PathRequestRecordKind.AStar:
-                AStarPathRequest? aStar = AStarPathRequest.Create(
-                    context,
-                    Origin,
-                    TargetPosition,
-                    UnitSize,
-                    AStarHeuristic,
-                    AllowUnwalkableEndpoints,
-                    AllowTraversalTransitions);
-                if (aStar == null)
-                    return false;
-
-                aStar.MaxClimbHeight = MaxClimbHeight;
-                if (MaxPathSearchRange > 0)
-                    aStar.MaxPathSearchRange = MaxPathSearchRange;
-
-                request = aStar;
                 return true;
 
             case PathRequestRecordKind.FlowField:
@@ -158,7 +124,7 @@ internal sealed class PathRequestRecord : IRecordable
                     Origin,
                     TargetPosition,
                     UnitSize,
-                    AStarHeuristic,
+                    VolumeHeuristic,
                     AllowUnwalkableEndpoints,
                     Medium);
                 if (volume == null)
@@ -168,24 +134,6 @@ internal sealed class PathRequestRecord : IRecordable
                     volume.MaxPathSearchRange = MaxPathSearchRange;
 
                 request = volume;
-                return true;
-
-            case PathRequestRecordKind.Hybrid:
-                HybridPathRequest? hybrid = HybridPathRequest.Create(
-                    context,
-                    Origin,
-                    TargetPosition,
-                    UnitSize,
-                    AStarHeuristic,
-                    MaxClimbHeight,
-                    AllowUnwalkableEndpoints);
-                if (hybrid == null)
-                    return false;
-
-                if (MaxPathSearchRange > 0)
-                    hybrid.MaxPathSearchRange = MaxPathSearchRange;
-
-                request = hybrid;
                 return true;
 
             default:
@@ -202,13 +150,8 @@ internal sealed class PathRequestRecord : IRecordable
         if (!request.Context.Guides.RequestGuide(request, out guide) || guide == null)
             return false;
 
-        if (guide is AStarGuide aStarGuide)
-            RestoreWaypointIndex(aStarGuide);
-        else if (guide is VolumeGuide volumeGuide)
+        if (guide is VolumeGuide volumeGuide)
             RestoreWaypointIndex(volumeGuide);
-        else if (guide is HybridGuide hybridGuide)
-            RestoreWaypointIndex(hybridGuide);
-
         return true;
     }
 
@@ -222,7 +165,7 @@ internal sealed class PathRequestRecord : IRecordable
         AllowTraversalTransitions = false;
         MaxPathSearchRange = 0;
         MaxClimbHeight = Fixed64.One;
-        AStarHeuristic = HeuristicMethod.Manhattan;
+        VolumeHeuristic = HeuristicMethod.Manhattan;
         FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
         Medium = TraversalMedium.Gas;
         HasGuide = false;
@@ -239,23 +182,11 @@ internal sealed class PathRequestRecord : IRecordable
         RecordValues.Look(chronicler, ref AllowTraversalTransitions, "AllowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref MaxPathSearchRange, "MaxPathSearchRange", 0);
         RecordValues.Look(chronicler, ref MaxClimbHeight, "MaxClimbHeight", Fixed64.One);
-        RecordValues.Look(chronicler, ref AStarHeuristic, "AStarHeuristic", HeuristicMethod.Manhattan);
+        RecordValues.Look(chronicler, ref VolumeHeuristic, "AStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref FlowFieldExtraFloodRange, "FlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref Medium, "Medium", TraversalMedium.Gas);
         RecordValues.Look(chronicler, ref HasGuide, "HasGuide", false);
         RecordValues.Look(chronicler, ref WaypointIndex, "WaypointIndex", NoWaypointIndex);
-    }
-
-    private void RestoreWaypointIndex(AStarGuide guide)
-    {
-        if (WaypointIndex <= 0)
-            return;
-
-        while (guide.CurrentWaypointIndex < WaypointIndex
-            && guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
-        {
-            guide.AdvanceWaypoint();
-        }
     }
 
     private void RestoreWaypointIndex(VolumeGuide guide)
@@ -270,15 +201,4 @@ internal sealed class PathRequestRecord : IRecordable
         }
     }
 
-    private void RestoreWaypointIndex(HybridGuide guide)
-    {
-        if (WaypointIndex <= 0)
-            return;
-
-        while (guide.CurrentWaypointIndex < WaypointIndex
-            && guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
-        {
-            guide.AdvanceWaypoint();
-        }
-    }
 }

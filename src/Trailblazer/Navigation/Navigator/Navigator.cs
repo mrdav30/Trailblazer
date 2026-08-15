@@ -27,15 +27,6 @@ namespace Trailblazer.Navigation;
 [Serializable]
 public abstract partial class Navigator : INavigate, IRecordable
 {
-    #region Constants
-
-    /// <summary>
-    /// Default vertical offset used to determine the object’s contact point with the ground.
-    /// </summary>
-    public static readonly Fixed64 DefaultFootPositionAdjust = Fixed64.Quarter;
-
-    #endregion
-
     #region Fields
 
     /// <inheritdoc cref="Position"/>
@@ -56,15 +47,8 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <inheritdoc cref="Acceleration"/>
     protected Vector3d _acceleration;
 
-    /// <inheritdoc cref="Size"/>
-    protected Fixed64 _size = Fixed64.One;
-
-    /// <summary>
-    /// Adjustment factor for the foot position, used to determine ground contact points.
-    /// </summary>
-    protected Fixed64 _footPositionAdjust = DefaultFootPositionAdjust;
-
-    private SolidPathAlgorithm _guidedPathMode = SolidPathAlgorithm.AStar;
+    /// <inheritdoc cref="NavigationProfile"/>
+    protected NavigationAgentProfile _navigationProfile;
 
     private bool _guidedAllowUnwalkableEndpoints;
 
@@ -72,7 +56,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     private Fixed64 _guidedMaxClimbHeight = Fixed64.One;
 
-    private HeuristicMethod _guidedAStarHeuristic = HeuristicMethod.Manhattan;
+    private HeuristicMethod _guidedVolumeHeuristic = HeuristicMethod.Manhattan;
 
     private int _guidedFlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
@@ -81,7 +65,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     /// <remarks>
     /// By default this is allocated deterministically from object setup order.
-    /// Hosts can override it during <see cref="Setup(Vector3d, FixedQuaternion?, Vector3d?, Fixed64?, Guid?)"/>
+    /// Hosts can override it during setup
     /// when a broader simulation stack already owns stable agent ids.
     /// </remarks>
     protected Guid _globalId;
@@ -220,14 +204,21 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     #region Settings
 
-    /// <inheritdoc/>
-    public Fixed64 Size => _size;
+    /// <summary>
+    /// Gets the exact immutable navigation profile supplied during setup.
+    /// </summary>
+    public NavigationAgentProfile NavigationProfile => _navigationProfile;
 
     /// <inheritdoc/>
-    public Fixed64 Radius => Size * Fixed64.Half;
+    public KinematicBodyShape BodyShape => NavigationProfile.Shape;
 
-    /// <inheritdoc cref="_footPositionAdjust"/>
-    public Fixed64 FootPositionAdjust { get => _footPositionAdjust; set => _footPositionAdjust = value; }
+    /// <inheritdoc/>
+    public Fixed64 Radius => BodyShape.Radius;
+
+    /// <summary>
+    /// Gets the derived world-space foot point used by navigation and locomotion.
+    /// </summary>
+    public Vector3d FootPosition => Position + Vector3d.Down * BodyShape.RootToFootOffsetY;
 
     /// <summary>
     /// Gets the opt-in heightmap grounding settings owned by this navigator.
@@ -238,11 +229,6 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Gets or sets a value indicating whether the object is currently locked on to a target.
     /// </summary>
     public bool IsLockedOn { get => _isLockedOn; set => _isLockedOn = value; }
-
-    /// <summary>
-    /// Path request mode used for guided travel.
-    /// </summary>
-    public SolidPathAlgorithm GuidedPathMode => _guidedPathMode;
 
     /// <summary>
     /// Whether object-built guided requests may target unwalkable voxels.
@@ -261,9 +247,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     public Fixed64 GuidedMaxClimbHeight => _guidedMaxClimbHeight;
 
     /// <summary>
-    /// Default heuristic used when the object builds A* requests.
+    /// Default heuristic used when the object builds volume requests.
     /// </summary>
-    public HeuristicMethod GuidedAStarHeuristic => _guidedAStarHeuristic;
+    internal HeuristicMethod GuidedVolumeHeuristic => _guidedVolumeHeuristic;
 
     /// <summary>
     /// Default extra flood range used when the object builds flow-field requests.
@@ -324,19 +310,19 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="position">The position in world coordinates where the object will be placed.</param>
     /// <param name="rotation">The optional rotation to apply to the object. If null, a default rotation is used.</param>
     /// <param name="velocity">The optional initial velocity of the object. If null, the object is initialized with zero velocity.</param>
-    /// <param name="size">The optional size of the object. If null, a default size is used.</param>
+    /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">The optional global identifier for the object. If null, a new identifier may be generated.</param>
     public virtual void Activate(
         TrailblazerWorldContext context,
         TrekCondition condition,
         Vector3d position,
+        NavigationAgentProfile navigationProfile,
         FixedQuaternion? rotation = null,
         Vector3d? velocity = null,
-        Fixed64? size = null,
         Guid? globalId = null)
     {
         BindContext(context);
-        Activate(condition, position, rotation, velocity, size, globalId);
+        Activate(condition, position, navigationProfile, rotation, velocity, globalId);
     }
 
     /// <summary>
@@ -346,17 +332,17 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="position">The position in world coordinates where the object will be placed.</param>
     /// <param name="rotation">The optional rotation to apply to the object. If null, a default rotation is used.</param>
     /// <param name="velocity">The optional initial velocity of the object. If null, the object is initialized with zero velocity.</param>
-    /// <param name="size">The optional size of the object. If null, a default size is used.</param>
+    /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">The optional global identifier for the object. If null, a new identifier may be generated.</param>
     public virtual void Activate(
         TrekCondition condition,
         Vector3d position,
+        NavigationAgentProfile navigationProfile,
         FixedQuaternion? rotation = null,
         Vector3d? velocity = null,
-        Fixed64? size = null,
         Guid? globalId = null)
     {
-        Setup(position, rotation, velocity, size, globalId);
+        Setup(position, navigationProfile, rotation, velocity, globalId);
         Initialize(condition);
     }
 
@@ -367,18 +353,18 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="position">Initial world-space position.</param>
     /// <param name="rotation">Optional starting rotation.</param>
     /// <param name="velocity">Optional initial velocity.</param>
-    /// <param name="size">Optional grid size (defaults to 1).</param>
+    /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">Optional host-provided stable identity. When omitted, Trailblazer assigns one deterministically from setup order.</param>
     public virtual void Setup(
         TrailblazerWorldContext context,
         Vector3d position,
+        NavigationAgentProfile navigationProfile,
         FixedQuaternion? rotation = null,
         Vector3d? velocity = null,
-        Fixed64? size = null,
         Guid? globalId = null)
     {
         BindContext(context);
-        Setup(position, rotation, velocity, size, globalId);
+        Setup(position, navigationProfile, rotation, velocity, globalId);
     }
 
     /// <summary>
@@ -387,16 +373,20 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="position">Initial world-space position.</param>
     /// <param name="rotation">Optional starting rotation.</param>
     /// <param name="velocity">Optional initial velocity.</param>
-    /// <param name="size">Optional grid size (defaults to 1).</param>
+    /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">Optional host-provided stable identity. When omitted, Trailblazer assigns one deterministically from setup order.</param>
     public virtual void Setup(
         Vector3d position,
+        NavigationAgentProfile navigationProfile,
         FixedQuaternion? rotation = null,
         Vector3d? velocity = null,
-        Fixed64? size = null,
         Guid? globalId = null)
     {
+        if (_isSet || _isInitialized)
+            throw new InvalidOperationException("Navigator is already set up. Call Reset() before setting it up again.");
+
         EnsureContextForSetup();
+        navigationProfile.Validate(nameof(navigationProfile));
 
         if (globalId.HasValue && globalId.Value == Guid.Empty)
             throw new ArgumentException("Navigator globalId cannot be Guid.Empty.", nameof(globalId));
@@ -410,7 +400,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         else
             Forward = Vector3d.Forward;
         _velocity = velocity ?? Vector3d.Zero;
-        _size = size ?? Fixed64.One;
+        _navigationProfile = navigationProfile;
 
         _isSet = true;
     }
@@ -569,7 +559,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (!TryCreateGuidedPathRequest(targetPosition, out IPathRequest pathRequest))
         {
             TrailblazerLogger.Channel.Warn(
-                $"Unable to create a {GuidedPathMode} path request for object {GlobalId} at {Position} targeting {targetPosition}.");
+                $"Unable to create a guided path request for object {GlobalId} at {Position} targeting {targetPosition}.");
             return;
         }
 
@@ -599,26 +589,66 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
+    /// Applies complete immutable graph-backed surface A* intent.
+    /// </summary>
+    /// <param name="query">The exact query intent whose start point equals the current derived foot position.</param>
+    /// <param name="rate">Desired movement rate.</param>
+    /// <param name="isRequestingFlight">Whether the object intends to fly or glide during traversal.</param>
+    /// <param name="isRequestingSwim">Whether the object intends to actively swim during traversal.</param>
+    /// <param name="isRequestingClimb">Whether the object explicitly intends to climb during traversal.</param>
+    /// <param name="isRequestingJump">Whether the object intends to jump during traversal.</param>
+    /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
+    /// <param name="groupId">Optional shared movement-group identifier.</param>
+    /// <exception cref="ArgumentException">Thrown when the query does not match the Navigator's exact supported surface shape.</exception>
+    public virtual void ApplyGuidedTrekRequest(
+        PathQuery query,
+        TrekRate? rate = null,
+        bool? isRequestingFlight = null,
+        bool? isRequestingSwim = null,
+        bool? isRequestingClimb = null,
+        bool? isRequestingJump = null,
+        bool canAffordJump = true,
+        int groupId = -1)
+    {
+        if (!IsActive)
+            return;
+
+        ValidateGuidedSurfaceQuery(query);
+        _pendingGuidedVolumeExitHandoff = null;
+        _guidedClimbIntentMode = isRequestingClimb.HasValue
+            ? GuidedClimbIntentMode.Explicit
+            : GuidedClimbIntentMode.Auto;
+        _guidedClimbIntent = isRequestingClimb ?? false;
+        _isGuideded = true;
+        _frameRequest.SetRequest(
+            direction: Vector3d.Zero,
+            rate: rate ?? TrekRate.Stationary,
+            isRequestingJump: isRequestingJump ?? false,
+            isRequestingFlight: isRequestingFlight ?? false,
+            isRequestingSwim: isRequestingSwim ?? false,
+            isRequestingClimb: _guidedClimbIntent,
+            facingDirection: null,
+            canAffordJump: canAffordJump);
+
+        Steering!.ApplyPathQuery(query, groupId);
+        CaptureGuidedRouteTopologyVersion();
+    }
+
+    /// <summary>
     /// Configures the object-owned defaults used when building guided path requests from a target position.
     /// </summary>
-    /// <param name="pathAlgorithm">The pathfinding algorithm to use for guided requests.</param>
     /// <param name="allowUnwalkableEndpoints">Whether to allow object-built guided requests to target unwalkable voxels.</param>
     /// <param name="allowTraversalTransitions">Whether to allow object-built guided requests to use authored traversal transitions for chart fallback, bounded swim exits, or bounded aerial landing handoffs.</param>
-    /// <param name="aStarHeuristic">The default heuristic to use when building A* guided requests.</param>
     /// <param name="flowFieldExtraFloodRange">The default extra flood range to use when building flow field guided requests.</param>
     /// <param name="maxClimbHeight">The default max climb height to use when building guided requests.</param>
     public virtual void ConfigureForGuidedTraversal(
-        SolidPathAlgorithm? pathAlgorithm = null,
         bool? allowUnwalkableEndpoints = null,
         bool? allowTraversalTransitions = null,
-        HeuristicMethod? aStarHeuristic = null,
         int? flowFieldExtraFloodRange = null,
         Fixed64? maxClimbHeight = null)
     {
-        _guidedPathMode = pathAlgorithm ?? _guidedPathMode;
         _guidedAllowUnwalkableEndpoints = allowUnwalkableEndpoints ?? _guidedAllowUnwalkableEndpoints;
         _guidedAllowTraversalTransitions = allowTraversalTransitions ?? _guidedAllowTraversalTransitions;
-        _guidedAStarHeuristic = aStarHeuristic ?? _guidedAStarHeuristic;
         _guidedFlowFieldExtraFloodRange = flowFieldExtraFloodRange ?? _guidedFlowFieldExtraFloodRange;
         _guidedMaxClimbHeight = maxClimbHeight ?? _guidedMaxClimbHeight;
     }
@@ -653,13 +683,12 @@ public abstract partial class Navigator : INavigate, IRecordable
             context: RequireContext(),
             origin: Position,
             targetPosition: targetPosition,
-            unitSize: Size,
-            pathMode: GuidedPathMode,
+            unitSize: Radius + Radius,
             allowUnwalkableEndpoints: GuidedAllowUnwalkableEndpoints,
             allowTraversalTransitions: GuidedAllowTraversalTransitions,
             maxClimbHeight: GuidedMaxClimbHeight,
             traversalMedium: _frameCondition.Medium,
-            aStarHeuristic: GuidedAStarHeuristic,
+            volumeHeuristic: GuidedVolumeHeuristic,
             flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
             out IPathRequest? createdRequest,
             out GuidedVolumeExitHandoff? handoff);
@@ -761,8 +790,8 @@ public abstract partial class Navigator : INavigate, IRecordable
         bool activatedGuidedHandoff = NavigatorGuidedTraversalState.TryActivatePendingVolumeExitHandoff(
             IsGuideded,
             RequireContext(),
-            Position,
-            Size,
+            FootPosition,
+            NavigationProfile,
             ref _frameRequest,
             Steering,
             ref _pendingGuidedVolumeExitHandoff,
@@ -797,7 +826,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         _frameRequest.SetTransientState(
              origin: Position,
-             footPosition: GetFootPosition(),
+             footPosition: FootPosition,
              rotation: Rotation,
              direction: IsGuideded ? heading : null
         );
@@ -861,7 +890,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         _positionDelta = Vector3d.Zero;
         _velocityDelta = Vector3d.Zero;
 
-        Motor!.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: GetFootPosition());
+        Motor!.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: FootPosition);
 
         // If the object is currently following a guided path,
         // reset only the transient request state to preserve path-following values.
@@ -1066,23 +1095,6 @@ public abstract partial class Navigator : INavigate, IRecordable
     #region Utilities
 
     /// <summary>
-    /// Calculates the world-space position of the object's foot, adjusted by the configured foot position offset.
-    /// </summary>
-    /// <remarks>
-    /// Use this method to obtain the precise ground contact point for the object,
-    /// which may be offset from its origin depending on the foot adjustment value.
-    /// </remarks>
-    /// <returns>
-    /// A <see cref="Vector3d"/> representing the foot position in world coordinates,
-    /// or <see langword="null"/> if the position is undefined.
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual Vector3d? GetFootPosition()
-    {
-        return Position + Vector3d.Down * FootPositionAdjust;
-    }
-
-    /// <summary>
     /// Generates a new globally unique identifier (GUID) for use in object identification or tracking.
     /// </summary>
     /// <remarks>Override this method to customize GUID generation logic if a different strategy is required by derived classes.</remarks>
@@ -1116,6 +1128,22 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         PathRequestContextResolver.ThrowIfUnusable(_context);
         return _context;
+    }
+
+    private void ValidateGuidedSurfaceQuery(PathQuery query)
+    {
+        if (query.Agent != NavigationProfile
+            || query.Start.Position != FootPosition
+            || query.Algorithm != PathAlgorithm.AStar
+            || query.AllowTransitions
+            || query.Traversal.StartDomain != TraversalDomain.Surface
+            || query.Traversal.TargetDomain != TraversalDomain.Surface
+            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            throw new ArgumentException(
+                "Guided surface queries must use the Navigator profile, current foot position, surface A*, and no transitions.",
+                nameof(query));
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

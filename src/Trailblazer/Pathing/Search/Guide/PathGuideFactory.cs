@@ -28,29 +28,13 @@ internal static class PathGuideFactory
     private const int MaxFramesUnused = 600;
 
     /// <summary>
-    /// A shared cache for A* survey results, keyed by request parameters.
-    /// This allows for efficient reuse of recently computed paths without needing to re-run the A* algorithm for identical requests.
+    /// Provides the guide state owned by the active pathing context.
     /// </summary>
     private static TrailblazerGuideState GuideState => PathManager.ActiveState.GuideState;
-
-    private static AStarSurveyor _aStarSurveyor => GuideState.AStarSurveyor;
 
     private static FlowFieldSurveyor _flowFieldSurveyor => GuideState.FlowFieldSurveyor;
 
     private static VolumeSurveyor _volumeSurveyor => GuideState.VolumeSurveyor;
-
-    private static ReusableSurveyResultCache<AStarSurveyResult> _cachedAStarResults =>
-        GuideState.CachedAStarResults;
-
-    /// <summary>
-    /// Returns the number of active (pooled or in-use) A* results currently tracked.
-    /// </summary>
-    public static int TotalAStarGuideCount => _cachedAStarResults.Count;
-
-    /// <summary>
-    /// Returns only the number of active (in-use) A* results currently tracked.
-    /// </summary>
-    public static int InUseAStarGuideCount => _cachedAStarResults.CountInUse;
 
     /// <summary>
     /// A shared cache for FlowField survey results, keyed by request parameters.
@@ -89,8 +73,6 @@ internal static class PathGuideFactory
     private static ReusableSurveyResultCache<HybridRoutePlanSurveyResult> _cachedHybridRoutePlans =>
         GuideState.CachedHybridRoutePlans;
 
-    private static GuidePool<AStarGuide> _aStarGuides => GuideState.AStarGuides;
-
     private static GuidePool<FlowFieldGuide> _flowFieldGuides => GuideState.FlowFieldGuides;
 
     private static GuidePool<VolumeGuide> _volumeGuides => GuideState.VolumeGuides;
@@ -109,8 +91,7 @@ internal static class PathGuideFactory
     /// Indicates whether any pathing guides are currently pooled and available.
     /// </summary>
     public static bool IsPooling =>
-        TotalAStarGuideCount > 0
-        || TotalFlowGuideCount > 0
+        TotalFlowGuideCount > 0
         || TotalVolumeGuideCount > 0
         || TotalHybridRoutePlanCount > 0;
 
@@ -118,8 +99,7 @@ internal static class PathGuideFactory
     /// Indicates whether any guides are currently in use (checked out from the pool and not yet returned).
     /// </summary>
     public static bool AnyInUse =>
-        InUseAStarGuideCount > 0
-        || InUseFlowGuideCount > 0
+        InUseFlowGuideCount > 0
         || InUseVolumeGuideCount > 0
         || InUseHybridRoutePlanCount > 0;
 
@@ -131,7 +111,6 @@ internal static class PathGuideFactory
     {
         if (!IsPooling) return;
 
-        _cachedAStarResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         _cachedFlowResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         _cachedVolumeResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         _cachedHybridRoutePlans.EvictStaleEntries(currentFrame, MaxFramesUnused);
@@ -181,50 +160,13 @@ internal static class PathGuideFactory
             return false;
         }
 
-        if (request is AStarPathRequest unreachableAStar
-            && SolidPartitionReachability.IsProvablyUnreachable(unreachableAStar))
-        {
-            result = null;
-            return false;
-        }
-
         result = request switch
         {
-            AStarPathRequest a => RequestAStar(a),
             FlowFieldPathRequest f => RequestFlowField(f),
             VolumePathRequest v => RequestVolume(v),
-            HybridPathRequest h => RequestHybrid(h),
             _ => null,
         };
         return result != null;
-    }
-
-    /// <summary>
-    /// Retrieves an A* guide from the pool or creates a new one based on the provided request.
-    /// </summary>
-    /// <param name="request">The configured A* pathfinding request.</param>
-    /// <returns>A valid AStarGuide instance.</returns>
-    public static AStarGuide? RequestAStar(AStarPathRequest request)
-    {
-        if (SolidPartitionReachability.IsProvablyUnreachable(request))
-            return null;
-
-        if (_cachedAStarResults.TryCheckout(request, out AStarSurveyResult cachedResult))
-            return RentAStarGuide(cachedResult);
-
-        return RequestAStarMiss(request);
-    }
-
-    private static AStarGuide? RequestAStarMiss(AStarPathRequest request)
-    {
-        bool pathFound = _cachedAStarResults.TryGetOrCreate(request,
-            () => ResolveAStarResult(request),
-            out AStarSurveyResult result);
-
-        if (!pathFound)
-            return null;
-
-        return RentAStarGuide(result);
     }
 
     /// <summary>
@@ -267,7 +209,7 @@ internal static class PathGuideFactory
             out FlowFieldSurveyResult result);
 
         // Make sure the start voxel is within the current fields collection. This dictionary probe is on the warm
-        // cache-hit path, so GridForge's WorldVoxelIndex hash must stay allocation-free to keep FlowField hits near A*.
+        // cache-hit path, so GridForge's WorldVoxelIndex hash must stay allocation-free.
         if (pathFound
             && result.Fields != null
             && request.StartNode != null
@@ -336,25 +278,6 @@ internal static class PathGuideFactory
     }
 
     /// <summary>
-    /// Builds a hybrid guide by composing cached chart and volume segment guides from a planned route request.
-    /// </summary>
-    private static HybridGuide? RequestHybrid(HybridPathRequest request)
-    {
-        HybridRoutePlan? routePlan = request.RoutePlan;
-        if (routePlan == null
-            || !HybridWaypointFlattener.TryBuild(
-            routePlan,
-            out AStarWaypoint[]? flattened,
-            out _))
-        {
-            return null;
-        }
-
-        HybridGuide guide = new();
-        return guide.Initialize(flattened!) ? guide : null;
-    }
-
-    /// <summary>
     /// Returns the guide back to its associated pool, optionally disposing it completely.
     /// </summary>
     /// <param name="guide">The guide to return to the cache.</param>
@@ -367,10 +290,6 @@ internal static class PathGuideFactory
 
         switch (guide)
         {
-            case AStarGuide a:
-                _cachedAStarResults.Return(a.TrailMap, dispose);
-                ReturnAStarGuide(a, dispose);
-                break;
             case FlowFieldGuide f:
                 f.ReleaseStagedResources(dispose);
                 if (f.FlowMap != null)
@@ -391,7 +310,6 @@ internal static class PathGuideFactory
     {
         TrailblazerWorldContext? ownerContext = guide switch
         {
-            AStarGuide a => a.TrailMap.Context,
             FlowFieldGuide f => f.OwnerContext,
             VolumeGuide v => v.TrailMap?.Context,
             _ => null,
@@ -417,7 +335,6 @@ internal static class PathGuideFactory
     {
         if (string.IsNullOrEmpty(chartKey)) return;
 
-        _cachedAStarResults.InvalidateForChart(chartKey);
         _cachedFlowResults.InvalidateForChart(chartKey);
         _cachedVolumeResults.InvalidateForChart(chartKey);
         _cachedHybridRoutePlans.InvalidateForChart(chartKey);
@@ -429,143 +346,15 @@ internal static class PathGuideFactory
     }
 
     /// <summary>
-    /// Removes all cached A*, FlowField, and Volume guides.
+    /// Removes all cached FlowField, Volume, and staged transition route data.
     /// </summary>
     public static void FlushCache(bool force = false)
     {
         if (!force && AnyInUse) return;
-        _cachedAStarResults.InvalidateAll();
         _cachedFlowResults.InvalidateAll();
         _cachedVolumeResults.InvalidateAll();
         _cachedHybridRoutePlans.InvalidateAll();
         ClearGuidePools();
-    }
-
-    internal static bool TrySeedAStarCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        TrailblazerWorldContext context = PathManager.ActiveState.Context;
-        WorldVoxelIndex origin = CreateSeedVoxelIndex(context, requestKey, z: 0);
-        WorldVoxelIndex destination = CreateSeedVoxelIndex(context, requestKey, z: 1);
-        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateAStar(
-            origin,
-            destination,
-            Fixed64.One,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: false,
-            HeuristicMethod.Manhattan,
-            Fixed64.One,
-            maxPathSearchRange: 1,
-            transitionRegistryVersion: 0);
-        return _cachedAStarResults.TrySeed(
-            AStarSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, cacheKey),
-            checkout);
-    }
-
-    internal static bool TrySeedFlowFieldCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        WorldVoxelIndex index = default;
-        var fields = new SwiftDictionary<WorldVoxelIndex, FlowField>(1)
-        {
-            [index] = new FlowField
-            {
-                GlobalIndex = index,
-                IsGoal = true
-            }
-        };
-
-        TrailblazerWorldContext context = PathManager.ActiveState.Context;
-        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateFlowField(
-            CreateSeedVoxelIndex(context, requestKey, z: 1),
-            Fixed64.One,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: false,
-            Fixed64.One,
-            FlowFieldPathRequest.DefaultExtraFloodRange,
-            maxPathSearchRange: 1,
-            transitionRegistryVersion: 0);
-        return _cachedFlowResults.TrySeed(
-            FlowFieldSurveyResult.Create(context, fields, chartKeys, cacheKey),
-            checkout);
-    }
-
-    internal static bool TrySeedVolumeCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        TrailblazerWorldContext context = PathManager.ActiveState.Context;
-        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateVolume(
-            CreateSeedVoxelIndex(context, requestKey, z: 0),
-            CreateSeedVoxelIndex(context, requestKey, z: 1),
-            Fixed64.One,
-            allowUnwalkableEndpoints: false,
-            HeuristicMethod.Euclidean,
-            TraversalMedium.Gas,
-            maxPathSearchRange: 1,
-            context.Pathing.State.VolumeRulesState.RegistryVersion);
-        return _cachedVolumeResults.TrySeed(
-            VolumeSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, cacheKey),
-            checkout);
-    }
-
-    internal static bool TrySeedHybridRoutePlanCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
-    {
-        TrailblazerWorldContext context = PathManager.ActiveState.Context;
-        var routePlan = new HybridRoutePlan(
-            new[] { HybridRouteStep.Waypoint(context, Vector3d.Zero) },
-            Array.Empty<TraversalTransition>(),
-            totalPathCost: 0);
-        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateHybrid(
-            CreateSeedVoxelIndex(context, requestKey, z: 0),
-            CreateSeedVoxelIndex(context, requestKey, z: 1),
-            Fixed64.One,
-            HybridChartRequestKind.AStar,
-            allowUnwalkableEndpoints: false,
-            HeuristicMethod.Manhattan,
-            Fixed64.One,
-            extraFloodRange: 0,
-            maxPathSearchRange: 1,
-            routePlan.DirectedTransitions,
-            context.Pathing.State.TransitionRegistryState.RegistryVersion,
-            context.Pathing.State.VolumeRulesState.RegistryVersion);
-
-        return _cachedHybridRoutePlans.TrySeed(
-            HybridRoutePlanSurveyResult.Create(context, routePlan, chartKeys, cacheKey),
-            checkout);
-    }
-
-    private static WorldVoxelIndex CreateSeedVoxelIndex(
-        TrailblazerWorldContext context,
-        int requestKey,
-        int z) =>
-        new(context.World.SpawnToken, gridIndex: 0, gridSpawnToken: 0, new VoxelIndex(requestKey, 0, z));
-
-    internal static int CountIndexedCacheEntriesForBenchmark(string chartKey)
-    {
-        return _cachedAStarResults.CountIndexedEntriesForChart(chartKey)
-            + _cachedFlowResults.CountIndexedEntriesForChart(chartKey)
-            + _cachedVolumeResults.CountIndexedEntriesForChart(chartKey)
-            + _cachedHybridRoutePlans.CountIndexedEntriesForChart(chartKey);
-    }
-
-    private static AStarWaypoint[] CreateSeedWaypoints()
-    {
-        return new[]
-        {
-            new AStarWaypoint
-            {
-                Position = Vector3d.Zero,
-                IsGoal = true
-            }
-        };
-    }
-
-    private static AStarGuide? RentAStarGuide(AStarSurveyResult result)
-    {
-        AStarGuide guide = _aStarGuides.Rent();
-        if (guide.Initialize(result))
-            return guide;
-
-        ReturnAStarGuide(guide, dispose: false);
-        _cachedAStarResults.Return(result, dispose: false);
-        return null;
     }
 
     private static FlowFieldGuide? RentFlowFieldGuide(FlowFieldSurveyResult result)
@@ -607,14 +396,6 @@ internal static class PathGuideFactory
         return null;
     }
 
-    private static void ReturnAStarGuide(AStarGuide guide, bool dispose)
-    {
-        if (dispose || guide.GetType() != typeof(AStarGuide))
-            _aStarGuides.Destroy(guide);
-        else
-            _aStarGuides.Release(guide);
-    }
-
     private static void ReturnFlowFieldGuide(FlowFieldGuide guide, bool dispose)
     {
         if (dispose || guide.GetType() != typeof(FlowFieldGuide))
@@ -633,46 +414,8 @@ internal static class PathGuideFactory
 
     private static void ClearGuidePools()
     {
-        _aStarGuides.Clear();
         _flowFieldGuides.Clear();
         _volumeGuides.Clear();
-    }
-
-    private static AStarSurveyResult ResolveAStarResult(AStarPathRequest request)
-    {
-        AStarSurveyResult directResult = _aStarSurveyor.FindPath(request);
-        if (directResult.HasPath || !request.AllowTraversalTransitions)
-            return directResult;
-
-        return TryBuildTransitionFallbackAStarResult(request, out AStarSurveyResult fallbackResult)
-            ? fallbackResult
-            : directResult;
-    }
-
-    private static bool TryBuildTransitionFallbackAStarResult(
-        AStarPathRequest request,
-        out AStarSurveyResult result)
-    {
-        result = AStarSurveyResult.Empty;
-
-        HybridPathRequest? hybridRequest = HybridPathRequest.CreateFromAStar(request);
-        HybridRoutePlan? routePlan = hybridRequest?.RoutePlan;
-        if (routePlan == null
-            || routePlan.DirectedTransitions.Length == 0)
-        {
-            return false;
-        }
-
-        if (!HybridWaypointFlattener.TryBuild(
-            routePlan,
-            out AStarWaypoint[]? flattenedWaypoints,
-            out string[] chartKeys))
-        {
-            return false;
-        }
-
-        result = AStarSurveyResult.Create(request.Context, flattenedWaypoints!, chartKeys, request.RequestCacheKey);
-        return true;
     }
 
     private static bool TryBuildTransitionFallbackFlowGuide(

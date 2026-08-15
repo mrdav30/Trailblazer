@@ -31,17 +31,24 @@ internal sealed class NavigationStructuralNode
 /// <summary>Stores one unique directed map dependency and its parallel edge count.</summary>
 internal readonly struct NavigationStructuralLink : IEquatable<NavigationStructuralLink>
 {
-    internal NavigationStructuralLink(string destinationMapId, int count)
+    internal NavigationStructuralLink(
+        string destinationMapId,
+        int count,
+        int uncertifiedCount)
     {
         DestinationMapId = destinationMapId;
         Count = count;
+        UncertifiedCount = uncertifiedCount;
     }
 
     internal string DestinationMapId { get; }
 
     internal int Count { get; }
 
+    internal int UncertifiedCount { get; }
+
     public bool Equals(NavigationStructuralLink other) =>
         Count == other.Count
+        && UncertifiedCount == other.UncertifiedCount
         && string.Equals(DestinationMapId, other.DestinationMapId, StringComparison.Ordinal);
 }

@@ -183,8 +183,6 @@ public sealed class ContextOwnedPathingServiceCoverageTests : IDisposable
             length: 4,
             chartNamePrefix: "ContextGuideGas");
 
-        AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         FlowFieldPathRequest flowRequest = TestRequire.NotNull(
             FlowFieldPathRequest.Create(context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         VolumePathRequest volumeRequest = TestRequire.NotNull(
@@ -195,56 +193,44 @@ public sealed class ContextOwnedPathingServiceCoverageTests : IDisposable
                 Fixed64.One,
                 medium: TraversalMedium.Gas));
 
-        context.Guides.RequestGuide(aStarRequest, out AStarGuide? aStarGuide).Should().BeTrue();
-        context.Guides.TotalAStarGuideCount.Should().Be(1);
-        context.Guides.InUseAStarGuideCount.Should().Be(1);
-        context.Guides.AnyInUse.Should().BeTrue();
-
-        context.Guides.ReturnGuide(null);
-        context.Guides.InUseAStarGuideCount.Should().Be(1);
-        context.Guides.ReturnGuide(aStarGuide);
-        context.Guides.InUseAStarGuideCount.Should().Be(0);
-        context.Guides.IsPooling.Should().BeTrue();
-
-        context.Guides.RequestGuide(aStarRequest, out IGuide? untypedGuide).Should().BeTrue();
-        untypedGuide.Should().BeOfType<AStarGuide>();
-        context.Guides.ReturnGuide(untypedGuide);
-
         context.Guides.RequestGuide(flowRequest, out FlowFieldGuide? flowGuide).Should().BeTrue();
         context.Guides.TotalFlowGuideCount.Should().Be(1);
         context.Guides.InUseFlowGuideCount.Should().Be(1);
+        context.Guides.AnyInUse.Should().BeTrue();
+
+        context.Guides.ReturnGuide(null);
+        context.Guides.InUseFlowGuideCount.Should().Be(1);
         context.Guides.ReturnGuide(flowGuide);
+        context.Guides.InUseFlowGuideCount.Should().Be(0);
+        context.Guides.IsPooling.Should().BeTrue();
+
+        context.Guides.RequestGuide(flowRequest, out IGuide? untypedGuide).Should().BeTrue();
+        untypedGuide.Should().BeOfType<FlowFieldGuide>();
+        context.Guides.ReturnGuide(untypedGuide);
 
         context.Guides.RequestGuide(volumeRequest, out VolumeGuide? volumeGuide).Should().BeTrue();
         context.Guides.TotalVolumeGuideCount.Should().Be(1);
         context.Guides.InUseVolumeGuideCount.Should().Be(1);
+        string volumeChartKey = TestRequire.NotNull(volumeGuide!.TrailMap).ChartsUtilized[0];
         context.Guides.ReturnGuide(volumeGuide);
-        context.Guides.InvalidateVolumeCache();
+        context.Guides.InvalidateCacheFor(volumeChartKey);
         context.Guides.TotalVolumeGuideCount.Should().Be(0);
 
-        context.Guides.TrySeedFlowFieldCacheForBenchmark(2222, new[] { "ContextGuideSolid" }, checkout: false)
-            .Should()
-            .BeTrue();
-        context.Guides.CountIndexedCacheEntriesForBenchmark("ContextGuideSolid").Should().BeGreaterThan(0);
         context.Guides.InvalidateCacheFor("ContextGuideSolid");
         context.Guides.TotalFlowGuideCount.Should().Be(0);
 
-        context.Guides.TrySeedVolumeCacheForBenchmark(3333, new[] { "ContextGuideGas-1" }, checkout: false)
-            .Should()
-            .BeTrue();
-        context.Guides.TotalVolumeGuideCount.Should().Be(1);
+        context.Guides.RequestGuide(volumeRequest, out VolumeGuide? recachedVolumeGuide).Should().BeTrue();
+        context.Guides.ReturnGuide(recachedVolumeGuide);
         context.Guides.InvalidateVolumeCache();
         context.Guides.TotalVolumeGuideCount.Should().Be(0);
 
-        context.Guides.TrySeedHybridRoutePlanCacheForBenchmark(4444, new[] { "ContextGuideSolid" }, checkout: true)
-            .Should()
-            .BeTrue();
-        context.Guides.TotalHybridRoutePlanCount.Should().Be(1);
-        context.Guides.InUseHybridRoutePlanCount.Should().Be(1);
+        context.Guides.RequestGuide(flowRequest, out FlowFieldGuide? recachedFlowGuide).Should().BeTrue();
+        context.Guides.ReturnGuide(recachedFlowGuide);
 
         context.Guides.FlushCache(force: true);
 
-        context.Guides.TotalAStarGuideCount.Should().Be(0);
+        context.Guides.TotalFlowGuideCount.Should().Be(0);
+        context.Guides.TotalVolumeGuideCount.Should().Be(0);
         context.Guides.TotalHybridRoutePlanCount.Should().Be(0);
         context.Guides.AnyInUse.Should().BeFalse();
     }
@@ -255,10 +241,10 @@ public sealed class ContextOwnedPathingServiceCoverageTests : IDisposable
         using TrailblazerWorldContext owner = PathTestFactory.CreateContextWithGrid();
         using TrailblazerWorldContext other = PathTestFactory.CreateContextWithGrid();
         PathTestFactory.RegisterSolidLine(owner, "OwnerGuideSolid", Vector3d.Zero, 2);
-        AStarPathRequest request = TestRequire.NotNull(
-            AStarPathRequest.Create(owner, Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One));
+        FlowFieldPathRequest request = TestRequire.NotNull(
+            FlowFieldPathRequest.Create(owner, Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One));
 
-        other.Guides.RequestGuide(request, out AStarGuide? typedGuide).Should().BeFalse();
+        other.Guides.RequestGuide(request, out FlowFieldGuide? typedGuide).Should().BeFalse();
         typedGuide.Should().BeNull();
         other.Guides.RequestGuide(request, out IGuide? untypedGuide).Should().BeFalse();
         untypedGuide.Should().BeNull();
@@ -274,7 +260,7 @@ public sealed class ContextOwnedPathingServiceCoverageTests : IDisposable
         Action inactivePathing = () => _ = inactiveContext.Pathing.AllCharts;
         Action inactiveTransitions = () => _ = inactiveContext.Transitions.RegistryVersion;
         Action inactiveVolumeRules = () => _ = inactiveContext.VolumeRules.HasGasVoxelRule;
-        Action inactiveGuides = () => _ = inactiveContext.Guides.TotalAStarGuideCount;
+        Action inactiveGuides = () => _ = inactiveContext.Guides.TotalFlowGuideCount;
         Action inactiveNavigation = () => _ = inactiveContext.Navigation.CreateNavigatorId();
 
         inactivePathing.Should().Throw<InvalidOperationException>();
@@ -290,7 +276,7 @@ public sealed class ContextOwnedPathingServiceCoverageTests : IDisposable
         Action disposedPathing = () => _ = disposedContext.Pathing.AllCharts;
         Action disposedTransitions = () => _ = disposedContext.Transitions.RegistryVersion;
         Action disposedVolumeRules = () => _ = disposedContext.VolumeRules.HasGasVoxelRule;
-        Action disposedGuides = () => _ = disposedContext.Guides.TotalAStarGuideCount;
+        Action disposedGuides = () => _ = disposedContext.Guides.TotalFlowGuideCount;
         Action disposedNavigation = () => _ = disposedContext.Navigation.CreateNavigatorId();
 
         disposedPathing.Should().Throw<ObjectDisposedException>();

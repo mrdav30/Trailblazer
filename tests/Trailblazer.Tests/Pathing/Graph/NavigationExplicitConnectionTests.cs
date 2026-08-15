@@ -1928,6 +1928,92 @@ public sealed class NavigationExplicitConnectionTests
     }
 
     [Fact]
+    public void SurfaceEnumeration_ShouldOrderExplicitHeadsByDestinationBeforeConnectionId()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration destinationBinding = AddGrid(context, -3);
+        NormalizedGridConfiguration sourceBinding = AddGrid(context, 0);
+        VoxelIndex sourceIndex = default;
+        VoxelIndex nativeIndex = new(1, 0, 0);
+        VoxelIndex firstDestination = new(1, 0, 0);
+        VoxelIndex secondDestination = new(2, 0, 0);
+        var first = new NavigationConnection(
+            "z-first-endpoint",
+            sourceIndex,
+            new NavigationCellAddress("a-destination", firstDestination),
+            GetFoot(sourceBinding, sourceIndex),
+            GetFoot(destinationBinding, firstDestination),
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { new NavigationCellAddress("a-destination", secondDestination) });
+        var second = new NavigationConnection(
+            "a-second-endpoint",
+            sourceIndex,
+            new NavigationCellAddress("a-destination", secondDestination),
+            GetFoot(sourceBinding, sourceIndex),
+            GetFoot(destinationBinding, secondDestination),
+            Fixed64.Zero,
+            Fixed64.One);
+        Admit(
+            context,
+            new NavigationMapBuilder("a-destination", destinationBinding)
+                .AddCell(firstDestination, SolidCell)
+                .AddCell(secondDestination, SolidCell)
+                .Build(),
+            1);
+        NavigationMapCommitOperation sourceCommit = Admit(
+            context,
+            new NavigationMapBuilder("z-source", sourceBinding)
+                .AddCell(sourceIndex, SolidCell)
+                .AddCell(nativeIndex, SolidCell)
+                .AddConnection(first)
+                .AddConnection(second)
+                .Build(),
+            2);
+        SimulateUntilTerminal(context, sourceCommit.Receipt);
+        sourceCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var sourceAddress = new NavigationCellAddress("z-source", sourceIndex);
+        lease.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef source).Should().BeTrue();
+        NavigationPagedSequence<NavigationConnectionOwnerKey> endpointOwners =
+            lease.Graph.ExplicitConnections.GetEndpointOwnerRow(sourceAddress);
+        endpointOwners.Count.Should().Be(2);
+        endpointOwners[0].ConnectionId.Should().Be("z-first-endpoint");
+        endpointOwners[1].ConnectionId.Should().Be("a-second-endpoint");
+        var kinds = new List<NavigationGraphEdgeKind>();
+        var endpoints = new List<NavigationCellAddress>();
+        var connectionIds = new List<string?>();
+
+        NavigationSurfaceEdgeEnumerator edges = lease.Graph.EnumerateSurfaceEdges(source);
+        while (edges.MoveNext())
+        {
+            kinds.Add(edges.Current.Kind);
+            lease.Graph.TryGetNodeAddress(edges.Current.Target, out NavigationCellAddress endpoint)
+                .Should().BeTrue();
+            endpoints.Add(endpoint);
+            connectionIds.Add(edges.Current.Kind == NavigationGraphEdgeKind.Explicit
+                ? edges.Current.ExplicitConnection.Owner.ConnectionId
+                : null);
+        }
+
+        kinds.Should().Equal(
+            NavigationGraphEdgeKind.Explicit,
+            NavigationGraphEdgeKind.Explicit,
+            NavigationGraphEdgeKind.Seam,
+            NavigationGraphEdgeKind.Native);
+        endpoints.Should().Equal(
+            new NavigationCellAddress("a-destination", firstDestination),
+            new NavigationCellAddress("a-destination", secondDestination),
+            new NavigationCellAddress("a-destination", secondDestination),
+            new NavigationCellAddress("z-source", nativeIndex));
+        connectionIds.Should().Equal(
+            "z-first-endpoint",
+            "a-second-endpoint",
+            null,
+            null);
+    }
+
+    [Fact]
     public void ExplicitEvaluation_ShouldUseCertifiedCostInclusiveCapacityAndOneWayDirection()
     {
         using TrailblazerWorldContext context = CreateExplicitEvaluationContext();
@@ -2269,6 +2355,77 @@ public sealed class NavigationExplicitConnectionTests
         sources.Should().Equal(
             new NavigationCellAddress("a-source", leftIndex),
             new NavigationCellAddress("z-source", rightIndex));
+    }
+
+    [Fact]
+    public void IncomingExplicitEnumeration_ShouldOrderHeadsBySourceBeforeConnectionId()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration sourceBinding = AddGrid(context, 0);
+        NormalizedGridConfiguration destinationBinding = AddGrid(context, 3);
+        VoxelIndex firstSource = new(1, 0, 0);
+        VoxelIndex secondSource = new(2, 0, 0);
+        VoxelIndex destinationIndex = default;
+        var first = new NavigationConnection(
+            "z-first-source",
+            firstSource,
+            new NavigationCellAddress("destination", destinationIndex),
+            GetFoot(sourceBinding, firstSource),
+            GetFoot(destinationBinding, destinationIndex),
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { new NavigationCellAddress("source", secondSource) });
+        var second = new NavigationConnection(
+            "a-second-source",
+            secondSource,
+            new NavigationCellAddress("destination", destinationIndex),
+            GetFoot(sourceBinding, secondSource),
+            GetFoot(destinationBinding, destinationIndex),
+            Fixed64.Zero,
+            Fixed64.One);
+        Admit(
+            context,
+            new NavigationMapBuilder("destination", destinationBinding)
+                .AddCell(destinationIndex, SolidCell)
+                .Build(),
+            1);
+        NavigationMapCommitOperation sourceCommit = Admit(
+            context,
+            new NavigationMapBuilder("source", sourceBinding)
+                .AddCell(firstSource, SolidCell)
+                .AddCell(secondSource, SolidCell)
+                .AddConnection(first)
+                .AddConnection(second)
+                .Build(),
+            2);
+        SimulateUntilTerminal(context, sourceCommit.Receipt);
+        sourceCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var destinationAddress = new NavigationCellAddress("destination", destinationIndex);
+        lease.Graph.TryGetNodeRef(destinationAddress, out NavigationNodeRef destination)
+            .Should().BeTrue();
+        NavigationPagedSequence<NavigationConnectionOwnerKey> endpointOwners =
+            lease.Graph.ExplicitConnections.GetEndpointOwnerRow(destinationAddress);
+        endpointOwners.Count.Should().Be(2);
+        endpointOwners[0].ConnectionId.Should().Be("z-first-source");
+        endpointOwners[1].ConnectionId.Should().Be("a-second-source");
+        var sources = new List<NavigationCellAddress>();
+        var connectionIds = new List<string>();
+
+        NavigationSurfaceEdgeEnumerator incoming =
+            lease.Graph.EnumerateIncomingExplicitSurfaceEdges(destination);
+        while (incoming.MoveNext())
+        {
+            lease.Graph.TryGetNodeAddress(incoming.Current.Target, out NavigationCellAddress source)
+                .Should().BeTrue();
+            sources.Add(source);
+            connectionIds.Add(incoming.Current.ExplicitConnection.Owner.ConnectionId);
+        }
+
+        sources.Should().Equal(
+            new NavigationCellAddress("source", firstSource),
+            new NavigationCellAddress("source", secondSource));
+        connectionIds.Should().Equal("z-first-source", "a-second-source");
     }
 
     [Fact]
@@ -2680,7 +2837,8 @@ public sealed class NavigationExplicitConnectionTests
             maxDependencyEntries.HasValue ? 1 : defaults.MaxAreaPolicies,
             maxDependencyEntries.HasValue ? 1 : defaults.MaxAreaRulesPerPolicy,
             maxDependencyEntries.HasValue ? 1 : defaults.MaxAreaRules,
-            defaults.MaxConcurrentSnapshotLeases);
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
         return TrailblazerWorldContext.CreateOwned(settings: settings);
     }
 

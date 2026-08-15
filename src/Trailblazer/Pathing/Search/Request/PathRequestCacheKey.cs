@@ -24,10 +24,8 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
     private enum RequestFamily : byte
     {
         None,
-        AStar,
         FlowField,
         Volume,
-        Hybrid,
         FlowFieldHybridFallback
     }
 
@@ -46,8 +44,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
     private readonly int _extraFloodRange;
     private readonly int _transitionRegistryVersion;
     private readonly int _volumeRulesRegistryVersion;
-    private readonly int _hybridChartRequestKind;
-    private readonly string[]? _transitionIds;
     private readonly int _hashCode;
 
     /// <summary>
@@ -69,8 +65,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
         int extraFloodRange,
         int transitionRegistryVersion,
         int volumeRulesRegistryVersion,
-        int hybridChartRequestKind,
-        string[]? transitionIds,
         Vector3d exactOrigin,
         Vector3d exactTargetPosition)
     {
@@ -89,8 +83,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
         _extraFloodRange = extraFloodRange;
         _transitionRegistryVersion = transitionRegistryVersion;
         _volumeRulesRegistryVersion = volumeRulesRegistryVersion;
-        _hybridChartRequestKind = hybridChartRequestKind;
-        _transitionIds = transitionIds;
         IsInitialized = true;
         _hashCode = ComputeHashCode(
             family,
@@ -106,40 +98,9 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
             extraFloodRange,
             transitionRegistryVersion,
             volumeRulesRegistryVersion,
-            hybridChartRequestKind,
-            transitionIds,
             exactOrigin,
             exactTargetPosition);
     }
-
-    internal static PathRequestCacheKey CreateAStar(
-        WorldVoxelIndex origin,
-        WorldVoxelIndex destination,
-        Fixed64 unitSize,
-        bool allowUnwalkableEndpoints,
-        bool allowTraversalTransitions,
-        HeuristicMethod heuristic,
-        Fixed64 maxClimbHeight,
-        int maxPathSearchRange,
-        int transitionRegistryVersion) =>
-        new(
-            RequestFamily.AStar,
-            origin,
-            destination,
-            unitSize,
-            maxClimbHeight,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions,
-            (int)heuristic,
-            traversalMedium: 0,
-            maxPathSearchRange,
-            extraFloodRange: 0,
-            allowTraversalTransitions ? transitionRegistryVersion : 0,
-            volumeRulesRegistryVersion: 0,
-            hybridChartRequestKind: 0,
-            transitionIds: null,
-            exactOrigin: default,
-            exactTargetPosition: default);
 
     internal static PathRequestCacheKey CreateFlowField(
         WorldVoxelIndex destination,
@@ -164,8 +125,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
             extraFloodRange,
             allowTraversalTransitions ? transitionRegistryVersion : 0,
             volumeRulesRegistryVersion: 0,
-            hybridChartRequestKind: 0,
-            transitionIds: null,
             exactOrigin: default,
             exactTargetPosition: default);
 
@@ -192,44 +151,8 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
             extraFloodRange: 0,
             transitionRegistryVersion: 0,
             volumeRulesRegistryVersion,
-            hybridChartRequestKind: 0,
-            transitionIds: null,
             exactOrigin: default,
             exactTargetPosition: default);
-
-    internal static PathRequestCacheKey CreateHybrid(
-        WorldVoxelIndex origin,
-        WorldVoxelIndex destination,
-        Fixed64 unitSize,
-        HybridChartRequestKind chartRequestKind,
-        bool allowUnwalkableEndpoints,
-        HeuristicMethod heuristic,
-        Fixed64 maxClimbHeight,
-        int extraFloodRange,
-        int maxPathSearchRange,
-        TraversalTransition[] directedTransitions,
-        int transitionRegistryVersion,
-        int volumeRulesRegistryVersion,
-        Vector3d exactOrigin = default,
-        Vector3d exactTargetPosition = default) =>
-        new(
-            RequestFamily.Hybrid,
-            origin,
-            destination,
-            unitSize,
-            maxClimbHeight,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions: false,
-            (int)heuristic,
-            traversalMedium: 0,
-            maxPathSearchRange,
-            extraFloodRange,
-            transitionRegistryVersion,
-            volumeRulesRegistryVersion,
-            (int)chartRequestKind,
-            SnapshotTransitionIds(directedTransitions),
-            exactOrigin,
-            exactTargetPosition);
 
     internal static PathRequestCacheKey CreateFlowFieldHybridFallback(
         WorldVoxelIndex origin,
@@ -257,8 +180,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
             extraFloodRange,
             transitionRegistryVersion,
             volumeRulesRegistryVersion,
-            (int)HybridChartRequestKind.FlowField,
-            transitionIds: null,
             exactOrigin,
             exactTargetPosition);
 
@@ -286,9 +207,7 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
             && _maxPathSearchRange == other._maxPathSearchRange
             && _extraFloodRange == other._extraFloodRange
             && _transitionRegistryVersion == other._transitionRegistryVersion
-            && _volumeRulesRegistryVersion == other._volumeRulesRegistryVersion
-            && _hybridChartRequestKind == other._hybridChartRequestKind
-            && TransitionIdsEqual(_transitionIds, other._transitionIds);
+            && _volumeRulesRegistryVersion == other._volumeRulesRegistryVersion;
     }
 
     /// <inheritdoc/>
@@ -311,34 +230,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
     public static bool operator !=(PathRequestCacheKey left, PathRequestCacheKey right) =>
         !left.Equals(right);
 
-    private static bool TransitionIdsEqual(string[]? left, string[]? right)
-    {
-        int length = left?.Length ?? 0;
-        if (length != (right?.Length ?? 0))
-            return false;
-
-        for (int i = 0; i < length; i++)
-        {
-            if (!string.Equals(left![i], right![i], StringComparison.Ordinal))
-                return false;
-        }
-
-        return true;
-    }
-
-    private static string[] SnapshotTransitionIds(TraversalTransition[]? directedTransitions)
-    {
-        int length = directedTransitions?.Length ?? 0;
-        if (length == 0)
-            return Array.Empty<string>();
-
-        string[] transitionIds = new string[length];
-        for (int i = 0; i < length; i++)
-            transitionIds[i] = directedTransitions![i].Id;
-
-        return transitionIds;
-    }
-
     private static int ComputeHashCode(
         RequestFamily family,
         WorldVoxelIndex origin,
@@ -353,8 +244,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
         int extraFloodRange,
         int transitionRegistryVersion,
         int volumeRulesRegistryVersion,
-        int hybridChartRequestKind,
-        string[]? transitionIds,
         Vector3d exactOrigin,
         Vector3d exactTargetPosition)
     {
@@ -362,7 +251,7 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
         hash.Add((int)family);
         hash.Add(origin.GetHashCode());
         hash.Add(destination.GetHashCode());
-        if (family is RequestFamily.Hybrid or RequestFamily.FlowFieldHybridFallback)
+        if (family == RequestFamily.FlowFieldHybridFallback)
         {
             hash.Add(exactOrigin.X.GetHashCode());
             hash.Add(exactOrigin.Y.GetHashCode());
@@ -381,12 +270,6 @@ public readonly struct PathRequestCacheKey : IEquatable<PathRequestCacheKey>
         hash.Add(extraFloodRange);
         hash.Add(transitionRegistryVersion);
         hash.Add(volumeRulesRegistryVersion);
-        hash.Add(hybridChartRequestKind);
-
-        int transitionCount = transitionIds?.Length ?? 0;
-        hash.Add(transitionCount);
-        for (int i = 0; i < transitionCount; i++)
-            hash.AddOrdinalString(transitionIds![i]);
 
         return hash.ToHashCode();
     }

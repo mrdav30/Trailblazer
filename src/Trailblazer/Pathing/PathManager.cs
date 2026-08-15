@@ -211,7 +211,6 @@ internal static class PathManager
             if (flushGuideCache && PathGuideFactory.IsPooling)
                 PathGuideFactory.FlushCache(true);
 
-            SolidPartitionReachability.Invalidate();
         }
     }
 
@@ -886,8 +885,6 @@ internal static class PathManager
 
             registration.IsInitialized = true;
             affectedChartKeys.Add(chart.Name);
-            SolidPartitionReachability.Invalidate();
-
             RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
             RefreshManagedGeneratedTransitionsForCharts(world, affectedChartKeys);
 
@@ -1005,8 +1002,6 @@ internal static class PathManager
             TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
             registration.IsInitialized = false;
             RemoveChartFromRegistry(chart.Name);
-            SolidPartitionReachability.Invalidate();
-
             RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
             RefreshManagedGeneratedTransitionsForCharts(world, affectedChartKeys, chart.Name);
 
@@ -1370,7 +1365,6 @@ internal static class PathManager
             BindCollectedSolidPartitions(partitionsToRebind);
 
             registration.IsInitialized = false;
-            SolidPartitionReachability.Invalidate();
         }
         finally
         {
@@ -1396,7 +1390,6 @@ internal static class PathManager
         _resolvedChartVoxelStates.Clear();
         _initializedChartTouchCountsByGridIndex.Clear();
         ClearActiveAuthoredVolumeMediumCounts();
-        SolidPartitionReachability.Invalidate();
     }
 
     private static bool DoBoundsOverlap(
@@ -2408,9 +2401,6 @@ internal static class PathManager
         SwiftHashSet<string> invalidatedChartKeys)
     {
         BindCollectedSolidPartitions(partitionsToRebind);
-
-        if (partitionsToRebind.Count > 0 || invalidatedChartKeys.Count > 0)
-            SolidPartitionReachability.Invalidate();
 
         foreach (string chartKey in invalidatedChartKeys)
             PathGuideFactory.InvalidateCacheFor(chartKey);

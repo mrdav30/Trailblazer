@@ -11,7 +11,7 @@ using GridForge.Spatial;
 namespace Trailblazer.Pathing;
 
 /// <summary>Enumerates physically present native surface neighbors in canonical address order.</summary>
-internal ref struct NavigationNativeSurfaceEdgeEnumerator
+internal struct NavigationNativeSurfaceEdgeEnumerator
 {
     private readonly NavigationWorldGraph? _graph;
     private readonly NavigationMapInstance? _instance;

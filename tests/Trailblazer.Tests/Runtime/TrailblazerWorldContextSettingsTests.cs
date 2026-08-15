@@ -52,7 +52,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxConcurrentSnapshotLeases.Should().Be(8);
         settings.QueryLimits.MaxBatchItems.Should().Be(8);
         settings.QueryLimits.MaxBatchDescriptorBytes.Should().Be(65_536);
-        settings.QueryLimits.MaxConcurrentAStarQueries.Should().Be(8);
+        settings.QueryLimits.MaxConcurrentNavigationQueries.Should().Be(8);
         settings.QueryLimits.AStarWorkspaceMapCapacity.Should().Be(16);
         settings.QueryLimits.AStarWorkspaceEndpointPageCapacity.Should().Be(512);
         settings.QueryLimits.AStarWorkspaceComponentCapacity.Should().Be(512);
@@ -62,6 +62,15 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.QueryLimits.MaxAStarSinglePayloadBytes.Should().Be(262_144);
         settings.QueryLimits.MaxAStarActivePayloadBytes.Should().Be(2_097_152);
         settings.QueryLimits.MaxAStarActivePayloadLeases.Should().Be(8);
+        settings.QueryLimits.FlowWorkspaceMapCapacity.Should().Be(16);
+        settings.QueryLimits.FlowWorkspaceEndpointPageCapacity.Should().Be(512);
+        settings.QueryLimits.FlowWorkspaceComponentCapacity.Should().Be(512);
+        settings.QueryLimits.FlowWorkspaceNodeCapacity.Should().Be(4_096);
+        settings.QueryLimits.MaxFlowCacheEntries.Should().Be(128);
+        settings.QueryLimits.MaxFlowReusablePayloadBytes.Should().Be(33_554_432);
+        settings.QueryLimits.MaxFlowSinglePayloadBytes.Should().Be(524_288);
+        settings.QueryLimits.MaxFlowActivePayloadBytes.Should().Be(4_194_304);
+        settings.QueryLimits.MaxFlowActivePayloadLeases.Should().Be(8);
     }
 
     [Fact]
@@ -229,11 +238,15 @@ public sealed class TrailblazerWorldContextSettingsTests
     [Fact]
     public void QueryLimits_ShouldRejectNegativeComponentCapacity()
     {
-        Action create = () => _ = CreateQueryLimits(
+        Action aStar = () => _ = CreateQueryLimits(
             maxConcurrentQueries: 1,
-            componentCapacity: -1);
+            aStarComponentCapacity: -1);
+        Action flow = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            flowComponentCapacity: -1);
 
-        create.Should().Throw<ArgumentOutOfRangeException>();
+        aStar.Should().Throw<ArgumentOutOfRangeException>();
+        flow.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     private static TrailblazerWorldContextSettings CreateSettings(
@@ -291,17 +304,27 @@ public sealed class TrailblazerWorldContextSettingsTests
 
     private static NavigationQueryLimits CreateQueryLimits(
         int maxConcurrentQueries,
-        int componentCapacity = 1) => new(
+        int aStarComponentCapacity = 1,
+        int flowComponentCapacity = 1) => new(
             maxBatchItems: 1,
             maxBatchDescriptorBytes: 264,
-            maxConcurrentAStarQueries: maxConcurrentQueries,
+            maxConcurrentNavigationQueries: maxConcurrentQueries,
             aStarWorkspaceMapCapacity: 1,
             aStarWorkspaceEndpointPageCapacity: 1,
+            aStarWorkspaceComponentCapacity: aStarComponentCapacity,
             aStarWorkspaceNodeCapacity: 1,
             maxAStarCacheEntries: 1,
             maxAStarReusablePayloadBytes: 1,
             maxAStarSinglePayloadBytes: 1,
             maxAStarActivePayloadBytes: 1,
             maxAStarActivePayloadLeases: 1,
-            aStarWorkspaceComponentCapacity: componentCapacity);
+            flowWorkspaceMapCapacity: 1,
+            flowWorkspaceEndpointPageCapacity: 1,
+            flowWorkspaceComponentCapacity: flowComponentCapacity,
+            flowWorkspaceNodeCapacity: 1,
+            maxFlowCacheEntries: 1,
+            maxFlowReusablePayloadBytes: 1,
+            maxFlowSinglePayloadBytes: 1,
+            maxFlowActivePayloadBytes: 1,
+            maxFlowActivePayloadLeases: 1);
 }

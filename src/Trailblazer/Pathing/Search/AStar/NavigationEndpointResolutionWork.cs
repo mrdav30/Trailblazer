@@ -48,7 +48,7 @@ internal sealed class NavigationEndpointResolutionWork
 {
     private readonly GridWorld _world;
     private readonly NavigationWorkMeter _meter;
-    private readonly NavigationAStarWorkspace _workspace;
+    private readonly NavigationEndpointWorkspace _workspace;
     private NavigationWorldGraph _graph = null!;
     private NavigationEndpoint _endpoint;
     private TraversalEvaluator _evaluator;
@@ -64,7 +64,7 @@ internal sealed class NavigationEndpointResolutionWork
         NavigationEndpoint endpoint,
         TraversalEvaluator evaluator,
         NavigationWorkMeter meter,
-        NavigationAStarWorkspace workspace)
+        NavigationEndpointWorkspace workspace)
         : this(world, meter, workspace)
     {
         Begin(graph, endpoint, evaluator);
@@ -73,7 +73,7 @@ internal sealed class NavigationEndpointResolutionWork
     internal NavigationEndpointResolutionWork(
         GridWorld world,
         NavigationWorkMeter meter,
-        NavigationAStarWorkspace workspace)
+        NavigationEndpointWorkspace workspace)
     {
         SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
@@ -97,7 +97,7 @@ internal sealed class NavigationEndpointResolutionWork
         _cursorBegun = false;
         _hasResult = false;
         Result = default;
-        _workspace.ResetEndpointResolution();
+        _workspace.ResetResolution();
         _discoveryComplete = endpoint.MapId == null && graph.MapCount == 0;
         Status = (endpoint.MapId == null
                 && graph.MapCount > _workspace.CoveredAddressGenerations.Length)
@@ -264,7 +264,7 @@ internal sealed class NavigationEndpointResolutionWork
         {
             return true;
         }
-        if (!_workspace.TryRecordEndpointPage(
+        if (!_workspace.TryRecordPage(
                 mapId,
                 node.CellSlot / NavigationSemanticPage.SlotCount))
         {
@@ -340,7 +340,7 @@ internal sealed class NavigationEndpointResolutionWork
             {
                 status = NavigationEndpointResolutionStatus.Stale;
             }
-            else if (!_workspace.TryRecordEndpointComponent(componentKey))
+            else if (!_workspace.TryRecordComponent(componentKey))
             {
                 status = NavigationEndpointResolutionStatus.CapacityExceeded;
             }

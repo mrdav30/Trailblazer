@@ -143,6 +143,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
         cache.CachedBytes.Should().Be(fixture.Far.RetainedBytes);
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease canonicalLease)
@@ -293,6 +294,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
 
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease checkout)
@@ -362,6 +364,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
         cache.TryReservePayload(fixture.Far.RetainedBytes, out _).Should().BeFalse();
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out _)
@@ -394,6 +397,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
         cache.ReservedPayloadBytes.Should().Be(0);
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out _)

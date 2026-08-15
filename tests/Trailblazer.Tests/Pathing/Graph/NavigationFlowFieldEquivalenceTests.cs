@@ -552,7 +552,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
             policy!,
             TraversalMedium.Solid,
             new NavigationWorkMeter(query.Budget));
-        var workspace = new NavigationFlowFieldWorkspace(512, 512, 512);
+        var workspace = new NavigationFlowFieldWorkspace(0, 512, 512, 512);
         using var work = new NavigationFlowFieldWork(resolved, workspace);
         for (int step = 0;
             step < 16_384 && work.Status == NavigationFlowFieldStatus.Pending;

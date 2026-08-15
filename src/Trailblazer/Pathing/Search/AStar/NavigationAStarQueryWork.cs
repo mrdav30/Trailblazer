@@ -60,7 +60,10 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         _store = store;
         _workspace = workspace;
         _cache = cache;
-        _admission = new NavigationQueryAdmissionWork(world, workspace);
+        _admission = new NavigationQueryAdmissionWork(
+            world,
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
     }
 
     internal NavigationAStarQueryStatus Status

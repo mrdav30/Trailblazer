@@ -109,11 +109,11 @@ public sealed class TrailblazerWorldContextSettings
             "Dependency work must fit one exact area-policy publication.");
         ThrowIfNonPositive(maxConcurrentSnapshotLeases, nameof(maxConcurrentSnapshotLeases));
         SwiftThrowHelper.ThrowIfArgument(
-            queryLimits.MaxConcurrentAStarQueries <= 0,
+            queryLimits.MaxConcurrentNavigationQueries <= 0,
             nameof(queryLimits),
             "Query limits must be explicitly initialized.");
         SwiftThrowHelper.ThrowIfArgument(
-            queryLimits.MaxConcurrentAStarQueries > maxConcurrentSnapshotLeases,
+            queryLimits.MaxConcurrentNavigationQueries > maxConcurrentSnapshotLeases,
             nameof(queryLimits),
             "Concurrent queries cannot exceed the context snapshot-lease ceiling.");
 
@@ -184,7 +184,7 @@ public sealed class TrailblazerWorldContextSettings
     /// <summary>Gets the maximum concurrently checked-out immutable graph snapshots.</summary>
     public int MaxConcurrentSnapshotLeases { get; }
 
-    /// <summary>Gets the context-owned A* query admission and retention ceilings.</summary>
+    /// <summary>Gets the context-owned navigation query admission and retention ceilings.</summary>
     public NavigationQueryLimits QueryLimits { get; }
 
     private static TrailblazerWorldContextSettings CreateDefault() => new(

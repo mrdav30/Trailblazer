@@ -35,6 +35,37 @@ public sealed class NavigationAStarAdmissionTests
         Fixed64.One);
 
     [Fact]
+    public void AggregateCoordinator_ShouldBoundAStarAgainstFlowReservation()
+    {
+        using var world = new GridWorld();
+        using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
+        var coordinator = new NavigationQueryAdmissionCoordinator(1);
+        coordinator.TryReservePrefix(
+                PathAlgorithm.FlowField,
+                requestedCount: 1,
+                out NavigationQueryCapacityReservation flow)
+            .Should().Be(1);
+        using var gate = CreateGate(
+            world,
+            store,
+            CreateLimits(maxBatchItems: 1, maxConcurrentQueries: 1),
+            coordinator);
+
+        gate.Begin(Query(maxExpandedNodes: 0), out NavigationAStarBatchWork rejected)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+        rejected.AdmittedCount.Should().Be(0);
+        rejected.GetStatus(0).Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
+        rejected.Dispose();
+        store.ActiveLeaseCount.Should().Be(0);
+
+        coordinator.Release(flow);
+        gate.Begin(Query(maxExpandedNodes: 0), out NavigationAStarBatchWork admitted)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+        admitted.Dispose();
+        coordinator.ActiveCount.Should().Be(0);
+    }
+
+    [Fact]
     public void PayloadCache_ShouldReserveActiveLeaseSlots()
     {
         var cache = new NavigationAStarPayloadCache(
@@ -59,7 +90,7 @@ public sealed class NavigationAStarAdmissionTests
     {
         using var world = new GridWorld();
         using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 2);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             CreateLimits(maxBatchItems: 1, maxConcurrentQueries: 2));
@@ -90,7 +121,7 @@ public sealed class NavigationAStarAdmissionTests
     {
         using var world = new GridWorld();
         using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             CreateLimits(
@@ -115,7 +146,7 @@ public sealed class NavigationAStarAdmissionTests
         gate.PayloadCache.ReservedLeaseCount.Should().Be(0);
         store.ActiveLeaseCount.Should().Be(0);
 
-        using var acceptedGate = new NavigationAStarAdmissionGate(
+        using var acceptedGate = CreateGate(
             world,
             store,
             CreateLimits(
@@ -136,7 +167,7 @@ public sealed class NavigationAStarAdmissionTests
     {
         using var world = new GridWorld();
         using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             CreateLimits(maxBatchItems: 1, maxConcurrentQueries: 1));
@@ -156,7 +187,7 @@ public sealed class NavigationAStarAdmissionTests
     {
         using var world = new GridWorld();
         using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 3);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             CreateLimits(
@@ -227,7 +258,7 @@ public sealed class NavigationAStarAdmissionTests
     {
         using var world = new GridWorld();
         using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             CreateLimits(maxBatchItems: 1, maxConcurrentQueries: 1));
@@ -262,13 +293,13 @@ public sealed class NavigationAStarAdmissionTests
             out Vector3d start,
             out Vector3d end);
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             new NavigationQueryLimits(
                 maxBatchItems: 1,
                 maxBatchDescriptorBytes: 1_024,
-                maxConcurrentAStarQueries: 1,
+                maxConcurrentNavigationQueries: 1,
                 aStarWorkspaceMapCapacity: 1,
                 aStarWorkspaceEndpointPageCapacity: 2,
                 aStarWorkspaceNodeCapacity: 2,
@@ -277,7 +308,16 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 1_024,
                 maxAStarActivePayloadLeases: 1,
-                aStarWorkspaceComponentCapacity: 4));
+                aStarWorkspaceComponentCapacity: 4,
+                flowWorkspaceMapCapacity: 1,
+                flowWorkspaceEndpointPageCapacity: 2,
+                flowWorkspaceComponentCapacity: 4,
+                flowWorkspaceNodeCapacity: 2,
+                maxFlowCacheEntries: 1,
+                maxFlowReusablePayloadBytes: 2_048,
+                maxFlowSinglePayloadBytes: 1_024,
+                maxFlowActivePayloadBytes: 1_024,
+                maxFlowActivePayloadLeases: 1));
         PathQuery query = Query(start, end, maxExpandedNodes: 2);
 
         gate.Begin(query, out NavigationAStarBatchWork first)
@@ -342,13 +382,13 @@ public sealed class NavigationAStarAdmissionTests
             out Vector3d start,
             out Vector3d end);
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             new NavigationQueryLimits(
                 maxBatchItems: 1,
                 maxBatchDescriptorBytes: 1_024,
-                maxConcurrentAStarQueries: 1,
+                maxConcurrentNavigationQueries: 1,
                 aStarWorkspaceMapCapacity: 1,
                 aStarWorkspaceEndpointPageCapacity: 2,
                 aStarWorkspaceNodeCapacity: 2,
@@ -357,7 +397,16 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 1_024,
                 maxAStarActivePayloadLeases: 1,
-                aStarWorkspaceComponentCapacity: 4));
+                aStarWorkspaceComponentCapacity: 4,
+                flowWorkspaceMapCapacity: 1,
+                flowWorkspaceEndpointPageCapacity: 2,
+                flowWorkspaceComponentCapacity: 4,
+                flowWorkspaceNodeCapacity: 2,
+                maxFlowCacheEntries: 1,
+                maxFlowReusablePayloadBytes: 2_048,
+                maxFlowSinglePayloadBytes: 1_024,
+                maxFlowActivePayloadBytes: 1_024,
+                maxFlowActivePayloadLeases: 1));
         PathQuery query = Query(start, end, maxExpandedNodes: 2);
         gate.Begin(query, out NavigationAStarBatchWork created)
             .Should().Be(NavigationAStarQueryStatus.Pending);
@@ -540,13 +589,13 @@ public sealed class NavigationAStarAdmissionTests
             out Vector3d start,
             out Vector3d end);
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 2);
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             new NavigationQueryLimits(
                 maxBatchItems: 2,
                 maxBatchDescriptorBytes: 1_024,
-                maxConcurrentAStarQueries: 2,
+                maxConcurrentNavigationQueries: 2,
                 aStarWorkspaceMapCapacity: 1,
                 aStarWorkspaceEndpointPageCapacity: 2,
                 aStarWorkspaceNodeCapacity: 2,
@@ -555,7 +604,16 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 2_048,
                 maxAStarActivePayloadLeases: 2,
-                aStarWorkspaceComponentCapacity: 4));
+                aStarWorkspaceComponentCapacity: 4,
+                flowWorkspaceMapCapacity: 1,
+                flowWorkspaceEndpointPageCapacity: 2,
+                flowWorkspaceComponentCapacity: 4,
+                flowWorkspaceNodeCapacity: 2,
+                maxFlowCacheEntries: 2,
+                maxFlowReusablePayloadBytes: 4_096,
+                maxFlowSinglePayloadBytes: 1_024,
+                maxFlowActivePayloadBytes: 2_048,
+                maxFlowActivePayloadLeases: 2));
         PathQuery queryA = Query(start, end, maxExpandedNodes: 2);
         PathQuery queryB = Query(end, start, maxExpandedNodes: 2);
         PathQuery queryC = Query(start, end, maxExpandedNodes: 2, maxEvaluatedEdges: 7);
@@ -609,6 +667,26 @@ public sealed class NavigationAStarAdmissionTests
         work.IsAdmissionComplete.Should().BeTrue();
     }
 
+    private static NavigationAStarAdmissionGate CreateGate(
+        GridWorld world,
+        NavigationWorldGraphStore store,
+        NavigationQueryLimits limits) => new(
+            world,
+            store,
+            limits,
+            new NavigationQueryAdmissionCoordinator(
+                limits.MaxConcurrentNavigationQueries));
+
+    private static NavigationAStarAdmissionGate CreateGate(
+        GridWorld world,
+        NavigationWorldGraphStore store,
+        NavigationQueryLimits limits,
+        NavigationQueryAdmissionCoordinator coordinator) => new(
+            world,
+            store,
+            limits,
+            coordinator);
+
     private static NavigationQueryLimits CreateLimits(
         int maxBatchItems = 8,
         int maxConcurrentQueries = 8,
@@ -618,7 +696,7 @@ public sealed class NavigationAStarAdmissionTests
         int maxActivePayloadLeases = 8) => new(
             maxBatchItems,
             maxBatchDescriptorBytes,
-            maxConcurrentAStarQueries: maxConcurrentQueries,
+            maxConcurrentNavigationQueries: maxConcurrentQueries,
             aStarWorkspaceMapCapacity: 0,
             aStarWorkspaceEndpointPageCapacity: 0,
             aStarWorkspaceNodeCapacity: 8,
@@ -627,7 +705,16 @@ public sealed class NavigationAStarAdmissionTests
             maxAStarSinglePayloadBytes: maxSinglePayloadBytes,
             maxAStarActivePayloadBytes: maxActivePayloadBytes,
             maxAStarActivePayloadLeases: maxActivePayloadLeases,
-            aStarWorkspaceComponentCapacity: 2);
+            aStarWorkspaceComponentCapacity: 2,
+            flowWorkspaceMapCapacity: 0,
+            flowWorkspaceEndpointPageCapacity: 0,
+            flowWorkspaceComponentCapacity: 2,
+            flowWorkspaceNodeCapacity: 8,
+            maxFlowCacheEntries: 8,
+            maxFlowReusablePayloadBytes: 16_384,
+            maxFlowSinglePayloadBytes: maxSinglePayloadBytes,
+            maxFlowActivePayloadBytes: maxActivePayloadBytes,
+            maxFlowActivePayloadLeases: maxActivePayloadLeases);
 
     private static PathQuery Query(int maxExpandedNodes) => new(
         new NavigationEndpoint(Vector3d.Zero),
@@ -666,13 +753,13 @@ public sealed class NavigationAStarAdmissionTests
         Vector3d end,
         bool reverseCompletion)
     {
-        using var gate = new NavigationAStarAdmissionGate(
+        using var gate = CreateGate(
             world,
             store,
             new NavigationQueryLimits(
                 maxBatchItems: 2,
                 maxBatchDescriptorBytes: 1_024,
-                maxConcurrentAStarQueries: 2,
+                maxConcurrentNavigationQueries: 2,
                 aStarWorkspaceMapCapacity: 1,
                 aStarWorkspaceEndpointPageCapacity: 2,
                 aStarWorkspaceNodeCapacity: 2,
@@ -681,7 +768,16 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 2_048,
                 maxAStarActivePayloadLeases: 2,
-                aStarWorkspaceComponentCapacity: 4));
+                aStarWorkspaceComponentCapacity: 4,
+                flowWorkspaceMapCapacity: 1,
+                flowWorkspaceEndpointPageCapacity: 2,
+                flowWorkspaceComponentCapacity: 4,
+                flowWorkspaceNodeCapacity: 2,
+                maxFlowCacheEntries: 1,
+                maxFlowReusablePayloadBytes: 4_096,
+                maxFlowSinglePayloadBytes: 1_024,
+                maxFlowActivePayloadBytes: 2_048,
+                maxFlowActivePayloadLeases: 2));
         PathQuery query = Query(start, end, maxExpandedNodes: 2);
         var batch = new PathQueryBatch(
             new[]

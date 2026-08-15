@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationAStarAdmissionGate.cs
+// NavigationFlowAdmissionGate.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -11,21 +11,20 @@ using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Serializes context-owned A* resource admission.</summary>
-internal sealed class NavigationAStarAdmissionGate : IDisposable
+/// <summary>Serializes context-owned flow resource admission.</summary>
+internal sealed class NavigationFlowAdmissionGate : IDisposable
 {
     private readonly object _sync = new();
     private readonly NavigationWorldGraphStore _store;
     private readonly NavigationQueryLimits _limits;
     private readonly NavigationQueryAdmissionCoordinator _coordinator;
-    private readonly NavigationAStarPayloadCache _cache;
-    private readonly NavigationAStarQueryWork[] _queries;
+    private readonly NavigationFlowFieldPayloadCache _cache;
+    private readonly NavigationFlowQueryWork[] _queries;
     private readonly NavigationWorldGraphLease?[] _leases;
-    private readonly NavigationAStarPayloadReservation[] _reservations;
     private readonly BatchDescriptor[] _descriptors;
+    private NavigationQueryCapacityReservation _capacityReservation;
     private ulong _generation;
     private ulong _activeGeneration;
-    private NavigationQueryCapacityReservation _capacityReservation;
     private int _activeCount;
     private int _activeAdmittedCount;
     private int _nextAdmission;
@@ -33,7 +32,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
     private bool _active;
     private bool _disposed;
 
-    internal NavigationAStarAdmissionGate(
+    internal NavigationFlowAdmissionGate(
         GridWorld world,
         NavigationWorldGraphStore store,
         NavigationQueryLimits limits,
@@ -49,55 +48,54 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         _store = store;
         _limits = limits;
         _coordinator = coordinator;
-        _cache = new NavigationAStarPayloadCache(
-            limits.MaxAStarCacheEntries,
-            limits.MaxAStarReusablePayloadBytes,
-            limits.MaxAStarSinglePayloadBytes,
-            limits.MaxAStarActivePayloadBytes,
-            limits.MaxAStarActivePayloadLeases);
-        _queries = new NavigationAStarQueryWork[limits.MaxConcurrentNavigationQueries];
+        _cache = new NavigationFlowFieldPayloadCache(
+            limits.MaxFlowCacheEntries,
+            limits.MaxFlowReusablePayloadBytes,
+            limits.MaxFlowSinglePayloadBytes,
+            limits.MaxFlowActivePayloadBytes,
+            limits.MaxFlowActivePayloadLeases);
+        _queries = new NavigationFlowQueryWork[limits.MaxConcurrentNavigationQueries];
         _leases = new NavigationWorldGraphLease[limits.MaxConcurrentNavigationQueries];
-        _reservations = new NavigationAStarPayloadReservation[limits.MaxConcurrentNavigationQueries];
         for (int i = 0; i < _queries.Length; i++)
         {
-            var workspace = new NavigationAStarWorkspace(
-                mapCapacity: limits.AStarWorkspaceMapCapacity,
-                endpointPageCapacity: limits.AStarWorkspaceEndpointPageCapacity,
-                componentCapacity: limits.AStarWorkspaceComponentCapacity,
-                nodeCapacity: limits.AStarWorkspaceNodeCapacity);
-            _queries[i] = new NavigationAStarQueryWork(world, store, workspace, _cache);
+            var workspace = new NavigationFlowFieldWorkspace(
+                limits.FlowWorkspaceMapCapacity,
+                limits.FlowWorkspaceEndpointPageCapacity,
+                limits.FlowWorkspaceComponentCapacity,
+                limits.FlowWorkspaceNodeCapacity);
+            _queries[i] = new NavigationFlowQueryWork(world, store, workspace, _cache);
         }
         _descriptors = new BatchDescriptor[limits.MaxBatchItems];
     }
 
-    internal NavigationAStarPayloadCache PayloadCache => _cache;
+    internal NavigationFlowFieldPayloadCache PayloadCache => _cache;
 
-    internal NavigationAStarQueryStatus Begin(
+    internal NavigationFlowQueryStatus Begin(
         PathQuery query,
-        out NavigationAStarBatchWork work)
+        out NavigationFlowBatchWork work)
     {
         lock (_sync)
         {
             if (!CanBegin() || !FitsSingleEnvelope(query))
             {
                 work = default;
-                return NavigationAStarQueryStatus.CapacityExceeded;
+                return NavigationFlowQueryStatus.CapacityExceeded;
             }
             _descriptors[0] = new BatchDescriptor(0, 0, query);
             return BeginCore(1, out work);
         }
     }
 
-    internal NavigationAStarQueryStatus Begin(
+    internal NavigationFlowQueryStatus Begin(
         PathQueryBatch batch,
-        out NavigationAStarBatchWork work)
+        out NavigationFlowBatchWork work)
     {
         lock (_sync)
         {
             if (!CanBegin() || !FitsBatchEnvelope(batch))
             {
                 work = default;
-                return NavigationAStarQueryStatus.CapacityExceeded;
+                return NavigationFlowQueryStatus.CapacityExceeded;
             }
             for (int i = 0; i < batch.Count; i++)
             {
@@ -111,25 +109,26 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     public void Dispose()
     {
-        NavigationAStarBatchWork active = default;
+        NavigationFlowBatchWork active = default;
         lock (_sync)
         {
             if (_disposed)
                 return;
             _disposed = true;
             if (_active)
-                active = new NavigationAStarBatchWork(this, _activeGeneration);
+                active = new NavigationFlowBatchWork(this, _activeGeneration);
         }
         active.Dispose();
+        _cache.Dispose();
     }
 
     internal void CancelActive()
     {
-        NavigationAStarBatchWork active = default;
+        NavigationFlowBatchWork active = default;
         lock (_sync)
         {
             if (_active)
-                active = new NavigationAStarBatchWork(this, _activeGeneration);
+                active = new NavigationFlowBatchWork(this, _activeGeneration);
         }
         active.Dispose();
     }
@@ -144,60 +143,35 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         && batch.Count <= _limits.MaxBatchItems
         && batch.GetLogicalRetainedBytes() <= _limits.MaxBatchDescriptorBytes;
 
-    private bool FitsSingleEnvelope(PathQuery query)
-    {
-        return PathQueryBatchItem.GetLogicalRetainedBytes(query)
-            <= _limits.MaxBatchDescriptorBytes;
-    }
+    private bool FitsSingleEnvelope(PathQuery query) =>
+        PathQueryBatchItem.GetLogicalRetainedBytes(query)
+        <= _limits.MaxBatchDescriptorBytes;
 
-    private NavigationAStarQueryStatus BeginCore(
+    private NavigationFlowQueryStatus BeginCore(
         int count,
-        out NavigationAStarBatchWork work)
+        out NavigationFlowBatchWork work)
     {
         int candidateCount = _coordinator.TryReservePrefix(
-            PathAlgorithm.AStar,
+            PathAlgorithm.FlowField,
             Math.Min(count, _queries.Length),
             out _capacityReservation);
         int leased = _store.TryAcquirePrefix(_leases.AsSpan(0, candidateCount));
         _capacityReservation = _coordinator.Trim(_capacityReservation, leased);
-
-        int admitted = 0;
-        for (; admitted < leased; admitted++)
-        {
-            PathQuery query = _descriptors[admitted].Query;
-            long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
-                Math.Min(
-                    _limits.AStarWorkspaceNodeCapacity,
-                    query.Budget.MaxExpandedNodes),
-                _limits.AStarWorkspaceComponentCapacity,
-                _limits.AStarWorkspaceEndpointPageCapacity);
-            if (!_cache.TryReservePayload(maximumBytes, out _reservations[admitted]))
-                break;
-        }
-        for (int i = admitted; i < leased; i++)
-        {
-            _leases[i]!.Dispose();
-            _leases[i] = null;
-        }
-        _capacityReservation = _coordinator.Trim(_capacityReservation, admitted);
-        for (int i = 0; i < admitted; i++)
+        for (int i = 0; i < leased; i++)
         {
             _descriptors[i].SlotIndex = i;
-            _queries[i].BeginReserved(
-                _descriptors[i].Query,
-                _leases[i]!,
-                ref _reservations[i]);
+            _queries[i].Begin(_descriptors[i].Query, _leases[i]!);
             _leases[i] = null;
         }
         _generation = checked(_generation + 1UL);
         _activeGeneration = _generation;
         _activeCount = count;
-        _activeAdmittedCount = admitted;
+        _activeAdmittedCount = leased;
         _nextAdmission = 0;
         _nextPublication = 0;
         _active = true;
-        work = new NavigationAStarBatchWork(this, _activeGeneration);
-        return NavigationAStarQueryStatus.Pending;
+        work = new NavigationFlowBatchWork(this, _activeGeneration);
+        return NavigationFlowQueryStatus.Pending;
     }
 
     private BatchDescriptor GetDescriptor(int inputIndex)
@@ -211,10 +185,10 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             if (_descriptors[i].InputIndex == inputIndex)
                 return _descriptors[i];
         }
-        throw new InvalidOperationException("The A* batch descriptor set is inconsistent.");
+        throw new InvalidOperationException("The flow batch descriptor set is inconsistent.");
     }
 
-    internal int GetAdmittedCount(NavigationAStarBatchWork work)
+    internal int GetAdmittedCount(NavigationFlowBatchWork work)
     {
         lock (_sync)
         {
@@ -223,7 +197,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         }
     }
 
-    internal bool IsAdmissionComplete(NavigationAStarBatchWork work)
+    internal bool IsAdmissionComplete(NavigationFlowBatchWork work)
     {
         lock (_sync)
         {
@@ -232,8 +206,8 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         }
     }
 
-    internal NavigationAStarQueryStatus GetStatus(
-        NavigationAStarBatchWork work,
+    internal NavigationFlowQueryStatus GetStatus(
+        NavigationFlowBatchWork work,
         int inputIndex)
     {
         lock (_sync)
@@ -241,15 +215,15 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             EnsureActive(work);
             BatchDescriptor descriptor = GetDescriptor(inputIndex);
             if (descriptor.SlotIndex < 0)
-                return NavigationAStarQueryStatus.CapacityExceeded;
-            NavigationAStarQueryWork query = _queries[descriptor.SlotIndex];
+                return NavigationFlowQueryStatus.CapacityExceeded;
+            NavigationFlowQueryWork query = _queries[descriptor.SlotIndex];
             lock (query)
                 return query.Status;
         }
     }
 
     internal bool IsReadyToPublish(
-        NavigationAStarBatchWork work,
+        NavigationFlowBatchWork work,
         int inputIndex)
     {
         lock (_sync)
@@ -262,7 +236,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
     }
 
     internal void AdvanceAdmission(
-        NavigationAStarBatchWork work,
+        NavigationFlowBatchWork work,
         int lookupStepLimit,
         int endpointCandidateStepLimit)
     {
@@ -271,19 +245,24 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             EnsureActive(work);
             while (_nextAdmission < _activeAdmittedCount)
             {
-                NavigationAStarQueryWork query = _queries[_nextAdmission];
+                NavigationFlowQueryWork query = _queries[_nextAdmission];
                 query.PrepareSearchOrCheckout(
                     lookupStepLimit,
                     endpointCandidateStepLimit);
                 if (!query.IsPrepared)
                     return;
+                if (query.ReservationRejected)
+                {
+                    CutCapacitySuffix(_nextAdmission);
+                    return;
+                }
                 _nextAdmission++;
             }
         }
     }
 
-    internal NavigationAStarQueryStatus AdvanceSearch(
-        NavigationAStarBatchWork work,
+    internal NavigationFlowQueryStatus AdvanceSearch(
+        NavigationFlowBatchWork work,
         int inputIndex,
         int lookupStepLimit,
         int nodeStepLimit,
@@ -291,16 +270,19 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         int connectionStepLimit)
     {
         BatchDescriptor descriptor;
-        NavigationAStarQueryWork query;
+        NavigationFlowQueryWork query;
         lock (_sync)
         {
             EnsureActive(work);
+            if (_nextAdmission < _activeAdmittedCount)
+            {
+                throw new InvalidOperationException(
+                    "The flow batch has not completed its sequential preparation barrier.");
+            }
             descriptor = GetDescriptor(inputIndex);
             if (descriptor.SlotIndex < 0)
-                return NavigationAStarQueryStatus.CapacityExceeded;
+                return NavigationFlowQueryStatus.CapacityExceeded;
             query = _queries[descriptor.SlotIndex];
-            if (!query.IsPrepared)
-                throw new InvalidOperationException("The query has not completed sequential admission.");
             Monitor.Enter(query);
         }
         try
@@ -318,18 +300,23 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
     }
 
     internal int PublishReadyPrefix(
-        NavigationAStarBatchWork work,
+        NavigationFlowBatchWork work,
         int maximumCount)
     {
         SwiftThrowHelper.ThrowIfNegative(maximumCount, nameof(maximumCount));
         lock (_sync)
         {
             EnsureActive(work);
+            if (_nextAdmission < _activeAdmittedCount)
+            {
+                throw new InvalidOperationException(
+                    "The flow batch has not completed its sequential preparation barrier.");
+            }
             int published = 0;
             while (published < maximumCount
                 && _nextPublication < _activeAdmittedCount)
             {
-                NavigationAStarQueryWork query = _queries[_nextPublication];
+                NavigationFlowQueryWork query = _queries[_nextPublication];
                 lock (query)
                 {
                     if (!query.IsReadyToPublish)
@@ -343,8 +330,8 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         }
     }
 
-    internal NavigationAStarPayloadLease TakeResult(
-        NavigationAStarBatchWork work,
+    internal NavigationFlowQueryResult TakeResult(
+        NavigationFlowBatchWork work,
         int inputIndex)
     {
         lock (_sync)
@@ -352,12 +339,12 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             EnsureActive(work);
             BatchDescriptor descriptor = GetDescriptor(inputIndex);
             if (descriptor.SlotIndex < 0)
-                throw new InvalidOperationException("The query was not admitted.");
+                throw new InvalidOperationException("The flow query was not admitted.");
             return _queries[descriptor.SlotIndex].TakeResult();
         }
     }
 
-    internal void Release(NavigationAStarBatchWork work)
+    internal void Release(NavigationFlowBatchWork work)
     {
         lock (_sync)
         {
@@ -381,13 +368,28 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         }
     }
 
-    private void EnsureActive(NavigationAStarBatchWork work)
+    private void CutCapacitySuffix(int firstRejected)
     {
-        if (!IsActive(work))
-            throw new ObjectDisposedException(nameof(NavigationAStarBatchWork));
+        int previousCount = _activeAdmittedCount;
+        for (int i = firstRejected; i < previousCount; i++)
+        {
+            _queries[i].Dispose();
+            _descriptors[i].SlotIndex = -1;
+        }
+        _activeAdmittedCount = firstRejected;
+        _nextAdmission = firstRejected;
+        _capacityReservation = _coordinator.Trim(
+            _capacityReservation,
+            firstRejected);
     }
 
-    private bool IsActive(NavigationAStarBatchWork work) =>
+    private void EnsureActive(NavigationFlowBatchWork work)
+    {
+        if (!IsActive(work))
+            throw new ObjectDisposedException(nameof(NavigationFlowBatchWork));
+    }
+
+    private bool IsActive(NavigationFlowBatchWork work) =>
         _active
         && work.IsOwnedBy(this)
         && work.Generation == _activeGeneration;
@@ -415,60 +417,4 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 : InputIndex.CompareTo(other.InputIndex);
         }
     }
-}
-
-/// <summary>Coordinates one deterministically admitted A* query batch.</summary>
-internal readonly struct NavigationAStarBatchWork : IDisposable
-{
-    private readonly NavigationAStarAdmissionGate? _owner;
-
-    internal NavigationAStarBatchWork(
-        NavigationAStarAdmissionGate owner,
-        ulong generation)
-    {
-        _owner = owner;
-        Generation = generation;
-    }
-
-    internal ulong Generation { get; }
-
-    internal int AdmittedCount => Owner.GetAdmittedCount(this);
-
-    internal bool IsAdmissionComplete => Owner.IsAdmissionComplete(this);
-
-    internal NavigationAStarQueryStatus GetStatus(int inputIndex) =>
-        Owner.GetStatus(this, inputIndex);
-
-    internal bool IsReadyToPublish(int inputIndex) =>
-        Owner.IsReadyToPublish(this, inputIndex);
-
-    internal void AdvanceAdmission(int lookupStepLimit, int endpointCandidateStepLimit) =>
-        Owner.AdvanceAdmission(this, lookupStepLimit, endpointCandidateStepLimit);
-
-    internal NavigationAStarQueryStatus AdvanceSearch(
-        int inputIndex,
-        int lookupStepLimit,
-        int nodeStepLimit,
-        int edgeStepLimit,
-        int connectionStepLimit) => Owner.AdvanceSearch(
-            this,
-            inputIndex,
-            lookupStepLimit,
-            nodeStepLimit,
-            edgeStepLimit,
-            connectionStepLimit);
-
-    internal int PublishReadyPrefix(int maximumCount) =>
-        Owner.PublishReadyPrefix(this, maximumCount);
-
-    internal NavigationAStarPayloadLease TakeResult(int inputIndex) =>
-        Owner.TakeResult(this, inputIndex);
-
-    public void Dispose() => _owner?.Release(this);
-
-    internal bool IsOwnedBy(NavigationAStarAdmissionGate owner) =>
-        ReferenceEquals(_owner, owner);
-
-    private NavigationAStarAdmissionGate Owner =>
-        _owner ?? throw new ObjectDisposedException(nameof(NavigationAStarBatchWork));
 }

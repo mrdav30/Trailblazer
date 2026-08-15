@@ -24,16 +24,25 @@ public sealed class TrailblazerPathingService
 
     private readonly NavigationGraphRuntime _navigationGraph;
     private readonly NavigationAStarAdmissionGate _navigationAStarAdmissionGate;
+    private readonly NavigationFlowAdmissionGate _navigationFlowAdmissionGate;
 
     internal TrailblazerPathingService(TrailblazerWorldContext context)
     {
         _context = context;
         State = new PathingWorldState(context);
         _navigationGraph = new NavigationGraphRuntime(context.World, context.Settings);
+        var admissionCoordinator = new NavigationQueryAdmissionCoordinator(
+            context.Settings.QueryLimits.MaxConcurrentNavigationQueries);
         _navigationAStarAdmissionGate = new NavigationAStarAdmissionGate(
             context.World,
             _navigationGraph.Store,
-            context.Settings.QueryLimits);
+            context.Settings.QueryLimits,
+            admissionCoordinator);
+        _navigationFlowAdmissionGate = new NavigationFlowAdmissionGate(
+            context.World,
+            _navigationGraph.Store,
+            context.Settings.QueryLimits,
+            admissionCoordinator);
         context.World.OnChangeCommitted += HandleCommittedChange;
     }
 
@@ -47,6 +56,9 @@ public sealed class TrailblazerPathingService
 
     internal NavigationAStarAdmissionGate NavigationAStarAdmissionGate =>
         _navigationAStarAdmissionGate;
+
+    internal NavigationFlowAdmissionGate NavigationFlowAdmissionGate =>
+        _navigationFlowAdmissionGate;
 
     internal int RetainedCompositionWorkCount =>
         _navigationGraph.RetainedCompositionWorkCount;
@@ -330,6 +342,7 @@ public sealed class TrailblazerPathingService
     {
         EnsureUsable();
         _navigationAStarAdmissionGate.CancelActive();
+        _navigationFlowAdmissionGate.CancelActive();
         _navigationGraph.Reset();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
     }
@@ -338,6 +351,7 @@ public sealed class TrailblazerPathingService
     {
         EnsureUsable();
         _navigationAStarAdmissionGate.CancelActive();
+        _navigationFlowAdmissionGate.CancelActive();
         _navigationGraph.Reset();
     }
 
@@ -348,6 +362,7 @@ public sealed class TrailblazerPathingService
 
         _context.World.OnChangeCommitted -= HandleCommittedChange;
         _navigationAStarAdmissionGate.Dispose();
+        _navigationFlowAdmissionGate.Dispose();
         State.ExternalGridBridge.Dispose();
         _navigationGraph.Dispose();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);

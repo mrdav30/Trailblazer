@@ -44,7 +44,25 @@ public sealed class NavigationSearchArchitectureTests
         "Pathing/Graph/NavigationSurfaceEdgeEnumerator.cs",
         "Pathing/Graph/TraversalEvaluator.cs",
         "Pathing/Query/NavigationQueryLimits.cs",
-        "Pathing/Query/PathQueryBatch.cs"
+        "Pathing/Query/PathQueryBatch.cs",
+        "Pathing/Search/NavigationEndpointWorkspace.cs",
+        "Pathing/Search/NavigationQueryAdmissionCoordinator.cs"
+    };
+
+    private static readonly string[] ReviewedFlowFiles =
+    {
+        "NavigationFlowAdmissionGate.cs",
+        "NavigationFlowBatchWork.cs",
+        "NavigationFlowFieldNode.cs",
+        "NavigationFlowFieldOpenHeap.cs",
+        "NavigationFlowFieldPayload.cs",
+        "NavigationFlowFieldPayloadCache.cs",
+        "NavigationFlowFieldPayloadKey.cs",
+        "NavigationFlowFieldPayloadLease.cs",
+        "NavigationFlowFieldStatus.cs",
+        "NavigationFlowFieldWork.cs",
+        "NavigationFlowFieldWorkspace.cs",
+        "NavigationFlowQueryWork.cs"
     };
 
     private static readonly string[] BannedIdentifiers =
@@ -70,6 +88,7 @@ public sealed class NavigationSearchArchitectureTests
     {
         string sourceRoot = GetSourceRoot();
         string aStarRoot = Path.Combine(sourceRoot, "Pathing", "Search", "AStar");
+        string flowRoot = Path.Combine(sourceRoot, "Pathing", "Search", "Flow");
         string[] actualNavigationFiles = Directory
             .GetFiles(aStarRoot, "Navigation*.cs", SearchOption.TopDirectoryOnly)
             .Select(Path.GetFileName)
@@ -82,8 +101,19 @@ public sealed class NavigationSearchArchitectureTests
         actualNavigationFiles.Should().Equal(
             expectedNavigationFiles,
             "every new search source must be deliberately reviewed and added to the allowlist");
+        string[] actualFlowFiles = Directory
+            .GetFiles(flowRoot, "Navigation*.cs", SearchOption.TopDirectoryOnly)
+            .Select(Path.GetFileName)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray()!;
+        actualFlowFiles.Should().Equal(
+            ReviewedFlowFiles.OrderBy(name => name, StringComparer.Ordinal),
+            "every new flow source must be deliberately reviewed and added to the allowlist");
 
-        var reviewedPaths = new List<string>(ReviewedAStarFiles.Length + ReviewedSupportingFiles.Length);
+        var reviewedPaths = new List<string>(
+            ReviewedAStarFiles.Length
+            + ReviewedFlowFiles.Length
+            + ReviewedSupportingFiles.Length);
         for (int i = 0; i < ReviewedAStarFiles.Length; i++)
             reviewedPaths.Add(Path.Combine(aStarRoot, ReviewedAStarFiles[i]));
         for (int i = 0; i < ReviewedSupportingFiles.Length; i++)
@@ -92,6 +122,8 @@ public sealed class NavigationSearchArchitectureTests
                 sourceRoot,
                 ReviewedSupportingFiles[i].Replace('/', Path.DirectorySeparatorChar)));
         }
+        for (int i = 0; i < ReviewedFlowFiles.Length; i++)
+            reviewedPaths.Add(Path.Combine(flowRoot, ReviewedFlowFiles[i]));
 
         var violations = new List<string>();
         for (int fileIndex = 0; fileIndex < reviewedPaths.Count; fileIndex++)

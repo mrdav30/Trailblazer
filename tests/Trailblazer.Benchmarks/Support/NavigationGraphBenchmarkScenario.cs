@@ -122,7 +122,7 @@ internal static class NavigationGraphBenchmarkScenario
         NavigationQueryLimits queryLimits = new(
             maxBatchItems: concurrentQueries,
             maxBatchDescriptorBytes: 65_536,
-            maxConcurrentAStarQueries: concurrentQueries,
+            maxConcurrentNavigationQueries: concurrentQueries,
             aStarWorkspaceMapCapacity: 1,
             aStarWorkspaceEndpointPageCapacity: pageCapacity,
             aStarWorkspaceNodeCapacity: nodeCapacity,
@@ -131,7 +131,16 @@ internal static class NavigationGraphBenchmarkScenario
             maxAStarSinglePayloadBytes: maximumPayloadBytes,
             maxAStarActivePayloadBytes: checked(maximumPayloadBytes * concurrentQueries),
             maxAStarActivePayloadLeases: concurrentQueries,
-            aStarWorkspaceComponentCapacity: 1);
+            aStarWorkspaceComponentCapacity: 1,
+            flowWorkspaceMapCapacity: 1,
+            flowWorkspaceEndpointPageCapacity: pageCapacity,
+            flowWorkspaceComponentCapacity: 1,
+            flowWorkspaceNodeCapacity: nodeCapacity,
+            maxFlowCacheEntries: cacheEntries,
+            maxFlowReusablePayloadBytes: Math.Max(33_554_432L, maximumPayloadBytes * cacheEntries),
+            maxFlowSinglePayloadBytes: maximumPayloadBytes,
+            maxFlowActivePayloadBytes: checked(maximumPayloadBytes * concurrentQueries),
+            maxFlowActivePayloadLeases: concurrentQueries);
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,

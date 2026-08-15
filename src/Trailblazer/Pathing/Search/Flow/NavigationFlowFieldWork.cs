@@ -71,7 +71,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         _query = query;
         _graph = query.Graph;
         _workspace = workspace;
-        _workspace.Reset();
+        _workspace.ResetSearch();
         _meter = query.Meter;
         _maximumPayloadBytes = maximumPayloadBytes;
         _heap = new NavigationFlowFieldOpenHeap(workspace);

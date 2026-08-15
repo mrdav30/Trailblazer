@@ -655,7 +655,7 @@ public sealed class NavigationFlowFieldTests
                 out NavigationSurfaceComponentKey component,
                 out _)
             .Should().BeTrue();
-        var workspace = new NavigationFlowFieldWorkspace(1, 1, 2);
+        var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 2);
 
         workspace.TryGetOrAdd(originNode, out int originSlot, out _)
             .Should().BeTrue();
@@ -704,6 +704,57 @@ public sealed class NavigationFlowFieldTests
     }
 
     [Fact]
+    public void SearchStart_ShouldPreserveEndpointDependenciesInThePublishedPayload()
+    {
+        using var world = new GridWorld();
+        VoxelIndex origin = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        var endpointCandidate = new VoxelIndex(64, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(65),
+                new[] { origin, destination, endpointCandidate },
+                "endpoint-dependency");
+        PathQuery query = ToFlowField(
+            fixture.CreateQuery(origin, destination, fixture.DefaultProfile),
+            Fixed64.Zero);
+        var endpointAddress = new NavigationCellAddress(
+            fixture.MapId,
+            endpointCandidate);
+        fixture.Graph.TryGetSurfaceComponent(
+                endpointAddress,
+                out NavigationSurfaceComponentKey endpointComponent,
+                out _)
+            .Should().BeTrue();
+        var workspace = new NavigationFlowFieldWorkspace(0, 2, 2, 2);
+        workspace.TryRecordPage(fixture.MapId, pageIndex: 1).Should().BeTrue();
+        workspace.TryRecordComponent(endpointComponent).Should().BeTrue();
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        using var work = new NavigationFlowFieldWork(
+            Resolve(
+                store,
+                fixture.Graph,
+                query,
+                new NavigationCellAddress(fixture.MapId, origin),
+                new NavigationCellAddress(fixture.MapId, destination),
+                out _),
+            workspace);
+
+        for (int step = 0;
+            step < 128 && work.Status == NavigationFlowFieldStatus.Pending;
+            step++)
+        {
+            work.Advance(32, 32, 32, 32);
+        }
+
+        work.Status.Should().Be(NavigationFlowFieldStatus.Success);
+        work.Result!.Dependencies.Pages.Should().HaveCount(2);
+        work.Result.Dependencies.Components.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void SearchAdvanceBeforePayloadConstruction_ShouldAllocateNothing()
     {
         using var world = new GridWorld();
@@ -724,7 +775,7 @@ public sealed class NavigationFlowFieldTests
         var destination = new NavigationCellAddress(
             fixture.MapId,
             cells[CellCount - 1]);
-        var workspace = new NavigationFlowFieldWorkspace(2, 2, CellCount);
+        var workspace = new NavigationFlowFieldWorkspace(0, 2, 2, CellCount);
 
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
@@ -772,7 +823,7 @@ public sealed class NavigationFlowFieldTests
         var destination = new NavigationCellAddress(
             fixture.MapId,
             cells[CellCount - 1]);
-        var workspace = new NavigationFlowFieldWorkspace(2, 1, CellCount);
+        var workspace = new NavigationFlowFieldWorkspace(0, 2, 1, CellCount);
 
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
@@ -818,7 +869,7 @@ public sealed class NavigationFlowFieldTests
             Fixed64.Zero);
         var origin = new NavigationCellAddress(fixture.MapId, cells[0]);
         var destination = new NavigationCellAddress(fixture.MapId, cells[2]);
-        var workspace = new NavigationFlowFieldWorkspace(1, 1, 3);
+        var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 3);
 
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
@@ -877,7 +928,7 @@ public sealed class NavigationFlowFieldTests
                 originAddress,
                 destinationAddress,
                 out _),
-            new NavigationFlowFieldWorkspace(2, 2, 2)))
+            new NavigationFlowFieldWorkspace(0, 2, 2, 2)))
         {
             completedStore.ActiveLeaseCount.Should().Be(1);
             for (int step = 0;
@@ -907,7 +958,7 @@ public sealed class NavigationFlowFieldTests
                 originAddress,
                 destinationAddress,
                 out _),
-            new NavigationFlowFieldWorkspace(2, 2, 2)))
+            new NavigationFlowFieldWorkspace(0, 2, 2, 2)))
         {
             failed.Advance(16, 16, 16, 16).Should().Be(
                 NavigationFlowFieldStatus.BudgetExceeded);
@@ -925,7 +976,7 @@ public sealed class NavigationFlowFieldTests
                 originAddress,
                 destinationAddress,
                 out _),
-            new NavigationFlowFieldWorkspace(2, 2, 2));
+            new NavigationFlowFieldWorkspace(0, 2, 2, 2));
         abandonedStore.ActiveLeaseCount.Should().Be(1);
 
         abandoned.Dispose();
@@ -990,6 +1041,7 @@ public sealed class NavigationFlowFieldTests
             TraversalMedium.Solid,
             meter);
         var workspace = new NavigationFlowFieldWorkspace(
+            mapCapacity: 0,
             dependencyPageCapacity,
             dependencyComponentCapacity,
             nodeCapacity);

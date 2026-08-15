@@ -203,11 +203,13 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
 
     internal NavigationFlowFieldStatus TryCheckout(
         NavigationWorldGraphStore store,
+        NavigationWorldGraph expectedGraph,
         NavigationFlowFieldPayloadKey key,
         NavigationCellAddress requiredOrigin,
         out NavigationFlowFieldPayloadLease lease)
     {
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
+        SwiftThrowHelper.ThrowIfNull(expectedGraph, nameof(expectedGraph));
         lease = default;
         NavigationFlowFieldPayload? checkedPayload = null;
         NavigationFlowFieldStatus status;
@@ -225,6 +227,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 RemoveAt(slot, invalidate: true);
                 return NavigationFlowFieldStatus.Stale;
             }
+            if (!expectedGraph.IsDependencyCurrent(entry.Payload.Dependencies))
+                return NavigationFlowFieldStatus.Pending;
             checkedPayload = entry.Payload;
             status = ClassifyCoverage(checkedPayload, requiredOrigin);
             if (status == NavigationFlowFieldStatus.Success)

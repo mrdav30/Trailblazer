@@ -100,7 +100,7 @@ public sealed class NavigationEndpointResolutionTests
                 maxResolutionDistance: Fixed64.One),
             evaluator,
             meter,
-            workspace);
+            workspace.EndpointWorkspace);
         Drain(unfiltered);
 
         unfiltered.Status.Should().Be(NavigationEndpointResolutionStatus.Success);
@@ -121,7 +121,7 @@ public sealed class NavigationEndpointResolutionTests
                 Fixed64.One),
             evaluator,
             meter,
-            workspace);
+            workspace.EndpointWorkspace);
         Drain(filtered);
 
         filtered.Status.Should().Be(NavigationEndpointResolutionStatus.Success);
@@ -158,7 +158,7 @@ public sealed class NavigationEndpointResolutionTests
                 resolution: EndpointResolutionPolicy.Strict),
             new TraversalEvaluator(graph, Profile(), Policy, TraversalMedium.Solid),
             meter,
-            workspace);
+            workspace.EndpointWorkspace);
 
         Drain(work);
 
@@ -193,7 +193,7 @@ public sealed class NavigationEndpointResolutionTests
                 new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z)),
             new TraversalEvaluator(graph, Profile(), Policy, TraversalMedium.Solid),
             meter,
-            workspace);
+            workspace.EndpointWorkspace);
 
         work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1)
             .Should().Be(NavigationEndpointResolutionStatus.Pending);
@@ -233,7 +233,7 @@ public sealed class NavigationEndpointResolutionTests
                 new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z)),
             new TraversalEvaluator(graph, Profile(), Policy, TraversalMedium.Solid),
             meter,
-            workspace);
+            workspace.EndpointWorkspace);
 
         work.Advance(lookupStepLimit: 0, endpointCandidateStepLimit: 0)
             .Should().Be(NavigationEndpointResolutionStatus.Pending);
@@ -339,7 +339,12 @@ public sealed class NavigationEndpointResolutionTests
             mapCapacity: 1,
             endpointPageCapacity: 2,
             componentCapacity: 4);
-        using var work = new NavigationQueryAdmissionWork(world, lease!, query, workspace);
+        using var work = new NavigationQueryAdmissionWork(
+            world,
+            lease!,
+            query,
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
 
         for (int step = 0;
              step < 64 && work.Status == NavigationQueryAdmissionStatus.Pending;
@@ -429,7 +434,12 @@ public sealed class NavigationEndpointResolutionTests
             mapCapacity: 3,
             endpointPageCapacity: 4,
             componentCapacity: 6);
-        using var work = new NavigationQueryAdmissionWork(world, lease!, query, workspace);
+        using var work = new NavigationQueryAdmissionWork(
+            world,
+            lease!,
+            query,
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
 
         for (int step = 0;
              step < 128 && work.Status == NavigationQueryAdmissionStatus.Pending;
@@ -465,7 +475,8 @@ public sealed class NavigationEndpointResolutionTests
             world,
             lease!,
             default,
-            workspace);
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
 
         work.Status.Should().Be(NavigationQueryAdmissionStatus.InvalidProfile);
         store.ActiveLeaseCount.Should().Be(0);
@@ -552,7 +563,8 @@ public sealed class NavigationEndpointResolutionTests
                 new NavigationAStarWorkspace(
                     mapCapacity: 1,
                     endpointPageCapacity: 2,
-                    componentCapacity: 4));
+                    componentCapacity: 4).EndpointWorkspace,
+                PathAlgorithm.AStar);
 
             Drain(exact);
 
@@ -574,7 +586,8 @@ public sealed class NavigationEndpointResolutionTests
                 new NavigationAStarWorkspace(
                     mapCapacity: 1,
                     endpointPageCapacity: 2,
-                    componentCapacity: 4));
+                    componentCapacity: 4).EndpointWorkspace,
+                PathAlgorithm.AStar);
 
             Drain(below);
 

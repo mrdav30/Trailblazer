@@ -19,6 +19,71 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationFlowFieldCacheTests
 {
     [Fact]
+    public void Checkout_ShouldRejectNewerPayloadForOlderLeasedGraphWithoutEviction()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        NavigationWorldGraph newerBase = fixture.Graph.WithGraphVersion(
+            fixture.Graph.GraphVersion + 1);
+        NavigationWorldGraph newer = newerBase.WithSurfaceComponents(
+            NavigationSurfaceComponentTestFactory.Build(newerBase));
+        using NavigationWorldGraphStore newerStore =
+            NavigationAStarExitTestHarness.CreateStore(newer);
+        NavigationFlowFieldPayload newerPayload =
+            NavigationFlowFieldCacheTestHarness.RunFlow(
+                newerStore,
+                newer,
+                fixture.FarQuery,
+                fixture.FarOrigin,
+                fixture.Far.Key.DestinationAddress,
+                NavigationFlowFieldStatus.Success);
+        using NavigationWorldGraphLease olderLease = fixture.Store.TryAcquire()!;
+        fixture.Store.TryPublish(newer)
+            .Should().Be(NavigationCandidatePublication.Published);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            maxEntries: 1,
+            maxReusableBytes: newerPayload.RetainedBytes,
+            maxSinglePayloadBytes: newerPayload.RetainedBytes,
+            maxActivePayloadBytes: newerPayload.RetainedBytes,
+            maxActiveLeases: 1);
+        cache.TryReservePayload(
+                newerPayload.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                newerPayload,
+                fixture.FarOrigin,
+                ref reservation,
+                out NavigationFlowFieldPayloadLease published)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        published.Dispose();
+
+        cache.TryCheckout(
+                fixture.Store,
+                olderLease.Graph,
+                newerPayload.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease rejected)
+            .Should().Be(NavigationFlowFieldStatus.Pending);
+        rejected.Should().Be(default(NavigationFlowFieldPayloadLease));
+        cache.Count.Should().Be(1,
+            "an older in-flight query cannot evict a payload valid for the current graph");
+
+        cache.TryCheckout(
+                fixture.Store,
+                newer,
+                newerPayload.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease current)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        current.TryGetPayload(out NavigationFlowFieldPayload retained)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        retained.Should().BeSameAs(newerPayload);
+        current.Dispose();
+    }
+
+    [Fact]
     public void NearThenFar_ShouldPromoteAndDetachTheActiveSmallerPrefix()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
@@ -79,6 +144,7 @@ public sealed class NavigationFlowFieldCacheTests
             "the cache must check the requested extra-cost margin, not just node presence");
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Near.Key,
                 fixture.MarginOrigin,
                 out NavigationFlowFieldPayloadLease checkout)
@@ -108,6 +174,7 @@ public sealed class NavigationFlowFieldCacheTests
 
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease rebound)
@@ -140,6 +207,7 @@ public sealed class NavigationFlowFieldCacheTests
         {
             cache.TryCheckout(
                     fixture.Store,
+                    fixture.Store.Current,
                     fixture.Far.Key,
                     fixture.NearOrigin,
                     out NavigationFlowFieldPayloadLease lease)
@@ -187,6 +255,7 @@ public sealed class NavigationFlowFieldCacheTests
         cache.ActiveLeaseCount.Should().Be(0);
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Complete.Key,
                 unreachable,
                 out NavigationFlowFieldPayloadLease checkout)
@@ -354,6 +423,7 @@ public sealed class NavigationFlowFieldCacheTests
         cache.LeasedBytes.Should().Be(fixture.Far.RetainedBytes);
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out _)
@@ -390,6 +460,7 @@ public sealed class NavigationFlowFieldCacheTests
             fixture.FarOrigin);
         leaseCapped.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out _)
@@ -418,6 +489,7 @@ public sealed class NavigationFlowFieldCacheTests
         Publish(lru, fixture, second, fixture.FarOrigin).Dispose();
         lru.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease touched)
@@ -428,12 +500,14 @@ public sealed class NavigationFlowFieldCacheTests
         lru.CachedBytes.Should().Be(twoPayloadBytes);
         lru.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 second.Key,
                 fixture.FarOrigin,
                 out _)
             .Should().Be(NavigationFlowFieldStatus.Pending);
         lru.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease retained)
@@ -503,6 +577,7 @@ public sealed class NavigationFlowFieldCacheTests
         cache.DetachedBytes.Should().Be(0);
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out _)
@@ -522,6 +597,7 @@ public sealed class NavigationFlowFieldCacheTests
         {
             cache.TryCheckout(
                     fixture.Store,
+                    fixture.Store.Current,
                     fixture.Far.Key,
                     fixture.FarOrigin,
                     out NavigationFlowFieldPayloadLease warm)
@@ -536,6 +612,7 @@ public sealed class NavigationFlowFieldCacheTests
         {
             if (cache.TryCheckout(
                     fixture.Store,
+                    fixture.Store.Current,
                     fixture.Far.Key,
                     fixture.FarOrigin,
                     out NavigationFlowFieldPayloadLease lease)
@@ -815,6 +892,7 @@ public sealed class NavigationFlowFieldCacheTests
 
         cache.TryCheckout(
                 fixture.Store,
+                fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease shared)
@@ -1015,7 +1093,7 @@ internal static class NavigationFlowFieldCacheTestHarness
             policy!,
             TraversalMedium.Solid,
             new NavigationWorkMeter(query.Budget));
-        var workspace = new NavigationFlowFieldWorkspace(128, 128, 128);
+        var workspace = new NavigationFlowFieldWorkspace(0, 128, 128, 128);
         using var work = new NavigationFlowFieldWork(resolved, workspace);
         for (int step = 0;
             step < 4_096 && work.Status == NavigationFlowFieldStatus.Pending;

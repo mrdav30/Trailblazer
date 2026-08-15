@@ -37,7 +37,8 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     }
 
     private readonly GridWorld _world;
-    private readonly NavigationAStarWorkspace _workspace;
+    private readonly NavigationEndpointWorkspace _workspace;
+    private readonly PathAlgorithm _expectedAlgorithm;
     private readonly NavigationWorkMeter _meter;
     private readonly NavigationEndpointResolutionWork _endpointWork;
     private readonly NavigationResolvedPathQuery _result;
@@ -55,20 +56,23 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         GridWorld world,
         NavigationWorldGraphLease lease,
         PathQuery query,
-        NavigationAStarWorkspace workspace)
-        : this(world, workspace)
+        NavigationEndpointWorkspace workspace,
+        PathAlgorithm expectedAlgorithm)
+        : this(world, workspace, expectedAlgorithm)
     {
         Begin(lease, query);
     }
 
     internal NavigationQueryAdmissionWork(
         GridWorld world,
-        NavigationAStarWorkspace workspace)
+        NavigationEndpointWorkspace workspace,
+        PathAlgorithm expectedAlgorithm)
     {
         SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
         _world = world;
         _workspace = workspace;
+        _expectedAlgorithm = expectedAlgorithm;
         _meter = new NavigationWorkMeter(default);
         _endpointWork = new NavigationEndpointResolutionWork(
             world,
@@ -95,7 +99,10 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         _stage = Stage.ResolvePolicy;
         _endpointActive = false;
         Status = NavigationQueryAdmissionStatus.Pending;
-        bool supported = TryResolveSurfaceMedium(query, out _medium);
+        bool supported = TryResolveSurfaceMedium(
+            query,
+            _expectedAlgorithm,
+            out _medium);
         if (!query.Agent.IsValid)
             Finish(NavigationQueryAdmissionStatus.InvalidProfile);
         else if (!supported)
@@ -252,9 +259,11 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
 
     private static bool TryResolveSurfaceMedium(
         PathQuery query,
+        PathAlgorithm expectedAlgorithm,
         out TraversalMedium medium)
     {
-        bool supported = query.Algorithm == PathAlgorithm.AStar
+        bool supported = query.Algorithm == expectedAlgorithm
+            && expectedAlgorithm is PathAlgorithm.AStar or PathAlgorithm.FlowField
             && !query.AllowTransitions
             && query.Traversal.StartDomain != TraversalDomain.Volume
             && query.Traversal.TargetDomain != TraversalDomain.Volume

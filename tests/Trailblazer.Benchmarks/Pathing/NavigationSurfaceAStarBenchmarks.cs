@@ -63,7 +63,10 @@ public class NavigationSurfaceAStarBenchmarks
                 NavigationGraphBenchmarkScenario.GetPageCapacity(ExpansionCount) + 2),
             nodeCapacity: ExpansionCount);
         _workspaceAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
-        _admission = new NavigationQueryAdmissionWork(_fixture.World, _workspace);
+        _admission = new NavigationQueryAdmissionWork(
+            _fixture.World,
+            _workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
 
         long cost = ResolveEndpointsAndColdAStar();
         if (_expandedNodes != ExpansionCount

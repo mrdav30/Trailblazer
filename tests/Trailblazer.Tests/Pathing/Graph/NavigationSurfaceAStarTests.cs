@@ -204,7 +204,8 @@ public sealed class NavigationSurfaceAStarTests
             world,
             lease!,
             query,
-            workspace);
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
         for (int step = 0;
              step < 64 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)
@@ -690,7 +691,8 @@ public sealed class NavigationSurfaceAStarTests
             world,
             lease!,
             query,
-            workspace);
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
         for (int step = 0;
              step < 256 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)
@@ -1081,7 +1083,8 @@ public sealed class NavigationSurfaceAStarTests
             world,
             lease!,
             query,
-            workspace);
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
         for (int step = 0;
              step < 64 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)

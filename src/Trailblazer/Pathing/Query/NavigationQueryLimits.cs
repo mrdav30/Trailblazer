@@ -7,90 +7,112 @@
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Defines finite context-owned A* query admission and retention ceilings.</summary>
+/// <summary>Defines finite context-owned navigation query admission and retention ceilings.</summary>
 public readonly struct NavigationQueryLimits
 {
     /// <summary>The hard ceiling for one deterministic query batch.</summary>
     public const int MaximumBatchItems = 256;
 
-    /// <summary>Gets the recommended finite A* query limits.</summary>
+    /// <summary>Gets the recommended finite navigation query limits.</summary>
     public static NavigationQueryLimits Default { get; } = new(
         maxBatchItems: 8,
         maxBatchDescriptorBytes: 65_536,
-        maxConcurrentAStarQueries: 8,
+        maxConcurrentNavigationQueries: 8,
         aStarWorkspaceMapCapacity: 16,
         aStarWorkspaceEndpointPageCapacity: 512,
+        aStarWorkspaceComponentCapacity: 512,
         aStarWorkspaceNodeCapacity: 4_096,
         maxAStarCacheEntries: 128,
         maxAStarReusablePayloadBytes: 16_777_216,
         maxAStarSinglePayloadBytes: 262_144,
         maxAStarActivePayloadBytes: 2_097_152,
         maxAStarActivePayloadLeases: 8,
-        aStarWorkspaceComponentCapacity: 512);
+        flowWorkspaceMapCapacity: 16,
+        flowWorkspaceEndpointPageCapacity: 512,
+        flowWorkspaceComponentCapacity: 512,
+        flowWorkspaceNodeCapacity: 4_096,
+        maxFlowCacheEntries: 128,
+        maxFlowReusablePayloadBytes: 33_554_432,
+        maxFlowSinglePayloadBytes: 524_288,
+        maxFlowActivePayloadBytes: 4_194_304,
+        maxFlowActivePayloadLeases: 8);
 
-    /// <summary>Initializes explicit finite A* query limits.</summary>
+    /// <summary>Initializes explicit finite navigation query limits.</summary>
     public NavigationQueryLimits(
         int maxBatchItems,
         long maxBatchDescriptorBytes,
-        int maxConcurrentAStarQueries,
+        int maxConcurrentNavigationQueries,
         int aStarWorkspaceMapCapacity,
         int aStarWorkspaceEndpointPageCapacity,
+        int aStarWorkspaceComponentCapacity,
         int aStarWorkspaceNodeCapacity,
         int maxAStarCacheEntries,
         long maxAStarReusablePayloadBytes,
         long maxAStarSinglePayloadBytes,
         long maxAStarActivePayloadBytes,
         int maxAStarActivePayloadLeases,
-        int aStarWorkspaceComponentCapacity)
+        int flowWorkspaceMapCapacity,
+        int flowWorkspaceEndpointPageCapacity,
+        int flowWorkspaceComponentCapacity,
+        int flowWorkspaceNodeCapacity,
+        int maxFlowCacheEntries,
+        long maxFlowReusablePayloadBytes,
+        long maxFlowSinglePayloadBytes,
+        long maxFlowActivePayloadBytes,
+        int maxFlowActivePayloadLeases)
     {
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             maxBatchItems <= 0 || maxBatchItems > MaximumBatchItems,
             maxBatchItems,
             nameof(maxBatchItems));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            maxBatchDescriptorBytes <= 0,
-            null,
-            nameof(maxBatchDescriptorBytes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            maxConcurrentAStarQueries <= 0,
-            maxConcurrentAStarQueries,
-            nameof(maxConcurrentAStarQueries));
-        SwiftThrowHelper.ThrowIfNegative(
+        ThrowIfNonPositive(maxBatchDescriptorBytes, nameof(maxBatchDescriptorBytes));
+        ThrowIfNonPositive(
+            maxConcurrentNavigationQueries,
+            nameof(maxConcurrentNavigationQueries));
+        ValidateWorkspace(
             aStarWorkspaceMapCapacity,
-            nameof(aStarWorkspaceMapCapacity));
-        SwiftThrowHelper.ThrowIfNegative(
             aStarWorkspaceEndpointPageCapacity,
-            nameof(aStarWorkspaceEndpointPageCapacity));
-        SwiftThrowHelper.ThrowIfNegative(
             aStarWorkspaceComponentCapacity,
-            nameof(aStarWorkspaceComponentCapacity));
-        SwiftThrowHelper.ThrowIfNegative(
             aStarWorkspaceNodeCapacity,
+            nameof(aStarWorkspaceMapCapacity),
+            nameof(aStarWorkspaceEndpointPageCapacity),
+            nameof(aStarWorkspaceComponentCapacity),
             nameof(aStarWorkspaceNodeCapacity));
-        SwiftThrowHelper.ThrowIfNegative(maxAStarCacheEntries, nameof(maxAStarCacheEntries));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            maxAStarReusablePayloadBytes < 0,
-            null,
-            nameof(maxAStarReusablePayloadBytes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            maxAStarSinglePayloadBytes <= 0,
-            null,
-            nameof(maxAStarSinglePayloadBytes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            maxAStarActivePayloadBytes <= 0,
-            null,
-            nameof(maxAStarActivePayloadBytes));
-        SwiftThrowHelper.ThrowIfArgument(
-            maxAStarSinglePayloadBytes > maxAStarActivePayloadBytes,
-            nameof(maxAStarSinglePayloadBytes),
-            "A single payload cannot exceed the complete active-payload byte ceiling.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            maxAStarActivePayloadLeases <= 0,
+        ValidateCache(
+            maxAStarCacheEntries,
+            maxAStarReusablePayloadBytes,
+            maxAStarSinglePayloadBytes,
+            maxAStarActivePayloadBytes,
             maxAStarActivePayloadLeases,
+            nameof(maxAStarCacheEntries),
+            nameof(maxAStarReusablePayloadBytes),
+            nameof(maxAStarSinglePayloadBytes),
+            nameof(maxAStarActivePayloadBytes),
             nameof(maxAStarActivePayloadLeases));
+        ValidateWorkspace(
+            flowWorkspaceMapCapacity,
+            flowWorkspaceEndpointPageCapacity,
+            flowWorkspaceComponentCapacity,
+            flowWorkspaceNodeCapacity,
+            nameof(flowWorkspaceMapCapacity),
+            nameof(flowWorkspaceEndpointPageCapacity),
+            nameof(flowWorkspaceComponentCapacity),
+            nameof(flowWorkspaceNodeCapacity));
+        ValidateCache(
+            maxFlowCacheEntries,
+            maxFlowReusablePayloadBytes,
+            maxFlowSinglePayloadBytes,
+            maxFlowActivePayloadBytes,
+            maxFlowActivePayloadLeases,
+            nameof(maxFlowCacheEntries),
+            nameof(maxFlowReusablePayloadBytes),
+            nameof(maxFlowSinglePayloadBytes),
+            nameof(maxFlowActivePayloadBytes),
+            nameof(maxFlowActivePayloadLeases));
+
         MaxBatchItems = maxBatchItems;
         MaxBatchDescriptorBytes = maxBatchDescriptorBytes;
-        MaxConcurrentAStarQueries = maxConcurrentAStarQueries;
+        MaxConcurrentNavigationQueries = maxConcurrentNavigationQueries;
         AStarWorkspaceMapCapacity = aStarWorkspaceMapCapacity;
         AStarWorkspaceEndpointPageCapacity = aStarWorkspaceEndpointPageCapacity;
         AStarWorkspaceComponentCapacity = aStarWorkspaceComponentCapacity;
@@ -100,6 +122,15 @@ public readonly struct NavigationQueryLimits
         MaxAStarSinglePayloadBytes = maxAStarSinglePayloadBytes;
         MaxAStarActivePayloadBytes = maxAStarActivePayloadBytes;
         MaxAStarActivePayloadLeases = maxAStarActivePayloadLeases;
+        FlowWorkspaceMapCapacity = flowWorkspaceMapCapacity;
+        FlowWorkspaceEndpointPageCapacity = flowWorkspaceEndpointPageCapacity;
+        FlowWorkspaceComponentCapacity = flowWorkspaceComponentCapacity;
+        FlowWorkspaceNodeCapacity = flowWorkspaceNodeCapacity;
+        MaxFlowCacheEntries = maxFlowCacheEntries;
+        MaxFlowReusablePayloadBytes = maxFlowReusablePayloadBytes;
+        MaxFlowSinglePayloadBytes = maxFlowSinglePayloadBytes;
+        MaxFlowActivePayloadBytes = maxFlowActivePayloadBytes;
+        MaxFlowActivePayloadLeases = maxFlowActivePayloadLeases;
     }
 
     /// <summary>Gets the maximum query descriptors accepted by one batch.</summary>
@@ -108,8 +139,8 @@ public readonly struct NavigationQueryLimits
     /// <summary>Gets the maximum logical bytes accepted for submitted batch descriptors.</summary>
     public long MaxBatchDescriptorBytes { get; }
 
-    /// <summary>Gets the maximum concurrently admitted queries.</summary>
-    public int MaxConcurrentAStarQueries { get; }
+    /// <summary>Gets the aggregate maximum concurrently admitted A* and Flow queries.</summary>
+    public int MaxConcurrentNavigationQueries { get; }
 
     /// <summary>Gets the map capacity of each exclusive A* workspace.</summary>
     public int AStarWorkspaceMapCapacity { get; }
@@ -117,7 +148,7 @@ public readonly struct NavigationQueryLimits
     /// <summary>Gets the endpoint-page capacity of each exclusive A* workspace.</summary>
     public int AStarWorkspaceEndpointPageCapacity { get; }
 
-    /// <summary>Gets the exact component-dependency capacity of each exclusive A* workspace.</summary>
+    /// <summary>Gets the component-dependency capacity of each exclusive A* workspace.</summary>
     public int AStarWorkspaceComponentCapacity { get; }
 
     /// <summary>Gets the node capacity of each exclusive A* workspace.</summary>
@@ -137,4 +168,79 @@ public readonly struct NavigationQueryLimits
 
     /// <summary>Gets the maximum active and reserved A* payload lease count.</summary>
     public int MaxAStarActivePayloadLeases { get; }
+
+    /// <summary>Gets the map capacity of each exclusive Flow workspace.</summary>
+    public int FlowWorkspaceMapCapacity { get; }
+
+    /// <summary>Gets the endpoint and dependency-page capacity of each exclusive Flow workspace.</summary>
+    public int FlowWorkspaceEndpointPageCapacity { get; }
+
+    /// <summary>Gets the component-dependency capacity of each exclusive Flow workspace.</summary>
+    public int FlowWorkspaceComponentCapacity { get; }
+
+    /// <summary>Gets the node capacity of each exclusive Flow workspace.</summary>
+    public int FlowWorkspaceNodeCapacity { get; }
+
+    /// <summary>Gets the maximum reusable Flow payload count.</summary>
+    public int MaxFlowCacheEntries { get; }
+
+    /// <summary>Gets the maximum reusable Flow payload bytes.</summary>
+    public long MaxFlowReusablePayloadBytes { get; }
+
+    /// <summary>Gets the maximum bytes retained by one Flow payload.</summary>
+    public long MaxFlowSinglePayloadBytes { get; }
+
+    /// <summary>Gets the maximum bytes retained by unique active Flow payloads.</summary>
+    public long MaxFlowActivePayloadBytes { get; }
+
+    /// <summary>Gets the maximum active and reserved Flow payload lease count.</summary>
+    public int MaxFlowActivePayloadLeases { get; }
+
+    private static void ValidateWorkspace(
+        int mapCapacity,
+        int pageCapacity,
+        int componentCapacity,
+        int nodeCapacity,
+        string mapName,
+        string pageName,
+        string componentName,
+        string nodeName)
+    {
+        SwiftThrowHelper.ThrowIfNegative(mapCapacity, mapName);
+        SwiftThrowHelper.ThrowIfNegative(pageCapacity, pageName);
+        SwiftThrowHelper.ThrowIfNegative(componentCapacity, componentName);
+        SwiftThrowHelper.ThrowIfNegative(nodeCapacity, nodeName);
+    }
+
+    private static void ValidateCache(
+        int entries,
+        long reusableBytes,
+        long singleBytes,
+        long activeBytes,
+        int activeLeases,
+        string entriesName,
+        string reusableName,
+        string singleName,
+        string activeName,
+        string leaseName)
+    {
+        SwiftThrowHelper.ThrowIfNegative(entries, entriesName);
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            reusableBytes < 0,
+            null,
+            reusableName);
+        ThrowIfNonPositive(singleBytes, singleName);
+        ThrowIfNonPositive(activeBytes, activeName);
+        SwiftThrowHelper.ThrowIfArgument(
+            singleBytes > activeBytes,
+            singleName,
+            "A single payload cannot exceed the complete active-payload byte ceiling.");
+        ThrowIfNonPositive(activeLeases, leaseName);
+    }
+
+    private static void ThrowIfNonPositive(int value, string parameterName) =>
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, value, parameterName);
+
+    private static void ThrowIfNonPositive(long value, string parameterName) =>
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, null, parameterName);
 }

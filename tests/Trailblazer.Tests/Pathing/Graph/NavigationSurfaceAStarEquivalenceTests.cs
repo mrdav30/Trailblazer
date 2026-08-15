@@ -679,7 +679,8 @@ internal static class NavigationAStarExitTestHarness
             world,
             lease,
             query,
-            workspace);
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
         for (int step = 0;
             step < 1_024 && admission.Status == NavigationQueryAdmissionStatus.Pending;
             step++)
@@ -741,7 +742,8 @@ internal static class NavigationAStarExitTestHarness
             world,
             lease,
             query,
-            workspace);
+            workspace.EndpointWorkspace,
+            PathAlgorithm.AStar);
         for (int step = 0;
             step < 1_024 && admission.Status == NavigationQueryAdmissionStatus.Pending;
             step++)

@@ -6,7 +6,6 @@
 //=======================================================================
 
 using System;
-using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 
@@ -23,20 +22,10 @@ internal sealed class NavigationAStarWorkspace
         SwiftThrowHelper.ThrowIfNegative(endpointPageCapacity, nameof(endpointPageCapacity));
         SwiftThrowHelper.ThrowIfNegative(nodeCapacity, nameof(nodeCapacity));
         SwiftThrowHelper.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
-        CoveredAddressCursor = new GridCoveredAddressCursor(mapCapacity);
-        CoveredAddressGenerations = mapCapacity == 0
-            ? Array.Empty<GridCoveredAddressGeneration>()
-            : new GridCoveredAddressGeneration[mapCapacity];
-        CoveredAddressOutput = new GridCoveredAddress[1];
-        EndpointPages = endpointPageCapacity == 0
-            ? Array.Empty<GraphPageDependencyAddress>()
-            : new GraphPageDependencyAddress[endpointPageCapacity];
-        EndpointComponents = componentCapacity == 0
-            ? Array.Empty<NavigationSurfaceComponentKey>()
-            : new NavigationSurfaceComponentKey[componentCapacity];
-        EndpointComponentSet = new NavigationAddressStampSet(
-            Math.Max(1, EndpointComponents.Length));
-        EndpointPageSet = new NavigationPageStampSet(Math.Max(1, endpointPageCapacity));
+        EndpointWorkspace = new NavigationEndpointWorkspace(
+            mapCapacity,
+            endpointPageCapacity,
+            componentCapacity);
         NodeTable = new NavigationAStarNodeTable(nodeCapacity);
         HeapNodes = nodeCapacity == 0
             ? Array.Empty<NavigationNodeRef>()
@@ -46,19 +35,16 @@ internal sealed class NavigationAStarWorkspace
             : new NavigationNodeRef[nodeCapacity];
     }
 
-    internal GridCoveredAddressCursor CoveredAddressCursor { get; }
+    internal NavigationEndpointWorkspace EndpointWorkspace { get; }
 
-    internal GridCoveredAddressGeneration[] CoveredAddressGenerations { get; }
+    internal GraphPageDependencyAddress[] EndpointPages => EndpointWorkspace.Pages;
 
-    internal GridCoveredAddress[] CoveredAddressOutput { get; }
+    internal NavigationSurfaceComponentKey[] EndpointComponents =>
+        EndpointWorkspace.Components;
 
-    internal GraphPageDependencyAddress[] EndpointPages { get; }
+    internal int EndpointPageCount => EndpointWorkspace.PageCount;
 
-    internal NavigationSurfaceComponentKey[] EndpointComponents { get; }
-
-    internal NavigationAddressStampSet EndpointComponentSet { get; }
-
-    internal NavigationPageStampSet EndpointPageSet { get; }
+    internal int EndpointComponentCount => EndpointWorkspace.ComponentCount;
 
     internal NavigationAStarNodeTable NodeTable { get; }
 
@@ -66,62 +52,24 @@ internal sealed class NavigationAStarWorkspace
 
     internal NavigationNodeRef[] PathNodes { get; }
 
-    internal int CoveredAddressGenerationCount { get; set; }
-
-    internal int EndpointPageCount { get; set; }
-
-    internal int EndpointComponentCount { get; set; }
-
     internal int HeapCount { get; set; }
 
     internal int PathNodeCount { get; set; }
 
     internal void Reset()
     {
-        ResetEndpointResolution();
-        EndpointComponentSet.Reset();
-        EndpointPageSet.Reset();
-        if (EndpointPageCount > 0)
-            Array.Clear(EndpointPages, 0, EndpointPageCount);
-        if (EndpointComponentCount > 0)
-            Array.Clear(EndpointComponents, 0, EndpointComponentCount);
-        EndpointPageCount = 0;
-        EndpointComponentCount = 0;
+        EndpointWorkspace.Reset();
         ResetSearch();
-    }
-
-    internal void ResetEndpointResolution()
-    {
-        if (CoveredAddressGenerationCount > 0)
-        {
-            Array.Clear(
-                CoveredAddressGenerations,
-                0,
-                CoveredAddressGenerationCount);
-        }
-        CoveredAddressOutput[0] = default;
-        CoveredAddressGenerationCount = 0;
     }
 
     internal bool TryRecordEndpointComponent(NavigationSurfaceComponentKey componentKey)
     {
-        if (!EndpointComponentSet.Add(componentKey.Representative))
-            return true;
-        if (EndpointComponentCount >= EndpointComponents.Length)
-            return false;
-        EndpointComponents[EndpointComponentCount++] = componentKey;
-        return true;
+        return EndpointWorkspace.TryRecordComponent(componentKey);
     }
 
     internal bool TryRecordEndpointPage(string mapId, int pageIndex)
     {
-        if (EndpointPageSet.Contains(mapId, pageIndex))
-            return true;
-        if (EndpointPageCount >= EndpointPages.Length)
-            return false;
-        EndpointPageSet.Add(mapId, pageIndex);
-        EndpointPages[EndpointPageCount++] = new GraphPageDependencyAddress(mapId, pageIndex);
-        return true;
+        return EndpointWorkspace.TryRecordPage(mapId, pageIndex);
     }
 
     internal void ResetSearch()

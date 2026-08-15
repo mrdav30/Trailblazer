@@ -1723,13 +1723,22 @@ public sealed class NavigationGraphCapacityTests
             maxConcurrentQueries,
             source.AStarWorkspaceMapCapacity,
             source.AStarWorkspaceEndpointPageCapacity,
+            source.AStarWorkspaceComponentCapacity,
             source.AStarWorkspaceNodeCapacity,
             source.MaxAStarCacheEntries,
             source.MaxAStarReusablePayloadBytes,
             source.MaxAStarSinglePayloadBytes,
             source.MaxAStarActivePayloadBytes,
             source.MaxAStarActivePayloadLeases,
-            source.AStarWorkspaceComponentCapacity);
+            source.FlowWorkspaceMapCapacity,
+            source.FlowWorkspaceEndpointPageCapacity,
+            source.FlowWorkspaceComponentCapacity,
+            source.FlowWorkspaceNodeCapacity,
+            source.MaxFlowCacheEntries,
+            source.MaxFlowReusablePayloadBytes,
+            source.MaxFlowSinglePayloadBytes,
+            source.MaxFlowActivePayloadBytes,
+            source.MaxFlowActivePayloadLeases);
 
     private static TrailblazerWorldContext CreateChunkedBaselineContext(
         int maxPersistentGraphPages,

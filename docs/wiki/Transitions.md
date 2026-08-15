@@ -21,7 +21,6 @@ Relevant code:
 - `src/Trailblazer/Pathing/Transition/TraversalTransitionType.cs`
 - `src/Trailblazer/Pathing/Transition/Query/TraversalTransitionQuery.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`
-- `src/Trailblazer/Pathing/Search/Hybrid/HybridPathRequest.cs`
 
 ## 1. Why Transitions Matter
 
@@ -313,10 +312,13 @@ Practical consequence:
 
 Transition-aware pathing is opt-in.
 
-For chart-backed requests:
+For the remaining chart-backed request:
 
-- `AStarPathRequest.AllowTraversalTransitions`
 - `FlowFieldPathRequest.AllowTraversalTransitions`
+
+Graph-backed surface `PathQuery` currently rejects
+`AllowTransitions == true` as `Unsupported`; it does not route through a legacy
+surface fallback.
 
 When that opt-in is enabled, the planning story is:
 
@@ -431,7 +433,6 @@ Useful tests:
 
 - `tests/Trailblazer.Tests/Pathing/Transition/Registry/TraversalTransitionRegistry.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/Transition/Query/TraversalTransitionQuery.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarTransitionFallback.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldTransitionFallback.Tests.cs`
 
 High-risk changes include:

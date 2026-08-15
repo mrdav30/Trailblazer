@@ -4,8 +4,8 @@ Trailblazer is a deterministic, framework-agnostic navigation library for
 lockstep simulations and games.
 
 The library combines voxel-backed pathing with runtime navigation controllers.
-Use the pathing layer directly when you only need chart registration, A*, flow
-fields, volume routes, and reusable guide data. Use the full navigation stack
+Use the pathing layer directly when you only need graph-backed surface A*,
+chart-backed flow fields, volume routes, and reusable guide data. Use the full navigation stack
 when you also want steering, turning, locomotion-aware movement, and
 deterministic frame-by-frame controller state.
 
@@ -19,9 +19,9 @@ groups, heightmaps, and runtime lifecycle hooks for that isolated world.
 - Deterministic fixed-point navigation using `FixedMathSharp`
 - Engine-agnostic pathing and movement primitives with no required renderer or
   physics engine
-- Context-owned chart registration, partition ownership, cache invalidation, and
-  guide reuse
-- A* waypoint paths, destination-centric flow fields, and raw-volume pathing
+- Context-owned navigation maps plus remaining chart-backed flow/volume state
+- Surface `PathQuery` waypoint leases, destination-centric flow fields, and
+  raw-volume pathing
 - Authored chart-to-chart and chart-to-volume traversal transitions
 - Deterministic heightmap lookup for context-owned ground/contact Y sampling
 - Runtime steering, direct-path checks, group movement, stuck detection,
@@ -50,8 +50,8 @@ groups, heightmaps, and runtime lifecycle hooks for that isolated world.
 | [Authoring](ChartAuthoring.md)           | Tokenized chart and generated-transition authoring                                               |
 | [Navigation Charts](NavigationCharts.md) | `NavigationChart`, chart cells, registration, initialization, updates, and unload behavior       |
 | [PathManager](PathManager.md)            | Context-local chart registry, partition ownership, effective-cell queries, and transition lookup |
-| [Pathing](Pathing.md)                    | Path requests, surveyors, guide resolution, staged fallback, and direct pathing usage            |
-| [Path Guides](PathGuides.md)             | `IGuide`, `IWaypointGuide`, guide factories, guide caches, and reusable survey results           |
+| [Pathing](Pathing.md)                    | Graph surface queries, remaining flow/volume requests, guide resolution, and direct usage         |
+| [Path Guides](PathGuides.md)             | `NavigationGuideLease` plus the remaining flow/volume guide and cache contracts                  |
 | [Transitions](Transitions.md)            | Authored handoffs between chart-backed traversal and raw-volume traversal                        |
 | [Volume Traversal](VolumeTraversal.md)   | Gas/liquid/raw-volume routing, medium rules, and volume request behavior                         |
 | [Heightmaps](HeightMaps.md)              | Context-owned deterministic ground/contact Y sampling and navigator grounding helpers            |
@@ -80,15 +80,16 @@ groups, heightmaps, and runtime lifecycle hooks for that isolated world.
 The library is easiest to reason about in this order:
 
 1. Create or attach a `TrailblazerWorldContext` for a `GridWorld`.
-2. Register one or more `NavigationChart` instances whose `Interval` matches the
-   context voxel size.
-3. Initialize chart-backed pathing state through `context.Pathing`.
+2. Publish navigation maps and area policies for graph-backed surface routing.
+3. Register and initialize `NavigationChart` state only for remaining
+   flow/volume consumers.
 4. Optionally register traversal transitions, volume medium rules, and heightmap
    layers on the same context.
-5. Build an `IPathRequest` directly, or let a `Navigator` create one from guided
-   travel settings.
-6. Resolve requests into guides through `context.Guides`, or let `NavSteering`
-   own guide lifecycle during guided movement.
+5. Build a complete immutable `PathQuery` for surface A*, or a remaining
+   flow/volume request where applicable.
+6. Resolve surface queries into disposable `NavigationGuideLease` instances
+   through `context.Guides`, or let `NavSteering` own the lease during guided
+   movement.
 7. Advance fixed-step runtime flow with `context.Simulate()`,
    `Navigator.Simulate()`, host traversal probing,
    `Navigator.CommitFrameMotion()`, and `context.LateSimulate()`.
@@ -105,15 +106,16 @@ entered context-owned state for the duration of the operation.
 | Type or Area                                       | Role                                                                                                                                                         |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `TrailblazerWorldContext`                          | Owns one world binding, deterministic frame clock, pathing services, guide caches, transitions, volume rules, heightmaps, navigator ids, and lifecycle hooks |
-| `NavigationChart`                                  | Authored traversable chart data that maps one-to-one onto live voxels after registration                                                                     |
+| `NavigationMap` / composed graph                   | Graph-backed surface topology and immutable query snapshot authority                                                                                        |
+| `NavigationChart`                                  | Remaining flow/volume authoring data that maps onto live voxels after registration                                                                            |
 | `PathManager`                                      | Context-local chart registry, partition coordinator, effective-cell query service, and cache-invalidation bridge                                             |
 | `TraversalAuthoringMap`                            | Tokenized setup path for building chart data plus generated transitions from lightweight authoring input                                                     |
 | `TraversalTransitionRegistry`                      | Stores explicit chart-to-chart and chart-to-volume handoff points for staged routing                                                                         |
-| `AStarPathRequest`                                 | Waypoint-oriented chart-backed route request                                                                                                                 |
+| `PathQuery`                                        | Complete immutable graph-query intent, including endpoints, profile, policy, traversal, algorithm, and finite budget                                        |
 | `FlowFieldPathRequest`                             | Destination-centric chart-backed request designed for shared fields                                                                                          |
 | `VolumePathRequest`                                | Raw 3D voxel connectivity request for gas, liquid, and chart-optional travel                                                                                 |
-| `PathGuideFactory`                                 | Resolves path requests into reusable guide instances backed by cached survey results                                                                         |
-| `AStarGuide` / `FlowFieldGuide` / `VolumeGuide`    | Runtime direction providers consumed by steering or custom movement code                                                                                     |
+| `TrailblazerGuideService`                          | Returns explicit status plus a disposable graph surface lease, and retains legacy flow/volume routing only for their remaining consumers                     |
+| `NavigationGuideLease` / `FlowFieldGuide` / `VolumeGuide` | Graph waypoint cursor and remaining runtime direction providers                                                                                         |
 | `Navigator`                                        | Host-facing coordinator for steering, turning, motor execution, frame deltas, traversal state, occupancy, and guided request construction                    |
 | `NavSteering`                                      | Heading generator that manages requests, direct-path checks, guide following, movement groups, stuck handling, and arrival                                   |
 | `NavTurning`                                       | Deterministic facing controller for buffered turn requests and collision auto-turns                                                                          |
@@ -125,7 +127,7 @@ entered context-owned state for the duration of the operation.
 
 | Path                                   | Purpose                                                                                                             |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `src/Trailblazer/Pathing`              | Chart management, requests, transitions, search, guides, caches, reachability, and voxel lookup                     |
+| `src/Trailblazer/Pathing`              | Navigation maps/graph queries plus remaining chart, flow, volume, transition, and cache code                       |
 | `src/Trailblazer/Navigation/Navigator` | Host-facing navigator orchestration, guided request construction, occupancy, heightmap grounding, and serialization |
 | `src/Trailblazer/Navigation/Steering`  | Steering request lifecycle, simulation, line of sight, movement groups, and steering serialization                  |
 | `src/Trailblazer/Navigation/Turning`   | Deterministic turning and turning serialization                                                                     |
@@ -151,8 +153,8 @@ entered context-owned state for the duration of the operation.
   selection, or route scoring depend on iteration.
 - Do not introduce hidden allocations, LINQ, or broad collection churn in
   per-frame or per-node hot paths.
-- Return checked-out guides unless `NavSteering` owns the guide lifecycle for
-  the active session.
+- Dispose `NavigationGuideLease` instances and return remaining checked-out
+  flow/volume guides unless `NavSteering` owns the active session.
 - Keep `Navigator.Simulate()` and `Navigator.CommitFrameMotion()` paired with
   host traversal probing between them.
 - Serialize authoritative runtime state explicitly; rebuild caches, host

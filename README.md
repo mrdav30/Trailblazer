@@ -13,8 +13,9 @@
 
 Trailblazer gives simulation-heavy .NET projects a fixed-point navigation stack
 without tying them to a renderer, physics engine, ECS, or game framework. Use
-the pathing layer directly for chart-backed A*, flow fields, volume routes, and
-reusable guide data. Add the navigation layer when you also want steering,
+the pathing layer directly for graph-backed surface A*, chart-backed flow
+fields, volume routes, and reusable guide data. Add the navigation layer when
+you also want steering,
 turning, locomotion-aware movement, groups, heightmap grounding, and
 frame-by-frame controller state.
 
@@ -26,10 +27,10 @@ The README is the front door. The deeper integration notes live in the
 
 - Deterministic runtime math through `FixedMathSharp` types such as `Fixed64`,
   `Vector3d`, and `FixedQuaternion`.
-- Voxel-backed world representation through `GridForge`, with explicit chart
-  registration and context-owned runtime state.
-- Three guide families: waypoint-oriented `AStarGuide`, destination-centric
-  `FlowFieldGuide`, and raw-volume `VolumeGuide`.
+- Voxel-backed world representation through `GridForge`, with context-owned
+  navigation maps and remaining chart-backed flow/volume state.
+- Graph-backed surface waypoints through `NavigationGuideLease`, plus the
+  destination-centric `FlowFieldGuide` and raw-volume `VolumeGuide` families.
 - Authored transitions between chart surfaces and raw gas/liquid/volume
   traversal.
 - Full navigation stack with `Navigator`, `NavSteering`, `NavTurning`, and
@@ -104,10 +105,11 @@ For local development against the repository, reference the project directly:
 Trailblazer is easiest to approach as a small pipeline:
 
 1. Create or attach a `TrailblazerWorldContext` for a `GridWorld`.
-2. Register `NavigationChart` data whose cell interval matches the context's
-   representative cubic cell edge.
-3. Request an `IGuide` directly, or let a `Navigator` create and manage guide
-   requests.
+2. Publish a `NavigationMap` and matching `NavigationAreaPolicy` for graph-backed
+   surface routing. Register `NavigationChart` data only for the remaining
+   flow/volume paths that still consume it.
+3. Submit a complete immutable `PathQuery`, or let a `Navigator` own its guide
+   session.
 4. Advance the context and navigators in your fixed-step simulation.
 5. Feed host-owned collision, traversal, contacts, and platform state back into
    the navigator.
@@ -116,62 +118,51 @@ Trailblazer owns navigation state. Your host still owns rendering, animation,
 entity lifetime, collision queries, environment probes, and any engine-specific
 integration.
 
-Trailblazer currently supports GridForge worlds whose active grids all use dense
-rectangular-prism storage with one shared cubic cell edge. Hex, sparse,
-anisotropic, or conflicting active-grid metrics fail fast at the context/request
-boundary. Those topologies require a dedicated pathfinding path and are planned
-as a fast-follow rather than being approximated by the cubic implementation.
+Surface graph routing supports rectangular and hex topology without deriving
+path cost from a context-wide voxel size. Remaining chart-backed flow/volume
+paths retain their existing constraints until their owning cutover phases.
 
 ## Quick Start
 
-This example builds a tiny chart, requests an A* guide, and samples the first
-movement direction. The [Pathing wiki](docs/wiki/Pathing.md) and
-[Navigator wiki](docs/wiki/Navigator.md) cover complete integration flows.
+After publishing a navigation map and its area policy, construct one complete
+surface query and own the returned lease. The [Pathing wiki](docs/wiki/Pathing.md)
+and [Navigator wiki](docs/wiki/Navigator.md) cover the surrounding setup.
 
 ```csharp
 using FixedMathSharp;
-using GridForge.Configuration;
 using Trailblazer;
 using Trailblazer.Pathing;
 
 using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
-context.World.TryAddGrid(
-    new GridConfiguration(new Vector3d(-4, -1, -4), new Vector3d(8, 2, 8)),
-    out _);
-
-bool[,,] cells = new bool[1, 3, 3]
-{
-    {
-        { true, true, true },
-        { true, true, true },
-        { true, true, true }
-    }
-};
-
-NavigationChart chart = NavigationChart.From3D(
-    name: "Arena",
-    sourceMap: cells,
-    minBounds: Vector3d.Zero,
-    interval: context.VoxelSize);
-
-context.Pathing.Register(chart);
-
 Vector3d origin = new(0, 0, 0);
 Vector3d destination = new(2, 0, 2);
-AStarPathRequest? request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
+var profile = new NavigationAgentProfile(
+    new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
+    Fixed64.One,
+    Fixed64.One,
+    Fixed64.FromFraction(1, 4),
+    TraversalMedia.Solid,
+    TraversalCapability.None);
+var query = new PathQuery(
+    new NavigationEndpoint(origin, "Arena"),
+    new NavigationEndpoint(destination, "Arena"),
+    profile,
+    new NavigationAreaPolicyKey("default", revision: 1),
+    new TraversalIntent(TraversalDomain.Surface, TraversalMedium.Solid, TraversalDomain.Surface),
+    PathAlgorithm.AStar,
+    new NavigationWorkBudget(1024, 64, 4096, 16384, 4096, 0, 0, 0, 0, 0, 0),
+    allowTransitions: false);
 
-if (request != null && context.Guides.RequestGuide(request, out AStarGuide? guide))
+NavigationGuideStatus status = context.Guides.RequestGuide(query, out NavigationGuideLease? lease);
+if (status == NavigationGuideStatus.Success && lease != null)
 {
-    try
+    using (lease)
     {
-        if (guide.TryGetMovementDirection(origin, out Vector3d heading))
+        if (lease.TryGetCurrentWaypoint(out NavigationCellAddress address, out Vector3d footWaypoint)
+            == NavigationGuideStatus.Success)
         {
-            // Apply heading in your own movement code, or use Navigator for the full stack.
+            // Consume the waypoint in your own movement code, or pass the query to Navigator.
         }
-    }
-    finally
-    {
-        context.Guides.ReturnGuide(guide);
     }
 }
 ```
@@ -181,8 +172,8 @@ if (request != null && context.Guides.RequestGuide(request, out AStarGuide? guid
 | Area            | What it does                                                                                                                                               | Start here                                                                                                      |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | World context   | Owns one `GridWorld`, the deterministic clock, pathing services, guide caches, transitions, heightmaps, movement groups, diagnostics, and lifecycle hooks. | [Overview](docs/wiki/Overview.md)                                                                               |
-| Chart authoring | Builds surface and volume traversal data from `NavigationChart`, `NavigationChartCell`, or tokenized `TraversalAuthoringMap` input.                        | [ChartAuthoring](docs/wiki/ChartAuthoring.md), [NavigationCharts](docs/wiki/NavigationCharts.md)                |
-| Pathing         | Resolves `AStarPathRequest`, `FlowFieldPathRequest`, and `VolumePathRequest` into reusable guides.                                                         | [Pathing](docs/wiki/Pathing.md), [PathGuides](docs/wiki/PathGuides.md)                                          |
+| Chart authoring | Builds the remaining flow/volume traversal data from `NavigationChart`, `NavigationChartCell`, or tokenized `TraversalAuthoringMap` input.                 | [ChartAuthoring](docs/wiki/ChartAuthoring.md), [NavigationCharts](docs/wiki/NavigationCharts.md)                |
+| Pathing         | Resolves graph-backed surface `PathQuery` values plus the remaining flow/volume request families.                                                          | [Pathing](docs/wiki/Pathing.md), [PathGuides](docs/wiki/PathGuides.md)                                          |
 | Transitions     | Describes explicit handoffs between charts and raw volume traversal, including generated transition data.                                                  | [Transitions](docs/wiki/Transitions.md), [VolumeTraversal](docs/wiki/VolumeTraversal.md)                        |
 | Navigation      | Coordinates steering, turning, motor simulation, locomotion, occupancy, and host traversal state.                                                          | [Navigator](docs/wiki/Navigator.md), [NavSteering](docs/wiki/NavSteering.md), [NavMotor](docs/wiki/NavMotor.md) |
 | Heightmaps      | Provides deterministic ground/contact Y sampling separate from chart walkability.                                                                          | [HeightMaps](docs/wiki/HeightMaps.md)                                                                           |
@@ -190,8 +181,10 @@ if (request != null && context.Guides.RequestGuide(request, out AStarGuide? guid
 
 ## Choosing A Request Type
 
-Use `AStarPathRequest` when one agent needs a concrete waypoint trail or you
-want explicit waypoint progression.
+Use `PathQuery` with `PathAlgorithm.AStar` when one agent needs a concrete
+surface waypoint trail. A successful request returns a disposable
+`NavigationGuideLease`; every acquisition and cursor operation reports a
+`NavigationGuideStatus`.
 
 Use `FlowFieldPathRequest` when many agents can share a destination and sample
 local movement vectors from one cached field.
@@ -199,9 +192,10 @@ local movement vectors from one cached field.
 Use `VolumePathRequest` when movement should route through raw 3D voxel
 connectivity for gas, liquid, aerial, or chart-optional travel.
 
-When using `Navigator.ApplyGuidedTrekRequest(...)`, the navigator chooses the
-request family from the current traversal medium and the settings configured
-through `Navigator.ConfigureForGuidedTraversal(...)`.
+For guided surface travel, pass that exact query to
+`Navigator.ApplyGuidedTrekRequest(PathQuery, ...)`. The query's profile must
+match the navigator's configured `NavigationProfile`, and its start must equal
+the navigator's derived foot position.
 
 ## Repository Map
 
@@ -235,8 +229,8 @@ enabled.
 
 ## Benchmarks
 
-The benchmark suite measures path-request and navigation hot paths: raw A* and
-flow-field surveys, cold and warm guide resolution, guide cache lifecycle,
+The benchmark suite measures path-request and navigation hot paths: graph
+surface A*, flow-field surveys, cold and warm guide resolution, guide lifecycle,
 steering steady-state costs, transition fallback, and volume routing.
 
 List available benchmark selections:

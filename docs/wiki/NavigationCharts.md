@@ -1,11 +1,16 @@
 # Navigation Charts
 
-This document is a deep dive into `NavigationChart`, the chart lifecycle managed
-by `PathManager`, and the role charts play in Trailblazer's world model.
+This document is a deep dive into the remaining `NavigationChart` lifecycle
+managed by `PathManager` for flow/volume consumers.
 
 `NavigationChart` is a dense authored traversal map. Solid traversal is its main
 chart-backed runtime use, but charts can also author raw-volume cells that
 initialize `VolumeChartPartition` state for `VolumePathRequest`.
+
+Graph-backed surface A* no longer reads charts, `PathManager`, or chart
+partitions. It consumes `NavigationMap` data through immutable composed graph
+snapshots and the public `PathQuery`/`NavigationGuideLease` service. The chart
+details below remain current only for the flow/volume paths that still use them.
 
 If you only need the high-level architecture, start with `Overview.md`. If you
 are working from the standalone pathing API inward, read `Pathing.md` before
@@ -323,8 +328,8 @@ Use transition-aware chart routing when:
   jump, swim, or takeoff/landing handoff
 - explicit `TraversalTransition` anchors should stitch chart segments to each
   other or to raw volume travel
-- an `AStarPathRequest` or `FlowFieldPathRequest` should fall back through
-  transitions instead of failing outright
+- a `FlowFieldPathRequest` should fall back through transitions instead of
+  failing outright
 
 Examples:
 

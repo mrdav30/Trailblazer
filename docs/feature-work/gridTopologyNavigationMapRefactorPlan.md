@@ -1685,10 +1685,10 @@ future-facing abstraction.
 | 3/4A | Freeze status/lease, edge/evaluator/search, GridForge seam, and deletion contracts | Complete |
 | 3/4B | Rectangular/hex surface native edges, compiled explicit connections, exact seams, canonical ordering | Complete |
 | 3/4C | Shared allocation-free surface evaluation, conservative component/page dependencies, maintenance integration | Complete for the surface graph; bounded endpoint admission/search cutover remains in 3/4D |
-| 3/4D | Bounded endpoint resolution, real A* admission, concrete workspace/cache, and dependency capture | Pending |
-| 3/4E | Internal unreachable fixed-point weighted surface A* and immutable result/guide lifecycle | Pending |
-| 3/4F | Pull guided profile/schema forward, atomically port callers, switch authority, and delete legacy A* | Pending |
-| 3/4G | Coverage/CRAP, determinism, allocation, performance, Release/Lean, and external review gates | Pending |
+| 3/4D | Bounded endpoint resolution, real A* admission, concrete workspace/cache, and dependency capture | Complete |
+| 3/4E | Internal unreachable fixed-point weighted surface A* and immutable result/guide lifecycle | Complete |
+| 3/4F | Pull guided profile/schema forward, atomically port callers, switch authority, and delete legacy A* | Complete |
+| 3/4G | Coverage/CRAP, determinism, allocation, performance, Release/Lean, and external review gates | Complete |
 
 Update this table only from fresh test, coverage, benchmark, deletion-inventory,
 and review evidence. Each checkpoint must leave one coherent authority and may
@@ -1868,6 +1868,16 @@ Native-graph criteria:
   `HeuristicMethod`, the legacy heap/request/cache carriers, and higher-level
   flow/volume/hybrid orchestration remain internal only where a direct unported
   consumer still exists; they contain no forwarding A* search/cache authority.
+- Phase 3/4 deletion ledger: remove `AStarSurveyor`, `AStarPathRequest`,
+  `AStarSurveyResult`, `AStarGuide`, Catmull-Rom smoothing, A*-only
+  `PathGuideFactory`/service/state cache and pool branches,
+  `PathRequestCacheKey.CreateAStar`/`RequestFamily.AStar`, the old surface
+  reachability fast-fail, and A*-specific hybrid fallback/conversion authority.
+  The direct-caller gate includes `GuidedVolumeExitHandoff`,
+  `HybridWaypointFlattener`, and `GuidedClimbIntentResolver` in addition to the
+  callers named above. Before deleting `AStarSurveyor`, move its remaining
+  volume-only constants/heuristic helpers into the still-owning volume branch;
+  that dependency is not permission to retain the old provider.
 - Add an architecture allowlist proving the new query/search namespace has no
   dependency on charts, partitions, `PathManager`, `AStarSurveyor`, old endpoint
   finders, or the legacy reusable cache.
@@ -1902,14 +1912,21 @@ Tasks:
   the sampled foot position through guide-local certified portal progression.
 - Preserve destination-centric cache sharing, partial-field coverage checks,
   recompute-and-promote behavior, detached active leases, and invalidation.
-- Replace reachability traversal with the shared edge/evaluator path or remove
-  it if measured benefit no longer justifies the cache.
+- Implement any retained fast-fail only from the new exact graph reachability
+  data. The old chart-partition reachability preflight was deleted in combined
+  Phase 3/4 and must not be recreated or adapted.
 - Delete cubic sampling grids and rectangular direction lookups.
 - Add A*/flow cost agreement tests for weighted routes.
 - Extend dependency-stamp validation to every flow acquisition/sample and cut
   flow and retained reachability authority to the new graph.
 - Port every flow request/guide consumer, delete the old flow provider and
   rectangular sampling carriers, then run a clean Release build and full suite.
+- Legacy-deletion ledger: remove the flow-only `FlowFieldSurveyor`, request,
+  result, guide, cache/pool, and `PathGuideFactory`/service/state branches after
+  their last direct consumer moves. Verify the Phase 3/4 deletion of the old
+  surface reachability cache and retain no chart/partition fast-fail adapter.
+  Keep `PathHeap`, endpoint finders, and shared request/cache carriers only where
+  Phase 7 volume/hybrid code still has a direct caller.
 
 Exit criteria:
 
@@ -1982,6 +1999,18 @@ Tasks:
   refresh, and every remaining volume/transition consumer before switching
   authority. Delete each superseded provider and carrier only after its direct
   consumers compile.
+- Legacy-deletion ledger: verify combined Phase 3/4 already removed the hybrid
+  surface-A* variant, flattened hybrid guide path, and guided-volume A* handoff
+  carriers; do not recreate them. Remove `VolumeSurveyor`, the remaining
+  FlowField/volume `HybridPathRequest`/`HybridRoutePlanner`/`HybridRoutePlan`
+  carriers, transition registries/indexes, `PathHeap`, `AStarWaypoint`, and
+  `HeuristicMethod` when their final volume/hybrid caller is gone. Remove
+  `SolidVoxelFinder`/`AlternativeVoxelFinder` only after every
+  remaining volume/hybrid endpoint consumer uses graph admission. Do not retain
+  `AStarSurveyor` as a constants/heuristic provider; any temporarily shared
+  volume math must be volume-owned before the Phase 3/4 deletion. Remove
+  `VolumeVoxelFinder` after Phase 6 replaces its line-of-sight role and every
+  volume endpoint consumer has moved to graph admission.
 - Run a clean Release build and full suite after the volume/transition/hybrid
   deletion boundary.
 
@@ -2034,6 +2063,23 @@ Tasks:
   not add a compatibility reader.
 - Delete any shared old request carriers retained for earlier phased consumers,
   then require a clean Release build and full suite before the phase exits.
+- Legacy-deletion ledger: after the remaining flow/volume/hybrid controller and
+  serialized shapes move, delete `IPathRequest`/`PathRequest` and the remaining
+  `FlowFieldPathRequest`/`VolumePathRequest` implementations,
+  `PathRequestCacheKey`, `ReusableSurveyResultCache<T>`, `PathGuideFactory`,
+  `TrailblazerGuideState`, legacy guide pools/service overloads/counters/chart-
+  key invalidation, old Navigator flow/volume heuristic/default fields, and the
+  remaining `PathRequestRecord` discriminators. Remove any retained
+  `PathRequestContextResolver`, `ChartsUtilized`, survey-result base, or shared
+  cache carrier once no new graph consumer references it. After their last
+  controller and serialization consumers move, also delete the final chart/
+  partition authority: `NavigationChart*`, `NavigationChartRegistration`,
+  `ResolvedChartVoxelState`, `SolidChartPartition`/`VolumeChartPartition`,
+  `PathManager`, `PathingWorldState` chart pools/dictionaries, GridForge chart
+  bridges, `TraversalAuthoringMap`/`TraversalBuildResult` chart carriers,
+  chart diagnostics/extensions, and chart-facing pathing/guide service APIs.
+  Retain no forwarding facade from the new `PathQuery`/guide service back to
+  these carriers; Phase 9 only verifies that this deletion left no residue.
 
 Exit criteria:
 
@@ -2055,6 +2101,15 @@ Tasks:
 
 - Verify the per-phase deletions and remove only residual dead tests/helpers;
   Phase 9 is not the first authoritative cutover.
+- Audit the explicit legacy allowlist left by Phases 3/4, 5, 7, and 8. Every
+  retained symbol must have a named live production consumer and owning deletion
+  phase; delete residual chart/partition, old surveyor/request/result/guide,
+  endpoint-finder, cache/pool, transition-registry, rectangular-direction,
+  Catmull-Rom, adapter, and compatibility-test code before release.
+- Scope final mechanical `rg` gates to production, tests, benchmarks, and active
+  README/wiki documentation. Preserve historical evidence under
+  `docs/feature-work/done` (and implementation audit records) instead of making
+  those archives satisfy a zero-reference gate.
 - Invert the current fail-fast hex/sparse/anisotropic/conflicting-metric tests
   into positive feature tests.
 - Replace rectangular-only diagnostics and benchmark fixture names.

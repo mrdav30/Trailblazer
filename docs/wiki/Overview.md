@@ -3,8 +3,8 @@
 Trailblazer is a deterministic navigation library for lockstep simulations and
 games. It is split into two layers that can be used together or independently:
 
-- A pathing layer for chart registration, path requests, A* pathfinding, flow
-  fields, and reusable guide caching.
+- A pathing layer for graph-backed surface queries, chart-backed flow fields,
+  volume routes, and reusable guide data.
 - A navigation layer for steering, turning, locomotion, and deterministic
   frame-by-frame movement.
 
@@ -35,8 +35,9 @@ Trailblazer assumes:
 - world-space math uses `FixedMathSharp` types such as `Fixed64`, `Vector3d`,
   and `FixedQuaternion`
 - traversable space is represented by `GridForge` voxels
-- pathfinding is driven by `NavigationChart` data and `SolidChartPartition`
-  ownership
+- surface A* is driven by immutable navigation maps and composed graph snapshots
+- remaining flow/volume paths still use chart and partition state until their
+  owning cutover phases
 - simulation advances in deterministic fixed steps through
   `TrailblazerWorldContext`
 - runtime diagnostics flow through `TrailblazerLogger.Channel`, with verbose
@@ -44,11 +45,11 @@ Trailblazer assumes:
 
 At a high level, the runtime loop is:
 
-1. Register and initialize one or more `NavigationChart` instances.
-2. Build an `IPathRequest` directly for lower-level pathing, or let `Navigator`
-   create one from a target position and guided-path settings.
-3. Resolve that request into an `IGuide` through
-   `TrailblazerWorldContext.Guides`, or let `NavSteering` do that for you.
+1. Publish navigation maps and a matching navigation-area policy.
+2. Build a complete immutable `PathQuery` for surface A*, or use a remaining
+   flow/volume request where applicable.
+3. Resolve surface intent through `TrailblazerWorldContext.Guides` into a
+   disposable `NavigationGuideLease`, or let `NavSteering` own that lifecycle.
 4. Run `Navigator.Simulate()` on the fixed step.
 5. Update traversal medium and surface state from your own collision/environment
    code.
@@ -56,10 +57,14 @@ At a high level, the runtime loop is:
 
 ## 2. World Representation
 
-### 2.1 NavigationChart
+### 2.1 Navigation Maps And Remaining Charts
 
-`NavigationChart` is the pathable surface description of your world. It stores
-authored chart-cell data and exposes:
+`NavigationMap` is the authored input to graph-backed surface A*. One map binds
+to one exact grid generation, and the context publishes composed immutable graph
+snapshots for query admission and dependency validation.
+
+`NavigationChart` is the remaining chart-backed flow/volume description. It
+stores authored chart-cell data and exposes:
 
 - `NavigationChart.From3D(...)` to build a chart from `bool[,,]` voxel data for
   one authored medium at a time, or from `NavigationChartCell[,,]` voxel data
@@ -73,6 +78,10 @@ authored chart-cell data and exposes:
   space
 
 Important details:
+
+- graph-backed surface A* does not read `NavigationChart`, `PathManager`, or
+  chart partitions
+- charts remain live for the unported flow/volume branches described below
 
 - the chart itself is data only; it does not become queryable by pathfinding
   until it is registered and initialized
@@ -90,16 +99,12 @@ Important details:
 `TrailblazerWorldContext` is the explicit owner for one `GridWorld` and its
 deterministic simulation clock. It provides context construction,
 attach/owned-world lifetime, independent frame rate and frame count,
-context-local lifecycle hooks, pathing state, transitions, volume rules,
-reachability snapshots, guide caches, navigator ids, and movement-group state.
+context-local lifecycle hooks, pathing state, transitions, volume rules, graph
+guide payloads, remaining guide caches, navigator ids, and movement-group state.
 
-`VoxelSize` is the representative cell edge reported by GridForge topology
-metrics. The current pathing implementation requires every active grid in the
-world to use dense rectangular-prism storage, cubic cells, and the same cell
-edge. Hex, sparse, anisotropic, or conflicting metrics are rejected explicitly.
-Supporting those layouts is a planned fast-follow that will replace this
-compatibility seam with topology-aware pathfinding rather than silently applying
-cubic assumptions.
+Graph-backed surface routing uses each grid's topology and world-space geometry;
+it does not derive costs from context-wide `VoxelSize`. Remaining chart-backed
+flow/volume branches retain their existing metric constraints until cut over.
 
 ### 2.3 Pathing Service
 
@@ -145,56 +150,30 @@ See also:
 
 ## 3. Path Requests
 
-All guide requests implement `IPathRequest`. Shared request state includes:
+Surface A* uses `PathQuery`, an immutable value containing exact start/end
+`NavigationEndpoint` values, `NavigationAgentProfile`, area-policy key,
+`TraversalIntent`, algorithm, finite `NavigationWorkBudget`, and transition
+intent. Endpoint positions are foot positions. Admission resolves these values
+against one immutable graph snapshot; callers do not select an A* heuristic.
 
-- `StartNode`
-- `EndNode`
-- `UnitSize`
-- `AllowUnwalkableEndpoints`
-- `MaxPathSearchRange`
-- `HasValidEndpoints`
-- `IsValid`
-- `RequestCacheKey`
-- `Context`
+The legacy `IPathRequest` hierarchy remains only for unported flow/volume
+consumers. Its cache keys and mutable endpoint carriers are not part of the
+surface A* API.
 
-Shared request behavior is provided by `PathRequest`:
+### 3.1 Surface `PathQuery`
 
-- `UpdateRequest(origin, destination, unitSize)` resolves start/end voxels,
-  computes validation state, and clears `MaxPathSearchRange` when the new
-  endpoints cannot be resolved
-- `TrySetOrigin(...)` and `TrySetDestination(...)` update endpoints without
-  recreating the request
-- `TrySetUnitSize(...)` revalidates the request for a different agent footprint
-- successful creation or endpoint reset derives `MaxPathSearchRange` from the
-  request's `TrailblazerWorldContext`
-
-`RequestCacheKey` is an exact value identity, not a persisted integer hash. It
-compares complete GridForge world/grid generations, voxel indices, and the
-request options that affect survey output; its hash code is used only for cache
-bucket placement. Hybrid keys also capture ordered transition ids and the
-relevant registry versions, plus the exact origin and target positions embedded
-in their staged segment requests.
-
-Use context-bound factories. Requests carry their owning
-`TrailblazerWorldContext`, and guide resolution rejects requests from a
-different context.
-
-### 3.1 AStarPathRequest
-
-Use `AStarPathRequest` when you want a concrete waypoint trail.
-
-Additional configuration includes:
-
-- `Heuristic` with `Manhattan`, `Octile`, or `Euclidean`; `Octile` is the
-  closest fit for diagonal-enabled chart grids, while `Manhattan` supports
-  axis-biased routing
-- `MaxClimbHeight` for vertical step restrictions
-
-Factory helpers:
+Use `PathAlgorithm.AStar` with surface traversal and
+`AllowTransitions == false`. Submit the query through:
 
 ```csharp
-AStarPathRequest.TryCreate(context, origin, destination, Fixed64.One, out var request);
+NavigationGuideStatus status = context.Guides.RequestGuide(
+    query,
+    out NavigationGuideLease? lease);
 ```
+
+A lease exists only for `Success`. Dispose it when finished. Its status and
+waypoint operations validate graph dependencies and can report `Stale`; finite
+admission/search limits report `BudgetExceeded` rather than running unbounded.
 
 ### 3.2 FlowFieldPathRequest
 
@@ -261,14 +240,10 @@ forcing callers onto a separate public request family.
 
 Current behavior:
 
-- `AStarPathRequest` and `FlowFieldPathRequest` remain the public chart-backed
-  request types.
-- Setting `AllowTraversalTransitions` lets either request use internal staged
-  fallback through authored `TraversalTransition` handoffs when direct chart
-  routing is not enough.
-- That fallback does not change the caller's intent: an `AStarPathRequest` still
-  means "route this as A*," and a `FlowFieldPathRequest` still means "route this
-  as FlowField."
+- Graph-backed surface A* rejects `AllowTransitions == true` as `Unsupported`
+  until transition nodes move into the composed graph.
+- `FlowFieldPathRequest.AllowTraversalTransitions` retains the internal staged
+  fallback needed by the unported flow/volume branch.
 - `Navigator` exposes the same policy for built-in guided travel through
   `ConfigureForGuidedTraversal(allowTraversalTransitions: true)`.
 - For navigator-owned volume-first travel, that same opt-in also enables bounded
@@ -278,31 +253,29 @@ Current behavior:
   `TraversalTransitionRegistry`.
 - Surveyors stay single-mode; staged escalation happens above them.
 
-This means the public API story stays centered on normal request types even when
-the resolved route temporarily switches through transition points or raw volume.
+No transition fallback routes a surface `PathQuery` through the deleted legacy
+A* provider.
 
-## 4. Surveyors and Guides
+## 4. Search Results and Guides
 
-Trailblazer separates raw path computation from runtime movement consumption.
+Trailblazer separates search payloads from runtime movement consumption.
 
 ### 4.1 Surveyors
 
-Surveyors build reusable results:
+The remaining legacy surveyors build reusable flow/volume results:
 
-- `AStarSurveyor` expands `SolidChartPartition` nodes and produces waypoint
-  trails
 - `FlowFieldSurveyor` performs a reverse flood and produces directional field
   data
 - `VolumeSurveyor` expands raw voxel neighbors and produces 3D waypoint trails
   for chart-optional volume travel
 
-Both surveyors return concrete `SurveyResult` types:
+They return concrete `SurveyResult` types:
 
-- `AStarSurveyResult`
 - `FlowFieldSurveyResult`
 - `VolumeSurveyResult`
 
-These results are what the cache stores and reuses.
+Surface A* instead publishes an immutable graph payload behind a
+`NavigationGuideLease`; it has no public surveyor/result authority.
 
 ### 4.2 Guides
 
@@ -318,9 +291,10 @@ public interface IGuide
 }
 ```
 
-Concrete guide types:
+Surface and remaining guide types:
 
-- `AStarGuide` implements `IWaypointGuide`
+- `NavigationGuideLease` owns a graph surface payload reference and waypoint
+  cursor
 - `FlowFieldGuide` implements `IGuide`
 - `VolumeGuide` implements `IWaypointGuide`
 
@@ -338,8 +312,8 @@ public interface IWaypointGuide : IGuide
 
 Guide behavior in practice:
 
-- `AStarGuide` follows discrete waypoints and optionally exposes spline-smoothed
-  movement
+- `NavigationGuideLease` exposes dependency-validated waypoint sampling and
+  advancement; it exposes no geometry-uncertified smoothing path
 - `FlowFieldGuide` samples the local vector field, can recover by searching for
   a nearby flow anchor, and can internally execute staged transition-aware
   FlowField routes
@@ -351,13 +325,16 @@ return, cache invalidation, and cache diagnostics.
 
 Supported operations:
 
+- `RequestGuide(PathQuery query, out NavigationGuideLease result)` returns a
+  `NavigationGuideStatus`
 - `RequestGuide(IPathRequest request, out IGuide result)`
 - `RequestGuide<T>(IPathRequest request, out T result)`
 - `ReturnGuide(IGuide guide, bool dispose = false)`
 - `InvalidateCacheFor(string chartKey)`
 - `FlushCache(bool force = false)`
 
-Internally, it uses `ReusableSurveyResultCache<T>` for:
+Graph surface payload reuse validates exact dependency stamps. The remaining
+flow/volume branches still use `ReusableSurveyResultCache<T>` for:
 
 - cache lookup by `RequestCacheKey`
 - reuse of valid survey results
@@ -366,12 +343,14 @@ Internally, it uses `ReusableSurveyResultCache<T>` for:
 
 Lifetime rules matter:
 
+- dispose graph `NavigationGuideLease` instances; do not pass them to
+  `ReturnGuide(...)`
 - if you request a guide directly, return it with
   `context.Guides.ReturnGuide(...)`
 - `NavSteering` handles this automatically when it owns the guide lifecycle
 - unloaded charts invalidate all cached results that reference them
-- `InvalidateCacheFor(...)` is chart-targeted, so unrelated cached A*,
-  FlowField, and Volume guides remain reusable
+- `InvalidateCacheFor(...)` is chart-targeted only for the remaining FlowField
+  and Volume caches; graph A* staleness comes from graph dependency stamps
 
 ## 6. Runtime Navigation Stack
 
@@ -394,11 +373,11 @@ See also:
 
 ### 6.2 NavSteering
 
-`NavSteering` is the heading-generation layer. It consumes an `IPathRequest`,
-decides between direct line-of-sight travel and guide-following, blends in local
-steering influences, uses an internal movement-group coordinator to preserve
-formation offsets for shared group sessions, and manages arrival, stop, and
-repath logic for the active navigation session.
+`NavSteering` is the heading-generation layer. For guided surface travel it owns
+immutable `PathQuery` intent plus a `NavigationGuideLease`, refreshing only the
+start foot position when repathing. It also retains the remaining flow/volume
+request path, blends local steering influences, and manages arrival and stop
+logic.
 
 See also:
 
@@ -486,16 +465,13 @@ For a pathing-first guide that does not assume `Navigator`, read
 [`Pathing.md`](Pathing.md).
 
 ```csharp
-var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
-
-if (context.Guides.RequestGuide(request, out AStarGuide guide))
+NavigationGuideStatus status = context.Guides.RequestGuide(query, out NavigationGuideLease? lease);
+if (status == NavigationGuideStatus.Success && lease != null)
 {
-    if (guide.TryGetMovementDirection(origin, out Vector3d heading))
+    using (lease)
     {
-        // Consume the heading in your own movement system.
+        lease.TryGetCurrentWaypoint(out NavigationCellAddress address, out Vector3d footWaypoint);
     }
-
-    context.Guides.ReturnGuide(guide);
 }
 ```
 
@@ -510,23 +486,22 @@ This is useful when:
 Before runtime pathing works correctly:
 
 1. Create or attach a `TrailblazerWorldContext` for the target `GridWorld`.
-2. Build `NavigationChart` data for the relevant walkable space.
-3. Register the chart with `context.Pathing.Register(...)`.
-4. If you registered with `initializeChart: false`, call
-   `context.Pathing.InitializeChart(chart.Name)` before requesting guides or
-   simulating navigators.
-5. Create and initialize your context-bound `Navigator`, or request guides
+2. Publish navigation maps and area policies for surface graph queries.
+3. Register and initialize charts only for remaining flow/volume consumers.
+4. Create and initialize your context-bound `Navigator` with an exact
+   `NavigationAgentProfile`, or request guides
    directly.
-6. Keep traversal state up to date through your concrete navigator's
+5. Keep traversal state up to date through your concrete navigator's
    `CheckTrekCondition()` implementation.
-7. Unload charts or clear caches during teardown.
+6. Dispose graph leases, unload remaining charts, and clear remaining caches
+   during teardown.
 
 ## 10. Common Gotchas
 
 - A chart is not pathable until it has been initialized; `Register(chart)` does
   this by default unless you pass `initializeChart: false`.
-- `IPathRequest.IsValid` depends on valid endpoints and a computed
-  `MaxPathSearchRange`.
+- A surface `PathQuery` needs a published map, matching area-policy revision,
+  exact profile, valid foot endpoints, and a nonzero finite work budget.
 - If you request guides directly, forgetting `ReturnGuide(...)` will keep
   results checked out.
 - `NeedsPath(...)` is a line trace over voxels, not a guarantee that a long
@@ -535,7 +510,8 @@ Before runtime pathing works correctly:
   refresh velocity state.
 - Host code is still responsible for collision probing, surface detection, water
   detection, and other environment inputs.
-- Chart unloads invalidate cached guides that reference those charts.
+- Graph mutations stale surface leases through dependency stamps; chart unloads
+  invalidate remaining flow/volume cache entries.
 
 ## 11. Where to Read Next
 
@@ -543,8 +519,8 @@ Before runtime pathing works correctly:
   quick-start examples
 - [`Pathing.md`](Pathing.md) for standalone pathing integration and request
   guidance
-- [`PathGuides.md`](PathGuides.md) for `IGuide`, `IWaypointGuide`, and
-  context-owned guide caches
+- [`PathGuides.md`](PathGuides.md) for `NavigationGuideLease` and the remaining
+  flow/volume guide caches
 - [`Transitions.md`](Transitions.md) for authored chart and volume handoffs
 - [`VolumeTraversal.md`](VolumeTraversal.md) for raw-volume traversal rules
 - [`NavMotor.md`](NavMotor.md) for motor phase ordering
@@ -557,7 +533,7 @@ Before runtime pathing works correctly:
   groups, and navigator guidance
 - `src/Trailblazer/Pathing` for chart lifecycle, pathing state, grid-bridge
   integration, transition topology, volume rules, and search
-- `src/Trailblazer/Pathing/Search` for request, guide, survey, voxel-resolution,
-  reachability, open-set, A*, FlowField, Hybrid, and Volume pathing code
+- `src/Trailblazer/Pathing/Search/AStar` for graph A* admission, payloads, and
+  leases; the sibling FlowField/Hybrid/Volume folders remain later-phase code
 - `src/Trailblazer/Traversal` for traversal-medium value objects shared by
   runtime, navigation, pathing, and transitions

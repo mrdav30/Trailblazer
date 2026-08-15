@@ -119,11 +119,10 @@ That means this runtime is not designed for:
 - `Velocity`
 - `Speed`
 - `Acceleration`
-- `Size`
-- `FootPositionAdjust`
+- the exact `NavigationProfile`, including authoritative body shape and
+  root-to-foot offset
 - guided-request defaults configured through `ConfigureForGuidedTraversal(...)`,
-  including `GuidedPathMode`, transition fallback, and the built-in chart
-  request tuning values
+  limited to remaining flow/volume transition and request tuning values
 - heightmap grounding settings configured through
   `ConfigureHeightmapGrounding(...)`, including mode, preferred layer name,
   active layer name, ground offset, and snap tolerance
@@ -142,9 +141,11 @@ That means this runtime is not designed for:
 
 On load it also:
 
+- requires the recorded `NavigationProfile` to exactly match the already
+  configured navigator shell
 - rebuilds `Forward` from `Rotation`
 - clears frame deltas
-- refreshes steering radius-derived tolerances from the loaded navigator size
+- refreshes steering radius-derived tolerances from the configured body shape
 - clears and recomputes occupancy
 - reinitializes `Turning` if present
 
@@ -168,28 +169,35 @@ construct or hydrate heightmap data from the navigator payload.
   weights, and braking power
 - cooldowns, stuck counters, repath counters, and auto-stop state
 - movement-group id and current travel mode
-- the active request shape through a serializable request record
+- exact graph surface query intent and lease cursor through `PathQueryRecord`
+- the remaining flow/volume request shape through `PathRequestRecord`
 
-The request record currently captures:
+The graph query record captures:
 
-- request type (`AStar`, `FlowField`, `Volume`, or internal `Hybrid`)
+- both endpoint positions, map filters, resolution policies, and bounds
+- the exact agent profile and area-policy revision
+- traversal domain/medium, A* algorithm, finite work budget, and transition flag
+- the guide-local waypoint cursor when a lease was active
+
+The remaining request record captures:
+
+- request type (`FlowField` or `Volume`)
 - origin
 - target position
 - unit size
 - walkability override
 - max search range
-- request-type-specific settings such as heuristic, max climb height, extra
-  flood range, or volume traversal mode
+- request-type-specific settings such as max climb height, extra flood range,
+  volume heuristic, or volume traversal mode
 - whether an active guide existed
 - current waypoint index when the guide is waypoint-based
 
 On load it also:
 
-- rebuilds the active `IPathRequest` from the recorded request data
-- reacquires a guide from the request's owning context when the session was
-  actively guide-driven
-- restores waypoint progress for `AStarGuide`, `VolumeGuide`, and internal
-  `HybridGuide` when the guide is waypoint-based
+- rebuilds exact surface `PathQuery` intent or the remaining `IPathRequest`
+- reacquires a graph `NavigationGuideLease` or remaining guide from the owning
+  context when the session was actively guide-driven
+- restores a bounded graph lease cursor or remaining volume waypoint progress
 - clears any stale guide or movement-group session state already attached to the
   existing runtime shell
 - preserves per-session movement-group intent while treating the context-owned
@@ -198,6 +206,9 @@ On load it also:
   `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`
 - falls back to a new path request on the next steering tick if a guide could
   not be reacquired immediately
+
+The retired surface-A* request discriminator is rejected in both JSON and
+MemoryPack. There is no scalar-profile or old-request compatibility reader.
 
 ### 3.3 NavTurning
 
@@ -273,6 +284,8 @@ the full live navigation stack.
 Out of scope today:
 
 - inline serialization of live `IGuide` instances
+- inline serialization of `NavigationGuideLease`, graph snapshots, payloads, or
+  dependency stamps
 - movement-group coordinator caches and memberships
 - chart registrations, path caches, or context-owned pathing state
 - full voxel occupancy maps
@@ -304,8 +317,8 @@ full save-game architecture too early.
 Current tradeoffs of this boundary:
 
 - it is safe and explicit, but not yet turnkey for whole-world persistence
-- it rebuilds live guides from recorded requests instead of serializing guide
-  instances directly
+- it rebuilds graph leases and remaining live guides from recorded intent
+  instead of serializing runtime handles directly
 - it keeps deterministic state local to the types that understand it
 - it still needs broader coverage before it becomes a complete framework-level
   persistence solution
@@ -348,9 +361,11 @@ The current Trailblazer-focused tests verify that:
 
 - supported navigator state round-trips through the JSON and MemoryPack
   chroniclers
-- guided A* and flow-field steering sessions survive round-trip
-- path-request configuration and A* waypoint progress survive round-trip
-- guides are reacquired after load instead of being serialized inline
+- graph surface and remaining flow-field steering sessions survive round-trip
+- exact surface query configuration and bounded waypoint progress survive
+  round-trip
+- graph leases and remaining guides are reacquired after load instead of being
+  serialized inline
 - partial payload loads preserve omitted branches on existing initialized
   runtime shells
 - payloads missing current fields fall back to declared defaults
@@ -377,8 +392,8 @@ The Trailblazer-specific branch is in solid shape now, but a few non-blocking
 follow-ups are still valuable:
 
 1. Add an end-to-end host workflow guide or sample that shows batch save/load
-   for multiple navigators, including chart prerequisites, restore ordering, and
-   optional `PrewarmMovementGroup()` calls.
+   for multiple navigators, including navigation-map/policy and remaining chart
+   prerequisites, restore ordering, and optional `PrewarmMovementGroup()` calls.
 2. Decide whether any additional Trailblazer-owned context state should ever
    expose optional snapshot surfaces, or whether pathing and navigation services
    remain rebuild-only by design.

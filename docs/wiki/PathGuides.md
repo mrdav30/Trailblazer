@@ -2,13 +2,11 @@
 
 This document is the focused reference for Trailblazer's guide layer:
 
-- `IGuide`
-- `IWaypointGuide`
-- `AStarGuide`
+- `NavigationGuideLease`
+- remaining `IGuide` and `IWaypointGuide` contracts
 - `FlowFieldGuide`
 - `VolumeGuide`
-- `HybridGuide`
-- `PathGuideFactory`
+- `TrailblazerGuideService`
 
 Use this file when you already understand requests and want to understand how
 computed path data is exposed to runtime consumers.
@@ -20,12 +18,10 @@ Relevant code:
 - `src/Trailblazer/Pathing/Search/Guide/IGuide.cs`
 - `src/Trailblazer/Pathing/Search/Guide/IWaypointGuide.cs`
 - `src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs`
+- `src/Trailblazer/Pathing/Search/AStar/NavigationGuideLease.cs`
 - `src/Trailblazer/Pathing/Search/Guide/PathGuideFactory.cs`
-- `src/Trailblazer/Pathing/Search/AStar/AStarGuide.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldGuide.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
-- `src/Trailblazer/Pathing/Search/Hybrid/HybridGuide.cs`
-- `src/Trailblazer/Pathing/Search/AStar/AStarSurveyResult.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyResult.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyResult.cs`
 
@@ -45,35 +41,57 @@ Guides answer:
 - what fallback direction should be used if normal guidance fails
 - for waypoint guides, which waypoint is currently active
 
-The main design split is:
+The surface design split is:
 
-- `IPathRequest` describes path intent
-- `SurveyResult` stores reusable computed data
-- `IGuide` exposes movement directions to consumers
-- `TrailblazerWorldContext.Guides` bridges requests into guide instances
+- `PathQuery` describes complete immutable intent
+- an immutable dependency-stamped payload stores reusable computed data
+- `NavigationGuideLease` owns one payload reference and a guide-local cursor
+- `TrailblazerWorldContext.Guides` returns explicit status plus the lease
+
+The remaining flow/volume paths still use `IPathRequest`, cached
+`SurveyResult`, and `IGuide`.
 
 ## 2. Survey Results Versus Guide Instances
 
 This distinction matters a lot.
 
-`TrailblazerWorldContext.Guides` caches survey results, not guide objects.
+Graph surface A* caches immutable payloads, not leases. The remaining guide
+factory caches flow/volume survey results, not guide objects.
 
 That means:
 
-- repeated equivalent requests can reuse cached `AStarSurveyResult`,
-  `FlowFieldSurveyResult`, or `VolumeSurveyResult`
-- each request still receives a fresh guide wrapper
-- guide objects themselves are lightweight runtime views over reusable result
-  data
+- repeated equivalent surface queries can share immutable payload data
+- each successful caller receives an exclusive waypoint cursor in its own lease
+- equivalent remaining requests can reuse `FlowFieldSurveyResult` or
+  `VolumeSurveyResult`
 
 Practical consequence:
 
-- return guides with `context.Guides.ReturnGuide(...)` so the backing survey
-  result can be released back to the cache
+- dispose surface leases; return remaining guides with
+  `context.Guides.ReturnGuide(...)`
 
 ## 3. Shared Contracts
 
-### 3.1 `IGuide`
+### 3.1 `NavigationGuideLease`
+
+`NavigationGuideLease` is the public graph-surface cursor. It exposes:
+
+- `Status`
+- `CurrentWaypointIndex`
+- `WaypointCount`
+- `TryGetCurrentWaypoint(...)`
+- `TryAdvanceWaypoint()`
+- `Dispose()`
+
+Every cursor operation returns or exposes `NavigationGuideStatus`; dependency
+changes can make an active lease `Stale`. `Dispose()` releases the payload
+reference. Do not pass a graph lease to `ReturnGuide(...)`.
+
+Acquisition reports one of `Success`, `Unsupported`, `NoMap`, `InvalidProfile`,
+`InvalidStart`, `InvalidEnd`, `NoPath`, `BudgetExceeded`, `CostOverflow`,
+`CapacityExceeded`, or `Stale`. A lease exists only for `Success`.
+
+### 3.2 `IGuide`
 
 `IGuide` is the smallest movement contract.
 
@@ -99,7 +117,7 @@ Important nuance:
 - consumers that need explicit waypoint progression should prefer
   `IWaypointGuide`
 
-### 3.2 `IWaypointGuide`
+### 3.3 `IWaypointGuide`
 
 `IWaypointGuide` extends `IGuide` for discrete waypoint trails.
 
@@ -135,43 +153,7 @@ Another important nuance:
 
 ## 4. Concrete Guide Types
 
-### 4.1 `AStarGuide`
-
-`AStarGuide` is the waypoint guide for chart-backed A* trails.
-
-It wraps:
-
-- `AStarSurveyResult TrailMap`
-
-Important state:
-
-- `CurrentWaypointIndex`
-- `UseSplineSmoothing`
-- `ActiveWaypoints`
-
-Key behavior:
-
-- `Initialize(...)` requires a valid `AStarSurveyResult`
-- `ActiveWaypoints` normally returns `TrailMap.Waypoints`
-- when `UseSplineSmoothing` is enabled and there are at least four waypoints,
-  `ActiveWaypoints` lazily switches to `AStarSurveyor.CatmullSmooth(...)`
-- `TryGetMovementDirection(...)` uses the nearest active waypoint from the
-  current position
-- `GetCurrentWaypointDirection(...)` uses `CurrentWaypointIndex`
-- `TryGetFallbackDirection(...)` searches forward from the last fallback index
-
-Other useful members:
-
-- `HasArrived()`
-- `TryGetWaypointAt(...)`
-
-Important nuance:
-
-- `Initialize(...)` sets `CurrentWaypointIndex` to `0`
-- that means consumers using `GetCurrentWaypointDirection(...)` directly should
-  expect to manage the first progression step themselves
-
-### 4.2 `FlowFieldGuide`
+### 4.1 `FlowFieldGuide`
 
 `FlowFieldGuide` is the vector-field guide for chart-backed flow fields.
 
@@ -198,8 +180,8 @@ Staged behavior:
 - `InitializeStaged(...)` switches the guide into staged-plan mode
 - the public guide type stays `FlowFieldGuide`
 - internally the guide advances through staged waypoints and staged sub-guides
-- staged path segments can borrow `AStarGuide` or `VolumeGuide` instances from
-  `PathGuideFactory`
+- staged path segments can borrow `FlowFieldGuide` or `VolumeGuide` instances
+  from the remaining guide factory
 
 This is an important API guarantee:
 
@@ -212,7 +194,7 @@ Important nuance:
 - `PathGuideFactory.ReturnGuide(...)` calls `ReleaseStagedResources(...)` so any
   borrowed staged sub-guides are returned correctly
 
-### 4.3 `VolumeGuide`
+### 4.2 `VolumeGuide`
 
 `VolumeGuide` is the waypoint guide for raw voxel volume detours.
 
@@ -233,43 +215,19 @@ Important nuance:
 
 - `Initialize(...)` starts `CurrentWaypointIndex` at `1` when the guide has more
   than one waypoint
-- unlike `AStarGuide`, the starting waypoint is skipped immediately for indexed
-  progression
-
-### 4.4 `HybridGuide`
-
-`HybridGuide` is the internal waypoint guide used for explicit
-`HybridPathRequest` resolution.
-
-It wraps:
-
-- a flattened `AStarWaypoint[]`
-
-It behaves similarly to `VolumeGuide`:
-
-- indexed waypoint progression
-- nearest-waypoint lookup for `TryGetMovementDirection(...)`
-- forward-search fallback
-
-Important limitations:
-
-- `HybridGuide` is internal
-- it does not wrap a reusable cached survey result
-- `context.Guides.ReturnGuide(...)` has no cache-release action for it
-
-In practice, `HybridGuide` exists mainly for internal guide composition and
-serialization restoration paths rather than for public consumption.
+- the starting waypoint is skipped immediately for indexed progression
 
 ## 5. Context Guide Service
 
 `TrailblazerWorldContext.Guides` is the context-owned guide-layer entry point.
-Requests carry their owning `TrailblazerWorldContext`; `context.Guides` only
-accepts requests from that same context so guide caches cannot be polluted by
-another world.
+Graph queries are admitted against that context's immutable graph snapshot.
+Remaining requests carry their owning `TrailblazerWorldContext`; the service
+rejects cross-context use.
 
 It is responsible for:
 
 - routing requests to the correct guide type
+- returning exact `NavigationGuideStatus` for graph surface queries
 - resolving or reusing cached survey results
 - applying transition-aware fallback when supported
 - releasing borrowed survey results back into the caches
@@ -286,6 +244,7 @@ It is not responsible for:
 
 The main entry points are:
 
+- `context.Guides.RequestGuide(PathQuery query, out NavigationGuideLease result)`
 - `context.Guides.RequestGuide(IPathRequest request, out IGuide result)`
 - `context.Guides.RequestGuide<T>(IPathRequest request, out T result)`
 - `context.Guides.ReturnGuide(IGuide guide, bool dispose = false)`
@@ -297,11 +256,9 @@ The internal `PathGuideFactory` performs the same routing and cache work after
 
 Useful status properties:
 
-- `TotalAStarGuideCount`
 - `TotalFlowGuideCount`
 - `TotalVolumeGuideCount`
 - `TotalHybridRoutePlanCount`
-- `InUseAStarGuideCount`
 - `InUseFlowGuideCount`
 - `InUseVolumeGuideCount`
 - `InUseHybridRoutePlanCount`
@@ -310,20 +267,20 @@ Useful status properties:
 
 Important invalidation rule:
 
-- `InvalidateCacheFor(string chartKey)` invalidates cached A*, FlowField,
-  Volume, and hybrid route-plan results whose `ChartsUtilized` contains that
-  chart key
+- `InvalidateCacheFor(string chartKey)` applies only to remaining FlowField,
+  Volume, and route-plan results whose `ChartsUtilized` contains that chart key
 - unrelated cached guides remain reusable when the invalidation does not match
   them
+- graph surface leases validate exact graph dependency stamps instead of chart
+  keys
 
 ### 5.2 Request Routing
 
 Routing is type-based:
 
-- `AStarPathRequest` -> `AStarGuide`
+- `PathQuery` surface A* -> status plus `NavigationGuideLease`
 - `FlowFieldPathRequest` -> `FlowFieldGuide`
 - `VolumePathRequest` -> `VolumeGuide`
-- `HybridPathRequest` -> internal `HybridGuide`
 
 Important nuance:
 
@@ -331,21 +288,13 @@ Important nuance:
 - callers should only use the generic overload when `T` matches the request type
   they are asking for
 
-### 5.3 A* Resolution
+### 5.3 Surface A* Resolution
 
-`RequestAStar(...)` asks the A* cache for a reusable `AStarSurveyResult`.
-
-The normal flow is:
-
-1. try to reuse or build a direct `AStarSurveyResult`
-2. if direct A* succeeds, wrap it in a fresh `AStarGuide`
-3. if direct A* fails and traversal transitions are enabled, build a flattened
-   transition-aware fallback result
-4. wrap that result in a fresh `AStarGuide`
-
-Important guarantee:
-
-- transition-aware chart fallback still returns `AStarGuide`, not `HybridGuide`
+The service validates the supported surface query shape, admits endpoint/search
+work under its finite budget, publishes one immutable result payload, and
+returns a lease only with `NavigationGuideStatus.Success`. FlowField, volume,
+and transition-enabled query shapes return `Unsupported`; there is no fallback
+to a legacy surface provider.
 
 ### 5.4 Flow Field Resolution
 
@@ -377,31 +326,17 @@ Important guarantee:
 
 There is no chart-transition fallback layer above `VolumePathRequest`.
 
-### 5.6 Explicit Hybrid Resolution
+### 5.6 FlowField Staged Resolution
 
-`RequestHybrid(...)` is private and only used for explicit internal
-`HybridPathRequest` handling.
-
-It:
-
-- reads the planned `HybridRoutePlan`
-- borrows sub-guides as needed to flatten staged chart and volume segments into
-  one waypoint list
-- returns borrowed sub-guides before returning
-- builds a `HybridGuide` over the flattened waypoint result
-
-Important nuance:
-
-- the temporary borrowed guides used during flattening are returned inside
-  `TryBuildFlattenedHybridWaypoints(...)`
-- the final `HybridGuide` is not backed by a cached survey result
+The remaining hybrid planner feeds `HybridRoutePlan` directly to a
+`FlowFieldGuide`. It has no standalone guide type and no surface-A* conversion
+path.
 
 ## 6. Cache And Lifetime Rules
 
-Each `TrailblazerWorldContext` uses one cache per reusable survey-result or
-route-plan family:
+Graph surface A* owns a dependency-stamped immutable payload cache. The
+remaining guide factory uses one cache per survey-result or route-plan family:
 
-- `_cachedAStarResults`
 - `_cachedFlowResults`
 - `_cachedVolumeResults`
 - `_cachedHybridRoutePlans`
@@ -413,6 +348,8 @@ bucket. The caches remain context-local as an additional ownership boundary.
 
 Guide lifetime rules:
 
+- a surface query returns an exclusive cursor lease over an immutable payload;
+  disposing it releases that reference
 - requesting a guide checks out the backing survey result
 - returning a guide releases the backing survey result
 - `dispose: true` removes the backing result from the cache instead of just
@@ -420,14 +357,9 @@ Guide lifetime rules:
 
 What `ReturnGuide(...)` actually does:
 
-- `AStarGuide` -> returns `TrailMap`
 - `FlowFieldGuide` -> releases staged resources, then returns `FlowMap` when one
   exists
 - `VolumeGuide` -> returns `TrailMap`
-- `HybridGuide` -> no cache action
-
-That last case is intentional in the current design because `HybridGuide` has no
-cached survey-result backing to release.
 
 ## 7. Invalidation And Maintenance
 
@@ -455,12 +387,13 @@ Maintenance behavior:
 ### 8.1 Minimal Direct Usage
 
 ```csharp
-var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
-
-if (context.Guides.RequestGuide(request, out AStarGuide guide))
+NavigationGuideStatus status = context.Guides.RequestGuide(query, out NavigationGuideLease? lease);
+if (status == NavigationGuideStatus.Success && lease != null)
 {
-    guide.TryGetMovementDirection(origin, out Vector3d heading);
-    context.Guides.ReturnGuide(guide);
+    using (lease)
+    {
+        lease.TryGetCurrentWaypoint(out NavigationCellAddress address, out Vector3d footWaypoint);
+    }
 }
 ```
 
@@ -484,7 +417,11 @@ if (context.Guides.RequestGuide(request, out IGuide guide))
 
 ### 8.3 Waypoint Progression
 
-When consuming a waypoint guide directly, the normal pattern is:
+For a graph surface lease, inspect `CurrentWaypointIndex`/`WaypointCount`, read
+the current waypoint, and call `TryAdvanceWaypoint()`. Treat any non-success
+status as terminal for that lease.
+
+When consuming a remaining `IWaypointGuide` directly, the normal pattern is:
 
 1. get indexed movement from `GetCurrentWaypointDirection(...)`
 2. decide when the current waypoint counts as reached
@@ -499,9 +436,9 @@ This is what `NavSteering` does for `IWaypointGuide`.
 - `TryGetMovementDirection(...)` and `GetCurrentWaypointDirection(...)` can
   produce different behavior on waypoint guides.
 - `AdvanceWaypoint()` does not bounds-check.
-- `AStarGuide` starts indexed progression at waypoint `0`.
-- `VolumeGuide` and `HybridGuide` start indexed progression at waypoint `1` when
-  possible.
+- A graph surface lease starts indexed progression at waypoint `0` and checks
+  bounds and dependency status when advancing.
+- `VolumeGuide` starts indexed progression at waypoint `1` when possible.
 - A `FlowFieldGuide` may be executing a staged hybrid route even though its
   public type is still `FlowFieldGuide`.
 - `ReturnGuide(...)` matters even when guide instances themselves are freshly
@@ -521,18 +458,16 @@ If you are modifying the guide layer, verify:
 
 High-risk files:
 
+- `src/Trailblazer/Pathing/Search/AStar/NavigationGuideLease.cs`
 - `src/Trailblazer/Pathing/Search/Guide/PathGuideFactory.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldGuide.cs`
-- `src/Trailblazer/Pathing/Search/AStar/AStarGuide.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
-- `src/Trailblazer/Pathing/Search/Hybrid/HybridGuide.cs`
 - `src/Trailblazer/Pathing/Search/Survey/ReusableSurveyResultCache.cs`
 
 Useful test entry points:
 
-- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarPathSurveyor.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Graph/TrailblazerGuideServiceTests.cs`
 - `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldSurveyor.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarTransitionFallback.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldTransitionFallback.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/Search/Volume/AerialSurveyor.Tests.cs`
 

@@ -4,9 +4,9 @@ This document is the detailed reference for Trailblazer's deterministic steering
 and guide-following layer.
 
 If you only need the high-level architecture, read `Overview.md`. If you want
-the pathing-first request, guide, and transition model without `Navigator`, read
-`Pathing.md`. If you specifically want `IGuide`, `IWaypointGuide`, and
-`PathGuideFactory`, read `PathGuides.md`. If you need the movement-execution
+the pathing-first query, guide, and transition model without `Navigator`, read
+`Pathing.md`. For graph leases and remaining guide contracts, read
+`PathGuides.md`. If you need the movement-execution
 side, read `NavMotor.md`.
 
 The code referenced here lives primarily in:
@@ -20,6 +20,7 @@ The code referenced here lives primarily in:
 - `src/Trailblazer/Navigation/Steering/NavSteeringEvents.cs`
 - `src/Trailblazer/Navigation/Steering/Grouping/GroupBehaviorWeights.cs`
 - `src/Trailblazer/Navigation/Steering/Serialization/PathRequestRecord.cs`
+- `src/Trailblazer/Navigation/Steering/Serialization/PathQueryRecord.cs`
 - `src/Trailblazer/Navigation/MovementGroups/*`
 - `src/Trailblazer/Pathing/Search/Guide/*`
 - `src/Trailblazer/Pathing/Search/Request/*`
@@ -33,7 +34,7 @@ It is responsible for:
 
 - accepting path requests
 - deciding whether a direct line-of-sight move is enough
-- requesting and following A* or flow-field guides
+- requesting and following graph surface leases or remaining flow/volume guides
 - blending target following with avoidance and group behavior
 - detecting stuck movement and triggering repath attempts
 - deciding when movement should stop or count as arrival
@@ -55,7 +56,8 @@ mover.
 
 Its main loop is:
 
-1. Accept an `IPathRequest`.
+1. Accept immutable surface `PathQuery` intent from `Navigator`, or a remaining
+   flow/volume `IPathRequest`.
 2. Validate whether the request still makes sense from the current origin.
 3. Decide between direct travel and guide-following.
 4. Produce a `TargetDirection`.
@@ -113,6 +115,7 @@ Important public state includes:
 - `TargetDirection`
 - `LastTargetDirection`
 - `CurrentRequest`
+- `CurrentQuery`
 - `TrailGuide`
 - `ShouldMove`
 - `IsStuck`
@@ -143,28 +146,24 @@ Important public state includes:
 - `Speed`
 - `Acceleration`
 - `StuckThresholdSpeed`
-- `Size`
+- `NavigationProfile`
+- `BodyShape`
 - `Radius`
 - voxel-occupant identity via `IVoxelOccupant`, including `GlobalId`
 
 In normal `Navigator` usage, the steering integration looks like this:
 
-1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the
-   target position plus navigator-owned defaults configured through
-   `ConfigureForGuidedTraversal(...)`, including transition fallback for
-   chart-backed modes, then forwards it to `Steering.ApplyPathRequest(...)`.
+1. `ApplyGuidedTrekRequest(PathQuery, ...)` validates the exact navigator
+   profile, current foot start, surface domain, A* algorithm, and no-transition
+   shape, then gives immutable query intent to steering. The target-position
+   overload remains only for later flow/volume paths.
 2. Each simulation tick, `Navigator.Simulate()` calls
    `Steering.GetHeading(this)`.
 3. The resulting heading is passed to `NavTurning` and `NavMotor`.
 
-The built-in chart-backed guided algorithms are:
-
-- `SolidPathAlgorithm.AStar`
-- `SolidPathAlgorithm.FlowField`
-
-When the navigator's current traversal medium is `Gas` or `Liquid`, guided
-routing is volume-first and uses the configured solid algorithm only for
-optional chart-backed exit or landing handoffs.
+When the navigator's current traversal medium is `Gas` or `Liquid`, the
+remaining guided branch is volume-first and may use FlowField chart exit or
+landing handoffs.
 
 If you use `NavSteering` directly, the essential rule is:
 
@@ -178,8 +177,8 @@ If you use `NavSteering` directly, the essential rule is:
 That includes:
 
 - the active destination
-- the current request object
-- the current guide, if one exists
+- the current immutable surface query or remaining request object
+- the graph lease or remaining guide, if one exists
 - the line-of-sight versus guided-path mode
 - stuck and repath counters
 - short-term auto-stop cooldown
@@ -187,25 +186,27 @@ That includes:
 
 Two internal concepts are especially important:
 
-### 5.1 `_currentRequest`
+### 5.1 Query Or Remaining Request
 
-This is the active `IPathRequest` for the current movement session. It is reused
-and updated as the navigator moves.
+`_currentQuery` is the active immutable graph surface intent. Repathing replaces
+only its start with the owner's current foot point and preserves every other
+query value. `_currentRequest` remains only for flow/volume sessions.
 
-### 5.2 `_trailGuide`
+### 5.2 Guide State
 
-This is the active `IGuide` returned by `PathGuideFactory`.
+`_navigationGuideLease` is the active graph surface cursor. `_trailGuide` is the
+remaining `IGuide` used by flow/volume sessions.
 
 It may be:
 
 - `null`, for direct travel or no active movement
-- an `AStarGuide`
+- a `NavigationGuideLease`
 - a `FlowFieldGuide`
 - a `VolumeGuide`
 
-When transition-aware guided fallback is enabled, `AStarGuide` and
-`FlowFieldGuide` still remain the public guide shapes. The staged transition
-behavior stays internal to the request-resolution and guide layers.
+Transition-aware FlowField behavior stays internal to the remaining
+request-resolution and guide layers. Surface queries do not fall back through
+that route.
 
 Gas and liquid guided travel both use the raw-volume path flow. They stay
 guide-free while the direct corridor is clear, then allocate a `VolumeGuide`
@@ -236,25 +237,30 @@ frame.
 
 ## 6. Request Lifecycle
 
-### 6.1 ApplyPathRequest(...)
+### 6.1 Starting A Session
 
 This is the start of a steering session.
 
-It:
+For surface travel, `Navigator.ApplyGuidedTrekRequest(PathQuery, ...)` validates
+the query before steering stores it. `ApplyPathRequest(...)` remains the direct
+entry point for flow/volume requests.
 
-- validates that the request has usable endpoints
+Starting either session:
+
+- records the exact destination and active intent
 - clears previous stuck state
 - clears line-of-sight state
 - records the exact destination point
-- stores the request and last known unit size
+- stores either immutable query intent or the remaining request
 - marks movement as active
 - schedules a path validation pass on the next `GetHeading(...)`
 - optionally assigns a movement group id for shared group steering
 - routes shared movement-group bookkeeping through an internal coordinator so
   hosts still only drive `NavSteering`
 
-If the request is invalid or lacks endpoints, `ApplyPathRequest(...)` calls
-`Arrive()` immediately.
+If a remaining request is invalid or lacks endpoints,
+`ApplyPathRequest(...)` calls `Arrive()` immediately. Invalid surface query
+shape is rejected by `Navigator` before steering state changes.
 
 Important detail:
 
@@ -287,7 +293,7 @@ The method returns `Vector3d.Zero` if:
 - `CanMove` is false
 - the movement session is not active
 - the agent has already arrived
-- the request or path becomes invalid
+- the current query/request or guide becomes terminally invalid
 
 ### 7.2 Path Validation
 
@@ -296,7 +302,9 @@ context is still valid.
 
 If `CanPathfind` is true, it calls `ValidateMovementPath(navigator.Position)`.
 
-The built-in aerial request mode always validates its live origin/destination,
+Graph surface validation checks the active lease status each tick. `Stale` and
+capacity pressure schedule a deterministic retry; other terminal acquisition
+statuses end the session. The built-in aerial request mode always validates its live origin/destination,
 because it may switch between direct 3D travel and a cached aerial guide as
 blockers appear or disappear inside authored or configured open volume.
 
@@ -355,8 +363,8 @@ If it returns `false`, steering:
 
 If the target direction is non-zero:
 
-- `IWaypointGuide.AdvanceWaypoint()` may be called when
-  `ShouldAdvanceToNextWaypoint()` returns true
+- the graph lease advances through `TryAdvanceWaypoint()`, or a remaining
+  `IWaypointGuide` advances, when `ShouldAdvanceToNextWaypoint()` returns true
 - `SetDeceleration(...)` can scale the heading magnitude down when approaching
   the target through a guide
 
@@ -372,12 +380,11 @@ This method is the bridge between steering and pathing.
 It performs the following work:
 
 1. skip if no request pass is scheduled
-2. detect unit-size changes
-3. update the request origin with `TrySetOrigin(...)`
-4. fail if endpoints are no longer valid
-5. short-circuit if there is zero displacement
-6. check direct line-of-sight via `IsDestinationInSight(...)`
-7. request a guide through `PathGuideFactory.RequestGuide(...)` if needed
+2. for a surface query, replace only the start foot position and request a new
+   dependency-validated lease through the context guide service
+3. for a remaining request, update its origin and validate endpoints
+4. apply direct line-of-sight shortcuts where that remaining branch supports it
+5. request a remaining guide if needed
 
 This means `NavSteering` does not blindly follow a cached guide forever. It
 revalidates from the current position.
@@ -391,18 +398,21 @@ mode:
 - no guide is required
 - `FindTargetDirection(...)` aims directly at `Destination`
 
-This is the cheapest successful pathing outcome.
+This is the cheapest successful outcome for remaining flow/volume sessions.
+The current graph surface path always consumes its certified waypoint lease;
+Phase 6 owns graph navigation-ray shortcuts.
 
 ### 8.3 Guided Travel
 
 If direct travel is not valid, steering requests a guide:
 
-- `AStarGuide` for waypoint-driven motion
+- `NavigationGuideLease` for graph surface waypoint motion
 - `FlowFieldGuide` for field sampling
 - `VolumeGuide` for 3D voxel detours when a volume request loses straight-line
   access
 
-Guide creation and reuse are delegated to `PathGuideFactory`.
+Graph surface acquisition goes through `TrailblazerGuideService`; the remaining
+guide factory owns flow/volume creation and reuse.
 
 For aerial requests, direct travel and guide-following are both valid runtime
 outcomes:
@@ -413,8 +423,9 @@ outcomes:
 
 ### 8.4 Guide Loss or Invalidity
 
-If guide resolution fails or the guide disappears, steering treats the path as
-invalid and stops or repaths rather than continuing with stale state.
+If graph acquisition reports `Stale` or `CapacityExceeded`, steering releases
+the old lease and retries on the next frame. Other terminal statuses stop the
+session. Remaining guide loss retains its existing stop/repath behavior.
 
 `SetTrailGuide(null)` is tolerated, but the next heading pass will collapse to a
 zero target unless a new valid path is produced.
@@ -429,6 +440,7 @@ blending.
 It resolves in this order:
 
 - direct vector toward `Destination` if `HasLineOfSightPath`
+- current graph waypoint from `NavigationGuideLease`
 - waypoint direction if the guide implements `IWaypointGuide`
 - generic guide direction through `IGuide.TryGetMovementDirection(...)`
 
@@ -481,16 +493,17 @@ Repath behavior includes:
 
 - clearing `HasLineOfSightPath`
 - leaving the movement group if grouped
-- trying guide-specific fallback through `TryGetFallbackDirection(...)`
-- otherwise scheduling a new path request for the next frame
-- disposing the current guide instead of returning a bad path to the pool
+- for graph surface paths, disposing the lease and scheduling the same immutable
+  query with only its start foot position replaced
+- for remaining guides, trying `TryGetFallbackDirection(...)` or scheduling a
+  new request
 
 This is one of the most important correctness paths in the class because it
 crosses:
 
 - runtime movement
 - guide lifetime
-- path caching
+- graph dependency validation and remaining path caching
 
 ## 11. Arrival vs Stop
 
@@ -513,8 +526,8 @@ It does not mark the destination as reached.
 `Arrive()`:
 
 - calls `StopMove()`
-- returns the active guide to `PathGuideFactory`
-- clears the current request
+- disposes the graph lease or returns a remaining guide
+- clears the current query/request
 - clears distance and direction state
 - marks `IsAtDestination = true`
 - fires `OnArrive`
@@ -539,6 +552,9 @@ It does not answer:
 - whether the best path is direct
 
 This is why steering still needs guide resolution when LOS fails.
+
+This chart/volume LOS helper is not surface-A* authority. Graph surface shortcuts
+wait for the certified navigation-ray work in Phase 6.
 
 ## 13. Group and Avoidance Steering
 
@@ -642,8 +658,7 @@ These events are useful for:
 With a concrete `Navigator`, the usual flow is:
 
 ```csharp
-navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
-navigator.ApplyGuidedTrekRequest(destination, rate: TrekRate.Moderate);
+navigator.ApplyGuidedTrekRequest(query, rate: TrekRate.Moderate);
 
 context.Simulate();
 navigator.Simulate();
@@ -652,16 +667,17 @@ navigator.CommitFrameMotion();
 
 Under the hood:
 
-1. `Navigator.ApplyGuidedTrekRequest(...)` creates a built-in path request from
-   the target position and navigator defaults, then forwards it to
-   `NavSteering`.
+1. `Navigator.ApplyGuidedTrekRequest(PathQuery, ...)` requires the exact
+   navigator profile and current foot start, then hands immutable surface intent
+   to `NavSteering`.
 2. `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The returned heading is passed to turning and motor systems.
 
-If you use `NavSteering` without `Navigator`, the minimum pattern is:
+Direct `NavSteering.ApplyPathRequest(...)` remains available for the unported
+flow/volume request families:
 
 ```csharp
-var steer = new NavSteering(context, radius);
+var steer = new NavSteering(context, profile.Shape.Radius);
 steer.ApplyPathRequest(request);
 
 Vector3d heading = steer.GetHeading(agent);
@@ -676,11 +692,9 @@ The essential rule is:
 
 ### Mutating the active request externally
 
-`CurrentRequest` is a live object reference. If code mutates it externally,
-steering sees the mutation directly. This can make tests look like repathing
-happened even when only the request object changed in place.
-
-There is already a test note in `NavSteering.Tests` calling this out.
+Surface `CurrentQuery` is immutable. `CurrentRequest` remains a live object only
+for flow/volume sessions, so external mutation of those requests is still
+visible to steering.
 
 ### Forgetting that direct travel skips guide allocation
 

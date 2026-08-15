@@ -105,7 +105,9 @@ The main entry points are:
 - `ReplaceTrekCondition(TrekCondition state)`
 - `Reset()`
 - `ApplyInputTrekRequest(...)`
-- `ApplyGuidedTrekRequest(...)`
+- `ApplyGuidedTrekRequest(PathQuery query, ...)` for graph surface travel
+- `ApplyGuidedTrekRequest(Vector3d targetPosition, ...)` for remaining
+  flow/volume travel
 - `ToggleGuidedJump(bool status)`
 - `ToggleGuidedFlight(bool status)`
 - `ToggleGuidedSwim(bool status)`
@@ -121,7 +123,6 @@ The main entry points are:
 - `AddPositionDelta(...)`
 - `ApplyRotationDelta(...)`
 - `AddVelocityDelta(...)`
-- `GetFootPosition()`
 
 Important public state includes:
 
@@ -138,22 +139,21 @@ Important public state includes:
 - `Motor`
 - `StuckThresholdSpeed`
 - `IsGuideded`
-- `Size`
+- `NavigationProfile`
+- `BodyShape`
 - `Radius`
-- `FootPositionAdjust`
-- `GuidedPathMode`
+- `FootPosition`
 - `GuidedAllowUnwalkableEndpoints`
 - `GuidedAllowTraversalTransitions`
 - `GuidedMaxClimbHeight`
-- `GuidedAStarHeuristic`
 - `GuidedFlowFieldExtraFloodRange`
 - `GlobalId`
 - `OccupantGroupId`
 - `IsLockedOn`
 
-`GuidedPathMode` and the related guided request defaults are read-only from the
-public API. Configure them with `ConfigureForGuidedTraversal(...)` so the
-navigator can keep its hosted request-building contract centralized.
+`NavigationProfile` is the sole body/profile authority. `BodyShape`, `Radius`,
+and `FootPosition` are derived from it. `ConfigureForGuidedTraversal(...)`
+controls only the remaining flow/volume request defaults.
 
 Protected frame-local state includes:
 
@@ -284,7 +284,7 @@ It:
 - sets `Rotation`
 - derives `Forward`
 - sets starting `Velocity`
-- sets `Size`
+- stores the required exact `NavigationProfile`
 - marks `_isSet = true`
 
 It does not create the steering, turning, or motor controllers yet.
@@ -363,32 +363,39 @@ step.
 
 `ApplyGuidedTrekRequest(...)` switches the navigator into guided mode.
 
-It:
+For graph-backed surface travel, pass a complete immutable `PathQuery`. The
+navigator requires:
+
+- `query.Agent == NavigationProfile`
+- `query.Start.Position == FootPosition`
+- surface-to-surface `PathAlgorithm.AStar`
+- `AllowTransitions == false`
+
+It then:
 
 - sets `IsGuideded = true`
 - clears the current manual direction
 - stores guided request state in `_frameRequest`
-- builds a concrete `IPathRequest` from the target position, the navigator's
-  current state, and guided-path defaults
 - optionally accepts a shared `groupId` for grouped movement
-- forwards the request to `Steering.ApplyPathRequest(...)`
+- gives the exact query to steering, which owns and disposes the resulting
+  `NavigationGuideLease`
 
-Use `ConfigureForGuidedTraversal(...)` to set the navigator-owned request
+The target-position overload remains for the unported flow/volume branch. It
+uses FlowField for solid chart travel and volume-first routing for gas/liquid.
+
+Use `ConfigureForGuidedTraversal(...)` only for those remaining request
 defaults:
 
 ```csharp
 navigator.ConfigureForGuidedTraversal(
-    pathAlgorithm: SolidPathAlgorithm.FlowField,
     allowUnwalkableEndpoints: true,
     allowTraversalTransitions: true,
-    aStarHeuristic: HeuristicMethod.Euclidean,
     flowFieldExtraFloodRange: 12,
     maxClimbHeight: (Fixed64)2);
 ```
 
-`allowTraversalTransitions` controls whether the built-in chart-backed guided
-modes (`AStar` and `FlowField`) may fall back through authored
-`TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs
+`allowTraversalTransitions` controls whether the remaining FlowField branch may
+fall back through authored `TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs
 from liquid volume into a follow-up chart request when the requested target is
 chart-backed outside the active liquid volume, plus bounded aerial landing
 handoffs when an authored volume-to-chart landing route beats staying in
@@ -431,15 +438,9 @@ use a bounded authored landing handoff into chart-backed follow-up travel.
 Passing the same non-negative `groupId` to multiple navigators lets
 `NavSteering` preserve relative formation offsets while the group stays compact.
 
-The built-in request factory currently supports:
-
-- `SolidPathAlgorithm.AStar`
-- `SolidPathAlgorithm.FlowField`
-
 When `_frameCondition.Medium` is `TraversalMedium.Gas` or
 `TraversalMedium.Liquid`, the navigator uses `VolumePathRequest` first and uses
-the configured solid path algorithm only for optional chart-backed follow-up
-handoffs.
+FlowField only for optional chart-backed follow-up handoffs.
 
 If a project needs a different request shape, override
 `TryCreateGuidedPathRequest(...)`.
@@ -682,11 +683,11 @@ that feeds steering behavior.
 
 ## 12. Utility Methods and Extension Points
 
-### 12.1 GetFootPosition()
+### 12.1 FootPosition
 
 Returns:
 
-- `Position + Vector3d.Down * FootPositionAdjust`
+- `Position + Vector3d.Down * BodyShape.RootToFootOffsetY`
 
 This is used by platform and ground-contact logic.
 
@@ -701,8 +702,8 @@ testing, host integration, or stricter determinism workflows.
 
 ### 12.3 TryCreateGuidedPathRequest(...)
 
-This protected factory hook lets subclasses build custom request types without
-replacing steering.
+This protected factory hook remains for custom flow/volume request types. Graph
+surface travel enters through the exact public `PathQuery` overload.
 
 ## 13. Common Integration Pattern
 
@@ -710,12 +711,19 @@ A typical concrete navigator flow looks like this:
 
 ```csharp
 var navigator = new MyNavigator(context);
+var profile = new NavigationAgentProfile(
+    new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
+    Fixed64.One,
+    Fixed64.One,
+    Fixed64.FromFraction(1, 4),
+    TraversalMedia.Solid,
+    TraversalCapability.None);
 
 navigator.Setup(
     position: new Vector3d(0, 0, 0),
+    navigationProfile: profile,
     rotation: FixedQuaternion.Identity,
-    velocity: Vector3d.Zero,
-    size: Fixed64.One);
+    velocity: Vector3d.Zero);
 
 navigator.Initialize(new TrekCondition
 {
@@ -724,8 +732,17 @@ navigator.Initialize(new TrekCondition
     GroundState = new GroundCondition()
 });
 
-navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
-navigator.ApplyGuidedTrekRequest(new Vector3d(5, 0, 5), rate: TrekRate.Moderate);
+var query = new PathQuery(
+    new NavigationEndpoint(navigator.FootPosition, "Ground"),
+    new NavigationEndpoint(new Vector3d(5, 0, 5), "Ground"),
+    profile,
+    new NavigationAreaPolicyKey("default", revision: 1),
+    new TraversalIntent(TraversalDomain.Surface, TraversalMedium.Solid, TraversalDomain.Surface),
+    PathAlgorithm.AStar,
+    new NavigationWorkBudget(1024, 64, 4096, 16384, 4096, 0, 0, 0, 0, 0, 0),
+    allowTransitions: false);
+
+navigator.ApplyGuidedTrekRequest(query, rate: TrekRate.Moderate);
 
 context.Simulate();
 navigator.Simulate();

@@ -14,14 +14,13 @@ chart lifecycle details, pair this with `NavigationCharts.md` and
 
 Relevant code:
 
-- `src/Trailblazer/Pathing/Search/Request/IPathRequest.cs`
-- `src/Trailblazer/Pathing/Search/Request/PathRequest.cs`
-- `src/Trailblazer/Pathing/Search/AStar/AStarPathRequest.cs`
+- `src/Trailblazer/Pathing/Query/PathQuery.cs`
+- `src/Trailblazer/Pathing/Search/AStar/NavigationGuideLease.cs`
+- `src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldPathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridPathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Guide/PathGuideFactory.cs`
-- `src/Trailblazer/Pathing/Search/AStar/AStarSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/VoxelResolution/SolidVoxelFinder.cs`
@@ -36,11 +35,11 @@ It is responsible for:
 
 - chart registration and initialization through `PathManager`
 - endpoint resolution from world positions into voxels
-- chart-backed A* and flow-field requests
+- graph-backed surface A* queries and chart-backed flow-field requests
 - chart-optional raw-volume requests
 - staged transition-aware fallback between chart, authored climb, and volume
   segments
-- reusable survey result caching through `PathGuideFactory`
+- graph payload leases plus remaining reusable flow/volume survey caching
 
 It is not responsible for:
 
@@ -57,17 +56,16 @@ Those responsibilities belong to `Trailblazer.Navigation`.
 When you use `Trailblazer.Pathing` directly, the normal flow is:
 
 1. Create or attach a `TrailblazerWorldContext` for the `GridWorld`.
-2. For chart-backed requests, build one or more `NavigationChart` instances.
-3. Register each chart with `context.Pathing.Register(...)`.
-4. Call `context.Pathing.InitializeChart(...)` or `InitializeAllCharts()` if
-   initialization was deferred.
-5. Optionally configure supplemental `context.VolumeRules` before creating
+2. For surface A*, publish navigation maps and a matching navigation-area policy.
+3. For remaining flow/volume requests, register and initialize the required
+   `NavigationChart` state.
+4. Optionally configure supplemental `context.VolumeRules` before creating
    constrained volume requests.
-6. Create an `IPathRequest` with a context-bound factory.
-7. Ask `context.Guides` for a guide.
-8. Consume the guide in your own movement or planning system.
-9. Return the guide with `context.Guides.ReturnGuide(...)`.
-10. On teardown, dispose or reset the context.
+5. Create a complete `PathQuery` or a remaining flow/volume request.
+6. Ask `context.Guides` for a guide.
+7. Consume and dispose the graph lease, or return a remaining guide with
+   `context.Guides.ReturnGuide(...)`.
+8. On teardown, dispose or reset the context.
 
 Chart registration alone is not enough. Chart-backed requests depend on live
 `SolidChartPartition` ownership, and that only exists after initialization. Full
@@ -75,11 +73,22 @@ Chart registration alone is not enough. Chart-backed requests depend on live
 whether that comes from chart cells that create `VolumeChartPartition`
 instances, `VolumeMediumRules`, or both.
 
-## 3. Core Request Contract
+## 3. Core Query Contract
 
-All request types implement `IPathRequest`.
+Surface A* uses immutable `PathQuery` intent. It contains:
 
-Shared state:
+- exact start and end `NavigationEndpoint` values, including optional `MapId`
+  filters and strict/nearest resolution policy
+- one exact `NavigationAgentProfile` and its authoritative
+  `KinematicBodyShape`
+- a versioned `NavigationAreaPolicyKey`
+- surface `TraversalIntent` and `PathAlgorithm.AStar`
+- one finite `NavigationWorkBudget`
+- `AllowTransitions`, which must be `false` for the current surface service
+
+The remaining flow/volume paths still implement `IPathRequest`.
+
+Their shared state includes:
 
 - `Origin`: exact world-space start position supplied by the caller
 - `TargetPosition`: exact world-space target position supplied by the caller
@@ -118,16 +127,17 @@ Important model rules:
 - Endpoint identities carry GridForge world id, world generation, grid id, grid
   generation, and voxel index. Grid rebuilds and id reuse therefore cannot
   alias stale cached routes.
-- A*, volume, and hybrid keys include their behavior-affecting request options.
+- Volume and hybrid keys include their behavior-affecting request options.
   Hybrid transition ids remain ordered and ordinal, and hybrid keys retain the
   exact endpoint positions embedded in staged segment requests. Flow-field keys
   remain destination-centric so agents can share a compatible field.
 - A request can have world positions stored and still be invalid if endpoints or
   search range cannot be resolved.
 
-## 4. `PathRequest` Base Behavior
+## 4. Remaining `PathRequest` Base Behavior
 
-`PathRequest` is the shared base class for chart-backed requests.
+`PathRequest` is the shared base class for the remaining chart-backed flow
+request.
 
 It provides:
 
@@ -151,45 +161,31 @@ valid voxel.
 
 ## 5. Request Families
 
-### 5.1 `AStarPathRequest`
+### 5.1 Surface `PathQuery`
 
-Use `AStarPathRequest` when you want a concrete waypoint trail for one route.
-
-Key configuration:
-
-- `Heuristic`
-- `MaxClimbHeight`
-- `AllowUnwalkableEndpoints`
-- `AllowTraversalTransitions`
-
-When `AllowTraversalTransitions` is enabled, authored climb topology generated
-from `SC` / `SC!` tokens participates in the same staged fallback surface as
-jump, swim, and aerial transitions.
-
-Use it when:
-
-- one agent or one route needs a specific trail
-- you want explicit waypoint progression
-- path reuse is keyed by both start and end voxels
-
-Cache-key behavior:
-
-- includes both `StartNode` and `EndNode`
-- includes `UnitSize`, `AllowUnwalkableEndpoints`, `AllowTraversalTransitions`,
-  `Heuristic`, `MaxClimbHeight`, and `MaxPathSearchRange`
-- also includes `TraversalTransitionRegistry.RegistryVersion` when transition
-  fallback is enabled
-
-Example:
+Use `PathQuery` with `PathAlgorithm.AStar` when one surface route needs an exact
+waypoint trail. Callers supply the complete profile, policy revision, endpoint
+rules, traversal intent, and finite work budget; the search selects its own
+certified fixed-point heuristic.
 
 ```csharp
-var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
-if (context.Guides.RequestGuide(request, out AStarGuide guide))
+NavigationGuideStatus status = context.Guides.RequestGuide(
+    query,
+    out NavigationGuideLease? lease);
+
+if (status == NavigationGuideStatus.Success && lease != null)
 {
-    // Consume guide.ActiveWaypoints or guide.TryGetMovementDirection(...)
-    context.Guides.ReturnGuide(guide);
+    using (lease)
+    {
+        lease.TryGetCurrentWaypoint(out NavigationCellAddress address, out Vector3d footWaypoint);
+    }
 }
 ```
+
+The lease is guide-local mutable cursor state over immutable cached payload
+data. It validates graph dependencies on acquisition, sampling, and advancement.
+There is no public A* surveyor, request class, guide pool, caller-selected
+heuristic, or chart reachability preflight.
 
 ### 5.2 `FlowFieldPathRequest`
 
@@ -203,9 +199,8 @@ Key configuration:
 - `AllowUnwalkableEndpoints`
 - `AllowTraversalTransitions`
 
-As with `AStarPathRequest`, enabling `AllowTraversalTransitions` also allows
-staged fallback through authored climb topology when direct chart routing cannot
-complete the route.
+Enabling `AllowTraversalTransitions` allows staged fallback through authored
+climb topology when direct flow routing cannot complete the route.
 
 Use it when:
 
@@ -284,14 +279,8 @@ var request = VolumePathRequest.Create(
 
 `HybridPathRequest` is the internal staged-routing adapter.
 
-It is not the normal public entry point. External callers should usually create:
-
-- `AStarPathRequest`
-- `FlowFieldPathRequest`
-- `VolumePathRequest`
-
-`HybridPathRequest` exists so chart-backed requests can stay public and simple
-while still falling back through authored transitions.
+It is not a public surface-A* entry point. It remains only for the unported
+FlowField transition fallback and its volume segments.
 
 Current planned route shapes are:
 
@@ -307,8 +296,8 @@ or mantle locomotion after the volume leg completes.
 
 Important internal behavior:
 
-- `HybridPathRequest.CreateFromAStar(...)` and `CreateFromFlowField(...)`
-  preserve the caller's original intent
+- `HybridPathRequest.CreateFromFlowField(...)` preserves the caller's FlowField
+  intent
 - `RebuildPlan()` calls `HybridRoutePlanner`
 - validity depends on both endpoints and a non-null `RoutePlan`
 - its hash includes the directed transition ids in the chosen route plan
@@ -318,9 +307,14 @@ internal infrastructure rather than a user-facing request family.
 
 ## 6. Endpoint Resolution Rules
 
-The request object is where world-space intent turns into pathing nodes.
+Query admission is where world-space intent turns into graph nodes.
 
-Chart-backed requests use `SolidVoxelFinder`:
+Surface `NavigationEndpoint` values support strict or bounded nearest-navigable
+resolution over mapped instances. An explicit `MapId` filters candidates before
+distance ranking, and the finite query budget bounds every lookup/candidate
+probe.
+
+Remaining chart-backed FlowField requests use `SolidVoxelFinder`:
 
 - direct voxel first
 - nearby chart-traversable neighbor second
@@ -336,7 +330,8 @@ Volume requests use `VolumeVoxelFinder`:
 
 Practical consequences:
 
-- requests can snap endpoints to nearby valid voxels
+- surface queries resolve only according to each endpoint's explicit policy
+- remaining requests can snap endpoints to nearby valid voxels
 - snapped volume endpoints still have to match the requested medium
 - `AllowUnwalkableEndpoints` relaxes endpoint resolution only; it does not make
   the full route ignore walkability
@@ -350,20 +345,23 @@ are the best executable reference for these rules.
 
 ## 7. Transitions and Staged Fallback
 
-Chart-backed requests can opt into authored transitions through
-`AllowTraversalTransitions`.
+The remaining chart-backed FlowField request can opt into authored transitions
+through `AllowTraversalTransitions`.
 
 For the dedicated authored-handoff reference, read
 [`Transitions.md`](Transitions.md).
 
 That opt-in means:
 
-- direct A* or flow-field routing is tried first
+- direct flow-field routing is tried first
 - if direct chart routing fails, `PathGuideFactory` can build a staged fallback
   using `HybridPathRequest`
 - that staged fallback may include authored climb transitions generated from
   explicit climb topology
-- the original public request type still describes the caller's intent
+- the original FlowField request still describes the caller's intent
+
+Surface `PathQuery` currently returns `Unsupported` when transitions are
+enabled; it never falls back through this legacy staged route.
 
 Important distinctions:
 
@@ -393,15 +391,18 @@ For the dedicated guide-layer contract and lifecycle reference, read
 
 Routing by type:
 
-- `AStarPathRequest` -> `AStarGuide`
+- surface `PathQuery` -> `NavigationGuideStatus` plus
+  `NavigationGuideLease` on success
 - `FlowFieldPathRequest` -> `FlowFieldGuide`
 - `VolumePathRequest` -> `VolumeGuide`
-- `HybridPathRequest` -> internal `HybridGuide`
+- `HybridPathRequest` -> internal FlowField staged route plan
 
 Cache behavior:
 
-- A*, flow-field, and volume survey results plus hybrid route plans each use
-  their own `ReusableSurveyResultCache<T>`
+- graph surface payloads use exact dependency-stamped cache identity owned by
+  graph A* admission
+- flow-field and volume survey results plus FlowField hybrid route plans retain
+  their own `ReusableSurveyResultCache<T>` until their owning cutovers
 - the cache key is the exact `request.RequestCacheKey`
 - cached results are reused until invalidated or evicted
 - stale entries are culled by `TrailblazerWorldContext.Simulate()` using the
@@ -409,6 +410,7 @@ Cache behavior:
 
 Important lifecycle rule:
 
+- dispose `NavigationGuideLease` directly
 - requesting a guide directly checks a survey result out of the cache
 - you should return it with `context.Guides.ReturnGuide(...)`
 
@@ -423,11 +425,12 @@ Invalidation sources:
 
 ## 9. Choosing The Right Request
 
-Choose `AStarPathRequest` when:
+Choose a surface `PathQuery` when:
 
 - you need a concrete waypoint chain
 - route identity should include both origin and destination
-- you care about climb limits and waypoint-style path following
+- route legality depends on an exact agent profile, area policy, and bounded
+  waypoint-style graph search
 
 Choose `FlowFieldPathRequest` when:
 
@@ -450,21 +453,16 @@ Choose transition-aware chart requests when:
 
 ## 10. Integration Patterns
 
-### 10.1 Minimal Chart-Backed Pathing
+### 10.1 Minimal Graph Surface Pathing
 
 ```csharp
-NavigationChart chart = NavigationChart.From3D("Ground", data, minBounds, Fixed64.One);
-context.Pathing.Register(chart);
-
-var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
-if (context.Guides.RequestGuide(request, out AStarGuide guide))
+NavigationGuideStatus status = context.Guides.RequestGuide(query, out NavigationGuideLease? lease);
+if (status == NavigationGuideStatus.Success && lease != null)
 {
-    if (guide.TryGetMovementDirection(origin, out Vector3d heading))
+    using (lease)
     {
-        // Use heading in your own system.
+        lease.TryGetCurrentWaypoint(out NavigationCellAddress address, out Vector3d footWaypoint);
     }
-
-    context.Guides.ReturnGuide(guide);
 }
 ```
 
@@ -482,10 +480,10 @@ if (context.Guides.RequestGuide(request, out FlowFieldGuide guide))
 }
 ```
 
-### 10.3 Transition-Aware Chart Pathing
+### 10.3 Transition-Aware FlowField Pathing
 
 ```csharp
-var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
+var request = FlowFieldPathRequest.Create(context, origin, destination, Fixed64.One);
 request.AllowTraversalTransitions = true;
 ```
 
@@ -512,8 +510,8 @@ the request itself.
   `VolumeMediumRules` provides gas membership, or both.
 - `context.Pathing.Reset()` also clears transition registry state and volume
   traversal rules.
-- If you request guides directly and forget `ReturnGuide(...)`, results stay
-  checked out.
+- Dispose graph leases; return remaining flow/volume guides through
+  `ReturnGuide(...)`.
 
 ## 12. AI And Contributor Notes
 
@@ -522,9 +520,10 @@ If you are changing `Trailblazer.Pathing`, read in this order:
 1. this file
 2. `NavigationCharts.md`
 3. `PathManager.md`
-4. the concrete request type you are touching
-5. `PathGuideFactory`
-6. the matching surveyor
+4. `PathQuery` and graph admission for surface A*, or the concrete remaining
+   flow/volume request
+5. `TrailblazerGuideService`
+6. the matching search/provider
 7. the matching tests in `tests/Trailblazer.Tests/Pathing`
 
 High-risk areas:
@@ -544,7 +543,7 @@ When docs and code disagree:
 Good pathing-focused test entry points:
 
 - `tests/Trailblazer.Tests/Pathing/Search/VoxelResolution/SolidVoxelFinder.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarTransitionFallback.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Graph/TrailblazerGuideServiceTests.cs`
 - `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldTransitionFallback.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/Transition/Registry/TraversalTransitionRegistry.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/Manager/PathingNavigationMap.Tests.cs`
@@ -552,7 +551,7 @@ Good pathing-focused test entry points:
 ## 13. Where To Read Next
 
 - `Overview.md` for the whole library architecture
-- `PathGuides.md` for `IGuide`, `IWaypointGuide`, and `PathGuideFactory`
+- `PathGuides.md` for graph leases and remaining guide families
 - `Transitions.md` for authored chart and volume handoffs
 - `VolumeTraversal.md` for raw-volume traversal rules and modes
 - `NavigationCharts.md` for authored surface-space design

@@ -73,7 +73,9 @@ fallback, but explicit bootstrap is the intended integration path.
 1. `TrailblazerManager` advances simulation time and ticks guide-cache cleanup.
 2. `PathManager` owns chart registration, chart initialization/unloading,
    partition pooling, and walkability/neighbor queries.
-3. `AStarSurveyor` and `FlowFieldSurveyor` compute reusable survey results.
+3. Graph-backed surface A* runs through `NavigationAStarAdmissionGate` and
+   `NavigationSurfaceAStarWork`; legacy flow/volume surveyors serve only the
+   unported branches owned by later phases.
 4. `PathGuideFactory` and `ReusableSurveyResultCache<T>` cache and return guide
    data.
 5. `NavSteering` turns a path request into a heading, line-of-sight shortcut,
@@ -199,7 +201,8 @@ Likely hotspots:
 
 - `PathManager` chart initialization, neighbor binding, and unload/invalidate
   flow.
-- `AStarSurveyor` node expansion and edge-validation work.
+- Graph endpoint admission, `NavigationSurfaceAStarWork` expansion, edge
+  evaluation, and A* payload-cache lifecycle.
 - `FlowFieldSurveyor` flood generation and flow-vector generation.
 - `PathGuideFactory` and `ReusableSurveyResultCache<T>` cache hit/miss and
   eviction behavior.

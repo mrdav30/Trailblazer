@@ -147,6 +147,7 @@ public class NavigationGraphLifecycleBenchmarks
             maxAreaPolicies: 64,
             maxAreaRulesPerPolicy: 4_096,
             maxAreaRules: 65_536,
-            maxConcurrentSnapshotLeases: 8);
+            maxConcurrentSnapshotLeases: 8,
+            queryLimits: NavigationQueryLimits.Default);
     }
 }

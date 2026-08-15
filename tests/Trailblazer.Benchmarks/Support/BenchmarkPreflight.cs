@@ -12,34 +12,6 @@ namespace Trailblazer.Benchmarks;
 internal static class BenchmarkPreflight
 {
     /// <summary>
-    /// Verifies that an A* guide request for the given endpoints succeeds and the resulting
-    /// guide has at least one waypoint. Returns the guide to the factory.
-    /// Throws if the request cannot be created or the guide is invalid.
-    /// </summary>
-    public static void AssertAStarRouteExists(
-        TrailblazerWorldContext context,
-        Vector3d origin,
-        Vector3d destination,
-        Fixed64 unitSize)
-    {
-        AStarPathRequest request = AStarPathRequest.Create(context, origin, destination, unitSize)
-            ?? throw new InvalidOperationException(
-                $"Preflight: AStarPathRequest.Create returned null for {origin} -> {destination}. " +
-                "Verify the chart is registered and both endpoints are walkable.");
-
-        if (!context.Guides.RequestGuide(request, out AStarGuide guide))
-            throw new InvalidOperationException(
-                $"Preflight: A* guide request failed for {origin} -> {destination}. " +
-                "Verify both endpoints are on the walkable surface.");
-
-        if (guide.ActiveWaypoints == null || guide.ActiveWaypoints.Length == 0)
-            throw new InvalidOperationException(
-                $"Preflight: A* guide for {origin} -> {destination} returned an empty waypoint list.");
-
-        context.Guides.ReturnGuide(guide);
-    }
-
-    /// <summary>
     /// Verifies that a flow-field guide request for the given endpoints succeeds and the
     /// resulting guide reports a valid field. Returns the guide to the factory.
     /// Throws if the request cannot be created or the guide is invalid.

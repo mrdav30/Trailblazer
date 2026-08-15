@@ -1,299 +1,88 @@
 # Trailblazer Benchmarks
 
-This project benchmarks the path-request and navigation hot paths using
-[BenchmarkDotNet](https://benchmarkdotnet.org/).
-
-The suite is layered so that regression in a high-level steering or cache
-benchmark can be diagnosed by running the lower-level surveyor or
-guide-resolution benchmark in isolation.
+This project uses BenchmarkDotNet to measure current graph, flow-field, volume,
+heap, and map-authoring hot paths. The retired chart-backed A* provider, cache,
+hybrid fallback, and legacy steering scenarios are intentionally absent.
 
 ## Requirements
 
 - .NET 8 SDK
-- `Release` configuration (mandatory — avoid `Debug` for performance
-  measurements)
+- `Release` configuration
 
 ## Running
 
-### List available benchmark selections
+List the available selections:
 
 ```bash
 dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- list
 ```
 
-### Run all benchmarks
+Run all benchmarks:
 
 ```bash
 dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- all
 ```
 
-### Run a selection by alias
+Aliases are derived from benchmark class names by removing `Benchmarks` and
+joining the remaining words with hyphens. Useful selections include:
 
-Aliases are derived from the benchmark class name. `Benchmarks` is stripped and
-the remaining words are joined with `-`. Pass one or more aliases as leading
-arguments before any BenchmarkDotNet flags.
-
-| Alias                     | Benchmark class                  |
-| ------------------------- | -------------------------------- |
-| `a-star-path-request`     | `AStarPathRequestBenchmarks`     |
+| Alias | Benchmark class |
+| --- | --- |
+| `navigation-surface-a-star` | `NavigationSurfaceAStarBenchmarks` |
+| `navigation-guide-service` | `NavigationGuideServiceBenchmarks` |
+| `navigation-a-star-contention` | `NavigationAStarContentionBenchmarks` |
 | `flow-field-path-request` | `FlowFieldPathRequestBenchmarks` |
-| `guide-cache`             | `GuideCacheBenchmarks`           |
-| `navigation-scenario`     | `NavigationScenarioBenchmarks`   |
-| `nav-steering`            | `NavSteeringBenchmarks`          |
-| `navigation-connection-canonicalization` | `NavigationConnectionCanonicalizationBenchmarks` |
-| `navigation-map-bake`     | `NavigationMapBakeBenchmarks`    |
-| `navigation-operation-fold` | `NavigationOperationFoldBenchmarks` |
-| `path-heap`               | `PathHeapBenchmarks`             |
-| `pathing-scenario`        | `PathingScenarioBenchmarks`      |
-| `transition-fallback`     | `TransitionFallbackBenchmarks`   |
-| `volume-path-request`     | `VolumePathRequestBenchmarks`    |
+| `volume-path-request` | `VolumePathRequestBenchmarks` |
+| `path-heap` | `PathHeapBenchmarks` |
+| `navigation-map-bake` | `NavigationMapBakeBenchmarks` |
+| `navigation-graph-lifecycle` | `NavigationGraphLifecycleBenchmarks` |
+| `navigation-graph-composition` | `NavigationGraphCompositionBenchmarks` |
+| `navigation-graph-contention` | `NavigationGraphContentionBenchmarks` |
+
+For a fast development smoke check:
 
 ```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- navigation-guide-service --job short --inProcess
 ```
 
-Multiple aliases run together:
+Do not treat short-run results as canonical measurements.
 
-```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request guide-cache
-```
+## Current provider benchmarks
 
-### Filter to specific methods
+`NavigationSurfaceAStarBenchmarks` measures production endpoint admission plus
+an uncached graph A* search at approximately 100, 1K, 10K, and 100K expanded
+nodes. BenchmarkDotNet reports latency and managed allocation; cleanup emits
+the deterministic work-meter, one-frontier heap, workspace, and result-byte
+counters for each case.
 
-Add `--filter` after the alias. The filter pattern is forwarded to
-BenchmarkDotNet's method-name filter and supports `*` wildcards.
+`NavigationGuideServiceBenchmarks.WarmGuideAcquireSampleAdvanceDispose`
+measures public acquire, sample, advance, and dispose after the graph payload
+and lease pools are warm. Its 32x32 open plane and 1,024-cell corridor match the
+retired provider's comparison shapes and preflight at zero managed bytes.
 
-```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --filter '*Corridor*'
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- nav-steering --filter '*SteadyState*'
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- all --list flat
-```
+`NavigationAStarContentionBenchmarks` uses persistent manual worker threads at
+1/2/4/8 concurrency. Same-key workers search concurrently, finish in reversed
+stable-ordinal order, then publish through the canonical prefix and report
+duplicate convergence plus reservation, result-payload, active/retained
+workspace, worker-thread allocation, detached, and retired accounting. The
+measured algorithm uses no `Task` scheduling; worker allocation excludes the
+threads and events created in global setup.
 
-### Fast development check (in-process short job)
+`FlowFieldPathRequestBenchmarks` and `VolumePathRequestBenchmarks` remain while
+their legacy providers still support the volume/handoff branch. Later phases
+remove those benchmarks with the corresponding provider authority.
 
-Use BenchmarkDotNet's built-in short job with the in-process toolchain during
-development to verify benchmark code compiles and produces plausible numbers
-without a full benchmark run.
+## Benchmark design
 
-```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --job short --inProcess
-```
-
-Do not treat results from short-run mode as canonical measurements.
-
-## Benchmark Suite Structure
-
-### A\* request and guide hot paths
-
-**Class**: `AStarPathRequestBenchmarks` | **Alias**: `a-star-path-request`  
-**Categories**: `Pathing`, `AStar`
-
-Covers: raw `AStarSurveyor` survey cost, cold and warm
-`PathGuideFactory.RequestGuide` across open-plane, corridor, sparse-blocker,
-choke-point, and heuristic-comparison scenarios.
-
-Key benchmarks:
-
-- `RawSurvey_OpenPlane32` — baseline raw survey without guide allocation
-- `WarmGuide_OpenPlane32` — the baseline warm cache hit (marked
-  `Baseline = true`)
-- `ColdGuide_Corridor1024` — long-route reconstruction cost, reveals waypoint
-  list insertion scaling
-- `FailedRoute_ChokeUnitSize2` — unsuccessful survey with unit size 2,
-  single-voxel gap
-
-### Flow-field request and reuse hot paths
-
-**Class**: `FlowFieldPathRequestBenchmarks` | **Alias**:
-`flow-field-path-request`  
-**Categories**: `Pathing`, `FlowField`
-
-Covers: raw `FlowFieldSurveyor` field generation, cold and warm guide
-resolution, many-start destination reuse, coverage miss, `SampleFlowVector` at
-exact and fractional positions, and `ExtraFloodRange` scaling on blocker maps.
-
-Key benchmarks:
-
-- `WarmGuide_OpenPlane64` — baseline destination-centric warm reuse (marked
-  `Baseline = true`)
-- `ManyStartWarmReuse_32Starts` — proves field is generated once and reused for
-  32 different starts
-- `SampleFlowVector_FractionalPosition` — fractional-position sampling cost
-- `RawSurvey_Blocker_LargeFloodRange` — shows ExtraFloodRange impact on flood
-  generation
-
-### Guide cache lifecycle
-
-**Class**: `GuideCacheBenchmarks` | **Alias**: `guide-cache`  
-**Categories**: `Pathing`, `Cache`
-
-Covers: A\* and flow-field cache hits, misses below and above the 128-entry LRU
-capacity, `InvalidateCacheFor`, full-capacity mixed-family invalidation,
-`CullExpiredGuides` with no stale and many stale entries, mixed-family culling,
-and `FlushCache` force versus soft modes.
-
-Key benchmarks:
-
-- `AStarCacheHit` — baseline cache hit (marked `Baseline = true`)
-- `AStarCacheMiss_OverCapacity_Eviction` — exercises LRU eviction above the
-  128-entry threshold
-- `InvalidateMixedCacheFor_*` — isolates chart invalidation with 128 seeded
-  entries per cache family
-- `CullMixedCache_*` — isolates mixed-family stale culling with 128 seeded
-  entries per cache family
-- `CullExpiredGuides_ManyStale` — cost of scanning 128 stale entries at frame
-  10000
-
-### NavSteering frame-facing hot paths
-
-**Class**: `NavSteeringBenchmarks` | **Alias**: `nav-steering`  
-**Categories**: `Navigation`, `Steering`
-
-Covers: first-frame guide resolution, direct-LOS steady state at default and
-every-frame cooldowns, guided A\* and flow-field steady state, and
-`ComputeCombinedSteering` at 32, 128, and 512 registered occupants.
-
-Key benchmarks:
-
-- `SteadyState_DirectLOS_DefaultCooldown` — baseline (marked `Baseline = true`)
-- `SteadyState_DirectLOS_EveryFrameRecheck` — every-frame LOS recheck cost
-- `FirstFrame_GuidedAStar` — cold first-frame cost including guide resolution
-- `CombinedSteering_Density512` — occupant-density scan at maximum tested
-  density
-
-### Navigation scenario workloads
-
-**Class**: `NavigationScenarioBenchmarks` | **Alias**: `navigation-scenario`  
-**Categories**: `Navigation`, `Scenario`
-
-Covers: first-frame and steady fixed-step updates for 100-agent and 500-agent
-mixed workloads containing direct LOS, A\*, flow-field, and combined-steering
-agents.
-
-Key benchmarks:
-
-- `FirstFrameMixedSteering_100Agents` — batched cold first-frame guide and
-  steering setup
-- `FirstFrameMixedSteering_500Agents` — larger first-frame hitch shape
-- `FixedStepMixedSteering_100Agents` — steady per-agent mixed frame cost
-- `FixedStepMixedSteering_500Agents` — larger steady per-agent mixed frame cost
-
-### Pathing scenario workloads
-
-**Class**: `PathingScenarioBenchmarks` | **Alias**: `pathing-scenario`  
-**Categories**: `Pathing`, `Scenario`
-
-Covers: dynamic chart invalidation plus A\* repath waves, shared flow-field
-guide checkout for 100 and 500 starts, reachability snapshot
-first-hit/steady-hit/invalidation checks, transition request construction and
-cache-key reads, transition request churn, and raw flow-field flood-range
-sweeps.
-
-Key benchmarks:
-
-- `DynamicObstacleUpdate_RepathWave64` — one chart update followed by 64 A\*
-  guide requests
-- `FlowFieldSharing_500Starts` — many starts sharing one cached destination
-  field
-- `ReachabilityFirstHit_ClearanceCombos` — distinct `(unitSize, maxClimbHeight)`
-  snapshot keys
-- `ReachabilityFirstHit_WorkloadCombos` — 32 distinct host-shaped reachability
-  snapshot keys
-- `ReachabilitySteadyHit_ActiveCombo` — repeated unreachable checks against the
-  active snapshot
-- `ReachabilityInvalidate_ActiveSnapshot` — chart-update invalidation of the
-  active snapshot
-- `TransitionRequestChurn_64Requests` — host-style request creation every fixed
-  step
-- `FlowFieldFloodRange_OpenPlane128` — large raw flow-field flood and allocation
-  shape
-
-### Path heap metadata
-
-**Class**: `PathHeapBenchmarks` | **Alias**: `path-heap`  
-**Categories**: `Pathing`, `Heap`
-
-Covers: reusable path-heap metadata add, lookup, path-cost read, removal, close
-marking, closed enumeration, and fast-clear replay without full survey setup
-cost.
-
-Key benchmarks:
-
-- `MetadataReplay_Structured4096` — reproduces the 4096-node structured-key
-  replay at 8192 and 32768 metadata-capacity warmup shapes
-
-### Transition-aware and volume routing
-
-#### Transition fallback
-
-**Class**: `TransitionFallbackBenchmarks` | **Alias**: `transition-fallback`  
-**Categories**: `Pathing`, `Transition`
-
-Covers: cold and warm A\* guide resolution for a disconnected jump-link scenario
-and a solid→swim-entry→liquid→swim-exit→solid path; cold and warm flow-field
-staged guide resolution for a jump-link transition.
-
-Key benchmarks:
-
-- `WarmGuide_AStar_JumpLink` — baseline warm guide hit through a transition
-  (marked `Baseline = true`)
-- `ColdGuide_AStar_SwimPath` — multi-segment transition assembly cold cost
-- `ColdGuide_FlowField_JumpLink` — staged flow-field guide cold initialization
-
-#### Volume path requests
-
-**Class**: `VolumePathRequestBenchmarks` | **Alias**: `volume-path-request`  
-**Categories**: `Pathing`, `Volume`
-
-Covers: raw `VolumeSurveyor` survey for a direct 5-cell gas corridor, cold and
-warm `PathGuideFactory.RequestVolume` for both a straight corridor and an
-L-shaped path that produces intermediate waypoints.
-
-Key benchmarks:
-
-- `WarmGuide_DirectGasCorridor` — baseline warm volume guide hit (marked
-  `Baseline = true`)
-- `ColdGuide_LShapeGasPath` — L-shaped corridor cold cost with waypoint
-  reconstruction
-
-## Design Principles
-
-- Chart registration, initialization, and world setup are in `[GlobalSetup]`,
-  never in benchmark bodies.
-- Cold benchmarks flush the guide cache in `[IterationSetup]` with
-  `BenchmarkPathFixture.FlushGuideCache()`.
-- Warm benchmarks prime the guide in setup and rely on the cache being populated
-  before measurement.
-- Every guide returned from `PathGuideFactory.RequestGuide` is returned with
-  `PathGuideFactory.ReturnGuide(...)`.
-- Preflight validation in setup throws `InvalidOperationException` when a
-  scenario no longer produces the expected route shape, ensuring benchmarks fail
-  fast rather than silently measuring the wrong thing.
-- Each benchmark class uses its own `BenchmarkPathFixture` instances to prevent
-  cross-contamination between benchmark groups.
-- `[MemoryDiagnoser]` is applied to all benchmark classes.
-
-## Baseline Artifacts
-
-Before starting optimization work, capture a baseline:
-
-```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- all --exporters json
-```
-
-BenchmarkDotNet writes results to `BenchmarkDotNet.Artifacts/results/` by
-default. Archive the JSON or markdown reports before making hot-path changes so
-regressions can be compared against a known state.
-
-## CI Guidance
+- World and map setup belong in `[GlobalSetup]`, never in benchmark bodies.
+- Setup preflights fail fast when the intended route cannot be produced.
+- Every acquired guide or graph lease is released by the benchmark.
+- `[MemoryDiagnoser]` is used for provider and graph-service benchmarks.
+- Canonical comparisons should archive BenchmarkDotNet JSON or Markdown output
+  from `BenchmarkDotNet.Artifacts/results/`.
 
 CI should at minimum compile the benchmark project in `Release`:
 
 ```bash
 dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj --configuration Release
 ```
-
-Running full benchmarks in CI is optional until local variance is understood.
-When you are ready to add performance gates, use BenchmarkDotNet's `--compare`
-or a stored baseline artifact rather than raw timing thresholds, which are
-sensitive to runner hardware.

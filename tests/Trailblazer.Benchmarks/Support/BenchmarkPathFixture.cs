@@ -30,10 +30,13 @@ internal sealed class BenchmarkPathFixture
     /// Optionally adds a single grid using the provided configuration.
     /// </summary>
     /// <param name="config">Optional grid configuration to add to the world.</param>
-    public void Setup(GridConfiguration? config = null)
+    /// <param name="settings">Optional context capacity settings.</param>
+    public void Setup(
+        GridConfiguration? config = null,
+        TrailblazerWorldContextSettings settings = null)
     {
         _world = BenchmarkEnvironment.PrepareWorld();
-        _context = TrailblazerWorldContext.Attach(_world);
+        _context = TrailblazerWorldContext.Attach(_world, settings: settings);
         _pathingScope = PathManager.EnterState(_context.Pathing.State);
 
         if (config.HasValue)

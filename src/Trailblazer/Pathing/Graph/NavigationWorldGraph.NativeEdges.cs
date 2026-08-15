@@ -107,6 +107,9 @@ internal sealed partial class NavigationWorldGraph
             includeNative: true,
             includeAutomaticSeams: true);
 
+    internal NavigationIncomingSurfaceEdgeEnumerator EnumerateIncomingSurfaceEdges(
+        NavigationNodeRef destination) => new(this, destination);
+
     internal NavigationSurfaceEdgeEnumerator EnumerateIncomingExplicitSurfaceEdges(
         NavigationNodeRef destination) => new(
             this,

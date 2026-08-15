@@ -9,8 +9,8 @@ using System;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Canonically sorts unique endpoint dependencies with bounded comparisons.</summary>
-internal sealed class NavigationDependencySortWork
+/// <summary>Canonically sorts unique graph dependencies with bounded comparisons.</summary>
+internal struct NavigationDependencySortWork
 {
     private enum Collection : byte
     {
@@ -26,7 +26,10 @@ internal sealed class NavigationDependencySortWork
         CompareRoot = 2
     }
 
-    private readonly NavigationAStarWorkspace _workspace;
+    private readonly NavigationSurfaceComponentKey[] _components;
+    private readonly int _componentCount;
+    private readonly GraphPageDependencyAddress[] _pages;
+    private readonly int _pageCount;
     private Collection _collection;
     private SiftStage _siftStage;
     private int _heapSize;
@@ -37,8 +40,32 @@ internal sealed class NavigationDependencySortWork
     private bool _building;
 
     internal NavigationDependencySortWork(NavigationAStarWorkspace workspace)
+        : this(
+            workspace.EndpointComponents,
+            workspace.EndpointComponentCount,
+            workspace.EndpointPages,
+            workspace.EndpointPageCount)
     {
-        _workspace = workspace;
+    }
+
+    internal NavigationDependencySortWork(
+        NavigationSurfaceComponentKey[] components,
+        int componentCount,
+        GraphPageDependencyAddress[] pages,
+        int pageCount)
+    {
+        _components = components;
+        _componentCount = componentCount;
+        _pages = pages;
+        _pageCount = pageCount;
+        _collection = Collection.Components;
+        _siftStage = SiftStage.None;
+        _heapSize = 0;
+        _buildIndex = 0;
+        _sortEnd = 0;
+        _siftRoot = 0;
+        _siftCandidate = 0;
+        _building = false;
         InitializeCollection();
     }
 
@@ -116,8 +143,8 @@ internal sealed class NavigationDependencySortWork
         if (IsComplete)
             return;
         int count = _collection == Collection.Components
-            ? _workspace.EndpointComponentCount
-            : _workspace.EndpointPageCount;
+            ? _componentCount
+            : _pageCount;
         _heapSize = count;
         _buildIndex = (count / 2) - 1;
         _sortEnd = count - 1;
@@ -135,11 +162,10 @@ internal sealed class NavigationDependencySortWork
     {
         if (_collection == Collection.Components)
         {
-            return _workspace.EndpointComponents[left].CompareTo(
-                _workspace.EndpointComponents[right]);
+            return _components[left].CompareTo(_components[right]);
         }
-        GraphPageDependencyAddress leftPage = _workspace.EndpointPages[left];
-        GraphPageDependencyAddress rightPage = _workspace.EndpointPages[right];
+        GraphPageDependencyAddress leftPage = _pages[left];
+        GraphPageDependencyAddress rightPage = _pages[right];
         int mapComparison = string.CompareOrdinal(leftPage.MapId, rightPage.MapId);
         return mapComparison != 0
             ? mapComparison
@@ -152,12 +178,11 @@ internal sealed class NavigationDependencySortWork
             return;
         if (_collection == Collection.Components)
         {
-            (_workspace.EndpointComponents[left], _workspace.EndpointComponents[right]) =
-                (_workspace.EndpointComponents[right], _workspace.EndpointComponents[left]);
+            (_components[left], _components[right]) =
+                (_components[right], _components[left]);
             return;
         }
-        (_workspace.EndpointPages[left], _workspace.EndpointPages[right]) =
-            (_workspace.EndpointPages[right], _workspace.EndpointPages[left]);
+        (_pages[left], _pages[right]) = (_pages[right], _pages[left]);
     }
 
     private static bool TryConsumeComparison(

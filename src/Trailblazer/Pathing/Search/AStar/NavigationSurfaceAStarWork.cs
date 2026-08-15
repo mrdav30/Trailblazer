@@ -47,7 +47,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
     private TraversalExplicitEdgeWork _explicitEdgeWork;
     private NavigationNodeRef _current;
     private NavigationNodeRef _pathCursor;
-    private NavigationDependencySortWork? _dependencySort;
+    private NavigationDependencySortWork _dependencySort;
     private NavigationDependencyStampWork? _dependencyStamp;
     private NavigationCellAddress[]? _payloadNodes;
     private NavigationSurfaceAStarStatus _resultStatus;
@@ -328,7 +328,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             if (_stage == Stage.SortDependencies)
             {
                 int lookupBefore = _meter.LookupProbes;
-                bool complete = _dependencySort!.Advance(_meter, lookupRemaining);
+                bool complete = _dependencySort.Advance(_meter, lookupRemaining);
                 lookupRemaining -= _meter.LookupProbes - lookupBefore;
                 if (!complete)
                 {
@@ -336,7 +336,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                         ? Finish(NavigationSurfaceAStarStatus.BudgetExceeded)
                         : Status;
                 }
-                _dependencySort = null;
+                _dependencySort = default;
                 _stage = Stage.CaptureDependencies;
                 continue;
             }
@@ -424,6 +424,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         _edges = default;
         _pendingEdge = default;
         _explicitEdgeWork = default;
+        _dependencySort = default;
     }
 
     private bool RecordPage(NavigationNodeRef node, bool recordComponent)

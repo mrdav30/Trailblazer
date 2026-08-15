@@ -83,6 +83,33 @@ public sealed class NavigationIncomingSurfaceEdgeTests
     }
 
     [Fact]
+    public void ParallelExplicitIncomingEdges_ShouldPreserveExactForwardRecordAndLocator()
+    {
+        using TrailblazerWorldContext forward =
+            CreateParallelExplicitContext(reverseInsertion: false);
+        using TrailblazerWorldContext reverse =
+            CreateParallelExplicitContext(reverseInsertion: true);
+        Fixed64 quarter = Fixed64.FromFraction(1, 4);
+        Fixed64 footY = Fixed64.FromFraction(-1, 2);
+        List<ParallelExplicitSnapshot> expected = new()
+        {
+            new(
+                "alpha",
+                new Vector3d(-quarter, footY, (Fixed64)(-1)),
+                new Vector3d(-quarter, footY, Fixed64.Zero),
+                CanonicalOutgoingOrdinal: 0),
+            new(
+                "zeta",
+                new Vector3d(quarter, footY, (Fixed64)(-1)),
+                new Vector3d(quarter, footY, Fixed64.Zero),
+                CanonicalOutgoingOrdinal: 1)
+        };
+
+        ReadParallelExplicitIncoming(forward).Should().Equal(expected);
+        ReadParallelExplicitIncoming(reverse).Should().Equal(expected);
+    }
+
+    [Fact]
     public void IncomingAdvance_ShouldDebitEveryInspectedCandidate_AndResumeWithoutLosingTheEdge()
     {
         using TrailblazerWorldContext context = CreateMixedContext(reverseInsertion: true);
@@ -188,6 +215,58 @@ public sealed class NavigationIncomingSurfaceEdgeTests
                     && current.ForwardEdge.AutomaticSeam.IsReverse));
         }
         return result;
+    }
+
+    private static List<ParallelExplicitSnapshot> ReadParallelExplicitIncoming(
+        TrailblazerWorldContext context)
+    {
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var destinationAddress = new NavigationCellAddress("destination", default);
+        lease.Graph.TryGetNodeRef(destinationAddress, out NavigationNodeRef destination)
+            .Should().BeTrue();
+        var result = new List<ParallelExplicitSnapshot>();
+        NavigationIncomingSurfaceEdgeEnumerator incoming =
+            lease.Graph.EnumerateIncomingSurfaceEdges(destination);
+        while (incoming.MoveNext())
+        {
+            NavigationIncomingSurfaceEdge current = incoming.Current;
+            if (current.ForwardEdge.Kind != NavigationGraphEdgeKind.Explicit)
+                continue;
+
+            NavigationGraphEdge resolved = ResolveSelectedEdge(
+                lease.Graph,
+                current.Predecessor,
+                current.SelectedEdge);
+            ReferenceEquals(
+                    resolved.ExplicitConnection,
+                    current.ForwardEdge.ExplicitConnection)
+                .Should().BeTrue("the durable locator must resolve the exact forward record");
+            result.Add(new ParallelExplicitSnapshot(
+                current.ForwardEdge.ExplicitConnection.Owner.ConnectionId,
+                current.ForwardEdge.ExplicitConnection.Definition.EntryAnchor,
+                current.ForwardEdge.ExplicitConnection.Definition.ExitAnchor,
+                current.SelectedEdge.CanonicalOutgoingOrdinal));
+        }
+        return result;
+    }
+
+    private static NavigationGraphEdge ResolveSelectedEdge(
+        NavigationWorldGraph graph,
+        NavigationNodeRef predecessor,
+        NavigationSelectedEdgeRef selected)
+    {
+        NavigationSurfaceEdgeEnumerator outgoing = graph.EnumerateSurfaceEdges(predecessor);
+        for (int ordinal = 0; ordinal <= selected.CanonicalOutgoingOrdinal; ordinal++)
+        {
+            outgoing.MoveNext().Should().BeTrue();
+            if (ordinal != selected.CanonicalOutgoingOrdinal)
+                continue;
+            graph.TryGetNodeAddress(outgoing.Current.Target, out NavigationCellAddress target)
+                .Should().BeTrue();
+            target.Should().Be(selected.Target);
+            return outgoing.Current;
+        }
+        throw new Xunit.Sdk.XunitException("The selected edge ordinal was not present.");
     }
 
     private static int ConsumeIncoming(
@@ -299,6 +378,75 @@ public sealed class NavigationIncomingSurfaceEdgeTests
         }
     }
 
+    private static TrailblazerWorldContext CreateParallelExplicitContext(
+        bool reverseInsertion)
+    {
+        TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        try
+        {
+            GridConfiguration sourceConfiguration = CreateConfiguration(
+                new Vector3d(0, 0, -1),
+                new Vector3d(0, 0, -1));
+            GridConfiguration destinationConfiguration = CreateConfiguration(
+                Vector3d.Zero,
+                Vector3d.Zero);
+            GridConfiguration[] configurations =
+            {
+                destinationConfiguration,
+                sourceConfiguration
+            };
+            AddGrids(context, configurations, reverseInsertion);
+            NormalizedGridConfiguration sourceBinding = Normalize(sourceConfiguration);
+            NormalizedGridConfiguration destinationBinding = Normalize(
+                destinationConfiguration);
+            Vector3d sourceFoot = GetFoot(sourceBinding, default);
+            Vector3d destinationFoot = GetFoot(destinationBinding, default);
+            Fixed64 quarter = Fixed64.FromFraction(1, 4);
+            var alpha = new NavigationConnection(
+                "alpha",
+                default,
+                new NavigationCellAddress("destination", default),
+                sourceFoot + new Vector3d(-quarter, Fixed64.Zero, Fixed64.Zero),
+                destinationFoot + new Vector3d(-quarter, Fixed64.Zero, Fixed64.Zero),
+                Fixed64.Zero,
+                Fixed64.One);
+            var zeta = new NavigationConnection(
+                "zeta",
+                default,
+                new NavigationCellAddress("destination", default),
+                sourceFoot + new Vector3d(quarter, Fixed64.Zero, Fixed64.Zero),
+                destinationFoot + new Vector3d(quarter, Fixed64.Zero, Fixed64.Zero),
+                Fixed64.Zero,
+                Fixed64.One);
+            var sourceBuilder = new NavigationMapBuilder("source", sourceBinding)
+                .AddCell(default, SurfaceCell);
+            if (reverseInsertion)
+            {
+                sourceBuilder.AddConnection(zeta);
+                sourceBuilder.AddConnection(alpha);
+            }
+            else
+            {
+                sourceBuilder.AddConnection(alpha);
+                sourceBuilder.AddConnection(zeta);
+            }
+            NavigationMap[] maps =
+            {
+                new NavigationMapBuilder("destination", destinationBinding)
+                    .AddCell(default, SurfaceCell)
+                    .Build(),
+                sourceBuilder.Build()
+            };
+            AdmitMaps(context, maps, reverseInsertion);
+            return context;
+        }
+        catch
+        {
+            context.Dispose();
+            throw;
+        }
+    }
+
     private static void AddGrids(
         TrailblazerWorldContext context,
         GridConfiguration[] configurations,
@@ -374,4 +522,10 @@ public sealed class NavigationIncomingSurfaceEdgeTests
         string ExplicitConnectionId,
         int NativeDirectionOrdinal,
         bool SeamIsReverse);
+
+    private readonly record struct ParallelExplicitSnapshot(
+        string ConnectionId,
+        Vector3d EntryAnchor,
+        Vector3d ExitAnchor,
+        int CanonicalOutgoingOrdinal);
 }

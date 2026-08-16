@@ -87,12 +87,12 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.One);
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture, 2, guideCapacity: 0);
-        Require(
+        Assert.True(
             cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation firstReservation),
             "The first same-key reservation was rejected.");
-        Require(
+        Assert.True(
             cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation secondReservation),
@@ -142,19 +142,19 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
         first.Start();
         second.Start();
         start.Set();
-        Require(first.Join(TimeSpan.FromSeconds(5)), "The first same-key worker did not stop.");
-        Require(second.Join(TimeSpan.FromSeconds(5)), "The second same-key worker did not stop.");
+        Assert.True(first.Join(TimeSpan.FromSeconds(5)), "The first same-key worker did not stop.");
+        Assert.True(second.Join(TimeSpan.FromSeconds(5)), "The second same-key worker did not stop.");
         if (firstFailure != null)
             throw new InvalidOperationException("The first same-key worker failed.", firstFailure);
         if (secondFailure != null)
             throw new InvalidOperationException("The second same-key worker failed.", secondFailure);
-        Require(firstStatus == NavigationFlowFieldStatus.Success, "The first same-key publish failed.");
-        Require(secondStatus == NavigationFlowFieldStatus.Success, "The second same-key publish failed.");
-        Require(
+        Assert.True(firstStatus == NavigationFlowFieldStatus.Success, "The first same-key publish failed.");
+        Assert.True(secondStatus == NavigationFlowFieldStatus.Success, "The second same-key publish failed.");
+        Assert.True(
             firstLease.TryGetPayload(out NavigationFlowFieldPayload firstPayload)
                 == NavigationFlowFieldStatus.Success,
             "The first same-key payload is not readable.");
-        Require(
+        Assert.True(
             secondLease.TryGetPayload(out NavigationFlowFieldPayload secondPayload)
                 == NavigationFlowFieldStatus.Success,
             "The second same-key payload is not readable.");
@@ -191,7 +191,7 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
         NavigationWorldGraph changed = affected.Graph
             .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
             .WithGraphVersion(affected.Store.Current.GraphVersion + 1);
-        Require(
+        Assert.True(
             affected.Store.TryPublish(changed) == NavigationCandidatePublication.Published,
             "The affected graph mutation was not published.");
         NavigationFlowFieldStatus affectedStatus = affectedCache.TryCheckout(
@@ -238,10 +238,10 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
             fixture.Store,
             new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
             out NavigationFlowFieldLease guide);
-        Require(
+        Assert.True(
             fixture.Graph.TryGetNodeRef(fixture.FarOrigin, out NavigationNodeRef sourceRef),
             "The sampling source was not found.");
-        Require(
+        Assert.True(
             fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source),
             "The sampling source state was not found.");
         NavigationGuideStatus sampleStatus = guide.TrySample(
@@ -377,7 +377,7 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
                 builder,
                 $"retired-{retiredKind}",
                 record.TryCreateRequest(context, out IPathRequest? request));
-            Require(request == null, $"Retired record kind {retiredKind} created a request.");
+            Assert.True(request == null, $"Retired record kind {retiredKind} created a request.");
         }
         return builder.ToString();
     }
@@ -399,7 +399,7 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
         NavigationFlowFieldPayload payload,
         NavigationCellAddress origin)
     {
-        Require(
+        Assert.True(
             cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation reservation),
@@ -410,7 +410,7 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
             origin,
             ref reservation,
             out NavigationFlowFieldPayloadLease lease);
-        Require(status == NavigationFlowFieldStatus.Success, $"Flow publication failed with {status}.");
+        Assert.True(status == NavigationFlowFieldStatus.Success, $"Flow publication failed with {status}.");
         return lease;
     }
 
@@ -534,9 +534,4 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
     private static void Append<T>(StringBuilder builder, string name, T value) =>
         builder.Append(name).Append('=').Append(value).Append(';');
 
-    private static void Require(bool condition, string message)
-    {
-        if (!condition)
-            throw new InvalidOperationException(message);
-    }
 }

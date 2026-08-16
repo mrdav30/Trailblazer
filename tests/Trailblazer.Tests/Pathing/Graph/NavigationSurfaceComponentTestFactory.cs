@@ -51,6 +51,6 @@ internal static class NavigationSurfaceComponentTestFactory
             NavigationWorldGraph.Empty,
             NavigationSurfaceComponentKeySet.Empty,
             seeds,
-            graph.TotalAddressCount);
+            seeds.Count);
     }
 }

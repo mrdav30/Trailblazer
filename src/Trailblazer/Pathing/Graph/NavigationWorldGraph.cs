@@ -157,17 +157,6 @@ internal sealed partial class NavigationWorldGraph
 
     internal int MapCount => _instances.Count;
 
-    internal int TotalAddressCount
-    {
-        get
-        {
-            int count = 0;
-            for (int i = 0; i < _instances.Count; i++)
-                count = checked(count + _instances.Get(i).AddressCount);
-            return count;
-        }
-    }
-
     internal bool TryGetCoveredAddressGeneration(
         int configurationOrdinal,
         out string mapId,

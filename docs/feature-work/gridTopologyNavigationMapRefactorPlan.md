@@ -1964,14 +1964,15 @@ design is
 `docs/superpowers/specs/2026-08-16-navigation-rays-and-simplification-design.md`;
 the executable TDD plan is
 `docs/superpowers/plans/2026-08-16-navigation-rays-and-simplification.md`.
-Production implementation has not started. The selected shape is one internal
-bounded ray kernel, canonical A* payload-time simplification, graph direct-path
-reuse, and same-lease Flow rejoin. The kernel stays internal until Phase 7
-proves the surface-plus-volume contract.
+Production implementation is in progress; the exact FixedMathSharp segment
+separation authority is complete. The selected shape is one internal bounded
+ray kernel, canonical A* payload-time simplification, graph direct-path reuse,
+and same-lease Flow rejoin. The kernel stays internal until Phase 7 proves the
+surface-plus-volume contract.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
-| FixedMathSharp/GridForge swept-body authority | Planned | Reuse `FixedMathSharp.Geometry`; no Trailblazer projection/collision duplicate |
+| FixedMathSharp/GridForge swept-body authority | In progress — FixedMathSharp `fdc1484` complete | Exact separation focused 8/8, Release 2,684+8, Lean 2,663+8, 0 B; GridForge segment/trace work remains |
 | Ordered navigation-ray core and endpoint fallback | Planned | Sparse/tie/overlap/evaluator/dependency/budget matrix green |
 | Portal-aware A* guide points and bounded simplification | Planned | Canonical payload, less-simplified success on ray-budget exhaustion, exact bytes |
 | Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |

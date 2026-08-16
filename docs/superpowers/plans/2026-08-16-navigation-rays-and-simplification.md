@@ -84,7 +84,7 @@
 - Produces: `public readonly bool FixedSegment2d.IsDistanceAtLeast(FixedSegment2d other, Fixed64 minimumDistance)`.
 - Consumes: existing `WidePlanarProjection.RationalDistance`, `GetSegmentDistance`, `CompareDistances`, and `CompareDistanceToRaw`; no rounded closest point becomes decision authority.
 
-- [ ] **Step 1: Write the exact-decision RED**
+- [x] **Step 1: Write the exact-decision RED**
 
 ```csharp
 [Theory]
@@ -106,7 +106,7 @@ public void IsDistanceAtLeast_AcceptsEqualityAndRejectsOneRawPenetration(
 
 Add crossing, parallel-disjoint, point/segment, both-points, oblique hex-like edge, maximum raw coordinate, negative-distance argument, reverse-order, and 256-iteration warmed 0 B cases.
 
-- [ ] **Step 2: Run the focused RED**
+- [x] **Step 2: Run the focused RED**
 
 Run from `F:/gamedevrepos/FixedMathSharp`:
 
@@ -116,7 +116,7 @@ dotnet test tests/FixedMathSharp.Tests/FixedMathSharp.Tests.csproj --configurati
 
 Expected: compile failure `CS1061` for missing `IsDistanceAtLeast`.
 
-- [ ] **Step 3: Implement the exact wide predicate**
+- [x] **Step 3: Implement the exact wide predicate**
 
 ```csharp
 public readonly bool IsDistanceAtLeast(
@@ -134,7 +134,7 @@ public readonly bool IsDistanceAtLeast(
 
 For a positive minimum, first use `FixedSegment2d`'s existing exact unique-intersection authority. The existing wide projection owner then compares all four exact endpoint-to-opposite-segment rational distances directly to `minimumDistance`; collinear overlap is rejected by its zero endpoint distance. Do not materialize a closest point or rounded distance, and do not add one-method partial files.
 
-- [ ] **Step 4: Run focused and full FixedMathSharp gates**
+- [x] **Step 4: Run focused and full FixedMathSharp gates**
 
 ```powershell
 dotnet test tests/FixedMathSharp.Tests/FixedMathSharp.Tests.csproj --configuration Release -m:1 --filter FullyQualifiedName~FixedSegment2dSeparationTests
@@ -146,7 +146,11 @@ dotnet build src/FixedMathSharp/FixedMathSharp.csproj --configuration Release -m
 
 Expected: all tests pass; both target frameworks build with zero warnings/errors.
 
-- [ ] **Step 5: Request correctness/ponytail review, apply only evidence-backed fixes, and commit**
+- [x] **Step 5: Request correctness/ponytail review, apply only evidence-backed fixes, and commit**
+
+Closure: FixedMathSharp `fdc1484`; focused `8/8`; Release `2,684 + 8`;
+ReleaseLean `2,663 + 8`; netstandard2.1/net8.0 zero warnings/errors;
+correctness and ponytail approved; warmed 256-call batch allocated 0 B.
 
 ```powershell
 git add -- src/FixedMathSharp/Geometry/Primitives/Segments/FixedSegment2d.cs src/FixedMathSharp/Geometry/Wide/Common/WidePlanarProjection.cs tests/FixedMathSharp.Tests/Geometry/Primitives/FixedSegment2d.Separation.Tests.cs

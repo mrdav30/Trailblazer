@@ -1968,15 +1968,16 @@ Production implementation is in progress. FixedMathSharp now owns exact finite
 segment separation, exact 3D point-on-segment membership, and conservative
 parameter enclosures for capsule and unique-intersection queries. GridForge
 `1ed5479` owns the reviewed swept-body/portal authority. Bounded deterministic
-ordered trace discovery is the next active slice. The selected shape is one
-internal bounded ray kernel, canonical A* payload-time simplification, graph
-direct-path reuse, and same-lease Flow rejoin. The kernel stays internal until
-Phase 7 proves the surface-plus-volume contract.
+ordered trace discovery is complete in GridForge `bc60dd7`; fixed Trailblazer
+ray workspace and budget contracts are the next active slice. The selected
+shape is one internal bounded ray kernel, canonical A* payload-time
+simplification, graph direct-path reuse, and same-lease Flow rejoin. The kernel
+stays internal until Phase 7 proves the surface-plus-volume contract.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
 | FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 710/710, 0 B, 224-byte cursor; independent correctness and lean reviews approved |
-| Ordered navigation-ray core and endpoint fallback | Planned | Sparse/tie/overlap/evaluator/dependency/budget matrix green |
+| Ordered navigation-ray core and endpoint fallback | In progress — GridForge ordered trace discovery `bc60dd7` complete | Separate grid/address/output ceilings and counts, mixed-topology canonical order, failure/success 0 B, Release/Lean 711/711; Trailblazer workspace/core/endpoint work remains |
 | Portal-aware A* guide points and bounded simplification | Planned | Canonical payload, less-simplified success on ray-budget exhaustion, exact bytes |
 | Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
 | Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |

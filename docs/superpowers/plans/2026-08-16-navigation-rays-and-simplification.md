@@ -270,6 +270,16 @@ git commit -m "feat(navigation): certify swept body segments"
 
 ### Task 3: Bounded GridForge Ordered Trace Discovery
 
+**Completed:** GridForge `bc60dd7` after independent correctness and ponytail
+approval. The old signature/status/count names were removed rather than
+forwarded: callers now supply grid, address, and output ceilings and receive
+distinct grid/address counts and failure statuses. Mixed rectangular/pointy/
+flat canonical sorting, one-below failure before address work, exact-limit slow
+scan success, and both warmed success/failure 0 B are pinned. Focused coverage
+passed 13/13; full Release and ReleaseLean passed 711/711; both target frameworks
+and the benchmark project built warning-free. The slice also removed 384 B of
+boxing from mixed-topology enum comparisons.
+
 **Files:**
 - Modify: `F:/gamedevrepos/GridForge/src/GridForge/Utility/GridTracer.TraceIntervals.cs`
 - Modify: `F:/gamedevrepos/GridForge/src/GridForge/Grids/Support/GridTraceInterval.cs`
@@ -296,11 +306,11 @@ public static GridTraceIntervalReport TraceIntervalsInto(
 - Adds `GridTraceIntervalStatus.GridCandidateLimitExceeded` and `GridTraceIntervalReport.GridCandidateCount`.
 - Replaces internal `GridWorld.CollectGridCandidates` with a bounded bool-returning signature; all callers pass an explicit finite ceiling.
 
-- [ ] **Step 1: Write candidate-grid one-below REDs**
+- [x] **Step 1: Write candidate-grid one-below REDs**
 
 Build overlapping rectangular/pointy/flat grids whose bounds all intersect one segment. Assert exact `GridCandidateCount`, canonical interval order, one-below `GridCandidateLimitExceeded`, cleared output, no address work after grid failure, equality limit success, and warm 0 B.
 
-- [ ] **Step 2: Run the RED**
+- [x] **Step 2: Run the RED**
 
 ```powershell
 dotnet test tests/GridForge.Tests/GridForge.Tests.csproj --configuration Release -m:1 --filter FullyQualifiedName~GridTraceIntervalTests
@@ -308,11 +318,11 @@ dotnet test tests/GridForge.Tests/GridForge.Tests.csproj --configuration Release
 
 Expected: compile failures for the new required argument/property/status.
 
-- [ ] **Step 3: Implement bounded collection and migrate all callers**
+- [x] **Step 3: Implement bounded collection and migrate all callers**
 
 Collection must stop before appending item `limit + 1`. A failure report preserves the exact candidate-grid count observed up to the ceiling, clears interval/address scratch, and distinguishes grid, address, output, and geometry failures. Other GridForge callers pass an explicit current-world or caller-owned ceiling; none call an unbounded forwarding shape.
 
-- [ ] **Step 4: Verify focused/full builds and API docs**
+- [x] **Step 4: Verify focused/full builds and API docs**
 
 ```powershell
 dotnet test tests/GridForge.Tests/GridForge.Tests.csproj --configuration Release -m:1 --filter FullyQualifiedName~GridTraceIntervalTests
@@ -324,7 +334,7 @@ rg -n "TraceIntervalsInto\(" src tests -g '*.cs'
 
 Every call must show three finite ceilings.
 
-- [ ] **Step 5: Review and commit**
+- [x] **Step 5: Review and commit**
 
 ```powershell
 git add -- src/GridForge/Utility/GridTracer.TraceIntervals.cs src/GridForge/Grids/Support/GridTraceInterval.cs src/GridForge/Grids/Managers/GridWorld.cs tests/GridForge.Tests/Utility/GridTraceIntervalTests.cs tests/GridForge.Benchmarks/Memory/GridTracerBenchmarks.cs

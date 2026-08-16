@@ -26,8 +26,8 @@
 
 ### FixedMathSharp
 
-- `src/FixedMathSharp/Geometry/Primitives/Segments/FixedSegment2d.Separation.cs` — public exact finite-segment minimum-distance decision.
-- `src/FixedMathSharp/Geometry/Wide/Common/WidePlanarProjection.SegmentSeparation.cs` — wide rational implementation using the existing projection authority.
+- `src/FixedMathSharp/Geometry/Primitives/Segments/FixedSegment2d.cs` — public exact finite-segment minimum-distance decision on the existing owner.
+- `src/FixedMathSharp/Geometry/Wide/Common/WidePlanarProjection.cs` — wide rational implementation beside the existing projection/distance authority.
 - `tests/FixedMathSharp.Tests/Geometry/Primitives/FixedSegment2d.Separation.Tests.cs` — equality, one-raw, degeneracy, crossing, extreme-domain, and allocation tests.
 
 ### GridForge
@@ -76,8 +76,8 @@
 ### Task 1: Exact FixedMath Segment Separation
 
 **Files:**
-- Create: `F:/gamedevrepos/FixedMathSharp/src/FixedMathSharp/Geometry/Primitives/Segments/FixedSegment2d.Separation.cs`
-- Create: `F:/gamedevrepos/FixedMathSharp/src/FixedMathSharp/Geometry/Wide/Common/WidePlanarProjection.SegmentSeparation.cs`
+- Modify: `F:/gamedevrepos/FixedMathSharp/src/FixedMathSharp/Geometry/Primitives/Segments/FixedSegment2d.cs`
+- Modify: `F:/gamedevrepos/FixedMathSharp/src/FixedMathSharp/Geometry/Wide/Common/WidePlanarProjection.cs`
 - Create: `F:/gamedevrepos/FixedMathSharp/tests/FixedMathSharp.Tests/Geometry/Primitives/FixedSegment2d.Separation.Tests.cs`
 
 **Interfaces:**
@@ -132,7 +132,7 @@ public readonly bool IsDistanceAtLeast(
 }
 ```
 
-In the wide partial, reject crossing/overlap when `minimumDistance > 0`, otherwise compute the minimum of the four exact endpoint-to-opposite-segment rational distances and compare it directly to `minimumDistance` without materializing a closest point or rounded distance.
+For a positive minimum, first use `FixedSegment2d`'s existing exact unique-intersection authority. The existing wide projection owner then compares all four exact endpoint-to-opposite-segment rational distances directly to `minimumDistance`; collinear overlap is rejected by its zero endpoint distance. Do not materialize a closest point or rounded distance, and do not add one-method partial files.
 
 - [ ] **Step 4: Run focused and full FixedMathSharp gates**
 
@@ -149,7 +149,7 @@ Expected: all tests pass; both target frameworks build with zero warnings/errors
 - [ ] **Step 5: Request correctness/ponytail review, apply only evidence-backed fixes, and commit**
 
 ```powershell
-git add -- src/FixedMathSharp/Geometry/Primitives/Segments/FixedSegment2d.Separation.cs src/FixedMathSharp/Geometry/Wide/Common/WidePlanarProjection.SegmentSeparation.cs tests/FixedMathSharp.Tests/Geometry/Primitives/FixedSegment2d.Separation.Tests.cs
+git add -- src/FixedMathSharp/Geometry/Primitives/Segments/FixedSegment2d.cs src/FixedMathSharp/Geometry/Wide/Common/WidePlanarProjection.cs tests/FixedMathSharp.Tests/Geometry/Primitives/FixedSegment2d.Separation.Tests.cs
 git diff --cached --check
 git commit -m "feat(geometry): compare exact segment separation"
 ```

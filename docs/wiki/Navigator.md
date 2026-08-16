@@ -105,9 +105,8 @@ The main entry points are:
 - `ReplaceTrekCondition(TrekCondition state)`
 - `Reset()`
 - `ApplyInputTrekRequest(...)`
-- `ApplyGuidedTrekRequest(PathQuery query, ...)` for graph surface travel
-- `ApplyGuidedTrekRequest(Vector3d targetPosition, ...)` for remaining
-  flow/volume travel
+- `ApplyGuidedTrekRequest(PathQuery query, ...)` for graph A* or Flow surface
+  travel and retained volume-exit handoff planning
 - `ToggleGuidedJump(bool status)`
 - `ToggleGuidedFlight(bool status)`
 - `ToggleGuidedSwim(bool status)`
@@ -143,17 +142,13 @@ Important public state includes:
 - `BodyShape`
 - `Radius`
 - `FootPosition`
-- `GuidedAllowUnwalkableEndpoints`
-- `GuidedAllowTraversalTransitions`
-- `GuidedMaxClimbHeight`
-- `GuidedFlowFieldExtraFloodRange`
 - `GlobalId`
 - `OccupantGroupId`
 - `IsLockedOn`
 
 `NavigationProfile` is the sole body/profile authority. `BodyShape`, `Radius`,
-and `FootPosition` are derived from it. `ConfigureForGuidedTraversal(...)`
-controls only the remaining flow/volume request defaults.
+and `FootPosition` are derived from it. Complete guided pathing intent belongs
+to the supplied `PathQuery`.
 
 Protected frame-local state includes:
 
@@ -368,8 +363,9 @@ navigator requires:
 
 - `query.Agent == NavigationProfile`
 - `query.Start.Position == FootPosition`
-- surface-to-surface `PathAlgorithm.AStar`
-- `AllowTransitions == false`
+- surface-to-surface `PathAlgorithm.AStar` or `PathAlgorithm.FlowField`
+- `AllowTransitions == false` for A*; only Flow may opt into retained handoff
+  planning
 
 It then:
 
@@ -378,24 +374,11 @@ It then:
 - stores guided request state in `_frameRequest`
 - optionally accepts a shared `groupId` for grouped movement
 - gives the exact query to steering, which owns and disposes the resulting
-  `NavigationGuideLease`
+  `NavigationGuideLease` or `NavigationFlowFieldLease`
 
-The target-position overload remains for the unported flow/volume branch. It
-uses FlowField for solid chart travel and volume-first routing for gas/liquid.
-
-Use `ConfigureForGuidedTraversal(...)` only for those remaining request
-defaults:
-
-```csharp
-navigator.ConfigureForGuidedTraversal(
-    allowUnwalkableEndpoints: true,
-    allowTraversalTransitions: true,
-    flowFieldExtraFloodRange: 12,
-    maxClimbHeight: (Fixed64)2);
-```
-
-`allowTraversalTransitions` controls whether the remaining FlowField branch may
-fall back through authored `TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs
+For Flow queries, `query.AllowTransitions` controls whether Navigator may use
+the retained hybrid planner above the direct graph guide-service boundary. It
+also allows bounded swim-exit style handoffs
 from liquid volume into a follow-up chart request when the requested target is
 chart-backed outside the active liquid volume, plus bounded aerial landing
 handoffs when an authored volume-to-chart landing route beats staying in
@@ -440,10 +423,7 @@ Passing the same non-negative `groupId` to multiple navigators lets
 
 When `_frameCondition.Medium` is `TraversalMedium.Gas` or
 `TraversalMedium.Liquid`, the navigator uses `VolumePathRequest` first and uses
-FlowField only for optional chart-backed follow-up handoffs.
-
-If a project needs a different request shape, override
-`TryCreateGuidedPathRequest(...)`.
+the supplied graph Flow query only for optional chart-backed follow-up handoffs.
 
 ### 7.3 Other Request Helpers
 
@@ -699,11 +679,6 @@ By default it delegates to Trailblazer's deterministic navigator-id allocator.
 
 That still gives a subclass a way to control identity generation if needed for
 testing, host integration, or stricter determinism workflows.
-
-### 12.3 TryCreateGuidedPathRequest(...)
-
-This protected factory hook remains for custom flow/volume request types. Graph
-surface travel enters through the exact public `PathQuery` overload.
 
 ## 13. Common Integration Pattern
 

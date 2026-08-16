@@ -31,7 +31,8 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-surface-a-star` | `NavigationSurfaceAStarBenchmarks` |
 | `navigation-guide-service` | `NavigationGuideServiceBenchmarks` |
 | `navigation-a-star-contention` | `NavigationAStarContentionBenchmarks` |
-| `flow-field-path-request` | `FlowFieldPathRequestBenchmarks` |
+| `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
+| `navigation-flow-field-contention` | `NavigationFlowFieldContentionBenchmarks` |
 | `volume-path-request` | `VolumePathRequestBenchmarks` |
 | `path-heap` | `PathHeapBenchmarks` |
 | `navigation-map-bake` | `NavigationMapBakeBenchmarks` |
@@ -55,10 +56,10 @@ nodes. BenchmarkDotNet reports latency and managed allocation; cleanup emits
 the deterministic work-meter, one-frontier heap, workspace, and result-byte
 counters for each case.
 
-`NavigationGuideServiceBenchmarks.WarmGuideAcquireSampleAdvanceDispose`
-measures public acquire, sample, advance, and dispose after the graph payload
-and lease pools are warm. Its 32x32 open plane and 1,024-cell corridor match the
-retired provider's comparison shapes and preflight at zero managed bytes.
+`NavigationGuideServiceBenchmarks.WarmFlowAcquireSampleDispose` measures public
+graph Flow acquire, sample, and return after the payload and lease pools are
+warm. Its 32x32 open plane and 1,024-cell corridor preflight at zero managed
+bytes on the measured thread.
 
 `NavigationAStarContentionBenchmarks` uses persistent manual worker threads at
 1/2/4/8 concurrency. Same-key workers search concurrently, finish in reversed
@@ -68,9 +69,21 @@ workspace, worker-thread allocation, detached, and retired accounting. The
 measured algorithm uses no `Task` scheduling; worker allocation excludes the
 threads and events created in global setup.
 
-`FlowFieldPathRequestBenchmarks` and `VolumePathRequestBenchmarks` remain while
-their legacy providers still support the volume/handoff branch. Later phases
-remove those benchmarks with the corresponding provider authority.
+`NavigationFlowFieldBenchmarks` covers cold reverse integration at 100, 1K,
+10K, and 100K settled nodes, near-to-far prefix promotion, warm 100/500/5,000
+agent batches, affected/unaffected invalidation, and an exact 1,000,000-node
+articulation split. `NavigationFlowFieldContentionBenchmarks` covers same-key
+and near/far publication with persistent manual workers and reversed
+completion.
+
+The default Flow benchmark run uses the canonical three-launch, ten-warmup,
+100-iteration Monitoring job. The exact 1M articulation case uses a separately
+named one-launch, zero-warmup, one-iteration `SingleShot` job because it builds
+and mutates the real million-node world. Do not compare those job boundaries as
+like-for-like. An explicit CLI `--job dry` or `--job short` replaces the default
+job for bounded preflight or smoke runs.
+
+`VolumePathRequestBenchmarks` remains with the retained volume/handoff branch.
 
 ## Benchmark design
 

@@ -13,8 +13,8 @@
 
 Trailblazer gives simulation-heavy .NET projects a fixed-point navigation stack
 without tying them to a renderer, physics engine, ECS, or game framework. Use
-the pathing layer directly for graph-backed surface A*, chart-backed flow
-fields, volume routes, and reusable guide data. Add the navigation layer when
+the pathing layer directly for graph-backed surface A* and flow fields,
+chart-backed volume routes, and reusable guide data. Add the navigation layer when
 you also want steering,
 turning, locomotion-aware movement, groups, heightmap grounding, and
 frame-by-frame controller state.
@@ -28,9 +28,10 @@ The README is the front door. The deeper integration notes live in the
 - Deterministic runtime math through `FixedMathSharp` types such as `Fixed64`,
   `Vector3d`, and `FixedQuaternion`.
 - Voxel-backed world representation through `GridForge`, with context-owned
-  navigation maps and remaining chart-backed flow/volume state.
-- Graph-backed surface waypoints through `NavigationGuideLease`, plus the
-  destination-centric `FlowFieldGuide` and raw-volume `VolumeGuide` families.
+  navigation maps and remaining chart-backed volume/handoff state.
+- Graph-backed surface waypoints through `NavigationGuideLease`,
+  destination-centric fields through `NavigationFlowFieldLease`, and retained
+  raw-volume routes through `VolumeGuide`.
 - Authored transitions between chart surfaces and raw gas/liquid/volume
   traversal.
 - Full navigation stack with `Navigator`, `NavSteering`, `NavTurning`, and
@@ -107,7 +108,7 @@ Trailblazer is easiest to approach as a small pipeline:
 1. Create or attach a `TrailblazerWorldContext` for a `GridWorld`.
 2. Publish a `NavigationMap` and matching `NavigationAreaPolicy` for graph-backed
    surface routing. Register `NavigationChart` data only for the remaining
-   flow/volume paths that still consume it.
+   volume/handoff paths that still consume it.
 3. Submit a complete immutable `PathQuery`, or let a `Navigator` own its guide
    session.
 4. Advance the context and navigators in your fixed-step simulation.
@@ -118,9 +119,10 @@ Trailblazer owns navigation state. Your host still owns rendering, animation,
 entity lifetime, collision queries, environment probes, and any engine-specific
 integration.
 
-Surface graph routing supports rectangular and hex topology without deriving
-path cost from a context-wide voxel size. Remaining chart-backed flow/volume
-paths retain their existing constraints until their owning cutover phases.
+Surface graph A* and Flow routing support rectangular and hex topology without
+deriving path cost from a context-wide voxel size. Remaining chart-backed
+volume/handoff paths retain their existing constraints until their owning
+cutover phases.
 
 ## Quick Start
 
@@ -172,8 +174,8 @@ if (status == NavigationGuideStatus.Success && lease != null)
 | Area            | What it does                                                                                                                                               | Start here                                                                                                      |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | World context   | Owns one `GridWorld`, the deterministic clock, pathing services, guide caches, transitions, heightmaps, movement groups, diagnostics, and lifecycle hooks. | [Overview](docs/wiki/Overview.md)                                                                               |
-| Chart authoring | Builds the remaining flow/volume traversal data from `NavigationChart`, `NavigationChartCell`, or tokenized `TraversalAuthoringMap` input.                 | [ChartAuthoring](docs/wiki/ChartAuthoring.md), [NavigationCharts](docs/wiki/NavigationCharts.md)                |
-| Pathing         | Resolves graph-backed surface `PathQuery` values plus the remaining flow/volume request families.                                                          | [Pathing](docs/wiki/Pathing.md), [PathGuides](docs/wiki/PathGuides.md)                                          |
+| Chart authoring | Builds the remaining volume/handoff traversal data from `NavigationChart`, `NavigationChartCell`, or tokenized `TraversalAuthoringMap` input.              | [ChartAuthoring](docs/wiki/ChartAuthoring.md), [NavigationCharts](docs/wiki/NavigationCharts.md)                |
+| Pathing         | Resolves graph-backed surface A* and Flow `PathQuery` values plus the remaining volume request family.                                                      | [Pathing](docs/wiki/Pathing.md), [PathGuides](docs/wiki/PathGuides.md)                                          |
 | Transitions     | Describes explicit handoffs between charts and raw volume traversal, including generated transition data.                                                  | [Transitions](docs/wiki/Transitions.md), [VolumeTraversal](docs/wiki/VolumeTraversal.md)                        |
 | Navigation      | Coordinates steering, turning, motor simulation, locomotion, occupancy, and host traversal state.                                                          | [Navigator](docs/wiki/Navigator.md), [NavSteering](docs/wiki/NavSteering.md), [NavMotor](docs/wiki/NavMotor.md) |
 | Heightmaps      | Provides deterministic ground/contact Y sampling separate from chart walkability.                                                                          | [HeightMaps](docs/wiki/HeightMaps.md)                                                                           |
@@ -186,8 +188,10 @@ surface waypoint trail. A successful request returns a disposable
 `NavigationGuideLease`; every acquisition and cursor operation reports a
 `NavigationGuideStatus`.
 
-Use `FlowFieldPathRequest` when many agents can share a destination and sample
-local movement vectors from one cached field.
+Use `PathQuery` with `PathAlgorithm.FlowField` and `FlowFieldQueryOptions` when
+many agents can share a destination and sample local movement vectors from one
+cached graph field. `context.Guides.RequestFlowField(...)` returns a disposable
+`NavigationFlowFieldLease`.
 
 Use `VolumePathRequest` when movement should route through raw 3D voxel
 connectivity for gas, liquid, aerial, or chart-optional travel.
@@ -230,8 +234,8 @@ enabled.
 ## Benchmarks
 
 The benchmark suite measures path-request and navigation hot paths: graph
-surface A*, flow-field surveys, cold and warm guide resolution, guide lifecycle,
-steering steady-state costs, transition fallback, and volume routing.
+surface A*, graph Flow reverse integration, prefix promotion, contention,
+invalidation, warm sampling, guide lifecycle, and volume routing.
 
 List available benchmark selections:
 
@@ -242,7 +246,7 @@ dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj 
 Run a specific group:
 
 ```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- guide-cache
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- navigation-flow-field
 ```
 
 See the [benchmark README](tests/Trailblazer.Benchmarks/README.md) for the full

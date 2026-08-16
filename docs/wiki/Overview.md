@@ -3,7 +3,7 @@
 Trailblazer is a deterministic navigation library for lockstep simulations and
 games. It is split into two layers that can be used together or independently:
 
-- A pathing layer for graph-backed surface queries, chart-backed flow fields,
+- A pathing layer for graph-backed surface A* and Flow queries, chart-backed
   volume routes, and reusable guide data.
 - A navigation layer for steering, turning, locomotion, and deterministic
   frame-by-frame movement.
@@ -35,9 +35,10 @@ Trailblazer assumes:
 - world-space math uses `FixedMathSharp` types such as `Fixed64`, `Vector3d`,
   and `FixedQuaternion`
 - traversable space is represented by `GridForge` voxels
-- surface A* is driven by immutable navigation maps and composed graph snapshots
-- remaining flow/volume paths still use chart and partition state until their
-  owning cutover phases
+- surface A* and Flow are driven by immutable navigation maps and composed graph
+  snapshots
+- remaining volume and handoff paths still use chart and partition state until
+  their owning cutover phases
 - simulation advances in deterministic fixed steps through
   `TrailblazerWorldContext`
 - runtime diagnostics flow through `TrailblazerLogger.Channel`, with verbose
@@ -46,10 +47,11 @@ Trailblazer assumes:
 At a high level, the runtime loop is:
 
 1. Publish navigation maps and a matching navigation-area policy.
-2. Build a complete immutable `PathQuery` for surface A*, or use a remaining
-   flow/volume request where applicable.
+2. Build a complete immutable `PathQuery` for surface A* or Flow, or use a
+   remaining volume request where applicable.
 3. Resolve surface intent through `TrailblazerWorldContext.Guides` into a
-   disposable `NavigationGuideLease`, or let `NavSteering` own that lifecycle.
+   disposable `NavigationGuideLease` or `NavigationFlowFieldLease`, or let
+   `NavSteering` own that lifecycle.
 4. Run `Navigator.Simulate()` on the fixed step.
 5. Update traversal medium and surface state from your own collision/environment
    code.
@@ -59,11 +61,11 @@ At a high level, the runtime loop is:
 
 ### 2.1 Navigation Maps And Remaining Charts
 
-`NavigationMap` is the authored input to graph-backed surface A*. One map binds
-to one exact grid generation, and the context publishes composed immutable graph
-snapshots for query admission and dependency validation.
+`NavigationMap` is the authored input to graph-backed surface A* and Flow. One
+map binds to one exact grid generation, and the context publishes composed
+immutable graph snapshots for query admission and dependency validation.
 
-`NavigationChart` is the remaining chart-backed flow/volume description. It
+`NavigationChart` is the remaining chart-backed volume/handoff description. It
 stores authored chart-cell data and exposes:
 
 - `NavigationChart.From3D(...)` to build a chart from `bool[,,]` voxel data for
@@ -79,9 +81,9 @@ stores authored chart-cell data and exposes:
 
 Important details:
 
-- graph-backed surface A* does not read `NavigationChart`, `PathManager`, or
-  chart partitions
-- charts remain live for the unported flow/volume branches described below
+- graph-backed surface A* and Flow do not read `NavigationChart`, `PathManager`,
+  or chart partitions
+- charts remain live for the retained volume/handoff branches described below
 
 - the chart itself is data only; it does not become queryable by pathfinding
   until it is registered and initialized
@@ -102,9 +104,10 @@ attach/owned-world lifetime, independent frame rate and frame count,
 context-local lifecycle hooks, pathing state, transitions, volume rules, graph
 guide payloads, remaining guide caches, navigator ids, and movement-group state.
 
-Graph-backed surface routing uses each grid's topology and world-space geometry;
-it does not derive costs from context-wide `VoxelSize`. Remaining chart-backed
-flow/volume branches retain their existing metric constraints until cut over.
+Graph-backed surface A* and Flow use each grid's topology and world-space
+geometry; they do not derive costs from context-wide `VoxelSize`. Remaining
+chart-backed volume/handoff branches retain their existing metric constraints
+until cut over.
 
 ### 2.3 Pathing Service
 
@@ -150,15 +153,15 @@ See also:
 
 ## 3. Path Requests
 
-Surface A* uses `PathQuery`, an immutable value containing exact start/end
+Surface A* and Flow use `PathQuery`, an immutable value containing exact start/end
 `NavigationEndpoint` values, `NavigationAgentProfile`, area-policy key,
 `TraversalIntent`, algorithm, finite `NavigationWorkBudget`, and transition
 intent. Endpoint positions are foot positions. Admission resolves these values
 against one immutable graph snapshot; callers do not select an A* heuristic.
 
-The legacy `IPathRequest` hierarchy remains only for unported flow/volume
-consumers. Its cache keys and mutable endpoint carriers are not part of the
-surface A* API.
+The legacy `IPathRequest` hierarchy remains only for retained volume consumers.
+Its cache keys and mutable endpoint carriers are not part of the graph surface
+API.
 
 ### 3.1 Surface `PathQuery`
 
@@ -175,33 +178,37 @@ A lease exists only for `Success`. Dispose it when finished. Its status and
 waypoint operations validate graph dependencies and can report `Stale`; finite
 admission/search limits report `BudgetExceeded` rather than running unbounded.
 
-### 3.2 FlowFieldPathRequest
+### 3.2 Graph Flow `PathQuery`
 
-Use `FlowFieldPathRequest` when many agents can share a destination-centric
-field.
+Use `PathAlgorithm.FlowField` when many agents can share a graph-backed,
+destination-centric field. Supply `FlowFieldQueryOptions` on the same immutable
+`PathQuery` used by A*.
 
-Additional configuration includes:
+The Flow-specific option is:
 
-- `MaxClimbHeight`, which restricts vertical step height during flood expansion
-  and flow selection
-- `ExtraFloodRange`, which controls how far the flood expands beyond the
-  destination
+- `ExtraIntegrationCost`, a non-negative exact cost included in payload identity
 
-Factory helpers:
+Acquire and sample the field through the context guide service:
 
 ```csharp
-FlowFieldPathRequest.TryCreate(context, origin, destination, out var request);
+NavigationGuideStatus status = context.Guides.RequestFlowField(
+    query,
+    out NavigationFlowFieldLease? lease);
 ```
 
-One important difference from A*:
+Direct acquisition requires surface-to-surface traversal and
+`AllowTransitions == false`. Dispose successful leases after sampling with
+`TrySample(actualFootPosition, budget, out heading)`.
 
-- the flow-field cache key is based on the exact destination voxel identity and
-  configuration, not the specific start voxel
+Important cache behavior:
+
+- the field family is based on exact destination and query identity, not the
+  specific start node
 - a single field can be reused by multiple agents as long as their current voxel
   exists in the generated field set
 - when a compatible cached field does not cover a farther start voxel,
-  Trailblazer computes a covering result without resetting the smaller field
-  while active guides may still reference it
+  Trailblazer publishes the deterministic longer prefix while active leases may
+  still reference the smaller payload
 
 ### 3.3 VolumePathRequest
 
@@ -240,18 +247,17 @@ forcing callers onto a separate public request family.
 
 Current behavior:
 
-- Graph-backed surface A* rejects `AllowTransitions == true` as `Unsupported`
-  until transition nodes move into the composed graph.
-- `FlowFieldPathRequest.AllowTraversalTransitions` retains the internal staged
-  fallback needed by the unported flow/volume branch.
-- `Navigator` exposes the same policy for built-in guided travel through
-  `ConfigureForGuidedTraversal(allowTraversalTransitions: true)`.
+- Direct graph A* and Flow guide-service calls reject
+  `AllowTransitions == true` as `Unsupported`.
+- Navigator-owned Flow queries may opt into the retained hybrid/volume handoff
+  planner above the direct graph guide-service boundary.
 - For navigator-owned volume-first travel, that same opt-in also enables bounded
   swim-exit handoffs from liquid volume into a follow-up chart request and
   bounded aerial landing handoffs into chart-backed follow-up travel.
 - The staged route is resolved internally from the request plus the live
   `TraversalTransitionRegistry`.
-- Surveyors stay single-mode; staged escalation happens above them.
+- Search implementations stay single-mode; staged escalation happens above
+  them.
 
 No transition fallback routes a surface `PathQuery` through the deleted legacy
 A* provider.
@@ -260,22 +266,16 @@ A* provider.
 
 Trailblazer separates search payloads from runtime movement consumption.
 
-### 4.1 Surveyors
+### 4.1 Search Payloads
 
-The remaining legacy surveyors build reusable flow/volume results:
+Graph surface searches publish immutable dependency-stamped payloads:
 
-- `FlowFieldSurveyor` performs a reverse flood and produces directional field
-  data
-- `VolumeSurveyor` expands raw voxel neighbors and produces 3D waypoint trails
-  for chart-optional volume travel
+- A* publishes ordered waypoint data behind `NavigationGuideLease`
+- Flow performs reverse integration and publishes selected edges and integration
+  costs behind `NavigationFlowFieldLease`
 
-They return concrete `SurveyResult` types:
-
-- `FlowFieldSurveyResult`
-- `VolumeSurveyResult`
-
-Surface A* instead publishes an immutable graph payload behind a
-`NavigationGuideLease`; it has no public surveyor/result authority.
+The retained `VolumeSurveyor` builds `VolumeSurveyResult` waypoint data for
+chart-optional volume travel. It is not surface-search authority.
 
 ### 4.2 Guides
 
@@ -291,11 +291,12 @@ public interface IGuide
 }
 ```
 
-Surface and remaining guide types:
+Graph leases and the remaining guide type:
 
 - `NavigationGuideLease` owns a graph surface payload reference and waypoint
   cursor
-- `FlowFieldGuide` implements `IGuide`
+- `NavigationFlowFieldLease` owns a graph Flow payload reference and samples a
+  heading from the actual foot position
 - `VolumeGuide` implements `IWaypointGuide`
 
 `IWaypointGuide` adds waypoint-specific operations:
@@ -314,9 +315,8 @@ Guide behavior in practice:
 
 - `NavigationGuideLease` exposes dependency-validated waypoint sampling and
   advancement; it exposes no geometry-uncertified smoothing path
-- `FlowFieldGuide` samples the local vector field, can recover by searching for
-  a nearby flow anchor, and can internally execute staged transition-aware
-  FlowField routes
+- `NavigationFlowFieldLease` exposes dependency-validated fixed-budget sampling;
+  terminal sampling may require the Navigator-owned local recovery bridge
 
 ## 5. Guide Caching and Lifetime
 
@@ -327,14 +327,16 @@ Supported operations:
 
 - `RequestGuide(PathQuery query, out NavigationGuideLease result)` returns a
   `NavigationGuideStatus`
+- `RequestFlowField(PathQuery query, out NavigationFlowFieldLease result)`
+  returns a `NavigationGuideStatus`
 - `RequestGuide(IPathRequest request, out IGuide result)`
 - `RequestGuide<T>(IPathRequest request, out T result)`
 - `ReturnGuide(IGuide guide, bool dispose = false)`
 - `InvalidateCacheFor(string chartKey)`
 - `FlushCache(bool force = false)`
 
-Graph surface payload reuse validates exact dependency stamps. The remaining
-flow/volume branches still use `ReusableSurveyResultCache<T>` for:
+Graph A* and Flow payload reuse validates exact dependency stamps. The remaining
+volume branch still uses `ReusableSurveyResultCache<T>` for:
 
 - cache lookup by `RequestCacheKey`
 - reuse of valid survey results
@@ -343,14 +345,14 @@ flow/volume branches still use `ReusableSurveyResultCache<T>` for:
 
 Lifetime rules matter:
 
-- dispose graph `NavigationGuideLease` instances; do not pass them to
-  `ReturnGuide(...)`
+- dispose graph `NavigationGuideLease` and `NavigationFlowFieldLease` instances;
+  do not pass them to `ReturnGuide(...)`
 - if you request a guide directly, return it with
   `context.Guides.ReturnGuide(...)`
 - `NavSteering` handles this automatically when it owns the guide lifecycle
 - unloaded charts invalidate all cached results that reference them
-- `InvalidateCacheFor(...)` is chart-targeted only for the remaining FlowField
-  and Volume caches; graph A* staleness comes from graph dependency stamps
+- `InvalidateCacheFor(...)` is chart-targeted only for the remaining Volume
+  cache; graph A* and Flow staleness comes from graph dependency stamps
 
 ## 6. Runtime Navigation Stack
 
@@ -374,10 +376,10 @@ See also:
 ### 6.2 NavSteering
 
 `NavSteering` is the heading-generation layer. For guided surface travel it owns
-immutable `PathQuery` intent plus a `NavigationGuideLease`, refreshing only the
-start foot position when repathing. It also retains the remaining flow/volume
-request path, blends local steering influences, and manages arrival and stop
-logic.
+immutable `PathQuery` intent plus a `NavigationGuideLease` or
+`NavigationFlowFieldLease`, refreshing only the start foot position when
+repathing. It also retains the volume request path, blends local steering
+influences, and manages arrival and stop logic.
 
 See also:
 
@@ -487,7 +489,7 @@ Before runtime pathing works correctly:
 
 1. Create or attach a `TrailblazerWorldContext` for the target `GridWorld`.
 2. Publish navigation maps and area policies for surface graph queries.
-3. Register and initialize charts only for remaining flow/volume consumers.
+3. Register and initialize charts only for remaining volume/handoff consumers.
 4. Create and initialize your context-bound `Navigator` with an exact
    `NavigationAgentProfile`, or request guides
    directly.
@@ -510,8 +512,8 @@ Before runtime pathing works correctly:
   refresh velocity state.
 - Host code is still responsible for collision probing, surface detection, water
   detection, and other environment inputs.
-- Graph mutations stale surface leases through dependency stamps; chart unloads
-  invalidate remaining flow/volume cache entries.
+- Graph mutations stale A* and Flow leases through dependency stamps; chart
+  unloads invalidate remaining volume cache entries.
 
 ## 11. Where to Read Next
 
@@ -519,8 +521,8 @@ Before runtime pathing works correctly:
   quick-start examples
 - [`Pathing.md`](Pathing.md) for standalone pathing integration and request
   guidance
-- [`PathGuides.md`](PathGuides.md) for `NavigationGuideLease` and the remaining
-  flow/volume guide caches
+- [`PathGuides.md`](PathGuides.md) for graph leases and the remaining volume
+  guide cache
 - [`Transitions.md`](Transitions.md) for authored chart and volume handoffs
 - [`VolumeTraversal.md`](VolumeTraversal.md) for raw-volume traversal rules
 - [`NavMotor.md`](NavMotor.md) for motor phase ordering
@@ -533,7 +535,7 @@ Before runtime pathing works correctly:
   groups, and navigator guidance
 - `src/Trailblazer/Pathing` for chart lifecycle, pathing state, grid-bridge
   integration, transition topology, volume rules, and search
-- `src/Trailblazer/Pathing/Search/AStar` for graph A* admission, payloads, and
-  leases; the sibling FlowField/Hybrid/Volume folders remain later-phase code
+- `src/Trailblazer/Pathing/Search/AStar` and `Search/Flow` for graph admission,
+  payloads, and leases; the Hybrid/Volume folders remain later-phase code
 - `src/Trailblazer/Traversal` for traversal-medium value objects shared by
   runtime, navigation, pathing, and transitions

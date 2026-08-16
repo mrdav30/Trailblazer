@@ -1927,6 +1927,22 @@ Tasks:
   surface reachability cache and retain no chart/partition fast-fail adapter.
   Keep `PathHeap`, endpoint finders, and shared request/cache carriers only where
   Phase 7 volume/hybrid code still has a direct caller.
+- Retained-carrier ledger (Phase 5 exit): these are volume/hybrid carriers, not
+  Flow compatibility surfaces. Each has a current production consumer and a
+  single deletion owner:
+
+  | Retained carrier | Live production consumer | Deletion owner |
+  | --- | --- | --- |
+  | `IPathRequest`, `PathRequest`, `VolumePathRequest`, and `PathRequestCacheKey` | `Navigator`'s guided volume-exit lane and `NavSteering.ApplyPathRequest(...)` | Phase 7 volume admission and controller cutover |
+  | `VolumeSurveyor`, `VolumeSurveyResult`, and `VolumeGuide` | `GuidedVolumeExitPlanner`, `HybridRoutePlanner`, and `NavSteering` volume sessions | Phase 7 volume graph-query cutover |
+  | `ReusableSurveyResultCache<T>`, `PathGuideFactory`, and their volume state/pool/service branches | `TrailblazerGuideService.RequestGuide(IPathRequest, ...)` used by `NavSteering` and `HybridRouteGuide` | Phase 7 volume guide-service cutover |
+  | `HybridPathRequest`, `HybridRoutePlanner`, `HybridRoutePlan`, and `HybridRouteGuide` | `GuidedVolumeExitPlanner` and `NavSteering` transition/handoff lanes | Phase 7 composed-graph transition routing cutover |
+  | `PathHeap`, `AStarWaypoint`, `HeuristicMethod`, and the endpoint finders | `VolumeSurveyor` and `HybridRoutePlanner` | Phase 7 volume graph admission cutover |
+  | chart/partition/path-manager and transition-registry carriers | `VolumePathRequest`, `VolumeSurveyor`, and `HybridRoutePlanner` | Phase 7 map/transition publication cutover |
+
+  Phase 7 deletes these carriers after their named consumer moves. Phase 8 may
+  migrate the resulting `PathQuery` controller/serialization shape, but does
+  not own or recreate an old request/cache/chart compatibility layer.
 
 Exit criteria:
 
@@ -2008,8 +2024,8 @@ Tasks:
   consumers compile.
 - Legacy-deletion ledger: verify combined Phase 3/4 already removed the hybrid
   surface-A* variant, flattened hybrid guide path, and guided-volume A* handoff
-  carriers; do not recreate them. Remove `VolumeSurveyor`, the remaining
-  FlowField/volume `HybridPathRequest`/`HybridRoutePlanner`/`HybridRoutePlan`
+  carriers; do not recreate them. Remove `VolumeSurveyor`, `VolumePathRequest`,
+  `HybridPathRequest`/`HybridRoutePlanner`/`HybridRoutePlan`
   carriers, transition registries/indexes, `PathHeap`, `AStarWaypoint`, and
   `HeuristicMethod` when their final volume/hybrid caller is gone. Remove
   `SolidVoxelFinder`/`AlternativeVoxelFinder` only after every
@@ -2068,27 +2084,18 @@ Tasks:
   persisted gameplay state; graph snapshots and runtime handles remain rebuild-only.
 - Reject old serialized request records with a clear schema/version error. Do
   not add a compatibility reader.
-- Delete any shared old request carriers retained for earlier phased consumers,
-  then require a clean Release build and full suite before the phase exits.
-- Legacy-deletion ledger: after the remaining flow/volume/hybrid controller and
-  serialized shapes move, delete `IPathRequest`/`PathRequest` and the remaining
-  `FlowFieldPathRequest`/`VolumePathRequest` implementations,
-  `PathRequestCacheKey`, `ReusableSurveyResultCache<T>`, `PathGuideFactory`,
-  `TrailblazerGuideState`, legacy guide pools/service overloads/counters/chart-
-  key invalidation, old Navigator flow/volume heuristic/default fields, and the
-  remaining `PathRequestRecord` discriminators. Remove any retained
-  `PathRequestContextResolver`, `ChartsUtilized`, survey-result base, or shared
-  cache carrier once no new graph consumer references it. After their last
-  controller and serialization consumers move, also delete the final chart/
-  partition authority: `NavigationChart*`, `NavigationChartRegistration`,
-  `ResolvedChartVoxelState`, `SolidChartPartition`/`VolumeChartPartition`,
-  `PathManager`, `PathingWorldState` chart pools/dictionaries, GridForge chart
-  bridges, `TraversalAuthoringMap`/`TraversalBuildResult` chart carriers,
-  chart diagnostics/extensions, and chart-facing pathing/guide service APIs.
-  Retain no forwarding facade from the new `PathQuery`/guide service back to
-  these carriers; Phase 9 only verifies that this deletion left no residue.
-  Delete the retained concrete `TrailGuide`/`SetTrailGuide` carrier with those
-  legacy guide lanes, or rename any surviving concrete carrier after the trim.
+- Do not recreate shared old request/cache/chart carriers deleted by their
+  Phase 7 owner; require a clean Release build and full suite before the phase
+  exits.
+- Legacy-deletion ledger: Phase 7 owns deletion of `IPathRequest`/
+  `PathRequest`, `VolumePathRequest`, `PathRequestCacheKey`,
+  `ReusableSurveyResultCache<T>`, `PathGuideFactory`, `TrailblazerGuideState`,
+  legacy volume guide pools/service overloads/counters/chart-key invalidation,
+  and the final chart/partition authority. Phase 8 deletes only the remaining
+  controller/serialization fields and `PathRequestRecord` shapes once they have
+  moved to the graph-native `PathQuery` schema. Retain no forwarding facade
+  from the new query/guide service back to a deleted carrier; Phase 9 only
+  verifies that the Phase 7 and Phase 8 deletions left no residue.
 
 Exit criteria:
 

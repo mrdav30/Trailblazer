@@ -130,6 +130,53 @@ public sealed class NavigationFlowFieldCacheTests
     }
 
     [Fact]
+    public void RemoveExact_ShouldInvalidateOnlyTheExactPayloadAcrossPromotion()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        long activeBytes = checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            maxEntries: 1,
+            maxReusableBytes: fixture.Far.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: activeBytes,
+            maxActiveLeases: 4,
+            guideMapCapacity: 0);
+        NavigationFlowFieldPayloadLease nearLease = Publish(
+            cache,
+            fixture,
+            fixture.Near,
+            fixture.NearOrigin);
+        NavigationFlowFieldPayloadLease farLease = Publish(
+            cache,
+            fixture,
+            fixture.Far,
+            fixture.FarOrigin);
+
+        cache.RemoveExact(fixture.Near);
+
+        nearLease.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Stale);
+        farLease.TryGetPayload(out NavigationFlowFieldPayload canonical)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        canonical.Should().BeSameAs(fixture.Far);
+        cache.Count.Should().Be(1);
+        cache.CachedBytes.Should().Be(fixture.Far.RetainedBytes);
+        nearLease.Dispose();
+        cache.DetachedBytes.Should().Be(0);
+
+        cache.RemoveExact(fixture.Far);
+
+        cache.Count.Should().Be(0);
+        cache.CachedBytes.Should().Be(0);
+        farLease.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Stale);
+        cache.DetachedBytes.Should().Be(fixture.Far.RetainedBytes);
+        farLease.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.DetachedBytes.Should().Be(0);
+    }
+
+    [Fact]
     public void Checkout_WhenOriginExistsButExtraMarginIsMissing_ShouldRemainAMiss()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =

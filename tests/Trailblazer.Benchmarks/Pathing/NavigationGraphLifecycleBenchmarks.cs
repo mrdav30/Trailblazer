@@ -134,6 +134,7 @@ public class NavigationGraphLifecycleBenchmarks
                 65_536,
                 65_536,
                 65_536),
+            TrailblazerWorldContextSettings.Default.GuideSampleBudget,
             maxIngressEntries: 4_096,
             maxIngressBytes: 4_096 * 256L,
             maxActiveSnapshots: 3,

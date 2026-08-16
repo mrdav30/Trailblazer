@@ -242,6 +242,7 @@ public class NavigationGraphCompositionBenchmarks
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             budget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

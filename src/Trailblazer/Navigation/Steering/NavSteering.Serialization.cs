@@ -66,7 +66,7 @@ public partial class NavSteering
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            ReleaseTrailGuide();
+            ReleaseNavigationGuidance();
             ResetMovementGroupSession();
 
             _currentRequest = null;
@@ -139,10 +139,60 @@ public partial class NavSteering
         }
     }
 
-    private void ReleaseTrailGuide(bool dispose = false)
+    internal void RestoreFlowQueryFromLoadedFoot(Vector3d footPosition)
+    {
+        if (_currentQuery is not PathQuery query
+            || query.Algorithm != PathAlgorithm.FlowField)
+        {
+            return;
+        }
+
+        query = query.WithStartPosition(footPosition);
+        _currentQuery = query;
+        _requestedDestination = query.End.Position;
+        ReleaseNavigationGuidance();
+        if (!ShouldMove || HasLineOfSightPath)
+            return;
+
+        NavigationGuideStatus status = ResolveContext().Guides.RequestFlowField(
+            query,
+            out NavigationFlowFieldLease? lease);
+        if (status == NavigationGuideStatus.Success && lease != null)
+        {
+            _navigationFlowFieldLease = lease;
+            _shouldRequestPathThisFrame = false;
+            PublishRouteTopology(
+                hasResolvedTopology: true,
+                usesGuideTopology: true,
+                requestsClimbIntent: false);
+            return;
+        }
+
+        lease?.Dispose();
+        if (status is NavigationGuideStatus.Stale
+            or NavigationGuideStatus.CapacityExceeded)
+        {
+            _shouldRequestPathThisFrame = true;
+            return;
+        }
+
+        _shouldMove = false;
+        _shouldRequestPathThisFrame = false;
+        _currentQuery = null;
+        PublishRouteTopology(
+            hasResolvedTopology: false,
+            usesGuideTopology: false,
+            requestsClimbIntent: false);
+    }
+
+    private void ReleaseNavigationGuidance(bool dispose = false)
     {
         _navigationGuideLease?.Dispose();
         _navigationGuideLease = null;
+        _navigationFlowFieldLease?.Dispose();
+        _navigationFlowFieldLease = null;
+        _flowRecoveryGuideLease?.Dispose();
+        _flowRecoveryGuideLease = null;
 
         if (_trailGuide == null)
             return;

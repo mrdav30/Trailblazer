@@ -1954,6 +1954,13 @@ Tasks:
 - Validate the complete swept body through the selected prism union: inset
   non-portal boundaries and shrink each portal tangentially/vertically;
   node-anchor clearance is necessary but never sufficient for a shortcut.
+- Phase 5 Flow recovery bridge deletion ledger: consumer `NavSteering`'s
+  `LocalRecoveryRequired` lane. Owner: navigation-ray-certified Flow
+  rejoin/string-pulling work. Delete `_flowRecoveryGuideLease`,
+  `TryGetFlowRecoveryHeading`, and the `ponytail:` bridge comment; replace with
+  certified navigation-ray rejoin to the existing shared Flow lease.
+  Acceptance: ordinary Flow sampling/cache identity unchanged and
+  bridge-symbol residue zero.
 
 Exit criteria:
 
@@ -2080,6 +2087,8 @@ Tasks:
   chart diagnostics/extensions, and chart-facing pathing/guide service APIs.
   Retain no forwarding facade from the new `PathQuery`/guide service back to
   these carriers; Phase 9 only verifies that this deletion left no residue.
+  Delete the retained concrete `TrailGuide`/`SetTrailGuide` carrier with those
+  legacy guide lanes, or rename any surviving concrete carrier after the trim.
 
 Exit criteria:
 

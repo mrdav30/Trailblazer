@@ -27,6 +27,7 @@ public sealed class TrailblazerWorldContextSettings
     public TrailblazerWorldContextSettings(
         NavigationOperationLimits operationLimits,
         MaintenanceWorkBudget maintenanceBudget,
+        GuideSampleWorkBudget guideSampleBudget,
         int maxIngressEntries,
         long maxIngressBytes,
         int maxActiveSnapshots,
@@ -119,6 +120,7 @@ public sealed class TrailblazerWorldContextSettings
 
         OperationLimits = operationLimits;
         MaintenanceBudget = maintenanceBudget;
+        GuideSampleBudget = guideSampleBudget;
         MaxIngressEntries = maxIngressEntries;
         MaxIngressBytes = maxIngressBytes;
         MaxActiveSnapshots = maxActiveSnapshots;
@@ -141,6 +143,9 @@ public sealed class TrailblazerWorldContextSettings
 
     /// <summary>Gets the deterministic work budget consumed at each maintenance boundary.</summary>
     public MaintenanceWorkBudget MaintenanceBudget { get; }
+
+    /// <summary>Gets the deterministic work budget consumed by one graph flow guide sample.</summary>
+    public GuideSampleWorkBudget GuideSampleBudget { get; }
 
     /// <summary>Gets the maximum coalesced GridForge ingress entries.</summary>
     public int MaxIngressEntries { get; }
@@ -213,6 +218,14 @@ public sealed class TrailblazerWorldContextSettings
             maxExplicitEdges: 65_536,
             maxDependencyEntries: 65_536,
             maxSurfaceComponentEdges: 65_536),
+        new GuideSampleWorkBudget(
+            maxCurrentNodeLookupProbes: 128,
+            maxCursorLegScans: 128,
+            maxCursorRebases: 8,
+            maxPortalChecks: 32,
+            maxPrismChecks: 32,
+            maxTraceIntervals: 32,
+            maxLocalRecoveryAttempts: 1),
         maxIngressEntries: 16_384,
         maxIngressBytes: 4_194_304,
         maxActiveSnapshots: 3,

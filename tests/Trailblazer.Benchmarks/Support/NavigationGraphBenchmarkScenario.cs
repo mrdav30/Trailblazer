@@ -145,6 +145,7 @@ internal static class NavigationGraphBenchmarkScenario
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             defaults.MaintenanceBudget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

@@ -515,6 +515,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     {
         if (!IsActive) return;
 
+        Steering!.StopMove();
         _isGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
         NavigatorGuidedTraversalState.ResetClimbIntent(
@@ -589,7 +590,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Applies complete immutable graph-backed surface A* intent.
+    /// Applies complete immutable graph-backed surface A* or flow-field intent.
     /// </summary>
     /// <param name="query">The exact query intent whose start point equals the current derived foot position.</param>
     /// <param name="rate">Desired movement rate.</param>
@@ -1134,14 +1135,14 @@ public abstract partial class Navigator : INavigate, IRecordable
     {
         if (query.Agent != NavigationProfile
             || query.Start.Position != FootPosition
-            || query.Algorithm != PathAlgorithm.AStar
+            || query.Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
             || query.AllowTransitions
             || query.Traversal.StartDomain != TraversalDomain.Surface
             || query.Traversal.TargetDomain != TraversalDomain.Surface
             || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
         {
             throw new ArgumentException(
-                "Guided surface queries must use the Navigator profile, current foot position, surface A*, and no transitions.",
+                "Guided surface queries must use the Navigator profile, current foot position, a graph surface algorithm, and no transitions.",
                 nameof(query));
         }
     }

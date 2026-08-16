@@ -37,6 +37,15 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaintenanceBudget.MaxDependencyEntries.Should().Be(65_536);
         settings.MaintenanceBudget.MaxSurfaceComponentEdges.Should().Be(65_536);
 
+        settings.GuideSampleBudget.Should().Be(new GuideSampleWorkBudget(
+            maxCurrentNodeLookupProbes: 128,
+            maxCursorLegScans: 128,
+            maxCursorRebases: 8,
+            maxPortalChecks: 32,
+            maxPrismChecks: 32,
+            maxTraceIntervals: 32,
+            maxLocalRecoveryAttempts: 1));
+
         settings.MaxIngressEntries.Should().Be(16_384);
         settings.MaxIngressBytes.Should().Be(4_194_304);
         settings.MaxActiveSnapshots.Should().Be(3);
@@ -78,11 +87,13 @@ public sealed class TrailblazerWorldContextSettingsTests
     {
         NavigationOperationLimits operationLimits = CreateOperationLimits();
         var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 5, 7, 21, 23);
+        var guideSampleBudget = new GuideSampleWorkBudget(2, 3, 5, 7, 11, 13, 17);
         NavigationQueryLimits queryLimits = CreateQueryLimits(maxConcurrentQueries: 2);
 
         var settings = new TrailblazerWorldContextSettings(
             operationLimits,
             maintenanceBudget,
+            guideSampleBudget,
             maxIngressEntries: 10,
             maxIngressBytes: 256,
             maxActiveSnapshots: 12,
@@ -101,6 +112,7 @@ public sealed class TrailblazerWorldContextSettingsTests
 
         settings.OperationLimits.Should().Be(operationLimits);
         settings.MaintenanceBudget.Should().Be(maintenanceBudget);
+        settings.GuideSampleBudget.Should().Be(guideSampleBudget);
         settings.MaxIngressEntries.Should().Be(10);
         settings.MaxIngressBytes.Should().Be(256);
         settings.MaxActiveSnapshots.Should().Be(12);
@@ -252,6 +264,7 @@ public sealed class TrailblazerWorldContextSettingsTests
     private static TrailblazerWorldContextSettings CreateSettings(
         NavigationOperationLimits? operationLimits = null,
         MaintenanceWorkBudget? maintenanceBudget = null,
+        GuideSampleWorkBudget? guideSampleBudget = null,
         int maxIngressEntries = 1,
         long maxIngressBytes = 256,
         int maxActiveSnapshots = 3,
@@ -269,6 +282,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         NavigationQueryLimits? queryLimits = null) => new(
             operationLimits ?? CreateOperationLimits(),
             maintenanceBudget ?? new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 3),
+            guideSampleBudget ?? new GuideSampleWorkBudget(1, 1, 1, 1, 1, 1, 1),
             maxIngressEntries,
             maxIngressBytes,
             maxActiveSnapshots,

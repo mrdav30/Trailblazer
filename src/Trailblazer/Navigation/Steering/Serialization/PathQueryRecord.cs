@@ -12,7 +12,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
-/// <summary>Records exact graph A* query intent and its guide-local cursor.</summary>
+/// <summary>Records exact graph query intent and any A* guide-local cursor.</summary>
 internal sealed class PathQueryRecord : IRecordable
 {
     private const int NoWaypointIndex = -1;
@@ -73,6 +73,8 @@ internal sealed class PathQueryRecord : IRecordable
 
     public bool AllowTransitions;
 
+    public Fixed64 ExtraIntegrationCost;
+
     public int WaypointIndex = NoWaypointIndex;
 
     public void Capture(PathQuery? query, NavigationGuideLease? guide)
@@ -109,6 +111,7 @@ internal sealed class PathQueryRecord : IRecordable
         MaxCoveredVoxelIntervals = value.Budget.MaxCoveredVoxelIntervals;
         MaxSimplificationRays = value.Budget.MaxSimplificationRays;
         AllowTransitions = value.AllowTransitions;
+        ExtraIntegrationCost = value.FlowField.ExtraIntegrationCost;
         WaypointIndex = guide?.CurrentWaypointIndex ?? NoWaypointIndex;
     }
 
@@ -117,7 +120,7 @@ internal sealed class PathQueryRecord : IRecordable
         query = null;
         if (!HasQuery)
             return true;
-        if (Algorithm != PathAlgorithm.AStar
+        if (Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
             || StartDomain != TraversalDomain.Surface
             || TargetDomain != TraversalDomain.Surface
             || CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid
@@ -157,7 +160,10 @@ internal sealed class PathQueryRecord : IRecordable
                     MaxTraceIntervals,
                     MaxCoveredVoxelIntervals,
                     MaxSimplificationRays),
-                AllowTransitions);
+                AllowTransitions,
+                Algorithm == PathAlgorithm.FlowField
+                    ? new FlowFieldQueryOptions(ExtraIntegrationCost)
+                    : default);
             return true;
         }
         catch (ArgumentException)
@@ -236,6 +242,7 @@ internal sealed class PathQueryRecord : IRecordable
         RecordValues.Look(chronicler, ref MaxCoveredVoxelIntervals, "MaxCoveredVoxelIntervals", 0);
         RecordValues.Look(chronicler, ref MaxSimplificationRays, "MaxSimplificationRays", 0);
         RecordValues.Look(chronicler, ref AllowTransitions, "AllowTransitions", false);
+        RecordValues.Look(chronicler, ref ExtraIntegrationCost, "ExtraIntegrationCost", Fixed64.Zero);
         RecordValues.Look(chronicler, ref WaypointIndex, "WaypointIndex", NoWaypointIndex);
     }
 }

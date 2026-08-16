@@ -15,6 +15,7 @@ public sealed class NavigationAreaContractsTests
         var settings = new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             defaults.MaintenanceBudget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

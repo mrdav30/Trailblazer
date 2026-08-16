@@ -696,6 +696,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         var settings = new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             budget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

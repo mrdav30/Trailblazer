@@ -1704,6 +1704,7 @@ public sealed class NavigationGraphCapacityTests
         return new TrailblazerWorldContextSettings(
             operationLimits ?? CreateOperationLimits(),
             maintenanceBudget ?? defaults.MaintenanceBudget,
+            defaults.GuideSampleBudget,
             maxIngressEntries,
             maxIngressBytes: Math.Max(32, operationLimits?.MaxMaps ?? 16) * 256L,
             maxActiveSnapshots: 3,

@@ -86,6 +86,72 @@ public sealed class TrailblazerGuideService
         }
     }
 
+    /// <summary>
+    /// Requests one graph-backed destination-centric flow field for immutable query intent.
+    /// </summary>
+    public NavigationGuideStatus RequestFlowField(
+        PathQuery query,
+        out NavigationFlowFieldLease? result)
+    {
+        EnsureUsable();
+        result = null;
+
+        if (query.Algorithm != PathAlgorithm.FlowField
+            || query.AllowTransitions
+            || query.Traversal.StartDomain != TraversalDomain.Surface
+            || query.Traversal.TargetDomain != TraversalDomain.Surface
+            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            return NavigationGuideStatus.Unsupported;
+        }
+
+        NavigationFlowAdmissionGate gate = _context.Pathing.NavigationFlowAdmissionGate;
+        NavigationFlowQueryStatus beginStatus = gate.Begin(query, out NavigationFlowBatchWork work);
+        if (beginStatus != NavigationFlowQueryStatus.Pending)
+            return ToPublic(beginStatus);
+
+        using (work)
+        {
+            work.AdvanceAdmission(
+                query.Budget.MaxLookupProbes,
+                query.Budget.MaxEndpointCandidates);
+            if (!work.IsAdmissionComplete)
+                return NavigationGuideStatus.BudgetExceeded;
+
+            if (!work.IsReadyToPublish(inputIndex: 0))
+            {
+                work.AdvanceSearch(
+                    inputIndex: 0,
+                    query.Budget.MaxLookupProbes,
+                    nodeStepLimit: int.MaxValue,
+                    query.Budget.MaxEvaluatedEdges,
+                    query.Budget.MaxConnectionLegs);
+                if (!work.IsReadyToPublish(inputIndex: 0))
+                    return NavigationGuideStatus.BudgetExceeded;
+            }
+
+            work.PublishReadyPrefix(maximumCount: 1);
+            NavigationFlowQueryStatus status = work.GetStatus(inputIndex: 0);
+            if (status != NavigationFlowQueryStatus.Success)
+                return ToPublic(status);
+
+            using NavigationFlowQueryResult flowResult = work.TakeResult(inputIndex: 0);
+            NavigationGuideStatus guideStatus = gate.PayloadCache.TryCreateGuide(
+                _context.World,
+                _context.Pathing.NavigationGraphStore,
+                flowResult,
+                out NavigationFlowFieldLease guide);
+            if (guideStatus != NavigationGuideStatus.Success)
+            {
+                guide.Dispose();
+                return guideStatus;
+            }
+
+            result = guide;
+            return NavigationGuideStatus.Success;
+        }
+    }
+
     /// <inheritdoc cref="PathGuideFactory.TotalFlowGuideCount"/>
     public int TotalFlowGuideCount
     {
@@ -247,4 +313,20 @@ public sealed class TrailblazerGuideService
 
     private bool IsRequestOwnedByThisContext(IPathRequest request) =>
         request != null && ReferenceEquals(request.Context, _context);
+
+    private static NavigationGuideStatus ToPublic(NavigationFlowQueryStatus status) => status switch
+    {
+        NavigationFlowQueryStatus.Success => NavigationGuideStatus.Success,
+        NavigationFlowQueryStatus.Unsupported => NavigationGuideStatus.Unsupported,
+        NavigationFlowQueryStatus.NoMap => NavigationGuideStatus.NoMap,
+        NavigationFlowQueryStatus.InvalidProfile => NavigationGuideStatus.InvalidProfile,
+        NavigationFlowQueryStatus.InvalidStart => NavigationGuideStatus.InvalidStart,
+        NavigationFlowQueryStatus.InvalidEnd => NavigationGuideStatus.InvalidEnd,
+        NavigationFlowQueryStatus.NoPath => NavigationGuideStatus.NoPath,
+        NavigationFlowQueryStatus.BudgetExceeded => NavigationGuideStatus.BudgetExceeded,
+        NavigationFlowQueryStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
+        NavigationFlowQueryStatus.CapacityExceeded => NavigationGuideStatus.CapacityExceeded,
+        NavigationFlowQueryStatus.Stale => NavigationGuideStatus.Stale,
+        _ => NavigationGuideStatus.Stale
+    };
 }

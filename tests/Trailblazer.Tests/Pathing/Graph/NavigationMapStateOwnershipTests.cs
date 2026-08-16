@@ -532,6 +532,7 @@ public sealed class NavigationMapStateOwnershipTests
         var settings = new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             maintenanceBudget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

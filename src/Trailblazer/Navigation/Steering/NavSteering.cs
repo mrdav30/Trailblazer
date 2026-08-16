@@ -171,6 +171,10 @@ public partial class NavSteering : IRecordable
 
     private NavigationGuideLease? _navigationGuideLease;
 
+    private NavigationFlowFieldLease? _navigationFlowFieldLease;
+
+    private NavigationGuideLease? _flowRecoveryGuideLease;
+
     /// <inheritdoc cref="_trailGuide"/>
     public IGuide? TrailGuide => _trailGuide;
 
@@ -219,8 +223,11 @@ public partial class NavSteering : IRecordable
     /// <summary>
     /// Indicates whether the agent is actively following a guide path with queued waypoints.
     /// </summary>
-    public bool HasTrailGuide => !HasLineOfSightPath
-        && (_navigationGuideLease != null || _trailGuide != null);
+    public bool HasNavigationGuidance => !HasLineOfSightPath
+        && (_navigationGuideLease != null
+            || _navigationFlowFieldLease != null
+            || _flowRecoveryGuideLease != null
+            || _trailGuide != null);
 
     /// <inheritdoc cref="_isAtDestination"/>
     public bool IsAtDestination => _isAtDestination;

@@ -17,7 +17,7 @@ public abstract partial class Navigator
     private enum SerializedGuidedPathMode
     {
         Invalid = -1,
-        FlowField = 1
+        Graph = 2
     }
 
     #region Serialization
@@ -30,7 +30,7 @@ public abstract partial class Navigator
             : new NavigationAgentProfileRecord(_navigationProfile);
         SerializedGuidedPathMode serializedGuidedPathMode = chronicler.Mode == SerializationMode.Loading
             ? SerializedGuidedPathMode.Invalid
-            : SerializedGuidedPathMode.FlowField;
+            : SerializedGuidedPathMode.Graph;
         GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
         if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
             pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
@@ -50,7 +50,7 @@ public abstract partial class Navigator
             "GuidedPathMode",
             SerializedGuidedPathMode.Invalid);
         if (chronicler.Mode == SerializationMode.Loading
-            && serializedGuidedPathMode != SerializedGuidedPathMode.FlowField)
+            && serializedGuidedPathMode != SerializedGuidedPathMode.Graph)
         {
             throw new InvalidOperationException(
                 "Serialized guided path mode is missing, retired, or unsupported.");
@@ -90,6 +90,8 @@ public abstract partial class Navigator
                 throw new InvalidOperationException(
                     "Serialized graph query profile must exactly match the configured Navigator shell.");
             }
+            if (chronicler.Mode == SerializationMode.Loading)
+                _steering.RestoreFlowQueryFromLoadedFoot(FootPosition);
         }
         if (_turning != null)
             RecordDeep.Look(chronicler, ref _turning, "Turning");

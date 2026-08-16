@@ -630,6 +630,7 @@ public sealed class NavigationSurfaceComponentTests
                 budget.MaxExplicitEdges,
                 budget.MaxDependencyEntries,
                 maxSurfaceComponentEdges: 1),
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

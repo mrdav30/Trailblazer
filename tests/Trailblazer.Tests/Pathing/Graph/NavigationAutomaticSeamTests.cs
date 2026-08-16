@@ -730,6 +730,7 @@ public sealed class NavigationAutomaticSeamTests
         var settings = new TrailblazerWorldContextSettings(
             budgeted.OperationLimits,
             budgeted.MaintenanceBudget,
+            budgeted.GuideSampleBudget,
             maxIngressEntries: 1,
             budgeted.MaxIngressBytes,
             budgeted.MaxActiveSnapshots,
@@ -852,6 +853,7 @@ public sealed class NavigationAutomaticSeamTests
         var settings = new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             defaults.MaintenanceBudget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,
@@ -1752,6 +1754,7 @@ public sealed class NavigationAutomaticSeamTests
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             budget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

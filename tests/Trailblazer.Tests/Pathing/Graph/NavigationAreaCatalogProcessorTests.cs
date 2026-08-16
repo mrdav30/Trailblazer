@@ -404,6 +404,7 @@ public sealed class NavigationAreaCatalogProcessorTests
         return new TrailblazerWorldContextSettings(
             operationLimits,
             maintenanceBudget,
+            defaults.GuideSampleBudget,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

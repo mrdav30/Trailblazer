@@ -353,6 +353,117 @@ public sealed class TrailblazerGuideServiceTests
         lease.Should().BeNull();
     }
 
+    [Fact]
+    public void RequestFlowField_ShouldAcquireSampleAndReleaseGraphFlowLease()
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery aStarQuery);
+        var flowProfile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        var query = new PathQuery(
+            aStarQuery.Start,
+            aStarQuery.End,
+            flowProfile,
+            aStarQuery.AreaPolicy,
+            aStarQuery.Traversal,
+            PathAlgorithm.FlowField,
+            aStarQuery.Budget,
+            allowTransitions: false,
+            new FlowFieldQueryOptions(Fixed64.Zero));
+        NavigationFlowFieldPayloadCache cache =
+            context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
+        NavigationWorldGraph graph = context.Pathing.NavigationGraphStore.Current;
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("guide-allocation", new VoxelIndex(4, 4, 4)),
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+
+        NavigationGuideStatus status = context.Guides.RequestFlowField(
+            query,
+            out NavigationFlowFieldLease? result);
+
+        status.Should().Be(NavigationGuideStatus.Success);
+        NavigationFlowFieldLease lease = TestRequire.NotNull(result);
+        lease.TrySample(
+                source.FootAnchor,
+                context.Settings.GuideSampleBudget,
+                out Vector3d heading)
+            .Should().Be(NavigationGuideStatus.Success);
+        heading.Should().Be(Vector3d.Right);
+        cache.ActiveLeaseCount.Should().Be(1);
+
+        lease.Dispose();
+
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("algorithm", NavigationGuideStatus.Unsupported)]
+    [InlineData("start", NavigationGuideStatus.InvalidStart)]
+    [InlineData("transition", NavigationGuideStatus.Unsupported)]
+    [InlineData("volume", NavigationGuideStatus.Unsupported)]
+    public void RequestFlowField_ShouldRejectUnsupportedOrUnresolvableQueryShape(
+        string mismatch,
+        NavigationGuideStatus expected)
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery aStarQuery);
+        PathQuery flowQuery = new(
+            aStarQuery.Start,
+            aStarQuery.End,
+            aStarQuery.Agent,
+            aStarQuery.AreaPolicy,
+            aStarQuery.Traversal,
+            PathAlgorithm.FlowField,
+            aStarQuery.Budget,
+            allowTransitions: false);
+        PathQuery query = mismatch switch
+        {
+            "algorithm" => aStarQuery,
+            "start" => flowQuery.WithStartPosition(new Vector3d(100, 0, 0)),
+            "transition" => new PathQuery(
+                flowQuery.Start,
+                flowQuery.End,
+                flowQuery.Agent,
+                flowQuery.AreaPolicy,
+                flowQuery.Traversal,
+                flowQuery.Algorithm,
+                flowQuery.Budget,
+                allowTransitions: true,
+                flowQuery.FlowField),
+            "volume" => new PathQuery(
+                flowQuery.Start,
+                flowQuery.End,
+                flowQuery.Agent,
+                flowQuery.AreaPolicy,
+                new TraversalIntent(
+                    TraversalDomain.Volume,
+                    TraversalMedium.Gas,
+                    TraversalDomain.Volume),
+                flowQuery.Algorithm,
+                flowQuery.Budget,
+                allowTransitions: false,
+                flowQuery.FlowField),
+            _ => throw new InvalidOperationException()
+        };
+
+        NavigationGuideStatus status = context.Guides.RequestFlowField(
+            query,
+            out NavigationFlowFieldLease? lease);
+
+        status.Should().Be(expected);
+        lease.Should().BeNull();
+        context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(0);
+    }
+
     private static PathQuery CreateSurfaceAStarQuery(NavigationWorkBudget? budget = null) => new(
         new NavigationEndpoint(Vector3d.Zero),
         new NavigationEndpoint(Vector3d.Right),

@@ -12,6 +12,12 @@ namespace Trailblazer.Tests.Navigation.Steering;
 [Collection("PathingCollection")]
 public sealed class PathRequestRecordTests : IDisposable
 {
+    [Fact]
+    public void FlowFieldKind_ShouldRetainLegacyWireValueUntilTaskEight()
+    {
+        ((int)PathRequestRecordKind.FlowField).Should().Be(2);
+    }
+
     public PathRequestRecordTests()
     {
         if (TestWorld.IsActive)

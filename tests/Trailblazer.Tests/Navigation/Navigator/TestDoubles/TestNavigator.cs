@@ -27,6 +27,12 @@ internal sealed class TestNavigator : Navigator
             _lastPosition = position;
     }
 
+    public void SetTestMotion(Vector3d velocity)
+    {
+        _velocity = velocity;
+        _speed = velocity.Magnitude;
+    }
+
     public bool ApplyHeightmapGrounding(
         bool updateMotorState = false,
         Fixed64? surfaceFriction = null,

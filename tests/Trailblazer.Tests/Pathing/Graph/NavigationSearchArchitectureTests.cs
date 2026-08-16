@@ -177,6 +177,47 @@ public sealed class NavigationSearchArchitectureTests
             "every one-unit cursor advance must consume its emitted certificate immediately");
     }
 
+    [Fact]
+    public void FlowRecoveryPostAdvanceRead_ShouldKeepStaleRecoveryOnly()
+    {
+        string steeringPath = Path.Combine(
+            GetSourceRoot(),
+            "Navigation",
+            "Steering",
+            "NavSteering.Simulation.cs");
+        string source = File.ReadAllText(steeringPath);
+        int methodIndex = source.IndexOf(
+            "private bool TryGetFlowRecoveryHeading",
+            StringComparison.Ordinal);
+        int advanceIndex = source.IndexOf(
+            "status = guide.TryAdvanceWaypoint();",
+            methodIndex,
+            StringComparison.Ordinal);
+        int readIndex = source.IndexOf(
+            "status = guide.TryGetCurrentWaypoint(out _, out waypoint);",
+            advanceIndex,
+            StringComparison.Ordinal);
+        int headingIndex = source.IndexOf(
+            "heading = waypoint - position;",
+            readIndex,
+            StringComparison.Ordinal);
+
+        methodIndex.Should().BeGreaterThanOrEqualTo(0);
+        advanceIndex.Should().BeGreaterThan(methodIndex);
+        readIndex.Should().BeGreaterThan(advanceIndex);
+        headingIndex.Should().BeGreaterThan(readIndex);
+        string postAdvanceRead = source.Substring(readIndex, headingIndex - readIndex);
+        postAdvanceRead.Should().Contain("status == NavigationGuideStatus.Stale");
+        postAdvanceRead.Should().Contain("_flowRecoveryGuideLease?.Dispose();");
+        postAdvanceRead.Should().Contain("_flowRecoveryGuideLease = null;");
+        postAdvanceRead.Should().Contain("return true;");
+        postAdvanceRead.Should().NotContain("_navigationFlowFieldLease");
+        postAdvanceRead.Should().NotContain("_currentQuery");
+        postAdvanceRead.Should().NotContain("PreparePathRetry");
+        postAdvanceRead.Should().NotContain("HandleInvalidPath");
+        postAdvanceRead.Should().NotContain("ReleaseNavigationGuidance");
+    }
+
     private static string GetSourceRoot([CallerFilePath] string testFile = "")
     {
         string graphTests = Path.GetDirectoryName(testFile)!;

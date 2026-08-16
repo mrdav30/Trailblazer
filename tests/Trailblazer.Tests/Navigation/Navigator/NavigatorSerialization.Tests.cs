@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
@@ -91,6 +92,17 @@ public class NavigatorSerializationTests : IDisposable
         targetMotor.IsInitialized.Should().BeTrue();
     }
 
+    [Fact]
+    public void JsonWire_ShouldPublishGraphGuidanceAsDiscriminatorTwo()
+    {
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+
+        string json = JsonRecordSerializer.Serialize(source);
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        document.RootElement.GetProperty("GuidedPathMode").GetInt32().Should().Be(2);
+    }
+
     [Theory]
     [InlineData(false)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
@@ -135,11 +147,11 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false, true, 0)]
-    [InlineData(false, false, 0)]
+    [InlineData(false, false, 1)]
     [InlineData(false, false, 99)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true, true, 0)]
-    [InlineData(true, false, 0)]
+    [InlineData(true, false, 1)]
     [InlineData(true, false, 99)]
 #endif
     public void RoundTrip_ShouldRejectMissingRetiredOrUnknownGuidedPathMode(
@@ -157,10 +169,13 @@ public class NavigatorSerializationTests : IDisposable
                 serializedMode,
                 "GuidedPathMode");
         var target = CreateNavigator(new Vector3d(-2, 0, -2), profile: source.NavigationProfile);
+        Vector3d shellPosition = target.Position;
 
         Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         populate.Should().Throw<InvalidOperationException>();
+        target.Position.Should().Be(shellPosition);
+        TestRequire.NotNull(target.Steering).CurrentQuery.Should().BeNull();
     }
 
 #if !TRAILBLAZER_DISABLE_MEMORYPACK

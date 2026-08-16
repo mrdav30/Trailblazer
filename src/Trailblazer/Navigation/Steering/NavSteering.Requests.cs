@@ -46,7 +46,7 @@ public partial class NavSteering
     }
 
     /// <summary>
-    /// Starts or replaces one graph-backed surface A* steering request.
+    /// Starts or replaces one graph-backed surface A* or flow-field steering request.
     /// </summary>
     internal virtual void ApplyPathQuery(PathQuery query, int groupId = -1)
     {
@@ -74,7 +74,7 @@ public partial class NavSteering
         _requestedDestination = destination;
         _destination = destination;
 
-        ReleaseTrailGuide();
+        ReleaseNavigationGuidance();
         _currentRequest = request;
         _currentQuery = query;
         if (request != null)

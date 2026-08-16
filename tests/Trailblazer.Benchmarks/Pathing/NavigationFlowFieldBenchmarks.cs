@@ -55,6 +55,8 @@ public class NavigationFlowFieldBenchmarks
             1,
             NavigationGraphBenchmarkScenario.GetPageCapacity(SettledNodeCount),
             NavigationGraphBenchmarkScenario.GetPageCapacity(SettledNodeCount) + 2,
+            SettledNodeCount,
+            SettledNodeCount,
             SettledNodeCount);
         _workspaceAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         _admission = new NavigationQueryAdmissionWork(

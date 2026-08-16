@@ -64,7 +64,10 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 mapCapacity: limits.AStarWorkspaceMapCapacity,
                 endpointPageCapacity: limits.AStarWorkspaceEndpointPageCapacity,
                 componentCapacity: limits.AStarWorkspaceComponentCapacity,
-                nodeCapacity: limits.AStarWorkspaceNodeCapacity);
+                nodeCapacity: limits.AStarWorkspaceNodeCapacity,
+                rayCoveredAddressCapacity: limits.RayWorkspaceCoveredAddressCapacity,
+                rayTraceIntervalCapacity: limits.RayWorkspaceTraceIntervalCapacity,
+                guidePointCapacity: limits.AStarWorkspaceGuidePointCapacity);
             _queries[i] = new NavigationAStarQueryWork(world, store, workspace, _cache);
         }
         _descriptors = new BatchDescriptor[limits.MaxBatchItems];

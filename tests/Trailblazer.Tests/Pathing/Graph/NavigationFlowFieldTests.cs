@@ -655,7 +655,7 @@ public sealed class NavigationFlowFieldTests
                 out NavigationSurfaceComponentKey component,
                 out _)
             .Should().BeTrue();
-        var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 2);
+        var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 2, 2, 2);
 
         workspace.TryGetOrAdd(originNode, out int originSlot, out _)
             .Should().BeTrue();
@@ -727,7 +727,7 @@ public sealed class NavigationFlowFieldTests
                 out NavigationSurfaceComponentKey endpointComponent,
                 out _)
             .Should().BeTrue();
-        var workspace = new NavigationFlowFieldWorkspace(0, 2, 2, 2);
+        var workspace = new NavigationFlowFieldWorkspace(0, 2, 2, 2, 2, 2);
         workspace.TryRecordPage(fixture.MapId, pageIndex: 1).Should().BeTrue();
         workspace.TryRecordComponent(endpointComponent).Should().BeTrue();
         using NavigationWorldGraphStore store =
@@ -775,7 +775,8 @@ public sealed class NavigationFlowFieldTests
         var destination = new NavigationCellAddress(
             fixture.MapId,
             cells[CellCount - 1]);
-        var workspace = new NavigationFlowFieldWorkspace(0, 2, 2, CellCount);
+        var workspace = new NavigationFlowFieldWorkspace(
+            0, 2, 2, CellCount, CellCount, CellCount);
 
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
@@ -823,7 +824,8 @@ public sealed class NavigationFlowFieldTests
         var destination = new NavigationCellAddress(
             fixture.MapId,
             cells[CellCount - 1]);
-        var workspace = new NavigationFlowFieldWorkspace(0, 2, 1, CellCount);
+        var workspace = new NavigationFlowFieldWorkspace(
+            0, 2, 1, CellCount, CellCount, CellCount);
 
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
@@ -869,7 +871,7 @@ public sealed class NavigationFlowFieldTests
             Fixed64.Zero);
         var origin = new NavigationCellAddress(fixture.MapId, cells[0]);
         var destination = new NavigationCellAddress(fixture.MapId, cells[2]);
-        var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 3);
+        var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 3, 3, 3);
 
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
@@ -928,7 +930,7 @@ public sealed class NavigationFlowFieldTests
                 originAddress,
                 destinationAddress,
                 out _),
-            new NavigationFlowFieldWorkspace(0, 2, 2, 2)))
+            new NavigationFlowFieldWorkspace(0, 2, 2, 2, 2, 2)))
         {
             completedStore.ActiveLeaseCount.Should().Be(1);
             for (int step = 0;
@@ -958,7 +960,7 @@ public sealed class NavigationFlowFieldTests
                 originAddress,
                 destinationAddress,
                 out _),
-            new NavigationFlowFieldWorkspace(0, 2, 2, 2)))
+            new NavigationFlowFieldWorkspace(0, 2, 2, 2, 2, 2)))
         {
             failed.Advance(16, 16, 16, 16).Should().Be(
                 NavigationFlowFieldStatus.BudgetExceeded);
@@ -976,7 +978,7 @@ public sealed class NavigationFlowFieldTests
                 originAddress,
                 destinationAddress,
                 out _),
-            new NavigationFlowFieldWorkspace(0, 2, 2, 2));
+            new NavigationFlowFieldWorkspace(0, 2, 2, 2, 2, 2));
         abandonedStore.ActiveLeaseCount.Should().Be(1);
 
         abandoned.Dispose();
@@ -1044,7 +1046,9 @@ public sealed class NavigationFlowFieldTests
             mapCapacity: 0,
             dependencyPageCapacity,
             dependencyComponentCapacity,
-            nodeCapacity);
+            nodeCapacity,
+            rayCoveredAddressCapacity: nodeCapacity,
+            rayTraceIntervalCapacity: nodeCapacity);
         using var work = new NavigationFlowFieldWork(
             resolved,
             workspace,

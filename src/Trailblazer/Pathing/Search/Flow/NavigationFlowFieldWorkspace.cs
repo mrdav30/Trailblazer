@@ -36,7 +36,9 @@ internal sealed class NavigationFlowFieldWorkspace
         int mapCapacity,
         int dependencyPageCapacity,
         int dependencyComponentCapacity,
-        int nodeCapacity)
+        int nodeCapacity,
+        int rayCoveredAddressCapacity,
+        int rayTraceIntervalCapacity)
     {
         SwiftThrowHelper.ThrowIfNegative(
             dependencyPageCapacity,
@@ -61,9 +63,17 @@ internal sealed class NavigationFlowFieldWorkspace
             mapCapacity,
             dependencyPageCapacity,
             dependencyComponentCapacity);
+        RayWorkspace = new NavigationRayWorkspace(
+            mapCapacity,
+            dependencyPageCapacity,
+            dependencyComponentCapacity,
+            rayCoveredAddressCapacity,
+            rayTraceIntervalCapacity);
     }
 
     internal NavigationEndpointWorkspace EndpointWorkspace { get; }
+
+    internal NavigationRayWorkspace RayWorkspace { get; }
 
     internal int[] HeapSlots { get; }
 
@@ -92,6 +102,7 @@ internal sealed class NavigationFlowFieldWorkspace
     {
         ResetSearch();
         EndpointWorkspace.Reset();
+        RayWorkspace.Reset();
     }
 
     internal void ResetSearch()

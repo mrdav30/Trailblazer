@@ -33,7 +33,7 @@ public sealed class NavigationAStarConcurrencyTests
                 "negative-publication");
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
-        var workspace = new NavigationAStarWorkspace(1, 8, 10, 8);
+        var workspace = new NavigationAStarWorkspace(1, 8, 10, 8, 8, 8, 8);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 1,
             maxReusableBytes: long.MaxValue,
@@ -120,7 +120,7 @@ public sealed class NavigationAStarConcurrencyTests
                 "mutation");
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
-        var workspace = new NavigationAStarWorkspace(1, 64, 66, 32);
+        var workspace = new NavigationAStarWorkspace(1, 64, 66, 32, 32, 32, 32);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 2,
             maxReusableBytes: long.MaxValue,
@@ -169,8 +169,8 @@ public sealed class NavigationAStarConcurrencyTests
                 "same-key");
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
-        var firstWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16);
-        var secondWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16);
+        var firstWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16, 16, 16, 16);
+        var secondWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16, 16, 16, 16);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 2,
             maxReusableBytes: long.MaxValue,

@@ -31,6 +31,9 @@ public readonly struct NavigationQueryLimits
         flowWorkspaceEndpointPageCapacity: 512,
         flowWorkspaceComponentCapacity: 512,
         flowWorkspaceNodeCapacity: 4_096,
+        rayWorkspaceCoveredAddressCapacity: 4_096,
+        rayWorkspaceTraceIntervalCapacity: 4_096,
+        aStarWorkspaceGuidePointCapacity: 65_536,
         maxFlowCacheEntries: 128,
         maxFlowReusablePayloadBytes: 33_554_432,
         maxFlowSinglePayloadBytes: 524_288,
@@ -55,6 +58,9 @@ public readonly struct NavigationQueryLimits
         int flowWorkspaceEndpointPageCapacity,
         int flowWorkspaceComponentCapacity,
         int flowWorkspaceNodeCapacity,
+        int rayWorkspaceCoveredAddressCapacity,
+        int rayWorkspaceTraceIntervalCapacity,
+        int aStarWorkspaceGuidePointCapacity,
         int maxFlowCacheEntries,
         long maxFlowReusablePayloadBytes,
         long maxFlowSinglePayloadBytes,
@@ -98,6 +104,23 @@ public readonly struct NavigationQueryLimits
             nameof(flowWorkspaceEndpointPageCapacity),
             nameof(flowWorkspaceComponentCapacity),
             nameof(flowWorkspaceNodeCapacity));
+        ThrowIfNonPositive(
+            rayWorkspaceCoveredAddressCapacity,
+            nameof(rayWorkspaceCoveredAddressCapacity));
+        ThrowIfNonPositive(
+            rayWorkspaceTraceIntervalCapacity,
+            nameof(rayWorkspaceTraceIntervalCapacity));
+        SwiftThrowHelper.ThrowIfArgument(
+            rayWorkspaceTraceIntervalCapacity > rayWorkspaceCoveredAddressCapacity,
+            nameof(rayWorkspaceTraceIntervalCapacity),
+            "Trace-interval capacity cannot exceed covered-address capacity.");
+        ThrowIfNonPositive(
+            aStarWorkspaceGuidePointCapacity,
+            nameof(aStarWorkspaceGuidePointCapacity));
+        SwiftThrowHelper.ThrowIfArgument(
+            aStarWorkspaceGuidePointCapacity < aStarWorkspaceNodeCapacity,
+            nameof(aStarWorkspaceGuidePointCapacity),
+            "A* guide-point capacity must cover every admitted search node.");
         ValidateCache(
             maxFlowCacheEntries,
             maxFlowReusablePayloadBytes,
@@ -126,6 +149,9 @@ public readonly struct NavigationQueryLimits
         FlowWorkspaceEndpointPageCapacity = flowWorkspaceEndpointPageCapacity;
         FlowWorkspaceComponentCapacity = flowWorkspaceComponentCapacity;
         FlowWorkspaceNodeCapacity = flowWorkspaceNodeCapacity;
+        RayWorkspaceCoveredAddressCapacity = rayWorkspaceCoveredAddressCapacity;
+        RayWorkspaceTraceIntervalCapacity = rayWorkspaceTraceIntervalCapacity;
+        AStarWorkspaceGuidePointCapacity = aStarWorkspaceGuidePointCapacity;
         MaxFlowCacheEntries = maxFlowCacheEntries;
         MaxFlowReusablePayloadBytes = maxFlowReusablePayloadBytes;
         MaxFlowSinglePayloadBytes = maxFlowSinglePayloadBytes;
@@ -180,6 +206,15 @@ public readonly struct NavigationQueryLimits
 
     /// <summary>Gets the node capacity of each exclusive Flow workspace.</summary>
     public int FlowWorkspaceNodeCapacity { get; }
+
+    /// <summary>Gets the covered-address capacity of each navigation-ray workspace.</summary>
+    public int RayWorkspaceCoveredAddressCapacity { get; }
+
+    /// <summary>Gets the ordered trace-interval capacity of each navigation-ray workspace.</summary>
+    public int RayWorkspaceTraceIntervalCapacity { get; }
+
+    /// <summary>Gets the raw and simplified guide-point capacity of each A* workspace.</summary>
+    public int AStarWorkspaceGuidePointCapacity { get; }
 
     /// <summary>Gets the maximum reusable Flow payload count.</summary>
     public int MaxFlowCacheEntries { get; }

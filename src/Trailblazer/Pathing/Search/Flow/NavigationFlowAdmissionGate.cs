@@ -63,7 +63,9 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
                 limits.FlowWorkspaceMapCapacity,
                 limits.FlowWorkspaceEndpointPageCapacity,
                 limits.FlowWorkspaceComponentCapacity,
-                limits.FlowWorkspaceNodeCapacity);
+                limits.FlowWorkspaceNodeCapacity,
+                limits.RayWorkspaceCoveredAddressCapacity,
+                limits.RayWorkspaceTraceIntervalCapacity);
             _queries[i] = new NavigationFlowQueryWork(world, store, workspace, _cache);
         }
         _descriptors = new BatchDescriptor[limits.MaxBatchItems];

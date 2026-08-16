@@ -680,7 +680,10 @@ internal static class NavigationAStarExitTestHarness
             Math.Max(1, graph.MapCount),
             endpointPageCapacity: 128,
             componentCapacity: 130,
-            nodeCapacity: 128);
+            nodeCapacity: 128,
+            rayCoveredAddressCapacity: 128,
+            rayTraceIntervalCapacity: 128,
+            guidePointCapacity: 128);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             lease,
@@ -743,7 +746,10 @@ internal static class NavigationAStarExitTestHarness
             Math.Max(1, graph.MapCount),
             endpointPageCapacity: 128,
             componentCapacity: 130,
-            nodeCapacity: 128);
+            nodeCapacity: 128,
+            rayCoveredAddressCapacity: 128,
+            rayTraceIntervalCapacity: 128,
+            guidePointCapacity: 128);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             lease,

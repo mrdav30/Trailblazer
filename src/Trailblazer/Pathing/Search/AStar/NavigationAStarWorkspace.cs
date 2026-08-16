@@ -16,12 +16,16 @@ internal sealed class NavigationAStarWorkspace
         int mapCapacity,
         int endpointPageCapacity,
         int componentCapacity,
-        int nodeCapacity = 0)
+        int nodeCapacity,
+        int rayCoveredAddressCapacity,
+        int rayTraceIntervalCapacity,
+        int guidePointCapacity)
     {
         SwiftThrowHelper.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
         SwiftThrowHelper.ThrowIfNegative(endpointPageCapacity, nameof(endpointPageCapacity));
         SwiftThrowHelper.ThrowIfNegative(nodeCapacity, nameof(nodeCapacity));
         SwiftThrowHelper.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
+        SwiftThrowHelper.ThrowIfNegative(guidePointCapacity, nameof(guidePointCapacity));
         EndpointWorkspace = new NavigationEndpointWorkspace(
             mapCapacity,
             endpointPageCapacity,
@@ -33,6 +37,13 @@ internal sealed class NavigationAStarWorkspace
         PathNodes = nodeCapacity == 0
             ? Array.Empty<NavigationNodeRef>()
             : new NavigationNodeRef[nodeCapacity];
+        RayWorkspace = new NavigationRayWorkspace(
+            mapCapacity,
+            endpointPageCapacity,
+            componentCapacity,
+            rayCoveredAddressCapacity,
+            rayTraceIntervalCapacity);
+        GuidePointCapacity = guidePointCapacity;
     }
 
     internal NavigationEndpointWorkspace EndpointWorkspace { get; }
@@ -52,6 +63,10 @@ internal sealed class NavigationAStarWorkspace
 
     internal NavigationNodeRef[] PathNodes { get; }
 
+    internal NavigationRayWorkspace RayWorkspace { get; }
+
+    internal int GuidePointCapacity { get; }
+
     internal int HeapCount { get; set; }
 
     internal int PathNodeCount { get; set; }
@@ -59,6 +74,7 @@ internal sealed class NavigationAStarWorkspace
     internal void Reset()
     {
         EndpointWorkspace.Reset();
+        RayWorkspace.Reset();
         ResetSearch();
     }
 

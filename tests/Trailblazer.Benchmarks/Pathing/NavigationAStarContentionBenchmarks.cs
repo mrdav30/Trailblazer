@@ -85,7 +85,10 @@ public class NavigationAStarContentionBenchmarks
             endpointPageCapacity: NavigationGraphBenchmarkScenario.GetPageCapacity(CorridorLength),
             componentCapacity: checked(
                 NavigationGraphBenchmarkScenario.GetPageCapacity(CorridorLength) + 2),
-            nodeCapacity: CorridorLength);
+            nodeCapacity: CorridorLength,
+            rayCoveredAddressCapacity: CorridorLength,
+            rayTraceIntervalCapacity: CorridorLength,
+            guidePointCapacity: CorridorLength);
         _workspaceBytesPerWorker = GC.GetAllocatedBytesForCurrentThread() - workspaceBefore;
         GC.KeepAlive(workspaceProbe);
         _retainedWorkspaceBytes = checked(_workspaceBytesPerWorker * WorkerCount);

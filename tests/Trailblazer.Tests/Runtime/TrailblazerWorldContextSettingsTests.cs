@@ -75,6 +75,9 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.QueryLimits.FlowWorkspaceEndpointPageCapacity.Should().Be(512);
         settings.QueryLimits.FlowWorkspaceComponentCapacity.Should().Be(512);
         settings.QueryLimits.FlowWorkspaceNodeCapacity.Should().Be(4_096);
+        settings.QueryLimits.RayWorkspaceCoveredAddressCapacity.Should().Be(4_096);
+        settings.QueryLimits.RayWorkspaceTraceIntervalCapacity.Should().Be(4_096);
+        settings.QueryLimits.AStarWorkspaceGuidePointCapacity.Should().Be(65_536);
         settings.QueryLimits.MaxFlowCacheEntries.Should().Be(128);
         settings.QueryLimits.MaxFlowReusablePayloadBytes.Should().Be(33_554_432);
         settings.QueryLimits.MaxFlowSinglePayloadBytes.Should().Be(524_288);
@@ -261,6 +264,29 @@ public sealed class TrailblazerWorldContextSettingsTests
         flow.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Fact]
+    public void QueryLimits_ShouldRejectInvalidRayAndGuidePointCapacities()
+    {
+        Action zeroCoveredAddresses = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            rayCoveredAddressCapacity: 0);
+        Action negativeTraceIntervals = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            rayTraceIntervalCapacity: -1);
+        Action traceExceedsCovered = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 2);
+        Action guidePointsBelowNodes = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            aStarGuidePointCapacity: 0);
+
+        zeroCoveredAddresses.Should().Throw<ArgumentOutOfRangeException>();
+        negativeTraceIntervals.Should().Throw<ArgumentOutOfRangeException>();
+        traceExceedsCovered.Should().Throw<ArgumentException>();
+        guidePointsBelowNodes.Should().Throw<ArgumentException>();
+    }
+
     private static TrailblazerWorldContextSettings CreateSettings(
         NavigationOperationLimits? operationLimits = null,
         MaintenanceWorkBudget? maintenanceBudget = null,
@@ -319,7 +345,10 @@ public sealed class TrailblazerWorldContextSettingsTests
     private static NavigationQueryLimits CreateQueryLimits(
         int maxConcurrentQueries,
         int aStarComponentCapacity = 1,
-        int flowComponentCapacity = 1) => new(
+        int flowComponentCapacity = 1,
+        int rayCoveredAddressCapacity = 1,
+        int rayTraceIntervalCapacity = 1,
+        int aStarGuidePointCapacity = 1) => new(
             maxBatchItems: 1,
             maxBatchDescriptorBytes: 264,
             maxConcurrentNavigationQueries: maxConcurrentQueries,
@@ -336,6 +365,9 @@ public sealed class TrailblazerWorldContextSettingsTests
             flowWorkspaceEndpointPageCapacity: 1,
             flowWorkspaceComponentCapacity: flowComponentCapacity,
             flowWorkspaceNodeCapacity: 1,
+            rayWorkspaceCoveredAddressCapacity: rayCoveredAddressCapacity,
+            rayWorkspaceTraceIntervalCapacity: rayTraceIntervalCapacity,
+            aStarWorkspaceGuidePointCapacity: aStarGuidePointCapacity,
             maxFlowCacheEntries: 1,
             maxFlowReusablePayloadBytes: 1,
             maxFlowSinglePayloadBytes: 1,

@@ -24,6 +24,12 @@ internal sealed class NavigationWorkMeter
 
     internal int ConnectionLegs { get; private set; }
 
+    internal int TraceIntervals { get; private set; }
+
+    internal int CoveredVoxelIntervals { get; private set; }
+
+    internal int SimplificationRays { get; private set; }
+
     internal int RemainingLookupProbes => _budget.MaxLookupProbes - LookupProbes;
 
     internal int RemainingEndpointCandidates =>
@@ -34,6 +40,14 @@ internal sealed class NavigationWorkMeter
     internal int RemainingEvaluatedEdges => _budget.MaxEvaluatedEdges - EvaluatedEdges;
 
     internal int RemainingConnectionLegs => _budget.MaxConnectionLegs - ConnectionLegs;
+
+    internal int RemainingTraceIntervals => _budget.MaxTraceIntervals - TraceIntervals;
+
+    internal int RemainingCoveredVoxelIntervals =>
+        _budget.MaxCoveredVoxelIntervals - CoveredVoxelIntervals;
+
+    internal int RemainingSimplificationRays =>
+        _budget.MaxSimplificationRays - SimplificationRays;
 
     internal bool TryConsumeLookupProbes(int count)
     {
@@ -75,6 +89,30 @@ internal sealed class NavigationWorkMeter
         return true;
     }
 
+    internal bool TryConsumeTraceIntervals(int count)
+    {
+        if (count < 0 || count > RemainingTraceIntervals)
+            return false;
+        TraceIntervals += count;
+        return true;
+    }
+
+    internal bool TryConsumeCoveredVoxelIntervals(int count)
+    {
+        if (count < 0 || count > RemainingCoveredVoxelIntervals)
+            return false;
+        CoveredVoxelIntervals += count;
+        return true;
+    }
+
+    internal bool TryConsumeSimplificationRays(int count)
+    {
+        if (count < 0 || count > RemainingSimplificationRays)
+            return false;
+        SimplificationRays += count;
+        return true;
+    }
+
     internal void Reset(NavigationWorkBudget budget)
     {
         _budget = budget;
@@ -83,5 +121,8 @@ internal sealed class NavigationWorkMeter
         ExpandedNodes = 0;
         EvaluatedEdges = 0;
         ConnectionLegs = 0;
+        TraceIntervals = 0;
+        CoveredVoxelIntervals = 0;
+        SimplificationRays = 0;
     }
 }

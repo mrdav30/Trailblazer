@@ -27,7 +27,10 @@ public sealed class NavigationEndpointResolutionTests
             mapCapacity: 1,
             endpointPageCapacity: 1,
             nodeCapacity: 1,
-            componentCapacity: 3);
+            componentCapacity: 3,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
 
         workspace.TryRecordEndpointComponent(new NavigationSurfaceComponentKey(
                 new NavigationCellAddress("map", new VoxelIndex(0, 0, 0))))
@@ -87,7 +90,11 @@ public sealed class NavigationEndpointResolutionTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 2,
             endpointPageCapacity: 4,
-            componentCapacity: 6);
+            componentCapacity: 6,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
         var meter = new NavigationWorkMeter(CreateBudget(64, 8));
         var evaluator = new TraversalEvaluator(graph, Profile(), Policy, TraversalMedium.Solid);
 
@@ -148,7 +155,11 @@ public sealed class NavigationEndpointResolutionTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
             endpointPageCapacity: 2,
-            componentCapacity: 4);
+            componentCapacity: 4,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
         var meter = new NavigationWorkMeter(CreateBudget(16, 2));
         var work = new NavigationEndpointResolutionWork(
             world,
@@ -184,7 +195,11 @@ public sealed class NavigationEndpointResolutionTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
             endpointPageCapacity: 2,
-            componentCapacity: 4);
+            componentCapacity: 4,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
         var meter = new NavigationWorkMeter(CreateBudget(16, 2));
         var work = new NavigationEndpointResolutionWork(
             world,
@@ -224,7 +239,11 @@ public sealed class NavigationEndpointResolutionTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
             endpointPageCapacity: 2,
-            componentCapacity: 4);
+            componentCapacity: 4,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
         var meter = new NavigationWorkMeter(CreateBudget(16, 2));
         var work = new NavigationEndpointResolutionWork(
             world,
@@ -338,7 +357,11 @@ public sealed class NavigationEndpointResolutionTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
             endpointPageCapacity: 2,
-            componentCapacity: 4);
+            componentCapacity: 4,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
         using var work = new NavigationQueryAdmissionWork(
             world,
             lease!,
@@ -433,7 +456,11 @@ public sealed class NavigationEndpointResolutionTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 3,
             endpointPageCapacity: 4,
-            componentCapacity: 6);
+            componentCapacity: 6,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
         using var work = new NavigationQueryAdmissionWork(
             world,
             lease!,
@@ -469,7 +496,11 @@ public sealed class NavigationEndpointResolutionTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
             endpointPageCapacity: 1,
-            componentCapacity: 3);
+            componentCapacity: 3,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
 
         using var work = new NavigationQueryAdmissionWork(
             world,
@@ -563,7 +594,11 @@ public sealed class NavigationEndpointResolutionTests
                 new NavigationAStarWorkspace(
                     mapCapacity: 1,
                     endpointPageCapacity: 2,
-                    componentCapacity: 4).EndpointWorkspace,
+                    componentCapacity: 4,
+                    nodeCapacity: 1,
+                    rayCoveredAddressCapacity: 1,
+                    rayTraceIntervalCapacity: 1,
+                    guidePointCapacity: 1).EndpointWorkspace,
                 PathAlgorithm.AStar);
 
             Drain(exact);
@@ -586,7 +621,11 @@ public sealed class NavigationEndpointResolutionTests
                 new NavigationAStarWorkspace(
                     mapCapacity: 1,
                     endpointPageCapacity: 2,
-                    componentCapacity: 4).EndpointWorkspace,
+                    componentCapacity: 4,
+                    nodeCapacity: 1,
+                    rayCoveredAddressCapacity: 1,
+                    rayTraceIntervalCapacity: 1,
+                    guidePointCapacity: 1).EndpointWorkspace,
                 PathAlgorithm.AStar);
 
             Drain(below);

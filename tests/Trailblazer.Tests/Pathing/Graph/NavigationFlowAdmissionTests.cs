@@ -386,7 +386,7 @@ public sealed class NavigationFlowAdmissionTests
             fixture.CreateQuery(origin, destination, fixture.DefaultProfile));
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
-        var workspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2);
+        var workspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2);
         using var cache = new NavigationFlowFieldPayloadCache(
             maxEntries: 2,
             maxReusableBytes: 4_096,
@@ -425,7 +425,7 @@ public sealed class NavigationFlowAdmissionTests
         result.Dispose();
         work.Dispose();
 
-        var warmWorkspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2);
+        var warmWorkspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2);
         using var warm = new NavigationFlowQueryWork(
             world,
             store,
@@ -476,7 +476,9 @@ public sealed class NavigationFlowAdmissionTests
             mapCapacity: 1,
             dependencyPageCapacity: 1,
             dependencyComponentCapacity: 1,
-            nodeCapacity: 2);
+            nodeCapacity: 2,
+            rayCoveredAddressCapacity: 2,
+            rayTraceIntervalCapacity: 2);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             store.TryAcquire()!,
@@ -620,6 +622,9 @@ public sealed class NavigationFlowAdmissionTests
             flowWorkspaceEndpointPageCapacity: 1,
             flowWorkspaceComponentCapacity: 1,
             flowWorkspaceNodeCapacity,
+            rayWorkspaceCoveredAddressCapacity: Math.Max(1, flowWorkspaceNodeCapacity),
+            rayWorkspaceTraceIntervalCapacity: Math.Max(1, flowWorkspaceNodeCapacity),
+            aStarWorkspaceGuidePointCapacity: 2,
             maxFlowCacheEntries: 4,
             maxFlowReusablePayloadBytes: 8_192,
             maxFlowSinglePayloadBytes,

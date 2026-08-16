@@ -1154,7 +1154,7 @@ internal static class NavigationFlowFieldCacheTestHarness
             policy!,
             TraversalMedium.Solid,
             new NavigationWorkMeter(query.Budget));
-        var workspace = new NavigationFlowFieldWorkspace(0, 128, 128, 128);
+        var workspace = new NavigationFlowFieldWorkspace(0, 128, 128, 128, 128, 128);
         using var work = new NavigationFlowFieldWork(resolved, workspace);
         for (int step = 0;
             step < 4_096 && work.Status == NavigationFlowFieldStatus.Pending;

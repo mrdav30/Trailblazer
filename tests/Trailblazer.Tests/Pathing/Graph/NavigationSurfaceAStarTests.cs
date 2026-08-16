@@ -199,7 +199,10 @@ public sealed class NavigationSurfaceAStarTests
             mapCapacity: 1,
             endpointPageCapacity: 4,
             componentCapacity: 6,
-            nodeCapacity: 8);
+            nodeCapacity: 8,
+            rayCoveredAddressCapacity: 8,
+            rayTraceIntervalCapacity: 8,
+            guidePointCapacity: 8);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             lease!,
@@ -577,7 +580,7 @@ public sealed class NavigationSurfaceAStarTests
             PathAlgorithm.AStar,
             new NavigationWorkBudget(64, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(2, 4, 6, 4);
+        var workspace = new NavigationAStarWorkspace(2, 4, 6, 4, 4, 4, 4);
         var cache = new NavigationAStarPayloadCache(1);
         using NavigationAStarQueryWork queryWork = BeginReservedQuery(
             context.World,
@@ -686,7 +689,10 @@ public sealed class NavigationSurfaceAStarTests
             mapCapacity: 1,
             endpointPageCapacity: 4,
             componentCapacity: 6,
-            nodeCapacity: 65);
+            nodeCapacity: 65,
+            rayCoveredAddressCapacity: 65,
+            rayTraceIntervalCapacity: 65,
+            guidePointCapacity: 65);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             lease!,
@@ -883,7 +889,10 @@ public sealed class NavigationSurfaceAStarTests
             mapCapacity: 3,
             endpointPageCapacity: 3,
             componentCapacity: 3,
-            nodeCapacity: 4);
+            nodeCapacity: 4,
+            rayCoveredAddressCapacity: 4,
+            rayTraceIntervalCapacity: 4,
+            guidePointCapacity: 4);
         var insufficientCache = new NavigationAStarPayloadCache(1);
         using (NavigationAStarQueryWork insufficient = BeginReservedQuery(
             world,
@@ -895,7 +904,7 @@ public sealed class NavigationSurfaceAStarTests
             DrainQuery(insufficient, 256);
             insufficient.Status.Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
         }
-        var workspace = new NavigationAStarWorkspace(3, 3, 4, 4);
+        var workspace = new NavigationAStarWorkspace(3, 3, 4, 4, 4, 4, 4);
         var cache = new NavigationAStarPayloadCache(1);
         GraphDependencyStamp dependencies;
         using (NavigationAStarQueryWork work = BeginReservedQuery(
@@ -1078,7 +1087,7 @@ public sealed class NavigationSurfaceAStarTests
                 maxCoveredVoxelIntervals: 0,
                 maxSimplificationRays: 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4);
+        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 4, 4, 4);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             lease!,
@@ -1180,7 +1189,7 @@ public sealed class NavigationSurfaceAStarTests
             PathAlgorithm.AStar,
             new NavigationWorkBudget(32, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 2);
         var cache = new NavigationAStarPayloadCache(1);
         using NavigationAStarQueryWork work = BeginReservedQuery(
             world,

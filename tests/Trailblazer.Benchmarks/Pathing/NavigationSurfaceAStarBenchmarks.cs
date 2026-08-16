@@ -61,7 +61,10 @@ public class NavigationSurfaceAStarBenchmarks
             endpointPageCapacity: NavigationGraphBenchmarkScenario.GetPageCapacity(ExpansionCount),
             componentCapacity: checked(
                 NavigationGraphBenchmarkScenario.GetPageCapacity(ExpansionCount) + 2),
-            nodeCapacity: ExpansionCount);
+            nodeCapacity: ExpansionCount,
+            rayCoveredAddressCapacity: ExpansionCount,
+            rayTraceIntervalCapacity: ExpansionCount,
+            guidePointCapacity: ExpansionCount);
         _workspaceAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         _admission = new NavigationQueryAdmissionWork(
             _fixture.World,

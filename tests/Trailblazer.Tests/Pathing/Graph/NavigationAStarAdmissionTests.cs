@@ -313,6 +313,9 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceEndpointPageCapacity: 2,
                 flowWorkspaceComponentCapacity: 4,
                 flowWorkspaceNodeCapacity: 2,
+                rayWorkspaceCoveredAddressCapacity: 2,
+                rayWorkspaceTraceIntervalCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 2,
                 maxFlowCacheEntries: 1,
                 maxFlowReusablePayloadBytes: 2_048,
                 maxFlowSinglePayloadBytes: 1_024,
@@ -402,6 +405,9 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceEndpointPageCapacity: 2,
                 flowWorkspaceComponentCapacity: 4,
                 flowWorkspaceNodeCapacity: 2,
+                rayWorkspaceCoveredAddressCapacity: 2,
+                rayWorkspaceTraceIntervalCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 2,
                 maxFlowCacheEntries: 1,
                 maxFlowReusablePayloadBytes: 2_048,
                 maxFlowSinglePayloadBytes: 1_024,
@@ -539,7 +545,7 @@ public sealed class NavigationAStarAdmissionTests
             out Vector3d start,
             out Vector3d end);
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
-        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 2);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 1,
             maxReusableBytes: 2_048,
@@ -609,6 +615,9 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceEndpointPageCapacity: 2,
                 flowWorkspaceComponentCapacity: 4,
                 flowWorkspaceNodeCapacity: 2,
+                rayWorkspaceCoveredAddressCapacity: 2,
+                rayWorkspaceTraceIntervalCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 2,
                 maxFlowCacheEntries: 2,
                 maxFlowReusablePayloadBytes: 4_096,
                 maxFlowSinglePayloadBytes: 1_024,
@@ -710,6 +719,9 @@ public sealed class NavigationAStarAdmissionTests
             flowWorkspaceEndpointPageCapacity: 0,
             flowWorkspaceComponentCapacity: 2,
             flowWorkspaceNodeCapacity: 8,
+            rayWorkspaceCoveredAddressCapacity: 8,
+            rayWorkspaceTraceIntervalCapacity: 8,
+            aStarWorkspaceGuidePointCapacity: 8,
             maxFlowCacheEntries: 8,
             maxFlowReusablePayloadBytes: 16_384,
             maxFlowSinglePayloadBytes: maxSinglePayloadBytes,
@@ -773,6 +785,9 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceEndpointPageCapacity: 2,
                 flowWorkspaceComponentCapacity: 4,
                 flowWorkspaceNodeCapacity: 2,
+                rayWorkspaceCoveredAddressCapacity: 2,
+                rayWorkspaceTraceIntervalCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 2,
                 maxFlowCacheEntries: 1,
                 maxFlowReusablePayloadBytes: 4_096,
                 maxFlowSinglePayloadBytes: 1_024,

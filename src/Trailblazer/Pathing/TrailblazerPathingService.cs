@@ -23,6 +23,7 @@ public sealed class TrailblazerPathingService
     private bool _disposed;
 
     private readonly NavigationGraphRuntime _navigationGraph;
+    private readonly NavigationImmediateRayWorkspace _immediateRayWorkspace;
     private readonly NavigationAStarAdmissionGate _navigationAStarAdmissionGate;
     private readonly NavigationFlowAdmissionGate _navigationFlowAdmissionGate;
 
@@ -31,8 +32,21 @@ public sealed class TrailblazerPathingService
         _context = context;
         State = new PathingWorldState(context);
         _navigationGraph = new NavigationGraphRuntime(context.World, context.Settings);
+        NavigationQueryLimits queryLimits = context.Settings.QueryLimits;
+        _immediateRayWorkspace = new NavigationImmediateRayWorkspace(
+            Math.Max(
+                queryLimits.AStarWorkspaceMapCapacity,
+                queryLimits.FlowWorkspaceMapCapacity),
+            Math.Max(
+                queryLimits.AStarWorkspaceEndpointPageCapacity,
+                queryLimits.FlowWorkspaceEndpointPageCapacity),
+            Math.Max(
+                queryLimits.AStarWorkspaceComponentCapacity,
+                queryLimits.FlowWorkspaceComponentCapacity),
+            queryLimits.RayWorkspaceCoveredAddressCapacity,
+            queryLimits.RayWorkspaceTraceIntervalCapacity);
         var admissionCoordinator = new NavigationQueryAdmissionCoordinator(
-            context.Settings.QueryLimits.MaxConcurrentNavigationQueries);
+            queryLimits.MaxConcurrentNavigationQueries);
         _navigationAStarAdmissionGate = new NavigationAStarAdmissionGate(
             context.World,
             _navigationGraph.Store,
@@ -59,6 +73,9 @@ public sealed class TrailblazerPathingService
 
     internal NavigationFlowAdmissionGate NavigationFlowAdmissionGate =>
         _navigationFlowAdmissionGate;
+
+    internal NavigationImmediateRayWorkspace ImmediateRayWorkspace =>
+        _immediateRayWorkspace;
 
     internal int RetainedCompositionWorkCount =>
         _navigationGraph.RetainedCompositionWorkCount;

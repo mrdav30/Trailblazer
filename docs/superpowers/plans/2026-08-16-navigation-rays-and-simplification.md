@@ -368,7 +368,7 @@ git commit -m "feat(grids): bound ordered trace grid discovery"
 
 - [ ] **Step 1: Write settings/API/workspace REDs**
 
-Pin default values, validation of zero/negative/inconsistent capacities, exact constructor migration, candidate arrays deriving only from the three ceilings plus existing map/page/component capacities, exact one-below work-meter behavior for all three existing budget categories, and one context-owned immediate workspace shared by the guide/pathing services.
+Pin default values, validation of zero/negative/inconsistent capacities, exact constructor migration, candidate arrays deriving only from the three ceilings plus existing map/page/component capacities, exact one-below work-meter behavior for all three existing budget categories, and one context-owned immediate workspace available directly from the pathing service to later synchronous consumers.
 
 - [ ] **Step 2: Run the contract RED**
 
@@ -393,7 +393,7 @@ internal readonly struct NavigationRayResult
 }
 ```
 
-The workspace preallocates GridForge scratch/results, interval chain records, predecessor/edge ordinals, fixed page/component dependency arrays/sets, and generation stamps. No public ray API is introduced.
+The workspace preallocates GridForge scratch/results, interval chain records, predecessor/edge ordinals, and focused fixed page/component dependency arrays/sets. Task 5 initializes reachability sentinels during its mandatory interval-mapping pass instead of retaining speculative generation stamps. No public ray API is introduced.
 
 - [ ] **Step 4: Focused GREEN and source architecture scan**
 

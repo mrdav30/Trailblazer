@@ -157,7 +157,10 @@ internal static class NavigationGraphBenchmarkScenario
             maxFlowReusablePayloadBytes: Math.Max(33_554_432L, maximumFlowPayloadBytes * cacheEntries),
             maxFlowSinglePayloadBytes: maximumFlowPayloadBytes,
             maxFlowActivePayloadBytes: checked(maximumFlowPayloadBytes * concurrentQueries),
-            maxFlowActivePayloadLeases: concurrentQueries);
+            maxFlowActivePayloadLeases: concurrentQueries,
+            rayWorkspaceCoveredAddressCapacity: nodeCapacity,
+            rayWorkspaceTraceIntervalCapacity: nodeCapacity,
+            aStarWorkspaceGuidePointCapacity: nodeCapacity);
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
@@ -210,6 +213,9 @@ internal static class NavigationGraphBenchmarkScenario
             query.FlowWorkspaceEndpointPageCapacity,
             flowWorkspaceComponentCapacity: 2,
             query.FlowWorkspaceNodeCapacity,
+            query.RayWorkspaceCoveredAddressCapacity,
+            query.RayWorkspaceTraceIntervalCapacity,
+            query.AStarWorkspaceGuidePointCapacity,
             query.MaxFlowCacheEntries,
             maxFlowReusablePayloadBytes: maximumFlowPayloadBytes,
             maxFlowSinglePayloadBytes: maximumFlowPayloadBytes,

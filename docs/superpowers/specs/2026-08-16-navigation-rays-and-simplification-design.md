@@ -89,21 +89,24 @@ capsule/convex relation.
 
 `GridCellGeometry.IsNavigationBodyAnchorValid` proves one body anchor and a
 selected portal opening. A navigation ray additionally needs to prove the body
-over the complete segment portion inside each selected prism. Phase 6 extends
-that existing GridForge authority into one shared segment-capable core; the
-anchor API becomes the coincident-endpoint case and existing corridor consumers
-delegate to the same core. GridForge must not retain parallel point and sweep
-clearance implementations. The shared authority:
+over the complete segment portion inside each selected prism and through the
+selected source/target prism union. Phase 6 extends that existing GridForge
+authority into one shared segment-capable core; the anchor API becomes the
+coincident-endpoint case and existing corridor consumers delegate to the same
+core. GridForge must not retain parallel point and sweep clearance
+implementations. The shared authority:
 
 - accepts one exact `GridCellPrism`, the bounded foot segment portion, body
   radius and height, and at most the selected incoming/outgoing
   `GridNavigationPortal` certificates;
 - validates the swept horizontal disk/capsule against every non-selected prism
   boundary;
-- permits crossing only through the exact selected portal openings after
-  resolving the active body profile;
-- validates vertical body bounds throughout the segment, including horizontal
-  portals;
+- permits traversal only through the exact selected portal opening after
+  resolving the active body profile. Vertical portals return one exact crossing
+  parameter; horizontal portals return ordered source/target parameters;
+- validates vertical body bounds throughout in-prism legs and validates a
+  horizontal transition against the certified two-prism union rather than
+  requiring the body to remain inside either prism alone;
 - fails closed on invalid certificates, ambiguity, or fixed-point overflow;
 - delegates general capsule, segment, and convex predicates to
   `FixedMathSharp.Geometry`;
@@ -127,6 +130,12 @@ The internal status model is finite and explicit:
 - `Blocked` when geometry or traversal semantics reject the segment;
 - `BudgetExceeded` when a declared counter is exhausted;
 - `CostOverflow`, `CapacityExceeded`, and `Stale` for their existing meanings.
+
+The request carries only ray-used semantics: resolved agent profile, area
+policy, traversal intent, transition permission, directed endpoints, endpoint
+allowance, and an optional fixed chain constraint. It does not retain a complete
+`PathQuery`. The constraint is unrestricted, current-source-address-only, or
+current source followed by one exact canonical selected edge.
 
 The result exposes only consumer-required facts: status, selected start/end
 addresses, exact traversal cost, and whether every selected semantic surcharge
@@ -165,10 +174,11 @@ For a segment from `start` to `end`, the work performs these steps:
 6. Apply the same `TraversalEvaluator` used by A*. Native, automatic-seam, and
    explicit edges must resolve to the exact selected edge and its compiled
    portal/corridor certificates.
-7. Resolve every selected portal contact against the input segment. Its exact
-   crossing parameter must exist, occur in semantic order, and lie inside both
-   participating trace intervals. An off-line explicit corridor cannot become
-   valid merely because its endpoint prisms overlap the same tie frontier.
+7. Resolve every selected portal contact against the input segment. A vertical
+   crossing parameter or horizontal source/target parameter pair must exist,
+   occur in semantic order, and lie inside the participating trace intervals.
+   An off-line explicit corridor cannot become valid merely because its endpoint
+   prisms overlap the same tie frontier.
 8. Prove monotonically continuous parameter coverage from zero through one.
    Every handoff is supported by the selected graph edge and body-valid portal;
    an interior sparse hole, blocked witness, or unselected overlap fails.
@@ -224,8 +234,17 @@ exact cumulative raw-route cost at every expanded guide point:
 - explicit connections add entry anchor, each active-profile portal source and
   target anchor, and exit anchor in semantic order;
 - consecutive duplicate positions are removed deterministically;
+- every edge's complete active-profile route is swept-body certified before
+  relaxation, so invalid geometry can lose to another A* route, and the winning
+  raw route is revalidated before payload publication;
 - every raw consecutive leg is certified by its compiled edge/corridor
-  authority before simplification begins.
+  authority before simplification begins. Explicit routes emit entry, compiled
+  portal source/target points, and exit; witness cell foot anchors are not
+  synthetic corridor waypoints;
+- exact cumulative graph cost is recorded at node foot anchors. Intermediate
+  portal/connection guide points inherit the preceding node cost and are not
+  shortcut endpoints, avoiding any fractional attribution of an authored edge
+  cost to geometry inside that edge.
 
 The immutable A* payload changes from an address-only node array to a bounded
 array of internal guide points containing the stable associated address and
@@ -243,11 +262,13 @@ query reserves the exact remaining lookup/copy work needed to publish the raw
 route and its already-discovered dependency stamp. Optional rays can consume
 only the unreserved remainder.
 
-- From the current committed point, candidates are attempted in deterministic
-  farthest-to-nearest route order.
+- From the current committed node foot anchor, later node foot anchors are
+  attempted in deterministic farthest-to-nearest route order. Portal and
+  connection points remain in the raw fallback but are never shortcut
+  endpoints.
 - A successful navigation ray commits the farthest proven candidate only when
-  its exact traversal cost is no greater than the raw cumulative subroute cost
-  it replaces.
+  its exact traversal cost is no greater than the exact difference between the
+  two node-anchor cumulative costs.
 - A blocked ray tries the next candidate while budget remains.
 - Each attempt consumes exactly one `MaxSimplificationRays` debit plus its trace,
   coverage, edge, connection, and dependency work.
@@ -284,6 +305,9 @@ requests no longer bypass it.
   bypassing an intentionally cheaper weighted route. Geometric traversal cost
   remains allowed. A successful eligible ray releases the guide and steers
   directly.
+- At this orchestration boundary, a geometrically successful but
+  semantic-cost-ineligible ray is normalized to `Blocked`; `Success` therefore
+  always means the returned direct heading is eligible.
 - Each steering check is a distinct bounded internal operation with a fresh
   `NavigationWorkMeter` created from the query's immutable
   `NavigationWorkBudget`. It does not consume or refresh the separate public
@@ -302,19 +326,24 @@ This is orchestration reuse, not a second LOS system.
 When ordinary Flow sampling returns `LocalRecoveryRequired`, the guide first
 uses its existing exact covered-address rebase. If that fails, it ray-tests only
 the fixed geometry already named by its current cursor: the current source
-anchor followed by the selected edge's compiled portal/target anchors. It does
-not scan or rank the Flow payload and owns no second candidate table.
+anchor followed by the selected edge's compiled portal/target anchors. Each
+target is exposed and tested immediately by stable ordinal; no candidate array
+is retained. It does not scan or rank the Flow payload and owns no second
+candidate table.
 
 For each fixed candidate, the guide runs the same navigation ray from the actual
-foot to the certified anchor/selected-edge entry. The ray may not substitute an
-unrelated graph corridor; any semantic travel before the already-selected Flow
-edge must be cost-neutral. A successful ray
+foot to the certified anchor/selected-edge entry. The source-anchor candidate is
+confined to current-source geometry; selected-edge candidates require current
+source followed by that exact canonical edge. Any semantic travel before the
+already-selected Flow edge must be cost-neutral. A successful ray
 returns the ray heading for that frame while retaining the original Flow lease
 and cache identity. The Flow cursor is committed/rebased only after the actual
 foot reaches a payload-covered node; until then each sample revalidates the
 corridor and current graph. No Flow field is rebuilt and no A* query is created.
 
-Blocked or cost-ineligible candidates continue to the next fixed candidate and,
+The failed exact-rebase/rejoin branch transfers the existing local-recovery
+debit and consumes exactly one such unit total. Blocked or cost-ineligible
+candidates continue to the next fixed candidate and,
 when none succeeds, return `LocalRecoveryRequired` without cursor mutation.
 Meter exhaustion returns `BudgetExceeded`; `CostOverflow` and
 `CapacityExceeded` retain their existing public statuses; dependency

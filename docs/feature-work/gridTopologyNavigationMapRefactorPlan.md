@@ -1958,6 +1958,39 @@ Exit criteria:
 
 **Goal:** close the geometry-sensitive correctness paths.
 
+**Living status (2026-08-16):** architecture approved; written design is
+`docs/superpowers/specs/2026-08-16-navigation-rays-and-simplification-design.md`;
+implementation has not started. The selected shape is one internal bounded ray
+kernel, canonical A* payload-time simplification, graph direct-path reuse, and
+same-lease Flow rejoin. The kernel stays internal until Phase 7 proves the
+surface-plus-volume contract.
+
+| Phase 6 slice | Status | Required closure |
+| --- | --- | --- |
+| FixedMathSharp/GridForge swept-body authority | Planned | Reuse `FixedMathSharp.Geometry`; no Trailblazer projection/collision duplicate |
+| Ordered navigation-ray core and endpoint fallback | Planned | Sparse/tie/overlap/evaluator/dependency/budget matrix green |
+| Portal-aware A* guide points and bounded simplification | Planned | Canonical payload, less-simplified success on ray-budget exhaustion, exact bytes |
+| Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
+| Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |
+
+Frozen Phase 6 decisions:
+
+- FixedMathSharp owns general fixed-point geometry, GridForge owns topology,
+  prisms, trace intervals, and portal certificates, and Trailblazer owns only
+  graph-chain/evaluator/budget/orchestration semantics.
+- The ray is internal in Phase 6. Phase 7 records the public-API decision after
+  volume wiring; there is no temporary public or forwarding overload.
+- A* simplification runs once before cache publication. Optional simplification
+  exhaustion appends the valid raw suffix rather than failing the successful
+  query.
+- Existing NavSteering direct-path cadence is retained, but graph `PathQuery`
+  uses the new ray instead of bypassing the check.
+- Flow recovery remains on the exact existing Flow payload/lease and uses a
+  bounded certified local rejoin. It never submits a recovery A* query.
+- Public `PathManager.NeedsPath` and surface
+  `NavSteering.IsDestinationInSight` are deleted rather than forwarded. The
+  explicitly volume-only direct-path provider remains Phase 7-owned.
+
 Tasks:
 
 - Implement ordered, sparse-hole-safe navigation rays.
@@ -1996,6 +2029,15 @@ Exit criteria:
 
 Tasks:
 
+- Activate the Phase 6 navigation-ray kernel for volume and transition graph
+  traversal, including complete media/capability/policy evaluation. Replace and
+  delete `VolumeVoxelFinder.IsDirectPathClear` and
+  `NavSteering.IsVolumeDestinationInSight` only when their graph consumers are
+  live; do not add a forwarding bridge.
+- Public-API decision ledger: after surface and volume ray semantics are both
+  proven, either promote one clean navigation-ray query/result API or record an
+  explicit pre-release decision to keep it internal. Remove any Phase 6
+  vertical-portal test-only activation superseded by the real consumer.
 - Activate rectangular six-face and hex six-planar-plus-two-vertical volume
   native directions plus the corresponding volume branches in
   `TraversalEvaluator`. Activate certified diagonal/vertical-diagonal witness

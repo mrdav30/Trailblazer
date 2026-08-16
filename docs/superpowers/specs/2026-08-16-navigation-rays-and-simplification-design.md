@@ -85,13 +85,15 @@ Trailblazer must contain no rectangular/hex projection formula, local portal
 reconstruction, epsilon comparison, floating-point fallback, or duplicate
 capsule/convex relation.
 
-## Upstream Swept-Body Primitive
+## Upstream Swept-Body Authority
 
 `GridCellGeometry.IsNavigationBodyAnchorValid` proves one body anchor and a
 selected portal opening. A navigation ray additionally needs to prove the body
-over the complete segment portion inside each selected prism. If the current
-GridForge surface cannot express that proof, Phase 6 adds the smallest reusable
-GridForge primitive that:
+over the complete segment portion inside each selected prism. Phase 6 extends
+that existing GridForge authority into one shared segment-capable core; the
+anchor API becomes the coincident-endpoint case and existing corridor consumers
+delegate to the same core. GridForge must not retain parallel point and sweep
+clearance implementations. The shared authority:
 
 - accepts one exact `GridCellPrism`, the bounded foot segment portion, body
   radius and height, and at most the selected incoming/outgoing
@@ -107,7 +109,7 @@ GridForge primitive that:
   `FixedMathSharp.Geometry`;
 - allocates zero and exposes no Trailblazer type.
 
-The primitive is tested independently for rectangular and both hex
+The authority is tested independently for rectangular and both hex
 orientations, corner clips, partial portals, vertical bounds, equality and
 one-raw-unit failures, reverse traversal, and extreme fixed-point inputs before
 Trailblazer consumes it.
@@ -126,18 +128,24 @@ The internal status model is finite and explicit:
 - `BudgetExceeded` when a declared counter is exhausted;
 - `CostOverflow`, `CapacityExceeded`, and `Stale` for their existing meanings.
 
-The result exposes only the facts needed by its internal consumer: status,
-selected start/end addresses, exact consumed counters, and the selected
-interval/edge chain held in caller-owned scratch while the work is active. It
-does not retain a graph snapshot or become a cache by itself.
+The result exposes only consumer-required facts: status, selected start/end
+addresses, exact traversal cost, and whether every selected semantic surcharge
+was zero. Counters remain in the caller-owned `NavigationWorkMeter` or
+`GuideSampleWorkMeter`; the selected interval/edge chain remains in scratch
+while work is active. The result does not retain a graph snapshot or become a
+cache by itself.
 
 ## Ordered Ray Evaluation
 
 For a segment from `start` to `end`, the work performs these steps:
 
-1. Call GridForge `GridTracer.TraceIntervalsInto` with caller-owned
-   `SwiftList<GridTraceInterval>` and `GridTraceIntervalScratch`.
-   `MaxCoveredVoxelIntervals` bounds address candidates and
+1. Extend and call GridForge `GridTracer.TraceIntervalsInto` with caller-owned
+   `SwiftList<GridTraceInterval>` and `GridTraceIntervalScratch`. Candidate-grid
+   discovery receives an explicit limit and stops before appending beyond it;
+   the report exposes the exact grid count and a distinct exceeded status. No
+   forwarding overload preserves the unbounded call shape. For query work,
+   `MaxLookupProbes` charges grid candidates,
+   `MaxCoveredVoxelIntervals` bounds address candidates, and
    `MaxTraceIntervals` bounds written exact intervals.
 2. Reject incomplete, unrepresentable, or non-continuous address coverage. For
    ordinary direct travel and simplification, require continuous physical
@@ -148,20 +156,30 @@ For a segment from `start` to `end`, the work performs these steps:
 4. Resolve and validate the required start and end graph nodes. The selected
    chain must begin at the expected start and end at the expected destination;
    merely intersecting another passable map is insufficient.
-5. Traverse interval/tie groups in their canonical upstream order. Within a
-   tied group, use stable address order. Carry reachable candidates forward by
-   enumerating canonical graph edges, not by assuming tied peers are mutually
-   adjacent.
+5. Traverse interval/tie groups in their canonical upstream order. A tie group
+   is a transitive overlap frontier, not one equal-parameter bucket. Within each
+   frontier, repeatedly relax canonical outgoing edges until bounded reachability
+   closure is reached; stable address/edge order chooses the canonical
+   predecessor but never prevents an opposite-order valid edge from becoming
+   reachable. Tied peers are not assumed mutually adjacent.
 6. Apply the same `TraversalEvaluator` used by A*. Native, automatic-seam, and
    explicit edges must resolve to the exact selected edge and its compiled
    portal/corridor certificates.
-7. Prove monotonically continuous parameter coverage from zero through one.
+7. Resolve every selected portal contact against the input segment. Its exact
+   crossing parameter must exist, occur in semantic order, and lie inside both
+   participating trace intervals. An off-line explicit corridor cannot become
+   valid merely because its endpoint prisms overlap the same tie frontier.
+8. Prove monotonically continuous parameter coverage from zero through one.
    Every handoff is supported by the selected graph edge and body-valid portal;
    an interior sparse hole, blocked witness, or unselected overlap fails.
-8. Validate the bounded segment portion in each selected prism with the
+9. Validate the bounded segment portion in each selected prism with the
    GridForge swept-body primitive. The portal plane is exempt only through the
    selected certificate; all other walls remain solid.
-9. Revalidate graph dependencies/current publication after the final geometric
+10. Accumulate the exact existing `TraversalCost` for the selected edge chain
+    and separately retain whether authored enter costs, area-policy costs, and
+    edge surcharges were all zero. Geometric edge/corridor distance is not a
+    semantic surcharge.
+11. Revalidate graph dependencies/current publication after the final geometric
    result before returning `Success`.
 
 The chain algorithm is iterative. Workspace arrays are fixed-capacity and
@@ -172,14 +190,21 @@ or dependence on hash-table iteration order is permitted.
 
 Strict endpoint resolution remains exact. For `NearestNavigable`, candidates
 retain the existing fixed-distance/address ranking but must also be reachable
-from the requested point through the navigation ray before they may win.
+through a role-aware navigation ray before they may win. Start resolution tests
+requested start -> candidate anchor. End resolution tests candidate anchor ->
+requested destination so directed edges and portals keep their meaning.
 
-The endpoint policy may authorize only one uncovered prefix adjacent to the
-unresolved requested point (or suffix for an unresolved destination). After the
-first selected physical graph interval, coverage must remain continuous through
-the candidate foot anchor. This permits an intentional bounded snap out of a
-sparse or unmapped endpoint without allowing an interior sparse gap. Strict
-resolution and ordinary LOS never receive that allowance.
+The endpoint policy may authorize only one uncovered prefix adjacent to an
+unresolved requested start, before the first selected physical graph interval;
+from that interval through the start candidate anchor, coverage must be
+continuous. The mirrored destination rule requires continuous coverage from
+the destination candidate anchor through the last selected physical graph
+interval and permits only the uncovered suffix after that interval. This
+permits an intentional bounded snap out of a sparse or unmapped endpoint
+without allowing an interior sparse gap. Strict resolution and ordinary LOS
+never receive that allowance. The allowance is an endpoint-resolution result
+only and can never be returned or reused as ordinary full-segment ray
+`Success`.
 
 Candidate ray work shares the query's one `NavigationWorkMeter`. A budget or
 capacity failure remains a query failure; a geometrically blocked candidate is
@@ -190,7 +215,8 @@ skipped and the next canonical candidate is considered.
 Search cost and predecessor selection remain unchanged. Each winning node record
 adds only a compact canonical predecessor-edge ordinal. During reconstruction,
 the edge is re-resolved from the parent in canonical enumeration order and its
-compiled geometry expands the raw route:
+compiled geometry expands the raw route. Caller-owned scratch also records the
+exact cumulative raw-route cost at every expanded guide point:
 
 - node foot anchors remain graph-addressed guide points;
 - native and automatic seams add active-profile source/target portal anchors
@@ -211,16 +237,25 @@ original graph route cost; geometric string pulling never rewrites route cost.
 
 ## Bounded Canonical Simplification
 
-Simplification runs after raw guide-point expansion and before dependency-stamp
-capture/payload publication.
+Simplification runs after raw guide-point expansion and before final
+dependency-stamp capture/payload publication. Before optional work begins, the
+query reserves the exact remaining lookup/copy work needed to publish the raw
+route and its already-discovered dependency stamp. Optional rays can consume
+only the unreserved remainder.
 
 - From the current committed point, candidates are attempted in deterministic
   farthest-to-nearest route order.
-- A successful navigation ray commits the farthest proven candidate.
+- A successful navigation ray commits the farthest proven candidate only when
+  its exact traversal cost is no greater than the raw cumulative subroute cost
+  it replaces.
 - A blocked ray tries the next candidate while budget remains.
 - Each attempt consumes exactly one `MaxSimplificationRays` debit plus its trace,
   coverage, edge, connection, and dependency work.
 - When no simplification ray remains, the untouched raw suffix is appended.
+- Ray dependencies are first held in temporary fixed scratch. A shortcut is
+  committed and its dependencies merged only when the exact union still fits
+  both dependency capacity and the reserved final-capture work; otherwise
+  optional simplification stops and appends the raw suffix.
 - A simplification `BudgetExceeded` therefore does not turn a successful A*
   search into failure. Search, endpoint, overflow, capacity, or stale failures
   retain their existing terminal semantics.
@@ -242,11 +277,21 @@ requests no longer bypass it.
 - Before acquiring A* or Flow guidance, steering attempts one certified ray
   from the actual foot position to the exact requested destination.
 - While guidance is active, the existing cooldown periodically repeats the
-  check. A successful ray releases the guide and steers directly.
-- `Blocked`, `BudgetExceeded`, or temporary ray-workspace contention means
-  "direct travel not proven" and falls back to/retains normal guidance; it does
-  not fail the navigation request.
-- `Stale` retries on a later frame through the existing graph retry path.
+  check.
+- Direct travel is accepted only when the ray is successful and every authored
+  cell enter cost, area-policy additional cost, and edge surcharge on its chain
+  is zero. This conservative rule prevents a clear straight segment from
+  bypassing an intentionally cheaper weighted route. Geometric traversal cost
+  remains allowed. A successful eligible ray releases the guide and steers
+  directly.
+- Each steering check is a distinct bounded internal operation with a fresh
+  `NavigationWorkMeter` created from the query's immutable
+  `NavigationWorkBudget`. It does not consume or refresh the separate public
+  guide request's meter.
+- Every synchronous non-success (`Blocked`, `BudgetExceeded`, `CostOverflow`,
+  or `CapacityExceeded`) means "direct travel not proven" and falls back to or
+  retains normal guidance. `Pending` never escapes the synchronous check.
+- `Stale` exposes no heading and follows the existing graph retry path.
 - Combined/group steering never converts a terminal zero-heading arrival or a
   retry-neutral zero into movement.
 
@@ -254,22 +299,28 @@ This is orchestration reuse, not a second LOS system.
 
 ## Flow Local Rejoin
 
-When ordinary Flow sampling returns `LocalRecoveryRequired`, the guide searches
-only a bounded local set of nodes already covered by its current immutable Flow
-payload. Candidate ranking is deterministic by fixed-point distance and stable
-address, with current selected-edge candidates preferred when eligible.
+When ordinary Flow sampling returns `LocalRecoveryRequired`, the guide first
+uses its existing exact covered-address rebase. If that fails, it ray-tests only
+the fixed geometry already named by its current cursor: the current source
+anchor followed by the selected edge's compiled portal/target anchors. It does
+not scan or rank the Flow payload and owns no second candidate table.
 
-For each candidate, the guide runs the same navigation ray from the actual foot
-to the candidate's certified anchor/selected-edge entry. A successful ray
+For each fixed candidate, the guide runs the same navigation ray from the actual
+foot to the certified anchor/selected-edge entry. The ray may not substitute an
+unrelated graph corridor; any semantic travel before the already-selected Flow
+edge must be cost-neutral. A successful ray
 returns the ray heading for that frame while retaining the original Flow lease
 and cache identity. The Flow cursor is committed/rebased only after the actual
 foot reaches a payload-covered node; until then each sample revalidates the
 corridor and current graph. No Flow field is rebuilt and no A* query is created.
 
-If no candidate is proven within the guide sample budget, the guide returns the
-existing retry-neutral status without cursor mutation. Dependency publication
-between ray validation and heading commit returns sticky `Stale`. Disposal and
-copied-lease generation behavior remain exactly once.
+Blocked or cost-ineligible candidates continue to the next fixed candidate and,
+when none succeeds, return `LocalRecoveryRequired` without cursor mutation.
+Meter exhaustion returns `BudgetExceeded`; `CostOverflow` and
+`CapacityExceeded` retain their existing public statuses; dependency
+publication between ray validation and heading commit returns sticky `Stale`.
+Only `Success` exposes a heading. Disposal and copied-lease generation behavior
+remain exactly once.
 
 The following Phase 5 bridge residue is deleted in this phase:
 
@@ -280,20 +331,22 @@ The following Phase 5 bridge residue is deleted in this phase:
 
 ## Workspace, Budgets, And Allocation
 
-`NavigationQueryLimits` receives explicit capacities for ray intervals,
-candidates/chain state, and expanded A* guide points. There is one explicit
-constructor shape; no compatibility or forwarding overload is added.
+`NavigationQueryLimits` receives only three new ceilings: covered ray addresses,
+trace intervals, and expanded A* guide points. Existing workspace map capacity
+sizes candidate-grid storage; interval capacity also sizes chain state. All
+other arrays derive from those values. There is one explicit constructor shape;
+no compatibility or forwarding overload is added.
 
 - Each exclusive A* workspace owns one ray workspace.
-- Each pooled Flow guide shell owns one fixed-capacity ray workspace; its bytes
-  are included in pool/cache accounting and the pool remains bounded by the
-  active lease ceiling.
-- The context guide/pathing service owns one locked reusable direct-ray
-  workspace initially. A pool is added only if the Phase 6 contention benchmark
+- The context guide/pathing service owns one locked reusable immediate-ray
+  workspace shared by direct checks and exceptional Flow rejoin. Lock
+  acquisition blocks; thread scheduling never changes a navigation result. A
+  deterministic bounded pool is added only if the Phase 6 contention benchmark
   proves serialization is a bottleneck.
 - All `GridTraceIntervalScratch` and `SwiftList` capacities are fully reserved
   from settings before warm execution. Admission rejects budgets that exceed
-  the configured workspace rather than allowing a hidden list growth.
+  the configured workspace rather than allowing a hidden list growth. Upstream
+  candidate-grid collection observes the supplied limit before appending.
 - Warm direct ray, simplification workspace reuse, Flow rejoin sample, A* guide
   advancement, and disposal allocate zero on the measured thread.
 
@@ -310,6 +363,14 @@ No GridForge/world lock is held while taking a graph-store, cache, guide, or
 steering lock. Caller-owned workspaces are never shared without their existing
 owner lock. A stale result never commits a simplification point, endpoint,
 guide cursor, or steering heading.
+
+Meter mapping is explicit. Query/endpoint/simplification/direct work charges
+candidate grids to lookup probes, covered addresses to covered-voxel intervals,
+trace output to trace intervals, graph edges to evaluated edges, and explicit
+corridor legs to connection legs. Flow rejoin charges grid/address/node probes
+to `GuideSampleWorkMeter` current-node lookup probes, graph edges/connection
+legs to cursor-leg scans, selected openings/prisms to portal/prism checks, and
+trace output to trace intervals. It receives no fresh hidden budget.
 
 ## Public And Legacy API Policy
 
@@ -337,19 +398,23 @@ Implementation is strict TDD. The minimum matrix includes:
   budgets;
 - dense and sparse rectangular, pointy-hex, and flat-hex maps;
 - mixed metrics, automatic seams, explicit multi-witness corridors, overlapping
-  mapped/unmapped grids, and tied interval groups;
+  mapped/unmapped grids, candidate-grid one-below limits, and tied interval
+  groups requiring opposite-address-order closure;
 - interior sparse holes, blocked witnesses, wrong/unselected overlaps, stale
   grid generations, and publication interleavings;
 - radius-zero and positive-radius straight crossings;
 - rectangular and both hex corner clips whose endpoint anchors are valid;
 - planar and vertical portals, partial openings, height/radius equality and
-  one-raw-unit failures, forward/reverse traversal;
-- nearest endpoint allowed prefix versus forbidden interior gap;
+  one-raw-unit failures, exact on-segment crossing parameters, off-line portal
+  rejection, and forward/reverse traversal;
+- nearest start/end endpoint allowed prefix/suffix versus forbidden interior
+  gap, including asymmetric directed portals;
 - raw A* portal expansion, deterministic simplification, zero-ray unchanged
   raw route, partial budget preserving a valid suffix, cache byte accounting,
   and mutation invalidation;
 - NavSteering initial direct path, cooldown recheck, blocked/budget fallback,
-  arrival-before-combined-steering, and serialization state;
+  all-status degradation, weighted-cost fallback, arrival-before-combined-
+  steering, and serialization state;
 - Flow local displacement, certified rejoin, no-candidate retry, graph mutation,
   same lease/cache identity, no A* admission, copied lease ABA, and disposal;
 - warmed zero-allocation gates for direct ray, A* construction reuse, and Flow
@@ -380,6 +445,5 @@ follow-ups:
 4. after surface and volume behavior are proven, either promote one clean public
    navigation-ray query/result API or record an explicit pre-release decision to
    keep it internal—never add a forwarding alias;
-5. remove any Phase 6 vertical-portal test-only activation that Phase 7 replaces
-   with a real runtime consumer.
-
+5. retain the reusable upstream vertical-portal primitive tests and add the
+   first real runtime volume consumer without a test-only production hook.

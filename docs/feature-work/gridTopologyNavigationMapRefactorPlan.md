@@ -1958,7 +1958,8 @@ Exit criteria:
 
 **Goal:** close the geometry-sensitive correctness paths.
 
-**Living status (2026-08-16):** architecture approved; written design is
+**Living status (2026-08-16):** architecture and amended correctness/ponytail
+reviews approved; written design is
 `docs/superpowers/specs/2026-08-16-navigation-rays-and-simplification-design.md`;
 implementation has not started. The selected shape is one internal bounded ray
 kernel, canonical A* payload-time simplification, graph direct-path reuse, and
@@ -1983,10 +1984,14 @@ Frozen Phase 6 decisions:
 - A* simplification runs once before cache publication. Optional simplification
   exhaustion appends the valid raw suffix rather than failing the successful
   query.
+- A shortcut is accepted only when its certified traversal cost does not exceed
+  the raw subroute it replaces. Pre-guide direct travel is conservative: every
+  non-geometric cell, area-policy, and edge surcharge must be zero.
 - Existing NavSteering direct-path cadence is retained, but graph `PathQuery`
   uses the new ray instead of bypassing the check.
 - Flow recovery remains on the exact existing Flow payload/lease and uses a
-  bounded certified local rejoin. It never submits a recovery A* query.
+  bounded certified local rejoin over only its current source/selected-edge
+  geometry. It never scans the payload or submits a recovery A* query.
 - Public `PathManager.NeedsPath` and surface
   `NavSteering.IsDestinationInSight` are deleted rather than forwarded. The
   explicitly volume-only direct-path provider remains Phase 7-owned.
@@ -2036,8 +2041,9 @@ Tasks:
   live; do not add a forwarding bridge.
 - Public-API decision ledger: after surface and volume ray semantics are both
   proven, either promote one clean navigation-ray query/result API or record an
-  explicit pre-release decision to keep it internal. Remove any Phase 6
-  vertical-portal test-only activation superseded by the real consumer.
+  explicit pre-release decision to keep it internal. Retain the reusable
+  upstream vertical-portal primitive tests and add the real runtime consumer
+  without a test-only production hook.
 - Activate rectangular six-face and hex six-planar-plus-two-vertical volume
   native directions plus the corresponding volume branches in
   `TraversalEvaluator`. Activate certified diagonal/vertical-diagonal witness

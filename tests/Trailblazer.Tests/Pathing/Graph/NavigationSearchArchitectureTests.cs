@@ -45,6 +45,8 @@ public sealed class NavigationSearchArchitectureTests
         "Pathing/Graph/TraversalEvaluator.cs",
         "Pathing/Query/NavigationQueryLimits.cs",
         "Pathing/Query/PathQueryBatch.cs",
+        "Pathing/Search/Flow/GuideSampleBatch.cs",
+        "Pathing/Search/Flow/GuideSampleWorkMeter.cs",
         "Pathing/Search/NavigationEndpointWorkspace.cs",
         "Pathing/Search/NavigationQueryAdmissionCoordinator.cs"
     };
@@ -53,6 +55,8 @@ public sealed class NavigationSearchArchitectureTests
     {
         "NavigationFlowAdmissionGate.cs",
         "NavigationFlowBatchWork.cs",
+        "NavigationFlowFieldGuideLease.cs",
+        "NavigationFlowFieldLease.cs",
         "NavigationFlowFieldNode.cs",
         "NavigationFlowFieldOpenHeap.cs",
         "NavigationFlowFieldPayload.cs",
@@ -62,13 +66,15 @@ public sealed class NavigationSearchArchitectureTests
         "NavigationFlowFieldStatus.cs",
         "NavigationFlowFieldWork.cs",
         "NavigationFlowFieldWorkspace.cs",
-        "NavigationFlowQueryWork.cs"
+        "NavigationFlowQueryWork.cs",
+        "NavigationSelectedEdgeProgressWork.cs"
     };
 
     private static readonly string[] BannedIdentifiers =
     {
         "AStarSurveyor",
         "ChartInterval",
+        "GridNavigationCorridorValidationCursor",
         "GridStorageKind",
         "NavigationChart",
         "PathGuideFactory",
@@ -79,6 +85,7 @@ public sealed class NavigationSearchArchitectureTests
         "ReusableSurveyResultCache",
         "SolidChart",
         "SolidVoxelFinder",
+        "TryCreateNavigationPortal",
         "VoxelFinder",
         "WorldVoxelIndex"
     };
@@ -143,6 +150,31 @@ public sealed class NavigationSearchArchitectureTests
 
         violations.Should().BeEmpty(
             "the new endpoint/evaluator/A* slice cannot regain charts, partitions, legacy providers, old finders, or rectangular-only search dependencies");
+    }
+
+    [Fact]
+    public void ExplicitRefresh_ShouldRetainValidatedCursorPortalsWithoutReconstruction()
+    {
+        string explicitRefresh = Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Map",
+            "Operations",
+            "NavigationOperationCandidate.ExplicitConnections.cs");
+        string source = File.ReadAllText(explicitRefresh);
+
+        source.Contains(
+                "GridCellGeometry.TryCreateNavigationPortal(",
+                StringComparison.Ordinal)
+            .Should().BeFalse(
+                "corridor validation must emit the exact retained certificates instead of "
+                + "triggering a second geometry pass");
+        source.Should().Contain(
+            "maxWork: 1",
+            "the cursor exposes only the portal emitted by its final completed work unit");
+        source.Should().Contain(
+            "_corridorCursor.TryGetCurrentPortal",
+            "every one-unit cursor advance must consume its emitted certificate immediately");
     }
 
     private static string GetSourceRoot([CallerFilePath] string testFile = "")

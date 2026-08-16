@@ -31,6 +31,16 @@ internal readonly struct NavigationFlowFieldPayloadLease : IDisposable
         ? ReturnStale(out payload)
         : _owner.TryGetPayload(_slot, _generation, out payload);
 
+    internal bool IsOwnedBy(
+        NavigationFlowFieldPayloadCache owner,
+        out int slot,
+        out ulong generation)
+    {
+        slot = _slot;
+        generation = _generation;
+        return ReferenceEquals(_owner, owner);
+    }
+
     public void Dispose() => _owner?.Return(_slot, _generation);
 
     private static NavigationFlowFieldStatus ReturnStale(

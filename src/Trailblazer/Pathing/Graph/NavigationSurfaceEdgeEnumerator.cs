@@ -120,16 +120,43 @@ internal struct NavigationSurfaceEdgeEnumerator
     internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
         NavigationWorkMeter? meter,
         ref int edgeStepRemaining)
-        => AdvanceOneCore(meter, null, ref edgeStepRemaining);
+    {
+        GuideSampleWorkMeter unused = default;
+        return AdvanceOneCore(
+            meter,
+            null,
+            ref unused,
+            useGuideMeter: false,
+            ref edgeStepRemaining);
+    }
 
     internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
         MaintenanceWorkMeter meter,
         ref int edgeStepRemaining)
-        => AdvanceOneCore(null, meter, ref edgeStepRemaining);
+    {
+        GuideSampleWorkMeter unused = default;
+        return AdvanceOneCore(
+            null,
+            meter,
+            ref unused,
+            useGuideMeter: false,
+            ref edgeStepRemaining);
+    }
+
+    internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
+        ref GuideSampleWorkMeter meter,
+        ref int edgeStepRemaining) => AdvanceOneCore(
+            null,
+            null,
+            ref meter,
+            useGuideMeter: true,
+            ref edgeStepRemaining);
 
     private NavigationSurfaceEdgeAdvanceStatus AdvanceOneCore(
         NavigationWorkMeter? queryMeter,
         MaintenanceWorkMeter? maintenanceMeter,
+        ref GuideSampleWorkMeter guideMeter,
+        bool useGuideMeter,
         ref int edgeStepRemaining)
     {
         if (_graph == null)
@@ -170,7 +197,12 @@ internal struct NavigationSurfaceEdgeEnumerator
             }
             if (_nativeNeedsDebit)
             {
-                if (!TryConsumeCandidate(queryMeter, maintenanceMeter, ref edgeStepRemaining))
+                if (!TryConsumeCandidate(
+                        queryMeter,
+                        maintenanceMeter,
+                        ref guideMeter,
+                        useGuideMeter,
+                        ref edgeStepRemaining))
                     return NavigationSurfaceEdgeAdvanceStatus.Blocked;
                 _nativeNeedsDebit = false;
                 _hasNative = true;
@@ -192,7 +224,12 @@ internal struct NavigationSurfaceEdgeEnumerator
             }
             if (_hasPendingExplicitOwner)
             {
-                if (!TryConsumeCandidate(queryMeter, maintenanceMeter, ref edgeStepRemaining))
+                if (!TryConsumeCandidate(
+                        queryMeter,
+                        maintenanceMeter,
+                        ref guideMeter,
+                        useGuideMeter,
+                        ref edgeStepRemaining))
                     return NavigationSurfaceEdgeAdvanceStatus.Blocked;
                 NavigationConnectionOwnerKey owner = _pendingExplicitOwner;
                 _pendingExplicitOwner = default;
@@ -216,7 +253,12 @@ internal struct NavigationSurfaceEdgeEnumerator
             }
             if (_hasPendingSeam)
             {
-                if (!TryConsumeCandidate(queryMeter, maintenanceMeter, ref edgeStepRemaining))
+                if (!TryConsumeCandidate(
+                        queryMeter,
+                        maintenanceMeter,
+                        ref guideMeter,
+                        useGuideMeter,
+                        ref edgeStepRemaining))
                     return NavigationSurfaceEdgeAdvanceStatus.Blocked;
                 NavigationAutomaticSeamRef seam = _pendingSeam;
                 _pendingSeam = default;
@@ -332,14 +374,17 @@ internal struct NavigationSurfaceEdgeEnumerator
     private static bool TryConsumeCandidate(
         NavigationWorkMeter? queryMeter,
         MaintenanceWorkMeter? maintenanceMeter,
+        ref GuideSampleWorkMeter guideMeter,
+        bool useGuideMeter,
         ref int edgeStepRemaining)
     {
-        if (queryMeter == null && maintenanceMeter == null)
+        if (queryMeter == null && maintenanceMeter == null && !useGuideMeter)
             return true;
         if (edgeStepRemaining == 0
             || (queryMeter != null && !queryMeter.TryConsumeEvaluatedEdges(1))
             || (maintenanceMeter != null
-                && !maintenanceMeter.TryConsumeSurfaceComponentEdges(1)))
+                && !maintenanceMeter.TryConsumeSurfaceComponentEdges(1))
+            || (useGuideMeter && !guideMeter.TryConsumeCursorLegScans(1)))
         {
             return false;
         }

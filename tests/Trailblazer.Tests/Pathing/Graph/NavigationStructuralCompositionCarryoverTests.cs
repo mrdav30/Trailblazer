@@ -106,8 +106,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 2)
         };
 
-        const long exactPeak = 11_048L;
-        const long oneBelowPeak = 11_047L;
+        const long exactPeak = 11_112L;
+        const long oneBelowPeak = 11_111L;
 
         RunSeamWork(world, candidate, changes, exactPeak, out bool exactExceeded)
             .Should().BeTrue();
@@ -115,8 +115,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         RunSeamWork(world, candidate, changes, oneBelowPeak, out bool belowExceeded)
             .Should().BeFalse();
         belowExceeded.Should().BeTrue(
-            "the exact peak retains seam journals and affected-component work after deleting "
-            + "the duplicate composition authority and 64-byte test-only full-graph scan state; "
+            "the exact peak is the prior 11,048-byte boundary plus two shared seam portals "
+            + "times the approved 32-byte certificate expansion; "
             + "one byte below cannot retain that boundary");
     }
 

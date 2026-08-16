@@ -216,7 +216,7 @@ public sealed class TrailblazerWorldContextSettings
         maxIngressEntries: 16_384,
         maxIngressBytes: 4_194_304,
         maxActiveSnapshots: 3,
-        maxActiveSnapshotBytes: 33_554_432,
+        maxActiveSnapshotBytes: 35_651_584,
         maxRetiredSnapshots: 8,
         maxRetiredSnapshotBytes: 67_108_864,
         maxPersistentGraphPages: 524_288,

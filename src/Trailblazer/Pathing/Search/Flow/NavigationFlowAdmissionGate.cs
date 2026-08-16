@@ -53,7 +53,8 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
             limits.MaxFlowReusablePayloadBytes,
             limits.MaxFlowSinglePayloadBytes,
             limits.MaxFlowActivePayloadBytes,
-            limits.MaxFlowActivePayloadLeases);
+            limits.MaxFlowActivePayloadLeases,
+            limits.FlowWorkspaceMapCapacity);
         _queries = new NavigationFlowQueryWork[limits.MaxConcurrentNavigationQueries];
         _leases = new NavigationWorldGraphLease[limits.MaxConcurrentNavigationQueries];
         for (int i = 0; i < _queries.Length; i++)

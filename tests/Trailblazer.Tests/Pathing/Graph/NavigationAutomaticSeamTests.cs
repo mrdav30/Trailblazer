@@ -35,7 +35,7 @@ public sealed class NavigationAutomaticSeamTests
     public void SeamPairRetainedSize_ShouldMatchOneSharedPortalPayload()
     {
         Unsafe.SizeOf<NavigationCellAddress>().Should().Be(24);
-        Unsafe.SizeOf<GridNavigationPortal>().Should().Be(72);
+        Unsafe.SizeOf<GridNavigationPortal>().Should().Be(GridNavigationPortal.SizeInBytes);
         NavigationAutomaticSeamPair.RetainedSize.Should().Be(
             16L
             + (2L * Unsafe.SizeOf<NavigationCellAddress>())

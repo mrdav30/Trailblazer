@@ -70,9 +70,8 @@ public sealed class NavigationExplicitConnectionTests
         record.Destination.Should().Be(new NavigationCellAddress("right", destinationIndex));
         record.CorridorCost.Should().Be(Fixed64.One);
         record.IsLowerBoundCertified.Should().BeTrue();
-        record.PortalWaypoints.Count.Should().Be(1);
-        record.PortalWaypoints[0].Should().Be(
-            new Vector3d((Fixed64)2.5m, (Fixed64)(-0.5m), Fixed64.Zero));
+        record.NavigationPortals.Count.Should().Be(1);
+        record.NavigationPortals[0].IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -117,7 +116,7 @@ public sealed class NavigationExplicitConnectionTests
             dormantLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord dormant)
                 .Should().BeTrue();
             dormant.IsActive.Should().BeFalse();
-            dormant.PortalWaypoints.Count.Should().Be(0);
+            dormant.NavigationPortals.Count.Should().Be(0);
             dormantLease.Graph.ExplicitConnections.GetActiveIncidentEdgeCount("left").Should().Be(0);
             dormantLease.Graph.ExplicitConnections.GetActiveIncidentEdgeCount("right").Should().Be(0);
         }
@@ -131,7 +130,7 @@ public sealed class NavigationExplicitConnectionTests
         revivedLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord revived)
             .Should().BeTrue();
         revived.IsActive.Should().BeTrue();
-        revived.PortalWaypoints.Count.Should().Be(1);
+        revived.NavigationPortals.Count.Should().Be(1);
     }
 
     [Fact]
@@ -218,7 +217,7 @@ public sealed class NavigationExplicitConnectionTests
         revivedLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord revived)
             .Should().BeTrue();
         revived.IsActive.Should().BeTrue();
-        revived.PortalWaypoints.Count.Should().Be(2);
+        revived.NavigationPortals.Count.Should().Be(2);
     }
 
     [Fact]
@@ -1605,8 +1604,10 @@ public sealed class NavigationExplicitConnectionTests
                 out NavigationExplicitConnectionRecord record)
             .Should().BeTrue();
         record.IsActive.Should().BeTrue();
-        explicitUnits.Should().Be(14 + record.PortalWaypoints.Count,
-            "each final waypoint must be materialized under its own explicit debit");
+        record.NavigationPortals.Count.Should().Be(expected.Length - 1,
+            "the retained certificate sequence must contain exactly one cursor-validated portal per adjacent semantic pair");
+        explicitUnits.Should().Be(14,
+            "each adjacent portal certificate is retained during its cursor validation debit");
     }
 
     [Fact]
@@ -2300,7 +2301,7 @@ public sealed class NavigationExplicitConnectionTests
             definition,
             isActive: true,
             Fixed64.Zero,
-            NavigationPagedSequence<Vector3d>.Empty);
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
         NavigationExplicitConnectionIndex explicitIndex =
             NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
         var instances = new NavigationMapInstance[lease.Graph.MapCount];

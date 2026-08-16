@@ -29,7 +29,8 @@ public sealed class NavigationFlowFieldConcurrencyTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: twoMaximumPayloads,
-            maxActiveLeases: 2);
+            maxActiveLeases: 2,
+            guideMapCapacity: 0);
         cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation nearReservation)
@@ -116,7 +117,8 @@ public sealed class NavigationFlowFieldConcurrencyTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: twoMaximumPayloads,
-            maxActiveLeases: 2);
+            maxActiveLeases: 2,
+            guideMapCapacity: 0);
         cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation nearReservation)
@@ -411,7 +413,8 @@ public sealed class NavigationFlowFieldConcurrencyTests
         maxReusableBytes: fixture.Far.RetainedBytes,
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,
         maxActivePayloadBytes: checked(fixture.Far.RetainedBytes * maxActiveLeases),
-        maxActiveLeases);
+        maxActiveLeases,
+        guideMapCapacity: 0);
 
     private static NavigationFlowFieldPayloadLease Publish(
         NavigationFlowFieldPayloadCache cache,

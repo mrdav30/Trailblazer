@@ -173,7 +173,7 @@ internal sealed partial class NavigationOperationCandidate
             connection,
             isActive: false,
             Fixed64.Zero,
-            NavigationPagedSequence<Vector3d>.Empty);
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
 
     private static bool IsKnownSuppressed(MapState state, GridForge.Spatial.VoxelIndex index) =>
         state.Overlay.TryGetCell(index, out NavigationCellOverlayOperation operation)
@@ -181,7 +181,7 @@ internal sealed partial class NavigationOperationCandidate
 
     internal sealed class ExplicitConnectionRefreshWork
     {
-        private const long BaseRetainedBytes = 688L;
+        private const long BaseRetainedBytes = 792L;
 
         private readonly NavigationOperationCandidate _candidate;
         private readonly NavigationExplicitConnectionIndex _foldSource;
@@ -222,8 +222,8 @@ internal sealed partial class NavigationOperationCandidate
         private bool _componentOwnerJournaled;
         private bool _corridorStarted;
         private GridNavigationCorridorValidationCursor _corridorCursor;
-        private NavigationPagedSequence<Vector3d>.Builder? _waypointBuilder;
-        private int _waypointCopyIndex;
+        private NavigationPagedSequence<GridNavigationPortal>.Builder? _portalBuilder;
+        private int _portalCopyIndex;
         private PersistentStringMap<PersistentVoxelIndexMap<IncidenceRowDelta>> _rowDeltas =
             PersistentStringMap<PersistentVoxelIndexMap<IncidenceRowDelta>>.Empty;
         private IncidenceOwnerTree _finalOwners;
@@ -296,7 +296,7 @@ internal sealed partial class NavigationOperationCandidate
             + _finalOwners.RetainedBytes
             + (_finalRowBuilder?.RetainedBytes ?? 0)
             + (_endpointRowBuilder?.RetainedBytes ?? 0)
-            + (_waypointBuilder?.RetainedBytes ?? 0)
+            + (_portalBuilder?.RetainedBytes ?? 0)
             + (_ownerUpdated ? 0 : _preparedRecord?.RetainedBytes ?? 0));
 
         internal int PersistentPageCount => checked(
@@ -309,7 +309,7 @@ internal sealed partial class NavigationOperationCandidate
             + _finalOwners.PersistentPageCount
             + (_finalRowBuilder?.PersistentPageCount ?? 0)
             + (_endpointRowBuilder?.PersistentPageCount ?? 0)
-            + (_waypointBuilder?.PersistentPageCount ?? 0)
+            + (_portalBuilder?.PersistentPageCount ?? 0)
             + (_ownerUpdated ? 0 : _preparedRecord?.PersistentPageCount ?? 0));
 
         internal bool Advance(MaintenanceWorkMeter meter)
@@ -449,8 +449,16 @@ internal sealed partial class NavigationOperationCandidate
                     _corridorPrisms.AsSpan(0, prismCount),
                     _corridorWaypoints.AsSpan(0, (prismCount - 1) * 2),
                     maxWork: 1);
+                if (_corridorCursor.TryGetCurrentPortal(out GridNavigationPortal portal))
+                {
+                    _portalBuilder ??= new NavigationPagedSequence<GridNavigationPortal>.Builder(
+                        elementBytes: GridNavigationPortal.SizeInBytes);
+                    _portalBuilder.Append(portal);
+                    _portalCopyIndex++;
+                }
             }
             if (_corridorCursor.Status != GridNavigationCorridorValidationStatus.Complete
+                || _portalCopyIndex != prismCount - 1
                 || (_currentDefinition.IsLowerBoundCertified
                     && !ValidateLowerBound(
                         _corridorPrisms[0],
@@ -462,24 +470,15 @@ internal sealed partial class NavigationOperationCandidate
                 IsValid = false;
                 return true;
             }
-            int waypointCount = _corridorCursor.PortalWaypointCount;
-            while (_waypointCopyIndex < waypointCount)
-            {
-                if (!meter.TryConsumeExplicitEdges(1))
-                    return false;
-                _waypointBuilder ??= new NavigationPagedSequence<Vector3d>.Builder(
-                    elementBytes: 24);
-                _waypointBuilder.Append(_corridorWaypoints[_waypointCopyIndex++]);
-            }
-            NavigationPagedSequence<Vector3d> waypoints = _waypointBuilder?.Seal()
-                ?? NavigationPagedSequence<Vector3d>.Empty;
-            _waypointBuilder = null;
+            NavigationPagedSequence<GridNavigationPortal> portals = _portalBuilder?.Seal()
+                ?? NavigationPagedSequence<GridNavigationPortal>.Empty;
+            _portalBuilder = null;
             _preparedRecord = new NavigationExplicitConnectionRecord(
                 _currentOwner,
                 _currentDefinition,
                 isActive: true,
                 _corridorCursor.GeometricCost,
-                waypoints,
+                portals,
                 isLowerBoundCertified: _currentDefinition.IsLowerBoundCertified);
             return true;
         }
@@ -942,8 +941,8 @@ internal sealed partial class NavigationOperationCandidate
             _componentOwnerJournaled = false;
             _corridorStarted = false;
             _corridorCursor = default;
-            _waypointBuilder = null;
-            _waypointCopyIndex = 0;
+            _portalBuilder = null;
+            _portalCopyIndex = 0;
         }
 
         private static bool HasComponentEdgeChanged(
@@ -961,24 +960,40 @@ internal sealed partial class NavigationOperationCandidate
                 || prior.IsLowerBoundCertified != next.IsLowerBoundCertified
                 || prior.CorridorCost != next.CorridorCost
                 || !prior.Definition.Equals(next.Definition)
-                || !WaypointsEqual(prior.PortalWaypoints, next.PortalWaypoints);
+                || !PortalsEqual(prior.NavigationPortals, next.NavigationPortals);
         }
 
-        private static bool WaypointsEqual(
-            NavigationPagedSequence<Vector3d> left,
-            NavigationPagedSequence<Vector3d> right)
+        private static bool PortalsEqual(
+            NavigationPagedSequence<GridNavigationPortal> left,
+            NavigationPagedSequence<GridNavigationPortal> right)
         {
             if (left.Count != right.Count)
                 return false;
-            NavigationPagedSequence<Vector3d>.Enumerator leftValues = left.GetEnumerator();
-            NavigationPagedSequence<Vector3d>.Enumerator rightValues = right.GetEnumerator();
+            NavigationPagedSequence<GridNavigationPortal>.Enumerator leftValues =
+                left.GetEnumerator();
+            NavigationPagedSequence<GridNavigationPortal>.Enumerator rightValues =
+                right.GetEnumerator();
             while (leftValues.MoveNext())
             {
-                if (!rightValues.MoveNext() || leftValues.Current != rightValues.Current)
+                if (!rightValues.MoveNext()
+                    || !PortalEquals(leftValues.Current, rightValues.Current))
+                {
                     return false;
+                }
             }
             return !rightValues.MoveNext();
         }
+
+        private static bool PortalEquals(
+            GridNavigationPortal left,
+            GridNavigationPortal right) =>
+            left.FaceKind == right.FaceKind
+            && left.SourceToTarget == right.SourceToTarget
+            && left.CanonicalFacePoint == right.CanonicalFacePoint
+            && left.MaximumHorizontalRadius == right.MaximumHorizontalRadius
+            && left.MaximumBodyHeight == right.MaximumBodyHeight
+            && left.VerticalFaceSegmentStart == right.VerticalFaceSegmentStart
+            && left.VerticalFaceSegmentEnd == right.VerticalFaceSegmentEnd;
 
         private bool AdvanceGather(MaintenanceWorkMeter meter)
         {

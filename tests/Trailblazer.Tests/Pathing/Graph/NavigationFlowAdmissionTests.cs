@@ -392,7 +392,8 @@ public sealed class NavigationFlowAdmissionTests
             maxReusableBytes: 4_096,
             maxSinglePayloadBytes: 2_048,
             maxActivePayloadBytes: 2_048,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
         using var work = new NavigationFlowQueryWork(
             world,
             store,

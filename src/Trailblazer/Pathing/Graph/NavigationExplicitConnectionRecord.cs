@@ -6,6 +6,7 @@
 //=======================================================================
 
 using FixedMathSharp;
+using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 
@@ -13,14 +14,14 @@ namespace Trailblazer.Pathing;
 internal sealed class NavigationExplicitConnectionRecord
 {
     private const long BaseRetainedBytes = 104L;
-    private readonly NavigationPagedSequence<Vector3d> _portalWaypoints;
+    private readonly NavigationPagedSequence<GridNavigationPortal> _navigationPortals;
 
     internal NavigationExplicitConnectionRecord(
         NavigationConnectionOwnerKey owner,
         NavigationConnection definition,
         bool isActive,
         Fixed64 corridorCost,
-        NavigationPagedSequence<Vector3d> portalWaypoints,
+        NavigationPagedSequence<GridNavigationPortal> navigationPortals,
         bool isLowerBoundCertified = false)
     {
         Owner = owner;
@@ -29,7 +30,7 @@ internal sealed class NavigationExplicitConnectionRecord
         Destination = definition.Destination;
         IsActive = isActive;
         CorridorCost = corridorCost;
-        _portalWaypoints = portalWaypoints;
+        _navigationPortals = navigationPortals;
         IsLowerBoundCertified = isLowerBoundCertified;
     }
 
@@ -47,11 +48,13 @@ internal sealed class NavigationExplicitConnectionRecord
 
     internal bool IsLowerBoundCertified { get; }
 
-    internal NavigationPagedSequence<Vector3d> PortalWaypoints => _portalWaypoints;
+    internal NavigationPagedSequence<GridNavigationPortal> NavigationPortals => _navigationPortals;
 
     internal long RetainedBytes => checked(
         BaseRetainedBytes
-        + _portalWaypoints.RetainedBytes);
+        + _navigationPortals.RetainedBytes);
 
-    internal int PersistentPageCount => checked(1 + _portalWaypoints.PersistentPageCount);
+    internal int PersistentPageCount => checked(
+        1
+        + _navigationPortals.PersistentPageCount);
 }

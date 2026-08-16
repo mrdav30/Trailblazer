@@ -45,7 +45,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: newerPayload.RetainedBytes,
             maxSinglePayloadBytes: newerPayload.RetainedBytes,
             maxActivePayloadBytes: newerPayload.RetainedBytes,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
         cache.TryReservePayload(
                 newerPayload.RetainedBytes,
                 out NavigationFlowFieldReservation reservation)
@@ -94,7 +95,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: activeBytes,
-            maxActiveLeases: 4);
+            maxActiveLeases: 4,
+            guideMapCapacity: 0);
 
         NavigationFlowFieldPayloadLease nearLease = Publish(
             cache,
@@ -163,7 +165,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
         NavigationFlowFieldPayloadLease first = Publish(
             cache,
             fixture,
@@ -235,7 +238,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Complete.RetainedBytes,
             maxSinglePayloadBytes: fixture.Complete.RetainedBytes,
             maxActivePayloadBytes: fixture.Complete.RetainedBytes,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
         cache.TryReservePayload(
                 fixture.Complete.RetainedBytes,
                 out NavigationFlowFieldReservation reservation)
@@ -274,7 +278,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: activeBytes,
-            maxActiveLeases: 2);
+            maxActiveLeases: 2,
+            guideMapCapacity: 0);
         cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation firstReservation)
@@ -409,7 +414,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: 0,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
 
         NavigationFlowFieldPayloadLease lease = Publish(
             cache,
@@ -443,7 +449,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes - 1,
             maxActivePayloadBytes: fixture.Far.RetainedBytes - 1,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
         oneByteShort.TryReservePayload(fixture.Far.RetainedBytes, out _)
             .Should().BeFalse();
 
@@ -452,7 +459,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
         NavigationFlowFieldPayloadLease sole = Publish(
             leaseCapped,
             fixture,
@@ -484,7 +492,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: twoPayloadBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
-            maxActiveLeases: 1);
+            maxActiveLeases: 1,
+            guideMapCapacity: 0);
         Publish(lru, fixture, fixture.Far, fixture.FarOrigin).Dispose();
         Publish(lru, fixture, second, fixture.FarOrigin).Dispose();
         lru.TryCheckout(
@@ -526,7 +535,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: activeBytes,
-            maxActiveLeases: 2);
+            maxActiveLeases: 2,
+            guideMapCapacity: 0);
         NavigationFlowFieldPayloadLease lease = Publish(
             cache,
             fixture,
@@ -641,7 +651,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: exactAggregate,
-            maxActiveLeases: 2);
+            maxActiveLeases: 2,
+            guideMapCapacity: 0);
         exact.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation first)
@@ -659,7 +670,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: exactAggregate - 1,
-            maxActiveLeases: 2);
+            maxActiveLeases: 2,
+            guideMapCapacity: 0);
         oneByteShort.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation accepted)
@@ -879,7 +891,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: twoPayloadBytes,
-            maxActiveLeases: 3);
+            maxActiveLeases: 3,
+            guideMapCapacity: 0);
         NavigationFlowFieldPayloadLease first = Publish(
             cache,
             fixture,
@@ -913,7 +926,8 @@ public sealed class NavigationFlowFieldCacheTests
         maxReusableBytes: checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes),
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,
         maxActivePayloadBytes: checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes),
-        maxActiveLeases: 4);
+        maxActiveLeases: 4,
+        guideMapCapacity: 0);
 
     private static NavigationFlowFieldPayloadLease Publish(
         NavigationFlowFieldPayloadCache cache,

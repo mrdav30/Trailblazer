@@ -13,7 +13,7 @@ namespace Trailblazer.Pathing;
 /// <summary>Owns one canonical absolute portal shared by both seam directions.</summary>
 internal sealed class NavigationAutomaticSeamPair
 {
-    internal const long RetainedSize = 136L;
+    internal const long RetainedSize = 168L;
 
     internal NavigationAutomaticSeamPair(
         NavigationCellAddress first,

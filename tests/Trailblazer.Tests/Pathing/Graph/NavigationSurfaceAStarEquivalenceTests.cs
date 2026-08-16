@@ -450,13 +450,17 @@ internal static class NavigationAStarExitTestHarness
             VoxelIndex source,
             VoxelIndex destination,
             Fixed64 corridorCost,
-            Fixed64 radiusClearance)
+            Fixed64 radiusClearance,
+            Vector3d entryOffset = default,
+            Vector3d exitOffset = default)
         {
             Id = id;
             Source = source;
             Destination = destination;
             CorridorCost = corridorCost;
             RadiusClearance = radiusClearance;
+            EntryOffset = entryOffset;
+            ExitOffset = exitOffset;
         }
 
         internal string Id { get; }
@@ -464,6 +468,8 @@ internal static class NavigationAStarExitTestHarness
         internal VoxelIndex Destination { get; }
         internal Fixed64 CorridorCost { get; }
         internal Fixed64 RadiusClearance { get; }
+        internal Vector3d EntryOffset { get; }
+        internal Vector3d ExitOffset { get; }
     }
 
     internal readonly struct GraphFixture
@@ -993,16 +999,30 @@ internal static class NavigationAStarExitTestHarness
                 spec.Id,
                 spec.Source,
                 new NavigationCellAddress(mapId, spec.Destination),
-                GetFoot(binding, spec.Source),
-                GetFoot(binding, spec.Destination),
+                GetFoot(binding, spec.Source) + spec.EntryOffset,
+                GetFoot(binding, spec.Destination) + spec.ExitOffset,
                 spec.RadiusClearance,
                 portalHeightClearance: (Fixed64)4);
+            NavigationPagedSequence<GridNavigationPortal> portals =
+                NavigationPagedSequence<GridNavigationPortal>.Empty;
+            if (binding.TryGetCellPrism(spec.Source, out GridCellPrism sourcePrism)
+                && binding.TryGetCellPrism(spec.Destination, out GridCellPrism destinationPrism)
+                && GridCellGeometry.TryCreateNavigationPortal(
+                    sourcePrism,
+                    destinationPrism,
+                    out GridNavigationPortal portal))
+            {
+                var portalBuilder = new NavigationPagedSequence<GridNavigationPortal>.Builder(
+                    GridNavigationPortal.SizeInBytes);
+                portalBuilder.Append(portal);
+                portals = portalBuilder.Seal();
+            }
             records[i] = new NavigationExplicitConnectionRecord(
                 new NavigationConnectionOwnerKey(mapId, spec.Id),
                 definition,
                 isActive: true,
                 spec.CorridorCost,
-                NavigationPagedSequence<Vector3d>.Empty,
+                portals,
                 isLowerBoundCertified: true);
             index = index.SetOwner(records[i], out _);
         }

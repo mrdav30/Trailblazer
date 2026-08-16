@@ -158,7 +158,7 @@ public sealed class NavigationSurfaceComponentTests
             definition,
             isActive: true,
             corridorCost: Fixed64.One,
-            NavigationPagedSequence<Vector3d>.Empty);
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
         NavigationExplicitConnectionIndex connections =
             NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
         var rowBuilder = new NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder(16);

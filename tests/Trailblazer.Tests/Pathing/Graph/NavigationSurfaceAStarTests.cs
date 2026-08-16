@@ -821,7 +821,7 @@ public sealed class NavigationSurfaceAStarTests
             connection,
             isActive: true,
             corridorCost: (Fixed64)20,
-            NavigationPagedSequence<Vector3d>.Empty);
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
         NavigationExplicitConnectionIndex connections =
             NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
         var endpointRowBuilder =
@@ -1009,7 +1009,7 @@ public sealed class NavigationSurfaceAStarTests
             definition,
             isActive: true,
             corridorCost: (Fixed64)8,
-            NavigationPagedSequence<Vector3d>.Empty);
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
         var alternateDefinition = new NavigationConnection(
             "z-shortcut",
             sourceIndex,
@@ -1024,7 +1024,7 @@ public sealed class NavigationSurfaceAStarTests
             alternateDefinition,
             isActive: true,
             corridorCost: (Fixed64)8,
-            NavigationPagedSequence<Vector3d>.Empty);
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
         NavigationExplicitConnectionIndex connections =
             NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
         connections = connections.SetOwner(alternateRecord, out _);

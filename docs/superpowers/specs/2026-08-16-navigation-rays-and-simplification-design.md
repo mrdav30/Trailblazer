@@ -102,8 +102,10 @@ implementations. The shared authority:
 - validates the swept horizontal disk/capsule against every non-selected prism
   boundary;
 - permits traversal only through the exact selected portal opening after
-  resolving the active body profile. Vertical portals return one exact crossing
-  parameter; horizontal portals return ordered source/target parameters;
+  resolving the active body profile. Vertical portals return a directed
+  source/target parameter enclosure around the exact crossing; horizontal
+  portals return ordered source/target parameters while their exact resolved
+  profile anchors remain the geometric split authority;
 - validates vertical body bounds throughout in-prism legs and validates a
   horizontal transition against the certified two-prism union rather than
   requiring the body to remain inside either prism alone;
@@ -111,6 +113,13 @@ implementations. The shared authority:
 - delegates general capsule, segment, and convex predicates to
   `FixedMathSharp.Geometry`;
 - allocates zero and exposes no Trailblazer type.
+
+One segment does not switch vertical authority between two same-wall portal
+openings. Each selected portal must cover its complete possible planar-overlap
+interval; otherwise GridForge fails closed and the caller retains an
+intermediate anchor. Phase 7 owns the decision to add exact inner/outer interval
+authority and a fixed A-only/overlap/B-only proof if a real volume or hybrid
+route requires that handoff.
 
 The authority is tested independently for rectangular and both hex
 orientations, corner clips, partial portals, vertical bounds, equality and
@@ -175,7 +184,7 @@ For a segment from `start` to `end`, the work performs these steps:
    explicit edges must resolve to the exact selected edge and its compiled
    portal/corridor certificates.
 7. Resolve every selected portal contact against the input segment. A vertical
-   crossing parameter or horizontal source/target parameter pair must exist,
+   directed source/target enclosure or horizontal source/target parameter pair must exist,
    occur in semantic order, and lie inside the participating trace intervals.
    An off-line explicit corridor cannot become valid merely because its endpoint
    prisms overlap the same tie frontier.

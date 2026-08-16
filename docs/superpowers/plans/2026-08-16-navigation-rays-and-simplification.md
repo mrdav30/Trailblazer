@@ -160,7 +160,24 @@ git commit -m "feat(geometry): compare exact segment separation"
 
 ---
 
+### Task 1b: FixedMath Contact Membership And Parameter Enclosures
+
+**Completed:** `80e019a` adds the endpoint-authored capsule parameter enclosure;
+`e400999` adds exact `FixedSegment.Contains(Vector3d)` and the one-solve nearest
+plus lower/upper unique-intersection enclosure. These are distinct conservative
+contracts, not compatibility overloads. Release 2,687/2,687, ReleaseLean
+2,666/2,666, both target frameworks warning-free, warmed allocation 0 B, and
+independent correctness/ponytail approval.
+
+---
+
 ### Task 2: Shared GridForge Navigation-Body Segment Authority
+
+**Completed:** GridForge `1ed5479` after independent correctness and ponytail
+approval. Focused swept-body/cursor coverage passed 60/60; full Release and
+ReleaseLean passed 710/710; both target frameworks and the benchmark project
+built warning-free; warmed validation allocated 0 B and retained the 224-byte,
+2N+1-work-unit cursor contract.
 
 **Files:**
 - Create: `F:/gamedevrepos/GridForge/src/GridForge/Grids/Topology/GridCellGeometry.NavigationBodySegment.cs`
@@ -170,7 +187,11 @@ git commit -m "feat(geometry): compare exact segment separation"
 - Modify: `F:/gamedevrepos/GridForge/tests/GridForge.Tests/Grids/GridNavigationCorridorValidationCursorTests.cs`
 
 **Interfaces:**
-- Consumes: `FixedSegment2d.IsDistanceAtLeast` from Task 1 and existing exact `GridNavigationPortal` certificate/profile fields.
+- Consumes: `FixedSegment2d.IsDistanceAtLeast`,
+  `TryGetCapsuleIntersectionParameterEnclosure`, exact
+  `FixedSegment.Contains`, and
+  `TryGetUniqueIntersectionParameterEnclosure` from Tasks 1/1b plus existing
+  exact `GridNavigationPortal` certificate/profile fields.
 - Produces:
 
 ```csharp
@@ -195,11 +216,11 @@ public static bool TryGetNavigationPortalTraversalParameters(
     out Fixed64 targetParameter);
 ```
 
-- [ ] **Step 1: Write the swept-body RED matrix**
+- [x] **Step 1: Write the swept-body RED matrix**
 
 Add rectangular, pointy-hex, and flat-hex tests for: straight clearance; midpoint corner clip with both endpoint anchors valid; equality/one-raw wall penetration; selected vertical portal approach/cross/reverse; partial opening/endcap clipping; changing Y across the portal; horizontal portal source/target parameters and two-prism body union in both directions; invalid/foreign/ambiguous certificate; extreme domain; and warm 0 B. Add a cursor test proving a multi-cell corridor rejects the same mid-leg clip that the direct segment API rejects.
 
-- [ ] **Step 2: Run the focused RED**
+- [x] **Step 2: Run the focused RED**
 
 ```powershell
 dotnet test tests/GridForge.Tests/GridForge.Tests.csproj --configuration Release -m:1 --filter "FullyQualifiedName~GridCellGeometryTests|FullyQualifiedName~GridNavigationCorridorValidationCursorTests"
@@ -207,20 +228,25 @@ dotnet test tests/GridForge.Tests/GridForge.Tests.csproj --configuration Release
 
 Expected: `CS0117` for the two missing APIs, after test fixtures compile.
 
-- [ ] **Step 3: Implement one shared segment core**
+- [x] **Step 3: Implement one shared segment core**
 
 Implement validation in this order:
 
 1. validate radius/height and prism/certificate arguments;
 2. for an in-prism leg, require both segment endpoints and body extents inside that exact prism except at a certified incoming/outgoing portal endpoint;
 3. use `FixedSegment2d.IsDistanceAtLeast` against complete non-selected wall segments;
-4. for a selected vertical portal, require one exact certified prism edge and validate the segment against the two blocked wall spans outside the conservative opening;
-5. use `TryGetNavigationPortalTraversalParameters` for an authored source/target prism pair: a vertical portal returns one equal parameter; a horizontal portal returns ordered source/target parameters and validates the swept body against the certified two-prism union. Both parameters must lie on the finite segment and inside the active profile opening; a degenerate point/anchor may use a selected opening for clearance but must not fabricate a traversal;
+4. for a selected vertical portal, require one exact certified prism edge and validate the segment against every blocked complement of the complete retained contact opening; keep each portal's profile height band active only over its full conservative capsule-overlap enclosure;
+5. use `TryGetNavigationPortalTraversalParameters` for an authored source/target prism pair: a vertical portal returns a directed source/target enclosure whose reconstructed endpoints are contained by the corresponding prisms; a horizontal portal returns ordered source/target parameters while the portal's exact resolved anchors remain authoritative. Validate the enclosed vertical gap against every wall of both prisms. A degenerate point/anchor may use a selected opening for clearance but must not fabricate a traversal;
 6. fail closed on overflow, collinearity ambiguity, foreign certificates, or two certificates claiming the same crossing inconsistently.
+
+The Phase 6 authority deliberately rejects a one-segment same-wall switch
+between two portals' vertical bands. Preserve an intermediate anchor. Phase 7
+owns exact inner/outer interval authority plus a fixed three-slice proof if a
+real volume/hybrid consumer requires the direct handoff.
 
 Change `IsNavigationBodyAnchorValid` to call the new segment method with `footStart == footEnd`; delete duplicated point-only wall-clearance decisions after parity tests pass. Make corridor validation call the in-prism segment authority for every emitted leg and the two-prism traversal primitive for every authored portal transition, including the distinct vertical movement between horizontal-portal source/target feet. Do not retain an anchor-only wall-clearance alternative.
 
-- [ ] **Step 4: Run focused, allocation, and full GridForge gates**
+- [x] **Step 4: Run focused, allocation, and full GridForge gates**
 
 ```powershell
 dotnet test tests/GridForge.Tests/GridForge.Tests.csproj --configuration Release -m:1 --filter "FullyQualifiedName~GridCellGeometryTests|FullyQualifiedName~GridNavigationCorridorValidationCursorTests"
@@ -230,7 +256,7 @@ dotnet build src/GridForge/GridForge.csproj --configuration Release -m:1 -f nets
 dotnet build src/GridForge/GridForge.csproj --configuration Release -m:1 -f net8.0
 ```
 
-- [ ] **Step 5: External re-review and commit**
+- [x] **Step 5: External re-review and commit**
 
 Require review of selected-opening exactness, vertical/horizontal semantics, equality, overflow, allocation, and deletion of duplicate point logic.
 

@@ -1964,15 +1964,18 @@ design is
 `docs/superpowers/specs/2026-08-16-navigation-rays-and-simplification-design.md`;
 the executable TDD plan is
 `docs/superpowers/plans/2026-08-16-navigation-rays-and-simplification.md`.
-Production implementation is in progress; the exact FixedMathSharp segment
-separation authority is complete. The selected shape is one internal bounded
-ray kernel, canonical A* payload-time simplification, graph direct-path reuse,
-and same-lease Flow rejoin. The kernel stays internal until Phase 7 proves the
-surface-plus-volume contract.
+Production implementation is in progress. FixedMathSharp now owns exact finite
+segment separation, exact 3D point-on-segment membership, and conservative
+parameter enclosures for capsule and unique-intersection queries. GridForge
+`1ed5479` owns the reviewed swept-body/portal authority. Bounded deterministic
+ordered trace discovery is the next active slice. The selected shape is one
+internal bounded ray kernel, canonical A* payload-time simplification, graph
+direct-path reuse, and same-lease Flow rejoin. The kernel stays internal until
+Phase 7 proves the surface-plus-volume contract.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
-| FixedMathSharp/GridForge swept-body authority | In progress — FixedMathSharp `fdc1484` complete | Exact separation focused 8/8, Release 2,684+8, Lean 2,663+8, 0 B; GridForge segment/trace work remains |
+| FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 710/710, 0 B, 224-byte cursor; independent correctness and lean reviews approved |
 | Ordered navigation-ray core and endpoint fallback | Planned | Sparse/tie/overlap/evaluator/dependency/budget matrix green |
 | Portal-aware A* guide points and bounded simplification | Planned | Canonical payload, less-simplified success on ray-budget exhaustion, exact bytes |
 | Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
@@ -1983,6 +1986,17 @@ Frozen Phase 6 decisions:
 - FixedMathSharp owns general fixed-point geometry, GridForge owns topology,
   prisms, trace intervals, and portal certificates, and Trailblazer owns only
   graph-chain/evaluator/budget/orchestration semantics.
+- GridForge uses the complete compiled vertical-face contact segment as the
+  physical aperture while the portal radius/height remain profile-admission
+  ceilings. Vertical traversal returns a directed source/target parameter
+  enclosure; horizontal traversal parameters order the exact profile anchors
+  retained by the portal rather than replacing those anchors with rounded
+  reconstructed points.
+- A single segment conservatively rejects a same-wall handoff that would need
+  to switch between two portals' vertical bands. Phase 7 either preserves the
+  intermediate anchor or adds upstream inner/outer parameter authority and a
+  fixed three-slice proof before enabling that volume/hybrid case; it must not
+  union outward enclosures.
 - The ray is internal in Phase 6. Phase 7 records the public-API decision after
   volume wiring; there is no temporary public or forwarding overload.
 - A* simplification runs once before cache publication. Optional simplification
@@ -2048,6 +2062,10 @@ Tasks:
   delete `VolumeVoxelFinder.IsDirectPathClear` and
   `NavSteering.IsVolumeDestinationInSight` only when their graph consumers are
   live; do not add a forwarding bridge.
+- Decide from real volume/hybrid routes whether same-wall dual-opening vertical
+  handoff is needed. If it is, extend FixedMathSharp/GridForge with exact inner
+  plus outer interval comparison and a fixed A-only/overlap/B-only sweep; until
+  then retain an intermediate anchor and the Phase 6 fail-closed behavior.
 - Public-API decision ledger: after surface and volume ray semantics are both
   proven, either promote one clean navigation-ray query/result API or record an
   explicit pre-release decision to keep it internal. Retain the reusable

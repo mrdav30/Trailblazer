@@ -11,7 +11,14 @@ namespace Trailblazer.Benchmarks;
 internal sealed class BenchmarkCatalog
 {
     private static readonly string[] _benchmarkSuffixes = new[] { "Benchmarks", "Benchmark" };
-    private static readonly HashSet<string> _selectionQualifiers = new(StringComparer.OrdinalIgnoreCase) { };
+    private static readonly HashSet<string> _selectionQualifiers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Agents",
+        "Agent",
+        "Articulation",
+        "Mutation",
+        "Promotion"
+    };
     private static readonly Dictionary<string, string[]> _aliasSynonyms = new(StringComparer.OrdinalIgnoreCase) { };
 
     private readonly Dictionary<string, Type[]> _aliasLookup;

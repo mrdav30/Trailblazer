@@ -12,16 +12,25 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks.Pathing;
 
-/// <summary>Measures zero-allocation warm public guide acquisition and cursor use.</summary>
+/// <summary>Measures zero-allocation warm public Flow acquire, sample, and return.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
 [Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase34", "Graph", "Guide", "Warm")]
+[BenchmarkCategory("Phase5", "Graph", "Flow", "Warm")]
 public class NavigationGuideServiceBenchmarks
 {
     private BenchmarkPathFixture _fixture;
     private PathQuery _query;
-    private int _expectedWaypointCount;
+    private static readonly GuideSampleWorkBudget SampleBudget = new(
+        128,
+        128,
+        8,
+        32,
+        32,
+        32,
+        1);
+    private long _warmAllocatedBytes;
+    private long _cachedPayloadBytes;
 
     /// <summary>Legacy-comparable graph route shape.</summary>
     [Params("OpenPlane32", "Corridor1024")]
@@ -42,67 +51,88 @@ public class NavigationGuideServiceBenchmarks
             NavigationGraphBenchmarkScenario.CreateSettings(
                 nodeCapacity,
                 concurrentQueries: 1));
-        _query = NavigationGraphBenchmarkScenario.Publish(
+        PathQuery published = NavigationGraphBenchmarkScenario.Publish(
             _fixture,
             configuration,
             $"warm-guide-{Scenario}",
             width,
             length,
             // Keep the documented expansion budget exact; facade chunking is separate work.
-            NavigationGraphBenchmarkScenario.CreateBudget(nodeCapacity));
-        _expectedWaypointCount = openPlane ? 63 : 1_024;
+            NavigationGraphBenchmarkScenario.CreateBudget(
+                nodeCapacity,
+                edgeSlack: checked(nodeCapacity * 16)));
+        _query = new PathQuery(
+            published.Start,
+            published.End,
+            published.Agent,
+            published.AreaPolicy,
+            published.Traversal,
+            PathAlgorithm.FlowField,
+            published.Budget,
+            allowTransitions: false,
+            new FlowFieldQueryOptions(FixedMathSharp.Fixed64.Zero));
 
-        RunWarmGuideRoundTrip();
-        RunWarmGuideRoundTrip();
+        RunWarmFlowRoundTrip();
+        RunWarmFlowRoundTrip();
         long before = GC.GetAllocatedBytesForCurrentThread();
-        long preflight = RunWarmGuideRoundTrip();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        if (allocated != 0 || preflight == 0)
+        long preflight = RunWarmFlowRoundTrip();
+        _warmAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        NavigationFlowFieldPayloadCache cache =
+            _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
+        _cachedPayloadBytes = cache.CachedBytes;
+        if (_warmAllocatedBytes != 0
+            || preflight == 0
+            || cache.ActiveLeaseCount != 0
+            || cache.LeasedBytes != 0
+            || cache.DetachedBytes != 0)
         {
             throw new InvalidOperationException(
-                $"Warm guide preflight for {Scenario} allocated {allocated} bytes or returned no signal.");
+                $"Warm Flow preflight for {Scenario}: allocated_bytes={_warmAllocatedBytes}, "
+                + $"signal={preflight}, active_leases={cache.ActiveLeaseCount}, "
+                + $"leased_bytes={cache.LeasedBytes}, detached_bytes={cache.DetachedBytes}.");
         }
     }
 
     [GlobalCleanup]
-    public void Cleanup() => _fixture?.Teardown();
-
-    /// <summary>Acquires, samples, advances, and disposes one cached public graph guide.</summary>
-    [Benchmark]
-    public long WarmGuideAcquireSampleAdvanceDispose() => RunWarmGuideRoundTrip();
-
-    private long RunWarmGuideRoundTrip()
+    public void Cleanup()
     {
-        NavigationGuideStatus request = _fixture.Context.Guides.RequestGuide(
-            _query,
-            out NavigationGuideLease? result);
-        if (request != NavigationGuideStatus.Success || !result.HasValue)
-            throw new InvalidOperationException($"Warm guide request failed with {request}.");
+        Console.WriteLine(
+            $"PHASE5_FLOW_SERVICE scenario={Scenario} warm_allocated_bytes={_warmAllocatedBytes} "
+            + $"cached_payload_bytes={_cachedPayloadBytes} active_leases=0 leased_bytes=0 "
+            + "detached_bytes=0 reserved_leases=0 reserved_bytes=0");
+        _fixture?.Teardown();
+    }
 
-        NavigationGuideLease guide = result.Value;
+    /// <summary>Acquires, samples, and returns one cached public graph Flow field.</summary>
+    [Benchmark]
+    public long WarmFlowAcquireSampleDispose() => RunWarmFlowRoundTrip();
+
+    private long RunWarmFlowRoundTrip()
+    {
+        NavigationGuideStatus request = _fixture.Context.Guides.RequestFlowField(
+            _query,
+            out NavigationFlowFieldLease? result);
+        if (request != NavigationGuideStatus.Success || !result.HasValue)
+            throw new InvalidOperationException($"Warm Flow request failed with {request}.");
+
+        NavigationFlowFieldLease guide = result.Value;
         try
         {
-            if (guide.WaypointCount != _expectedWaypointCount)
+            NavigationGuideStatus sample = guide.TrySample(
+                _query.Start.Position,
+                SampleBudget,
+                out FixedMathSharp.Vector3d heading);
+            if (sample != NavigationGuideStatus.Success || heading == FixedMathSharp.Vector3d.Zero)
             {
                 throw new InvalidOperationException(
-                    $"Warm guide route changed: expected {_expectedWaypointCount}, got {guide.WaypointCount}.");
+                    $"Warm Flow sample failed: sample={sample}, heading={heading}.");
             }
-            NavigationGuideStatus sample = guide.TryGetCurrentWaypoint(out _, out _);
-            NavigationGuideStatus advance = guide.TryAdvanceWaypoint();
-            if (sample != NavigationGuideStatus.Success
-                || advance != NavigationGuideStatus.Success
-                || guide.CurrentWaypointIndex != 1)
-            {
-                throw new InvalidOperationException(
-                    $"Warm guide cursor failed: sample={sample}, advance={advance}, "
-                    + $"cursor={guide.CurrentWaypointIndex}.");
-            }
-            return ((long)guide.WaypointCount << 32)
-                | (uint)(guide.CurrentWaypointIndex + 1);
+            return guide.OriginIntegrationCost.m_rawValue ^ heading.GetHashCode();
         }
         finally
         {
             guide.Dispose();
         }
     }
+
 }

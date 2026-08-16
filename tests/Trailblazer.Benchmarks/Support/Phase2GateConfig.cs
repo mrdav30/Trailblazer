@@ -21,12 +21,19 @@ namespace Trailblazer.Benchmarks;
 internal sealed class Phase2GateConfig : ManualConfig
 {
     public Phase2GateConfig()
+        : this(ConfigUnionRule.AlwaysUseGlobal, singleShot: false)
     {
-        AddJob(Job.Default
+    }
+
+    internal Phase2GateConfig(ConfigUnionRule unionRule, bool singleShot)
+    {
+        UnionRule = unionRule;
+        Job job = singleShot ? Job.Dry.WithId("SingleShot") : Job.Default;
+        AddJob(job
             .WithStrategy(RunStrategy.Monitoring)
-            .WithLaunchCount(3)
-            .WithWarmupCount(10)
-            .WithIterationCount(100)
+            .WithLaunchCount(singleShot ? 1 : 3)
+            .WithWarmupCount(singleShot ? 0 : 10)
+            .WithIterationCount(singleShot ? 1 : 100)
             .WithInvocationCount(1)
             .WithUnrollFactor(1)
             .WithMsBuildArguments(

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Running;
 
 namespace Trailblazer.Benchmarks;
@@ -65,9 +66,42 @@ internal static class Program
             return 1;
         }
 
-        BenchmarkSwitcher.FromTypes(selectedTypes).Run(args.Skip(aliasCount).ToArray());
+        string[] benchmarkArgs = args.Skip(aliasCount).ToArray();
+        if (!benchmarkArgs.Any(argument =>
+                string.Equals(argument, "--filter", StringComparison.OrdinalIgnoreCase)))
+        {
+            benchmarkArgs = benchmarkArgs.Concat(new[] { "--filter", "*" }).ToArray();
+        }
+
+        bool hasCommandLineJob = benchmarkArgs.Any(argument =>
+            string.Equals(argument, "--job", StringComparison.OrdinalIgnoreCase));
+        if (hasCommandLineJob)
+        {
+            BenchmarkSwitcher.FromTypes(selectedTypes).Run(
+                benchmarkArgs,
+                DefaultConfig.Instance);
+            return 0;
+        }
+
+        Type[] singleShotTypes = selectedTypes
+            .Where(type => string.Equals(
+                type.Name,
+                "NavigationFlowFieldArticulationBenchmarks",
+                StringComparison.Ordinal))
+            .ToArray();
+        Type[] canonicalTypes = selectedTypes.Except(singleShotTypes).ToArray();
+        if (canonicalTypes.Length > 0)
+            BenchmarkSwitcher.FromTypes(canonicalTypes).Run(benchmarkArgs, CreateGlobalConfig(false));
+        if (singleShotTypes.Length > 0)
+            BenchmarkSwitcher.FromTypes(singleShotTypes).Run(benchmarkArgs, CreateGlobalConfig(true));
         return 0;
     }
+
+    private static IConfig CreateGlobalConfig(bool singleShot) =>
+        ManualConfig.Union(
+                DefaultConfig.Instance,
+                new Phase2GateConfig(ConfigUnionRule.Union, singleShot))
+            .WithUnionRule(ConfigUnionRule.AlwaysUseGlobal);
 
     private static void WriteUsage()
     {

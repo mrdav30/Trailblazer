@@ -25,13 +25,24 @@ internal static class NavigationGraphBenchmarkScenario
         topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
         storageKind: GridStorageKind.Dense);
 
+    internal static GridConfiguration CreateConfiguration(
+        int width,
+        int length,
+        Vector3d origin) => new(
+        origin,
+        origin + new Vector3d(width - 1, 0, length - 1),
+        topologyKind: GridTopologyKind.RectangularPrism,
+        topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+        storageKind: GridStorageKind.Dense);
+
     internal static PathQuery Publish(
         BenchmarkPathFixture fixture,
         GridConfiguration configuration,
         string mapId,
         int width,
         int length,
-        NavigationWorkBudget budget)
+        NavigationWorkBudget budget,
+        long operationSequence = 1)
     {
         if (!configuration.TryNormalize(out NormalizedGridConfiguration binding))
             throw new InvalidOperationException("The graph benchmark configuration is invalid.");
@@ -53,15 +64,15 @@ internal static class NavigationGraphBenchmarkScenario
         var mapOperation = new NavigationMapCommitOperation(
             new PreparedNavigationMap(builder.Build(), bakeVersion: 1),
             OverlayReplacementPolicy.Clear,
-            operationSequence: 1,
-            effectiveFrame: 1);
+            operationSequence,
+            effectiveFrame: fixture.Context.FrameCount + 1);
         var policyKey = new NavigationAreaPolicyKey(mapId, revision: 1);
         var policyOperation = new NavigationAreaPolicyCommitOperation(
             new NavigationAreaPolicy(
                 policyKey,
                 new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
-            publicationSequence: 2,
-            effectiveFrame: 1);
+            publicationSequence: checked(operationSequence + 1),
+            effectiveFrame: fixture.Context.FrameCount + 1);
         if (!fixture.Context.Pathing.Admit(mapOperation)
             || !fixture.Context.Pathing.Admit(policyOperation))
         {
@@ -80,7 +91,9 @@ internal static class NavigationGraphBenchmarkScenario
         {
             throw new InvalidOperationException(
                 $"The graph benchmark publication failed: map={mapOperation.Receipt.Status}, "
-                + $"policy={policyOperation.Receipt.Status}.");
+                + $"map_rejection={mapOperation.Receipt.Rejection}, "
+                + $"policy={policyOperation.Receipt.Status}, "
+                + $"policy_rejection={policyOperation.Receipt.Rejection}.");
         }
 
         var startIndex = default(VoxelIndex);
@@ -115,7 +128,11 @@ internal static class NavigationGraphBenchmarkScenario
     {
         int pageCapacity = checked(((nodeCapacity + NavigationSemanticPage.SlotCount - 1)
             / NavigationSemanticPage.SlotCount) + 2);
-        long maximumPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
+        long maximumAStarPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
+            nodeCapacity,
+            componentCount: 1,
+            pageCapacity);
+        long maximumFlowPayloadBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
             nodeCapacity,
             componentCount: 1,
             pageCapacity);
@@ -127,9 +144,9 @@ internal static class NavigationGraphBenchmarkScenario
             aStarWorkspaceEndpointPageCapacity: pageCapacity,
             aStarWorkspaceNodeCapacity: nodeCapacity,
             maxAStarCacheEntries: cacheEntries,
-            maxAStarReusablePayloadBytes: Math.Max(16_777_216L, maximumPayloadBytes * cacheEntries),
-            maxAStarSinglePayloadBytes: maximumPayloadBytes,
-            maxAStarActivePayloadBytes: checked(maximumPayloadBytes * concurrentQueries),
+            maxAStarReusablePayloadBytes: Math.Max(16_777_216L, maximumAStarPayloadBytes * cacheEntries),
+            maxAStarSinglePayloadBytes: maximumAStarPayloadBytes,
+            maxAStarActivePayloadBytes: checked(maximumAStarPayloadBytes * concurrentQueries),
             maxAStarActivePayloadLeases: concurrentQueries,
             aStarWorkspaceComponentCapacity: 1,
             flowWorkspaceMapCapacity: 1,
@@ -137,9 +154,9 @@ internal static class NavigationGraphBenchmarkScenario
             flowWorkspaceComponentCapacity: 1,
             flowWorkspaceNodeCapacity: nodeCapacity,
             maxFlowCacheEntries: cacheEntries,
-            maxFlowReusablePayloadBytes: Math.Max(33_554_432L, maximumPayloadBytes * cacheEntries),
-            maxFlowSinglePayloadBytes: maximumPayloadBytes,
-            maxFlowActivePayloadBytes: checked(maximumPayloadBytes * concurrentQueries),
+            maxFlowReusablePayloadBytes: Math.Max(33_554_432L, maximumFlowPayloadBytes * cacheEntries),
+            maxFlowSinglePayloadBytes: maximumFlowPayloadBytes,
+            maxFlowActivePayloadBytes: checked(maximumFlowPayloadBytes * concurrentQueries),
             maxFlowActivePayloadLeases: concurrentQueries);
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         return new TrailblazerWorldContextSettings(
@@ -163,11 +180,83 @@ internal static class NavigationGraphBenchmarkScenario
             queryLimits);
     }
 
+    internal static TrailblazerWorldContextSettings CreateArticulationSettings(
+        int nodeCapacity)
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            nodeCapacity,
+            concurrentQueries: 2,
+            cacheEntries: 1);
+        NavigationOperationLimits limits = settings.OperationLimits;
+        NavigationQueryLimits query = settings.QueryLimits;
+        long maximumFlowPayloadBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
+            nodeCapacity,
+            componentCount: 2,
+            query.FlowWorkspaceEndpointPageCapacity);
+        var articulationQueryLimits = new NavigationQueryLimits(
+            query.MaxBatchItems,
+            query.MaxBatchDescriptorBytes,
+            query.MaxConcurrentNavigationQueries,
+            query.AStarWorkspaceMapCapacity,
+            query.AStarWorkspaceEndpointPageCapacity,
+            query.AStarWorkspaceComponentCapacity,
+            query.AStarWorkspaceNodeCapacity,
+            query.MaxAStarCacheEntries,
+            query.MaxAStarReusablePayloadBytes,
+            query.MaxAStarSinglePayloadBytes,
+            query.MaxAStarActivePayloadBytes,
+            query.MaxAStarActivePayloadLeases,
+            query.FlowWorkspaceMapCapacity,
+            query.FlowWorkspaceEndpointPageCapacity,
+            flowWorkspaceComponentCapacity: 2,
+            query.FlowWorkspaceNodeCapacity,
+            query.MaxFlowCacheEntries,
+            maxFlowReusablePayloadBytes: maximumFlowPayloadBytes,
+            maxFlowSinglePayloadBytes: maximumFlowPayloadBytes,
+            maxFlowActivePayloadBytes: checked(maximumFlowPayloadBytes * 2),
+            query.MaxFlowActivePayloadLeases);
+        var largeLimits = new NavigationOperationLimits(
+            limits.MaxPendingOperations,
+            limits.MaxPendingDescriptorBytes,
+            maxPreparedMapBytes: 536_870_912L,
+            limits.MaxBatchItems,
+            limits.MaxBatchDescriptorBytes,
+            limits.MaxBatchSortScratchBytes,
+            limits.MaxCorridorCells,
+            limits.MaxMaps,
+            limits.MaxRetainedMapIdentities,
+            limits.MaxOverlayCellsPerMap,
+            limits.MaxOverlayConnectionsPerMap,
+            limits.MaxOverlayTransitionsPerMap,
+            limits.MaxOverlayCells,
+            limits.MaxOverlayConnections,
+            limits.MaxOverlayTransitions);
+        return new TrailblazerWorldContextSettings(
+            largeLimits,
+            settings.MaintenanceBudget,
+            settings.GuideSampleBudget,
+            settings.MaxIngressEntries,
+            settings.MaxIngressBytes,
+            settings.MaxActiveSnapshots,
+            maxActiveSnapshotBytes: 4_294_967_296L,
+            settings.MaxRetiredSnapshots,
+            maxRetiredSnapshotBytes: 4_294_967_296L,
+            maxPersistentGraphPages: 8_388_608,
+            settings.MaxDynamicCellSlotsPerMap,
+            settings.MaxDynamicCellSlots,
+            settings.NavigationAreaCount,
+            settings.MaxAreaPolicies,
+            settings.MaxAreaRulesPerPolicy,
+            settings.MaxAreaRules,
+            settings.MaxConcurrentSnapshotLeases,
+            articulationQueryLimits);
+    }
+
     internal static NavigationWorkBudget CreateBudget(int nodeCount, int edgeSlack = 0) => new(
-        maxLookupProbes: Math.Max(1_024, checked(nodeCount * 4)),
+        maxLookupProbes: Math.Max(1_024, checked(nodeCount * 128)),
         maxEndpointCandidates: 2,
         maxExpandedNodes: nodeCount,
-        maxEvaluatedEdges: checked((nodeCount * 4) + edgeSlack),
+        maxEvaluatedEdges: checked((nodeCount * 8) + edgeSlack),
         maxConnectionLegs: 0,
         maxTransitionCandidates: 0,
         maxTransitionPairs: 0,
@@ -178,9 +267,98 @@ internal static class NavigationGraphBenchmarkScenario
 
     internal static int GetPageCapacity(int nodeCapacity) => checked(
         ((nodeCapacity + NavigationSemanticPage.SlotCount - 1)
-            / NavigationSemanticPage.SlotCount) + 2);
+        / NavigationSemanticPage.SlotCount) + 2);
 
-    private static Vector3d GetFoot(
+    internal static PathQuery ToFlow(PathQuery query) => new(
+        query.Start,
+        query.End,
+        query.Agent,
+        query.AreaPolicy,
+        query.Traversal,
+        PathAlgorithm.FlowField,
+        query.Budget,
+        allowTransitions: false,
+        new FlowFieldQueryOptions(Fixed64.Zero));
+
+    internal static PathQuery WithStart(
+        PathQuery query,
+        GridConfiguration configuration,
+        VoxelIndex index)
+    {
+        if (!configuration.TryNormalize(out NormalizedGridConfiguration binding))
+            throw new InvalidOperationException("The graph benchmark configuration is invalid.");
+        return query.WithStartPosition(GetFoot(binding, index));
+    }
+
+    internal static NavigationFlowQueryResult ExecuteFlow(
+        NavigationFlowAdmissionGate gate,
+        PathQuery query)
+    {
+        NavigationFlowQueryStatus status = ExecuteFlow(gate, query, out NavigationFlowQueryResult result);
+        if (status != NavigationFlowQueryStatus.Success)
+            throw new InvalidOperationException($"The Flow benchmark query failed with {status}.");
+        return result;
+    }
+
+    internal static NavigationFlowQueryStatus ExecuteFlow(
+        NavigationFlowAdmissionGate gate,
+        PathQuery query,
+        out NavigationFlowQueryResult result)
+    {
+        result = default;
+        if (gate.Begin(query, out NavigationFlowBatchWork work)
+            != NavigationFlowQueryStatus.Pending)
+        {
+            throw new InvalidOperationException("The Flow benchmark query was not admitted.");
+        }
+        try
+        {
+            while (!work.IsAdmissionComplete)
+                work.AdvanceAdmission(int.MaxValue, int.MaxValue);
+            while (!work.IsReadyToPublish(0))
+                work.AdvanceSearch(0, int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue);
+            if (work.PublishReadyPrefix(1) != 1)
+                throw new InvalidOperationException("The Flow benchmark query did not publish.");
+            NavigationFlowQueryStatus status = work.GetStatus(0);
+            if (status == NavigationFlowQueryStatus.Success)
+                result = work.TakeResult(0);
+            return status;
+        }
+        finally
+        {
+            work.Dispose();
+        }
+    }
+
+    internal static bool IsStrictPrefix(
+        NavigationFlowFieldPayload prefix,
+        NavigationFlowFieldPayload longer)
+    {
+        if (prefix.Nodes.Length >= longer.Nodes.Length
+            || prefix.Dependencies.Components.Length > longer.Dependencies.Components.Length
+            || prefix.Dependencies.Pages.Length > longer.Dependencies.Pages.Length)
+        {
+            return false;
+        }
+        for (int i = 0; i < prefix.Nodes.Length; i++)
+        {
+            if (!prefix.Nodes[i].Equals(longer.Nodes[i]))
+                return false;
+        }
+        for (int i = 0; i < prefix.Dependencies.Components.Length; i++)
+        {
+            if (!prefix.Dependencies.Components[i].Equals(longer.Dependencies.Components[i]))
+                return false;
+        }
+        for (int i = 0; i < prefix.Dependencies.Pages.Length; i++)
+        {
+            if (!prefix.Dependencies.Pages[i].Equals(longer.Dependencies.Pages[i]))
+                return false;
+        }
+        return true;
+    }
+
+    internal static Vector3d GetFoot(
         NormalizedGridConfiguration binding,
         VoxelIndex index)
     {

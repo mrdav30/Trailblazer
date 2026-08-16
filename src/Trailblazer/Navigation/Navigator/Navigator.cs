@@ -50,15 +50,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <inheritdoc cref="NavigationProfile"/>
     protected NavigationAgentProfile _navigationProfile;
 
-    private bool _guidedAllowUnwalkableEndpoints;
-
-    private bool _guidedAllowTraversalTransitions;
-
-    private Fixed64 _guidedMaxClimbHeight = Fixed64.One;
-
     private HeuristicMethod _guidedVolumeHeuristic = HeuristicMethod.Manhattan;
-
-    private int _guidedFlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
     /// <summary>
     /// Stable runtime identity used for occupancy and steering coordination.
@@ -196,7 +188,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     public NavMotor? Motor => _motor;
 
     /// <summary>
-    /// Indicates whether the current traversal session is guided via a TrailGuide path (e.g., A* or flow field).
+    /// Indicates whether the current traversal session owns navigation guidance.
     /// </summary>
     public bool IsGuideded => _isGuideded;
 
@@ -231,30 +223,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     public bool IsLockedOn { get => _isLockedOn; set => _isLockedOn = value; }
 
     /// <summary>
-    /// Whether object-built guided requests may target unwalkable voxels.
-    /// </summary>
-    public bool GuidedAllowUnwalkableEndpoints => _guidedAllowUnwalkableEndpoints;
-
-    /// <summary>
-    /// Whether object-built guided requests may use authored traversal transitions for chart fallback,
-    /// bounded swim exits, or bounded aerial landing handoffs.
-    /// </summary>
-    public bool GuidedAllowTraversalTransitions => _guidedAllowTraversalTransitions;
-
-    /// <summary>
-    /// Default max climb height used when the object builds guided requests.
-    /// </summary>
-    public Fixed64 GuidedMaxClimbHeight => _guidedMaxClimbHeight;
-
-    /// <summary>
     /// Default heuristic used when the object builds volume requests.
     /// </summary>
     internal HeuristicMethod GuidedVolumeHeuristic => _guidedVolumeHeuristic;
-
-    /// <summary>
-    /// Default extra flood range used when the object builds flow-field requests.
-    /// </summary>
-    public int GuidedFlowFieldExtraFloodRange => _guidedFlowFieldExtraFloodRange;
 
     #endregion
 
@@ -535,61 +506,6 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Constructs and applies a guided traversal request toward a destination using object-owned path request defaults.
-    /// </summary>
-    /// <param name="targetPosition">The desired world-space target position.</param>
-    /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
-    /// <param name="isRequestingJump">Whether the object intends to jump during traversal.</param>
-    /// <param name="isRequestingFlight">Whether the object intends to fly or glide during traversal.</param>
-    /// <param name="isRequestingSwim">Whether the object intends to actively swim while traversing liquid.</param>
-    /// <param name="isRequestingClimb">Whether the object intends to climb during traversal.</param>
-    /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
-    /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
-    public virtual void ApplyGuidedTrekRequest(
-        Vector3d targetPosition,
-        TrekRate? rate = null,
-        bool? isRequestingFlight = null,
-        bool? isRequestingSwim = null,
-        bool? isRequestingClimb = null,
-        bool? isRequestingJump = null,
-        bool canAffordJump = true,
-        int groupId = -1)
-    {
-        if (!IsActive) return;
-
-        if (!TryCreateGuidedPathRequest(targetPosition, out IPathRequest pathRequest))
-        {
-            TrailblazerLogger.Channel.Warn(
-                $"Unable to create a guided path request for object {GlobalId} at {Position} targeting {targetPosition}.");
-            return;
-        }
-
-        if (_pendingGuidedVolumeExitHandoff != null)
-            _pendingGuidedVolumeExitHandoff.MovementGroupId = groupId;
-
-        _guidedClimbIntent = NavigatorGuidedTraversalState.ResolveInitialClimbIntent(
-            pathRequest,
-            _pendingGuidedVolumeExitHandoff,
-            isRequestingClimb,
-            out _guidedClimbIntentMode);
-
-        _isGuideded = true;
-        _frameRequest.SetRequest(
-                direction: Vector3d.Zero,
-                rate: rate ?? TrekRate.Stationary,
-                isRequestingJump: isRequestingJump ?? false,
-                isRequestingFlight: isRequestingFlight ?? false,
-                isRequestingSwim: isRequestingSwim ?? false,
-                isRequestingClimb: _guidedClimbIntent,
-                facingDirection: null,
-                canAffordJump: canAffordJump
-        );
-
-        Steering!.ApplyPathRequest(pathRequest, groupId);
-        CaptureGuidedRouteTopologyVersion();
-    }
-
-    /// <summary>
     /// Applies complete immutable graph-backed surface A* or flow-field intent.
     /// </summary>
     /// <param name="query">The exact query intent whose start point equals the current derived foot position.</param>
@@ -615,11 +531,43 @@ public abstract partial class Navigator : INavigate, IRecordable
             return;
 
         ValidateGuidedSurfaceQuery(query);
-        _pendingGuidedVolumeExitHandoff = null;
-        _guidedClimbIntentMode = isRequestingClimb.HasValue
-            ? GuidedClimbIntentMode.Explicit
-            : GuidedClimbIntentMode.Auto;
-        _guidedClimbIntent = isRequestingClimb ?? false;
+        GuidedVolumeExitHandoff? replacementHandoff = null;
+        IPathRequest? volumeRequest = null;
+        if (_frameCondition.Medium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            if (!GuidedVolumeExitPlanner.TryPlan(
+                    RequireContext(),
+                    query,
+                    _frameCondition.Medium,
+                    GuidedVolumeHeuristic,
+                    out VolumePathRequest? plannedVolume,
+                    out GuidedVolumeExitHandoff? plannedHandoff,
+                    out _)
+                || plannedVolume == null
+                || plannedHandoff == null)
+            {
+                throw new ArgumentException(
+                    "The exact graph query cannot be reached from the navigator's current volume.",
+                    nameof(query));
+            }
+
+            volumeRequest = plannedVolume;
+            replacementHandoff = plannedHandoff;
+            replacementHandoff.MovementGroupId = groupId;
+            _guidedClimbIntent = NavigatorGuidedTraversalState.ResolveInitialClimbIntent(
+                RequireContext(),
+                replacementHandoff,
+                isRequestingClimb,
+                out _guidedClimbIntentMode);
+        }
+        else
+        {
+            _guidedClimbIntentMode = isRequestingClimb.HasValue
+                ? GuidedClimbIntentMode.Explicit
+                : GuidedClimbIntentMode.Auto;
+            _guidedClimbIntent = isRequestingClimb ?? false;
+        }
+        _pendingGuidedVolumeExitHandoff = replacementHandoff;
         _isGuideded = true;
         _frameRequest.SetRequest(
             direction: Vector3d.Zero,
@@ -631,27 +579,11 @@ public abstract partial class Navigator : INavigate, IRecordable
             facingDirection: null,
             canAffordJump: canAffordJump);
 
-        Steering!.ApplyPathQuery(query, groupId);
+        if (volumeRequest != null)
+            Steering!.ApplyPathRequest(volumeRequest, groupId);
+        else
+            Steering!.ApplyPathQuery(query, groupId);
         CaptureGuidedRouteTopologyVersion();
-    }
-
-    /// <summary>
-    /// Configures the object-owned defaults used when building guided path requests from a target position.
-    /// </summary>
-    /// <param name="allowUnwalkableEndpoints">Whether to allow object-built guided requests to target unwalkable voxels.</param>
-    /// <param name="allowTraversalTransitions">Whether to allow object-built guided requests to use authored traversal transitions for chart fallback, bounded swim exits, or bounded aerial landing handoffs.</param>
-    /// <param name="flowFieldExtraFloodRange">The default extra flood range to use when building flow field guided requests.</param>
-    /// <param name="maxClimbHeight">The default max climb height to use when building guided requests.</param>
-    public virtual void ConfigureForGuidedTraversal(
-        bool? allowUnwalkableEndpoints = null,
-        bool? allowTraversalTransitions = null,
-        int? flowFieldExtraFloodRange = null,
-        Fixed64? maxClimbHeight = null)
-    {
-        _guidedAllowUnwalkableEndpoints = allowUnwalkableEndpoints ?? _guidedAllowUnwalkableEndpoints;
-        _guidedAllowTraversalTransitions = allowTraversalTransitions ?? _guidedAllowTraversalTransitions;
-        _guidedFlowFieldExtraFloodRange = flowFieldExtraFloodRange ?? _guidedFlowFieldExtraFloodRange;
-        _guidedMaxClimbHeight = maxClimbHeight ?? _guidedMaxClimbHeight;
     }
 
     /// <summary>
@@ -668,42 +600,6 @@ public abstract partial class Navigator : INavigate, IRecordable
         Fixed64? snapTolerance = null)
     {
         _heightmapGrounding.Configure(mode, layerName, groundOffset, snapTolerance);
-    }
-
-    /// <summary>
-    /// Builds a concrete path request for guided travel from the object's current state and defaults.
-    /// Subclasses can override this to support custom request types without changing steering.
-    /// </summary>
-    protected virtual bool TryCreateGuidedPathRequest(
-        Vector3d targetPosition,
-        out IPathRequest pathRequest)
-    {
-        _pendingGuidedVolumeExitHandoff = null;
-
-        bool success = NavigatorPathRequestFactory.TryCreate(
-            context: RequireContext(),
-            origin: Position,
-            targetPosition: targetPosition,
-            unitSize: Radius + Radius,
-            allowUnwalkableEndpoints: GuidedAllowUnwalkableEndpoints,
-            allowTraversalTransitions: GuidedAllowTraversalTransitions,
-            maxClimbHeight: GuidedMaxClimbHeight,
-            traversalMedium: _frameCondition.Medium,
-            volumeHeuristic: GuidedVolumeHeuristic,
-            flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
-            out IPathRequest? createdRequest,
-            out GuidedVolumeExitHandoff? handoff);
-        if (!success || createdRequest == null)
-        {
-            pathRequest = null!;
-            return false;
-        }
-
-        pathRequest = createdRequest;
-        if (handoff != null)
-            _pendingGuidedVolumeExitHandoff = handoff;
-
-        return true;
     }
 
     /// <summary>
@@ -790,9 +686,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         bool activatedGuidedHandoff = NavigatorGuidedTraversalState.TryActivatePendingVolumeExitHandoff(
             IsGuideded,
-            RequireContext(),
             FootPosition,
-            NavigationProfile,
             ref _frameRequest,
             Steering,
             ref _pendingGuidedVolumeExitHandoff,
@@ -1136,13 +1030,13 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (query.Agent != NavigationProfile
             || query.Start.Position != FootPosition
             || query.Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
-            || query.AllowTransitions
+            || (query.AllowTransitions && query.Algorithm != PathAlgorithm.FlowField)
             || query.Traversal.StartDomain != TraversalDomain.Surface
             || query.Traversal.TargetDomain != TraversalDomain.Surface
             || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
         {
             throw new ArgumentException(
-                "Guided surface queries must use the Navigator profile, current foot position, a graph surface algorithm, and no transitions.",
+                "Guided surface queries must use the Navigator profile and current foot position; only graph Flow may request transitions.",
                 nameof(query));
         }
     }

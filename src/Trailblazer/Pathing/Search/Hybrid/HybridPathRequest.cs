@@ -11,10 +11,12 @@ using GridForge.Grids;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Immutable internal carrier for a FlowField request and its staged transition route plan.
+/// Immutable internal carrier for graph Flow intent and its staged transition route plan.
 /// </summary>
 internal sealed class HybridPathRequest
 {
+    internal PathQuery? SurfaceIntent { get; }
+
     internal TrailblazerWorldContext Context { get; }
 
     internal Vector3d Origin { get; }
@@ -29,25 +31,23 @@ internal sealed class HybridPathRequest
 
     internal bool AllowUnwalkableEndpoints { get; }
 
-    internal Fixed64 MaxClimbHeight { get; }
-
-    internal int ExtraFloodRange { get; }
-
     internal bool HasValidEndpoints => StartNode != null && EndNode != null;
 
     internal HybridRoutePlan? RoutePlan { get; }
 
-    private HybridPathRequest(FlowFieldPathRequest request)
+    private HybridPathRequest(TrailblazerWorldContext context, PathQuery query)
     {
-        Context = request.Context;
-        Origin = request.Origin;
-        StartNode = request.StartNode;
-        TargetPosition = request.TargetPosition;
-        EndNode = request.EndNode;
-        UnitSize = request.UnitSize;
-        AllowUnwalkableEndpoints = request.AllowUnwalkableEndpoints;
-        MaxClimbHeight = request.MaxClimbHeight;
-        ExtraFloodRange = request.ExtraFloodRange;
+        Context = context;
+        SurfaceIntent = query;
+        Origin = query.Start.Position;
+        TargetPosition = query.End.Position;
+        UnitSize = query.Agent.Shape.Radius + query.Agent.Shape.Radius;
+        AllowUnwalkableEndpoints = query.Start.Resolution != EndpointResolutionPolicy.Strict
+            || query.End.Resolution != EndpointResolutionPolicy.Strict;
+        context.World.TryGetVoxel(Origin, out Voxel? startNode);
+        context.World.TryGetVoxel(TargetPosition, out Voxel? endNode);
+        StartNode = startNode;
+        EndNode = endNode;
 
         HybridRoutePlan? routePlan;
         using (PathManager.EnterState(Context.Pathing.State))
@@ -56,12 +56,21 @@ internal sealed class HybridPathRequest
         RoutePlan = routePlan;
     }
 
-    internal static HybridPathRequest? CreateFromFlowField(FlowFieldPathRequest request)
+    internal static HybridPathRequest? Create(
+        TrailblazerWorldContext context,
+        PathQuery query)
     {
-        if (request?.HasValidEndpoints != true)
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        if (query.Algorithm != PathAlgorithm.FlowField
+            || !query.AllowTransitions
+            || query.Traversal.StartDomain != TraversalDomain.Surface
+            || query.Traversal.TargetDomain != TraversalDomain.Surface
+            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
             return null;
+        }
 
-        var hybridRequest = new HybridPathRequest(request);
-        return hybridRequest.RoutePlan != null ? hybridRequest : null;
+        var request = new HybridPathRequest(context, query);
+        return request.RoutePlan != null ? request : null;
     }
 }

@@ -1383,45 +1383,6 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
-    public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentFlowFieldCacheEntries()
-    {
-        var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
-        TestWorld.World.TryAddGrid(config, out _);
-
-        bool[,,] data = CreateThreeVoxelLine();
-
-        PathTestFactory.RegisterFromData(TestWorld.Context, "OverlappedFlowChart", data, Vector3d.Zero);
-        PathTestFactory.RegisterFromData(TestWorld.Context, "UnrelatedFlowChart", data, new Vector3d(-6, 0, 0));
-
-        FlowFieldPathRequest overlappedRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(2, 0, 0),
-            Fixed64.One));
-        FlowFieldPathRequest unrelatedRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, new Vector3d(-6, 0, 0),
-            new Vector3d(-4, 0, 0),
-            Fixed64.One));
-        FlowFieldGuide overlappedGuide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(overlappedRequest, out FlowFieldGuide? createdOverlappedGuide),
-            createdOverlappedGuide);
-        FlowFieldGuide unrelatedGuide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(unrelatedRequest, out FlowFieldGuide? createdUnrelatedGuide),
-            createdUnrelatedGuide);
-
-        PathGuideFactory.ReturnGuide(overlappedGuide);
-        PathGuideFactory.ReturnGuide(unrelatedGuide);
-
-        Assert.Equal(2, PathGuideFactory.TotalFlowGuideCount);
-
-        PathManager.Register(PathTestFactory.BuildSinglePointMap("OverlapFlowChart", new Vector3d(1, 0, 0)));
-        PathManager.InitializeChart("OverlapFlowChart");
-
-        Assert.Equal(1, PathGuideFactory.TotalFlowGuideCount);
-
-        PathManager.UnloadChart("UnrelatedFlowChart");
-
-        Assert.Equal(0, PathGuideFactory.TotalFlowGuideCount);
-    }
-
-    [Fact]
     public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentVolumeCacheEntries()
     {
         var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));

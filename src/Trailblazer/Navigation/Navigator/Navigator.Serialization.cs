@@ -31,9 +31,10 @@ public abstract partial class Navigator
         SerializedGuidedPathMode serializedGuidedPathMode = chronicler.Mode == SerializationMode.Loading
             ? SerializedGuidedPathMode.Invalid
             : SerializedGuidedPathMode.Graph;
-        GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
-        if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
-            pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
+        GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff =
+            chronicler.Mode == SerializationMode.Loading
+                ? new GuidedVolumeExitHandoff()
+                : _pendingGuidedVolumeExitHandoff;
 
         RecordDeep.Look(chronicler, ref navigationProfileRecord, "NavigationProfile");
         if (chronicler.Mode == SerializationMode.Loading
@@ -62,11 +63,7 @@ public abstract partial class Navigator
         RecordValues.Look(chronicler, ref _velocity, "Velocity", Vector3d.Zero);
         RecordValues.Look(chronicler, ref _speed, "Speed", Fixed64.Zero);
         RecordValues.Look(chronicler, ref _acceleration, "Acceleration", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _guidedAllowUnwalkableEndpoints, "GuidedAllowUnwalkableEndpoints", false);
-        RecordValues.Look(chronicler, ref _guidedAllowTraversalTransitions, "GuidedAllowTraversalTransitions", false);
-        RecordValues.Look(chronicler, ref _guidedMaxClimbHeight, "GuidedMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref _guidedVolumeHeuristic, "GuidedAStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref _guidedFlowFieldExtraFloodRange, "GuidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref _globalId, "GlobalId", Guid.Empty);
         RecordValues.Look(chronicler, ref _occupantGroupId, "OccupantGroupId", (byte)1);
         RecordValues.Look(chronicler, ref _isLockedOn, "IsLockedOn", false);
@@ -101,6 +98,20 @@ public abstract partial class Navigator
         if (chronicler.Mode == SerializationMode.Loading)
         {
             TrailblazerWorldContext context = RequireContext();
+            if (pendingGuidedVolumeExitHandoff?.RejectedOnLoad == true)
+            {
+                throw new InvalidOperationException(
+                    "Serialized volume-exit follow-up is malformed or unsupported.");
+            }
+
+            if (pendingGuidedVolumeExitHandoff?.IsValid == true
+                && pendingGuidedVolumeExitHandoff.FollowupQuery is PathQuery followupQuery
+                && followupQuery.Agent != _navigationProfile)
+            {
+                throw new InvalidOperationException(
+                    "Serialized volume-exit follow-up profile must exactly match the configured Navigator shell.");
+            }
+
             _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true
                 ? pendingGuidedVolumeExitHandoff
                 : null;

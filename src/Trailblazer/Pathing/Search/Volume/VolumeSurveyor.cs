@@ -8,7 +8,6 @@
 using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
@@ -31,18 +30,6 @@ public sealed class VolumeSurveyor
     private const int StraightCost = 100;
 
     private const int DiagonalCost = 141;
-
-    private static readonly Lazy<VolumeSurveyor> _instance =
-        new(() => new VolumeSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
-
-    /// <summary>
-    /// Gets the singleton instance of the VolumeSurveyor class.
-    /// </summary>
-    /// <remarks>
-    /// Use this property to access the shared VolumeSurveyor instance throughout the application.
-    /// This instance is thread-safe and intended for global use.
-    /// </remarks>
-    public static VolumeSurveyor Shared => _instance.Value;
 
     private readonly SurveyorLock _scratchLock = new();
 

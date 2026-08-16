@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using FluentAssertions;
+using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests.Phase0;
@@ -15,6 +16,24 @@ namespace Trailblazer.Tests.Phase0;
 /// </summary>
 public sealed class PublicApiSnapshotTests
 {
+    [Theory]
+    [InlineData("Trailblazer.Pathing.PathRequest")]
+    [InlineData("Trailblazer.Pathing.SolidVoxelFinder")]
+    [InlineData("Trailblazer.Pathing.AlternativeVoxelFinder")]
+    public void RetiredLegacyPathRequestFamily_ShouldBeDeleted(string typeName)
+    {
+        typeof(TrailblazerWorldContext).Assembly.GetType(typeName).Should().BeNull();
+    }
+
+    [Fact]
+    public void RetainedVolumeAndHybridCarriers_ShouldExposeOnlyConcreteLiveState()
+    {
+        typeof(VolumeGuide).GetProperty("TrailMap").Should().BeNull();
+        typeof(VolumeGuide).GetProperty("VolumeResult").Should().NotBeNull();
+        typeof(VolumeSurveyor).GetProperty("Shared").Should().BeNull();
+        typeof(HybridRouteStep).GetProperty("AdditionalCost").Should().BeNull();
+    }
+
     [Fact]
     public void ExportedApi_ShouldMatchThePhase0Snapshot()
     {

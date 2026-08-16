@@ -19,80 +19,76 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 {
     private enum SerializedHandoffMode
     {
-        Invalid = -1,
-        FlowField = 1
+        Missing = -1,
+        Invalid = 0,
+        Graph = 2
     }
 
     public string? TransitionId;
-
-    public Vector3d ChartOriginPosition;
-
-    public Vector3d TargetPosition;
-
-    public bool AllowUnwalkableEndpoints;
-
-    public bool AllowTraversalTransitions;
-
-    public Fixed64 MaxClimbHeight = Fixed64.One;
-
-    public int FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
     public int MovementGroupId = -1;
 
     public bool IsRequestingClimb;
 
-    public bool IsValid => !string.IsNullOrWhiteSpace(TransitionId);
+    public PathQuery? FollowupQuery { get; set; }
 
-    public bool TryCreateFollowupRequest(
-        TrailblazerWorldContext context,
+    internal bool RejectedOnLoad { get; private set; }
+
+    public bool IsValid => !string.IsNullOrWhiteSpace(TransitionId) && FollowupQuery.HasValue;
+
+    public bool TryCreateFollowupQuery(
         Vector3d currentFootPosition,
-        NavigationAgentProfile profile,
-        out IPathRequest? request)
+        out PathQuery? query)
     {
-        PathRequestContextResolver.ThrowIfUnusable(context);
-        request = null;
-        if (!IsValid)
+        query = null;
+        if (!IsValid || FollowupQuery is not PathQuery followup)
             return false;
 
-        Fixed64 unitSize = profile.Shape.Radius + profile.Shape.Radius;
-        var flowField = FlowFieldPathRequest.Create(
-            context,
-            ChartOriginPosition,
-            TargetPosition,
-            unitSize,
-            AllowUnwalkableEndpoints,
-            AllowTraversalTransitions);
-        if (flowField == null || !flowField.TrySetOrigin(currentFootPosition))
-            return false;
-
-        flowField.MaxClimbHeight = MaxClimbHeight;
-        flowField.ExtraFloodRange = FlowFieldExtraFloodRange;
-        request = flowField;
+        query = followup.WithStartPosition(currentFootPosition);
         return true;
     }
 
     public void RecordData(IChronicler chronicler)
     {
+        var queryRecord = new PathQueryRecord();
+        if (chronicler.Mode != SerializationMode.Loading)
+            queryRecord.Capture(FollowupQuery, null);
+
         SerializedHandoffMode serializedMode = chronicler.Mode == SerializationMode.Loading
-            ? SerializedHandoffMode.Invalid
-            : SerializedHandoffMode.FlowField;
-        RecordValues.Look(chronicler, ref serializedMode, "ChartPathMode", SerializedHandoffMode.Invalid);
-        RecordValues.Look(chronicler, ref TransitionId, "TransitionId", null);
-        RecordValues.Look(chronicler, ref ChartOriginPosition, "ChartOriginPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref TargetPosition, "TargetPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref AllowUnwalkableEndpoints, "AllowUnwalkableEndpoints", false);
-        RecordValues.Look(chronicler, ref AllowTraversalTransitions, "AllowTraversalTransitions", false);
-        RecordValues.Look(chronicler, ref MaxClimbHeight, "MaxClimbHeight", Fixed64.One);
-        RecordValues.Look(chronicler, ref FlowFieldExtraFloodRange, "FlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
-        RecordValues.Look(chronicler, ref MovementGroupId, "MovementGroupId", -1);
-        RecordValues.Look(chronicler, ref IsRequestingClimb, "IsRequestingClimb", false);
+            ? SerializedHandoffMode.Missing
+            : FollowupQuery.HasValue
+                ? SerializedHandoffMode.Graph
+                : SerializedHandoffMode.Invalid;
+        string? transitionId = chronicler.Mode == SerializationMode.Loading ? null : TransitionId;
+        int movementGroupId = chronicler.Mode == SerializationMode.Loading ? -1 : MovementGroupId;
+        bool isRequestingClimb = chronicler.Mode != SerializationMode.Loading && IsRequestingClimb;
+        RecordValues.Look(chronicler, ref serializedMode, "ChartPathMode", SerializedHandoffMode.Missing);
+        RecordValues.Look(chronicler, ref transitionId, "TransitionId", null);
+        RecordDeep.Look(chronicler, ref queryRecord, "FollowupQuery");
+        RecordValues.Look(chronicler, ref movementGroupId, "MovementGroupId", -1);
+        RecordValues.Look(chronicler, ref isRequestingClimb, "IsRequestingClimb", false);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            if (serializedMode != SerializedHandoffMode.FlowField)
+            RejectedOnLoad = false;
+            if (serializedMode == SerializedHandoffMode.Invalid)
+                return;
+
+            if (serializedMode != SerializedHandoffMode.Graph
+                || string.IsNullOrWhiteSpace(transitionId)
+                || !queryRecord.TryCreateQuery(out PathQuery? query)
+                || query is not PathQuery graphQuery
+                || graphQuery.Algorithm != PathAlgorithm.FlowField
+                || !graphQuery.AllowTransitions)
             {
-                TransitionId = null;
+                RejectedOnLoad = true;
+                return;
             }
+
+            TransitionId = transitionId;
+            FollowupQuery = graphQuery;
+            MovementGroupId = movementGroupId;
+            IsRequestingClimb = isRequestingClimb;
         }
     }
 }

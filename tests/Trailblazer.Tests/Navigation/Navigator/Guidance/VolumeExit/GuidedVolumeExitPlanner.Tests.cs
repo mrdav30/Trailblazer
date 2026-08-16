@@ -2,7 +2,10 @@ using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
+using GridForge.Spatial;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -11,10 +14,13 @@ namespace Trailblazer.Tests.Navigation;
 [Collection("PathingCollection")]
 public sealed class GuidedVolumeExitPlannerTests : IDisposable
 {
+    private readonly GridConfiguration _configuration;
+
     public GuidedVolumeExitPlannerTests()
     {
         TestWorld.Setup();
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        _configuration = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
+        TestWorld.World.TryAddGrid(_configuration, out _);
     }
 
     public void Dispose()
@@ -29,164 +35,209 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     {
         const string sceneKey = "GuidedPlannerFlow";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
-
-        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            TraversalMedium.Liquid,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: true,
-            maxClimbHeight: (Fixed64)2,
-            volumeHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 8,
-            out VolumePathRequest? request,
-            out GuidedVolumeExitHandoff? handoff,
-            out int totalCost).Should().BeTrue();
-
-        VolumePathRequest plannedRequest = TestRequire.NotNull(request);
-        GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
-        plannedRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        plannedHandoff.FlowFieldExtraFloodRange.Should().Be(8);
-        totalCost.Should().BeGreaterThan(0);
-
-        plannedHandoff.TryCreateFollowupRequest(TestWorld.Context, new Vector3d(2, 0, 0), PathTestFactory.DefaultNavigationProfile, out IPathRequest? followup).Should().BeTrue();
-        followup.Should().BeOfType<FlowFieldPathRequest>();
-    }
-
-    [Fact]
-    public void TryPlan_ShouldUseTransitionAwareFlowFieldChartLeg_ForAerialLanding()
-    {
-        const string sceneKey = "GuidedPlannerAerialFlow";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
-
-        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            TraversalMedium.Gas,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: true,
-            maxClimbHeight: Fixed64.One,
-            volumeHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 6,
-            out VolumePathRequest? request,
-            out GuidedVolumeExitHandoff? handoff,
-            out int totalCost).Should().BeTrue();
-
-        VolumePathRequest plannedRequest = TestRequire.NotNull(request);
-        GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
-        plannedRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
-        plannedHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        plannedHandoff.FlowFieldExtraFloodRange.Should().Be(6);
-        totalCost.Should().BeGreaterThan(0);
-    }
-
-    [Fact]
-    public void TryPlan_ShouldFail_WhenFlowFieldChartLegNeedsTransitionsButFallbackIsDisabled()
-    {
-        const string sceneKey = "GuidedPlannerAerialFlowDisabled";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
-
-        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            TraversalMedium.Gas,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: false,
-            maxClimbHeight: Fixed64.One,
-            volumeHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 4,
-            out VolumePathRequest? request,
-            out GuidedVolumeExitHandoff? handoff,
-            out int totalCost).Should().BeFalse();
-
-        request.Should().BeNull();
-        handoff.Should().BeNull();
-        totalCost.Should().Be(0);
-    }
-
-    [Fact]
-    public void TryPlan_ShouldAllowZeroDisplacementChartLeg()
-    {
-        const string sceneKey = "GuidedPlannerZeroChartLeg";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
-
-        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
+        NavigationAreaPolicyKey policyKey = PublishSurfaceGraph(
+            "guided-volume-exit",
             new Vector3d(2, 0, 0),
-            Fixed64.One,
+            new Vector3d(3, 0, 0),
+            new Vector3d(4, 0, 0));
+        var query = new PathQuery(
+            new NavigationEndpoint(Vector3d.Zero, "guided-volume-exit"),
+            new NavigationEndpoint(new Vector3d(4, 0, 0), "guided-volume-exit"),
+            PathTestFactory.DefaultNavigationProfile,
+            policyKey,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            PathAlgorithm.FlowField,
+            new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 64, 64, 64, 0, 0, 0),
+            allowTransitions: true,
+            new FlowFieldQueryOptions(Fixed64.FromFraction(1, 3)));
+
+        GuidedVolumeExitPlanner.TryPlan(
+            TestWorld.Context,
+            query,
             TraversalMedium.Liquid,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: true,
-            maxClimbHeight: Fixed64.One,
-            volumeHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 3,
+            HeuristicMethod.Manhattan,
             out VolumePathRequest? request,
             out GuidedVolumeExitHandoff? handoff,
-            out int totalCost).Should().BeTrue();
+            out Fixed64 totalCost).Should().BeTrue();
 
         VolumePathRequest plannedRequest = TestRequire.NotNull(request);
         GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
         plannedRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        plannedHandoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
-        plannedHandoff.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        totalCost.Should().BeGreaterThan(0);
+        plannedHandoff.FollowupQuery.Should().Be(query);
+        totalCost.Should().BeGreaterThan(Fixed64.Zero);
+        totalCost.Should().NotBe(totalCost.Floor());
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+
+        plannedHandoff.TryCreateFollowupQuery(
+            new Vector3d(2, 0, 0),
+            out PathQuery? followup).Should().BeTrue();
+        followup.Should().Be(query.WithStartPosition(new Vector3d(2, 0, 0)));
     }
 
     [Fact]
-    public void TryPlan_ShouldFail_WhenTargetIsOutsideEveryActiveGrid()
+    public void Navigator_ShouldActivateTheExactGraphQueryAfterTheVolumeExit()
     {
-        const string sceneKey = "GuidedPlannerOutsideGrid";
+        const string sceneKey = "NavigatorExactVolumeExit";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
+        NavigationAreaPolicyKey policyKey = PublishSurfaceGraph(
+            "navigator-volume-exit",
+            new Vector3d(2, 0, 0),
+            new Vector3d(3, 0, 0),
+            new Vector3d(4, 0, 0));
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var query = new PathQuery(
+            new NavigationEndpoint(Vector3d.Zero, "navigator-volume-exit"),
+            new NavigationEndpoint(new Vector3d(4, 0, 0), "navigator-volume-exit"),
+            profile,
+            policyKey,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            PathAlgorithm.FlowField,
+            new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 64, 64, 64, 0, 0, 0),
+            allowTransitions: true,
+            new FlowFieldQueryOptions(Fixed64.FromFraction(1, 3)));
+        var navigator = new TestNavigator(TestWorld.Context);
+        navigator.Setup(Vector3d.Up * profile.Shape.RootToFootOffsetY, profile);
+        navigator.Initialize(new TrekCondition
+        {
+            Medium = TraversalMedium.Liquid,
+            SurfaceLevel = Fixed64.Zero
+        });
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
 
-        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(40, 0, 0),
-            Fixed64.One,
-            TraversalMedium.Liquid,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: true,
-            maxClimbHeight: Fixed64.One,
-            volumeHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 0,
-            out VolumePathRequest? request,
-            out GuidedVolumeExitHandoff? handoff,
-            out int totalCost).Should().BeFalse();
+        navigator.ApplyGuidedTrekRequest(
+            query,
+            rate: TrekRate.Fast,
+            isRequestingSwim: true,
+            groupId: 7);
 
-        request.Should().BeNull();
-        handoff.Should().BeNull();
-        totalCost.Should().Be(0);
+        steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
+            .Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        steering.CurrentQuery.Should().BeNull();
+
+        navigator.SetTestPosition(
+            new Vector3d(2, 0, 0) + Vector3d.Up * profile.Shape.RootToFootOffsetY);
+        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        steering.Arrive();
+        navigator.Simulate();
+
+        steering.CurrentRequest.Should().BeNull();
+        steering.CurrentQuery.Should().Be(query.WithStartPosition(new Vector3d(2, 0, 0)));
+        steering.MovementGroupID.Should().Be(7);
+        steering.ShouldMove.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(1);
+
+        steering.StopMove();
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(0);
     }
 
     [Fact]
-    public void TryPlan_ShouldFail_WhenNoTransitionsCanExitVolume()
+    public void Navigator_ShouldKeepTheActiveVolumeHandoffWhenReplacementPlanningFails()
     {
-        RegisterSolidTargetLine("GuidedPlannerNoTransition", new Vector3d(2, 0, 0), 3);
-        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
+        const string sceneKey = "NavigatorVolumeReplacement";
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
+        NavigationAreaPolicyKey policyKey = PublishSurfaceGraph(
+            "navigator-volume-replacement",
+            new Vector3d(2, 0, 0),
+            new Vector3d(3, 0, 0),
+            new Vector3d(4, 0, 0));
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var valid = new PathQuery(
+            new NavigationEndpoint(Vector3d.Zero, "navigator-volume-replacement"),
+            new NavigationEndpoint(new Vector3d(4, 0, 0), "navigator-volume-replacement"),
+            profile,
+            policyKey,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            PathAlgorithm.FlowField,
+            new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 64, 64, 64, 0, 0, 0),
+            allowTransitions: true);
+        var navigator = new TestNavigator(TestWorld.Context);
+        navigator.Setup(Vector3d.Up * profile.Shape.RootToFootOffsetY, profile);
+        navigator.Initialize(new TrekCondition
+        {
+            Medium = TraversalMedium.Liquid,
+            SurfaceLevel = Fixed64.Zero
+        });
+        navigator.ApplyGuidedTrekRequest(valid, groupId: 17);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        IPathRequest activeRequest = TestRequire.NotNull(steering.CurrentRequest);
+        GuidedVolumeExitHandoff activeHandoff = TestRequire.NotNull(
+            ReflectionUtility.GetPrivateFieldFromBase<GuidedVolumeExitHandoff?>(
+                navigator,
+                "_pendingGuidedVolumeExitHandoff"));
+        var invalid = new PathQuery(
+            valid.Start,
+            new NavigationEndpoint(new Vector3d(7, 0, 0), "missing-map"),
+            valid.Agent,
+            new NavigationAreaPolicyKey("missing-policy", 1),
+            valid.Traversal,
+            valid.Algorithm,
+            valid.Budget,
+            allowTransitions: true,
+            valid.FlowField);
 
-        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            TraversalMedium.Liquid,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: true,
-            maxClimbHeight: Fixed64.One,
-            volumeHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 0,
-            out VolumePathRequest? request,
-            out GuidedVolumeExitHandoff? handoff,
-            out int totalCost).Should().BeFalse();
+        Action replace = () => navigator.ApplyGuidedTrekRequest(invalid, groupId: 99);
 
-        request.Should().BeNull();
-        handoff.Should().BeNull();
-        totalCost.Should().Be(0);
+        replace.Should().Throw<ArgumentException>().WithParameterName("query");
+        steering.CurrentRequest.Should().BeSameAs(activeRequest);
+        ReflectionUtility.GetPrivateFieldFromBase<GuidedVolumeExitHandoff?>(
+                navigator,
+                "_pendingGuidedVolumeExitHandoff")
+            .Should().BeSameAs(activeHandoff);
+        steering.MovementGroupID.Should().Be(17);
     }
 
-    private static void RegisterSolidTargetLine(string chartKey, Vector3d minBounds, int length)
+    private NavigationAreaPolicyKey PublishSurfaceGraph(string mapId, params Vector3d[] positions)
     {
-        var data = new bool[1, length, 1];
-        for (int i = 0; i < length; i++)
-            data[0, i, 0] = true;
+        _configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        var builder = new NavigationMapBuilder(mapId, binding);
+        var cell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        for (int i = 0; i < positions.Length; i++)
+        {
+            VoxelIndex index = PathTestFactory.RequireVoxel(TestWorld.Context, positions[i]).WorldIndex.VoxelIndex;
+            builder.AddCell(index, cell);
+        }
 
-        PathTestFactory.RegisterFromData(TestWorld.Context, chartKey, data, minBounds);
+        var mapOperation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(builder.Build(), bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 1,
+            effectiveFrame: 1);
+        var policyKey = new NavigationAreaPolicyKey(mapId, 1);
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            new NavigationAreaPolicy(
+                policyKey,
+                new[] { new NavigationAreaRule(true, Fixed64.FromFraction(1, 3)) }),
+            publicationSequence: 2,
+            effectiveFrame: 1);
+        TestWorld.Context.Pathing.Admit(mapOperation).Should().BeTrue();
+        TestWorld.Context.Pathing.Admit(policyOperation).Should().BeTrue();
+        while (mapOperation.Receipt.Status == NavigationOperationStatus.Pending
+            || policyOperation.Receipt.Status == NavigationOperationStatus.Pending)
+        {
+            TestWorld.Context.Simulate();
+        }
+
+        mapOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        policyOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        return policyKey;
     }
 }
 
@@ -214,61 +265,88 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    [Fact]
-    public void TryCreateFollowupRequest_ShouldFail_WhenHandoffIsInvalid()
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldPreserveTheExactGraphFollowupQueryWithWireModeTwo(bool useMemoryPack)
     {
-        // Default TransitionId is null, so IsValid == false; the early-return branch is exercised.
-        var handoff = new GuidedVolumeExitHandoff();
-        handoff.TryCreateFollowupRequest(TestWorld.Context, Vector3d.Zero, PathTestFactory.DefaultNavigationProfile, out _).Should().BeFalse();
+        PathQuery query = CreateGraphQuery();
+        var source = new GuidedVolumeExitHandoff
+        {
+            TransitionId = "graph-transition",
+            FollowupQuery = query,
+            MovementGroupId = 7,
+            IsRequestingClimb = true
+        };
+
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = new GuidedVolumeExitHandoff();
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.IsValid.Should().BeTrue();
+        target.FollowupQuery.Should().Be(query);
+        target.TryCreateFollowupQuery(Vector3d.Right, out PathQuery? rebased)
+            .Should().BeTrue();
+        rebased.Should().Be(query.WithStartPosition(Vector3d.Right));
+        target.MovementGroupId.Should().Be(7);
+        target.IsRequestingClimb.Should().BeTrue();
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
+    [InlineData(false, -1)]
+    [InlineData(false, 1)]
+    [InlineData(false, 99)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true, false)]
-    [InlineData(true, true)]
+    [InlineData(true, -1)]
+    [InlineData(true, 1)]
+    [InlineData(true, 99)]
 #endif
-    public void RoundTrip_ShouldRejectLegacyOrMissingHandoffModeInsteadOfFallingBackToFlowField(
+    public void RoundTrip_ShouldRejectInvalidHandoffModeBeforeMutatingExistingState(
         bool useMemoryPack,
-        bool omitMode)
+        int serializedMode)
     {
-        PathTestFactory.RegisterFromData(
-            TestWorld.Context,
-            "LegacySerializedAStarHandoff",
-            new bool[1, 2, 1] { { { true }, { true } } },
-            Vector3d.Zero);
-        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        PathQuery sourceQuery = CreateGraphQuery();
         var source = new GuidedVolumeExitHandoff
         {
-            TransitionId = "test-transition",
-            ChartOriginPosition = Vector3d.Zero,
-            TargetPosition = Vector3d.Right
+            TransitionId = "serialized-transition",
+            FollowupQuery = sourceQuery,
+            MovementGroupId = 7,
+            IsRequestingClimb = true
         };
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
-        payload = omitMode
+        payload = serializedMode < 0
             ? SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "ChartPathMode")
-            : SerializationUtility.SetPayloadValue(payload, useMemoryPack, 0, "ChartPathMode");
-        var target = new GuidedVolumeExitHandoff();
+            : SerializationUtility.SetPayloadValue(payload, useMemoryPack, serializedMode, "ChartPathMode");
+        PathQuery sentinelQuery = sourceQuery.WithStartPosition(Vector3d.Left);
+        var target = new GuidedVolumeExitHandoff
+        {
+            TransitionId = "sentinel-transition",
+            FollowupQuery = sentinelQuery,
+            MovementGroupId = 42,
+            IsRequestingClimb = false
+        };
 
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
-        target.IsValid.Should().BeFalse();
-        target.TryCreateFollowupRequest(TestWorld.Context, Vector3d.Zero, profile, out IPathRequest? request)
-            .Should().BeFalse();
-        request.Should().BeNull();
+        target.TransitionId.Should().Be("sentinel-transition");
+        target.FollowupQuery.Should().Be(sentinelQuery);
+        target.MovementGroupId.Should().Be(42);
+        target.IsRequestingClimb.Should().BeFalse();
     }
 
-    [Fact]
-    public void TryCreateFollowupRequest_ShouldFail_WhenFlowFieldCreateReturnsNull()
-    {
-        // Same as above but for the FlowField case branch.
-        var handoff = new GuidedVolumeExitHandoff
-        {
-            TransitionId = "test-transition",
-            ChartOriginPosition = new Vector3d(1000, 0, 0),
-            TargetPosition = new Vector3d(1001, 0, 0),
-        };
-        handoff.TryCreateFollowupRequest(TestWorld.Context, Vector3d.Zero, PathTestFactory.DefaultNavigationProfile, out _).Should().BeFalse();
-    }
+    private static PathQuery CreateGraphQuery() => new(
+        new NavigationEndpoint(Vector3d.Zero, "graph-map"),
+        new NavigationEndpoint(new Vector3d(4, 0, 0), "graph-map"),
+        PathTestFactory.DefaultNavigationProfile,
+        new NavigationAreaPolicyKey("graph-policy", 3),
+        new TraversalIntent(
+            TraversalDomain.Surface,
+            TraversalMedium.Solid,
+            TraversalDomain.Surface),
+        PathAlgorithm.FlowField,
+        new NavigationWorkBudget(11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21),
+        allowTransitions: true,
+        new FlowFieldQueryOptions(Fixed64.Half));
 }

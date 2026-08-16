@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // NavSteering.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -167,7 +167,7 @@ public partial class NavSteering : IRecordable
     /// <summary>
     /// Current guide used to compute the desired path or flow.
     /// </summary>
-    private IGuide? _trailGuide;
+    private VolumeGuide? _volumeGuide;
 
     private NavigationGuideLease? _navigationGuideLease;
 
@@ -175,8 +175,10 @@ public partial class NavSteering : IRecordable
 
     private NavigationGuideLease? _flowRecoveryGuideLease;
 
-    /// <inheritdoc cref="_trailGuide"/>
-    public IGuide? TrailGuide => _trailGuide;
+    private HybridRouteGuide? _hybridRouteGuide;
+
+    /// <inheritdoc cref="_volumeGuide"/>
+    public VolumeGuide? VolumeGuide => _volumeGuide;
 
     /// <inheritdoc cref="_shouldMove"/>
     public bool ShouldMove => _shouldMove;
@@ -227,7 +229,8 @@ public partial class NavSteering : IRecordable
         && (_navigationGuideLease != null
             || _navigationFlowFieldLease != null
             || _flowRecoveryGuideLease != null
-            || _trailGuide != null);
+            || _hybridRouteGuide != null
+            || _volumeGuide != null);
 
     /// <inheritdoc cref="_isAtDestination"/>
     public bool IsAtDestination => _isAtDestination;

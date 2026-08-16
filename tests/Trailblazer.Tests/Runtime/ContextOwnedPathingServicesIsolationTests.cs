@@ -2,6 +2,7 @@ using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Grids;
+using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -42,6 +43,48 @@ public sealed class ContextOwnedPathingServicesIsolationTests : IDisposable
         contextA.Transitions.IsRegistered("shared-transition").Should().BeFalse();
         contextB.Transitions.IsRegistered("shared-transition").Should().BeTrue();
         contextB.Transitions.IsActive("shared-transition").Should().BeTrue();
+    }
+
+    [Fact]
+    public void GuidedClimbIntent_ShouldResolveAgainstTheOwningContext()
+    {
+        using TrailblazerWorldContext contextA = PathTestFactory.CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = PathTestFactory.CreateContextWithGrid();
+        PathTestFactory.RegisterSolidLine(contextA, "ClimbIntentA", Vector3d.Zero, 2);
+        PathTestFactory.RegisterSolidLine(contextB, "ClimbIntentB", Vector3d.Zero, 2);
+        TraversalTransition requesting;
+        using (PathManager.EnterState(contextA.Pathing.State))
+        {
+            requesting = new TraversalTransition(
+                "shared-climb-intent",
+                TraversalTransitionType.Jump,
+                TraversalTransitionAnchor.Solid(Vector3d.Zero),
+                TraversalTransitionAnchor.Solid(Vector3d.Right),
+                requestsClimbIntent: true);
+        }
+        TraversalTransition notRequesting;
+        using (PathManager.EnterState(contextB.Pathing.State))
+        {
+            notRequesting = new TraversalTransition(
+                "shared-climb-intent",
+                TraversalTransitionType.Jump,
+                TraversalTransitionAnchor.Solid(Vector3d.Zero),
+                TraversalTransitionAnchor.Solid(Vector3d.Right));
+        }
+        contextA.Transitions.Register(requesting).Should().BeTrue();
+        contextB.Transitions.Register(notRequesting).Should().BeTrue();
+        var handoff = new GuidedVolumeExitHandoff { TransitionId = "shared-climb-intent" };
+
+        using (PathManager.EnterState(contextB.Pathing.State))
+        {
+            NavigatorGuidedTraversalState.ResolveInitialClimbIntent(
+                    contextA,
+                    handoff,
+                    null,
+                    out GuidedClimbIntentMode mode)
+                .Should().BeTrue();
+            mode.Should().Be(GuidedClimbIntentMode.Auto);
+        }
     }
 
     [Fact]
@@ -88,28 +131,6 @@ public sealed class ContextOwnedPathingServicesIsolationTests : IDisposable
         contextB.VolumeRules.HasGasVoxelRule.Should().BeFalse();
         contextA.Guides.TotalVolumeGuideCount.Should().Be(0);
         contextB.Guides.TotalVolumeGuideCount.Should().Be(1);
-    }
-
-    [Fact]
-    public void ContextFlowGuides_ShouldInvalidateOnlyOwningGuideCaches()
-    {
-        using TrailblazerWorldContext contextA = PathTestFactory.CreateContextWithGrid();
-        using TrailblazerWorldContext contextB = PathTestFactory.CreateContextWithGrid();
-        PathTestFactory.RegisterSolidLine(contextA, "SharedGuideChart", Vector3d.Zero, 2);
-        PathTestFactory.RegisterSolidLine(contextB, "SharedGuideChart", Vector3d.Zero, 2);
-        FlowFieldPathRequest requestA = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            contextA, Vector3d.Zero, Vector3d.Right, Fixed64.One));
-        FlowFieldPathRequest requestB = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            contextB, Vector3d.Zero, Vector3d.Right, Fixed64.One));
-        contextA.Guides.RequestGuide(requestA, out FlowFieldGuide? guideA).Should().BeTrue();
-        contextB.Guides.RequestGuide(requestB, out FlowFieldGuide? guideB).Should().BeTrue();
-        contextA.Guides.ReturnGuide(guideA);
-        contextB.Guides.ReturnGuide(guideB);
-
-        contextA.Guides.InvalidateCacheFor("SharedGuideChart");
-
-        contextA.Guides.TotalFlowGuideCount.Should().Be(0);
-        contextB.Guides.TotalFlowGuideCount.Should().Be(1);
     }
 
 }

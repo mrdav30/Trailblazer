@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // NavSteering.Serialization.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -26,7 +26,7 @@ public partial class NavSteering
             if (_currentQuery.HasValue)
                 queryRecord.Capture(_currentQuery, _navigationGuideLease);
             else
-                requestRecord.Capture(_currentRequest, _trailGuide);
+                requestRecord.Capture(_currentRequest, _volumeGuide);
         }
 
         int movementGroupId = _movementGroupSession.GroupId;
@@ -127,7 +127,7 @@ public partial class NavSteering
                 && !_shouldRequestPathThisFrame
                 && !HasLineOfSightPath)
             {
-                if (!requestRecord.TryCreateGuide(_currentRequest, out _trailGuide))
+                if (!requestRecord.TryCreateGuide(_currentRequest, out _volumeGuide))
                     _shouldRequestPathThisFrame = ShouldMove;
             }
             else if (_currentRequest != null
@@ -153,6 +153,12 @@ public partial class NavSteering
         ReleaseNavigationGuidance();
         if (!ShouldMove || HasLineOfSightPath)
             return;
+
+        if (query.AllowTransitions)
+        {
+            _shouldRequestPathThisFrame = true;
+            return;
+        }
 
         NavigationGuideStatus status = ResolveContext().Guides.RequestFlowField(
             query,
@@ -193,12 +199,14 @@ public partial class NavSteering
         _navigationFlowFieldLease = null;
         _flowRecoveryGuideLease?.Dispose();
         _flowRecoveryGuideLease = null;
+        _hybridRouteGuide?.Dispose();
+        _hybridRouteGuide = null;
 
-        if (_trailGuide == null)
+        if (_volumeGuide == null)
             return;
 
-        (_currentRequest?.Context ?? ResolveContext()).Guides.ReturnGuide(_trailGuide, dispose);
-        _trailGuide = null;
+        (_currentRequest?.Context ?? ResolveContext()).Guides.ReturnGuide(_volumeGuide, dispose);
+        _volumeGuide = null;
     }
 
     private void ResetMovementGroupSession()

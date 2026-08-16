@@ -66,7 +66,7 @@ internal static class HybridRoutePlanner
             request.TargetPosition,
             request,
             out HybridRouteStep? step,
-            out int chartCost))
+            out Fixed64 chartCost))
         {
             return false;
         }
@@ -140,7 +140,7 @@ internal static class HybridRoutePlanner
                 transition.Source.Position,
                 request,
                 out HybridRouteStep? toTransitionStep,
-                out int toTransitionCost))
+                out Fixed64 toTransitionCost))
             {
                 continue;
             }
@@ -150,7 +150,7 @@ internal static class HybridRoutePlanner
                 request.TargetPosition,
                 request,
                 out HybridRouteStep? toTargetStep,
-                out int toTargetCost))
+                out Fixed64 toTargetCost))
             {
                 continue;
             }
@@ -159,11 +159,11 @@ internal static class HybridRoutePlanner
                 new[]
                 {
                     toTransitionStep!,
-                    HybridRouteStep.Waypoint(request.Context, transition.Destination.Position, transition.PathCostModifier),
+                    HybridRouteStep.Waypoint(request.Context, transition.Destination.Position),
                     toTargetStep!
                 },
                 new[] { transition },
-                toTransitionCost + transition.PathCostModifier + toTargetCost);
+                toTransitionCost + (Fixed64)transition.PathCostModifier + toTargetCost);
 
             bestPlan = GetBetterPlan(bestPlan, candidate);
         }
@@ -275,7 +275,7 @@ internal static class HybridRoutePlanner
                 entry.Source.Position,
                 request,
                 out HybridRouteStep? toEntryStep,
-                out int toEntryCost))
+                out Fixed64 toEntryCost))
             {
                 continue;
             }
@@ -289,7 +289,7 @@ internal static class HybridRoutePlanner
                     request,
                     volumeMedium,
                     out HybridRouteStep? volumeStep,
-                    out int volumeCost))
+                    out Fixed64 volumeCost))
                 {
                     continue;
                 }
@@ -299,7 +299,7 @@ internal static class HybridRoutePlanner
                     request.TargetPosition,
                     request,
                     out HybridRouteStep? toTargetStep,
-                    out int toTargetCost))
+                    out Fixed64 toTargetCost))
                 {
                     continue;
                 }
@@ -308,13 +308,13 @@ internal static class HybridRoutePlanner
                     new[]
                     {
                         toEntryStep!,
-                        HybridRouteStep.Waypoint(request.Context, entry.Destination.Position, entry.PathCostModifier),
+                        HybridRouteStep.Waypoint(request.Context, entry.Destination.Position),
                         volumeStep!,
-                        HybridRouteStep.Waypoint(request.Context, exit.Destination.Position, exit.PathCostModifier),
+                        HybridRouteStep.Waypoint(request.Context, exit.Destination.Position),
                         toTargetStep!
                     },
                     new[] { entry, exit },
-                    toEntryCost + entry.PathCostModifier + volumeCost + exit.PathCostModifier + toTargetCost);
+                    toEntryCost + (Fixed64)entry.PathCostModifier + volumeCost + (Fixed64)exit.PathCostModifier + toTargetCost);
 
                 bestPlan = GetBetterPlan(bestPlan, candidate);
             }
@@ -329,41 +329,63 @@ internal static class HybridRoutePlanner
         Vector3d destination,
         HybridPathRequest request,
         [NotNullWhen(true)] out HybridRouteStep? step,
-        out int pathCost)
+        out Fixed64 pathCost)
     {
         step = null;
-        pathCost = 0;
+        pathCost = Fixed64.Zero;
 
-        FlowFieldPathRequest? chartRequest = FlowFieldPathRequest.Create(
-            request.Context,
-            origin,
-            destination,
-            request.UnitSize,
-            request.AllowUnwalkableEndpoints);
-        if (chartRequest == null)
+        if (request.SurfaceIntent is not PathQuery surfaceIntent)
             return false;
 
-        chartRequest.MaxClimbHeight = request.MaxClimbHeight;
-        chartRequest.ExtraFloodRange = request.ExtraFloodRange;
-
-        if (chartRequest.HasZeroDisplacement)
+        PathQuery stageQuery = CreateSurfaceStageQuery(
+            surfaceIntent,
+            origin,
+            destination);
+        if (origin == destination)
         {
             step = HybridRouteStep.Waypoint(request.Context, destination);
             return true;
         }
 
-        FlowFieldSurveyResult surveyResult = request.Context.Pathing.State.GuideState.FlowFieldSurveyor.FindPath(chartRequest);
-        if (!surveyResult.HasPath
-            || surveyResult.Fields == null
-            || chartRequest.StartNode == null
-            || !surveyResult.Fields.TryGetValue(chartRequest.StartNode.WorldIndex, out FlowField startField))
+        NavigationGuideStatus status = request.Context.Guides.RequestFlowField(
+            stageQuery,
+            out NavigationFlowFieldLease? lease);
+        if (status != NavigationGuideStatus.Success || lease == null)
         {
+            lease?.Dispose();
             return false;
         }
 
-        pathCost = startField.PathCost;
-        step = HybridRouteStep.Segment(chartRequest, chartKeys: surveyResult.ChartsUtilized);
+        pathCost = lease.Value.OriginIntegrationCost;
+        lease.Value.Dispose();
+        step = HybridRouteStep.Surface(request.Context, stageQuery);
         return true;
+    }
+
+    private static PathQuery CreateSurfaceStageQuery(
+        PathQuery intent,
+        Vector3d origin,
+        Vector3d destination)
+    {
+        NavigationEndpoint start = origin == intent.Start.Position
+            ? intent.Start
+            : new NavigationEndpoint(origin);
+        NavigationEndpoint end = destination == intent.End.Position
+            ? intent.End
+            : new NavigationEndpoint(destination);
+        return new PathQuery(
+            start,
+            end,
+            intent.Agent,
+            intent.AreaPolicy,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            PathAlgorithm.FlowField,
+            intent.Budget,
+            allowTransitions: false,
+            intent.FlowField);
     }
 
     private static bool TryCreateVolumeStep(
@@ -372,10 +394,10 @@ internal static class HybridRoutePlanner
         HybridPathRequest request,
         TraversalMedium medium,
         [NotNullWhen(true)] out HybridRouteStep? step,
-        out int pathCost)
+        out Fixed64 pathCost)
     {
         step = null;
-        pathCost = 0;
+        pathCost = Fixed64.Zero;
 
         VolumePathRequest? volumeRequest = VolumePathRequest.Create(
             request.Context,
@@ -398,8 +420,8 @@ internal static class HybridRoutePlanner
         if (!surveyResult.HasPath)
             return false;
 
-        pathCost = surveyResult.Waypoints![^1].PathCost;
-        step = HybridRouteStep.Segment(volumeRequest, chartKeys: surveyResult.ChartsUtilized);
+        pathCost = (Fixed64)surveyResult.Waypoints![^1].PathCost;
+        step = HybridRouteStep.Volume(volumeRequest);
         return true;
     }
 
@@ -421,7 +443,7 @@ internal static class HybridRoutePlanner
         if (transitions == null || transitions.Length == 0)
             return null;
 
-        int[] bestCosts = new int[transitions.Length];
+        Fixed64[] bestCosts = new Fixed64[transitions.Length];
         int[] previousIndices = new int[transitions.Length];
         HybridRouteStep?[] entrySteps = new HybridRouteStep?[transitions.Length];
         HybridRouteStep?[] bridgeSteps = new HybridRouteStep?[transitions.Length];
@@ -429,7 +451,7 @@ internal static class HybridRoutePlanner
 
         for (int i = 0; i < transitions.Length; i++)
         {
-            bestCosts[i] = int.MaxValue;
+            bestCosts[i] = Fixed64.MaxValue;
             previousIndices[i] = -1;
 
             if (!TryCreateChartStep(
@@ -437,18 +459,18 @@ internal static class HybridRoutePlanner
                 transitions[i].Source.Position,
                 request,
                 out HybridRouteStep? entryStep,
-                out int entryCost))
+                out Fixed64 entryCost))
             {
                 continue;
             }
 
             entrySteps[i] = entryStep;
-            bestCosts[i] = entryCost + transitions[i].PathCostModifier;
+            bestCosts[i] = entryCost + (Fixed64)transitions[i].PathCostModifier;
         }
 
         int bestEndIndex = -1;
         HybridRouteStep? bestExitStep = null;
-        int bestTotalCost = int.MaxValue;
+        Fixed64 bestTotalCost = Fixed64.MaxValue;
 
         while (true)
         {
@@ -458,16 +480,16 @@ internal static class HybridRoutePlanner
 
             visited[currentIndex] = true;
             TraversalTransition currentTransition = transitions[currentIndex];
-            int currentCost = bestCosts[currentIndex];
+            Fixed64 currentCost = bestCosts[currentIndex];
 
             if (TryCreateChartStep(
                 currentTransition.Destination.Position,
                 request.TargetPosition,
                 request,
                 out HybridRouteStep? exitStep,
-                out int exitCost))
+                out Fixed64 exitCost))
             {
-                int totalCost = currentCost + exitCost;
+                Fixed64 totalCost = currentCost + exitCost;
                 if (totalCost < bestTotalCost)
                 {
                     bestTotalCost = totalCost;
@@ -482,7 +504,7 @@ internal static class HybridRoutePlanner
                     continue;
 
                 HybridRouteStep? bridgeStep = null;
-                int bridgeCost = 0;
+                Fixed64 bridgeCost = Fixed64.Zero;
                 if (transitions[nextIndex].Source.Position != currentTransition.Destination.Position
                     && !TryCreateChartStep(
                         currentTransition.Destination.Position,
@@ -494,7 +516,7 @@ internal static class HybridRoutePlanner
                     continue;
                 }
 
-                int candidateCost = currentCost + bridgeCost + transitions[nextIndex].PathCostModifier;
+                Fixed64 candidateCost = currentCost + bridgeCost + (Fixed64)transitions[nextIndex].PathCostModifier;
                 if (candidateCost >= bestCosts[nextIndex])
                     continue;
 
@@ -595,10 +617,10 @@ internal static class HybridRoutePlanner
         }
     }
 
-    private static int GetCheapestUnvisitedTransition(int[] bestCosts, bool[] visited)
+    private static int GetCheapestUnvisitedTransition(Fixed64[] bestCosts, bool[] visited)
     {
         int bestIndex = -1;
-        int bestCost = int.MaxValue;
+        Fixed64 bestCost = Fixed64.MaxValue;
         for (int i = 0; i < bestCosts.Length; i++)
         {
             if (visited[i] || bestCosts[i] >= bestCost)
@@ -619,7 +641,7 @@ internal static class HybridRoutePlanner
         HybridRouteStep?[] bridgeSteps,
         int endIndex,
         HybridRouteStep exitStep,
-        int totalCost)
+        Fixed64 totalCost)
     {
         SwiftList<int> reversedTransitionIndices = new();
         for (int index = endIndex; index >= 0; index = previousIndices[index])
@@ -644,8 +666,7 @@ internal static class HybridRoutePlanner
 
             steps.Add(HybridRouteStep.Waypoint(
                 context,
-                transition.Destination.Position,
-                transition.PathCostModifier));
+                transition.Destination.Position));
             orderedIndex++;
         }
 

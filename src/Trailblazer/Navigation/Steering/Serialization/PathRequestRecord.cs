@@ -15,7 +15,6 @@ namespace Trailblazer.Navigation.Steering;
 internal enum PathRequestRecordKind
 {
     None = 0,
-    FlowField = 2,
     Volume = 3
 }
 
@@ -36,15 +35,9 @@ internal sealed class PathRequestRecord : IRecordable
 
     public bool AllowUnwalkableEndpoints;
 
-    public bool AllowTraversalTransitions;
-
     public int MaxPathSearchRange;
 
-    public Fixed64 MaxClimbHeight = Fixed64.One;
-
     public HeuristicMethod VolumeHeuristic = HeuristicMethod.Manhattan;
-
-    public int FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
     public TraversalMedium Medium = TraversalMedium.Gas;
 
@@ -67,13 +60,6 @@ internal sealed class PathRequestRecord : IRecordable
 
         switch (request)
         {
-            case FlowFieldPathRequest flowField:
-                Kind = PathRequestRecordKind.FlowField;
-                AllowTraversalTransitions = flowField.AllowTraversalTransitions;
-                MaxClimbHeight = flowField.MaxClimbHeight;
-                FlowFieldExtraFloodRange = flowField.ExtraFloodRange;
-                break;
-
             case VolumePathRequest volume:
                 Kind = PathRequestRecordKind.Volume;
                 VolumeHeuristic = volume.Heuristic;
@@ -99,24 +85,8 @@ internal sealed class PathRequestRecord : IRecordable
             case PathRequestRecordKind.None:
                 return true;
 
-            case PathRequestRecordKind.FlowField:
-                FlowFieldPathRequest? flowField = FlowFieldPathRequest.Create(
-                    context,
-                    Origin,
-                    TargetPosition,
-                    UnitSize,
-                    AllowUnwalkableEndpoints,
-                    AllowTraversalTransitions);
-                if (flowField == null)
-                    return false;
-
-                flowField.MaxClimbHeight = MaxClimbHeight;
-                flowField.ExtraFloodRange = FlowFieldExtraFloodRange;
-                if (MaxPathSearchRange > 0)
-                    flowField.MaxPathSearchRange = MaxPathSearchRange;
-
-                request = flowField;
-                return true;
+            case (PathRequestRecordKind)2:
+                return false;
 
             case PathRequestRecordKind.Volume:
                 VolumePathRequest? volume = VolumePathRequest.Create(
@@ -141,17 +111,18 @@ internal sealed class PathRequestRecord : IRecordable
         }
     }
 
-    public bool TryCreateGuide(IPathRequest? request, out IGuide? guide)
+    public bool TryCreateGuide(IPathRequest? request, out VolumeGuide? guide)
     {
         guide = null;
         if (!HasGuide || request == null)
             return false;
 
-        if (!request.Context.Guides.RequestGuide(request, out guide) || guide == null)
+        if (!request.Context.Guides.RequestGuide(request, out VolumeGuide? volumeGuide)
+            || volumeGuide == null)
             return false;
 
-        if (guide is VolumeGuide volumeGuide)
-            RestoreWaypointIndex(volumeGuide);
+        guide = volumeGuide;
+        RestoreWaypointIndex(volumeGuide);
         return true;
     }
 
@@ -162,11 +133,8 @@ internal sealed class PathRequestRecord : IRecordable
         TargetPosition = Vector3d.Zero;
         UnitSize = Fixed64.One;
         AllowUnwalkableEndpoints = false;
-        AllowTraversalTransitions = false;
         MaxPathSearchRange = 0;
-        MaxClimbHeight = Fixed64.One;
         VolumeHeuristic = HeuristicMethod.Manhattan;
-        FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
         Medium = TraversalMedium.Gas;
         HasGuide = false;
         WaypointIndex = NoWaypointIndex;
@@ -179,11 +147,8 @@ internal sealed class PathRequestRecord : IRecordable
         RecordValues.Look(chronicler, ref TargetPosition, "TargetPosition", Vector3d.Zero);
         RecordValues.Look(chronicler, ref UnitSize, "UnitSize", Fixed64.One);
         RecordValues.Look(chronicler, ref AllowUnwalkableEndpoints, "AllowUnwalkableEndpoints", false);
-        RecordValues.Look(chronicler, ref AllowTraversalTransitions, "AllowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref MaxPathSearchRange, "MaxPathSearchRange", 0);
-        RecordValues.Look(chronicler, ref MaxClimbHeight, "MaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref VolumeHeuristic, "AStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref FlowFieldExtraFloodRange, "FlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref Medium, "Medium", TraversalMedium.Gas);
         RecordValues.Look(chronicler, ref HasGuide, "HasGuide", false);
         RecordValues.Look(chronicler, ref WaypointIndex, "WaypointIndex", NoWaypointIndex);

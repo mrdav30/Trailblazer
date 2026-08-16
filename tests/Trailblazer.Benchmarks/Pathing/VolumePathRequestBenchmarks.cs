@@ -19,6 +19,7 @@ namespace Trailblazer.Benchmarks.Pathing;
 [BenchmarkCategory("Pathing", "Volume")]
 public class VolumePathRequestBenchmarks
 {
+    private readonly VolumeSurveyor _volumeSurveyor = new();
     private static readonly Vector3d DirectCorridorOffset = Vector3d.Zero;
     private static readonly Vector3d LShapeOffset = new(16, 0, 0);
 
@@ -98,7 +99,7 @@ public class VolumePathRequestBenchmarks
                 "Preflight: Volume direct corridor request could not be created.");
 
         // Validate the survey finds a route.
-        VolumeSurveyResult check = VolumeSurveyor.Shared.FindPath(_directCorridorRequest);
+        VolumeSurveyResult check = _volumeSurveyor.FindPath(_directCorridorRequest);
         if (!check.HasPath)
             throw new System.InvalidOperationException(
                 "Preflight: VolumeSurveyor found no path for the direct gas corridor.");
@@ -141,7 +142,7 @@ public class VolumePathRequestBenchmarks
             throw new System.InvalidOperationException(
                 "Preflight: Volume L-shape request could not be created.");
 
-        VolumeSurveyResult check = VolumeSurveyor.Shared.FindPath(_lShapeRequest);
+        VolumeSurveyResult check = _volumeSurveyor.FindPath(_lShapeRequest);
         if (!check.HasPath)
             throw new System.InvalidOperationException(
                 "Preflight: VolumeSurveyor found no path for the L-shape gas path.");
@@ -159,9 +160,9 @@ public class VolumePathRequestBenchmarks
         BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
     }
 
-    private static void EnsureVolumeSurveyResolves(VolumePathRequest request, string requestName)
+    private void EnsureVolumeSurveyResolves(VolumePathRequest request, string requestName)
     {
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = _volumeSurveyor.FindPath(request);
         if (!result.HasPath)
             throw new System.InvalidOperationException(
                 $"Preflight: raw volume survey for {requestName} failed after all volume benchmark charts were configured.");
@@ -208,7 +209,7 @@ public class VolumePathRequestBenchmarks
     [BenchmarkCategory("Pathing", "Volume", "Raw")]
     public bool RawSurvey_DirectGasCorridor()
     {
-        return VolumeSurveyor.Shared.FindPath(_directCorridorRequest).HasPath;
+        return _volumeSurveyor.FindPath(_directCorridorRequest).HasPath;
     }
 
     // -------------------------------------------------------------------------

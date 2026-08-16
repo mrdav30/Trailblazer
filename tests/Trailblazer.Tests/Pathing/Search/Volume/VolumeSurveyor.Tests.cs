@@ -14,6 +14,7 @@ namespace Trailblazer.Tests.Pathing;
 [Collection("PathingCollection")]
 public sealed class VolumeSurveyorTests : IDisposable
 {
+    private static VolumeSurveyor Surveyor => TestWorld.Context.Pathing.State.GuideState.VolumeSurveyor;
     public VolumeSurveyorTests()
     {
         TestWorld.Setup();
@@ -33,16 +34,16 @@ public sealed class VolumeSurveyorTests : IDisposable
     [Fact]
     public void FindPath_ShouldReturnEmpty_ForNullZeroDisplacementAndInvalidRequests()
     {
-        VolumeSurveyor.Shared.FindPath(null!).HasPath.Should().BeFalse();
+        Surveyor.FindPath(null!).HasPath.Should().BeFalse();
 
         GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
 
         VolumePathRequest sameVoxel = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero, Vector3d.Zero, Fixed64.One));
-        VolumeSurveyor.Shared.FindPath(sameVoxel).HasPath.Should().BeFalse();
+        Surveyor.FindPath(sameVoxel).HasPath.Should().BeFalse();
 
         VolumePathRequest invalid = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero, Vector3d.Zero, Fixed64.One));
         invalid.UpdateRequest(new Vector3d(64, 0, 0), Vector3d.Zero, Fixed64.One).Should().BeFalse();
-        VolumeSurveyor.Shared.FindPath(invalid).HasPath.Should().BeFalse();
+        Surveyor.FindPath(invalid).HasPath.Should().BeFalse();
     }
 
     [Fact]
@@ -55,7 +56,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
 
         result.HasPath.Should().BeFalse();
         result.Waypoints.Should().BeNull();
@@ -71,7 +72,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             new Vector3d(1, 0, 1),
             Fixed64.One));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
 
         result.HasPath.Should().BeFalse();
         result.Waypoints.Should().BeNull();
@@ -89,7 +90,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
 
         result.HasPath.Should().BeTrue();
         Assert.NotNull(result.Waypoints);
@@ -120,7 +121,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
 
         result.HasPath.Should().BeTrue();
         Assert.NotNull(result.Waypoints);
@@ -143,7 +144,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
 
         result.HasPath.Should().BeTrue();
         // Chart keys from the VolumeChartPartition owners must make it into the result.
@@ -165,7 +166,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             allowUnwalkableEndpoints: true,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
         AStarWaypoint[] waypoints = TestRequire.NotNull(result.Waypoints);
 
         result.HasPath.Should().BeTrue();
@@ -195,7 +196,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
 
         result.HasPath.Should().BeTrue();
         // The 5-voxel straight-line path: start + first inner (lastDir=Zero differs from dir) + end = 3 waypoints.
@@ -229,7 +230,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             allowUnwalkableEndpoints: true,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
 
         result.HasPath.Should().BeTrue();
         result.ChartsUtilized.Should().Contain("SolidVolumeOwners");
@@ -336,7 +337,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
         AStarWaypoint[] waypoints = TestRequire.NotNull(result.Waypoints);
 
         result.HasPath.Should().BeTrue();
@@ -375,14 +376,14 @@ public sealed class VolumeSurveyorTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        VolumeSurveyor.Shared.FindPath(request).HasPath.Should().BeTrue();
+        Surveyor.FindPath(request).HasPath.Should().BeTrue();
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
         long before = GC.GetAllocatedBytesForCurrentThread();
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         result.HasPath.Should().BeTrue();

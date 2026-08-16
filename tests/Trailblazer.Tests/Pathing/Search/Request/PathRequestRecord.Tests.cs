@@ -13,9 +13,20 @@ namespace Trailblazer.Tests.Navigation.Steering;
 public sealed class PathRequestRecordTests : IDisposable
 {
     [Fact]
-    public void FlowFieldKind_ShouldRetainLegacyWireValueUntilTaskEight()
+    public void RawLegacyFlowKind_ShouldBeUnnamedAndRejectedBeforeRequestCreation()
     {
-        ((int)PathRequestRecordKind.FlowField).Should().Be(2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "RetiredFlowRecord", Vector3d.Zero, 2);
+        var record = new PathRequestRecord
+        {
+            Kind = (PathRequestRecordKind)2,
+            Origin = Vector3d.Zero,
+            TargetPosition = Vector3d.Right,
+            UnitSize = Fixed64.One
+        };
+
+        Enum.GetNames(typeof(PathRequestRecordKind)).Should().NotContain("FlowField");
+        record.TryCreateRequest(TestWorld.Context, out IPathRequest? request).Should().BeFalse();
+        request.Should().BeNull();
     }
 
     public PathRequestRecordTests()
@@ -35,49 +46,6 @@ public sealed class PathRequestRecordTests : IDisposable
         PathManager.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
-    }
-
-    [Fact]
-    public void TryCreateRequest_ShouldRoundTripSupportedRequestKinds()
-    {
-        PathTestFactory.RegisterLineChart(TestWorld.Context, "PathRecordSolid", Vector3d.Zero, 5);
-        PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 2), TraversalMedium.Gas, 5, "PathRecordGas");
-
-        FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(4, 0, 0),
-            Fixed64.One,
-            allowUnwalkableEndpoints: true,
-            allowTraversalTransitions: true));
-        flowField.MaxClimbHeight = (Fixed64)2;
-        flowField.ExtraFloodRange = 21;
-        flowField.MaxPathSearchRange = 13;
-
-        VolumePathRequest volume = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
-            new Vector3d(4, 0, 2),
-            Fixed64.One,
-            HeuristicMethod.Manhattan,
-            allowUnwalkableEndpoints: true,
-            medium: TraversalMedium.Gas));
-        volume.MaxPathSearchRange = 9;
-
-        AssertRoundTrip(flowField, PathRequestRecordKind.FlowField, recreated =>
-        {
-            FlowFieldPathRequest recreatedFlowField = Assert.IsType<FlowFieldPathRequest>(recreated);
-            recreatedFlowField.AllowTraversalTransitions.Should().BeTrue();
-            recreatedFlowField.AllowUnwalkableEndpoints.Should().BeTrue();
-            recreatedFlowField.MaxClimbHeight.Should().Be((Fixed64)2);
-            recreatedFlowField.ExtraFloodRange.Should().Be(21);
-            recreatedFlowField.MaxPathSearchRange.Should().Be(13);
-        });
-
-        AssertRoundTrip(volume, PathRequestRecordKind.Volume, recreated =>
-        {
-            VolumePathRequest recreatedVolume = Assert.IsType<VolumePathRequest>(recreated);
-            recreatedVolume.AllowUnwalkableEndpoints.Should().BeTrue();
-            recreatedVolume.Heuristic.Should().Be(HeuristicMethod.Manhattan);
-            recreatedVolume.Medium.Should().Be(TraversalMedium.Gas);
-            recreatedVolume.MaxPathSearchRange.Should().Be(9);
-        });
     }
 
     [Theory]
@@ -137,38 +105,6 @@ public sealed class PathRequestRecordTests : IDisposable
     }
 
     [Fact]
-    public void ResetAndEdgeCases_ShouldClearRecord_AndRejectUnsupportedCapture()
-    {
-        PathRequestRecord record = new();
-
-        record.TryCreateRequest(TestWorld.Context, out IPathRequest? emptyRequest).Should().BeTrue();
-        emptyRequest.Should().BeNull();
-        record.TryCreateGuide(null, out IGuide? emptyGuide).Should().BeFalse();
-        emptyGuide.Should().BeNull();
-
-        PathTestFactory.RegisterLineChart(TestWorld.Context, "PathRecordUnsupported", Vector3d.Zero, 2);
-        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
-
-        Action captureUnsupported = () => record.Capture(new UnsupportedRequest(start, end), null);
-        captureUnsupported.Should().Throw<NotSupportedException>();
-
-        FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            TestWorld.Context,
-            Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One));
-        record.Capture(flowField, null);
-        record.Reset();
-
-        record.Kind.Should().Be(PathRequestRecordKind.None);
-        record.TargetPosition.Should().Be(Vector3d.Zero);
-        record.MaxPathSearchRange.Should().Be(0);
-        record.HasGuide.Should().BeFalse();
-        record.WaypointIndex.Should().Be(-1);
-    }
-
-    [Fact]
     public void TryCreateRequest_ShouldRejectUnsupportedKinds_AndFailedRecreationPaths()
     {
         PathRequestRecord record = new();
@@ -185,7 +121,7 @@ public sealed class PathRequestRecordTests : IDisposable
         retiredAStar.Should().BeNull();
 
         record.Reset();
-        record.Kind = PathRequestRecordKind.FlowField;
+        record.Kind = (PathRequestRecordKind)2;
         record.Origin = new Vector3d(-20, 0, 0);
         record.TargetPosition = new Vector3d(-18, 0, 0);
         record.TryCreateRequest(TestWorld.Context, out IPathRequest? failedFlowField).Should().BeFalse();
@@ -205,43 +141,6 @@ public sealed class PathRequestRecordTests : IDisposable
         record.TargetPosition = new Vector3d(4, 0, 0);
         record.TryCreateRequest(TestWorld.Context, out IPathRequest? retiredHybrid).Should().BeFalse();
         retiredHybrid.Should().BeNull();
-    }
-
-    [Fact]
-    public void TryCreateGuide_ShouldReturnFalse_WhenGuideCannotBeRecreated()
-    {
-        PathTestFactory.RegisterLineChart(TestWorld.Context, "PathRecordFlowField", new Vector3d(0, 4, 0), 3);
-
-        FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, new Vector3d(0, 4, 0),
-            new Vector3d(2, 4, 0),
-            Fixed64.One));
-
-        FlowFieldGuide flowGuide = TestRequire.Created(
-            PathGuideFactory.RequestGuide(flowField, out FlowFieldGuide? createdFlowGuide),
-            createdFlowGuide);
-        PathRequestRecord flowRecord = new();
-        flowRecord.Capture(flowField, flowGuide);
-        IGuide recreatedFlowGuide = TestRequire.Created(
-            flowRecord.TryCreateGuide(flowField, out IGuide? createdRecreatedFlowGuide),
-            createdRecreatedFlowGuide);
-        recreatedFlowGuide.Should().BeOfType<FlowFieldGuide>();
-
-        PathGuideFactory.ReturnGuide(recreatedFlowGuide, dispose: true);
-        PathGuideFactory.ReturnGuide(flowGuide, dispose: true);
-
-        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "PathRecordDisconnectedStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "PathRecordDisconnectedEnd", new Vector3d(4, 0, 0));
-
-        PathRequestRecord failureRecord = new()
-        {
-            HasGuide = true
-        };
-        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(4, 0, 0));
-        var disconnected = new UnsupportedRequest(start, end);
-
-        failureRecord.TryCreateGuide(disconnected, out IGuide? failedGuide).Should().BeFalse();
-        failedGuide.Should().BeNull();
     }
 
     private static void AssertRoundTrip(
@@ -269,8 +168,8 @@ public sealed class PathRequestRecordTests : IDisposable
 
         record.TryCreateRequest(TestWorld.Context, out IPathRequest? recreatedRequest).Should().BeTrue();
         IPathRequest restoredRequest = TestRequire.NotNull(recreatedRequest);
-        IGuide recreatedGuide = TestRequire.Created(
-            record.TryCreateGuide(restoredRequest, out IGuide? createdRecreatedGuide),
+        VolumeGuide recreatedGuide = TestRequire.Created(
+            record.TryCreateGuide(restoredRequest, out VolumeGuide? createdRecreatedGuide),
             createdRecreatedGuide);
         recreatedGuide.Should().BeAssignableTo<IWaypointGuide>()
             .Which.CurrentWaypointIndex.Should().Be(expectedWaypointIndex);

@@ -196,66 +196,6 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
     }
 
     [Fact]
-    public void PathingReset_ShouldClearOnlyOwningPathingState()
-    {
-        typeof(TrailblazerPathingService)
-            .GetMethod(nameof(TrailblazerPathingService.Reset), BindingFlags.Instance | BindingFlags.Public)
-            .Should()
-            .NotBeNull("context.Pathing.Reset() is the host-facing pathing teardown API");
-
-        using TrailblazerWorldContext contextA = PathTestFactory.CreateContextWithGrid();
-        using TrailblazerWorldContext contextB = PathTestFactory.CreateContextWithGrid();
-        PathTestFactory.RegisterSolidLine(contextA, "LifecycleResetChartA", Vector3d.Zero, 2);
-        PathTestFactory.RegisterSolidLine(contextB, "LifecycleResetChartB", Vector3d.Zero, 2);
-        contextA.Transitions.Register(PathTestFactory.CreateJumpTransition(contextA, "lifecycle-reset-transition-a", Vector3d.Zero, new Vector3d(1, 0, 0)))
-            .Should()
-            .BeTrue();
-        contextB.Transitions.Register(PathTestFactory.CreateJumpTransition(contextB, "lifecycle-reset-transition-b", Vector3d.Zero, new Vector3d(1, 0, 0)))
-            .Should()
-            .BeTrue();
-        contextA.VolumeRules.SetGasVoxelRule(static _ => true);
-        contextB.VolumeRules.SetGasVoxelRule(static _ => true);
-        FlowFieldPathRequest requestA = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            contextA, Vector3d.Zero, Vector3d.Right, Fixed64.One));
-        FlowFieldPathRequest requestB = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            contextB, Vector3d.Zero, Vector3d.Right, Fixed64.One));
-        contextA.Guides.RequestGuide(requestA, out FlowFieldGuide? guideA).Should().BeTrue();
-        contextB.Guides.RequestGuide(requestB, out FlowFieldGuide? guideB).Should().BeTrue();
-        contextA.Guides.ReturnGuide(guideA);
-        contextB.Guides.ReturnGuide(guideB);
-
-        contextA.Pathing.Reset();
-
-        contextA.Pathing.IsChartRegistered("LifecycleResetChartA").Should().BeFalse();
-        contextA.Transitions.IsRegistered("lifecycle-reset-transition-a").Should().BeFalse();
-        contextA.VolumeRules.HasGasVoxelRule.Should().BeFalse();
-        contextA.Guides.TotalFlowGuideCount.Should().Be(0);
-
-        contextB.Pathing.IsChartRegistered("LifecycleResetChartB").Should().BeTrue();
-        contextB.Transitions.IsRegistered("lifecycle-reset-transition-b").Should().BeTrue();
-        contextB.VolumeRules.HasGasVoxelRule.Should().BeTrue();
-        contextB.Guides.TotalFlowGuideCount.Should().Be(1);
-    }
-
-    [Fact]
-    public void Dispose_ShouldDisposePathingStateAndGuideCachesIdempotently()
-    {
-        TrailblazerWorldContext context = PathTestFactory.CreateContextWithGrid();
-        PathingWorldState state = context.Pathing.State;
-
-        context.Dispose();
-        context.Dispose();
-
-        Action chartLockUse = () => state.NavigationChartMapLock.EnterReadLock();
-        Action transitionLockUse = () => state.TransitionRegistryState.TransitionLock.EnterReadLock();
-        Action guideCacheUse = () => state.GuideState.CachedFlowResults.InvalidateAll();
-
-        chartLockUse.Should().Throw<ObjectDisposedException>();
-        transitionLockUse.Should().Throw<ObjectDisposedException>();
-        guideCacheUse.Should().Throw<ObjectDisposedException>();
-    }
-
-    [Fact]
     public void GetFrameFromTime_ShouldUseCurrentInverseDeltaTime()
     {
         TestWorld.Setup();

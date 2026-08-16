@@ -12,6 +12,7 @@ namespace Trailblazer.Tests.Pathing;
 [Collection("PathingCollection")]
 public sealed class SurveyorLockTests : IDisposable
 {
+    private static VolumeSurveyor Surveyor => TestWorld.Context.Pathing.State.GuideState.VolumeSurveyor;
     public SurveyorLockTests()
     {
         TestWorld.Setup();
@@ -27,18 +28,15 @@ public sealed class SurveyorLockTests : IDisposable
     }
 
     [Fact]
-    public void Surveyors_ShouldUseIndependentScratchLocks_InsteadOfGlobalLock()
+    public void VolumeSurveyor_ShouldUseItsOwnScratchLock_InsteadOfGlobalLock()
     {
         typeof(SurveyorLock)
             .GetField("GlobalLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Should().BeNull();
 
-        object? flowFieldLock = GetScratchLock(FlowFieldSurveyor.Shared);
-        object? volumeLock = GetScratchLock(VolumeSurveyor.Shared);
+        object? volumeLock = GetScratchLock(Surveyor);
 
-        flowFieldLock?.GetType().Name.Should().Be(nameof(SurveyorLock));
         volumeLock?.GetType().Name.Should().Be(nameof(SurveyorLock));
-        flowFieldLock.Should().NotBeSameAs(volumeLock);
     }
 
     [Fact]
@@ -52,25 +50,15 @@ public sealed class SurveyorLockTests : IDisposable
         NavigationChart chart = NavigationChart.From3D("ConcurrentSurveyors", data, Vector3d.Zero, Fixed64.One);
         PathManager.Register(chart);
 
-        FlowFieldPathRequest flowFieldRequest = TestRequire.Created(
-            FlowFieldPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(7, 0, 7), out FlowFieldPathRequest? createdFlowField),
-            createdFlowField);
         VolumePathRequest volumeRequest = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(7, 0, 7),
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        Task<FlowFieldSurveyResult[]> flowFieldTask = Task.Run(() => RunFlowField(flowFieldRequest));
         Task<VolumeSurveyResult[]> volumeTask = Task.Run(() => RunVolume(volumeRequest));
 
-        FlowFieldSurveyResult[] flowFieldResults = await flowFieldTask;
         VolumeSurveyResult[] volumeResults = await volumeTask;
 
-        flowFieldResults.Should().AllSatisfy(result =>
-        {
-            result.HasPath.Should().BeTrue();
-            TestRequire.NotNull(result.Fields).Count.Should().Be(64);
-        });
         volumeResults.Should().AllSatisfy(result =>
         {
             result.HasPath.Should().BeTrue();
@@ -89,20 +77,11 @@ public sealed class SurveyorLockTests : IDisposable
             ?.GetValue(surveyor);
     }
 
-    private static FlowFieldSurveyResult[] RunFlowField(FlowFieldPathRequest request)
-    {
-        var results = new FlowFieldSurveyResult[8];
-        for (int i = 0; i < results.Length; i++)
-            results[i] = FlowFieldSurveyor.Shared.FindPath(request);
-
-        return results;
-    }
-
     private static VolumeSurveyResult[] RunVolume(VolumePathRequest request)
     {
         var results = new VolumeSurveyResult[8];
         for (int i = 0; i < results.Length; i++)
-            results[i] = VolumeSurveyor.Shared.FindPath(request);
+            results[i] = Surveyor.FindPath(request);
 
         return results;
     }

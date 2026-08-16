@@ -124,7 +124,7 @@ internal sealed class PathQueryRecord : IRecordable
             || StartDomain != TraversalDomain.Surface
             || TargetDomain != TraversalDomain.Surface
             || CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid
-            || AllowTransitions
+            || (AllowTransitions && Algorithm != PathAlgorithm.FlowField)
             || string.IsNullOrWhiteSpace(AreaPolicyId)
             || !Agent.TryCreate(out NavigationAgentProfile profile))
         {

@@ -16,9 +16,9 @@ namespace Trailblazer.Pathing;
 public sealed class VolumeGuide : IWaypointGuide
 {
     /// <summary>
-    /// Gets the trail map result for the volume survey, if available.
+    /// Gets the volume survey result, if available.
     /// </summary>
-    public VolumeSurveyResult? TrailMap { get; private set; }
+    public VolumeSurveyResult? VolumeResult { get; private set; }
 
     /// <inheritdoc/>
     public int CurrentWaypointIndex { get; private set; }
@@ -28,8 +28,8 @@ public sealed class VolumeGuide : IWaypointGuide
     /// <summary>
     /// Gets the collection of currently active waypoints used for pathfinding.
     /// </summary>
-    /// <remarks>Returns an empty array if no trail map is available or if there are no active waypoints.</remarks>
-    internal AStarWaypoint[] ActiveWaypoints => TrailMap?.Waypoints ?? Array.Empty<AStarWaypoint>();
+    /// <remarks>Returns an empty array if no volume result is available or if there are no active waypoints.</remarks>
+    internal AStarWaypoint[] ActiveWaypoints => VolumeResult?.Waypoints ?? Array.Empty<AStarWaypoint>();
 
     /// <summary>
     /// Initializes the navigation state using the specified survey result.
@@ -42,7 +42,7 @@ public sealed class VolumeGuide : IWaypointGuide
             return false;
 
         AStarWaypoint[] waypoints = surveyResult.Waypoints!;
-        TrailMap = surveyResult;
+        VolumeResult = surveyResult;
         CurrentWaypointIndex = waypoints.Length > 1 ? 1 : 0;
         _lastTriedIndex = CurrentWaypointIndex;
         return true;
@@ -77,7 +77,7 @@ public sealed class VolumeGuide : IWaypointGuide
     {
         direction = Vector3d.Zero;
 
-        if (TrailMap == null || !TrailMap.HasPath)
+        if (VolumeResult == null || !VolumeResult.HasPath)
             return false;
 
         int closestIndex = GetIndex(origin);
@@ -91,8 +91,8 @@ public sealed class VolumeGuide : IWaypointGuide
     /// <inheritdoc/>
     public Vector3d GetCurrentWaypointDirection(Vector3d origin)
     {
-        if (TrailMap == null
-            || !TrailMap.HasPath
+        if (VolumeResult == null
+            || !VolumeResult.HasPath
             || CurrentWaypointIndex < 0
             || CurrentWaypointIndex >= ActiveWaypoints.Length)
         {
@@ -111,7 +111,7 @@ public sealed class VolumeGuide : IWaypointGuide
     {
         fallbackDirection = Vector3d.Zero;
 
-        if (TrailMap == null || ActiveWaypoints.Length == 0)
+        if (VolumeResult == null || ActiveWaypoints.Length == 0)
             return false;
 
         int searchStart = FixedMath.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
@@ -139,7 +139,7 @@ public sealed class VolumeGuide : IWaypointGuide
     /// <summary>
     /// Attempts to retrieve the waypoint at the specified index in the active waypoints collection.
     /// </summary>
-    /// <remarks>Returns false if the trail map is null, does not have a path, or if the index is out of range.</remarks>
+    /// <remarks>Returns false if the volume result is null, has no path, or the index is out of range.</remarks>
     /// <param name="index">The zero-based index of the waypoint to retrieve. Must be within the bounds of the active waypoints collection.</param>
     /// <param name="waypoint">
     /// When this method returns, contains the waypoint at the specified index if the operation succeeds; otherwise,
@@ -148,7 +148,7 @@ public sealed class VolumeGuide : IWaypointGuide
     /// <returns>true if the waypoint at the specified index was successfully retrieved; otherwise, false.</returns>
     internal bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
     {
-        if (TrailMap == null || !TrailMap.HasPath || index < 0 || index >= ActiveWaypoints.Length)
+        if (VolumeResult == null || !VolumeResult.HasPath || index < 0 || index >= ActiveWaypoints.Length)
         {
             waypoint = default;
             return false;
@@ -160,7 +160,7 @@ public sealed class VolumeGuide : IWaypointGuide
 
     internal void ResetForReuse()
     {
-        TrailMap = null;
+        VolumeResult = null;
         CurrentWaypointIndex = 0;
         _lastTriedIndex = 0;
     }

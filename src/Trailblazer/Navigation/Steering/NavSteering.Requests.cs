@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // NavSteering.Requests.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -97,16 +97,6 @@ public partial class NavSteering
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PauseAutoStop() => _autoStopFrameCount = AutoPauseStopTimeForContext;
-
-    /// <summary>
-    /// Replaces the current guide used for guided steering.
-    /// </summary>
-    /// <param name="guide">The guide to follow, or <c>null</c> to clear guided movement.</param>
-    public void SetTrailGuide(IGuide? guide)
-    {
-        _trailGuide = guide;
-        _shouldRequestPathThisFrame = _trailGuide != null;
-    }
 
     /// <summary>
     /// Assigns this steering session to a movement group.

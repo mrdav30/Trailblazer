@@ -12,44 +12,54 @@ namespace Trailblazer.Pathing;
 
 internal sealed class HybridRouteStep
 {
-    public HybridRouteStepKind Kind { get; private set; }
+    public PathQuery? SurfaceQuery { get; private set; }
 
-    public IPathRequest SegmentRequest { get; private set; } = null!;
+    public VolumePathRequest? VolumeRequest { get; private set; }
 
     public TrailblazerWorldContext Context { get; private set; } = null!;
 
     public Vector3d WaypointPosition { get; private set; }
 
-    public int AdditionalCost { get; private set; }
-
-    public string[] SegmentChartKeys { get; private set; } = Array.Empty<string>();
-
     private HybridRouteStep() { }
 
-    public static HybridRouteStep Segment(
-        IPathRequest request,
-        int additionalCost = 0,
-        string[]? chartKeys = null) => new()
+    public static HybridRouteStep Surface(
+        TrailblazerWorldContext context,
+        PathQuery query)
+    {
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        if (query.Algorithm != PathAlgorithm.FlowField
+            || query.AllowTransitions
+            || query.Traversal.StartDomain != TraversalDomain.Surface
+            || query.Traversal.TargetDomain != TraversalDomain.Surface
+            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
         {
-            Kind = HybridRouteStepKind.PathSegment,
-            SegmentRequest = request,
+            throw new ArgumentException(
+                "Hybrid surface stages require a transition-disabled graph Flow query.",
+                nameof(query));
+        }
+
+        return new HybridRouteStep
+        {
+            Context = context,
+            SurfaceQuery = query
+        };
+    }
+
+    public static HybridRouteStep Volume(VolumePathRequest request) => new()
+        {
             Context = request.Context,
-            AdditionalCost = additionalCost,
-            SegmentChartKeys = chartKeys ?? Array.Empty<string>()
+            VolumeRequest = request
         };
 
     public static HybridRouteStep Waypoint(
         TrailblazerWorldContext context,
-        Vector3d position,
-        int additionalCost = 0)
+        Vector3d position)
     {
         PathRequestContextResolver.ThrowIfUnusable(context);
         return new()
         {
-            Kind = HybridRouteStepKind.Waypoint,
             Context = context,
-            WaypointPosition = position,
-            AdditionalCost = additionalCost
+            WaypointPosition = position
         };
     }
 }

@@ -11,6 +11,7 @@ namespace Trailblazer.Tests.Pathing;
 [Collection("PathingCollection")]
 public class AerialSurveyorTests : IDisposable
 {
+    private static VolumeSurveyor Surveyor => TestWorld.Context.Pathing.State.GuideState.VolumeSurveyor;
     public AerialSurveyorTests()
     {
         TestWorld.Setup();
@@ -40,7 +41,7 @@ public class AerialSurveyorTests : IDisposable
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
         var waypoints = TestRequire.NotNull(result.Waypoints);
         Voxel startNode = TestRequire.NotNull(request.StartNode);
         Voxel endNode = TestRequire.NotNull(request.EndNode);
@@ -70,7 +71,7 @@ public class AerialSurveyorTests : IDisposable
             PathGuideFactory.RequestGuide(request, out VolumeGuide? createdGuide),
             createdGuide);
 
-        VolumeSurveyResult trailMap = TestRequire.NotNull(guide.TrailMap);
+        VolumeSurveyResult trailMap = TestRequire.NotNull(guide.VolumeResult);
         trailMap.HasPath.Should().BeTrue();
         guide.CurrentWaypointIndex.Should().BeGreaterThan(0);
     }
@@ -91,7 +92,7 @@ public class AerialSurveyorTests : IDisposable
             Fixed64.One,
             medium: TraversalMedium.Liquid));
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = Surveyor.FindPath(request);
         var waypoints = TestRequire.NotNull(result.Waypoints);
         Voxel startNode = TestRequire.NotNull(request.StartNode);
         Voxel endNode = TestRequire.NotNull(request.EndNode);

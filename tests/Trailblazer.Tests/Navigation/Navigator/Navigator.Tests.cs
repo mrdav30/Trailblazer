@@ -86,7 +86,6 @@ public class NavigatorTests : IDisposable
 
     [Theory]
     [InlineData("start")]
-    [InlineData("transition")]
     [InlineData("volume")]
     public void ApplyGuidedTrekRequest_ShouldRejectInvalidFlowFieldShape(string mismatch)
     {
@@ -99,16 +98,6 @@ public class NavigatorTests : IDisposable
         PathQuery query = mismatch switch
         {
             "start" => valid.WithStartPosition(Vector3d.Left),
-            "transition" => new PathQuery(
-                valid.Start,
-                valid.End,
-                valid.Agent,
-                valid.AreaPolicy,
-                valid.Traversal,
-                valid.Algorithm,
-                valid.Budget,
-                allowTransitions: true,
-                valid.FlowField),
             "volume" => new PathQuery(
                 valid.Start,
                 valid.End,
@@ -177,6 +166,187 @@ public class NavigatorTests : IDisposable
         steering.CurrentQuery.Should().Be(query);
         steering.CurrentRequest.Should().BeNull();
         steering.MovementGroupID.Should().Be(12);
+    }
+
+    [Fact]
+    public void GetHeading_ShouldOwnTransitionEnabledFlowThroughTheHybridRouteGuide()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        var navigator = CreateNavigator(start, profile: profile);
+        PathQuery query = CreateSurfaceQuery(
+            start,
+            end,
+            profile,
+            PathAlgorithm.FlowField,
+            "navigator-graph",
+            allowTransitions: true);
+
+        navigator.ApplyGuidedTrekRequest(query);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+
+        steering.GetHeading(navigator).Should().Be(Vector3d.Right);
+        ReflectionUtility.GetPrivateField<HybridRouteGuide?>(steering, "_hybridRouteGuide")
+            .Should().NotBeNull();
+        ReflectionUtility.GetPrivateField<NavigationFlowFieldLease?>(steering, "_navigationFlowFieldLease")
+            .Should().BeNull();
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+
+        steering.StopMove();
+
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void GetHeading_ShouldUseTheActiveHybridSurfaceStepForTheSoleFlowRecoveryBridge()
+    {
+        (Vector3d start, Vector3d middle, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        Vector3d displacedFoot = start + new Vector3d(
+            Fixed64.Zero,
+            Fixed64.Zero,
+            (Fixed64)3 / (Fixed64)8);
+        var navigator = CreateNavigator(displacedFoot, profile: profile);
+        PathQuery topLevelQuery = CreateSurfaceQuery(
+            displacedFoot,
+            end,
+            profile,
+            PathAlgorithm.FlowField,
+            "navigator-graph",
+            allowTransitions: true);
+        PathQuery surfaceStepQuery = new(
+            topLevelQuery.Start,
+            new NavigationEndpoint(middle, "navigator-graph"),
+            topLevelQuery.Agent,
+            topLevelQuery.AreaPolicy,
+            topLevelQuery.Traversal,
+            PathAlgorithm.FlowField,
+            topLevelQuery.Budget,
+            allowTransitions: false,
+            topLevelQuery.FlowField);
+        var hybridGuide = new HybridRouteGuide(new HybridRoutePlan(
+            new[] { HybridRouteStep.Surface(TestWorld.Context, surfaceStepQuery) },
+            Array.Empty<TraversalTransition>(),
+            Fixed64.Zero));
+        navigator.ApplyGuidedTrekRequest(topLevelQuery);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        ReflectionUtility.SetPrivateField(steering, "_hybridRouteGuide", hybridGuide);
+        ReflectionUtility.SetPrivateField(steering, "_shouldRequestPathThisFrame", false);
+
+        steering.GetHeading(navigator);
+
+        NavigationGuideLease recovery = TestRequire.NotNull(
+            ReflectionUtility.GetPrivateField<NavigationGuideLease?>(
+                steering,
+                "_flowRecoveryGuideLease"));
+        object inner = ReflectionUtility.GetPrivateField<object>(recovery, "_inner");
+        NavigationAStarPayloadLease payloadLease =
+            ReflectionUtility.GetPrivateField<NavigationAStarPayloadLease>(inner, "_payloadLease");
+        PathQuery recoveryQuery = payloadLease.Payload.Key.Query;
+        recoveryQuery.End.Should().Be(surfaceStepQuery.End);
+        recoveryQuery.Agent.Should().Be(surfaceStepQuery.Agent);
+        recoveryQuery.AreaPolicy.Should().Be(surfaceStepQuery.AreaPolicy);
+        recoveryQuery.AllowTransitions.Should().BeFalse();
+        recoveryQuery.Algorithm.Should().Be(PathAlgorithm.AStar);
+        steering.CurrentQuery.Should().Be(topLevelQuery);
+        ReflectionUtility.GetPrivateField<HybridRouteGuide?>(steering, "_hybridRouteGuide")
+            .Should().BeSameAs(hybridGuide);
+
+        steering.StopMove();
+
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+        TestWorld.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void HybridRouteGuide_ShouldPropagateStaleUntilDisposedWithoutLeakingTheLease()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        PathQuery query = CreateSurfaceQuery(
+            start,
+            end,
+            profile,
+            PathAlgorithm.FlowField,
+            "navigator-graph");
+        using var guide = new HybridRouteGuide(new HybridRoutePlan(
+            new[] { HybridRouteStep.Surface(TestWorld.Context, query) },
+            Array.Empty<TraversalTransition>(),
+            Fixed64.Zero));
+
+        guide.TrySample(start, TestWorld.Context.Settings.GuideSampleBudget, out _)
+            .Should().Be(NavigationGuideStatus.Success);
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+
+        PublishGraphLine(bakeVersion: 2, publicationSequence: 3);
+
+        guide.TrySample(start, TestWorld.Context.Settings.GuideSampleBudget, out _)
+            .Should().Be(NavigationGuideStatus.Stale);
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+
+        guide.Dispose();
+
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void HybridRouteGuide_ShouldPropagateCapacityWithoutAcquiringOrLeakingAResource()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        PathQuery query = CreateSurfaceQuery(
+            start,
+            end,
+            profile,
+            PathAlgorithm.FlowField,
+            "navigator-graph");
+        int capacity = TestWorld.Context.Settings.QueryLimits.MaxFlowActivePayloadLeases;
+        var blockers = new NavigationFlowFieldLease[capacity];
+        for (int i = 0; i < blockers.Length; i++)
+        {
+            TestWorld.Context.Guides.RequestFlowField(query, out NavigationFlowFieldLease? blocker)
+                .Should().Be(NavigationGuideStatus.Success);
+            blockers[i] = TestRequire.NotNull(blocker);
+        }
+
+        using var guide = new HybridRouteGuide(new HybridRoutePlan(
+            new[] { HybridRouteStep.Surface(TestWorld.Context, query) },
+            Array.Empty<TraversalTransition>(),
+            Fixed64.Zero));
+        guide.TrySample(start, TestWorld.Context.Settings.GuideSampleBudget, out Vector3d heading)
+            .Should().Be(NavigationGuideStatus.CapacityExceeded);
+        heading.Should().Be(Vector3d.Zero);
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(capacity);
+
+        guide.Dispose();
+        for (int i = 0; i < blockers.Length; i++)
+            blockers[i].Dispose();
+
+        TestWorld.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
     }
 
     [Fact]
@@ -1144,632 +1314,6 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateFlowFieldRequest()
-    {
-        var data = new bool[1, 6, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorFlowField", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(
-            allowUnwalkableEndpoints: true,
-            allowTraversalTransitions: true,
-            maxClimbHeight: (Fixed64)2,
-            flowFieldExtraFloodRange: 24
-        );
-
-        Vector3d target = new(4, 0, 0);
-        navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Fast);
-
-        navigator.IsGuideded.Should().BeTrue();
-        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
-
-        var request = steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
-        request.Origin.Should().Be(navigator.Position);
-        request.TargetPosition.Should().Be(target);
-        request.UnitSize.Should().Be(navigator.Radius + navigator.Radius);
-        request.AllowUnwalkableEndpoints.Should().BeTrue();
-        request.AllowTraversalTransitions.Should().BeTrue();
-        request.MaxClimbHeight.Should().Be((Fixed64)2);
-        request.ExtraFloodRange.Should().Be(24);
-
-        PathManager.UnloadChart("NavigatorFlowField");
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateAerialRequest_AndEnableFlight()
-    {
-        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 2, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 3, 0));
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(allowTraversalTransitions: true);
-        Vector3d target = new(0, 3, 0);
-
-        navigator.SetAirborne();
-        navigator.ApplyGuidedTrekRequest(target, isRequestingFlight: true, rate: TrekRate.Fast);
-
-        navigator.IsGuideded.Should().BeTrue();
-        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
-        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
-
-        var request = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
-        request.Origin.Should().Be(navigator.Position);
-        request.TargetPosition.Should().Be(target);
-        request.UnitSize.Should().Be(navigator.Radius + navigator.Radius);
-        request.Heuristic.Should().Be(navigator.GuidedVolumeHeuristic);
-        request.Medium.Should().Be(TraversalMedium.Gas);
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateAerialLandingHandoff_WhenTransitionOptInIsEnabled()
-    {
-        const string sceneKey = "NavigatorAerialLandingHandoff";
-        RegisterAerialLandingHandoffScene(sceneKey);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true
-        );
-        navigator.SetAirborne();
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(4, 0, 0),
-            isRequestingFlight: true,
-            rate: TrekRate.Fast,
-            groupId: 9);
-
-        VolumePathRequest initialRequest = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
-        initialRequest.Medium.Should().Be(TraversalMedium.Gas);
-        initialRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
-        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
-
-        navigator.SetTestPosition(
-            new Vector3d(1, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
-        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        steering.Arrive();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        FlowFieldPathRequest followupRequest = steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
-        followupRequest.TargetPosition.X.Should().Be((Fixed64)4);
-        followupRequest.TargetPosition.Y.Should().Be(Fixed64.Zero);
-        followupRequest.TargetPosition.Z.Should().Be(Fixed64.Zero);
-        followupRequest.AllowTraversalTransitions.Should().BeTrue();
-        steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
-        steering.Destination.X.Should().Be((Fixed64)4);
-        steering.MovementGroupID.Should().Be(9);
-        steering.ShouldMove.Should().BeTrue();
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-
-        UnloadAerialLandingHandoffScene(sceneKey);
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateTransitionAwareFlowFieldGuide_WhenNavigatorOptInIsEnabled()
-    {
-        RegisterTransitionFallbackScene();
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true,
-            flowFieldExtraFloodRange: 8
-        );
-
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
-
-        steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>()
-            .Which.AllowTraversalTransitions.Should().BeTrue();
-
-        TestWorld.Context.Simulate();
-        steering.GetHeading(navigator);
-
-        steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
-        steering.ShouldMove.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_ShouldCaptureExplicitClimbIntent()
-    {
-        var data = new bool[1, 4, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedClimbIntent", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(3, 0, 0),
-            rate: TrekRate.Fast,
-            isRequestingClimb: true);
-
-        navigator.IsGuideded.Should().BeTrue();
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-
-        PathManager.UnloadChart("NavigatorGuidedClimbIntent");
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_ShouldPreserveClimbAcrossSwimExitHandoff_WhenGeneratedSwimExitTargetsLiquidClimbShoreline()
-    {
-        const string chartKey = "NavigatorLiquidClimbExit";
-        GuidedPathTestScene.RegisterLiquidClimbExitScene(TestWorld.Context, chartKey);
-
-        var navigator = CreateNavigator(new Vector3d(1, 0, 0));
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true
-        );
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(5, 0, 0),
-            rate: TrekRate.Fast);
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-        VolumePathRequest initialRequest = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
-        initialRequest.TargetPosition.Should().Be(new Vector3d(3, 0, 0));
-
-        navigator.SetTestPosition(
-            new Vector3d(4, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
-        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        steering.Arrive();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>();
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-
-        PathManager.UnloadChart(chartKey);
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateLiquidRequest_WithoutAutoSwimIntent_WhenInWater()
-    {
-        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 2));
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
-
-        Vector3d target = new(0, 0, 2);
-        navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Fast);
-
-        navigator.IsGuideded.Should().BeTrue();
-        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
-
-        var request = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
-        request.Origin.Should().Be(navigator.Position);
-        request.TargetPosition.Should().Be(target);
-        request.Medium.Should().Be(TraversalMedium.Liquid);
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_ShouldCaptureExplicitSwimIntent_WhenRequestedInWater()
-    {
-        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 2));
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(0, 0, 2),
-            rate: TrekRate.Fast,
-            isRequestingSwim: true);
-
-        navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
-        steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
-            .Which.Medium.Should().Be(TraversalMedium.Liquid);
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_ShouldPreserveClimbAcrossGuidedHandoff_WhenTransitionRequestsIt()
-    {
-        const string sceneKey = "NavigatorAerialClimbHandoff";
-        GuidedPathTestScene.RegisterAerialClimbHandoffScene(TestWorld.Context, sceneKey);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true
-        );
-        navigator.SetAirborne();
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(4, 0, 0),
-            isRequestingFlight: true,
-            rate: TrekRate.Fast);
-
-        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-
-        navigator.SetTestPosition(
-            new Vector3d(1, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
-        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        steering.Arrive();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>();
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-
-        PathManager.UnloadChart($"{sceneKey}-Landing");
-        PathManager.UnloadChart($"{sceneKey}-Target");
-    }
-
-    [Fact]
-    public void Simulate_ShouldSyncAutoGuidedClimbIntent_WhenSteeringPublishesClimbRouteTopology()
-    {
-        var data = new bool[1, 3, 1]
-        {
-            {
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorAutoGuidedClimbSync", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        navigator.SetTestSteering(new ScriptedRouteTopologySteering(
-            navigator.Radius,
-            new ScriptedRouteTopologyFrame(Vector3d.Right, RequestsClimbIntent: true)));
-
-        navigator.ApplyGuidedTrekRequest(new Vector3d(2, 0, 0), rate: TrekRate.Fast);
-        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-
-        PathManager.UnloadChart("NavigatorAutoGuidedClimbSync");
-    }
-
-    [Fact]
-    public void Simulate_ShouldClearAutoGuidedClimbIntent_WhenSteeringPublishesNonClimbRouteTopology()
-    {
-        GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        navigator.SetTestSteering(new ScriptedRouteTopologySteering(
-            navigator.Radius,
-            new ScriptedRouteTopologyFrame(Vector3d.Right, RequestsClimbIntent: false)));
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true
-        );
-
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Simulate_ShouldPreserveExplicitGuidedClimbIntent_WhenSteeringPublishesDifferentRouteTopology()
-    {
-        var data = new bool[1, 3, 1]
-        {
-            {
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorExplicitGuidedClimbSticky", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        navigator.SetTestSteering(new ScriptedRouteTopologySteering(
-            navigator.Radius,
-            new ScriptedRouteTopologyFrame(Vector3d.Right, RequestsClimbIntent: true)));
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(2, 0, 0),
-            rate: TrekRate.Fast,
-            isRequestingClimb: false);
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
-
-        PathManager.UnloadChart("NavigatorExplicitGuidedClimbSticky");
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateSwimExitHandoff_WhenTransitionOptInIsEnabled()
-    {
-        RegisterVolumeExitHandoffScene("NavigatorSwimExitHandoff");
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true,
-            maxClimbHeight: (Fixed64)2
-        );
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(4, 0, 0),
-            rate: TrekRate.Fast,
-            isRequestingSwim: true,
-            groupId: 7);
-
-        VolumePathRequest initialRequest = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
-        initialRequest.Medium.Should().Be(TraversalMedium.Liquid);
-        initialRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-
-        navigator.SetTestPosition(
-            new Vector3d(2, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
-        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        steering.Arrive();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        FlowFieldPathRequest followupRequest = steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
-        followupRequest.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
-        followupRequest.MaxClimbHeight.Should().Be((Fixed64)2);
-        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
-        steering.MovementGroupID.Should().Be(7);
-        steering.ShouldMove.Should().BeTrue();
-        navigator.FrameRequest.Direction.X.Should().BeGreaterThan(Fixed64.Zero);
-
-        PathManager.UnloadChart("NavigatorSwimExitHandoff");
-    }
-
-    [Fact]
-    public void Simulate_ShouldRecomputeAutoGuidedClimbIntent_FromFollowupRouteTopology_AfterVolumeExitHandoff()
-    {
-        const string chartKey = "NavigatorVolumeExitFollowupClimb";
-        GuidedPathTestScene.RegisterVolumeExitFollowupClimbScene(TestWorld.Context, chartKey);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true
-        );
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(4, 0, 0),
-            rate: TrekRate.Fast);
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
-        steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
-            .Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-
-        navigator.SetTestPosition(
-            new Vector3d(2, 0, 0) + Vector3d.Up * navigator.BodyShape.RootToFootOffsetY);
-        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        steering.Arrive();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>()
-            .Which.AllowTraversalTransitions.Should().BeTrue();
-        steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-
-        PathManager.UnloadChart(chartKey);
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_RejectSwimRequest_WhenTransitionOptInIsDisabled_AndTargetRequiresExitHandoff()
-    {
-        RegisterVolumeExitHandoffScene("NavigatorSwimExitDisabled");
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: false
-        );
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(4, 0, 0),
-            rate: TrekRate.Fast);
-
-        navigator.IsGuideded.Should().BeFalse();
-        steering.CurrentRequest.Should().BeNull();
-        steering.ShouldMove.Should().BeFalse();
-
-        PathManager.UnloadChart("NavigatorSwimExitDisabled");
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_RejectSwimRequests_WhenNavigatorIsNotInWater()
-    {
-        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 2));
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(0, 0, 2),
-            rate: TrekRate.Fast,
-            isRequestingSwim: true);
-
-        navigator.IsGuideded.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
-        steering.CurrentRequest.Should().BeNull();
-        steering.ShouldMove.Should().BeFalse();
-    }
-
-    [Fact]
-    public void ApplyGuidedTrekRequest_Should_IgnoreInvalidTargets_WithoutEnteringGuidedMode()
-    {
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-
-        navigator.ApplyGuidedTrekRequest(new Vector3d(100, 0, 100), rate: TrekRate.Moderate);
-
-        navigator.IsGuideded.Should().BeFalse();
-        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
-        steering.CurrentRequest.Should().BeNull();
-        steering.ShouldMove.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Reset_ShouldClearGuidedMode()
-    {
-        var data = new bool[1, 6, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorResetGuided", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
-
-        navigator.IsGuideded.Should().BeTrue();
-
-        navigator.Reset();
-
-        navigator.IsGuideded.Should().BeFalse();
-
-        PathManager.UnloadChart("NavigatorResetGuided");
-    }
-
-    [Fact]
-    public void Simulate_ShouldResolveHeading_ForGuidedRequests()
-    {
-        var data = new bool[1, 6, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedHeading", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        navigator.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
-        Vector3d.Dot(navigator.FrameRequest.Direction, Vector3d.Right).Should().BeGreaterThan(Fixed64.Zero);
-
-        PathManager.UnloadChart("NavigatorGuidedHeading");
-    }
-
-    [Fact]
-    public void Simulate_Should_PersistGuidedFlightIntent_BetweenFrames()
-    {
-        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 2, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 3, 0));
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        navigator.SetAirborne();
-        navigator.ApplyGuidedTrekRequest(new Vector3d(0, 3, 0), isRequestingFlight: true, rate: TrekRate.Fast);
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-        navigator.CommitFrameMotion();
-
-        navigator.ApplyGuidedTrekRequest(new Vector3d(0, 3, 0), isRequestingFlight: true, rate: TrekRate.Fast);
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
-        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
-        navigator.FrameRequest.Direction.Y.Should().BeGreaterThan(Fixed64.Zero);
-    }
-
-    [Fact]
-    public void Simulate_Should_NotReuseGuidedDirection_AfterSteeringArrive()
-    {
-        var data = new bool[1, 6, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorArriveStopsHeading", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-        navigator.CommitFrameMotion();
-
-        steering.Arrive();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        steering.ShouldMove.Should().BeFalse();
-        steering.CurrentRequest.Should().BeNull();
-        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
-        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
-
-        PathManager.UnloadChart("NavigatorArriveStopsHeading");
-    }
-
-    [Fact]
     public void ApplyInputTrekRequest_ShouldCaptureFacingDirection()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -1860,36 +1404,6 @@ public class NavigatorTests : IDisposable
         navigator.Simulate();
 
         turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
-    }
-
-    [Fact]
-    public void Simulate_ShouldKeepGuidedTurnBehavior_WhenLockedOn()
-    {
-        var data = new bool[1, 6, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedTurnWhileLockedOn", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavTurning turning = TestRequire.NotNull(navigator.Turning);
-        navigator.IsLockedOn = true;
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        navigator.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
-        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(navigator.FrameRequest.Direction));
-
-        PathManager.UnloadChart("NavigatorGuidedTurnWhileLockedOn");
     }
 
     [Fact]
@@ -2060,42 +1574,6 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void InactiveNavigator_ShouldIgnoreRequestConditionAndCollisionUpdates()
-    {
-        var navigator = new TestNavigator(TestWorld.Context);
-
-        navigator.ApplyInputTrekRequest(
-            Vector3d.Right,
-            TrekRate.Fast,
-            isRequestingJump: true,
-            isRequestingFlight: true,
-            isRequestingSwim: true,
-            facingDirection: Vector3d.Forward);
-        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast, isRequestingJump: true, groupId: 7);
-        navigator.SetTrekCondition(
-            medium: TraversalMedium.Liquid,
-            surfaceLevel: (Fixed64)3,
-            surfaceCondition: new GroundCondition(),
-            replaceGroundContact: false,
-            ceilingLevel: (Fixed64)6,
-            updateMotorState: true);
-        navigator.NotifyCollision();
-
-        navigator.IsGuideded.Should().BeFalse();
-        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
-        navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
-        navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
-        navigator.FrameRequest.FacingDirection.Should().BeNull();
-        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Unknown);
-        navigator.FrameCondition.SurfaceLevel.Should().Be(Fixed64.Zero);
-        navigator.FrameCondition.GroundState.Should().BeNull();
-        navigator.FrameCondition.CeilingLevel.Should().Be(Fixed64.MaxValue);
-    }
-
-    [Fact]
     public void GuidedRequestSetters_ShouldUpdateFrameRequestState()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -2113,37 +1591,6 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
-    }
-
-    [Fact]
-    public void Simulate_ShouldClearGuidedClimbIntent_WhenGuidedRequestCompletes()
-    {
-        var data = new bool[1, 3, 1]
-        {
-            {
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedClimbClear", data, Vector3d.Zero);
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(2, 0, 0),
-            rate: TrekRate.Fast,
-            isRequestingClimb: true);
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
-        steering.Arrive();
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
-
-        PathManager.UnloadChart("NavigatorGuidedClimbClear");
     }
 
     [Fact]
@@ -2227,42 +1674,6 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void Simulate_ShouldIgnoreInvalidPendingGuidedVolumeExitHandoff()
-    {
-        RegisterVolumeExitHandoffScene("NavigatorInvalidPendingHandoff");
-
-        var navigator = CreateNavigator(Vector3d.Zero);
-        NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        navigator.ConfigureForGuidedTraversal(
-            allowTraversalTransitions: true
-        );
-
-        navigator.ApplyGuidedTrekRequest(
-            new Vector3d(4, 0, 0),
-            rate: TrekRate.Fast,
-            groupId: 5);
-
-        navigator.SetTestPosition(new Vector3d(2, 0, 0));
-        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        steering.Arrive();
-
-        GuidedVolumeExitHandoff handoff = ReflectionUtility.GetPrivateFieldFromBase<GuidedVolumeExitHandoff>(
-            navigator,
-            "_pendingGuidedVolumeExitHandoff");
-        handoff.TransitionId = null;
-
-        TestWorld.Context.Simulate();
-        navigator.Simulate();
-
-        steering.CurrentRequest.Should().BeNull();
-        steering.ShouldMove.Should().BeFalse();
-        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
-
-        PathManager.UnloadChart("NavigatorInvalidPendingHandoff");
-    }
-
-    [Fact]
     public void DeltaHelpers_ShouldIgnoreZeroInputs_AndApplyQueuedMotionOnCommit()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -2318,7 +1729,8 @@ public class NavigatorTests : IDisposable
         Vector3d end,
         NavigationAgentProfile profile,
         PathAlgorithm algorithm = PathAlgorithm.AStar,
-        string? mapId = null) => new(
+        string? mapId = null,
+        bool allowTransitions = false) => new(
             new NavigationEndpoint(start, mapId),
             new NavigationEndpoint(end, mapId),
             profile,
@@ -2329,7 +1741,7 @@ public class NavigatorTests : IDisposable
                 TraversalDomain.Surface),
             algorithm,
             new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 0, 0, 0),
-            allowTransitions: false);
+            allowTransitions);
 
     private static int ReadGraphWaypointIndex(string json)
     {
@@ -2425,86 +1837,6 @@ public class NavigatorTests : IDisposable
     {
         binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
         return new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z);
-    }
-
-    private static void RegisterTransitionFallbackScene()
-    {
-        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "NavigatorTransitionFallbackStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "NavigatorTransitionFallbackEnd", new Vector3d(4, 0, 0));
-
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(3, 0, 0));
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: "navigator-transition-fallback-entry",
-            type: TraversalTransitionType.SwimEntry,
-            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Liquid(new Vector3d(1, 0, 0)),
-            pathCostModifier: 2)).Should().BeTrue();
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: "navigator-transition-fallback-exit",
-            type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.Liquid(new Vector3d(3, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
-            pathCostModifier: 1)).Should().BeTrue();
-    }
-
-    private static void RegisterAerialLandingHandoffScene(string sceneKey)
-    {
-        PathTestFactory.RegisterSingleTraversalPoint(
-            TestWorld.Context, $"{sceneKey}-Landing",
-            new Vector3d(1, 0, 0),
-            TraversalMedia.Solid | TraversalMedia.Gas);
-        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, $"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
-
-        GuidedPathTestScene.AddObstaclePlaneAtX(TestWorld.Context, 2);
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: $"{sceneKey}-landing",
-            type: TraversalTransitionType.Landing,
-            source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
-            pathCostModifier: 1)).Should().BeTrue();
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: $"{sceneKey}-chart-hop",
-            type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
-            pathCostModifier: 2)).Should().BeTrue();
-    }
-
-    private static void UnloadAerialLandingHandoffScene(string sceneKey)
-    {
-        PathManager.UnloadChart($"{sceneKey}-Landing");
-        PathManager.UnloadChart($"{sceneKey}-Target");
-    }
-
-    private static void RegisterVolumeExitHandoffScene(string chartKey)
-    {
-        NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1]
-        {
-            {
-                { NavigationChartCell.SolidLiquid },
-                { NavigationChartCell.Solid },
-                { NavigationChartCell.Solid }
-            }
-        };
-
-        PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
-
-        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: $"{chartKey}-exit",
-            type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
-            pathCostModifier: 1)).Should().BeTrue();
     }
 
     private readonly record struct ScriptedRouteTopologyFrame(

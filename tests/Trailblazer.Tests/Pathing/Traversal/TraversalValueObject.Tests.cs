@@ -123,11 +123,11 @@ public sealed class TraversalValueObjectTests : IDisposable
     [Fact]
     public void HybridRoutePlan_ShouldFallbackToEmptyArrays_WhenConstructedWithNullArrays()
     {
-        HybridRoutePlan plan = new(null!, null!, totalPathCost: 12);
+        HybridRoutePlan plan = new(null!, null!, totalPathCost: (Fixed64)12);
 
         plan.Steps.Should().BeEmpty();
         plan.DirectedTransitions.Should().BeEmpty();
-        plan.TotalPathCost.Should().Be(12);
+        plan.TotalPathCost.Should().Be((Fixed64)12);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public sealed class TraversalValueObjectTests : IDisposable
     {
         HybridRouteStep[] steps = new[]
         {
-            HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(1, 0, 0), additionalCost: 3)
+            HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(1, 0, 0))
         };
         TraversalTransition[] transitions = new[]
         {
@@ -146,11 +146,11 @@ public sealed class TraversalValueObjectTests : IDisposable
                 destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)))
         };
 
-        HybridRoutePlan plan = new(steps, transitions, totalPathCost: 7);
+        HybridRoutePlan plan = new(steps, transitions, totalPathCost: (Fixed64)7);
 
         plan.Steps.Should().BeSameAs(steps);
         plan.DirectedTransitions.Should().BeSameAs(transitions);
-        plan.TotalPathCost.Should().Be(7);
+        plan.TotalPathCost.Should().Be((Fixed64)7);
     }
 
     [Fact]

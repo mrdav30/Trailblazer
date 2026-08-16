@@ -16,7 +16,7 @@ namespace Trailblazer.Navigation;
 internal static class NavigatorGuidedTraversalState
 {
     public static bool ResolveInitialClimbIntent(
-        IPathRequest pathRequest,
+        TrailblazerWorldContext context,
         GuidedVolumeExitHandoff? pendingVolumeExitHandoff,
         bool? requestedClimb,
         out GuidedClimbIntentMode intentMode)
@@ -28,7 +28,12 @@ internal static class NavigatorGuidedTraversalState
         }
 
         intentMode = GuidedClimbIntentMode.Auto;
-        return GuidedClimbIntentResolver.Resolve(pathRequest, pendingVolumeExitHandoff);
+        return pendingVolumeExitHandoff != null
+            && !string.IsNullOrEmpty(pendingVolumeExitHandoff.TransitionId)
+            && context.Transitions.TryGet(
+                pendingVolumeExitHandoff.TransitionId,
+                out TraversalTransition transition)
+            && transition.RequestsClimbIntent;
     }
 
     public static void PrepareFrame(
@@ -103,9 +108,7 @@ internal static class NavigatorGuidedTraversalState
 
     public static bool TryActivatePendingVolumeExitHandoff(
         bool isGuided,
-        TrailblazerWorldContext context,
         Vector3d currentFootPosition,
-        NavigationAgentProfile profile,
         ref TrekRequest frameRequest,
         NavSteering? steering,
         ref GuidedVolumeExitHandoff? pendingVolumeExitHandoff,
@@ -125,12 +128,10 @@ internal static class NavigatorGuidedTraversalState
             return false;
         }
 
-        if (!pendingVolumeExitHandoff.TryCreateFollowupRequest(
-                context,
+        if (!pendingVolumeExitHandoff.TryCreateFollowupQuery(
                 currentFootPosition,
-                profile,
-                out IPathRequest? followupRequest)
-            || followupRequest == null)
+                out PathQuery? followupQuery)
+            || followupQuery is not PathQuery query)
         {
             return false;
         }
@@ -138,7 +139,7 @@ internal static class NavigatorGuidedTraversalState
         GuidedVolumeExitHandoff handoff = pendingVolumeExitHandoff;
         pendingVolumeExitHandoff = null;
 
-        steering.ApplyPathRequest(followupRequest, handoff.MovementGroupId);
+        steering.ApplyPathQuery(query, handoff.MovementGroupId);
         CaptureRouteTopologyVersion(steering, ref lastSeenRouteTopologyVersion);
         frameRequest.IsRequestingFlight = false;
         frameRequest.IsRequestingSwim = false;

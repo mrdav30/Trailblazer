@@ -152,26 +152,6 @@ public sealed class TrailblazerGuideService
         }
     }
 
-    /// <inheritdoc cref="PathGuideFactory.TotalFlowGuideCount"/>
-    public int TotalFlowGuideCount
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.TotalFlowGuideCount;
-        }
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.InUseFlowGuideCount"/>
-    public int InUseFlowGuideCount
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.InUseFlowGuideCount;
-        }
-    }
-
     /// <inheritdoc cref="PathGuideFactory.TotalVolumeGuideCount"/>
     public int TotalVolumeGuideCount
     {
@@ -189,26 +169,6 @@ public sealed class TrailblazerGuideService
         {
             using (EnterUsableState())
                 return PathGuideFactory.InUseVolumeGuideCount;
-        }
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.TotalHybridRoutePlanCount"/>
-    public int TotalHybridRoutePlanCount
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.TotalHybridRoutePlanCount;
-        }
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.InUseHybridRoutePlanCount"/>
-    public int InUseHybridRoutePlanCount
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.InUseHybridRoutePlanCount;
         }
     }
 

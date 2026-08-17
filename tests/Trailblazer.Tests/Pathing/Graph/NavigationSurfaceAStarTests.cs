@@ -205,10 +205,11 @@ public sealed class NavigationSurfaceAStarTests
             guidePointCapacity: 8);
         using var admission = new NavigationQueryAdmissionWork(
             world,
-            lease!,
-            query,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.AStar);
+        admission.Begin(lease!, query);
         for (int step = 0;
              step < 64 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)
@@ -695,10 +696,11 @@ public sealed class NavigationSurfaceAStarTests
             guidePointCapacity: 65);
         using var admission = new NavigationQueryAdmissionWork(
             world,
-            lease!,
-            query,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.AStar);
+        admission.Begin(lease!, query);
         for (int step = 0;
              step < 256 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)
@@ -1090,10 +1092,11 @@ public sealed class NavigationSurfaceAStarTests
         var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 4, 4, 4);
         using var admission = new NavigationQueryAdmissionWork(
             world,
-            lease!,
-            query,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.AStar);
+        admission.Begin(lease!, query);
         for (int step = 0;
              step < 64 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)

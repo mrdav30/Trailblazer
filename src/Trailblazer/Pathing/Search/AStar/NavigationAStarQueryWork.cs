@@ -62,7 +62,9 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         _cache = cache;
         _admission = new NavigationQueryAdmissionWork(
             world,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.AStar);
     }
 

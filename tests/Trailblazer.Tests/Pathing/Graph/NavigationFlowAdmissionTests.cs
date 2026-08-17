@@ -481,10 +481,11 @@ public sealed class NavigationFlowAdmissionTests
             rayTraceIntervalCapacity: 2);
         using var admission = new NavigationQueryAdmissionWork(
             world,
-            store.TryAcquire()!,
-            query,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.FlowField);
+        admission.Begin(store.TryAcquire()!, query);
 
         for (int step = 0;
             step < 32 && admission.Status == NavigationQueryAdmissionStatus.Pending;

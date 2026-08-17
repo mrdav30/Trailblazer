@@ -431,7 +431,13 @@ git commit -m "feat(pathing): define bounded navigation ray workspaces"
 - `NavigationSurfaceEdgeEnumerator.CurrentOrdinal` is the zero-based canonical ordinal of the currently emitted edge.
 - `NavigationRayWork.Begin(in NavigationRayRequest request)` resets without allocation.
 - `NavigationRayRequest` explicitly carries `GridWorld`, the graph store, the leased expected graph, resolved `NavigationAgentProfile`, resolved `NavigationAreaPolicy`, `TraversalIntent`, transition permission, directed endpoints, endpoint allowances, and an optional `NavigationRayChainConstraint`. It does not retain a complete `PathQuery` or algorithm/Flow options that the kernel never reads.
-- `NavigationRayChainConstraint` has exactly three modes: unrestricted, current-source-address only, or current source followed by one exact canonical selected edge `(source, target, ordinal)` with no substitute graph edge.
+- `NavigationRayChainConstraint` has five internal modes: unrestricted;
+  current-source-address only; current source followed by one exact canonical
+  selected edge `(source, target, ordinal)` with no substitute graph edge;
+  exact seed address with unrestricted continuation; or unrestricted
+  continuation with one exact finish address. The final two reuse the existing
+  source/target fields and exist only because Task 6 proved that overlapping
+  grids make result-address postchecking insufficient for endpoint identity.
 - Query and guide `Advance` entry points run one common iterative state machine. Each state exposes the next concrete debit; thin overloads consume it from `NavigationWorkMeter` or `ref GuideSampleWorkMeter` without an interface, boxing, or duplicated transition logic.
 
 - [x] **Step 1: Write the core RED matrix**
@@ -493,39 +499,68 @@ framework builds 0 warnings/errors; warmed query and guide adapters allocate
 **Files:**
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationEndpointResolutionWork.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationQueryAdmissionWork.cs`
-- Modify: `src/Trailblazer/Pathing/Search/NavigationEndpointWorkspace.cs`
-- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarWorkspace.cs` to pass its exclusive ray workspace into endpoint admission.
-- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldWorkspace.cs` to pass its exclusive ray workspace into endpoint admission.
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs` and
+  `src/Trailblazer/Pathing/Search/Flow/NavigationFlowQueryWork.cs` to pass their
+  existing exclusive ray workspaces into endpoint admission.
+- Modify: `src/Trailblazer/Pathing/Search/Ray/NavigationRayStatus.cs` and
+  `NavigationRayWork.cs` for exact seed/finish identity and dependency-current
+  blocked results.
+- Modify: `src/Trailblazer/Pathing/Graph/TraversalEvaluator.cs` to expose its
+  already-retained profile and policy to endpoint-owned ray requests without
+  retaining duplicate copies.
+- Modify: benchmark and test constructor callers; do not retain the deleted
+  one-shot admission constructors.
 - Test: `tests/Trailblazer.Tests/Pathing/Graph/NavigationEndpointResolutionTests.cs`
-- Test: A*/Flow admission tests.
+- Test: A*/Flow admission and ray-concurrency tests.
 
 **Interfaces:**
 - Add internal `NavigationEndpointRole.Start` and `.Destination`.
 - `NearestNavigable` candidate proof runs requested start → candidate anchor with only a start prefix allowance, or candidate anchor → requested destination with only a destination suffix allowance.
 - Strict resolution remains exact and never consumes the allowance.
+- Start proof uses `FinishAddress(candidate)`; destination proof uses
+  `SeedAddress(candidate)`. This prevents another canonical overlapping grid
+  from satisfying the ray before the requested candidate is examined.
+- Both `Success` and `Blocked` rays merge their bounded page/component
+  dependencies into endpoint admission before the ray workspace resets.
+  `Blocked` validates world, graph, policy, and dependencies before it can act
+  as a negative endpoint proof.
+- A candidate ray is one atomic kernel operation. Its terminal result ends the
+  current endpoint/admission call, saturates the caller-local chunk counters,
+  and resumes outer endpoint work on the next call; the shared query meter
+  still records the complete atomic ray work.
+- Endpoint publication brackets its accumulated dependency scan with the raw
+  world sequence and validates every accumulated page/component dependency.
 
-- [ ] **Step 1: Write endpoint REDs**
+- [x] **Step 1: Write endpoint REDs**
 
 Pin: allowed sparse start prefix; allowed sparse destination suffix; forbidden interior gap; asymmetric portal forward/reverse; nearest geometrically close but graph-unreachable candidate loses to farther reachable candidate; budget/capacity/stale propagation; Flow and A* share the exact role behavior.
 
-- [ ] **Step 2: Observe RED**
+- [x] **Step 2: Observe RED**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationEndpointResolutionTests|FullyQualifiedName~NavigationAStarAdmissionTests|FullyQualifiedName~NavigationFlowAdmissionTests"
 ```
 
-- [ ] **Step 3: Integrate resumable candidate rays**
+- [x] **Step 3: Integrate resumable candidate rays**
 
 Hold one pending candidate while its ray returns `Pending`; rank only `Success`; skip `Blocked`; propagate budget/cost/capacity/stale exactly. Never expose an endpoint-allowance success as an ordinary full ray result.
 
-- [ ] **Step 4: Focused GREEN, tracker update, and commit**
+- [x] **Step 4: Focused GREEN, tracker update, review, and commit**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationEndpointResolutionTests|FullyQualifiedName~NavigationAStarAdmissionTests|FullyQualifiedName~NavigationFlowAdmissionTests"
-git add -- src/Trailblazer/Pathing/Search/AStar/NavigationEndpointResolutionWork.cs src/Trailblazer/Pathing/Search/AStar/NavigationQueryAdmissionWork.cs src/Trailblazer/Pathing/Search/NavigationEndpointWorkspace.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarWorkspace.cs src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldWorkspace.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationEndpointResolutionTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationAStarAdmissionTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowAdmissionTests.cs docs/feature-work/gridTopologyNavigationMapRefactorPlan.md
+git add -- src/Trailblazer/Pathing/Graph/TraversalEvaluator.cs src/Trailblazer/Pathing/Search/AStar/NavigationEndpointResolutionWork.cs src/Trailblazer/Pathing/Search/AStar/NavigationQueryAdmissionWork.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs src/Trailblazer/Pathing/Search/Flow/NavigationFlowQueryWork.cs src/Trailblazer/Pathing/Search/Ray/NavigationRayStatus.cs src/Trailblazer/Pathing/Search/Ray/NavigationRayWork.cs tests/Trailblazer.Benchmarks/Pathing/NavigationFlowFieldBenchmarks.cs tests/Trailblazer.Benchmarks/Pathing/NavigationSurfaceAStarBenchmarks.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationEndpointResolutionTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowAdmissionTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationRayConcurrencyTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationSearchArchitectureTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationSurfaceAStarEquivalenceTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationSurfaceAStarTests.cs docs/feature-work/gridTopologyNavigationMapRefactorPlan.md docs/superpowers/plans/2026-08-16-navigation-rays-and-simplification.md
 git diff --cached --check
 git commit -m "feat(pathing): certify nearest graph endpoints"
 ```
+
+Closure: endpoint/admission/concurrency focused `53/53`; graph/pathing aggregate
+`479/479`; Release `1,404/1,404`; ReleaseLean `1,373/1,373`; both target
+frameworks in both configurations build with 0 warnings/errors. Strict REDs pin
+atomic-ray yielding, exact overlapping candidate identity, dependency-bearing
+negative proofs, final-current publication, missing-component staleness, and
+A*/Flow parity. Independent correctness and lean review found no remaining
+P0-P2 findings.
 
 ---
 

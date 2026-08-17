@@ -81,7 +81,9 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         _workspace = workspace;
         _admission = new NavigationQueryAdmissionWork(
             world,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.FlowField);
     }
 

@@ -36,7 +36,6 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         ResolveEnd = 2
     }
 
-    private readonly GridWorld _world;
     private readonly NavigationEndpointWorkspace _workspace;
     private readonly PathAlgorithm _expectedAlgorithm;
     private readonly NavigationWorkMeter _meter;
@@ -54,30 +53,24 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
 
     internal NavigationQueryAdmissionWork(
         GridWorld world,
-        NavigationWorldGraphLease lease,
-        PathQuery query,
+        NavigationWorldGraphStore store,
         NavigationEndpointWorkspace workspace,
-        PathAlgorithm expectedAlgorithm)
-        : this(world, workspace, expectedAlgorithm)
-    {
-        Begin(lease, query);
-    }
-
-    internal NavigationQueryAdmissionWork(
-        GridWorld world,
-        NavigationEndpointWorkspace workspace,
+        NavigationRayWorkspace rayWorkspace,
         PathAlgorithm expectedAlgorithm)
     {
         SwiftThrowHelper.ThrowIfNull(world, nameof(world));
+        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
-        _world = world;
+        SwiftThrowHelper.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
         _workspace = workspace;
         _expectedAlgorithm = expectedAlgorithm;
         _meter = new NavigationWorkMeter(default);
         _endpointWork = new NavigationEndpointResolutionWork(
             world,
+            store,
             _meter,
-            workspace);
+            workspace,
+            rayWorkspace);
         _result = new NavigationResolvedPathQuery();
     }
 
@@ -158,7 +151,10 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                 if (!_endpointActive)
                 {
                     BeginEndpointWork(
-                        _stage == Stage.ResolveStart ? _query.Start : _query.End);
+                        _stage == Stage.ResolveStart ? _query.Start : _query.End,
+                        _stage == Stage.ResolveStart
+                            ? NavigationEndpointRole.Start
+                            : NavigationEndpointRole.Destination);
                     _endpointActive = true;
                 }
                 int lookupBefore = _meter.LookupProbes;
@@ -166,8 +162,12 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                 NavigationEndpointResolutionStatus endpointStatus = _endpointWork.Advance(
                     lookupRemaining,
                     candidateRemaining);
-                lookupRemaining -= _meter.LookupProbes - lookupBefore;
-                candidateRemaining -= _meter.EndpointCandidates - candidatesBefore;
+                lookupRemaining = Math.Max(
+                    0,
+                    lookupRemaining - (_meter.LookupProbes - lookupBefore));
+                candidateRemaining = Math.Max(
+                    0,
+                    candidateRemaining - (_meter.EndpointCandidates - candidatesBefore));
                 if (endpointStatus == NavigationEndpointResolutionStatus.Pending)
                     return Status;
                 if (endpointStatus != NavigationEndpointResolutionStatus.Success)
@@ -217,17 +217,18 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         _active = false;
     }
 
-    private void BeginEndpointWork(NavigationEndpoint endpoint)
+    private void BeginEndpointWork(
+        NavigationEndpoint endpoint,
+        NavigationEndpointRole role)
     {
         NavigationWorldGraph graph = _lease!.Graph;
         _endpointWork.Begin(
             graph,
             endpoint,
-            new TraversalEvaluator(
-                graph,
-                _query.Agent,
-                _areaPolicy!,
-                _medium));
+            role,
+            _query.Agent,
+            _areaPolicy!,
+            _query.Traversal);
     }
 
     private NavigationQueryAdmissionStatus Finish(

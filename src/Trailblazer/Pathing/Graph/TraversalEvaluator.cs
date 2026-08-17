@@ -73,6 +73,10 @@ internal readonly struct TraversalEvaluator
         _medium = resolvedMedium;
     }
 
+    internal NavigationAgentProfile Profile => _profile;
+
+    internal NavigationAreaPolicy AreaPolicy => _areaPolicy;
+
     internal bool TryGetPassableNodeState(
         NavigationNodeRef node,
         out NavigationNodeState state) =>

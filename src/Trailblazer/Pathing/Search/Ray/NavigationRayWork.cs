@@ -37,9 +37,7 @@ internal sealed class NavigationRayWork
 
     internal void Begin(in NavigationRayRequest request)
     {
-        if (_begun)
-            ReleaseExplicitConnectionReferences();
-        _workspace.Reset();
+        Reset();
         _request = request;
         _evaluator = new TraversalEvaluator(
             request.ExpectedGraph,
@@ -53,6 +51,20 @@ internal sealed class NavigationRayWork
         _worldChangeSequence = 0;
         _meterBlocked = false;
         _begun = true;
+    }
+
+    internal void Reset()
+    {
+        if (_begun)
+            ReleaseExplicitConnectionReferences();
+        _workspace.Reset();
+        _request = default;
+        _evaluator = default;
+        Result = default;
+        Status = NavigationRayStatus.Pending;
+        _worldChangeSequence = 0;
+        _meterBlocked = false;
+        _begun = false;
     }
 
     internal NavigationRayStatus Advance(NavigationWorkMeter meter)
@@ -231,6 +243,16 @@ internal sealed class NavigationRayWork
     {
         NavigationRayChainRecord[] records = _workspace.ChainRecords;
         int count = _workspace.TraceIntervals.Count;
+        NavigationSurfaceComponentKey finishComponent = default;
+        if (_request.ChainConstraint.Kind
+                == NavigationRayChainConstraintKind.FinishAddress
+            && !_request.ExpectedGraph.TryGetSurfaceComponent(
+                _request.ChainConstraint.TargetAddress,
+                out finishComponent,
+                out _))
+        {
+            return Finish(NavigationRayStatus.Stale);
+        }
         bool permitsStartPrefix = _request.EndpointAllowance
             == NavigationRayEndpointAllowance.StartPrefix;
         bool permitsDestinationSuffix = _request.EndpointAllowance
@@ -241,7 +263,7 @@ internal sealed class NavigationRayWork
             for (int ordinal = 0; ordinal < count; ordinal++)
             {
                 if (records[ordinal].State == NavigationRayChainRecordState.Unreached
-                    && MatchesSeedConstraint(ordinal)
+                    && MatchesSeedConstraint(ordinal, finishComponent)
                     && _workspace.TraceIntervals[ordinal].TEnter < firstSeedParameter)
                 {
                     firstSeedParameter = _workspace.TraceIntervals[ordinal].TEnter;
@@ -258,6 +280,7 @@ internal sealed class NavigationRayWork
                     : interval.TEnter > Fixed64.Zero || interval.TExit < Fixed64.Zero)
                 || !CanSeed(
                     ordinal,
+                    finishComponent,
                     ref guideMeter,
                     useGuideMeter))
             {
@@ -314,7 +337,7 @@ internal sealed class NavigationRayWork
 
         if (permitsDestinationSuffix)
             return FinishDestinationSuffix(ref guideMeter, useGuideMeter);
-        return Finish(NavigationRayStatus.Blocked);
+        return FinishBlocked();
     }
 
     private NavigationRayStatus FinishDestinationSuffix(
@@ -344,7 +367,7 @@ internal sealed class NavigationRayWork
             if (_meterBlocked)
                 return Finish(NavigationRayStatus.BudgetExceeded);
         }
-        return Finish(NavigationRayStatus.Blocked);
+        return FinishBlocked();
     }
 
     private NavigationRayStatus Expand(
@@ -490,7 +513,10 @@ internal sealed class NavigationRayWork
                         _request.Profile.Shape.Height,
                         incomingPortal,
                         outgoingPortal,
-                        GetEndpointAllowance(sourceRecord, isFinalSegment: false)))
+                        GetEndpointAllowance(
+                            sourceOrdinal,
+                            sourceRecord,
+                            isFinalSegment: false)))
                 {
                     if (_meterBlocked)
                         return NavigationRayStatus.BudgetExceeded;
@@ -651,6 +677,7 @@ internal sealed class NavigationRayWork
                     outgoing,
                     portalOrdinal == 0
                         ? GetEndpointAllowance(
+                            sourceOrdinal,
                             _workspace.ChainRecords[sourceOrdinal],
                             isFinalSegment: false)
                         : GridNavigationBodySegmentEndpointAllowance.None))
@@ -780,13 +807,20 @@ internal sealed class NavigationRayWork
 
     private bool CanSeed(
         int ordinal,
+        NavigationSurfaceComponentKey finishComponent,
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter)
     {
         NavigationNodeRef node = _workspace.ChainRecords[ordinal].Node;
         NavigationRayChainConstraint constraint = _request.ChainConstraint;
         NavigationCellAddress address;
-        if (constraint.Kind == NavigationRayChainConstraintKind.Unrestricted)
+        if (constraint.Kind == NavigationRayChainConstraintKind.FinishAddress
+            && !MatchesSeedConstraint(ordinal, finishComponent))
+        {
+            return false;
+        }
+        if (constraint.Kind is NavigationRayChainConstraintKind.Unrestricted
+            or NavigationRayChainConstraintKind.FinishAddress)
         {
             if (_request.EndpointAllowance == NavigationRayEndpointAllowance.StartPrefix)
                 return true;
@@ -819,11 +853,24 @@ internal sealed class NavigationRayWork
                 GridNavigationBodySegmentEndpointAllowance.None);
     }
 
-    private bool MatchesSeedConstraint(int ordinal)
+    private bool MatchesSeedConstraint(
+        int ordinal,
+        NavigationSurfaceComponentKey finishComponent)
     {
         NavigationRayChainConstraint constraint = _request.ChainConstraint;
         if (constraint.Kind == NavigationRayChainConstraintKind.Unrestricted)
             return true;
+        if (constraint.Kind == NavigationRayChainConstraintKind.FinishAddress)
+        {
+            return _request.ExpectedGraph.TryGetNodeAddress(
+                    _workspace.ChainRecords[ordinal].Node,
+                    out NavigationCellAddress seedAddress)
+                && _request.ExpectedGraph.TryGetSurfaceComponent(
+                    seedAddress,
+                    out NavigationSurfaceComponentKey actual,
+                    out _)
+                && actual == finishComponent;
+        }
         return _request.ExpectedGraph.TryGetNodeAddress(
                 _workspace.ChainRecords[ordinal].Node,
                 out NavigationCellAddress address)
@@ -836,7 +883,9 @@ internal sealed class NavigationRayWork
         int edgeOrdinal)
     {
         NavigationRayChainConstraint constraint = _request.ChainConstraint;
-        if (constraint.Kind == NavigationRayChainConstraintKind.Unrestricted)
+        if (constraint.Kind is NavigationRayChainConstraintKind.Unrestricted
+            or NavigationRayChainConstraintKind.SeedAddress
+            or NavigationRayChainConstraintKind.FinishAddress)
             return true;
         return constraint.Kind == NavigationRayChainConstraintKind.SelectedEdge
             && source == constraint.SourceAddress
@@ -858,14 +907,17 @@ internal sealed class NavigationRayWork
             == NavigationRayEndpointAllowance.DestinationSuffix;
         if ((!permitsDestinationSuffix
                 && (interval.TEnter > Fixed64.One || interval.TExit < Fixed64.One))
+            || !_request.ExpectedGraph.TryGetNodeAddress(
+                record.Node,
+                out NavigationCellAddress address)
+            || (_request.ChainConstraint.Kind
+                    == NavigationRayChainConstraintKind.FinishAddress
+                && address != _request.ChainConstraint.TargetAddress)
             || !TryGetIncomingPortal(
                 ordinal,
                 ref guideMeter,
                 useGuideMeter,
                 out GridNavigationPortal incomingPortal)
-            || !_request.ExpectedGraph.TryGetNodeAddress(
-                record.Node,
-                out NavigationCellAddress address)
             || !_request.ExpectedGraph.TryGetSeamPrism(address, out GridCellPrism prism))
         {
             return false;
@@ -889,21 +941,24 @@ internal sealed class NavigationRayWork
                 _request.Profile.Shape.Height,
                 incomingPortal,
                 default,
-                GetEndpointAllowance(record, isFinalSegment: true));
+                GetEndpointAllowance(ordinal, record, isFinalSegment: true));
     }
 
     private GridNavigationBodySegmentEndpointAllowance GetEndpointAllowance(
+        int ordinal,
         in NavigationRayChainRecord record,
         bool isFinalSegment)
     {
         if (record.PredecessorOrdinal < 0
-            && _request.EndpointAllowance == NavigationRayEndpointAllowance.StartPrefix)
+            && _request.EndpointAllowance == NavigationRayEndpointAllowance.StartPrefix
+            && _workspace.TraceIntervals[ordinal].TEnter > Fixed64.Zero)
         {
             return GridNavigationBodySegmentEndpointAllowance.StartFootprintEdge;
         }
         return isFinalSegment
             && _request.EndpointAllowance
                 == NavigationRayEndpointAllowance.DestinationSuffix
+            && _workspace.TraceIntervals[ordinal].TExit < Fixed64.One
             ? GridNavigationBodySegmentEndpointAllowance.EndFootprintEdge
             : GridNavigationBodySegmentEndpointAllowance.None;
     }
@@ -984,6 +1039,11 @@ internal sealed class NavigationRayWork
             record.IsSemanticCostNeutral);
         return Finish(NavigationRayStatus.Success, preserveResult: true);
     }
+
+    private NavigationRayStatus FinishBlocked() =>
+        AreDependenciesCurrent()
+            ? Finish(NavigationRayStatus.Blocked)
+            : Finish(NavigationRayStatus.Stale);
 
     private bool AreDependenciesCurrent()
     {

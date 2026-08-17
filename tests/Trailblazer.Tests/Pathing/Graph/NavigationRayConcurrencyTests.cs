@@ -80,6 +80,83 @@ public sealed class NavigationRayConcurrencyTests
             .Should().Be((NavigationRayStatus)expectedStatus);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BlockedRay_ShouldValidateItsNegativeProofBeforePublication(
+        bool mutateRawWorld)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        NavigationRayRequest baseline = CreateRequest(fixture);
+        var request = new NavigationRayRequest(
+            fixture.World,
+            fixture.Store,
+            fixture.Graph,
+            NavigationAStarExitTestHarness.Profile(),
+            NavigationAStarExitTestHarness.Policy,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            allowTransitions: false,
+            baseline.Start,
+            baseline.End,
+            NavigationRayEndpointAllowance.None,
+            NavigationRayChainConstraint.SourceOnly(fixture.FarOrigin));
+        var work = new NavigationRayWork(new NavigationRayWorkspace(1, 8, 8, 16, 16));
+        var meter = new NavigationWorkMeter(new NavigationWorkBudget(
+            maxLookupProbes: 1_024,
+            maxEndpointCandidates: 0,
+            maxExpandedNodes: 0,
+            maxEvaluatedEdges: 1_024,
+            maxConnectionLegs: 1_024,
+            maxTransitionCandidates: 0,
+            maxTransitionPairs: 0,
+            maxStagedLegAttempts: 0,
+            maxTraceIntervals: 16,
+            maxCoveredVoxelIntervals: 16,
+            maxSimplificationRays: 0));
+        work.Begin(request);
+        InvokePhase(work, "Trace", meter).Should().Be(NavigationRayStatus.Pending);
+        InvokePhase(work, "MapIntervals", meter).Should().Be(NavigationRayStatus.Pending);
+
+        if (mutateRawWorld)
+        {
+            fixture.Graph.TryGetMap(
+                    fixture.FarOrigin.MapId,
+                    out NavigationMapInstance? instance)
+                .Should().BeTrue();
+            instance.Should().NotBeNull();
+            fixture.World.ActiveGrids[instance!.GridIdentity.GridIndex]
+                .TryRemoveVoxel(new VoxelIndex(2, 0, 0))
+                .Should().BeTrue();
+        }
+        else
+        {
+            var revisedPolicy = new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey(
+                    NavigationAStarExitTestHarness.Policy.Key.PolicyId,
+                    NavigationAStarExitTestHarness.Policy.Key.Revision + 1),
+                new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+            NavigationAreaCatalog.Empty.TryPublish(
+                    revisedPolicy,
+                    1,
+                    1,
+                    1,
+                    1,
+                    out NavigationAreaCatalog revisedCatalog)
+                .Should().Be(NavigationOperationRejection.None);
+            fixture.Store.TryPublish(fixture.Graph.WithAreaCatalog(
+                    revisedCatalog,
+                    fixture.Graph.GraphVersion + 1))
+                .Should().Be(NavigationCandidatePublication.Published);
+        }
+
+        InvokePhase(work, "EvaluateChain", meter)
+            .Should().Be(NavigationRayStatus.Stale);
+    }
+
     private static NavigationRayRequest CreateRequest(
         NavigationFlowFieldCacheTestHarness.LineFixture fixture)
     {

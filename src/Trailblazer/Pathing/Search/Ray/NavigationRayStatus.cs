@@ -32,7 +32,9 @@ internal enum NavigationRayChainConstraintKind : byte
 {
     Unrestricted,
     SourceAddress,
-    SelectedEdge
+    SelectedEdge,
+    SeedAddress,
+    FinishAddress
 }
 
 internal readonly struct NavigationRayChainConstraint
@@ -73,6 +75,14 @@ internal readonly struct NavigationRayChainConstraint
             targetAddress,
             edgeOrdinal);
     }
+
+    internal static NavigationRayChainConstraint SeedAt(
+        NavigationCellAddress sourceAddress) =>
+        new(NavigationRayChainConstraintKind.SeedAddress, sourceAddress, default, -1);
+
+    internal static NavigationRayChainConstraint FinishAt(
+        NavigationCellAddress targetAddress) =>
+        new(NavigationRayChainConstraintKind.FinishAddress, default, targetAddress, -1);
 }
 
 internal readonly struct NavigationRayRequest

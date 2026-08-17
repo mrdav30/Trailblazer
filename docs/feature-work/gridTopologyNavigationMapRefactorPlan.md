@@ -1984,11 +1984,18 @@ P0-P2 issue. The selected
 shape remains one internal bounded ray kernel, canonical A* payload-time
 simplification, graph direct-path reuse, and same-lease Flow rejoin. The kernel
 stays internal until Phase 7 proves the surface-plus-volume contract.
+Role-aware nearest endpoint admission now uses that kernel to certify exact
+start-prefix and destination-suffix snaps, including overlapping-grid candidate
+identity, directed portal traversal, dependency-bearing blocked proofs, and
+final world/page/component validation. Candidate rays are atomic but yield the
+outer admission call immediately after completion, so local work chunks never
+perform additional endpoint work while the shared meter records the full ray.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
 | FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479`, `1170bd9`, `e29b6df` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 713/713, 0 B, exact endpoint cropping/combined trace budget/high-water identity; independent correctness and lean reviews approved |
-| Ordered navigation-ray core and endpoint fallback | Complete pending commit — GridForge ordered trace discovery `bc60dd7`; Trailblazer contracts/workspaces committed; kernel 53/53 focused GREEN | Relevant aggregate 128/128, Release 1,386/1,386, ReleaseLean 1,355/1,355, both TFMs 0 warnings/errors, independent correctness/lean approval; next is endpoint-admission integration |
+| Ordered navigation-ray core | Complete — GridForge ordered trace discovery `bc60dd7`; Trailblazer kernel `f54dcb5` | Focused 53/53, relevant aggregate 128/128, Release 1,386/1,386, ReleaseLean 1,355/1,355, both TFMs 0 warnings/errors, warmed query/guide 0 B, independent correctness/lean approval |
+| Role-aware nearest-endpoint ray proof | Complete — exact overlapping-candidate identity, directed start/destination seams, blocked-negative dependencies, and A*/Flow parity | Focused 53/53, graph/pathing aggregate 479/479, Release 1,404/1,404, ReleaseLean 1,373/1,373, both TFMs/configurations 0 warnings/errors, independent correctness/lean approval |
 | Portal-aware A* guide points and bounded simplification | Planned | Canonical payload, less-simplified success on ray-budget exhaustion, exact bytes |
 | Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
 | Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |
@@ -2011,6 +2018,16 @@ Frozen Phase 6 decisions:
   union outward enclosures.
 - The ray is internal in Phase 6. Phase 7 records the public-API decision after
   volume wiring; there is no temporary public or forwarding overload.
+- The internal chain constraint has five evidence-backed modes. The original
+  unrestricted/source-only/exact-selected-edge modes remain unchanged;
+  endpoint admission adds exact seed and exact finish roles using the same
+  stored source/target addresses. Overlapping grids made a result-address
+  postcheck insufficient because an earlier canonical overlap can otherwise
+  terminate the ray before the candidate's chain is examined.
+- A blocked ray used to skip a nearest endpoint is a published negative proof,
+  not a geometry hint. It validates the current world/policy/page/component
+  dependencies and merges those dependencies into endpoint admission before
+  the shared ray workspace resets; union overflow is terminal capacity failure.
 - Public query limits own three explicit finite ceilings: 4,096 covered
   addresses, 4,096 retained trace intervals, and 65,536 A* guide points by
   default. Every A*/Flow admission slot owns one exclusive ray workspace;

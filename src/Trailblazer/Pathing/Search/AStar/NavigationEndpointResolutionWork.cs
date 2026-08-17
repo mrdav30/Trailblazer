@@ -25,6 +25,13 @@ internal enum NavigationEndpointResolutionStatus : byte
     Stale = 7
 }
 
+/// <summary>Identifies the directed query endpoint being resolved.</summary>
+internal enum NavigationEndpointRole : byte
+{
+    Start,
+    Destination
+}
+
 /// <summary>Identifies one exact resolved graph endpoint.</summary>
 internal readonly struct NavigationResolvedEndpoint
 {
@@ -47,56 +54,80 @@ internal readonly struct NavigationResolvedEndpoint
 internal sealed class NavigationEndpointResolutionWork
 {
     private readonly GridWorld _world;
+    private readonly NavigationWorldGraphStore _store;
     private readonly NavigationWorkMeter _meter;
     private readonly NavigationEndpointWorkspace _workspace;
+    private readonly NavigationRayWorkspace _rayWorkspace;
+    private readonly NavigationRayWork _rayWork;
     private NavigationWorldGraph _graph = null!;
     private NavigationEndpoint _endpoint;
     private TraversalEvaluator _evaluator;
+    private TraversalIntent _intent;
+    private NavigationEndpointRole _role;
+    private NavigationResolvedEndpoint _pendingCandidate;
     private int _mapOrdinal;
     private int _generationInputOrdinal;
+    private ulong _worldChangeSequence;
     private bool _discoveryComplete;
     private bool _cursorBegun;
+    private bool _cursorComplete;
     private bool _hasResult;
 
     internal NavigationEndpointResolutionWork(
         GridWorld world,
-        NavigationWorldGraph graph,
-        NavigationEndpoint endpoint,
-        TraversalEvaluator evaluator,
+        NavigationWorldGraphStore store,
         NavigationWorkMeter meter,
-        NavigationEndpointWorkspace workspace)
-        : this(world, meter, workspace)
-    {
-        Begin(graph, endpoint, evaluator);
-    }
-
-    internal NavigationEndpointResolutionWork(
-        GridWorld world,
-        NavigationWorkMeter meter,
-        NavigationEndpointWorkspace workspace)
+        NavigationEndpointWorkspace workspace,
+        NavigationRayWorkspace rayWorkspace)
     {
         SwiftThrowHelper.ThrowIfNull(world, nameof(world));
+        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
+        SwiftThrowHelper.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
         _world = world;
+        _store = store;
         _meter = meter;
         _workspace = workspace;
+        _rayWorkspace = rayWorkspace;
+        _rayWork = new NavigationRayWork(rayWorkspace);
     }
 
     internal void Begin(
         NavigationWorldGraph graph,
         NavigationEndpoint endpoint,
-        TraversalEvaluator evaluator)
+        NavigationEndpointRole role,
+        NavigationAgentProfile profile,
+        NavigationAreaPolicy areaPolicy,
+        TraversalIntent intent)
     {
         SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
+        SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        SwiftThrowHelper.ThrowIfArgument(
+            role is not NavigationEndpointRole.Start
+                and not NavigationEndpointRole.Destination,
+            nameof(role),
+            "Endpoint role must be start or destination.");
         _graph = graph;
         _endpoint = endpoint;
-        _evaluator = evaluator;
+        _role = role;
+        _intent = intent;
+        _evaluator = new TraversalEvaluator(
+            graph,
+            profile,
+            areaPolicy,
+            intent.CurrentMedium == TraversalMedium.Unknown
+                ? TraversalMedium.Solid
+                : intent.CurrentMedium);
+        _pendingCandidate = default;
         _mapOrdinal = 0;
         _generationInputOrdinal = 0;
+        _worldChangeSequence = _world.ChangeSequence;
         _cursorBegun = false;
+        _cursorComplete = false;
         _hasResult = false;
         Result = default;
+        _rayWork.Reset();
         _workspace.ResetResolution();
         _discoveryComplete = endpoint.MapId == null && graph.MapCount == 0;
         Status = (endpoint.MapId == null
@@ -112,11 +143,17 @@ internal sealed class NavigationEndpointResolutionWork
         _graph = null!;
         _endpoint = default;
         _evaluator = default;
+        _intent = default;
+        _role = default;
+        _pendingCandidate = default;
         _mapOrdinal = 0;
         _generationInputOrdinal = 0;
+        _worldChangeSequence = 0;
         _discoveryComplete = false;
         _cursorBegun = false;
+        _cursorComplete = false;
         _hasResult = false;
+        _rayWork.Reset();
         Status = default;
         Result = default;
     }
@@ -135,6 +172,21 @@ internal sealed class NavigationEndpointResolutionWork
             nameof(endpointCandidateStepLimit));
         if (Status != NavigationEndpointResolutionStatus.Pending)
             return Status;
+
+        if (_pendingCandidate.Node.IsValid)
+        {
+            NavigationEndpointResolutionStatus candidateStatus = AdvanceCandidateRay();
+            if (candidateStatus != NavigationEndpointResolutionStatus.Pending)
+                return candidateStatus;
+            return Status;
+        }
+        if (_cursorComplete)
+        {
+            return Finish(
+                _hasResult
+                    ? NavigationEndpointResolutionStatus.Success
+                    : NavigationEndpointResolutionStatus.InvalidEndpoint);
+        }
 
         int lookupRemaining = Math.Min(lookupStepLimit, _meter.RemainingLookupProbes);
         int candidateRemaining = Math.Min(
@@ -192,6 +244,7 @@ internal sealed class NavigationEndpointResolutionWork
                 out int addressProbes,
                 out int inputsConsumed,
                 out int outputCount);
+            _cursorComplete = cursorStatus == GridCoveredAddressCursorStatus.Complete;
             int consumedLookup = checked(lookupProbes + addressProbes);
             _meter.TryConsumeLookupProbes(consumedLookup);
             lookupRemaining -= consumedLookup;
@@ -293,18 +346,99 @@ internal sealed class NavigationEndpointResolutionWork
             Finish(NavigationEndpointResolutionStatus.Stale);
             return false;
         }
-        if (!_hasResult
-            || distance < Result.ResolutionDistance
-            || (distance == Result.ResolutionDistance
-                && address.CompareTo(Result.Address) < 0))
+        if (!CanBeatCurrentResult(address, distance))
+            return true;
+
+        var resolved = new NavigationResolvedEndpoint(node, address, distance);
+        if (_endpoint.Resolution == EndpointResolutionPolicy.Strict)
         {
-            Result = new NavigationResolvedEndpoint(
-                node,
-                address,
-                distance);
-            _hasResult = true;
+            AcceptCandidate(resolved);
+            return true;
+        }
+
+        _pendingCandidate = resolved;
+        Vector3d start = _role == NavigationEndpointRole.Start
+            ? _endpoint.Position
+            : state.FootAnchor;
+        Vector3d end = _role == NavigationEndpointRole.Start
+            ? state.FootAnchor
+            : _endpoint.Position;
+        NavigationRayChainConstraint constraint = _role == NavigationEndpointRole.Start
+            ? NavigationRayChainConstraint.FinishAt(address)
+            : NavigationRayChainConstraint.SeedAt(address);
+        _rayWork.Begin(new NavigationRayRequest(
+            _world,
+            _store,
+            _graph,
+            _evaluator.Profile,
+            _evaluator.AreaPolicy,
+            _intent,
+            allowTransitions: false,
+            start,
+            end,
+            _role == NavigationEndpointRole.Start
+                ? NavigationRayEndpointAllowance.StartPrefix
+                : NavigationRayEndpointAllowance.DestinationSuffix,
+            constraint));
+        return false;
+    }
+
+    private NavigationEndpointResolutionStatus AdvanceCandidateRay()
+    {
+        NavigationRayStatus rayStatus = _rayWork.Advance(_meter);
+        if (rayStatus == NavigationRayStatus.Pending)
+            return Status;
+        if (rayStatus is NavigationRayStatus.Success or NavigationRayStatus.Blocked)
+        {
+            if (!TryMergeRayDependencies())
+                return Finish(NavigationEndpointResolutionStatus.CapacityExceeded);
+            if (rayStatus == NavigationRayStatus.Success)
+                AcceptCandidate(_pendingCandidate);
+            _pendingCandidate = default;
+            _rayWork.Reset();
+            return Status;
+        }
+        return Finish(rayStatus switch
+        {
+            NavigationRayStatus.BudgetExceeded =>
+                NavigationEndpointResolutionStatus.BudgetExceeded,
+            NavigationRayStatus.CostOverflow =>
+                NavigationEndpointResolutionStatus.CostOverflow,
+            NavigationRayStatus.CapacityExceeded =>
+                NavigationEndpointResolutionStatus.CapacityExceeded,
+            _ => NavigationEndpointResolutionStatus.Stale
+        });
+    }
+
+    private bool TryMergeRayDependencies()
+    {
+        NavigationDependencyWorkspace dependencies = _rayWorkspace.Dependencies;
+        for (int i = 0; i < dependencies.ComponentCount; i++)
+        {
+            if (!_workspace.TryRecordComponent(dependencies.Components[i]))
+                return false;
+        }
+        for (int i = 0; i < dependencies.PageCount; i++)
+        {
+            GraphPageDependencyAddress page = dependencies.Pages[i];
+            if (!_workspace.TryRecordPage(page.MapId, page.PageIndex))
+                return false;
         }
         return true;
+    }
+
+    private bool CanBeatCurrentResult(
+        NavigationCellAddress address,
+        Fixed64 distance) =>
+        !_hasResult
+        || distance < Result.ResolutionDistance
+        || (distance == Result.ResolutionDistance
+            && address.CompareTo(Result.Address) < 0);
+
+    private void AcceptCandidate(NavigationResolvedEndpoint candidate)
+    {
+        Result = candidate;
+        _hasResult = true;
     }
 
     private bool TryGetBounds(out Vector3d minimum, out Vector3d maximum)
@@ -331,6 +465,8 @@ internal sealed class NavigationEndpointResolutionWork
     private NavigationEndpointResolutionStatus Finish(
         NavigationEndpointResolutionStatus status)
     {
+        _pendingCandidate = default;
+        _rayWork.Reset();
         if (status == NavigationEndpointResolutionStatus.Success)
         {
             if (!_graph.TryGetSurfaceComponent(
@@ -345,9 +481,58 @@ internal sealed class NavigationEndpointResolutionWork
                 status = NavigationEndpointResolutionStatus.CapacityExceeded;
             }
         }
+        if ((status == NavigationEndpointResolutionStatus.Success
+                || (status == NavigationEndpointResolutionStatus.InvalidEndpoint
+                    && (_workspace.PageCount != 0 || _workspace.ComponentCount != 0)))
+            && !AreDependenciesCurrent())
+        {
+            status = NavigationEndpointResolutionStatus.Stale;
+        }
         Status = status;
         if (status != NavigationEndpointResolutionStatus.Success)
             Result = default;
         return Status;
+    }
+
+    private bool AreDependenciesCurrent()
+    {
+        if (_world.ChangeSequence != _worldChangeSequence)
+            return false;
+        NavigationWorldGraph current = _store.Current;
+        NavigationAreaPolicy areaPolicy = _evaluator.AreaPolicy;
+        if (_graph.AreaCatalog.TryGet(
+                areaPolicy.Key,
+                out NavigationAreaPolicy? expectedPolicy)
+            && expectedPolicy != null
+            && (!current.AreaCatalog.TryGet(
+                    areaPolicy.Key,
+                    out NavigationAreaPolicy? currentPolicy)
+                || currentPolicy == null
+                || !currentPolicy.ContentEquals(expectedPolicy)))
+        {
+            return false;
+        }
+        NavigationDependencyWorkspace dependencies = _workspace.Dependencies;
+        for (int i = 0; i < dependencies.ComponentCount; i++)
+        {
+            NavigationSurfaceComponentKey key = dependencies.Components[i];
+            if (!_graph.TryGetComponentDependency(key, out GraphComponentDependency prior)
+                || !current.TryGetComponentDependency(key, out GraphComponentDependency next)
+                || !prior.Equals(next))
+            {
+                return false;
+            }
+        }
+        for (int i = 0; i < dependencies.PageCount; i++)
+        {
+            GraphPageDependencyAddress address = dependencies.Pages[i];
+            if (!_graph.TryGetPageDependency(address, out GraphPageDependency prior)
+                || !current.TryGetPageDependency(address, out GraphPageDependency next)
+                || !prior.Equals(next))
+            {
+                return false;
+            }
+        }
+        return _world.ChangeSequence == _worldChangeSequence;
     }
 }

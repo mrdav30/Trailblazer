@@ -61,7 +61,9 @@ public class NavigationFlowFieldBenchmarks
         _workspaceAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         _admission = new NavigationQueryAdmissionWork(
             _fixture.World,
+            _fixture.Context.Pathing.NavigationGraphStore,
             _workspace.EndpointWorkspace,
+            _workspace.RayWorkspace,
             PathAlgorithm.FlowField);
 
         long cost = ColdReverseIntegration();

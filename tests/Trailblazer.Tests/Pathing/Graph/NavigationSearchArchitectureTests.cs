@@ -218,6 +218,30 @@ public sealed class NavigationSearchArchitectureTests
         postAdvanceRead.Should().NotContain("ReleaseNavigationGuidance");
     }
 
+    [Fact]
+    public void EndpointProofPublication_ShouldCloseWorldSequenceAndAvoidReranking()
+    {
+        string endpointPath = Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "AStar",
+            "NavigationEndpointResolutionWork.cs");
+        string source = File.ReadAllText(endpointPath);
+        int validationIndex = source.IndexOf(
+            "private bool AreDependenciesCurrent()",
+            StringComparison.Ordinal);
+        validationIndex.Should().BeGreaterThanOrEqualTo(0);
+        string validation = source.Substring(validationIndex);
+
+        validation.Split("_world.ChangeSequence", StringSplitOptions.None)
+            .Length.Should().Be(3,
+                "world identity must bracket the dependency scan");
+        source.Should().NotContain(
+            "if (!CanBeatCurrentResult(candidate.Address, candidate.ResolutionDistance))",
+            "candidate ranking was already proved before the ray began");
+    }
+
     private static string GetSourceRoot([CallerFilePath] string testFile = "")
     {
         string graphTests = Path.GetDirectoryName(testFile)!;

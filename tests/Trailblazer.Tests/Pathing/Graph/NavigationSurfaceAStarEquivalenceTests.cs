@@ -686,10 +686,11 @@ internal static class NavigationAStarExitTestHarness
             guidePointCapacity: 128);
         using var admission = new NavigationQueryAdmissionWork(
             world,
-            lease,
-            query,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.AStar);
+        admission.Begin(lease, query);
         for (int step = 0;
             step < 1_024 && admission.Status == NavigationQueryAdmissionStatus.Pending;
             step++)
@@ -752,10 +753,11 @@ internal static class NavigationAStarExitTestHarness
             guidePointCapacity: 128);
         using var admission = new NavigationQueryAdmissionWork(
             world,
-            lease,
-            query,
+            store,
             workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
             PathAlgorithm.AStar);
+        admission.Begin(lease, query);
         for (int step = 0;
             step < 1_024 && admission.Status == NavigationQueryAdmissionStatus.Pending;
             step++)

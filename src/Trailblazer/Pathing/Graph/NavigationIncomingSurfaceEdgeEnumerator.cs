@@ -18,7 +18,6 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
     private NavigationSurfaceEdgeEnumerator _outgoingEdges;
     private NavigationGraphEdge _incomingCandidate;
     private NavigationNodeRef _predecessor;
-    private int _outgoingOrdinal;
     private bool _hasIncomingCandidate;
 
     internal NavigationIncomingSurfaceEdgeEnumerator(
@@ -30,7 +29,6 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
         _outgoingEdges = default;
         _incomingCandidate = default;
         _predecessor = default;
-        _outgoingOrdinal = 0;
         _hasIncomingCandidate = false;
         _structural = structural;
         Current = default;
@@ -115,7 +113,6 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
                 _outgoingEdges = _structural
                     ? _graph.EnumerateStructuralSurfaceEdges(_predecessor)
                     : _graph.EnumerateSurfaceEdges(_predecessor);
-                _outgoingOrdinal = 0;
                 _hasIncomingCandidate = true;
             }
 
@@ -141,14 +138,15 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
             }
 
             NavigationGraphEdge forwardEdge = _outgoingEdges.Current;
-            int ordinal = _outgoingOrdinal++;
             if (!MatchesIncomingCandidate(forwardEdge))
                 continue;
 
             Current = new NavigationIncomingSurfaceEdge(
                 _predecessor,
                 forwardEdge,
-                new NavigationSelectedEdgeRef(_destinationAddress, ordinal));
+                new NavigationSelectedEdgeRef(
+                    _destinationAddress,
+                    _outgoingEdges.CurrentOrdinal));
             ClearIncomingCandidate();
             return NavigationSurfaceEdgeAdvanceStatus.Edge;
         }
@@ -179,7 +177,6 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
         _outgoingEdges = default;
         _incomingCandidate = default;
         _predecessor = default;
-        _outgoingOrdinal = 0;
         _hasIncomingCandidate = false;
     }
 }

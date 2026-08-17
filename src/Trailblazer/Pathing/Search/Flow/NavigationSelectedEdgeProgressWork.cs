@@ -231,7 +231,6 @@ internal static class NavigationSelectedEdgeProgressWork
         out NavigationGraphEdge edge)
     {
         NavigationSurfaceEdgeEnumerator edges = graph.EnumerateStructuralSurfaceEdges(source);
-        int ordinal = 0;
         int edgeStepRemaining = int.MaxValue;
         while (true)
         {
@@ -247,7 +246,7 @@ internal static class NavigationSelectedEdgeProgressWork
                 continue;
             if (status == NavigationSurfaceEdgeAdvanceStatus.Complete)
                 break;
-            if (ordinal++ != selected.CanonicalOutgoingOrdinal)
+            if (edges.CurrentOrdinal != selected.CanonicalOutgoingOrdinal)
                 continue;
             edge = edges.Current;
             return graph.TryGetNodeAddress(edge.Target, out NavigationCellAddress target)

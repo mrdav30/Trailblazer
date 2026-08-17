@@ -44,6 +44,7 @@ internal struct NavigationSurfaceEdgeEnumerator
     private NavigationCellAddress _nativeEndpoint;
     private NavigationCellAddress _explicitEndpoint;
     private NavigationCellAddress _seamEndpoint;
+    private int _currentOrdinal;
 
     internal NavigationSurfaceEdgeEnumerator(
         NavigationWorldGraph graph,
@@ -73,6 +74,7 @@ internal struct NavigationSurfaceEdgeEnumerator
         _nativeEndpoint = default;
         _explicitEndpoint = default;
         _seamEndpoint = default;
+        _currentOrdinal = -1;
         Current = default;
         if (!graph.TryGetNodeAddress(origin, out _origin)
             || (structural
@@ -101,6 +103,8 @@ internal struct NavigationSurfaceEdgeEnumerator
     }
 
     internal NavigationGraphEdge Current { get; private set; }
+
+    internal int CurrentOrdinal => _currentOrdinal;
 
     internal bool MoveNext()
     {
@@ -317,6 +321,7 @@ internal struct NavigationSurfaceEdgeEnumerator
             selectedKind = 2;
         }
         Current = selected;
+        _currentOrdinal++;
         if (selectedKind == 0)
             _hasNative = false;
         else if (selectedKind == 1)

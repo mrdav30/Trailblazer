@@ -1968,18 +1968,27 @@ Production implementation is in progress. FixedMathSharp now owns exact finite
 segment separation, exact 3D point-on-segment membership, and conservative
 parameter enclosures for capsule and unique-intersection queries. GridForge
 `1ed5479` owns the reviewed swept-body/portal authority. Bounded deterministic
-ordered trace discovery is complete in GridForge `bc60dd7`. Trailblazer's
+ordered trace discovery is complete in GridForge `bc60dd7`; exact endpoint
+cropping plus combined candidate-work authority landed in `1170bd9`, and traced
+grid high-water identity landed in `e29b6df`. Trailblazer's
 finite ray settings, work-meter categories, exclusive query workspaces, focused
 dependency accumulation, and single context-owned blocking immediate workspace
-are complete; the ordered ray kernel is the next active slice. The selected
+are complete. The ordered ray kernel now evaluates native, automatic-seam, and
+compiled explicit corridors through one packed canonical closure, with exact
+query/guide metering, endpoint allowances, semantic cost/overflow facts,
+dependency/current revalidation, and warmed zero-allocation behavior. Its
+53-case focused matrix is green; the relevant graph aggregate is 128/128,
+Release is 1,386/1,386, ReleaseLean is 1,355/1,355, both target-framework
+builds are warning-free, and independent correctness/ponytail review found no
+P0-P2 issue. The selected
 shape remains one internal bounded ray kernel, canonical A* payload-time
 simplification, graph direct-path reuse, and same-lease Flow rejoin. The kernel
 stays internal until Phase 7 proves the surface-plus-volume contract.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
-| FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 710/710, 0 B, 224-byte cursor; independent correctness and lean reviews approved |
-| Ordered navigation-ray core and endpoint fallback | In progress — GridForge ordered trace discovery `bc60dd7` and Trailblazer bounded contracts/workspaces complete | Separate grid/address/output ceilings and counts, mixed-topology canonical order, failure/success 0 B, Release/Lean 711/711; Trailblazer ordered evaluator and endpoint integration remain |
+| FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479`, `1170bd9`, `e29b6df` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 713/713, 0 B, exact endpoint cropping/combined trace budget/high-water identity; independent correctness and lean reviews approved |
+| Ordered navigation-ray core and endpoint fallback | Complete pending commit — GridForge ordered trace discovery `bc60dd7`; Trailblazer contracts/workspaces committed; kernel 53/53 focused GREEN | Relevant aggregate 128/128, Release 1,386/1,386, ReleaseLean 1,355/1,355, both TFMs 0 warnings/errors, independent correctness/lean approval; next is endpoint-admission integration |
 | Portal-aware A* guide points and bounded simplification | Planned | Canonical payload, less-simplified success on ray-budget exhaustion, exact bytes |
 | Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
 | Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |
@@ -2009,6 +2018,18 @@ Frozen Phase 6 decisions:
   Direct workspace construction requires every ray/guide ceiling explicitly,
   and ray dependency scratch retains only page/component accumulation rather
   than endpoint-resolution cursors or speculative generation stamps.
+- GridForge trace admission retains separate finite grid/address/output
+  ceilings plus one `long` combined grid-and-address work ceiling. Guide rays
+  map their single current-node allowance to that combined ceiling without
+  pre-spending hidden address work. Every returned interval carries the source
+  grid high-water sequence captured under the trace read lock; the ray compares
+  it before physical-presence filtering and rechecks the world sequence at its
+  final linearization point.
+- Destination-suffix rays establish the farthest reachable canonical terminal
+  before applying the boundary allowance. Start-prefix authority is consumed
+  only by the first selected chain segment, never by later explicit witnesses.
+  Consecutive explicit corridors additionally require the prior exit anchor to
+  precede the next entry anchor along the directed ray.
 - A* simplification runs once before cache publication. Optional simplification
   exhaustion appends the valid raw suffix rather than failing the successful
   query.

@@ -434,11 +434,11 @@ git commit -m "feat(pathing): define bounded navigation ray workspaces"
 - `NavigationRayChainConstraint` has exactly three modes: unrestricted, current-source-address only, or current source followed by one exact canonical selected edge `(source, target, ordinal)` with no substitute graph edge.
 - Query and guide `Advance` entry points run one common iterative state machine. Each state exposes the next concrete debit; thin overloads consume it from `NavigationWorkMeter` or `ref GuideSampleWorkMeter` without an interface, boxing, or duplicated transition logic.
 
-- [ ] **Step 1: Write the core RED matrix**
+- [x] **Step 1: Write the core RED matrix**
 
 Tests must cover dense/sparse rectangular, pointy/flat hex, mixed overlapping mapped/unmapped grids, disconnected overlap, interior sparse hole, native/seam/explicit multi-witness edges, off-line explicit portal, reverse/asymmetric portal, transitive tie frontier requiring opposite address order, wrong selected overlap, positive radius corner clip, horizontal/vertical portal primitive consumption, every one-below counter, every terminal status, mutation before/after final validation, and exact cost/cost-neutral facts.
 
-- [ ] **Step 2: Run the core RED**
+- [x] **Step 2: Run the core RED**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationRayTests|FullyQualifiedName~NavigationRayConcurrencyTests"
@@ -446,7 +446,7 @@ dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Rel
 
 Expected: missing `NavigationRayWork` behavior and failing requested statuses.
 
-- [ ] **Step 3: Implement the iterative state machine**
+- [x] **Step 3: Implement the iterative state machine**
 
 The state machine must:
 
@@ -463,7 +463,7 @@ For query work, trace intervals debit `MaxTraceIntervals`, covered addresses deb
 
 No recursion, hash iteration, geometry reconstruction, or input-order result dependency is permitted.
 
-- [ ] **Step 4: Run focused, relevant aggregate, allocation, and both TFM builds**
+- [x] **Step 4: Run focused, relevant aggregate, allocation, and both TFM builds**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationRay|FullyQualifiedName~TraversalEvaluator|FullyQualifiedName~NavigationExplicitConnection|FullyQualifiedName~NavigationAutomaticSeam"
@@ -471,15 +471,20 @@ dotnet build src/Trailblazer/Trailblazer.csproj --configuration Release -m:1 -p:
 dotnet build src/Trailblazer/Trailblazer.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true -f net8.0
 ```
 
-- [ ] **Step 5: External correctness/ponytail review and commit**
+- [x] **Step 5: External correctness/ponytail review and commit**
 
 Review graph-chain closure, meter accounting, staleness linearization, lock order, zero allocations, and absence of duplicate geometry.
 
 ```powershell
-git add -- src/Trailblazer/Pathing/Search/Ray src/Trailblazer/Pathing/Graph/NavigationSurfaceEdgeEnumerator.cs src/Trailblazer/Pathing/Graph/TraversalEvaluator.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationRayTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationRayConcurrencyTests.cs docs/feature-work/gridTopologyNavigationMapRefactorPlan.md
+git add -- src/Trailblazer/Pathing/Search/Ray src/Trailblazer/Pathing/Graph/NavigationSurfaceEdgeEnumerator.cs src/Trailblazer/Pathing/Graph/NavigationIncomingSurfaceEdgeEnumerator.cs src/Trailblazer/Pathing/Search/Flow/GuideSampleWorkMeter.cs src/Trailblazer/Pathing/Search/Flow/NavigationSelectedEdgeProgressWork.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationRayTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationRayConcurrencyTests.cs docs/feature-work/gridTopologyNavigationMapRefactorPlan.md docs/superpowers/plans/2026-08-16-navigation-rays-and-simplification.md
 git diff --cached --check
 git commit -m "feat(pathing): evaluate ordered navigation rays"
 ```
+
+Closure: focused ray/concurrency `53/53`; relevant graph aggregate `128/128`;
+Release `1,386/1,386`; ReleaseLean `1,355/1,355`; both Release target
+framework builds 0 warnings/errors; warmed query and guide adapters allocate
+0 B; independent correctness and ponytail reviews found no P0-P2 findings.
 
 ---
 

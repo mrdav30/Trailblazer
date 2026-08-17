@@ -53,6 +53,9 @@ internal struct GuideSampleWorkMeter
     internal readonly int GetCurrentNodeLookupAllowance() =>
         _remainingCurrentNodeLookupProbes;
 
+    internal readonly int GetTraceIntervalAllowance() =>
+        _remainingTraceIntervals;
+
     private static bool TryConsume(ref int remaining, int count)
     {
         if (count < 0 || count > remaining)

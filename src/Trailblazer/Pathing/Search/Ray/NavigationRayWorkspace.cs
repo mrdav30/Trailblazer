@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 
@@ -40,18 +41,9 @@ internal sealed class NavigationRayWorkspace
         TraceIntervalCapacity = traceIntervalCapacity;
         TraceScratch = new GridTraceIntervalScratch(mapCapacity, coveredAddressCapacity);
         TraceIntervals = new SwiftList<GridTraceInterval>(traceIntervalCapacity);
-        IntervalAddresses = traceIntervalCapacity == 0
-            ? Array.Empty<NavigationCellAddress>()
-            : new NavigationCellAddress[traceIntervalCapacity];
-        IntervalNodes = traceIntervalCapacity == 0
-            ? Array.Empty<NavigationNodeRef>()
-            : new NavigationNodeRef[traceIntervalCapacity];
-        PredecessorOrdinals = traceIntervalCapacity == 0
-            ? Array.Empty<int>()
-            : new int[traceIntervalCapacity];
-        EdgeOrdinals = traceIntervalCapacity == 0
-            ? Array.Empty<int>()
-            : new int[traceIntervalCapacity];
+        ChainRecords = traceIntervalCapacity == 0
+            ? Array.Empty<NavigationRayChainRecord>()
+            : new NavigationRayChainRecord[traceIntervalCapacity];
         Dependencies = new NavigationDependencyWorkspace(pageCapacity, componentCapacity);
     }
 
@@ -65,13 +57,7 @@ internal sealed class NavigationRayWorkspace
 
     internal SwiftList<GridTraceInterval> TraceIntervals { get; }
 
-    internal NavigationCellAddress[] IntervalAddresses { get; }
-
-    internal NavigationNodeRef[] IntervalNodes { get; }
-
-    internal int[] PredecessorOrdinals { get; }
-
-    internal int[] EdgeOrdinals { get; }
+    internal NavigationRayChainRecord[] ChainRecords { get; }
 
     internal NavigationDependencyWorkspace Dependencies { get; }
 
@@ -81,4 +67,24 @@ internal sealed class NavigationRayWorkspace
         TraceIntervals.Clear();
         Dependencies.Reset();
     }
+}
+
+internal enum NavigationRayChainRecordState : byte
+{
+    Unavailable,
+    Unreached,
+    Ready,
+    Expanded
+}
+
+internal struct NavigationRayChainRecord
+{
+    internal NavigationNodeRef Node;
+    internal int PredecessorOrdinal;
+    internal int RootOrdinal;
+    internal Fixed64 ArrivalParameter;
+    internal Fixed64 TraversalCost;
+    internal NavigationExplicitConnectionRecord IncomingExplicitConnection;
+    internal NavigationRayChainRecordState State;
+    internal bool IsSemanticCostNeutral;
 }

@@ -142,8 +142,6 @@ internal readonly struct TraversalEvaluator
 
     internal NavigationAreaPolicy AreaPolicy => _areaPolicy;
 
-    internal NavigationWorldGraph Graph => _graph;
-
     internal bool TryGetPassableNodeState(
         NavigationNodeRef node,
         out NavigationNodeState state) =>

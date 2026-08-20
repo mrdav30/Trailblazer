@@ -291,6 +291,75 @@ public sealed class NavigationSearchArchitectureTests
             "candidate ranking was already proved before the ray began");
     }
 
+    [Fact]
+    public void AStarQuerySlot_ShouldConstructOneRayWorkInAdmissionOnly()
+    {
+        string root = Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "AStar");
+        string admission = File.ReadAllText(Path.Combine(
+            root,
+            "NavigationQueryAdmissionWork.cs"));
+        string endpoint = File.ReadAllText(Path.Combine(
+            root,
+            "NavigationEndpointResolutionWork.cs"));
+        string workspace = File.ReadAllText(Path.Combine(
+            root,
+            "NavigationAStarWorkspace.cs"));
+
+        admission.Split("new NavigationRayWork(", StringSplitOptions.None)
+            .Length.Should().Be(2,
+                "one admission-owned ray is shared with endpoint resolution and search");
+        endpoint.Should().NotContain("new NavigationRayWork(");
+        workspace.Should().NotContain("new NavigationRayWork(");
+    }
+
+    [Fact]
+    public void ConditionalWorldEpoch_ShouldBeTheTrailingPublicationAndGuideValidation()
+    {
+        string root = Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "AStar");
+        string cache = File.ReadAllText(Path.Combine(
+            root,
+            "NavigationAStarPayloadCache.cs"));
+        string guide = File.ReadAllText(Path.Combine(
+            root,
+            "NavigationAStarGuideLease.cs"));
+        string query = File.ReadAllText(Path.Combine(
+            root,
+            "NavigationAStarQueryWork.cs"));
+
+        cache.Should().Contain(
+            "graph.IsDependencyCurrent(current.Payload.Dependencies)\n                && IsWorldCurrent(current.Payload)");
+        cache.Should().Contain(
+            "!graphLease.Graph.IsDependencyCurrent(payload.Dependencies)\n                || !store.Current.IsDependencyCurrent(payload.Dependencies)\n                || !IsWorldCurrent(payload)");
+        guide.Should().Contain(
+            "!store.Current.IsDependencyCurrent(payload.Dependencies)\n                || !_owner.IsWorldCurrent(payload)");
+
+        int publish = query.IndexOf("_cache.TryPublish(", StringComparison.Ordinal);
+        int trailingStore = query.IndexOf(
+            "_store.Current.IsDependencyCurrent(published.Payload.Dependencies)",
+            publish,
+            StringComparison.Ordinal);
+        int trailingWorld = query.IndexOf(
+            "_cache.IsWorldCurrent(published.Payload)",
+            trailingStore,
+            StringComparison.Ordinal);
+        int removal = query.IndexOf(
+            "_cache.RemoveExact(published.Payload)",
+            trailingWorld,
+            StringComparison.Ordinal);
+        publish.Should().BeGreaterThanOrEqualTo(0);
+        trailingStore.Should().BeGreaterThan(publish);
+        trailingWorld.Should().BeGreaterThan(trailingStore);
+        removal.Should().BeGreaterThan(trailingWorld);
+    }
+
     private static string GetSourceRoot([CallerFilePath] string testFile = "")
     {
         string graphTests = Path.GetDirectoryName(testFile)!;

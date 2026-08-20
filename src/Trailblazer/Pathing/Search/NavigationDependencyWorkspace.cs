@@ -51,22 +51,68 @@ internal sealed class NavigationDependencyWorkspace
 
     internal bool TryRecordComponent(NavigationSurfaceComponentKey component)
     {
+        if (ComponentCount >= Components.Length)
+            return _componentSet.Contains(component.Representative);
         if (!_componentSet.Add(component.Representative))
             return true;
-        if (ComponentCount >= Components.Length)
-            return false;
         Components[ComponentCount++] = component;
         return true;
     }
 
     internal bool TryRecordPage(string mapId, int pageIndex)
     {
-        if (_pageSet.Contains(mapId, pageIndex))
-            return true;
         if (PageCount >= Pages.Length)
-            return false;
-        _pageSet.Add(mapId, pageIndex);
+            return _pageSet.Contains(mapId, pageIndex);
+        if (!_pageSet.Add(mapId, pageIndex))
+            return true;
         Pages[PageCount++] = new GraphPageDependencyAddress(mapId, pageIndex);
         return true;
+    }
+
+    internal bool TryCountMissing(
+        NavigationDependencyWorkspace source,
+        NavigationWorkMeter meter,
+        out int missingComponents,
+        out int missingPages)
+    {
+        SwiftThrowHelper.ThrowIfNull(source, nameof(source));
+        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
+        missingComponents = 0;
+        missingPages = 0;
+        if (source.ComponentCount > int.MaxValue - source.PageCount)
+            return false;
+        int probeCount = source.ComponentCount + source.PageCount;
+        if (!meter.TryConsumeLookupProbes(probeCount))
+            return false;
+        for (int i = 0; i < source.ComponentCount; i++)
+        {
+            if (!_componentSet.Contains(source.Components[i].Representative))
+                missingComponents++;
+        }
+        for (int i = 0; i < source.PageCount; i++)
+        {
+            GraphPageDependencyAddress page = source.Pages[i];
+            if (!_pageSet.Contains(page.MapId, page.PageIndex))
+                missingPages++;
+        }
+        return true;
+    }
+
+    internal bool CanFit(int additionalComponents, int additionalPages) =>
+        additionalComponents >= 0
+        && additionalPages >= 0
+        && additionalComponents <= Components.Length - ComponentCount
+        && additionalPages <= Pages.Length - PageCount;
+
+    internal void CommitMerge(NavigationDependencyWorkspace source)
+    {
+        SwiftThrowHelper.ThrowIfNull(source, nameof(source));
+        for (int i = 0; i < source.ComponentCount; i++)
+            TryRecordComponent(source.Components[i]);
+        for (int i = 0; i < source.PageCount; i++)
+        {
+            GraphPageDependencyAddress page = source.Pages[i];
+            TryRecordPage(page.MapId, page.PageIndex);
+        }
     }
 }

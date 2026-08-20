@@ -252,8 +252,10 @@ stable address and exact position:
   synthetic corridor waypoints.
 
 The existing `NavigationAStarNodeTable` remains the cumulative node-foot cost
-authority. Task 8 alone adds bounded node-to-guide ordinal scratch when
-simplification consumes those costs; no per-guide cost array is retained.
+authority. Task 8 alone adds bounded path-node-to-guide ordinal scratch and
+populates it at the existing node-owned append sites while reconstruction still
+knows that ownership. Guide-point values are never rescanned to infer node
+ownership, and no per-guide cost or node-marker array is retained.
 
 The immutable A* payload changes from an address-only node array to a bounded
 array of internal guide points containing the stable associated address and
@@ -267,9 +269,11 @@ original graph route cost; geometric string pulling never rewrites route cost.
 
 Simplification runs after raw guide-point expansion and before final
 dependency-stamp capture/payload publication. Before optional work begins, the
-query reserves the exact remaining lookup/copy work needed to publish the raw
-route and its already-discovered dependency stamp. Optional rays can consume
-only the unreserved remainder.
+query reserves a count-derived worst-case lookup ceiling for the one final
+dependency sort and the exact component/page stamp-capture probes. The shared
+work meter keeps that floor unavailable to the existing atomic ray. Final guide
+copying remains governed by the resumable caller step limit and is not part of
+the navigation work budget.
 
 - From the current committed node foot anchor, later node foot anchors are
   attempted in deterministic farthest-to-nearest route order. Portal and
@@ -278,17 +282,40 @@ only the unreserved remainder.
 - A successful navigation ray commits the farthest proven candidate only when
   its exact traversal cost is no greater than the exact difference between the
   two node-anchor cumulative costs.
+- A strict-less accepted ray is not constructible for immutable nonnegative
+  graph edges: the exact-anchor ray is another graph path between the same
+  nodes, and the selected A* path has optimal substructure. Verification pins
+  equality acceptance and greater-cost rejection; it does not add a hook to
+  manufacture an unreachable comparison case.
 - A blocked ray tries the next candidate while budget remains.
 - Each attempt consumes exactly one `MaxSimplificationRays` debit plus its trace,
   coverage, edge, connection, and dependency work.
 - When no simplification ray remains, the untouched raw suffix is appended.
-- Ray dependencies are first held in temporary fixed scratch. A shortcut is
-  committed and its dependencies merged only when the exact union still fits
-  both dependency capacity and the reserved final-capture work; otherwise
-  optional simplification stops and appends the raw suffix.
+- Ray dependencies remain in the ray workspace's existing fixed scratch. Two
+  allocation-free, metered membership passes first count and validate the exact
+  union, then append only after all component/page capacities, the enlarged
+  final sort/capture reservation, and one lookup probe per append-pass entry
+  fit. Completed blocked, cost-ineligible, and endpoint-identity-mismatched
+  proofs are also merged when simplification continues, because they influenced
+  the canonical retained result. A partial, budget-exhausted, or union-rejected
+  ray is not merged.
+- The terminal ray proof and both metered dependency passes are one bounded
+  atomic simplification unit. The full second-pass debit and enlarged final
+  reservation are proven before the first append; no resumable union state is
+  retained.
+- Candidate rays are seeded at the exact source node address, and both returned
+  endpoint addresses must equal the selected path-node endpoints. Overlapping
+  mapped intervals therefore fail closed instead of authorizing another node's
+  shortcut.
 - A simplification `BudgetExceeded` therefore does not turn a successful A*
-  search into failure. Search, endpoint, overflow, capacity, or stale failures
-  retain their existing terminal semantics.
+  search into failure. Mandatory search, endpoint, dependency-finalization,
+  payload, and publication failures retain their existing terminal semantics.
+
+Optional simplification `BudgetExceeded`, `CapacityExceeded`, or
+`CostOverflow` stops simplification and preserves the untouched raw suffix;
+those statuses remain terminal only when they arise from mandatory admission,
+search, reconstruction, dependency finalization, payload sizing, or
+publication. `Stale` is always terminal.
 
 This algorithm is bounded by the declared ray count even though the conceptual
 candidate space is quadratic. It never performs an unmetered all-pairs scan.
@@ -298,6 +325,15 @@ identical payload guide points.
 Ray-touched semantic pages and components are merged into the payload dependency
 stamp. Cached simplified routes therefore become stale when any node, edge,
 witness, portal, or policy fact used by a shortcut changes.
+
+Because a simplification ray also reads the mutable `GridWorld` trace, the first
+successfully merged completed proof—accepted or completed-negative—binds the
+payload to the captured world change sequence. The sequence must remain equal
+through final construction, both sides of publication, cache checkout, and
+guide use. A mismatch yields `Stale`. The payload owns the single conditional
+epoch fact; the context-owned cache retains the world reference once and pooled
+guides validate through their cache owner. Payloads with no completed merged
+proof retain the existing graph-only cache behavior.
 
 ## Graph Direct Travel
 

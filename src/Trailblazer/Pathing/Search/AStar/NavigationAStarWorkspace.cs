@@ -37,6 +37,9 @@ internal sealed class NavigationAStarWorkspace
         PathNodes = nodeCapacity == 0
             ? Array.Empty<NavigationNodeRef>()
             : new NavigationNodeRef[nodeCapacity];
+        PathNodeGuidePointOrdinals = nodeCapacity == 0
+            ? Array.Empty<int>()
+            : new int[nodeCapacity];
         RayWorkspace = new NavigationRayWorkspace(
             mapCapacity,
             endpointPageCapacity,
@@ -64,6 +67,8 @@ internal sealed class NavigationAStarWorkspace
     internal NavigationNodeRef[] HeapNodes { get; }
 
     internal NavigationNodeRef[] PathNodes { get; }
+
+    internal int[] PathNodeGuidePointOrdinals { get; }
 
     internal NavigationRayWorkspace RayWorkspace { get; }
 

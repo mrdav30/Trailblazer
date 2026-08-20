@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
@@ -19,6 +20,7 @@ internal struct NavigationAStarPayloadReservation
 internal sealed class NavigationAStarPayloadCache
 {
     private readonly object _sync = new();
+    private readonly GridWorld _world;
     private readonly NavigationAStarPayloadKey[] _keys;
     private readonly CacheEntry?[] _entries;
     private readonly byte[] _states;
@@ -43,12 +45,14 @@ internal sealed class NavigationAStarPayloadCache
     private NavigationAStarGuideLease? _freeGuides;
 
     internal NavigationAStarPayloadCache(
+        GridWorld world,
         int maxEntries,
         long maxReusableBytes = long.MaxValue,
         long maxSinglePayloadBytes = long.MaxValue,
         long maxActivePayloadBytes = long.MaxValue,
         int maxActiveLeases = int.MaxValue)
     {
+        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNegative(maxEntries, nameof(maxEntries));
         if (maxReusableBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxReusableBytes));
@@ -65,6 +69,7 @@ internal sealed class NavigationAStarPayloadCache
         int required = checked(Math.Max(1, maxEntries * 2));
         while (tableSize < required)
             tableSize = checked(tableSize * 2);
+        _world = world;
         _keys = new NavigationAStarPayloadKey[tableSize];
         _entries = new CacheEntry[tableSize];
         _states = new byte[tableSize];
@@ -145,6 +150,12 @@ internal sealed class NavigationAStarPayloadCache
 
     internal long MaximumSinglePayloadBytes => _maximumSinglePayloadBytes;
 
+    internal GridWorld World => _world;
+
+    internal bool IsWorldCurrent(NavigationAStarPayload payload) =>
+        payload.WorldChangeSequence is not ulong sequence
+        || _world.ChangeSequence == sequence;
+
     internal bool TryCheckout(
         NavigationAStarPayloadKey key,
         NavigationWorldGraph graph,
@@ -160,7 +171,8 @@ internal sealed class NavigationAStarPayloadCache
                 return false;
             }
             CacheEntry current = _entries[slot]!;
-            if (graph.IsDependencyCurrent(current.Payload.Dependencies))
+            if (graph.IsDependencyCurrent(current.Payload.Dependencies)
+                && IsWorldCurrent(current.Payload))
             {
                 if (!TryCheckout(current, out lease))
                     return false;
@@ -203,7 +215,8 @@ internal sealed class NavigationAStarPayloadCache
         using (graphLease)
         {
             if (!graphLease.Graph.IsDependencyCurrent(payload.Dependencies)
-                || !store.Current.IsDependencyCurrent(payload.Dependencies))
+                || !store.Current.IsDependencyCurrent(payload.Dependencies)
+                || !IsWorldCurrent(payload))
             {
                 payloadLease.Dispose();
                 guide = null;
@@ -275,7 +288,8 @@ internal sealed class NavigationAStarPayloadCache
             if (!found)
                 return false;
             CacheEntry current = _entries[slot]!;
-            if (!graph.IsDependencyCurrent(current.Payload.Dependencies))
+            if (!graph.IsDependencyCurrent(current.Payload.Dependencies)
+                || !IsWorldCurrent(current.Payload))
             {
                 RemoveAt(slot);
                 return false;
@@ -313,7 +327,8 @@ internal sealed class NavigationAStarPayloadCache
                 payload.GuidePoints.Length)
             || !reservation.HasLeaseSlot
             || retainedBytes > reservation.MaximumBytes
-            || !store.Current.IsDependencyCurrent(payload.Dependencies))
+            || !store.Current.IsDependencyCurrent(payload.Dependencies)
+            || !IsWorldCurrent(payload))
         {
             return false;
         }
@@ -321,7 +336,8 @@ internal sealed class NavigationAStarPayloadCache
         {
             ValidateReservationUnderLock(reservation);
             NavigationWorldGraph graph = store.Current;
-            if (!graph.IsDependencyCurrent(payload.Dependencies))
+            if (!graph.IsDependencyCurrent(payload.Dependencies)
+                || !IsWorldCurrent(payload))
                 return false;
             long otherReservations =
                 _reservedPayloadBytes - reservation.MaximumBytes;
@@ -329,7 +345,8 @@ internal sealed class NavigationAStarPayloadCache
             if (found)
             {
                 CacheEntry current = _entries[slot]!;
-                if (graph.IsDependencyCurrent(current.Payload.Dependencies))
+                if (graph.IsDependencyCurrent(current.Payload.Dependencies)
+                    && IsWorldCurrent(current.Payload))
                 {
                     if (_activeLeaseCount + _reservedLeaseCount - 1
                             >= _maximumActiveLeases

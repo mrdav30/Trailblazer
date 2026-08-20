@@ -20,6 +20,7 @@ internal sealed class NavigationAStarPayload
     private const long Int64Bytes = 8L;
     private const long ByteBytes = 1L;
     private const long Fixed64Bytes = Int64Bytes;
+    private const long NullableUInt64Bytes = 16L;
     private const long NavigationCellAddressBytes = 24L;
     private const long PathQueryBytes = 240L;
     private const long NavigationAStarPayloadKeyBytes =
@@ -29,6 +30,7 @@ internal sealed class NavigationAStarPayload
         + NavigationAStarPayloadKeyBytes
         + (2L * ReferenceSlotBytes)
         + Fixed64Bytes
+        + NullableUInt64Bytes
         + ByteBytes);
 
     internal NavigationAStarPayload(
@@ -36,6 +38,7 @@ internal sealed class NavigationAStarPayload
         NavigationAStarGuidePoint[] guidePoints,
         Fixed64 cost,
         GraphDependencyStamp dependencies,
+        ulong? worldChangeSequence,
         NavigationSurfaceAStarStatus status)
     {
         SwiftThrowHelper.ThrowIfNull(guidePoints, nameof(guidePoints));
@@ -50,6 +53,7 @@ internal sealed class NavigationAStarPayload
         GuidePoints = guidePoints;
         Cost = cost;
         Dependencies = dependencies;
+        WorldChangeSequence = worldChangeSequence;
         Status = status;
     }
 
@@ -62,6 +66,8 @@ internal sealed class NavigationAStarPayload
     internal Fixed64 Cost { get; }
 
     internal GraphDependencyStamp Dependencies { get; }
+
+    internal ulong? WorldChangeSequence { get; }
 
     internal NavigationSurfaceAStarStatus Status { get; }
 

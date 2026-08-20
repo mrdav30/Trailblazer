@@ -7,6 +7,7 @@
 
 using System;
 using FixedMathSharp;
+using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
@@ -30,13 +31,18 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         Reconstruct = 1,
         ReversePath = 2,
         ExpandGuide = 3,
-        SortDependencies = 4,
-        CaptureDependencies = 5,
-        BuildPayload = 6
+        Simplify = 4,
+        CopyRaw = 5,
+        SortDependencies = 6,
+        CaptureDependencies = 7,
+        BuildPayload = 8
     }
 
     private NavigationResolvedPathQuery? _query;
     private NavigationWorldGraph? _graph;
+    private readonly GridWorld _world;
+    private readonly NavigationWorldGraphStore _store;
+    private readonly NavigationRayWork _rayWork;
     private TraversalEvaluator _evaluator;
     private readonly NavigationAStarWorkspace _workspace;
     private readonly NavigationWorkMeter _meter;
@@ -59,23 +65,40 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
     private int _routeEdgeOrdinal;
     private int _guideRollback;
     private int _payloadWrite;
+    private int _simplificationSourcePathOrdinal;
+    private int _simplificationCandidatePathOrdinal;
+    private int _simplificationWriteOrdinal;
+    private int _rawCopyOrdinal;
+    private int _rawCopyEndOrdinal;
+    private int _finalizationLookupReservation;
+    private ulong _simplificationWorldChangeSequence;
     private bool _hasCurrent;
     private bool _routeActive;
     private bool _reconstructionEdgeActive;
     private bool _lastGuidePointIsNode;
+    private bool _hasCompletedSimplificationProof;
 
     internal NavigationSurfaceAStarWork(
+        GridWorld world,
+        NavigationWorldGraphStore store,
         NavigationResolvedPathQuery query,
         NavigationAStarWorkspace workspace,
+        NavigationRayWork rayWork,
         long maximumPayloadBytes)
     {
+        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
+        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(query, nameof(query));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
+        SwiftThrowHelper.ThrowIfNull(rayWork, nameof(rayWork));
         if (maximumPayloadBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maximumPayloadBytes));
+        _world = world;
+        _store = store;
         _query = query;
         _graph = query.Graph;
         _workspace = workspace;
+        _rayWork = rayWork;
         _workspace.ResetSearch();
         _meter = query.Meter;
         _maximumPayloadBytes = maximumPayloadBytes;
@@ -322,7 +345,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                         new NavigationAStarGuidePoint(
                             startAddress,
                             startState.FootAnchor),
-                        isNode: true))
+                        pathNodeOrdinal: 0))
                 {
                     return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
                 }
@@ -338,8 +361,9 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 {
                     _routeWork.Reset();
                     _edges = default;
-                    _dependencySort = new NavigationDependencySortWork(_workspace);
-                    _stage = Stage.SortDependencies;
+                    NavigationSurfaceAStarStatus begin = BeginSimplification();
+                    if (begin != NavigationSurfaceAStarStatus.Pending)
+                        return begin;
                     continue;
                 }
                 NavigationNodeRef sourceNode =
@@ -410,7 +434,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     bool isTarget = _routeWork.CurrentPointIsTargetFootAnchor;
                     if (!AppendGuidePoint(
                             _routeWork.CurrentPoint,
-                            isTarget))
+                            isTarget ? _pathEdgeOrdinal + 1 : -1))
                     {
                         return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
                     }
@@ -436,6 +460,31 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 continue;
             }
 
+            if (_stage == Stage.Simplify)
+                return AdvanceSimplification();
+
+            if (_stage == Stage.CopyRaw)
+            {
+                if (_rawCopyOrdinal <= _rawCopyEndOrdinal)
+                {
+                    if (nodeRemaining == 0)
+                        return Status;
+                    nodeRemaining--;
+                    _workspace.GuidePoints[_simplificationWriteOrdinal++] =
+                        _workspace.GuidePoints[_rawCopyOrdinal++];
+                    continue;
+                }
+                if (_rawCopyEndOrdinal == _workspace.GuidePointCount - 1)
+                {
+                    PrepareDependencyFinalization();
+                    continue;
+                }
+                _simplificationSourcePathOrdinal++;
+                _simplificationCandidatePathOrdinal = _workspace.PathNodeCount - 1;
+                _stage = Stage.Simplify;
+                continue;
+            }
+
             if (_stage == Stage.SortDependencies)
             {
                 int lookupBefore = _meter.LookupProbes;
@@ -454,6 +503,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
 
             if (_stage == Stage.CaptureDependencies)
             {
+                if (!IsSimplificationWorldCurrent())
+                    return Finish(NavigationSurfaceAStarStatus.Stale);
                 _dependencyStamp ??= new NavigationDependencyStampWork(
                     _graph!,
                     _query!.AreaPolicy,
@@ -471,6 +522,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                         : Status;
                 }
                 if (!_dependencyStamp.IsValid)
+                    return Finish(NavigationSurfaceAStarStatus.Stale);
+                if (!IsSimplificationWorldCurrent())
                     return Finish(NavigationSurfaceAStarStatus.Stale);
                 long requiredPayloadBytes = NavigationAStarPayload.GetRetainedBytes(
                     _workspace.GuidePointCount,
@@ -495,6 +548,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 continue;
             }
             NavigationResolvedPathQuery resolved = _query!;
+            if (!IsSimplificationWorldCurrent())
+                return Finish(NavigationSurfaceAStarStatus.Stale);
             Fixed64 resultCost = Fixed64.Zero;
             if (_resultStatus == NavigationSurfaceAStarStatus.Success)
             {
@@ -509,7 +564,12 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 _payloadGuidePoints!,
                 resultCost,
                 _dependencyStamp!.Result,
+                _hasCompletedSimplificationProof
+                    ? _simplificationWorldChangeSequence
+                    : null,
                 _resultStatus);
+            if (!IsSimplificationWorldCurrent())
+                return Finish(NavigationSurfaceAStarStatus.Stale);
             return Finish(_resultStatus);
         }
         return Status;
@@ -523,12 +583,260 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         ReleaseRuntimeState();
     }
 
+    private NavigationSurfaceAStarStatus BeginSimplification()
+    {
+        _simplificationWorldChangeSequence = _world.ChangeSequence;
+        _simplificationSourcePathOrdinal = 0;
+        _simplificationCandidatePathOrdinal = _workspace.PathNodeCount - 1;
+        _simplificationWriteOrdinal = 1;
+        if (_workspace.PathNodeCount < 2 || _meter.RemainingSimplificationRays == 0)
+        {
+            _simplificationWriteOrdinal = _workspace.GuidePointCount;
+            PrepareDependencyFinalization();
+            return Status;
+        }
+        if (!TryGetFinalizationLookupReservation(
+                _workspace.EndpointComponentCount,
+                _workspace.EndpointPageCount,
+                out _finalizationLookupReservation))
+        {
+            _simplificationWriteOrdinal = _workspace.GuidePointCount;
+            PrepareDependencyFinalization();
+            return Status;
+        }
+        if (!_meter.TrySetLookupReservationFloor(_finalizationLookupReservation))
+        {
+            _simplificationWriteOrdinal = _workspace.GuidePointCount;
+            PrepareDependencyFinalization();
+            return Status;
+        }
+        _stage = Stage.Simplify;
+        return Status;
+    }
+
+    private NavigationSurfaceAStarStatus AdvanceSimplification()
+    {
+        if (!IsSimplificationWorldCurrent())
+            return Finish(NavigationSurfaceAStarStatus.Stale);
+        if (_simplificationSourcePathOrdinal + 1 >= _workspace.PathNodeCount)
+        {
+            PrepareDependencyFinalization();
+            return Status;
+        }
+        if (_meter.RemainingSimplificationRays == 0)
+        {
+            BeginRawCopy(copySuffix: true);
+            return Status;
+        }
+        if (_simplificationCandidatePathOrdinal <= _simplificationSourcePathOrdinal)
+        {
+            BeginRawCopy(copySuffix: false);
+            return Status;
+        }
+        if (_simplificationCandidatePathOrdinal == _simplificationSourcePathOrdinal + 1
+            && _workspace.PathNodeGuidePointOrdinals[_simplificationCandidatePathOrdinal]
+                == _workspace.PathNodeGuidePointOrdinals[_simplificationSourcePathOrdinal] + 1)
+        {
+            BeginRawCopy(copySuffix: false);
+            return Status;
+        }
+        if (!_meter.TryConsumeSimplificationRays(1))
+        {
+            BeginRawCopy(copySuffix: true);
+            return Status;
+        }
+
+        int sourcePathOrdinal = _simplificationSourcePathOrdinal;
+        int candidatePathOrdinal = _simplificationCandidatePathOrdinal;
+        NavigationAStarGuidePoint source = _workspace.GuidePoints[
+            _workspace.PathNodeGuidePointOrdinals[sourcePathOrdinal]];
+        NavigationAStarGuidePoint candidate = _workspace.GuidePoints[
+            _workspace.PathNodeGuidePointOrdinals[candidatePathOrdinal]];
+        _rayWork.Begin(new NavigationRayRequest(
+            _world,
+            _store,
+            _graph!,
+            _query!.Query.Agent,
+            _query.AreaPolicy,
+            _query.Query.Traversal,
+            _query.Query.AllowTransitions,
+            source.Position,
+            candidate.Position,
+            NavigationRayEndpointAllowance.None,
+            NavigationRayChainConstraint.SeedAt(source.Address)));
+        NavigationRayStatus rayStatus = _rayWork.Advance(_meter);
+        if (rayStatus == NavigationRayStatus.Pending)
+            return Status;
+        if (rayStatus == NavigationRayStatus.Stale)
+            return Finish(NavigationSurfaceAStarStatus.Stale);
+        if (rayStatus is not NavigationRayStatus.Success
+            and not NavigationRayStatus.Blocked)
+        {
+            BeginRawCopy(copySuffix: true);
+            return Status;
+        }
+
+        bool accepted = false;
+        if (rayStatus == NavigationRayStatus.Success)
+        {
+            NavigationRayResult ray = _rayWork.Result;
+            if (ray.StartAddress == source.Address
+                && ray.EndAddress == candidate.Address)
+            {
+                NavigationNodeRef sourceNode = _workspace.PathNodes[sourcePathOrdinal];
+                NavigationNodeRef candidateNode = _workspace.PathNodes[candidatePathOrdinal];
+                if (!_workspace.NodeTable.TryGetSlot(sourceNode, out int sourceSlot)
+                    || !_workspace.NodeTable.TryGetSlot(candidateNode, out int candidateSlot)
+                    || !Fixed64.TrySubtract(
+                        _workspace.NodeTable.GetRecord(candidateSlot).Cost,
+                        _workspace.NodeTable.GetRecord(sourceSlot).Cost,
+                        out Fixed64 rawCost))
+                {
+                    BeginRawCopy(copySuffix: true);
+                    return Status;
+                }
+                accepted = ray.TraversalCost <= rawCost;
+            }
+        }
+
+        if (_world.ChangeSequence != _simplificationWorldChangeSequence)
+            return Finish(NavigationSurfaceAStarStatus.Stale);
+        if (!TryMergeRayDependencies())
+        {
+            if (_world.ChangeSequence != _simplificationWorldChangeSequence)
+                return Finish(NavigationSurfaceAStarStatus.Stale);
+            BeginRawCopy(copySuffix: true);
+            return Status;
+        }
+        _hasCompletedSimplificationProof = true;
+        if (!IsSimplificationWorldCurrent())
+            return Finish(NavigationSurfaceAStarStatus.Stale);
+
+        if (!accepted)
+        {
+            _simplificationCandidatePathOrdinal--;
+            return Status;
+        }
+        _workspace.GuidePoints[_simplificationWriteOrdinal++] = candidate;
+        _simplificationSourcePathOrdinal = candidatePathOrdinal;
+        _simplificationCandidatePathOrdinal = _workspace.PathNodeCount - 1;
+        if (_simplificationSourcePathOrdinal + 1 >= _workspace.PathNodeCount)
+            PrepareDependencyFinalization();
+        return Status;
+    }
+
+    private bool TryMergeRayDependencies()
+    {
+        if (_world.ChangeSequence != _simplificationWorldChangeSequence)
+            return false;
+        NavigationDependencyWorkspace target = _workspace.EndpointWorkspace.Dependencies;
+        NavigationDependencyWorkspace source = _workspace.RayWorkspace.Dependencies;
+        if (!target.TryCountMissing(
+                source,
+                _meter,
+                out int missingComponents,
+                out int missingPages)
+            || !target.CanFit(missingComponents, missingPages))
+        {
+            return false;
+        }
+        int componentCount;
+        int pageCount;
+        try
+        {
+            componentCount = checked(target.ComponentCount + missingComponents);
+            pageCount = checked(target.PageCount + missingPages);
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+        int priorReservation = _finalizationLookupReservation;
+        if (!TryGetFinalizationLookupReservation(
+                componentCount,
+                pageCount,
+                out int enlargedReservation)
+            || !_meter.TrySetLookupReservationFloor(enlargedReservation))
+        {
+            return false;
+        }
+        if (source.ComponentCount > int.MaxValue - source.PageCount)
+        {
+            _meter.TrySetLookupReservationFloor(priorReservation);
+            return false;
+        }
+        int appendProbeCount = source.ComponentCount + source.PageCount;
+        // A terminal ray and both dependency passes are one bounded atomic unit:
+        // prove and debit the complete append pass before mutating the target.
+        if (!_meter.TryConsumeLookupProbes(appendProbeCount))
+        {
+            _meter.TrySetLookupReservationFloor(priorReservation);
+            return false;
+        }
+        target.CommitMerge(source);
+        _finalizationLookupReservation = enlargedReservation;
+        return _world.ChangeSequence == _simplificationWorldChangeSequence;
+    }
+
+    private static bool TryGetFinalizationLookupReservation(
+        int componentCount,
+        int pageCount,
+        out int reservation)
+    {
+        try
+        {
+            reservation = checked(
+                NavigationDependencySortWork.GetMaximumComparisonCount(
+                    componentCount,
+                    pageCount)
+                + componentCount
+                + pageCount);
+        }
+        catch (OverflowException)
+        {
+            reservation = 0;
+            return false;
+        }
+        return true;
+    }
+
+    private void BeginRawCopy(bool copySuffix)
+    {
+        _rawCopyOrdinal = _workspace.PathNodeGuidePointOrdinals[
+            _simplificationSourcePathOrdinal] + 1;
+        _rawCopyEndOrdinal = copySuffix
+            ? _workspace.GuidePointCount - 1
+            : _workspace.PathNodeGuidePointOrdinals[_simplificationSourcePathOrdinal + 1];
+        _stage = Stage.CopyRaw;
+    }
+
+    private void PrepareDependencyFinalization()
+    {
+        if (!IsSimplificationWorldCurrent())
+        {
+            Finish(NavigationSurfaceAStarStatus.Stale);
+            return;
+        }
+        _workspace.GuidePointCount = _simplificationWriteOrdinal;
+        _meter.ReleaseLookupReservationFloor();
+        _finalizationLookupReservation = 0;
+        _dependencySort = new NavigationDependencySortWork(_workspace);
+        _stage = Stage.SortDependencies;
+    }
+
+    private bool IsSimplificationWorldCurrent() =>
+        !_hasCompletedSimplificationProof
+        || _world.ChangeSequence == _simplificationWorldChangeSequence;
+
     private void ReleaseRuntimeState()
     {
         _graph = null;
         _evaluator = default;
         _edges = default;
         _routeWork.Reset();
+        _meter.ReleaseLookupReservationFloor();
+        _finalizationLookupReservation = 0;
+        _rayWork.Reset();
         _dependencySort = default;
     }
 
@@ -623,8 +931,9 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
 
     private bool AppendGuidePoint(
         NavigationAStarGuidePoint point,
-        bool isNode)
+        int pathNodeOrdinal)
     {
+        bool isNode = pathNodeOrdinal >= 0;
         int count = _workspace.GuidePointCount;
         if (count != 0
             && _workspace.GuidePoints[count - 1].Position == point.Position)
@@ -636,6 +945,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             {
                 _workspace.GuidePoints[count - 1] = point;
                 _lastGuidePointIsNode = isNode;
+                if (isNode)
+                    _workspace.PathNodeGuidePointOrdinals[pathNodeOrdinal] = count - 1;
                 return true;
             }
         }
@@ -644,6 +955,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         _workspace.GuidePoints[count] = point;
         _workspace.GuidePointCount = count + 1;
         _lastGuidePointIsNode = isNode;
+        if (isNode)
+            _workspace.PathNodeGuidePointOrdinals[pathNodeOrdinal] = count;
         return true;
     }
 

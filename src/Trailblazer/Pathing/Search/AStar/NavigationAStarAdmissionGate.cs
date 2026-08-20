@@ -50,6 +50,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         _limits = limits;
         _coordinator = coordinator;
         _cache = new NavigationAStarPayloadCache(
+            world,
             limits.MaxAStarCacheEntries,
             limits.MaxAStarReusablePayloadBytes,
             limits.MaxAStarSinglePayloadBytes,

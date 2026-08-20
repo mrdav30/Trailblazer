@@ -78,19 +78,21 @@ internal sealed class NavigationEndpointResolutionWork
         NavigationWorldGraphStore store,
         NavigationWorkMeter meter,
         NavigationEndpointWorkspace workspace,
-        NavigationRayWorkspace rayWorkspace)
+        NavigationRayWorkspace rayWorkspace,
+        NavigationRayWork rayWork)
     {
         SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
         SwiftThrowHelper.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
+        SwiftThrowHelper.ThrowIfNull(rayWork, nameof(rayWork));
         _world = world;
         _store = store;
         _meter = meter;
         _workspace = workspace;
         _rayWorkspace = rayWorkspace;
-        _rayWork = new NavigationRayWork(rayWorkspace);
+        _rayWork = rayWork;
     }
 
     internal void Begin(

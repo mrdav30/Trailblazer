@@ -71,6 +71,17 @@ internal struct NavigationDependencySortWork
 
     internal bool IsComplete => _collection == Collection.Complete;
 
+    internal static int GetMaximumComparisonCount(
+        int componentCount,
+        int pageCount)
+    {
+        SwiftThrowHelper.ThrowIfNegative(componentCount, nameof(componentCount));
+        SwiftThrowHelper.ThrowIfNegative(pageCount, nameof(pageCount));
+        return checked(
+            GetCollectionMaximumComparisonCount(componentCount)
+            + GetCollectionMaximumComparisonCount(pageCount));
+    }
+
     internal bool Advance(NavigationWorkMeter meter, int lookupStepLimit)
     {
         SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
@@ -193,5 +204,30 @@ internal struct NavigationDependencySortWork
             return false;
         remaining--;
         return true;
+    }
+
+    private static int GetCollectionMaximumComparisonCount(int count)
+    {
+        int comparisons = 0;
+        for (int root = (count / 2) - 1; root >= 0; root--)
+            comparisons = checked(comparisons + GetSiftMaximumComparisonCount(root, count));
+        for (int heapSize = count - 1; heapSize > 0; heapSize--)
+            comparisons = checked(comparisons + GetSiftMaximumComparisonCount(0, heapSize));
+        return comparisons;
+    }
+
+    private static int GetSiftMaximumComparisonCount(int root, int heapSize)
+    {
+        int comparisons = 0;
+        while (true)
+        {
+            int left = checked((root * 2) + 1);
+            if (left >= heapSize)
+                return comparisons;
+            comparisons = checked(comparisons + 1);
+            if (left + 1 < heapSize)
+                comparisons = checked(comparisons + 1);
+            root = left;
+        }
     }
 }

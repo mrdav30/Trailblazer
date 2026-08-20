@@ -103,7 +103,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             unfiltered,
             graph,
@@ -128,7 +129,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             filtered,
             graph,
@@ -194,7 +196,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         work.Begin(
             graph,
             new NavigationEndpoint(
@@ -255,7 +258,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         work.Begin(
             graph,
             new NavigationEndpoint(
@@ -312,7 +316,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         work.Begin(
             fixture.Graph,
             new NavigationEndpoint(
@@ -378,7 +383,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             work,
             graph,
@@ -427,7 +433,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             work,
             graph,
@@ -513,7 +520,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             work,
             graph,
@@ -556,7 +564,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             work,
             graph,
@@ -601,7 +610,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             work,
             graph,
@@ -651,7 +661,8 @@ public sealed class NavigationEndpointResolutionTests
             store,
             meter,
             workspace.EndpointWorkspace,
-            workspace.RayWorkspace);
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
         BeginEndpoint(
             work,
             graph,

@@ -165,13 +165,15 @@ internal sealed class NavigationAStarGuideLease
             NavigationAStarPayload payload = payloadLease.Payload;
             NavigationWorldGraph graph = graphLease.Graph;
             if (!graph.IsDependencyCurrent(payload.Dependencies)
-                || (uint)_currentWaypointOrdinal >= (uint)payload.GuidePoints.Length)
+                || (uint)_currentWaypointOrdinal >= (uint)payload.GuidePoints.Length
+                || !_owner.IsWorldCurrent(payload))
             {
                 return MarkStaleUnderLock();
             }
             NavigationAStarGuidePoint current =
                 payload.GuidePoints[_currentWaypointOrdinal];
-            if (!store.Current.IsDependencyCurrent(payload.Dependencies))
+            if (!store.Current.IsDependencyCurrent(payload.Dependencies)
+                || !_owner.IsWorldCurrent(payload))
             {
                 return MarkStaleUnderLock();
             }
@@ -196,7 +198,8 @@ internal sealed class NavigationAStarGuideLease
         {
             NavigationAStarPayload payload = payloadLease.Payload;
             if (!graphLease.Graph.IsDependencyCurrent(payload.Dependencies)
-                || !store.Current.IsDependencyCurrent(payload.Dependencies))
+                || !store.Current.IsDependencyCurrent(payload.Dependencies)
+                || !_owner.IsWorldCurrent(payload))
             {
                 return MarkStaleUnderLock();
             }

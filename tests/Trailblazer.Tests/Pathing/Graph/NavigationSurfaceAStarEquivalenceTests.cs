@@ -591,14 +591,15 @@ internal static class NavigationAStarExitTestHarness
         GridWorld world,
         GridConfiguration configuration,
         VoxelIndex[] cells,
-        string mapId)
+        string mapId,
+        NavigationCell[]? navigationCells = null)
     {
         world.TryAddGrid(configuration, cells, out _).Should().BeTrue();
         configuration.TryNormalize(out NormalizedGridConfiguration binding)
             .Should().BeTrue();
         var builder = new NavigationMapBuilder(mapId, binding);
         for (int i = 0; i < cells.Length; i++)
-            builder.AddCell(cells[i], Cell);
+            builder.AddCell(cells[i], navigationCells?[i] ?? Cell);
         NavigationMapInstance instance = Compose(world, builder.Build());
         return new GraphFixture(CreateGraph(new[] { instance }), binding, mapId);
     }
@@ -726,8 +727,11 @@ internal static class NavigationAStarExitTestHarness
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
         NavigationNodeRef startNode = admission.Result.Start.Node;
         using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
             admission.Result,
             workspace,
+            admission.RayWork,
             long.MaxValue);
         for (int step = 0;
             step < 4_096 && search.Status == NavigationSurfaceAStarStatus.Pending;

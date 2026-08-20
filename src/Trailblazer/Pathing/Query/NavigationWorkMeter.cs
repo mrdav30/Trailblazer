@@ -11,6 +11,7 @@ namespace Trailblazer.Pathing;
 internal sealed class NavigationWorkMeter
 {
     private NavigationWorkBudget _budget;
+    private int _lookupReservationFloor;
 
     internal NavigationWorkMeter(NavigationWorkBudget budget) => Reset(budget);
 
@@ -30,7 +31,8 @@ internal sealed class NavigationWorkMeter
 
     internal int SimplificationRays { get; private set; }
 
-    internal int RemainingLookupProbes => _budget.MaxLookupProbes - LookupProbes;
+    internal int RemainingLookupProbes =>
+        _budget.MaxLookupProbes - LookupProbes - _lookupReservationFloor;
 
     internal int RemainingEndpointCandidates =>
         _budget.MaxEndpointCandidates - EndpointCandidates;
@@ -56,6 +58,16 @@ internal sealed class NavigationWorkMeter
         LookupProbes += count;
         return true;
     }
+
+    internal bool TrySetLookupReservationFloor(int count)
+    {
+        if (count < 0 || count > _budget.MaxLookupProbes - LookupProbes)
+            return false;
+        _lookupReservationFloor = count;
+        return true;
+    }
+
+    internal void ReleaseLookupReservationFloor() => _lookupReservationFloor = 0;
 
     internal bool TryConsumeEndpointCandidates(int count)
     {
@@ -124,5 +136,6 @@ internal sealed class NavigationWorkMeter
         TraceIntervals = 0;
         CoveredVoxelIntervals = 0;
         SimplificationRays = 0;
+        _lookupReservationFloor = 0;
     }
 }

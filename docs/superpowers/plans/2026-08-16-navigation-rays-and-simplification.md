@@ -647,7 +647,14 @@ git commit -m "feat(pathing): retain portal-correct A-star guides"
 **Files:**
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationSurfaceAStarWork.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarWorkspace.cs`
-- Modify: `src/Trailblazer/Pathing/Search/Ray/NavigationRayWorkspace.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarAdmissionGate.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayload.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayloadCache.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarGuideLease.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationDependencySortWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/NavigationDependencyWorkspace.cs`
+- Modify: `src/Trailblazer/Pathing/Query/NavigationWorkMeter.cs`
 - Test: `tests/Trailblazer.Tests/Pathing/Graph/NavigationSurfaceAStarTests.cs`
 - Test: `tests/Trailblazer.Tests/Pathing/Graph/NavigationAStarConcurrencyTests.cs`
 
@@ -655,31 +662,47 @@ git commit -m "feat(pathing): retain portal-correct A-star guides"
 - Simplification is payload-construction-only and uses the A* workspace's exclusive `NavigationRayWork`.
 - The payload still reports the original optimal graph `TotalCost`.
 
-- [ ] **Step 1: Write simplification REDs**
+- [x] **Step 1: Write simplification REDs**
 
-Pin farthest-valid node-anchor selection, blocked-farthest/nearer fallback, portal points never becoming shortcut endpoints, zero-ray raw byte identity, one-ray deterministic partial result, ray budget exhaustion retaining a valid raw suffix, weighted shortcut cost greater/equal/less than the exact node-anchor raw subroute, candidate dependency merge, union-capacity fallback, mutation invalidation, Debug/Release byte identity, and zero warmed allocation.
+Pin farthest-valid node-anchor selection, blocked-farthest/nearer fallback, portal points never becoming shortcut endpoints, a portal point equal to a later node foot without becoming that node's candidate identity, zero-ray raw byte identity, one-ray direct-success/direct-failure behavior, ray budget exhaustion retaining a valid raw suffix, weighted shortcut cost equal to or greater than the exact node-anchor raw subroute, exact endpoint identity under overlapping mapped grids, accepted and completed-negative dependency merge, exact-fit and one-short atomic union fallback, the count-derived dependency-finalization ceiling at/one-below, world mutation after completed proof/before capture/publication/cache/guide use, Debug/Release byte identity, and zero warmed allocation. A strict-less case is not constructible under the immutable nonnegative graph model: an exact-anchor successful ray is another graph path between the same nodes, while the selected A* route has optimal substructure. Equality acceptance and greater-cost rejection therefore exhaust the reachable comparison boundary without a test hook.
 
-- [ ] **Step 2: Observe RED**
+- [x] **Step 2: Observe RED**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationSurfaceAStarTests|FullyQualifiedName~NavigationAStarConcurrencyTests"
 ```
 
-- [ ] **Step 3: Implement mandatory-raw-first optional work**
+- [x] **Step 3: Implement mandatory-raw-first optional work**
 
-Keep the complete raw dependency set in fixed workspace storage and reserve the exact sort/copy work needed to publish that raw set before optional rays begin. Add one fixed node-to-raw-guide ordinal array here, initialize it while scanning the already-built raw guide, and use the existing node-table cumulative costs at those ordinals; do not add a per-guide cost array. From each exact node-foot anchor, attempt later node-foot anchors in farthest-to-nearest route order; portal and connection points remain raw-guide-only. Commit only a `Success` whose `TraversalCost` is no greater than the exact difference between the two node-anchor cumulative costs. Hold ray dependencies in temporary sorted scratch; before committing, require enough fixed capacity and unreserved lookup work to merge them into the final set. If optional ray count/work/union capacity is unavailable, stop and append the untouched raw suffix. Sort/capture the final raw-plus-accepted-ray dependency stamp exactly once. `Stale` remains terminal; optional blocked/cost-ineligible candidates continue.
+Keep the complete raw dependency set in fixed workspace storage. Add one fixed path-node-to-raw-guide ordinal array, populate it at the existing `AppendGuidePoint(..., isNode: true)` ownership point, and use `PathNodes` plus the existing node-table cumulative costs; do not scan guide values to rediscover node ownership and do not add per-guide costs or markers. Compact the existing guide buffer in place. From each exact node-foot anchor, attempt later node-foot anchors in farthest-to-nearest route order; portal and connection points remain raw-guide-only. Seed the ray at the exact source address, verify both returned endpoint addresses, and commit only a `Success` whose `TraversalCost` is no greater than the checked difference between the two node-anchor cumulative costs.
 
-- [ ] **Step 4: Run focused/allocation/determinism gates and review**
+Before optional work, reserve a count-derived worst-case lookup ceiling for the single final dependency sort plus the exact component/page capture count. The shared `NavigationWorkMeter` enforces that reservation floor for the existing atomic ray; no dry-run sort, copied dependency set, or second ray API is added. Preflight each completed ray proof with two allocation-free, metered membership scans: the first consumes one lookup probe per ray component/page while counting the exact union; before mutation, verify fixed capacities, the enlarged finalization reservation, and the same exact append-pass debit; only then consume those probes and append the proven-fitting entries. Merge completed accepted, blocked, cost-ineligible, and endpoint-identity-mismatched proofs when simplification continues; a partial/budget-exhausted ray is not a completed proof. If optional ray count/work/union capacity is unavailable, stop before mutation and append the untouched raw suffix. Release the reservation only for the single final sort/capture.
+
+Capture the `GridWorld.ChangeSequence` before simplification. When the first completed ray proof is successfully merged—accepted, blocked, cost-ineligible, or endpoint-identity-mismatched—require that sequence through final construction, both sides of publication, cache checkout, and guide use; a mismatch is terminal `Stale`. A partial/budget-exhausted or union-rejected proof does not bind the final raw payload. Store the single conditional epoch fact with the payload; let the context-owned A* cache retain the existing `GridWorld` reference once and let pooled guides validate through their cache owner. Keep zero-ray guide-point output byte-identical. Optional `Blocked`, cost-ineligible `Success`, `BudgetExceeded`, `CapacityExceeded`, or `CostOverflow` stop/continue as appropriate without invalidating the already-valid raw path; `Stale` remains terminal. Mandatory search, reconstruction, dependency finalization, payload sizing, and publication retain their existing terminal status semantics.
+
+- [x] **Step 4: Run focused/allocation/determinism gates and review**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationSurfaceAStar|FullyQualifiedName~NavigationAStarConcurrency"
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration ReleaseLean -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationSurfaceAStar|FullyQualifiedName~NavigationAStarConcurrency"
 ```
 
+Task 8 closed with the focused Surface/concurrency/architecture matrix at
+43/43 in both Release and ReleaseLean, admission/endpoint ownership at 40/40 in
+both configurations, the full suites at 1,434/1,434 and 1,403/1,403, all four
+source target/configuration builds warning-free, the benchmark project
+warning-free, and Debug Surface A* at 29/29 through the local LSF stack. Warmed
+candidate work allocates 0 B. Independent correctness and ponytail reviews
+found no remaining P0-P2 issue. A separate overlapping-map simplification
+fixture was not retained because every valid attempted graph selected the exact
+destination identity and forcing a different identity made the route invalid;
+the lower ray/endpoint matrices already pin overlapping identity, while A*
+still postchecks both exact endpoint addresses before accepting a shortcut.
+
 - [ ] **Step 5: Tracker update and commit**
 
 ```powershell
-git add -- src/Trailblazer/Pathing/Search/AStar src/Trailblazer/Pathing/Search/Ray tests/Trailblazer.Tests/Pathing/Graph docs/feature-work/gridTopologyNavigationMapRefactorPlan.md
+git add -- src/Trailblazer/Pathing/Search/AStar/NavigationSurfaceAStarWork.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarWorkspace.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarAdmissionGate.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayload.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayloadCache.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarGuideLease.cs src/Trailblazer/Pathing/Search/AStar/NavigationDependencySortWork.cs src/Trailblazer/Pathing/Search/NavigationDependencyWorkspace.cs src/Trailblazer/Pathing/Query/NavigationWorkMeter.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationSurfaceAStarTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationAStarConcurrencyTests.cs docs/superpowers/plans/2026-08-16-navigation-rays-and-simplification.md docs/superpowers/specs/2026-08-16-navigation-rays-and-simplification-design.md docs/feature-work/gridTopologyNavigationMapRefactorPlan.md
 git diff --cached --check
 git commit -m "feat(pathing): simplify certified A-star guides"
 ```

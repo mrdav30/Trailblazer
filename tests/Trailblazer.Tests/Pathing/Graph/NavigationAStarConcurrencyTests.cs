@@ -10,7 +10,10 @@ using System.Reflection;
 using System.Threading;
 using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Grids.Storage;
+using GridForge.Grids.Topology;
 using GridForge.Spatial;
 using Trailblazer.Pathing;
 using Xunit;
@@ -35,6 +38,7 @@ public sealed class NavigationAStarConcurrencyTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
         var workspace = new NavigationAStarWorkspace(1, 8, 10, 8, 8, 8, 8);
         var cache = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 1,
             maxReusableBytes: long.MaxValue,
             maxSinglePayloadBytes: long.MaxValue,
@@ -122,6 +126,7 @@ public sealed class NavigationAStarConcurrencyTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
         var workspace = new NavigationAStarWorkspace(1, 64, 66, 32, 32, 32, 32);
         var cache = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 2,
             maxReusableBytes: long.MaxValue,
             maxSinglePayloadBytes: long.MaxValue,
@@ -188,6 +193,7 @@ public sealed class NavigationAStarConcurrencyTests
         var firstWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16, 16, 16, 16);
         var secondWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16, 16, 16, 16);
         var cache = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 2,
             maxReusableBytes: long.MaxValue,
             maxSinglePayloadBytes: long.MaxValue,
@@ -257,7 +263,7 @@ public sealed class NavigationAStarConcurrencyTests
         using (NavigationWorldGraphStore staleStore =
             NavigationAStarExitTestHarness.CreateStore(changed, 2))
         {
-            var staleCache = CreateCache(payload.RetainedBytes);
+            var staleCache = CreateCache(world, payload.RetainedBytes);
             staleCache.TryReservePayload(
                     payload.RetainedBytes,
                     out NavigationAStarPayloadReservation staleReservation)
@@ -276,7 +282,7 @@ public sealed class NavigationAStarConcurrencyTests
 
         using NavigationWorldGraphStore guideStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
-        NavigationAStarPayloadCache guideCache = CreateCache(payload.RetainedBytes);
+        NavigationAStarPayloadCache guideCache = CreateCache(world, payload.RetainedBytes);
         guideCache.TryReservePayload(
                 payload.RetainedBytes,
                 out NavigationAStarPayloadReservation guideReservation)
@@ -296,6 +302,70 @@ public sealed class NavigationAStarConcurrencyTests
         guideStore.ActiveLeaseCount.Should().Be(0);
         guideCache.TryCheckout(payload.Key, changed, out _).Should().BeFalse();
         guideCache.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void SimplifiedPayload_WhenWorldEpochChanges_ShouldFailCacheAndGuideUse()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = CreateLine(3);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(3),
+                cells,
+                "world-epoch");
+        PathQuery query = new(
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[0]),
+                fixture.MapId),
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[^1]),
+                fixture.MapId),
+            fixture.DefaultProfile,
+            NavigationAStarExitTestHarness.Policy.Key,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(
+                8_192, 32, 128, 1_024, 1_024, 0, 0, 0, 128, 128, 1),
+            allowTransitions: false);
+        NavigationAStarPayload payload = NavigationAStarExitTestHarness
+            .RunAStar(world, fixture.Graph, query)
+            .Payload!;
+        payload.WorldChangeSequence.Should().Be(world.ChangeSequence);
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
+        NavigationAStarPayloadCache cache = CreateCache(world, payload.RetainedBytes);
+        cache.TryReservePayload(
+                payload.RetainedBytes,
+                out NavigationAStarPayloadReservation reservation)
+            .Should().BeTrue();
+        cache.TryPublish(payload, store, ref reservation, out NavigationAStarPayloadLease lease)
+            .Should().BeTrue();
+        cache.TryCreateGuide(store, lease, out NavigationAStarGuideLease? guide)
+            .Should().Be(NavigationAStarQueryStatus.Success);
+        guide.Should().NotBeNull();
+        long generation = guide!.Generation;
+        GridConfiguration mutation = new(
+            new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+            new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(
+                Fixed64.One,
+                Fixed64.One,
+                Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        world.TryAddGrid(mutation, out _).Should().BeTrue();
+
+        guide.TryGetCurrentWaypoint(generation, out _, out _)
+            .Should().Be(NavigationAStarQueryStatus.Stale);
+        cache.TryCheckout(payload.Key, fixture.Graph, out _).Should().BeFalse();
+        cache.Count.Should().Be(0);
+        guide.Dispose(generation);
+        cache.ActiveLeaseCount.Should().Be(0);
     }
 
     private static void Prepare(NavigationAStarQueryWork work)
@@ -354,7 +424,10 @@ public sealed class NavigationAStarConcurrencyTests
         return cells;
     }
 
-    private static NavigationAStarPayloadCache CreateCache(long retainedBytes) => new(
+    private static NavigationAStarPayloadCache CreateCache(
+        GridWorld world,
+        long retainedBytes) => new(
+        world,
         maxEntries: 1,
         maxReusableBytes: retainedBytes,
         maxSinglePayloadBytes: retainedBytes,

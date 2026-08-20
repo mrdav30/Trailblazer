@@ -93,7 +93,9 @@ public sealed class NavigationAStarAdmissionTests
     [Fact]
     public void PayloadCache_ShouldReserveActiveLeaseSlots()
     {
+        using var world = new GridWorld();
         var cache = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 1,
             maxReusableBytes: 1_024,
             maxSinglePayloadBytes: 1_024,
@@ -572,6 +574,7 @@ public sealed class NavigationAStarAdmissionTests
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
         var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
         var cache = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 1,
             maxReusableBytes: 2_048,
             maxSinglePayloadBytes: 1_024,

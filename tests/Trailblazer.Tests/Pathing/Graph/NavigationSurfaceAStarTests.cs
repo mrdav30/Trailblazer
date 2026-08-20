@@ -34,6 +34,577 @@ public sealed class NavigationSurfaceAStarTests
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });
 
     [Fact]
+    public void Advance_WithOneSimplificationRay_ShouldRetainOnlyDirectNodeFeet()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0)
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "map");
+        Vector3d start = NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[0]);
+        Vector3d end = NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[2]);
+        PathQuery query = CreateSimplificationQuery(fixture, cells[0], cells[2], 1);
+
+        NavigationAStarExitTestHarness.SearchResult result =
+            NavigationAStarExitTestHarness.RunAStar(world, fixture.Graph, query);
+
+        result.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        result.Cost.Should().Be((Fixed64)2);
+        result.Payload!.GuidePoints.Should().Equal(
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress(fixture.MapId, cells[0]),
+                start),
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress(fixture.MapId, cells[2]),
+                end));
+    }
+
+    [Fact]
+    public void Advance_WhenDirectSimplificationRayIsBlocked_ShouldRetainRawGuide()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0),
+            new(2, 0, 1)
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                new GridConfiguration(
+                    Vector3d.Zero,
+                    new Vector3d((Fixed64)3, (Fixed64)2, (Fixed64)2),
+                    topologyKind: GridTopologyKind.RectangularPrism,
+                    topologyMetrics: GridTopologyMetrics.Rectangular(
+                        Fixed64.One,
+                        (Fixed64)2,
+                        Fixed64.One),
+                    storageKind: GridStorageKind.Sparse),
+                cells,
+                "map");
+        NavigationAStarExitTestHarness.SearchResult raw =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[^1], 0));
+        NavigationAStarExitTestHarness.SearchResult simplified =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[^1], 1));
+        NavigationAStarExitTestHarness.SearchResult nearer =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[^1], 2));
+
+        simplified.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        simplified.Cost.Should().Be(raw.Cost);
+        simplified.Payload!.GuidePoints.Should().Equal(raw.Payload!.GuidePoints);
+        simplified.Payload.WorldChangeSequence.Should().Be(world.ChangeSequence);
+        NavigationAStarGuidePoint[] rawPoints = raw.Payload.GuidePoints;
+        Vector3d nearerFoot = NavigationAStarExitTestHarness.GetFoot(
+            fixture.Binding,
+            cells[2]);
+        int rawSuffix = Array.FindIndex(
+            rawPoints,
+            point => point.Address == new NavigationCellAddress(fixture.MapId, cells[2])
+                && point.Position == nearerFoot);
+        rawSuffix.Should().BeGreaterThan(0);
+        var expected = new NavigationAStarGuidePoint[rawPoints.Length - rawSuffix + 1];
+        expected[0] = rawPoints[0];
+        Array.Copy(rawPoints, rawSuffix, expected, 1, rawPoints.Length - rawSuffix);
+        nearer.Payload!.GuidePoints.Should().Equal(expected,
+            "the blocked farthest candidate falls back to the nearer node foot and keeps its raw suffix");
+    }
+
+    [Fact]
+    public void Advance_WhenOnlyAdjacentPortalBearingCandidateSucceeds_ShouldCompactThatInterval()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(1, 0, 1)
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                new GridConfiguration(
+                    Vector3d.Zero,
+                    new Vector3d((Fixed64)2, (Fixed64)2, (Fixed64)2),
+                    topologyKind: GridTopologyKind.RectangularPrism,
+                    topologyMetrics: GridTopologyMetrics.Rectangular(
+                        Fixed64.One,
+                        (Fixed64)2,
+                        Fixed64.One),
+                    storageKind: GridStorageKind.Sparse),
+                cells,
+                "adjacent-portal");
+        NavigationAStarExitTestHarness.SearchResult raw =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[^1], 0));
+        NavigationAStarExitTestHarness.SearchResult simplified =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[^1], 2));
+        NavigationAStarGuidePoint[] rawPoints = raw.Payload!.GuidePoints;
+        Vector3d middleFoot = NavigationAStarExitTestHarness.GetFoot(
+            fixture.Binding,
+            cells[1]);
+        int middleOrdinal = Array.FindIndex(
+            rawPoints,
+            point => point.Address == new NavigationCellAddress(fixture.MapId, cells[1])
+                && point.Position == middleFoot);
+        middleOrdinal.Should().BeGreaterThan(1,
+            "the adjacent node foot follows its raw portal point");
+        var expected = new NavigationAStarGuidePoint[rawPoints.Length - middleOrdinal + 1];
+        expected[0] = rawPoints[0];
+        Array.Copy(rawPoints, middleOrdinal, expected, 1, rawPoints.Length - middleOrdinal);
+
+        simplified.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        simplified.Payload!.GuidePoints.Should().Equal(expected);
+    }
+
+    [Fact]
+    public void Advance_WhenFirstSourceExhaustsCandidates_ShouldStillSimplifyFromNextSource()
+    {
+        using var world = new GridWorld();
+        var first = new VoxelIndex(0, 0, 0);
+        var witness = new VoxelIndex(0, 0, 1);
+        var bend = new VoxelIndex(1, 0, 1);
+        var middle = new VoxelIndex(2, 0, 1);
+        var last = new VoxelIndex(3, 0, 1);
+        VoxelIndex[] cells = { first, witness, bend, middle, last };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateExplicitMap(
+                world,
+                new GridConfiguration(
+                    Vector3d.Zero,
+                    new Vector3d((Fixed64)4, (Fixed64)2, (Fixed64)2),
+                    topologyKind: GridTopologyKind.RectangularPrism,
+                    topologyMetrics: GridTopologyMetrics.Rectangular(
+                        Fixed64.One,
+                        (Fixed64)2,
+                        Fixed64.One),
+                    storageKind: GridStorageKind.Sparse),
+                cells,
+                "exhausted-source",
+                new[]
+                {
+                    new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+                        "first-to-bend",
+                        first,
+                        bend,
+                        corridorCost: Fixed64.One,
+                        radiusClearance: Fixed64.One,
+                        witnesses: new[] { witness })
+                });
+        NavigationAStarExitTestHarness.SearchResult raw =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, first, last, 0));
+        NavigationAStarExitTestHarness.SearchResult simplified =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, first, last, 4));
+        NavigationAStarGuidePoint[] rawPoints = raw.Payload!.GuidePoints;
+        Vector3d bendFoot = NavigationAStarExitTestHarness.GetFoot(fixture.Binding, bend);
+        int bendOrdinal = Array.FindIndex(
+            rawPoints,
+            point => point.Address == new NavigationCellAddress(fixture.MapId, bend)
+                && point.Position == bendFoot);
+        bendOrdinal.Should().BeGreaterThan(1,
+            "the first raw interval follows its authored bend");
+        var expected = new NavigationAStarGuidePoint[bendOrdinal + 2];
+        Array.Copy(rawPoints, expected, bendOrdinal + 1);
+        expected[^1] = rawPoints[^1];
+
+        simplified.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        simplified.Cost.Should().Be(raw.Cost);
+        simplified.Payload!.GuidePoints.Should().Equal(expected,
+            "exhausting the first source preserves only its raw interval before the straight tail shortcut");
+    }
+
+    [Fact]
+    public void Advance_WhenOptionalFinalizationCeilingDoesNotFit_ShouldRunMandatoryCapture()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0)
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "finalization-floor");
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
+        var workspace = new NavigationAStarWorkspace(1, 8, 10, 8, 8, 8, 8);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        admission.Begin(
+            store.TryAcquire()!,
+            CreateSimplificationQuery(
+                fixture,
+                cells[0],
+                cells[^1],
+                simplificationRays: 0,
+                lookupProbes: 8));
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 16);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
+            admission.Result,
+            workspace,
+            admission.RayWork,
+            long.MaxValue);
+
+        while (search.Status == NavigationSurfaceAStarStatus.Pending)
+            search.Advance(64, 64, 64, 64);
+
+        search.Status.Should().Be(NavigationSurfaceAStarStatus.BudgetExceeded);
+        admission.Meter.LookupProbes.Should().Be(8,
+            "mandatory dependency capture consumes the remaining probe even when the optional ceiling cannot be reserved");
+    }
+
+    [Fact]
+    public void Advance_WithOneLookupStep_ShouldCompleteAtomicRayUnionThenYieldBeforeFinalization()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0)
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "atomic-unit");
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
+        var workspace = new NavigationAStarWorkspace(1, 8, 10, 8, 8, 8, 8);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        admission.Begin(
+            store.TryAcquire()!,
+            CreateSimplificationQuery(fixture, cells[0], cells[^1], 1));
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 16);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
+            admission.Result,
+            workspace,
+            admission.RayWork,
+            long.MaxValue);
+        int lookupBeforeAtomicUnit;
+        int traceBeforeAtomicUnit;
+        int coverageBeforeAtomicUnit;
+        do
+        {
+            lookupBeforeAtomicUnit = admission.Meter.LookupProbes;
+            traceBeforeAtomicUnit = admission.Meter.TraceIntervals;
+            coverageBeforeAtomicUnit = admission.Meter.CoveredVoxelIntervals;
+            search.Advance(lookupStepLimit: 1, 64, 64, 64);
+        }
+        while (admission.Meter.SimplificationRays == 0);
+
+        search.Status.Should().Be(NavigationSurfaceAStarStatus.Pending,
+            "the terminal ray decision yields before dependency finalization");
+        admission.Meter.LookupProbes.Should().Be(lookupBeforeAtomicUnit + 8,
+            "one grid probe, three mapped intervals, and two two-entry dependency passes form the bounded atomic unit");
+        admission.Meter.TraceIntervals.Should().Be(traceBeforeAtomicUnit + 3);
+        admission.Meter.CoveredVoxelIntervals.Should().Be(coverageBeforeAtomicUnit + 8);
+        admission.Meter.SimplificationRays.Should().Be(1);
+        int lookupAfterAtomicUnit = admission.Meter.LookupProbes;
+
+        search.Advance(lookupStepLimit: 1, 64, 64, 64)
+            .Should().Be(NavigationSurfaceAStarStatus.Pending);
+        admission.Meter.LookupProbes.Should().Be(lookupAfterAtomicUnit + 1,
+            "the next call starts the separately step-limited final dependency work");
+    }
+
+    [Fact]
+    public void Advance_WhenWorldMutatesAfterCompletedProofBeforeCapture_ShouldReturnStale()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0)
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "map");
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
+        PathQuery query = CreateSimplificationQuery(fixture, cells[0], cells[^1], 1);
+        NavigationAStarExitTestHarness.RunAStar(world, fixture.Graph, query)
+            .Status.Should().Be(NavigationSurfaceAStarStatus.Success,
+                "the measured simplification pass must be JIT-warmed");
+        var workspace = new NavigationAStarWorkspace(1, 8, 10, 8, 8, 8, 8);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        admission.Begin(
+            store.TryAcquire()!,
+            query);
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 16);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
+            admission.Result,
+            workspace,
+            admission.RayWork,
+            long.MaxValue);
+
+        long allocationStart = GC.GetAllocatedBytesForCurrentThread();
+        while (search.Status == NavigationSurfaceAStarStatus.Pending
+            && admission.Meter.SimplificationRays == 0)
+        {
+            search.Advance(64, 64, 64, 64);
+        }
+        long candidateAllocatedBytes =
+            GC.GetAllocatedBytesForCurrentThread() - allocationStart;
+
+        admission.Meter.SimplificationRays.Should().Be(1);
+        candidateAllocatedBytes.Should().Be(0,
+            "a warmed candidate proof must reuse its workspace; only the final immutable payload may allocate");
+        search.Status.Should().Be(NavigationSurfaceAStarStatus.Pending,
+            "the outer advance must yield after the terminal ray decision");
+        GridConfiguration mutation = new(
+            new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+            new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(
+                Fixed64.One,
+                Fixed64.One,
+                Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        world.TryAddGrid(mutation, out _).Should().BeTrue();
+
+        search.Advance(64, 64, 64, 64)
+            .Should().Be(NavigationSurfaceAStarStatus.Stale);
+        admission.Meter.RemainingLookupProbes.Should().Be(
+            query.Budget.MaxLookupProbes - admission.Meter.LookupProbes,
+            "terminal cleanup must release the simplification lookup floor");
+    }
+
+    [Fact]
+    public void FinalizationLookupCeiling_ShouldReserveAtExactBudgetAndRejectOneBelow()
+    {
+        int ceiling = checked(
+            NavigationDependencySortWork.GetMaximumComparisonCount(2, 3) + 5);
+        var exact = new NavigationWorkMeter(new NavigationWorkBudget(
+            ceiling, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+        var oneBelow = new NavigationWorkMeter(new NavigationWorkBudget(
+            ceiling - 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+
+        exact.TrySetLookupReservationFloor(ceiling).Should().BeTrue();
+        exact.RemainingLookupProbes.Should().Be(0);
+        oneBelow.TrySetLookupReservationFloor(ceiling).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Advance_WhenOptionalRayBudgetIsUnavailable_ShouldKeepRawSuffixUnbound()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0)
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "ray-budget");
+        NavigationAStarExitTestHarness.SearchResult raw =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[^1], 0));
+        NavigationAStarExitTestHarness.SearchResult exhausted =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(
+                    fixture,
+                    cells[0],
+                    cells[^1],
+                    simplificationRays: 1,
+                    traceIntervals: 0,
+                    coveredVoxelIntervals: 0));
+
+        exhausted.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        exhausted.Payload!.GuidePoints.Should().Equal(raw.Payload!.GuidePoints);
+        exhausted.Payload.WorldChangeSequence.Should().BeNull(
+            "a partial budget-exhausted proof must not bind the raw payload");
+    }
+
+    [Fact]
+    public void Advance_WhenDirectRayCostsMoreThanAStarSubpath_ShouldRetainRawGuide()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0),
+            new(0, 0, 1),
+            new(1, 0, 1),
+            new(2, 0, 1)
+        };
+        NavigationCell[] navigationCells =
+        {
+            NavigationAStarExitTestHarness.Cell,
+            NavigationAStarExitTestHarness.ExpensiveCell,
+            NavigationAStarExitTestHarness.Cell,
+            NavigationAStarExitTestHarness.Cell,
+            NavigationAStarExitTestHarness.Cell,
+            NavigationAStarExitTestHarness.Cell
+        };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                new GridConfiguration(
+                    Vector3d.Zero,
+                    new Vector3d((Fixed64)3, (Fixed64)2, (Fixed64)2),
+                    topologyKind: GridTopologyKind.RectangularPrism,
+                    topologyMetrics: GridTopologyMetrics.Rectangular(
+                        Fixed64.One,
+                        (Fixed64)2,
+                        Fixed64.One),
+                    storageKind: GridStorageKind.Sparse),
+                cells,
+                "cost-detour",
+                navigationCells);
+        NavigationAStarExitTestHarness.SearchResult raw =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[2], 0));
+        NavigationAStarExitTestHarness.SearchResult simplified =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                CreateSimplificationQuery(fixture, cells[0], cells[2], 1));
+
+        raw.Cost.Should().Be((Fixed64)4);
+        raw.Payload!.GuidePoints.Length.Should().BeGreaterThan(2);
+        simplified.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        simplified.Cost.Should().Be(raw.Cost);
+        simplified.Payload!.GuidePoints.Should().Equal(raw.Payload.GuidePoints,
+            "the successful direct ray is cost-ineligible");
+        simplified.Payload.WorldChangeSequence.Should().Be(world.ChangeSequence,
+            "the completed cost-ineligible proof is merged");
+    }
+
+    [Fact]
+    public void DependencyUnion_WhenOneUniqueEntryDoesNotFit_ShouldNotMutateTarget()
+    {
+        var target = new NavigationDependencyWorkspace(1, 1);
+        var source = new NavigationDependencyWorkspace(2, 2);
+        var existingAddress = new NavigationCellAddress("map", default);
+        var extraAddress = new NavigationCellAddress("map", new VoxelIndex(64, 0, 0));
+        target.TryRecordComponent(new NavigationSurfaceComponentKey(existingAddress))
+            .Should().BeTrue();
+        target.TryRecordPage("map", 0).Should().BeTrue();
+        source.TryRecordComponent(new NavigationSurfaceComponentKey(existingAddress))
+            .Should().BeTrue();
+        source.TryRecordPage("map", 0).Should().BeTrue();
+        source.TryRecordComponent(new NavigationSurfaceComponentKey(extraAddress))
+            .Should().BeTrue();
+        source.TryRecordPage("map", 1).Should().BeTrue();
+        var meter = new NavigationWorkMeter(new NavigationWorkBudget(
+            4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+
+        target.TryCountMissing(source, meter, out int components, out int pages)
+            .Should().BeTrue();
+
+        components.Should().Be(1);
+        pages.Should().Be(1);
+        target.CanFit(components, pages).Should().BeFalse();
+        target.ComponentCount.Should().Be(1);
+        target.PageCount.Should().Be(1);
+        target.Components[0].Representative.Should().Be(existingAddress);
+        target.Pages[0].Should().Be(new GraphPageDependencyAddress("map", 0));
+    }
+
+    [Fact]
+    public void DependencyUnion_WhenOnlyDuplicatesRemain_ShouldCommitAtExactFit()
+    {
+        var target = new NavigationDependencyWorkspace(1, 1);
+        var source = new NavigationDependencyWorkspace(1, 1);
+        var address = new NavigationCellAddress("map", default);
+        var component = new NavigationSurfaceComponentKey(address);
+        target.TryRecordComponent(component).Should().BeTrue();
+        target.TryRecordPage("map", 0).Should().BeTrue();
+        source.TryRecordComponent(component).Should().BeTrue();
+        source.TryRecordPage("map", 0).Should().BeTrue();
+        var meter = new NavigationWorkMeter(new NavigationWorkBudget(
+            4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+
+        target.TryCountMissing(source, meter, out int components, out int pages)
+            .Should().BeTrue();
+        meter.TryConsumeLookupProbes(source.ComponentCount + source.PageCount)
+            .Should().BeTrue();
+        target.CommitMerge(source);
+
+        components.Should().Be(0);
+        pages.Should().Be(0);
+        target.ComponentCount.Should().Be(1);
+        target.PageCount.Should().Be(1);
+        meter.LookupProbes.Should().Be(4);
+    }
+
+    [Fact]
     public void Payload_ShouldRetainGuidePointsWithoutALegacyNodeAlias()
     {
         var dependencies = new GraphDependencyStamp(
@@ -47,6 +618,7 @@ public sealed class NavigationSurfaceAStarTests
             new[] { guidePoint },
             Fixed64.Zero,
             dependencies,
+            null,
             NavigationSurfaceAStarStatus.Success);
 
         payload.GuidePoints.Should().Equal(guidePoint);
@@ -114,6 +686,7 @@ public sealed class NavigationSurfaceAStarTests
             Array.Empty<NavigationAStarGuidePoint>(),
             Fixed64.Zero,
             emptyDependencies,
+            null,
             NavigationSurfaceAStarStatus.NoPath);
         var populatedPayload = new NavigationAStarPayload(
             key,
@@ -127,12 +700,13 @@ public sealed class NavigationSurfaceAStarTests
             },
             Fixed64.One,
             populatedDependencies,
+            null,
             NavigationSurfaceAStarStatus.Success);
 
-        emptyPayload.RetainedBytes.Should().Be(384L);
+        emptyPayload.RetainedBytes.Should().Be(400L);
         NavigationAStarPayload.GetMaximumRetainedBytes(0, 0, 0)
             .Should().Be(emptyPayload.RetainedBytes);
-        populatedPayload.RetainedBytes.Should().Be(856L);
+        populatedPayload.RetainedBytes.Should().Be(872L);
         NavigationAStarPayload.GetMaximumRetainedBytes(
                 populatedPayload.GuidePoints.Length,
                 components.Length,
@@ -244,8 +818,11 @@ public sealed class NavigationSurfaceAStarTests
         }
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
         using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
             admission.Result,
             workspace,
+            admission.RayWork,
             long.MaxValue);
 
         for (int step = 0;
@@ -293,7 +870,8 @@ public sealed class NavigationSurfaceAStarTests
             middlePrism.Center.X,
             middlePrism.VerticalMin,
             middlePrism.Center.Z);
-        search.Result.GuidePoints.Should().Equal(
+        var expectedGuidePoints = new[]
+        {
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress("map", addresses[0]),
                 query.Start.Position),
@@ -308,7 +886,9 @@ public sealed class NavigationSurfaceAStarTests
                 secondTargetAnchor),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress("map", addresses[2]),
-                query.End.Position));
+                query.End.Position)
+        };
+        search.Result.GuidePoints.Should().Equal(expectedGuidePoints);
         workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
             .Should().BeTrue();
         NavigationAStarNodeRecord startRecord = workspace.NodeTable.GetRecord(startSlot);
@@ -318,6 +898,7 @@ public sealed class NavigationSurfaceAStarTests
         admission.Meter.EvaluatedEdges.Should().Be(6);
         search.Result.RetainedBytes.Should().BeGreaterThan(0);
         var resultBoundedCache = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 0,
             maxReusableBytes: 0,
             maxSinglePayloadBytes: search.Result.RetainedBytes - 1,
@@ -333,6 +914,7 @@ public sealed class NavigationSurfaceAStarTests
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         var cache = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 1,
             maxReusableBytes: search.Result.RetainedBytes,
             maxSinglePayloadBytes: maximumPayloadBytes);
@@ -347,12 +929,14 @@ public sealed class NavigationSurfaceAStarTests
             (NavigationAStarGuidePoint[])search.Result.GuidePoints.Clone(),
             search.Result.Cost,
             search.Result.Dependencies,
+            search.Result.WorldChangeSequence,
             search.Result.Status);
         FluentActions.Invoking(() => new NavigationAStarPayload(
                 search.Result.Key,
                 (NavigationAStarGuidePoint[])search.Result.GuidePoints.Clone(),
                 search.Result.Cost,
                 search.Result.Dependencies,
+                search.Result.WorldChangeSequence,
                 NavigationSurfaceAStarStatus.BudgetExceeded))
             .Should().Throw<ArgumentException>(
                 "terminal failures must never become reusable payloads");
@@ -451,6 +1035,7 @@ public sealed class NavigationSurfaceAStarTests
         cache.DetachedBytes.Should().Be(0);
         using NavigationWorldGraphStore capacityStore = CreateStore(graph);
         var undersized = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 1,
             maxReusableBytes: search.Result.RetainedBytes - 1,
             maxSinglePayloadBytes: search.Result.RetainedBytes - 1);
@@ -458,6 +1043,7 @@ public sealed class NavigationSurfaceAStarTests
         undersized.Count.Should().Be(0);
 
         var detachedOnly = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 0,
             maxReusableBytes: 0,
             maxSinglePayloadBytes: search.Result.RetainedBytes,
@@ -480,6 +1066,7 @@ public sealed class NavigationSurfaceAStarTests
         recoveredDetachedLease.Dispose();
 
         var leaseCapped = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 1,
             maxReusableBytes: search.Result.RetainedBytes,
             maxSinglePayloadBytes: search.Result.RetainedBytes,
@@ -507,6 +1094,7 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationCellAddress("map", new VoxelIndex(4, 0, 0)));
         long twoPayloadBytes = checked(search.Result.RetainedBytes + second.RetainedBytes);
         var lru = new NavigationAStarPayloadCache(
+            world,
             maxEntries: 2,
             maxReusableBytes: twoPayloadBytes,
             maxSinglePayloadBytes: search.Result.RetainedBytes);
@@ -605,8 +1193,11 @@ public sealed class NavigationSurfaceAStarTests
             admission.Advance(64, 8);
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
         using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
             admission.Result,
             workspace,
+            admission.RayWork,
             long.MaxValue);
 
         while (search.Status == NavigationSurfaceAStarStatus.Pending)
@@ -1045,7 +1636,7 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationWorkBudget(64, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
         var workspace = new NavigationAStarWorkspace(2, 4, 6, 4, 4, 4, 4);
-        var cache = new NavigationAStarPayloadCache(1);
+        var cache = new NavigationAStarPayloadCache(context.World, 1);
         using NavigationAStarQueryWork queryWork = BeginReservedQuery(
             context.World,
             store,
@@ -1220,8 +1811,11 @@ public sealed class NavigationSurfaceAStarTests
         }
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
         using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
             admission.Result,
             workspace,
+            admission.RayWork,
             long.MaxValue);
 
         for (int step = 0;
@@ -1421,7 +2015,7 @@ public sealed class NavigationSurfaceAStarTests
             rayCoveredAddressCapacity: 4,
             rayTraceIntervalCapacity: 4,
             guidePointCapacity: 8);
-        var insufficientCache = new NavigationAStarPayloadCache(1);
+        var insufficientCache = new NavigationAStarPayloadCache(world, 1);
         using (NavigationAStarQueryWork insufficient = BeginReservedQuery(
             world,
             store,
@@ -1433,7 +2027,7 @@ public sealed class NavigationSurfaceAStarTests
             insufficient.Status.Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
         }
         var workspace = new NavigationAStarWorkspace(3, 3, 2, 3, 4, 4, 8);
-        var cache = new NavigationAStarPayloadCache(1);
+        var cache = new NavigationAStarPayloadCache(world, 1);
         GraphDependencyStamp dependencies;
         using (NavigationAStarQueryWork work = BeginReservedQuery(
             world,
@@ -1701,8 +2295,11 @@ public sealed class NavigationSurfaceAStarTests
         }
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
         using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
             admission.Result,
             workspace,
+            admission.RayWork,
             long.MaxValue);
 
         for (int step = 0;
@@ -1793,7 +2390,7 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationWorkBudget(32, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
         var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 2);
-        var cache = new NavigationAStarPayloadCache(1);
+        var cache = new NavigationAStarPayloadCache(world, 1);
         using NavigationAStarQueryWork work = BeginReservedQuery(
             world,
             store,
@@ -1864,6 +2461,7 @@ public sealed class NavigationSurfaceAStarTests
         (NavigationAStarGuidePoint[])source.GuidePoints.Clone(),
         source.Cost,
         source.Dependencies,
+        source.WorldChangeSequence,
         source.Status);
 
     private static NavigationPagedSequence<GridNavigationPortal> CompilePortalSequence(
@@ -1943,6 +2541,41 @@ public sealed class NavigationSurfaceAStarTests
         binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
         return prism;
     }
+
+    private static PathQuery CreateSimplificationQuery(
+        NavigationAStarExitTestHarness.GraphFixture fixture,
+        VoxelIndex start,
+        VoxelIndex end,
+        int simplificationRays,
+        int lookupProbes = 8_192,
+        int traceIntervals = 128,
+        int coveredVoxelIntervals = 128) => new(
+        new NavigationEndpoint(
+            NavigationAStarExitTestHarness.GetFoot(fixture.Binding, start),
+            fixture.MapId),
+        new NavigationEndpoint(
+            NavigationAStarExitTestHarness.GetFoot(fixture.Binding, end),
+            fixture.MapId),
+        fixture.DefaultProfile,
+        NavigationAStarExitTestHarness.Policy.Key,
+        new TraversalIntent(
+            TraversalDomain.Surface,
+            TraversalMedium.Solid,
+            TraversalDomain.Surface),
+        PathAlgorithm.AStar,
+        new NavigationWorkBudget(
+            maxLookupProbes: lookupProbes,
+            maxEndpointCandidates: 32,
+            maxExpandedNodes: 128,
+            maxEvaluatedEdges: 1_024,
+            maxConnectionLegs: 1_024,
+            maxTransitionCandidates: 0,
+            maxTransitionPairs: 0,
+            maxStagedLegAttempts: 0,
+            maxTraceIntervals: traceIntervals,
+            maxCoveredVoxelIntervals: coveredVoxelIntervals,
+            maxSimplificationRays: simplificationRays),
+        allowTransitions: false);
 
     private static NavigationAgentProfile Profile() => new(
         new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),

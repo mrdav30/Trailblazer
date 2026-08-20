@@ -39,6 +39,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     private readonly NavigationEndpointWorkspace _workspace;
     private readonly PathAlgorithm _expectedAlgorithm;
     private readonly NavigationWorkMeter _meter;
+    private readonly NavigationRayWork _rayWork;
     private readonly NavigationEndpointResolutionWork _endpointWork;
     private readonly NavigationResolvedPathQuery _result;
     private NavigationWorldGraphLease? _lease;
@@ -65,12 +66,14 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         _workspace = workspace;
         _expectedAlgorithm = expectedAlgorithm;
         _meter = new NavigationWorkMeter(default);
+        _rayWork = new NavigationRayWork(rayWorkspace);
         _endpointWork = new NavigationEndpointResolutionWork(
             world,
             store,
             _meter,
             workspace,
-            rayWorkspace);
+            rayWorkspace,
+            _rayWork);
         _result = new NavigationResolvedPathQuery();
     }
 
@@ -107,6 +110,8 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     internal NavigationResolvedPathQuery Result => _result;
 
     internal NavigationWorkMeter Meter => _meter;
+
+    internal NavigationRayWork RayWork => _rayWork;
 
     internal NavigationQueryAdmissionStatus Advance(
         int lookupStepLimit,

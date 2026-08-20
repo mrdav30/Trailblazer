@@ -116,8 +116,11 @@ public class NavigationSurfaceAStarBenchmarks
             }
 
             using var search = new NavigationSurfaceAStarWork(
+                _fixture.World,
+                _fixture.Context.Pathing.NavigationGraphStore,
                 _admission.Result,
                 _workspace,
+                _admission.RayWork,
                 long.MaxValue);
             while (search.Status == NavigationSurfaceAStarStatus.Pending)
                 search.Advance(int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue);

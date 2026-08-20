@@ -139,11 +139,15 @@ internal sealed class NavigationAStarQueryWork : IDisposable
             MarkReady(MapSearchStatus(_pendingLease.Payload.Status));
             return Status;
         }
+        NavigationRayWork rayWork = _admission.RayWork;
+        DisposeAdmission();
         _search = new NavigationSurfaceAStarWork(
+            _cache.World,
+            _store,
             resolved,
             _workspace,
+            rayWork,
             _payloadReservation.MaximumBytes);
-        DisposeAdmission();
         return Status;
     }
 
@@ -189,7 +193,8 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         }
 
         NavigationAStarPayload payload = _search!.Result;
-        if (!_store.Current.IsDependencyCurrent(payload.Dependencies))
+        if (!_store.Current.IsDependencyCurrent(payload.Dependencies)
+            || !_cache.IsWorldCurrent(payload))
             return Finish(NavigationAStarQueryStatus.Stale);
         if (!_cache.TryPublish(
                 payload,
@@ -197,13 +202,15 @@ internal sealed class NavigationAStarQueryWork : IDisposable
                 ref _payloadReservation,
                 out NavigationAStarPayloadLease published))
         {
-            if (!_store.Current.IsDependencyCurrent(payload.Dependencies))
+            if (!_store.Current.IsDependencyCurrent(payload.Dependencies)
+                || !_cache.IsWorldCurrent(payload))
                 return Finish(NavigationAStarQueryStatus.Stale);
             return _readyStatus == NavigationAStarQueryStatus.Success
                 ? Finish(NavigationAStarQueryStatus.CapacityExceeded)
                 : Finish(_readyStatus);
         }
-        if (!_store.Current.IsDependencyCurrent(published.Payload.Dependencies))
+        if (!_store.Current.IsDependencyCurrent(published.Payload.Dependencies)
+            || !_cache.IsWorldCurrent(published.Payload))
         {
             _cache.RemoveExact(published.Payload);
             published.Dispose();
@@ -245,7 +252,8 @@ internal sealed class NavigationAStarQueryWork : IDisposable
     private NavigationAStarQueryStatus FinishCached(
         NavigationAStarPayloadLease lease)
     {
-        if (!_store.Current.IsDependencyCurrent(lease.Payload.Dependencies))
+        if (!_store.Current.IsDependencyCurrent(lease.Payload.Dependencies)
+            || !_cache.IsWorldCurrent(lease.Payload))
         {
             _cache.RemoveExact(lease.Payload);
             lease.Dispose();

@@ -457,7 +457,7 @@ TrailblazerWorldContext
   TraversalEvaluator
   immutable direct-indexed navigation-area policies
   A* / reverse-Dijkstra flow / reachability
-  synchronized guide caches and compiled transition indexes
+  synchronized A*/Flow guide caches + source-owned transition pages/rule array
   algorithm-specific bounded workspaces (combined Phase 3/4 uses one
     NavigationAStarWorkspace per admitted A* query)
 ```
@@ -793,9 +793,9 @@ exclude the origin and include exact destination, complete agent profile,
 traversal intent, flow options, and the complete `NavigationWorkBudget` value;
 origin is a coverage
 requirement checked atomically at checkout. Cached payloads validate their
-dependency stamp against the current snapshot. Effective baked, overlay, and
-generated transition indexes publish with the graph snapshot, so there is no
-independently mutable registry version.
+dependency stamp against the current snapshot. Effective baked/overlay
+transition pages and the sorted procedural rule array publish with the graph
+snapshot, so there is no independently mutable registry/query-cache version.
 
 A search acquires an O(1) ref-counted snapshot lease for resolution, expansion,
 and result copy. Each concurrent query also checks out its own pooled,
@@ -1222,13 +1222,13 @@ on an absent sparse voxel is dormant, not deleted, and reappears when that exact
 physical address exists. Hosts cannot mutate media through a second rules
 registry, so snapshot publication remains the single cache/guide staleness clock.
 
-Surface and volume searches share nodes and search infrastructure but select
-different native edge rules through the traversal domain. Hybrid planning
-continues to stage local surface/volume segments around semantic transitions.
-Generated swim/climb/etc. transitions compile from the effective baked-plus-
-overlay cells and actual graph contacts. A cell delta refreshes only generated
-transitions incident to the changed address and publishes their indexes in the
-same snapshot transaction.
+Surface and volume searches share one medium-state graph authority keyed by
+physical node plus exact medium; `TraversalDomain` and staged Hybrid planning
+are deleted. Native/volume movement retains medium. Semantic transitions may
+retain or change medium and are enumerated from explicit anchored definitions
+or the graph snapshot's bounded canonical rule array. A cell delta changes
+only rule applicability incident to the changed address in the same snapshot
+transaction; procedural rule edges are not materialized per cell.
 
 Persistent transition anchors become:
 
@@ -1239,27 +1239,22 @@ optional exact point override
 TraversalMedium
 ```
 
-They bind to fresh exact-generation graph nodes at runtime. Generated
-transitions compile from map addresses and actual graph contacts, not Cartesian
-chart increments. Automatic IDs derive from source/destination map IDs, endpoint
-indices, medium/type, and directionality; inserting an earlier map entry does
-not rename an unchanged transition. Authored semantic transitions require an
-explicit stable map-local ID. Global identity is `(source MapId, local
-transition ID)`, so local IDs may repeat in different source maps. Any
-authored/authored, generated/generated, or authored/generated collision within
-the same source-map scope fails the graph build transaction. Transition and
-total route costs become `Fixed64`.
+They bind to fresh exact-generation graph nodes at runtime. Authored semantic
+transitions require an explicit stable map-local ID. Rule-derived identity is
+tagged separately and combines stable rule ID with resolved source/destination
+medium-states. Explicit and rule identities cannot collide across kinds;
+duplicates fail only within the definition owner or within the rule array.
+Transition `ActionCost` and total route costs use `Fixed64`.
 
 There is no independently mutable transition registry. Baked definitions provide
 defaults; runtime `Upsert`/`Suppress`/`RevertToBake` transition overlay operations
 are the public mutation path. Dropping a ladder upserts one or more source-owned
 climb transitions (and any required physical connection); destroying it
 suppresses/reverts those IDs. A stable overlay ID may shadow its baked default;
-duplicate overlay keys and overlay/generated collisions reject in the same
-source-map scope. The changed outgoing/incoming pages,
-generated incident transitions, affected components, dependency stamps, and
-cache invalidations publish atomically with the graph snapshot, so hybrid guides
-need no second staleness clock.
+duplicate overlay keys reject in the same source-map scope. The changed
+outgoing/incoming pages, rule table/applicability, affected structural
+components, dependency stamps, and cache invalidations publish atomically with
+the graph snapshot, so unified guides need no second staleness clock.
 
 Delete `TrailblazerTransitionService.Register/Unregister`, the current global
 manual/generated registry ownership model, and its mutable query facade. Replace
@@ -2171,32 +2166,189 @@ Tasks:
   explicit pre-release decision to keep it internal. Retain the reusable
   upstream vertical-portal primitive tests and add the real runtime consumer
   without a test-only production hook.
-- Activate rectangular six-face and hex six-planar-plus-two-vertical volume
-  native directions plus the corresponding volume branches in
-  `TraversalEvaluator`. Activate certified diagonal/vertical-diagonal witness
-  rules only with their first volume/hybrid consumer.
+- Map defaults are immutable authoring truth, not query behavior. A map carries
+  one optional complete default `NavigationCell`; `None` remains fail-closed.
+  Effective precedence is overlay cell, explicit baked cell, map default, then
+  no navigation cell. Each winner replaces the complete payload without field
+  merging. Replacing the same map/binding with a Gas versus Liquid default is a
+  semantic publication change that invalidates every affected graph proof.
+  The default covers each physically present cell inside the normalized
+  `GridBinding`; never populate absent sparse addresses implicitly. Cell
+  `Suppress` tombstones every lower layer and `RevertToBake` falls through
+  explicit bake, default, then no cell.
+- Native same-medium reachability remains positive-face based: rectangular six
+  faces and hex six planar plus two vertical faces. Native/shortcut movement
+  retains medium without an action. A semantic transition may retain medium
+  for Jump/Climb or change it for Solid/Gas/Liquid crossings, always emits an
+  instruction, and is excluded whenever `AllowTransitions == false`.
+- Transition immutability is snapshot-local, not a bake-time restriction.
+  Runtime objects such as ladders, doors, elevators, and teleporters publish
+  exact directed transition definitions through bounded overlay transactions;
+  moving/removing the object replaces or suppresses those definitions and
+  stales affected proofs through normal graph publication.
+- Separate anchored transition instances from reusable public map-authoring
+  generation rules. A rule explicitly identifies source/destination media,
+  same-cell or positive-face-contact scope, transition type, required
+  capabilities, complete nonnegative `ActionCost`, compact locomotion hints,
+  and a stable rule ID. Keep one canonically sorted immutable rule array bounded
+  in the graph snapshot and linearly scan matching local edges
+  procedurally in canonical order for both forward A* and reverse Flow; do not
+  add an index without benchmark evidence or materialize one transition object
+  per eligible cell. Effective cell media
+  describes matter, the agent profile describes abilities, and the rule
+  describes which state change the environment permits. Mere media contact
+  never invents an action without such a rule.
+- Replace staged hybrid orchestration with one medium-state graph search. Keep
+  one immutable addressed physical node per effective `NavigationCell`; key
+  bounded search and payload state by `(NavigationNodeRef, TraversalMedium)` so
+  a mixed-media cell may be reached with different valid outgoing behavior.
+  Native and certified shortcut edges retain the medium; semantic transition
+  edges may retain or change it and are all excluded when
+  `PathQuery.AllowTransitions == false`. A* and Flow use the same state edges,
+  costs, dependencies, and
+  publication linearization.
+- Delete `TraversalDomain` and replace the prototype `TraversalIntent` shape
+  with exact Solid/Gas/Liquid `StartMedium` plus nonempty `TargetMedia`.
+  `Unknown` remains a runtime sentinel but is invalid query intent; never add
+  hidden inference or priority. Filter start candidates by exact `StartMedium`.
+  When transitions are disabled, reject immediately if the target excludes that
+  medium; otherwise set the effective target mask to `StartMedium`, qualify/rank
+  target addresses by that mask, then admit/seed that one state and anchor. With
+  transitions enabled, set the effective mask to `TargetMedia`, qualify/rank by
+  any medium in it, admit every qualifying medium
+  at the winning address, use zero A* heuristic, and Flow-seed with canonical
+  address then medium tie order. Keep `AllowTransitions` as the one explicit
+  semantic-action switch.
+- Replace address/position-only A* waypoints and heading-only Flow samples with
+  transition-aware results; do not retain the old overloads. Ordinary results
+  report the selected medium and movement target/heading. A transition result
+  reports only its stable ID/type plus exact source/destination addresses,
+  media, resolved world positions, and compact request/preserve-climb
+  locomotion hints. Carry a private opaque existing-lease-acquisition-generation
+  + step/sample-ordinal completion stamp in the same value; do not
+  expose or serialize a second token type. Hold per-acquisition lease state at
+  the source action until the consumer explicitly completes that exact pending
+  instruction; never mutate reusable cached payload state or
+  infer successful engine-specific locomotion or animation from proximity.
+  Store transition payload only for actual transition steps rather than
+  inflating every movement entry or retaining a staged route object.
+- Require Navigator guided requests to match the exact current frame medium;
+  fail before guide acquisition rather than silently synthesizing a volume-
+  first query. The unified lease owns cursor/action state, Navigator owns only
+  the surfaced pending instruction, and
+  `CompletePendingTransition(in instruction)` is the sole advancement path.
+  Delete automatic guided-volume handoff activation.
+- Retire legacy raw-volume knobs explicitly: profile radius/body height replace
+  `UnitSize`; endpoint policies replace `AllowUnwalkableEndpoints` without
+  admitting an impassable state; finite `NavigationWorkBudget` replaces
+  `MaxPathSearchRange`; and the graph owns the admissible heuristic instead of
+  exposing `HeuristicMethod`.
+- Preserve the old Volume search's Euclidean-neighbor intent without retaining
+  its rectangular-only `100/141` approximation. Query-time volume shortcuts use
+  GridForge's complete deterministic topology sets: rectangular 26 directions
+  and hex-prism 20 directions. Rectangular two-axis shortcuts require the full
+  four-cell closure, rectangular three-axis shortcuts the full eight-cell
+  closure, and hex vertical-planar shortcuts the corresponding four-cell
+  closure. The fixed closure prevents corner cutting but is not a body-size
+  ceiling. GridForge must also enumerate every prism whose interior has positive
+  overlap with the swept upright body into caller-bounded scratch; exact
+  tangency does not claim the adjacent half-open cell. Every closure/coverage cell
+  participates in medium/profile/policy/passability evaluation and graph
+  dependencies; candidate directions stay bounded while witness count is
+  profile/binding-bounded. Shortcuts never create reachability.
+- Cost accepted volume shortcuts from exact world-space Fixed64 anchor distance:
+  conservative ceiling for edge cost and conservative Euclidean floor for A*
+  heuristics. Do not preserve the legacy bug that charged three-axis unit moves
+  `141` instead of approximately `173`, or its assumption of isotropic unit
+  rectangular cells. A* and Flow must consume the same shortcut set and costs.
+- Before activating positive-radius non-face shortcuts, extend GridForge with
+  one allocation-free caller-bounded operation that enumerates all prisms
+  whose interiors positively overlap the swept upright body and validates the direct segment
+  through their union with FixedMathSharp.Geometry. Report exact work/capacity/
+  geometry status and canonical covered cells for semantic/dependency checks.
+  Do not retain a compiled certificate/maxima/cache without benchmark evidence,
+  retain 20/26 edges per node, or duplicate corner geometry in Trailblazer.
+  Keep face edges as the fail-closed fallback.
+- Reuse each A*/Flow slot's existing `NavigationRayWorkspace` limits and extend
+  it only with GridForge's typed swept-coverage result buffer. Do not add a
+  volume-shortcut workspace, public capacity family, or pool.
+- Add a medium-aware free-flight anchor/evaluator branch. Do not reuse surface
+  foot-anchor step/drop semantics for vertical Gas/Liquid travel. Retain the
+  public bottom-center foot reference, but resolve a profile-specific volume
+  anchor by centering the upright body in the GridForge cell volume and deriving
+  its foot from the body height. Free-form means unrestricted deterministic 3D
+  translation; pitch, roll, animation pose, and engine collision response
+  remain motor/host concerns.
+- Use the covered-prism union operation for volume anchor placement (degenerate
+  sweep), non-face shortcuts, and positive-face movement for profiles that span
+  more than one prism/map/grid. Reuse GridForge's existing directed portal/
+  traversal/body-segment predicates as the fast path for one-prism-fitting
+  positive-face movement; Phase 6 volume ray chains delegate to that same face
+  authority. Never recreate topology offsets, portal/corner tests, or clearance
+  math in Trailblazer. Surface-to-volume transitions connect separately
+  resolved anchors through the explicit completion handshake.
 - Delete runtime volume predicate rules and port host examples to immutable map
-  defaults plus explicit addressed cell overlay deltas.
+  defaults plus explicit addressed cell overlay deltas. Arbitrary host delegates
+  are not translated: hosts pre-materialize their results before publication.
+  Remove the legacy requirement for a Solid/Volume chart partition and delete
+  `TrailblazerWorldContext.VolumeRules`, `TrailblazerVolumeRulesService`,
+  `VolumeVoxelRule`, `VolumeMediumRules`, and `VolumeMediumRulesState` exactly.
 - Bind persistent transition addresses to exact runtime graph nodes.
-- Extend/rebuild exact reachability components and dependency stamps with the
-  newly effective transition edges before any transition-aware query is
-  admitted.
-- Compile generated transitions from effective baked-plus-overlay cells and graph
-  contacts; a cell delta refreshes only transitions incident to changed addresses.
+- Keep same-medium positive-face components as structural over-approximations
+  of effective medium presence/contact only, never profile/policy/clearance-
+  keyed proof. Different components can reject a transition-disabled query;
+  same-component membership never proves a route. Transition-enabled A*/Flow
+  follows directed transition edges between those components without a second
+  hybrid-component cache or staleness clock.
+- Compile rule applicability from effective baked-plus-overlay cells and graph
+  contacts; a cell delta changes only procedural transitions incident to
+  changed addresses. Capability filtering remains query-owned, so one
+  Liquid-to-Gas takeoff rule can serve a flying/swimming duck without granting
+  that edge to a non-flying fish.
+- Derive rule action points canonically: SameCell uses resolved source/
+  destination medium anchors; PositiveFaceContact uses GridForge's directed
+  profile-resolved contact anchors. Validate explicit point overrides inside
+  declared endpoint prisms and certify each medium-specific anchor-to-action
+  leg with ordinary dependency recording.
 - Compile transition Upsert/Suppress/RevertToBake operations into persistent
   source-owned outgoing/incoming pages in the candidate graph snapshot. A same-
-  ID overlay intentionally shadows its baked source-owned default; reject
-  duplicate overlay keys and every overlay/generated ID collision before
-  publication. Support a dropped/removed ladder without whole-map replacement.
-- Convert transition, staged-plan, fallback, and total route costs to `Fixed64`.
-- Update transition indexes and caches to exact runtime identities and sorted
-  graph dependency stamps.
+  ID overlay intentionally shadows its baked source-owned default. Identity is
+  tagged `(Definition|Rule, owner ID, source state, destination state)`; reject
+  duplicates only within the definition owner or rule array because cross-kind
+  IDs cannot collide. Support a dropped/removed ladder without whole-map
+  replacement.
+- Convert only unified graph transition/payload and total route costs to
+  `Fixed64`; delete legacy staged/fallback int costs untouched.
+  Rename pre-release `AdditionalCost` to complete `ActionCost`. Charge movement
+  to/from action anchors plus ActionCost and target cell/area enter costs; never
+  infer teleporter action cost from endpoint distance. Use zero A* heuristic
+  whenever transitions are enabled until a measured lower bound is proven.
+- Store explicit transitions only in source-owned outgoing/destination incoming
+  graph pages, keep one sorted rule array, and use ordinary A*/Flow dependency
+  stamps. Delete the old registry/query cache/index; do not create a standalone
+  transition cache or index.
 - Exercise every source/destination topology/storage combination through
   surface-to-volume and semantic transitions.
-- Port `GuidedVolumeExitPlanner`, hybrid fallback/preplan factories, transition
-  refresh, and every remaining volume/transition consumer before switching
-  authority. Delete each superseded provider and carrier only after its direct
-  consumers compile.
+- Replace direct consumers of `GuidedVolumeExitPlanner` and hybrid fallback/
+  preplan factories with unified query/guide behavior, then delete those
+  providers without adapting them. Move transition refresh, every
+  `NavSteering`/`Navigator` controller field, `GuideSampleBatch`,
+  benchmark caller, and JSON/MemoryPack record before switching authority.
+  Delete each superseded provider and carrier only after all direct consumers
+  compile; Phase 7 owns this atomic controller/serialization cutover.
+- Round-trip standalone `PathQuery` values exactly. Navigator session records
+  persist durable destination/profile/policy/algorithm/budget/target-media
+  intent, not a guide cursor or in-flight action; load rebuilds the start
+  endpoint and `StartMedium` from valid host-restored state. Missing/old/
+  malformed query and handoff shapes reject transactionally in JSON and
+  MemoryPack without mutating the existing shell.
+- Treat the experimental hybrid system as replacement evidence, not retained
+  architecture. After the unified guide consumers are live, require exact
+  source/test/benchmark/docs/serialization/API-snapshot residue scans for the
+  staged planner, route-step/plan carriers, guide sequencing, legacy handoff
+  records, and their independent cache or staleness clocks. Do not keep aliases,
+  forwarding overloads, compatibility factories, or inactive serialized
+  discriminators.
 - Legacy-deletion ledger: verify combined Phase 3/4 already removed the hybrid
   surface-A* variant, flattened hybrid guide path, and guided-volume A* handoff
   carriers; do not recreate them. Remove `VolumeSurveyor`, `VolumePathRequest`,
@@ -2209,68 +2361,72 @@ Tasks:
   volume math must be volume-owned before the Phase 3/4 deletion. Remove
   `VolumeVoxelFinder` after Phase 6 replaces its line-of-sight role and every
   volume endpoint consumer has moved to graph admission.
+- Delete `IPathRequest`, `PathRequestCacheKey`, `ReusableSurveyResultCache<T>`,
+  `IGuide`, `IWaypointGuide`, `GuidePool`, `PathGuideFactory`,
+  `TrailblazerGuideState`, legacy volume pools/service
+  overloads, `PathRequestRecord`, guided-volume Navigator state, old guide
+  result overloads, and every inactive discriminator in the same Phase 7
+  boundary. Exact residue gates cover production, tests, benchmarks, active
+  README/wiki docs, public API snapshot, and JSON/MemoryPack keys.
 - Run a clean Release build and full suite after the volume/transition/hybrid
   deletion boundary.
 
 Exit criteria:
 
-- gas/liquid paths, transitions, and hybrid routes work across the full matrix;
+- gas/liquid paths, transitions, and mixed-medium composed-graph routes work
+  across the full matrix;
+- open rectangular two-axis/three-axis and hex vertical-diagonal routes retain
+  exact Euclidean-like A*/Flow costs and headings; blocked closure cells and
+  just-failing positive-radius bodies reject only the shortcut and retain the
+  face-connected fallback;
 - mined/opened cells, water/lava media changes, and ladder add/remove publish as
   bounded overlay transactions and invalidate only affected candidate pages/
   structural components;
+- a ladder dropped from a cliff into liquid publishes exact overlay climb
+  transitions, produces a held actionable guide instruction, continues only
+  after explicit completion, and becomes stale/unavailable when the ladder is
+  moved or removed;
+- one Liquid-to-Gas takeoff rule lets a `Swim | Fly` duck take off at multiple
+  eligible water-surface contacts without per-cell transition authoring, while
+  an otherwise equivalent non-flying agent cannot use those procedural edges;
 - grid respawn rebinds durable transition addresses without preserving stale
   runtime identities;
 - effective baked-plus-overlay cell media is the only ordinary traversal truth;
-- transition indexes share graph snapshot publication/dependencies; no
-  independent mutable registry or second guide-staleness clock remains.
+- source-owned transition pages and the sorted rule array share graph snapshot
+  publication/dependencies; no independent registry, query cache/index, or
+  second guide-staleness clock remains.
 
 ### Phase 8 - Navigator, Kinematic Boundary, And Serialization
 
-**Goal:** finish controller behavior and the remaining flow/volume/hybrid
-serialization cutover after the authoritative shape and A* schema moved into
-combined Phase 3/4.
+**Goal:** finish topology-neutral controller behavior and serialization after
+Phase 7 atomically removed the remaining flow/volume/hybrid compatibility lane.
 
 Tasks:
 
 - Replace steering closing/arrival thresholds and movement-group bucket padding
   with explicit world-unit settings.
-- Port only the remaining flow/volume/hybrid controller and serialized-request
-  consumers, plus the Phase 6 LOS integration. Guided surface A*, its repath
-  checks, and its surface legs were already cut over in combined Phase 3/4; do
-  not add a second adapter or request authority here.
+- Do not recreate a remaining flow/volume/hybrid controller or serialized-
+  request lane. Phase 7 already moves those consumers to the unified graph
+  query/guide surface; keep subsequent controller work on that one authority.
 - Keep motor, turning, locomotion, and heightmap behavior topology-neutral.
 - Emit deterministic committed cell/area-entry metadata only after controller
   movement commits, and expose the last committed area as read-only controller
   state for the next fixed step. The host owns damage, audio, friction, status
   effects, and every other material-specific side effect; speculative navigation
   never runs them.
-- Replace the remaining old serialized flow/volume/hybrid authority:
-  `PathRequestRecord`, Navigator path mode/endpoint/flow fields, NavSteering
-  legacy request fields, and guided-volume chart/heuristic/range fields. The
-  A*-specific discriminator and old-record rejection already land in combined
-  Phase 3/4.
-- Extend the explicit schema discriminator introduced by the A* cutover so a
-  missing/old remaining request shape fails in both JSON and MemoryPack
-  transports. Runtime snapshots, dependency stamps, and leases remain
-  rebuild-only.
+- Preserve Phase 7's exact unified query schema and old-record rejection in both
+  JSON and MemoryPack. Runtime snapshots, dependency stamps, leases, guide
+  cursors, and host actions remain rebuild-only.
 - Continue populate-existing-instance loading: hosts register every per-grid map
   referenced by restored navigators, then restore/replay their coalesced semantic
   overlays, before loading guided Navigators. Overlay state is explicit host-
   persisted gameplay state; graph snapshots and runtime handles remain rebuild-only.
 - Reject old serialized request records with a clear schema/version error. Do
   not add a compatibility reader.
-- Do not recreate shared old request/cache/chart carriers deleted by their
-  Phase 7 owner; require a clean Release build and full suite before the phase
-  exits.
-- Legacy-deletion ledger: Phase 7 owns deletion of `IPathRequest`/
-  `PathRequest`, `VolumePathRequest`, `PathRequestCacheKey`,
-  `ReusableSurveyResultCache<T>`, `PathGuideFactory`, `TrailblazerGuideState`,
-  legacy volume guide pools/service overloads/counters/chart-key invalidation,
-  and the final chart/partition authority. Phase 8 deletes only the remaining
-  controller/serialization fields and `PathRequestRecord` shapes once they have
-  moved to the graph-native `PathQuery` schema. Retain no forwarding facade
-  from the new query/guide service back to a deleted carrier; Phase 9 only
-  verifies that the Phase 7 and Phase 8 deletions left no residue.
+- Do not recreate old request/cache/chart/controller/serialization carriers
+  deleted by their Phase 7 owner; require a clean Release build and full suite
+  before the phase exits. Phase 9 only verifies that the Phase 7/8 deletions
+  left no residue.
 
 Exit criteria:
 
@@ -2357,7 +2513,7 @@ the gate finite without omitting any axis.
 - weighted flow field build/reuse/sample;
 - reachability if retained;
 - direct navigation ray and string pulling;
-- transitions and hybrid routes;
+- semantic transitions and mixed-medium composed-graph routes;
 - cache hit/miss/invalidation and active-guide staleness;
 - Navigator waypoint following and manual KCC-without-map behavior;
 - serialization restore after map registration.
@@ -2376,7 +2532,7 @@ Critical focused regressions:
 - A cell can atomically change solid -> water -> lava-policy -> suppressed ->
   RevertToBake with full media/capability/cost/clearance semantics. Only incident
   edges and affected candidate pages/components invalidate; from Phase 7, the
-  same rule includes generated transitions.
+  same rule includes incident procedural transition-rule applicability.
 - A ladder Upsert creates source-owned climb transitions/required connections;
   Suppress/Revert removes them. Active guides stale atomically, unrelated
   components remain reusable, and no map replacement or secondary registry occurs.
@@ -2386,10 +2542,11 @@ Critical focused regressions:
 - `PreserveAndRevalidate` retains valid overlay state across a rebake and rejects
   an incompatible candidate without changing the old snapshot; `Clear` installs
   the new bake and resets overlay/dynamic-slot state atomically.
-- Duplicate overlay addresses/IDs, overlay/generated ID collisions, invalid
+- Duplicate overlay addresses/definition IDs, duplicate rule IDs, invalid
   witnesses/anchors, out-of-grid indices, and overlay capacity overflow reject
   the complete transaction without partial pages or version changes. A same-ID
-  overlay/baked pair is the intentional override path, not a collision.
+  overlay/baked definition pair is the intentional override path; tagged rule
+  and definition identities cannot collide across kinds.
 - One atomic multi-map transaction can add/remove both directed halves of a
   cross-map connection; failure in either map rolls back both halves.
 - Water requiring `Swim` exercises all-of capability admission. Rock/asphalt/
@@ -2402,9 +2559,10 @@ Critical focused regressions:
   double-apply either mutation.
 - From Phase 5 onward, removing a mined articulation cell from a large
   single-map component charges every visited node and every then-effective
-  native/explicit/seam edge; Phase 7 adds effective transition edges to that
-  charge. It remains fail-closed across budget carryover and reopens only after
-  the split publishes. Combined Phase 3/4 uses conservative map-component
+  native/explicit/seam edge. Phase 7 keeps medium structural components free of
+  semantic transition edges and meters rule/transition dependency publication
+  separately. The split remains fail-closed across budget carryover and reopens
+  only after publication. Combined Phase 3/4 uses conservative map-component
   invalidation and makes no finer locality claim.
 - An active GridForge grid with no map remains usable by KCC/spatial systems and
   contributes no AI nodes.
@@ -2517,14 +2675,14 @@ Critical focused regressions:
   the cursor mismatch discards the candidate and the next complete pass includes
   that mutation exactly once before the scope reopens.
 - One request exhausts one shared work meter across endpoint producers,
-  GridForge trace/coverage output, transition candidate pairs, staged legs,
-  connection legs, and every nested hybrid/recovery search.
+  GridForge trace/swept-coverage output, transition candidates, connection
+  legs, and same-lease ray/rejoin work; no nested Hybrid/recovery search remains.
 - Guide samples and sample batches exhaust finite node/cursor/portal/prism/trace/
   recovery counters without advancing a cursor or mutating cached field state.
 - Root-to-foot offset participates in path positions, body clearance, profile
   equality, cache identity, serialization, and post-load mismatch rejection.
-- Duplicate map-local connection/transition IDs, dangling local addresses, and
-  out-of-prism anchors fail map construction. Cross-map references remain
+- Duplicate map-local connection/explicit-transition IDs, duplicate rule IDs,
+  dangling local addresses, and out-of-prism anchors fail map construction. Cross-map references remain
   dormant while the target map is absent and fail the candidate composition
   deterministically if the installed target lacks a referenced cell/witness.
 - `NoMap`, invalid profile/endpoint, no-path, work budget, cost overflow,

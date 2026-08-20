@@ -52,6 +52,8 @@
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
 		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.FluentAssertions\FixedMathSharp.FluentAssertions.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0" />
+		<ProjectReference Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
+			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0" />
 		<ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=9.0.0" />
 	</ItemGroup>

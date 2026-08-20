@@ -839,19 +839,19 @@ Independent correctness and ponytail reviews reported no remaining P0-P2.
 - Benchmark alias: `navigation-ray` with short/medium/long, sparse blocked, mixed seam/explicit, worst guide points, bounded simplification, Flow rejoin, and immediate-workspace contention cases.
 - Determinism output prefix: `PHASE6_RAY_DIGEST` with canonical sorted fields and checked-in hashes.
 
-- [ ] **Step 1: Write determinism and benchmark catalog REDs**
+- [x] **Step 1: Write determinism and benchmark catalog REDs**
 
 The digest matrix must cover rectangular, pointy, flat, tie/overlap, endpoint, simplified A*, direct steering, Flow rejoin, and mutation/serialization-visible controller state. The benchmark catalog test/list command must fail until `navigation-ray` resolves.
 
-- [ ] **Step 2: Implement the smallest real benchmark/digest harness**
+- [x] **Step 2: Implement the smallest real benchmark/digest harness**
 
 Use production worlds/graphs, exact counters, preflight semantic assertions, warmed allocation checks, and bounded BDN jobs. Do not publish timing claims until all semantic preflights pass.
 
-- [ ] **Step 3: Run 13 serial determinism processes**
+- [x] **Step 3: Run 13 serial determinism processes**
 
 Run Debug, Release, ten additional Release processes, and direct ReleaseLean. Extract/sort exactly the expected digest lines and compare byte-for-byte plus SHA-256. Store ignored evidence under `.superpowers/sdd/2026-08-16-phase6-navigation-rays/`.
 
-- [ ] **Step 4: Run bounded smoke then canonical benchmarks**
+- [x] **Step 4: Run bounded smoke then canonical benchmarks**
 
 ```powershell
 dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj --configuration Release -- navigation-ray --job short --inProcess
@@ -860,11 +860,11 @@ dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj 
 
 Require every case discovered/executed, zero BDN issue/error patterns, semantic counters/drains green, and p50/p95/p99/max/allocation archived without unsupported claims.
 
-- [ ] **Step 5: Update docs and living Phase 7 handoff**
+- [x] **Step 5: Update docs and living Phase 7 handoff**
 
 Document one graph ray/direct/simplified-guide/Flow-rejoin behavior. The tracker must explicitly retain Phase 7 ownership of volume ray wiring, `VolumeVoxelFinder.IsDirectPathClear`, `IsVolumeDestinationInSight`, full media/transition semantics, and the pre-release public/internal API decision. Do not describe a test-only runtime activation.
 
-- [ ] **Step 6: Run final cross-repository gates serially**
+- [x] **Step 6: Run final cross-repository gates serially**
 
 FixedMathSharp:
 
@@ -893,10 +893,24 @@ dotnet build src/Trailblazer/Trailblazer.csproj --configuration ReleaseLean -m:1
 dotnet pack src/Trailblazer/Trailblazer.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true
 ```
 
-- [ ] **Step 7: Final scans and independent reviews**
+Final serial evidence used the isolated Phase 6 package feed so transitive
+package identity could not shadow freshly built sibling projects. FixedMathSharp
+passed 2,695 Release and 2,674 ReleaseLean solution tests; GridForge passed
+713/713 in both configurations; Trailblazer passed 1,471/1,471 Release and
+1,440/1,440 ReleaseLean. All four Trailblazer source TFM/configuration builds
+and the benchmark build completed with zero warnings and zero errors. Release
+and ReleaseLean packages each passed the package-content gate.
+
+- [x] **Step 7: Final scans and independent reviews**
 
 Require zero forbidden surface LOS/recovery/forwarding symbols, zero Trailblazer topology projection/collision duplicates, zero new LINQ/float/recursive hot code, correct API snapshot, clean package contents, clean `git diff --check`, and correctness plus ponytail approvals over the entire Phase 6 range.
 
-- [ ] **Step 8: Commit final evidence/docs slices and mark Phase 6 complete**
+The complete Phase 6 range received independent correctness and ponytail
+reviews with no remaining P0-P2. Exact production scans found no removed
+surface LOS, Flow recovery-A*, trail-guide naming, floating-point, LINQ, or new
+BCL collection residue. The API/architecture gate passed 19/19 and the final
+diff/package checks were clean.
+
+- [x] **Step 8: Commit final evidence/docs slices and mark Phase 6 complete**
 
 Use focused commits for determinism, benchmarks, docs/ledger, and any review-only cuts. The final tracker row records commit hashes, test counts, benchmark artifact paths, determinism hash, allocation evidence, residual Phase 7 debt, and no unowned legacy surface API.

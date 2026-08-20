@@ -2015,8 +2015,16 @@ without package drift.
 | Role-aware nearest-endpoint ray proof | Complete — exact overlapping-candidate identity, directed start/destination seams, blocked-negative dependencies, and A*/Flow parity | Focused 53/53, graph/pathing aggregate 479/479, Release 1,404/1,404, ReleaseLean 1,373/1,373, both TFMs/configurations 0 warnings/errors, independent correctness/lean approval |
 | Portal-aware A* guide points | Complete — raw guide and structural-certificate closure independently approved | Focused 83/83; Release 1,419/1,419; ReleaseLean 1,388/1,388; both TFMs/configurations and benchmark build 0 warnings/errors. Exact parent ordinal, zero/multi-witness portal replay, isolated positive-radius source/exit leg rejection, equal-cost parallel-edge geometry, canonical duplicate ownership, exact payload bytes, dependency-bearing negative proofs, and sticky structural `Stale` are pinned; explicit rays use one evidence pass and no per-interval portal storage |
 | Bounded A* simplification | Complete — Trailblazer `893796b`; mandatory raw guide compacted in place with one shared ray worker | Focused Surface/concurrency/architecture 43/43 and admission/endpoint 40/40 in Release plus ReleaseLean; full Release 1,434/1,434; full ReleaseLean 1,403/1,403; Debug Surface A* 29/29; four source builds and benchmark build 0 warnings/errors; warmed candidate work 0 B; exact atomic dependency union, reservation-floor release, world-epoch invalidation, raw-suffix fallback, equality acceptance/greater-cost rejection, and independent correctness/lean approval |
-| Graph direct travel and Flow same-lease rejoin | Complete but uncommitted — Tasks 9/10 focused gates and independent correctness/lean reviews clean | Internal graph ray owns initial/cooldown direct travel; same Flow lease reuses the context ray workspace; no graph LOS bypass, recovery A*, or Flow rebuild |
-| Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |
+| Graph direct travel and Flow same-lease rejoin | Complete — Trailblazer `6fc6fc1`; Tasks 9/10 focused gates and independent correctness/lean reviews clean | Internal graph ray owns initial/cooldown direct travel; same Flow lease reuses the context ray workspace; no graph LOS bypass, recovery A*, or Flow rebuild |
+| Determinism, benchmarks, docs, and exit evidence | Complete — Trailblazer `6d621fe` determinism, `53acaa7` benchmarks, `a67e22d` review cut, `384c4d8` public docs | 13 serial process digest files are byte-identical (`B43909461CC467E92B8B18DB1AB639B114BCF9FC48B6A5B7BA8657D6BBAC1065`); all 9 real benchmark cases pass semantic preflight, bounded smoke, and the canonical 3-launch/100-iteration job. Final Trailblazer gates are Release 1,471/1,471 and ReleaseLean 1,440/1,440; four source builds and the benchmark build have 0 warnings/errors; Release and ReleaseLean package-content gates pass 1/1. Ignored reports are archived under `.superpowers/sdd/2026-08-16-phase6-navigation-rays/`; independent correctness and ponytail reviews report no remaining P0-P2 |
+
+Phase 6 is complete. FixedMathSharp finished at `e400999`, GridForge at
+`1202e6d`, and the Trailblazer implementation through direct steering and Flow
+rejoin at `6fc6fc1`. The final benchmark/determinism/docs commits above add no
+runtime activation. Warm production ray, Flow rejoin, mixed seam/explicit,
+sparse-blocked, and contention-worker preflights allocate 0 B; A* benchmark
+cases intentionally account for immutable payload allocation instead of
+claiming a zero-allocation build.
 
 Frozen Phase 6 decisions:
 
@@ -2036,6 +2044,15 @@ Frozen Phase 6 decisions:
   union outward enclosures.
 - The ray is internal in Phase 6. Phase 7 records the public-API decision after
   volume wiring; there is no temporary public or forwarding overload.
+- The isolated Phase 6 package feed remains the authoritative cross-repository
+  build path. Before Phase 7 relies on the plain sibling-project switch for
+  clean builds, propagate the local-stack option through SwiftCollections (or
+  retain the isolated feed); otherwise its FixedMathSharp package reference can
+  shadow GridForge's direct sibling reference with an older assembly.
+- Phase 7 retains complete ownership of volume navigation-ray wiring,
+  `VolumeVoxelFinder.IsDirectPathClear`,
+  `NavSteering.IsVolumeDestinationInSight`, and full media/transition
+  semantics. Neither retained volume helper is surface graph authority.
 - The internal chain constraint has five evidence-backed modes. The original
   unrestricted/source-only/exact-selected-edge modes remain unchanged;
   endpoint admission adds exact seed and exact finish roles using the same

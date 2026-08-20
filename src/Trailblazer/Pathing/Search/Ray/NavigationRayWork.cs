@@ -269,6 +269,20 @@ internal sealed class NavigationRayWork
                     firstSeedParameter = _workspace.TraceIntervals[ordinal].TEnter;
                 }
             }
+            NavigationRayChainConstraintKind constraintKind =
+                _request.ChainConstraint.Kind;
+            if (constraintKind is NavigationRayChainConstraintKind.SourceAddress
+                    or NavigationRayChainConstraintKind.SelectedEdge)
+            {
+                for (int ordinal = 0; ordinal < count; ordinal++)
+                {
+                    if (records[ordinal].State == NavigationRayChainRecordState.Unreached
+                        && _workspace.TraceIntervals[ordinal].TEnter < firstSeedParameter)
+                    {
+                        return FinishBlocked();
+                    }
+                }
+            }
         }
         for (int ordinal = 0; ordinal < count; ordinal++)
         {
@@ -913,6 +927,10 @@ internal sealed class NavigationRayWork
             || (_request.ChainConstraint.Kind
                     == NavigationRayChainConstraintKind.FinishAddress
                 && address != _request.ChainConstraint.TargetAddress)
+            || (_request.ChainConstraint.Kind
+                    == NavigationRayChainConstraintKind.SelectedEdge
+                && (record.PredecessorOrdinal < 0
+                    || address != _request.ChainConstraint.TargetAddress))
             || !TryGetIncomingPortal(
                 ordinal,
                 ref guideMeter,

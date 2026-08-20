@@ -232,7 +232,8 @@ public sealed class NavigationFlowFieldGuideTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
             maxActiveLeases: 2,
-            guideMapCapacity: 8);
+            guideMapCapacity: 8,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease firstPayload = Publish(cache, fixture);
         NavigationFlowFieldPayloadLease secondPayload;
         cache.TryCheckout(
@@ -332,7 +333,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -363,6 +365,47 @@ public sealed class NavigationFlowFieldGuideTests
                 out Vector3d sourcePortal,
                 out _)
             .Should().BeTrue();
+        payload.TryGetNode(origin, out NavigationFlowFieldNode flowNode)
+            .Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator edges =
+            fixture.Graph.EnumerateStructuralSurfaceEdges(sourceRef);
+        NavigationGraphEdge selectedEdge = default;
+        while (edges.MoveNext())
+        {
+            if (edges.CurrentOrdinal == flowNode.SelectedEdge.CanonicalOutgoingOrdinal)
+                selectedEdge = edges.Current;
+        }
+        selectedEdge.Kind.Should().Be(NavigationGraphEdgeKind.Explicit);
+        Vector3d selectedExitTarget = record.Definition.ExitAnchor;
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                origin,
+                source,
+                targetState,
+                flowNode.SelectedEdge,
+                selectedExitTarget,
+                targetOrdinal: 1,
+                out NavigationFlowRejoinTarget exitTarget)
+            .Should().BeTrue();
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                origin,
+                source,
+                targetState,
+                flowNode.SelectedEdge,
+                selectedExitTarget,
+                targetOrdinal: 2,
+                out NavigationFlowRejoinTarget destinationTarget)
+            .Should().BeTrue();
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                origin,
+                source,
+                targetState,
+                flowNode.SelectedEdge,
+                selectedExitTarget,
+                targetOrdinal: 3,
+                out _)
+            .Should().BeFalse();
+        exitTarget.Position.Should().Be(record.Definition.ExitAnchor);
+        destinationTarget.Position.Should().Be(targetState.FootAnchor);
         Vector3d entry = source.FootAnchor + new Vector3d(
             Fixed64.Zero,
             Fixed64.Zero,
@@ -447,7 +490,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -534,7 +578,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -583,7 +628,8 @@ public sealed class NavigationFlowFieldGuideTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
             maxActiveLeases: 2,
-            guideMapCapacity: 8);
+            guideMapCapacity: 8,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease firstPayload = Publish(cache, fixture);
         cache.TryCheckout(
                 fixture.Store,
@@ -661,9 +707,12 @@ public sealed class NavigationFlowFieldGuideTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void AutomaticSeam_ShouldSampleProfileResolvedDirectedPortal(bool stacked)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void AutomaticSeam_ShouldSampleProfileResolvedDirectedPortal(
+        bool stacked,
+        bool reverse)
     {
         using NavigationAStarExitTestHarness.SeamFixture fixture =
             NavigationAStarExitTestHarness.CreateAutomaticSeam(stacked);
@@ -678,11 +727,27 @@ public sealed class NavigationFlowFieldGuideTests
                 fixture.DefaultProfile.AllowedMedia,
                 fixture.DefaultProfile.Capabilities)
             : fixture.DefaultProfile;
+        PathQuery surfaceQuery = fixture.CreateQuery(profile);
+        if (reverse)
+        {
+            surfaceQuery = new PathQuery(
+                surfaceQuery.End,
+                surfaceQuery.Start,
+                surfaceQuery.Agent,
+                surfaceQuery.AreaPolicy,
+                surfaceQuery.Traversal,
+                surfaceQuery.Algorithm,
+                surfaceQuery.Budget,
+                surfaceQuery.AllowTransitions,
+                surfaceQuery.FlowField);
+        }
         PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(
-            fixture.CreateQuery(profile),
+            surfaceQuery,
             Fixed64.Zero);
-        var origin = new NavigationCellAddress("source", default);
-        var destination = new NavigationCellAddress("target", default);
+        var sourceAddress = new NavigationCellAddress("source", default);
+        var targetAddress = new NavigationCellAddress("target", default);
+        NavigationCellAddress origin = reverse ? targetAddress : sourceAddress;
+        NavigationCellAddress destination = reverse ? sourceAddress : targetAddress;
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
             store,
             fixture.Graph,
@@ -696,7 +761,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -708,14 +774,54 @@ public sealed class NavigationFlowFieldGuideTests
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
             .Should().Be(NavigationGuideStatus.Success);
+        payload.TryGetNode(origin, out NavigationFlowFieldNode flowNode)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(origin, out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState sourceState)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(destination, out NavigationNodeRef targetRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(targetRef, out NavigationNodeState targetState)
+            .Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator edges =
+            fixture.Graph.EnumerateStructuralSurfaceEdges(sourceRef);
+        NavigationGraphEdge selectedEdge = default;
+        while (edges.MoveNext())
+        {
+            if (edges.CurrentOrdinal == flowNode.SelectedEdge.CanonicalOutgoingOrdinal)
+                selectedEdge = edges.Current;
+        }
+        selectedEdge.Kind.Should().Be(NavigationGraphEdgeKind.Seam);
+        selectedEdge.AutomaticSeam.Portal.TryResolveProfile(
+                query.Agent.Shape.Radius,
+                query.Agent.Shape.Height,
+                out Vector3d firstPortal,
+                out Vector3d secondPortal)
+            .Should().BeTrue();
+        Vector3d expectedPortal = selectedEdge.AutomaticSeam.IsReverse
+            ? firstPortal
+            : secondPortal;
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                origin,
+                sourceState,
+                targetState,
+                flowNode.SelectedEdge,
+                expectedPortal,
+                targetOrdinal: 1,
+                out NavigationFlowRejoinTarget rejoinTarget)
+            .Should().BeTrue();
+        rejoinTarget.Position.Should().Be(expectedPortal);
+        Vector3d actualStart = reverse ? fixture.End : fixture.Start;
+        Vector3d actualEnd = reverse ? fixture.Start : fixture.End;
 
         guide.TrySample(
-                fixture.Start,
+                actualStart,
                 GenerousSampleBudget,
                 out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
-        heading.Should().Be((fixture.End - fixture.Start).Normalized);
+        heading.Should().Be((actualEnd - actualStart).Normalized);
         guide.Dispose();
     }
 
@@ -766,7 +872,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -853,7 +960,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -889,6 +997,98 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be((sourcePortal - actualFoot).Normalized);
+        guide.Dispose();
+    }
+
+    [Fact]
+    public void WeightedNativeRejoin_ShouldAcceptTheAlreadySelectedEdgeAfterSourceRayIsBlocked()
+    {
+        using var world = new GridWorld();
+        VoxelIndex destination = default;
+        var originIndex = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { destination, originIndex },
+                "sample-weighted-rejoin",
+                new[]
+                {
+                    NavigationAStarExitTestHarness.ExpensiveCell,
+                    NavigationAStarExitTestHarness.Cell
+                });
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 8);
+        NavigationAgentProfile baseline = fixture.DefaultProfile;
+        var shape = new KinematicBodyShape(
+            Fixed64.One / (Fixed64)4,
+            baseline.Shape.Height,
+            baseline.Shape.RootToFootOffsetY);
+        var profile = new NavigationAgentProfile(
+            shape,
+            baseline.MaxStepUp,
+            baseline.MaxDropDown,
+            baseline.ArrivalRadius,
+            baseline.AllowedMedia,
+            baseline.Capabilities);
+        PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(
+            fixture.CreateQuery(originIndex, destination, profile),
+            Fixed64.Zero);
+        var origin = new NavigationCellAddress(fixture.MapId, originIndex);
+        var target = new NavigationCellAddress(fixture.MapId, destination);
+        NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            store,
+            fixture.Graph,
+            query,
+            origin,
+            target,
+            NavigationFlowFieldStatus.Success);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            1,
+            payload.RetainedBytes,
+            payload.RetainedBytes,
+            payload.RetainedBytes,
+            1,
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        NavigationFlowFieldPayloadLease payloadLease = Publish(
+            cache,
+            store,
+            payload,
+            origin);
+        cache.TryCreateGuide(
+                world,
+                store,
+                new NavigationFlowQueryResult(origin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+        fixture.Graph.TryGetNodeRef(origin, out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        fixture.Graph.TryGetSeamPrism(origin, out GridCellPrism sourcePrism)
+            .Should().BeTrue();
+        fixture.Graph.TryGetSeamPrism(target, out GridCellPrism targetPrism)
+            .Should().BeTrue();
+        GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                targetPrism,
+                out GridNavigationPortal portal)
+            .Should().BeTrue();
+        portal.TryResolveProfile(
+                shape.Radius,
+                shape.Height,
+                out _,
+                out Vector3d targetPortal)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor + Vector3d.Right + Vector3d.Backward;
+        sourcePrism.Contains(actualFoot).Should().BeFalse();
+        targetPrism.Contains(actualFoot).Should().BeFalse();
+
+        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+            .Should().Be(NavigationGuideStatus.Success);
+
+        heading.Should().Be((targetPortal - actualFoot).Normalized);
         guide.Dispose();
     }
 
@@ -936,7 +1136,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -1017,7 +1218,8 @@ public sealed class NavigationFlowFieldGuideTests
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -1177,13 +1379,42 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().BeTrue();
         originNode.SelectedEdge.Target.Should().Be(destinationAddress,
             "the explicit connection must beat the expensive native witness route");
+        graph.TryGetNodeRef(origin, out NavigationNodeRef originRef)
+            .Should().BeTrue();
+        graph.TryGetNodeState(originRef, out NavigationNodeState originState)
+            .Should().BeTrue();
+        graph.TryGetNodeRef(destinationAddress, out NavigationNodeRef destinationRef)
+            .Should().BeTrue();
+        graph.TryGetNodeState(destinationRef, out NavigationNodeState destinationState)
+            .Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator outgoing = graph.EnumerateStructuralSurfaceEdges(
+            originRef);
+        NavigationGraphEdge selectedEdge = default;
+        while (outgoing.MoveNext())
+        {
+            if (outgoing.CurrentOrdinal == originNode.SelectedEdge.CanonicalOutgoingOrdinal)
+                selectedEdge = outgoing.Current;
+        }
+        selectedEdge.Kind.Should().Be(NavigationGraphEdgeKind.Explicit);
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                origin,
+                originState,
+                destinationState,
+                originNode.SelectedEdge,
+                selectedEdge.ExplicitConnection.Definition.ExitAnchor,
+                targetOrdinal: 1,
+                out NavigationFlowRejoinTarget exitTarget)
+            .Should().BeTrue();
+        exitTarget.Position.Should().Be(
+            selectedEdge.ExplicitConnection.Definition.ExitAnchor);
         using var cache = new NavigationFlowFieldPayloadCache(
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
             payload.RetainedBytes,
             1,
-            8);
+            8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease payloadLease = Publish(
             cache,
             store,
@@ -1277,7 +1508,8 @@ public sealed class NavigationFlowFieldGuideTests
             "directed progress must rewind to the actual witness after retreat");
         portalHeading.Should().NotBe(Vector3d.Zero);
         incomingHeading.Should().Be(expectedForward);
-        invalidHeading.Should().Be(Vector3d.Zero);
+        invalidHeading.Should().Be(Vector3d.Zero,
+            "an earlier mapped witness outside the required chain must not be skipped");
         guide.Dispose();
     }
 
@@ -1375,6 +1607,208 @@ public sealed class NavigationFlowFieldGuideTests
         guide.Dispose();
     }
 
+    [Fact]
+    public void LocalRecovery_DisplacedBeyondCurrentSource_ShouldRayRejoinTheSameLease()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
+        cache.TryCreateGuide(
+                fixture.World,
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        fixture.Graph.TryGetSeamPrism(
+                fixture.FarOrigin,
+                out GridCellPrism sourcePrism)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        sourcePrism.Contains(actualFoot).Should().BeFalse();
+        NavigationFlowFieldLease sameLease = guide;
+
+        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+            .Should().Be(NavigationGuideStatus.Success);
+
+        heading.Should().Be(Vector3d.Backward);
+        sameLease.Status.Should().Be(NavigationGuideStatus.Success);
+        cache.ActiveLeaseCount.Should().Be(1);
+        guide.Dispose();
+    }
+
+    [Fact]
+    public void LocalRecoveryRejoin_ShouldConsumeExactlyOneAttempt()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
+        cache.TryCreateGuide(
+                fixture.World,
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        var meter = new GuideSampleWorkMeter(GenerousSampleBudget);
+
+        guide.TrySample(actualFoot, ref meter, out Vector3d firstHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        guide.TrySample(actualFoot, ref meter, out Vector3d exhaustedHeading)
+            .Should().Be(NavigationGuideStatus.BudgetExceeded);
+
+        firstHeading.Should().Be(Vector3d.Backward);
+        exhaustedHeading.Should().Be(Vector3d.Zero);
+        guide.Dispose();
+    }
+
+    [Theory]
+    [InlineData(0, NavigationGuideStatus.BudgetExceeded)]
+    [InlineData(2, NavigationGuideStatus.CapacityExceeded)]
+    public void LocalRecoveryRejoin_ShouldPropagateTerminalWorkStatus(
+        int scenario,
+        NavigationGuideStatus expected)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        NavigationImmediateRayWorkspace workspace = scenario == 2
+            ? new NavigationImmediateRayWorkspace(8, 64, 64, 128, 0)
+            : NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace();
+        using var cache = new NavigationFlowFieldPayloadCache(
+            1,
+            fixture.Far.RetainedBytes,
+            fixture.Far.RetainedBytes,
+            fixture.Far.RetainedBytes,
+            1,
+            8,
+            workspace);
+        NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
+        cache.TryCreateGuide(
+                fixture.World,
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+        Vector3d actualFoot =
+            source.FootAnchor + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        GuideSampleWorkBudget budget = scenario == 0
+            ? new GuideSampleWorkBudget(128, 128, 8, 32, 32, 32, 0)
+            : GenerousSampleBudget;
+
+        guide.TrySample(actualFoot, budget, out Vector3d heading)
+            .Should().Be(expected);
+
+        heading.Should().Be(Vector3d.Zero);
+        guide.Dispose();
+    }
+
+    [Fact]
+    public void RejoinTargets_NativeSelectedEdge_ShouldExposeStableSourcePortalAndTargetOrdinals()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        fixture.Far.TryGetNode(
+                fixture.FarOrigin,
+                out NavigationFlowFieldNode flowNode)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(
+                flowNode.SelectedEdge.Target,
+                out NavigationNodeRef targetRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(targetRef, out NavigationNodeState target)
+            .Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator edges =
+            fixture.Graph.EnumerateStructuralSurfaceEdges(sourceRef);
+        NavigationGraphEdge selectedEdge = default;
+        while (edges.MoveNext())
+        {
+            if (edges.CurrentOrdinal == flowNode.SelectedEdge.CanonicalOutgoingOrdinal)
+                selectedEdge = edges.Current;
+        }
+        selectedEdge.Kind.Should().Be(NavigationGraphEdgeKind.Native);
+        selectedEdge.NativePortal.TryTranslate(
+                source.Center,
+                out GridNavigationPortal translatedPortal)
+            .Should().BeTrue();
+        translatedPortal.TryResolveProfile(
+                fixture.Far.Key.Agent.Shape.Radius,
+                fixture.Far.Key.Agent.Shape.Height,
+                out _,
+                out Vector3d selectedExitTarget)
+            .Should().BeTrue();
+
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                fixture.FarOrigin,
+                source,
+                target,
+                flowNode.SelectedEdge,
+                selectedExitTarget,
+                targetOrdinal: 0,
+                out NavigationFlowRejoinTarget sourceTarget)
+            .Should().BeTrue();
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                fixture.FarOrigin,
+                source,
+                target,
+                flowNode.SelectedEdge,
+                selectedExitTarget,
+                targetOrdinal: 1,
+                out NavigationFlowRejoinTarget portalTarget)
+            .Should().BeTrue();
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                fixture.FarOrigin,
+                source,
+                target,
+                flowNode.SelectedEdge,
+                selectedExitTarget,
+                targetOrdinal: 2,
+                out NavigationFlowRejoinTarget nodeTarget)
+            .Should().BeTrue();
+        NavigationSelectedEdgeProgressWork.TryGetRejoinTarget(
+                fixture.FarOrigin,
+                source,
+                target,
+                flowNode.SelectedEdge,
+                selectedExitTarget,
+                targetOrdinal: 3,
+                out _)
+            .Should().BeFalse();
+
+        sourceTarget.Position.Should().Be(source.FootAnchor);
+        sourceTarget.Constraint.Kind.Should().Be(
+            NavigationRayChainConstraintKind.SourceAddress);
+        portalTarget.Constraint.Kind.Should().Be(
+            NavigationRayChainConstraintKind.SelectedEdge);
+        nodeTarget.Position.Should().Be(target.FootAnchor);
+    }
+
     private static GuideSampleWorkBudget GenerousSampleBudget => new(
         128,
         128,
@@ -1391,7 +1825,8 @@ public sealed class NavigationFlowFieldGuideTests
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,
         maxActivePayloadBytes: fixture.Far.RetainedBytes,
         maxActiveLeases: 1,
-        guideMapCapacity: 8);
+        guideMapCapacity: 8,
+        immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
     private static NavigationFlowFieldPayloadLease Publish(
         NavigationFlowFieldPayloadCache cache,

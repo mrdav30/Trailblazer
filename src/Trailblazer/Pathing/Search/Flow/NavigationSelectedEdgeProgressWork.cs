@@ -12,6 +12,21 @@ using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 
+internal readonly struct NavigationFlowRejoinTarget
+{
+    internal NavigationFlowRejoinTarget(
+        Vector3d position,
+        NavigationRayChainConstraint constraint)
+    {
+        Position = position;
+        Constraint = constraint;
+    }
+
+    internal Vector3d Position { get; }
+
+    internal NavigationRayChainConstraint Constraint { get; }
+}
+
 /// <summary>Samples only the canonical selected edge stored by one flow node.</summary>
 internal static class NavigationSelectedEdgeProgressWork
 {
@@ -22,8 +37,46 @@ internal static class NavigationSelectedEdgeProgressWork
         BudgetExceeded
     }
 
+    internal static bool TryGetRejoinTarget(
+        NavigationCellAddress sourceAddress,
+        NavigationNodeState sourceState,
+        NavigationNodeState targetState,
+        NavigationSelectedEdgeRef selected,
+        Vector3d selectedExitTarget,
+        int targetOrdinal,
+        out NavigationFlowRejoinTarget target)
+    {
+        SwiftThrowHelper.ThrowIfNegative(targetOrdinal, nameof(targetOrdinal));
+        target = default;
+        if (targetOrdinal == 0)
+        {
+            target = new NavigationFlowRejoinTarget(
+                sourceState.FootAnchor,
+                NavigationRayChainConstraint.SourceOnly(sourceAddress));
+            return true;
+        }
+
+        NavigationRayChainConstraint constraint =
+            NavigationRayChainConstraint.SelectedEdge(
+                sourceAddress,
+                selected.Target,
+                selected.CanonicalOutgoingOrdinal);
+        if (targetOrdinal == 1)
+        {
+            target = new NavigationFlowRejoinTarget(selectedExitTarget, constraint);
+            return true;
+        }
+        if (targetOrdinal == 2)
+        {
+            target = new NavigationFlowRejoinTarget(targetState.FootAnchor, constraint);
+            return true;
+        }
+        return false;
+    }
+
     internal static NavigationGuideStatus TrySample(
         GridWorld world,
+        NavigationWorldGraphStore store,
         NavigationWorldGraph graph,
         NavigationFlowFieldPayload payload,
         NavigationCellAddress sourceAddress,
@@ -32,6 +85,7 @@ internal static class NavigationSelectedEdgeProgressWork
         GridCoveredAddressCursor coveredAddressCursor,
         GridCoveredAddressGeneration[] coveredAddressGenerations,
         GridCoveredAddress[] coveredAddressOutput,
+        NavigationImmediateRayWorkspace immediateRayWorkspace,
         out NavigationCellAddress nextSourceAddress,
         out Vector3d heading)
     {
@@ -63,17 +117,14 @@ internal static class NavigationSelectedEdgeProgressWork
             bool sourceContains = sourcePrism.Contains(actualFootPosition);
             if (currentSource == payload.Key.DestinationAddress)
             {
-                if (sourceContains)
+                if (sourceContains
+                    && GridCellGeometry.IsNavigationBodyAnchorValid(
+                        sourcePrism,
+                        actualFootPosition,
+                        payload.Key.Agent.Shape.Radius,
+                        payload.Key.Agent.Shape.Height,
+                        default))
                 {
-                    if (!GridCellGeometry.IsNavigationBodyAnchorValid(
-                            sourcePrism,
-                            actualFootPosition,
-                            payload.Key.Agent.Shape.Radius,
-                            payload.Key.Agent.Shape.Height,
-                            default))
-                    {
-                        return TryRequireLocalRecovery(ref meter);
-                    }
                     nextSourceAddress = currentSource;
                     return TrySetHeading(
                         actualFootPosition,
@@ -83,6 +134,7 @@ internal static class NavigationSelectedEdgeProgressWork
                 }
                 NavigationGuideStatus destinationRecovery = TryAdvanceRecovery(
                     world,
+                    store,
                     graph,
                     payload,
                     actualFootPosition,
@@ -90,10 +142,25 @@ internal static class NavigationSelectedEdgeProgressWork
                     coveredAddressCursor,
                     coveredAddressGenerations,
                     coveredAddressOutput,
+                    immediateRayWorkspace,
+                    currentSource,
+                    sourceState,
+                    default,
+                    Vector3d.Zero,
+                    default,
+                    hasSelectedEdge: false,
                     allowRecovery,
-                    out currentSource);
+                    out currentSource,
+                    out Vector3d destinationRejoinHeading,
+                    out bool destinationRejoined);
                 if (destinationRecovery != NavigationGuideStatus.Success)
                     return destinationRecovery;
+                if (destinationRejoined)
+                {
+                    nextSourceAddress = sourceAddress;
+                    heading = destinationRejoinHeading;
+                    return NavigationGuideStatus.Success;
+                }
                 allowRecovery = false;
                 continue;
             }
@@ -134,6 +201,40 @@ internal static class NavigationSelectedEdgeProgressWork
                     ref meter,
                     out NavigationCellAddress explicitSource,
                     out heading);
+                if (explicitStatus == NavigationGuideStatus.LocalRecoveryRequired)
+                {
+                    NavigationGuideStatus recovery = TryAdvanceRecovery(
+                        world,
+                        store,
+                        graph,
+                        payload,
+                        actualFootPosition,
+                        ref meter,
+                        coveredAddressCursor,
+                        coveredAddressGenerations,
+                        coveredAddressOutput,
+                        immediateRayWorkspace,
+                        currentSource,
+                        sourceState,
+                        node.SelectedEdge,
+                        edge.ExplicitConnection.Definition.ExitAnchor,
+                        targetState,
+                        hasSelectedEdge: true,
+                        allowRecovery,
+                        out currentSource,
+                        out Vector3d rejoinHeading,
+                        out bool rejoined);
+                    if (recovery != NavigationGuideStatus.Success)
+                        return recovery;
+                    if (rejoined)
+                    {
+                        nextSourceAddress = sourceAddress;
+                        heading = rejoinHeading;
+                        return NavigationGuideStatus.Success;
+                    }
+                    allowRecovery = false;
+                    continue;
+                }
                 if (explicitStatus != NavigationGuideStatus.Success
                     || explicitSource == currentSource)
                 {
@@ -170,10 +271,9 @@ internal static class NavigationSelectedEdgeProgressWork
                     selectedPortal);
             if (!sourceBodyValid && !targetBodyValid)
             {
-                if (sourceContains || targetContains)
-                    return TryRequireLocalRecovery(ref meter);
                 NavigationGuideStatus recovery = TryAdvanceRecovery(
                     world,
+                    store,
                     graph,
                     payload,
                     actualFootPosition,
@@ -181,10 +281,25 @@ internal static class NavigationSelectedEdgeProgressWork
                     coveredAddressCursor,
                     coveredAddressGenerations,
                     coveredAddressOutput,
+                    immediateRayWorkspace,
+                    currentSource,
+                    sourceState,
+                    node.SelectedEdge,
+                    targetPortal,
+                    targetState,
+                    hasSelectedEdge: true,
                     allowRecovery,
-                    out currentSource);
+                    out currentSource,
+                    out Vector3d rejoinHeading,
+                    out bool rejoined);
                 if (recovery != NavigationGuideStatus.Success)
                     return recovery;
+                if (rejoined)
+                {
+                    nextSourceAddress = sourceAddress;
+                    heading = rejoinHeading;
+                    return NavigationGuideStatus.Success;
+                }
                 allowRecovery = false;
                 continue;
             }
@@ -291,13 +406,9 @@ internal static class NavigationSelectedEdgeProgressWork
         return NodeLookupStatus.NotFound;
     }
 
-    private static NavigationGuideStatus TryRequireLocalRecovery(
-        ref GuideSampleWorkMeter meter) => meter.TryConsumeLocalRecoveryAttempts(1)
-        ? NavigationGuideStatus.LocalRecoveryRequired
-        : NavigationGuideStatus.BudgetExceeded;
-
     private static NavigationGuideStatus TryAdvanceRecovery(
         GridWorld world,
+        NavigationWorldGraphStore store,
         NavigationWorldGraph graph,
         NavigationFlowFieldPayload payload,
         Vector3d actualFootPosition,
@@ -305,23 +416,152 @@ internal static class NavigationSelectedEdgeProgressWork
         GridCoveredAddressCursor coveredAddressCursor,
         GridCoveredAddressGeneration[] coveredAddressGenerations,
         GridCoveredAddress[] coveredAddressOutput,
+        NavigationImmediateRayWorkspace immediateRayWorkspace,
+        NavigationCellAddress sourceAddress,
+        NavigationNodeState sourceState,
+        NavigationSelectedEdgeRef selected,
+        Vector3d selectedExitTarget,
+        NavigationNodeState targetState,
+        bool hasSelectedEdge,
         bool allowRecovery,
-        out NavigationCellAddress rebased)
+        out NavigationCellAddress rebased,
+        out Vector3d heading,
+        out bool rejoined)
     {
         rebased = default;
-        return allowRecovery
-            ? TryRebase(
-                world,
-                graph,
-                payload,
-                actualFootPosition,
-                ref meter,
-                coveredAddressCursor,
-                coveredAddressGenerations,
-                coveredAddressOutput,
-                out rebased)
-            : NavigationGuideStatus.LocalRecoveryRequired;
+        heading = Vector3d.Zero;
+        rejoined = false;
+        if (!allowRecovery)
+            return NavigationGuideStatus.LocalRecoveryRequired;
+        NavigationGuideStatus rebase = TryRebase(
+            world,
+            graph,
+            payload,
+            actualFootPosition,
+            ref meter,
+            coveredAddressCursor,
+            coveredAddressGenerations,
+            coveredAddressOutput,
+            out rebased);
+        if (rebase != NavigationGuideStatus.LocalRecoveryRequired)
+            return rebase;
+        NavigationGuideStatus status = TryRejoin(
+            world,
+            store,
+            graph,
+            payload,
+            sourceAddress,
+            sourceState,
+            selected,
+            selectedExitTarget,
+            targetState,
+            hasSelectedEdge,
+            actualFootPosition,
+            ref meter,
+            immediateRayWorkspace,
+            out heading);
+        rejoined = status == NavigationGuideStatus.Success;
+        return status;
     }
+
+    private static NavigationGuideStatus TryRejoin(
+        GridWorld world,
+        NavigationWorldGraphStore store,
+        NavigationWorldGraph graph,
+        NavigationFlowFieldPayload payload,
+        NavigationCellAddress sourceAddress,
+        NavigationNodeState sourceState,
+        NavigationSelectedEdgeRef selected,
+        Vector3d selectedExitTarget,
+        NavigationNodeState targetState,
+        bool hasSelectedEdge,
+        Vector3d actualFootPosition,
+        ref GuideSampleWorkMeter meter,
+        NavigationImmediateRayWorkspace immediateRayWorkspace,
+        out Vector3d heading)
+    {
+        heading = Vector3d.Zero;
+        if (!graph.AreaCatalog.TryGet(
+                payload.Key.AreaPolicy,
+                out NavigationAreaPolicy? areaPolicy)
+            || areaPolicy == null)
+        {
+            return NavigationGuideStatus.Stale;
+        }
+        lock (immediateRayWorkspace.SyncRoot)
+        {
+            NavigationRayWork ray = immediateRayWorkspace.RayWork;
+            for (int targetOrdinal = 0; ; targetOrdinal++)
+            {
+                if (targetOrdinal > 0 && !hasSelectedEdge)
+                    return NavigationGuideStatus.LocalRecoveryRequired;
+                if (!TryGetRejoinTarget(
+                    sourceAddress,
+                    sourceState,
+                    targetState,
+                    selected,
+                    selectedExitTarget,
+                    targetOrdinal,
+                    out NavigationFlowRejoinTarget target))
+                {
+                    return NavigationGuideStatus.LocalRecoveryRequired;
+                }
+
+                ray.Begin(new NavigationRayRequest(
+                    world,
+                    store,
+                    graph,
+                    payload.Key.Agent,
+                    areaPolicy,
+                    payload.Key.Traversal,
+                    payload.Key.AllowTransitions,
+                    actualFootPosition,
+                    target.Position,
+                    NavigationRayEndpointAllowance.StartPrefix,
+                    target.Constraint));
+                NavigationRayStatus status;
+                NavigationRayResult result;
+                try
+                {
+                    do
+                    {
+                        status = ray.Advance(ref meter);
+                    }
+                    while (status == NavigationRayStatus.Pending);
+                    result = ray.Result;
+                }
+                finally
+                {
+                    ray.Reset();
+                }
+                if (status == NavigationRayStatus.Blocked
+                    || (status == NavigationRayStatus.Success
+                        && !result.IsSemanticCostNeutral
+                        && target.Constraint.Kind
+                            != NavigationRayChainConstraintKind.SelectedEdge))
+                {
+                    continue;
+                }
+                if (status != NavigationRayStatus.Success)
+                    return MapRayStatus(status);
+                return TrySetHeadingUnchecked(
+                    actualFootPosition,
+                    target.Position,
+                    out heading);
+            }
+        }
+    }
+
+    private static NavigationGuideStatus MapRayStatus(
+        NavigationRayStatus status) => status switch
+        {
+            NavigationRayStatus.Blocked => NavigationGuideStatus.LocalRecoveryRequired,
+            NavigationRayStatus.BudgetExceeded => NavigationGuideStatus.BudgetExceeded,
+            NavigationRayStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
+            NavigationRayStatus.CapacityExceeded => NavigationGuideStatus.CapacityExceeded,
+            NavigationRayStatus.Stale => NavigationGuideStatus.Stale,
+            _ => NavigationGuideStatus.Stale
+        };
 
     private static NavigationGuideStatus TryResolvePortal(
         NavigationGraphEdge edge,
@@ -629,7 +869,7 @@ internal static class NavigationSelectedEdgeProgressWork
             nextSourceAddress = record.Destination;
             return NavigationGuideStatus.Success;
         }
-        return TryRequireLocalRecovery(ref meter);
+        return NavigationGuideStatus.LocalRecoveryRequired;
     }
 
     private static NavigationGuideStatus TryReadExplicitPortal(

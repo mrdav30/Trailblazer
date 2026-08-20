@@ -61,7 +61,10 @@ internal sealed class NavigationFlowFieldGuideLease
     {
         lock (_sync)
         {
-            if (_owner != null || _world != null || _store != null || _payloadSlot >= 0)
+            if (_owner != null
+                || _world != null
+                || _store != null
+                || _payloadSlot >= 0)
                 throw new InvalidOperationException("The flow guide lease is already active.");
             if (_generation == ulong.MaxValue)
                 throw new InvalidOperationException("The flow guide generation is exhausted.");
@@ -130,6 +133,9 @@ internal sealed class NavigationFlowFieldGuideLease
                 return _status;
             if (!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload payload))
                 return MarkStaleUnderLock();
+            NavigationFlowFieldPayloadCache owner = _owner!;
+            GridWorld world = _world!;
+            ulong worldSequence = world.ChangeSequence;
             NavigationWorldGraphStore store = _store!;
             NavigationWorldGraphLease? graphLease = store.TryAcquire();
             if (graphLease == null)
@@ -141,7 +147,8 @@ internal sealed class NavigationFlowFieldGuideLease
                     return MarkStaleUnderLock();
                 NavigationCellAddress candidateSource = _currentSource;
                 NavigationGuideStatus status = NavigationSelectedEdgeProgressWork.TrySample(
-                    _world!,
+                    world,
+                    store,
                     graph,
                     payload,
                     _currentSource,
@@ -150,10 +157,12 @@ internal sealed class NavigationFlowFieldGuideLease
                     _coveredAddressCursor,
                     _coveredAddressGenerations,
                     _coveredAddressOutput,
+                    owner.ImmediateRayWorkspace,
                     out candidateSource,
                     out Vector3d candidateHeading);
                 if (!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload current)
-                    || !ReferenceEquals(current, payload))
+                    || !ReferenceEquals(current, payload)
+                    || world.ChangeSequence != worldSequence)
                 {
                     return MarkStaleUnderLock();
                 }

@@ -391,7 +391,8 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,
         maxActivePayloadBytes: checked(fixture.Far.RetainedBytes * activeLeases),
         maxActiveLeases: activeLeases,
-        guideMapCapacity: guideCapacity);
+        guideMapCapacity: guideCapacity,
+        immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
     private static NavigationFlowFieldPayloadLease Publish(
         NavigationFlowFieldPayloadCache cache,

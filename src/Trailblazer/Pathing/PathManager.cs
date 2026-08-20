@@ -2606,49 +2606,5 @@ internal static class PathManager
         return TryGetMaxSearchSize(GetConfiguredWorld(), start, end, out maxSearchSize);
     }
 
-    /// <summary>
-    /// Checks if a path is needed between the start and end positions based on traced voxels and unit size.
-    /// </summary>
-    /// <param name="world">The grid world.</param>
-    /// <param name="startPos">The starting position.</param>
-    /// <param name="endPos">The destination position.</param>
-    /// <param name="unitSize">The size of the navigating unit.</param>
-    /// <param name="includeEnd">Whether to permit unwalkable voxels.</param>
-    /// <returns>True if a path is required; otherwise, false.</returns>
-    public static bool NeedsPath(
-        GridWorld world,
-        Vector3d startPos,
-        Vector3d endPos,
-        Fixed64 unitSize,
-        bool includeEnd = false)
-    {
-        LinkWorld(world);
-        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(world, startPos, endPos))
-        {
-            foreach (Voxel voxel in gridVoxelSet.Voxels)
-            {
-                // A path is required if a voxel doesn't exist in the traced line
-                if (!voxel.TryGetPartition(out SolidChartPartition? partition))
-                    return true;
-
-                if (!includeEnd && !voxel.IsBlocked && partition!.IsImpassable(unitSize))
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// Checks if a path is needed between the start and end positions using the configured world.
-    /// </summary>
-    public static bool NeedsPath(
-        Vector3d startPos,
-        Vector3d endPos,
-        Fixed64 unitSize,
-        bool includeEnd = false)
-    {
-        return NeedsPath(GetConfiguredWorld(), startPos, endPos, unitSize, includeEnd);
-    }
-
     #endregion
 }

@@ -197,8 +197,6 @@ public partial class NavSteering
         _navigationGuideLease = null;
         _navigationFlowFieldLease?.Dispose();
         _navigationFlowFieldLease = null;
-        _flowRecoveryGuideLease?.Dispose();
-        _flowRecoveryGuideLease = null;
         _hybridRouteGuide?.Dispose();
         _hybridRouteGuide = null;
 

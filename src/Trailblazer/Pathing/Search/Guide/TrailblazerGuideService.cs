@@ -7,6 +7,7 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
+using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
@@ -22,6 +23,78 @@ public sealed class TrailblazerGuideService
     {
         _context = context;
         _state = state;
+    }
+
+    /// <summary>Proves one cost-neutral graph-direct surface heading.</summary>
+    internal NavigationRayStatus TryGetDirectHeading(
+        PathQuery query,
+        Vector3d actualFoot,
+        out Vector3d heading)
+    {
+        EnsureUsable();
+        heading = Vector3d.Zero;
+        if (query.Traversal.StartDomain != TraversalDomain.Surface
+            || query.Traversal.TargetDomain != TraversalDomain.Surface
+            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            return NavigationRayStatus.Blocked;
+        }
+
+        NavigationImmediateRayWorkspace immediate = _context.Pathing.ImmediateRayWorkspace;
+        lock (immediate.SyncRoot)
+        {
+            NavigationWorldGraphStore store = _context.Pathing.NavigationGraphStore;
+            using NavigationWorldGraphLease? lease = store.TryAcquire();
+            if (lease == null)
+                return NavigationRayStatus.CapacityExceeded;
+            NavigationWorldGraph graph = lease.Graph;
+            if (!graph.AreaCatalog.TryGet(
+                    query.AreaPolicy,
+                    out NavigationAreaPolicy? areaPolicy)
+                || areaPolicy == null)
+            {
+                return NavigationRayStatus.Stale;
+            }
+
+            NavigationRayWork ray = immediate.RayWork;
+            ray.Begin(new NavigationRayRequest(
+                _context.World,
+                store,
+                graph,
+                query.Agent,
+                areaPolicy,
+                query.Traversal,
+                query.AllowTransitions,
+                actualFoot,
+                query.End.Position,
+                NavigationRayEndpointAllowance.None));
+            NavigationWorkMeter meter = immediate.WorkMeter;
+            meter.Reset(query.Budget);
+            NavigationRayStatus status;
+            NavigationRayResult result;
+            try
+            {
+                do
+                {
+                    status = ray.Advance(meter);
+                }
+                while (status == NavigationRayStatus.Pending);
+                result = ray.Result;
+            }
+            finally
+            {
+                ray.Reset();
+            }
+            if (status != NavigationRayStatus.Success)
+                return status;
+            if (!result.IsSemanticCostNeutral)
+                return NavigationRayStatus.Blocked;
+            if (!Vector3d.TrySubtract(query.End.Position, actualFoot, out Vector3d delta))
+                return NavigationRayStatus.CostOverflow;
+            if (delta != Vector3d.Zero)
+                heading = delta.Normalized;
+            return NavigationRayStatus.Success;
+        }
     }
 
     /// <summary>

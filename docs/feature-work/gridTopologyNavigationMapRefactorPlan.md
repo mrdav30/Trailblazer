@@ -2015,7 +2015,7 @@ without package drift.
 | Role-aware nearest-endpoint ray proof | Complete — exact overlapping-candidate identity, directed start/destination seams, blocked-negative dependencies, and A*/Flow parity | Focused 53/53, graph/pathing aggregate 479/479, Release 1,404/1,404, ReleaseLean 1,373/1,373, both TFMs/configurations 0 warnings/errors, independent correctness/lean approval |
 | Portal-aware A* guide points | Complete — raw guide and structural-certificate closure independently approved | Focused 83/83; Release 1,419/1,419; ReleaseLean 1,388/1,388; both TFMs/configurations and benchmark build 0 warnings/errors. Exact parent ordinal, zero/multi-witness portal replay, isolated positive-radius source/exit leg rejection, equal-cost parallel-edge geometry, canonical duplicate ownership, exact payload bytes, dependency-bearing negative proofs, and sticky structural `Stale` are pinned; explicit rays use one evidence pass and no per-interval portal storage |
 | Bounded A* simplification | Complete — Trailblazer `893796b`; mandatory raw guide compacted in place with one shared ray worker | Focused Surface/concurrency/architecture 43/43 and admission/endpoint 40/40 in Release plus ReleaseLean; full Release 1,434/1,434; full ReleaseLean 1,403/1,403; Debug Surface A* 29/29; four source builds and benchmark build 0 warnings/errors; warmed candidate work 0 B; exact atomic dependency union, reservation-floor release, world-epoch invalidation, raw-suffix fallback, equality acceptance/greater-cost rejection, and independent correctness/lean approval |
-| Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
+| Graph direct travel and Flow same-lease rejoin | Complete but uncommitted — Tasks 9/10 focused gates and independent correctness/lean reviews clean | Internal graph ray owns initial/cooldown direct travel; same Flow lease reuses the context ray workspace; no graph LOS bypass, recovery A*, or Flow rebuild |
 | Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |
 
 Frozen Phase 6 decisions:
@@ -2083,10 +2083,17 @@ Frozen Phase 6 decisions:
   uses the new ray instead of bypassing the check.
 - Flow recovery remains on the exact existing Flow payload/lease and uses a
   bounded certified local rejoin over only its current source/selected-edge
-  geometry. Source recovery is source-address-only; selected-edge targets must
-  traverse that exact canonical edge, are tested one at a time, and share the
-  existing single local-recovery debit. It never scans the payload or submits a
-  recovery A* query.
+  geometry. Source recovery is source-address-only. Native and automatic-seam
+  edges expose their target-side portal then target foot; explicit edges expose
+  their `ExitAnchor` then target foot. All selected-edge targets must traverse
+  that exact canonical edge, are tested one at a time, and share the existing
+  single local-recovery debit. Intermediate explicit portal anchors are not
+  enumerated because the existing selected-edge ray validates the complete
+  entry-to-exit corridor. Ordinary sampling passes its already-resolved
+  selected-edge exit into rejoin without repeating portal/profile work.
+  Source-only recovery remains cost-neutral; an exact selected-edge candidate
+  accepts that Flow-authorized edge's authored cell, area, or explicit cost. It
+  never scans the payload or submits a recovery A* query.
 - Public `PathManager.NeedsPath` and surface
   `NavSteering.IsDestinationInSight` are deleted rather than forwarded. The
   explicitly volume-only direct-path provider remains Phase 7-owned.
@@ -2110,6 +2117,10 @@ Tasks:
   certified navigation-ray rejoin to the existing shared Flow lease.
   Acceptance: ordinary Flow sampling/cache identity unchanged and
   bridge-symbol residue zero.
+- Phase 7 may add partial-explicit rejoin only if a real transition or volume
+  consumer needs to terminate inside a compiled explicit corridor. Until then,
+  retain Phase 6's full-corridor `ExitAnchor`/target authority and do not imply
+  support for intermediate explicit portal targets.
 
 Exit criteria:
 

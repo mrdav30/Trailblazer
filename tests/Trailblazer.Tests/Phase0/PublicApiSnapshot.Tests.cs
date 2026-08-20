@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using FluentAssertions;
+using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -16,6 +17,21 @@ namespace Trailblazer.Tests.Phase0;
 /// </summary>
 public sealed class PublicApiSnapshotTests
 {
+    [Fact]
+    public void SurfaceLineOfSightCompatibilityApi_ShouldBeDeleted()
+    {
+        typeof(PathManager).GetMethods(
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Should().NotContain(method => method.Name == "NeedsPath");
+        typeof(NavSteering).GetMethods(
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Should().NotContain(method => method.Name == "IsDestinationInSight");
+        typeof(NavSteering).GetMethod(
+                "IsVolumeDestinationInSight",
+                BindingFlags.Public | BindingFlags.Static)
+            .Should().NotBeNull("volume direct-path authority remains Phase 7-owned");
+    }
+
     [Theory]
     [InlineData("Trailblazer.Pathing.PathRequest")]
     [InlineData("Trailblazer.Pathing.SolidVoxelFinder")]

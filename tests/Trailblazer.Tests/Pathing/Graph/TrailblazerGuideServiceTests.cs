@@ -16,6 +16,149 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class TrailblazerGuideServiceTests
 {
     [Fact]
+    public void TryGetDirectHeading_ClearCostNeutralSurfaceRay_ShouldReturnExactHeading()
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
+        NavigationWorldGraph graph = context.Pathing.NavigationGraphStore.Current;
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("guide-allocation", new VoxelIndex(4, 4, 4)),
+                out NavigationNodeRef startRef)
+            .Should().BeTrue();
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("guide-allocation", new VoxelIndex(6, 4, 4)),
+                out NavigationNodeRef endRef)
+            .Should().BeTrue();
+        graph.TryGetNodeState(startRef, out NavigationNodeState start)
+            .Should().BeTrue();
+        graph.TryGetNodeState(endRef, out NavigationNodeState end)
+            .Should().BeTrue();
+        query = WithRayBudget(query, start.FootAnchor, end.FootAnchor);
+
+        NavigationRayStatus status = context.Guides.TryGetDirectHeading(
+            query,
+            query.Start.Position,
+            out Vector3d heading);
+
+        status.Should().Be(NavigationRayStatus.Success);
+        heading.Should().Be(Vector3d.Right);
+        context.Pathing.NavigationAStarAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(0);
+        context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(0);
+    }
+
+    [Fact]
+    public void TryGetDirectHeading_ZeroTraceBudget_ShouldNotExposeAHeading()
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
+
+        NavigationRayStatus status = context.Guides.TryGetDirectHeading(
+            query,
+            query.Start.Position,
+            out Vector3d heading);
+
+        status.Should().Be(NavigationRayStatus.BudgetExceeded);
+        heading.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void TryGetDirectHeading_WarmChecks_ShouldAllocateZeroBytes()
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
+        query = ResolveDirectRoute(context, query);
+        for (int i = 0; i < 16; i++)
+        {
+            context.Guides.TryGetDirectHeading(query, query.Start.Position, out _)
+                .Should().Be(NavigationRayStatus.Success);
+        }
+
+        NavigationRayStatus status = default;
+        Vector3d heading = default;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 256; i++)
+        {
+            status = context.Guides.TryGetDirectHeading(
+                query,
+                query.Start.Position,
+                out heading);
+        }
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        status.Should().Be(NavigationRayStatus.Success);
+        heading.Should().Be(Vector3d.Right);
+        allocated.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryGetDirectHeading_TwoBlockedThreads_ShouldReturnIdenticalResults()
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
+        query = ResolveDirectRoute(context, query);
+        object sync = context.Pathing.ImmediateRayWorkspace.SyncRoot;
+        using var firstStarted = new ManualResetEventSlim();
+        using var secondStarted = new ManualResetEventSlim();
+        NavigationRayStatus firstStatus = default;
+        NavigationRayStatus secondStatus = default;
+        Vector3d firstHeading = default;
+        Vector3d secondHeading = default;
+        Exception? firstError = null;
+        Exception? secondError = null;
+        var first = new Thread(() =>
+        {
+            firstStarted.Set();
+            try
+            {
+                firstStatus = context.Guides.TryGetDirectHeading(
+                    query,
+                    query.Start.Position,
+                    out firstHeading);
+            }
+            catch (Exception error)
+            {
+                firstError = error;
+            }
+        }) { IsBackground = true };
+        var second = new Thread(() =>
+        {
+            secondStarted.Set();
+            try
+            {
+                secondStatus = context.Guides.TryGetDirectHeading(
+                    query,
+                    query.Start.Position,
+                    out secondHeading);
+            }
+            catch (Exception error)
+            {
+                secondError = error;
+            }
+        }) { IsBackground = true };
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        lock (sync)
+        {
+            first.Start();
+            second.Start();
+            firstStarted.Wait(TimeSpan.FromSeconds(5), cancellationToken).Should().BeTrue();
+            secondStarted.Wait(TimeSpan.FromSeconds(5), cancellationToken).Should().BeTrue();
+            SpinWait.SpinUntil(
+                    () => (first.ThreadState & ThreadState.WaitSleepJoin) != 0
+                        && (second.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                    TimeSpan.FromSeconds(5))
+                .Should().BeTrue("both checks must block on the one immediate workspace");
+        }
+        first.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+        second.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        firstError.Should().BeNull();
+        secondError.Should().BeNull();
+        firstStatus.Should().Be(NavigationRayStatus.Success);
+        secondStatus.Should().Be(firstStatus);
+        firstHeading.Should().Be(Vector3d.Right);
+        secondHeading.Should().Be(firstHeading);
+    }
+
+    [Fact]
     public void RequestGuide_OpenPlane32_ShouldUseExpansionBudgetOnlyForExpansions()
     {
         using TrailblazerWorldContext context = CreateOpenPlane32Context(
@@ -483,6 +626,51 @@ public sealed class TrailblazerGuideServiceTests
         budget ?? new NavigationWorkBudget(
             1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0),
         allowTransitions: false);
+
+    private static PathQuery WithRayBudget(
+        PathQuery query,
+        Vector3d start,
+        Vector3d end) => new(
+        new NavigationEndpoint(start, query.Start.MapId),
+        new NavigationEndpoint(end, query.End.MapId),
+        query.Agent,
+        query.AreaPolicy,
+        query.Traversal,
+        query.Algorithm,
+        new NavigationWorkBudget(
+            maxLookupProbes: 4_096,
+            maxEndpointCandidates: query.Budget.MaxEndpointCandidates,
+            maxExpandedNodes: query.Budget.MaxExpandedNodes,
+            maxEvaluatedEdges: 4_096,
+            maxConnectionLegs: 4_096,
+            maxTransitionCandidates: query.Budget.MaxTransitionCandidates,
+            maxTransitionPairs: query.Budget.MaxTransitionPairs,
+            maxStagedLegAttempts: query.Budget.MaxStagedLegAttempts,
+            maxTraceIntervals: 4_096,
+            maxCoveredVoxelIntervals: 4_096,
+            maxSimplificationRays: query.Budget.MaxSimplificationRays),
+        query.AllowTransitions,
+        query.FlowField);
+
+    private static PathQuery ResolveDirectRoute(
+        TrailblazerWorldContext context,
+        PathQuery query)
+    {
+        NavigationWorldGraph graph = context.Pathing.NavigationGraphStore.Current;
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("guide-allocation", new VoxelIndex(4, 4, 4)),
+                out NavigationNodeRef startRef)
+            .Should().BeTrue();
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("guide-allocation", new VoxelIndex(6, 4, 4)),
+                out NavigationNodeRef endRef)
+            .Should().BeTrue();
+        graph.TryGetNodeState(startRef, out NavigationNodeState start)
+            .Should().BeTrue();
+        graph.TryGetNodeState(endRef, out NavigationNodeState end)
+            .Should().BeTrue();
+        return WithRayBudget(query, start.FootAnchor, end.FootAnchor);
+    }
 
     private static PathQuery PublishThreeCellRoute(
         TrailblazerWorldContext context,

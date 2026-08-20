@@ -18,15 +18,19 @@ internal sealed class NavigationImmediateRayWorkspace
         int traceIntervalCapacity)
     {
         SyncRoot = new object();
-        Workspace = new NavigationRayWorkspace(
+        var workspace = new NavigationRayWorkspace(
             mapCapacity,
             pageCapacity,
             componentCapacity,
             coveredAddressCapacity,
             traceIntervalCapacity);
+        RayWork = new NavigationRayWork(workspace);
+        WorkMeter = new NavigationWorkMeter(default);
     }
 
     internal object SyncRoot { get; }
 
-    internal NavigationRayWorkspace Workspace { get; }
+    internal NavigationRayWork RayWork { get; }
+
+    internal NavigationWorkMeter WorkMeter { get; }
 }

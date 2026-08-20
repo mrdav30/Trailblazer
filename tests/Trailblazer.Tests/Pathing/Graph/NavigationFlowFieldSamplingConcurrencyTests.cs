@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Threading;
 using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Configuration;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -41,6 +42,17 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldLease first = CreateGuide(cache, fixture);
         NavigationFlowFieldLease staleAlias = first;
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        first.TrySample(actualFoot, GenerousBudget, out Vector3d rejoinHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        rejoinHeading.Should().Be(Vector3d.Backward);
         first.Dispose();
 
         NavigationFlowFieldLease second = CreateGuide(cache, fixture);
@@ -49,6 +61,92 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         second.Status.Should().Be(NavigationGuideStatus.Success);
         staleAlias.Dispose();
         cache.ActiveLeaseCount.Should().Be(1);
+        second.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void TwoRejoiningGuides_ShouldSerializeThroughOneWorkspaceDeterministically()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        var workspace = NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace();
+        using var cache = new NavigationFlowFieldPayloadCache(
+            1,
+            fixture.Far.RetainedBytes,
+            fixture.Far.RetainedBytes,
+            fixture.Far.RetainedBytes,
+            2,
+            8,
+            workspace);
+        NavigationFlowFieldLease first = CreateGuide(cache, fixture);
+        NavigationFlowFieldLease second = CreateGuide(cache, fixture);
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        using var firstStarted = new ManualResetEventSlim();
+        using var secondStarted = new ManualResetEventSlim();
+        NavigationGuideStatus firstStatus = default;
+        NavigationGuideStatus secondStatus = default;
+        Vector3d firstHeading = default;
+        Vector3d secondHeading = default;
+        Exception? firstError = null;
+        Exception? secondError = null;
+        var firstThread = new Thread(() =>
+        {
+            firstStarted.Set();
+            try
+            {
+                firstStatus = first.TrySample(actualFoot, GenerousBudget, out firstHeading);
+            }
+            catch (Exception error)
+            {
+                firstError = error;
+            }
+        }) { IsBackground = true };
+        var secondThread = new Thread(() =>
+        {
+            secondStarted.Set();
+            try
+            {
+                secondStatus = second.TrySample(actualFoot, GenerousBudget, out secondHeading);
+            }
+            catch (Exception error)
+            {
+                secondError = error;
+            }
+        }) { IsBackground = true };
+
+        lock (workspace.SyncRoot)
+        {
+            firstThread.Start();
+            secondThread.Start();
+            firstStarted.Wait(5_000, TestContext.Current.CancellationToken)
+                .Should().BeTrue();
+            secondStarted.Wait(5_000, TestContext.Current.CancellationToken)
+                .Should().BeTrue();
+            SpinWait.SpinUntil(
+                    () => (firstThread.ThreadState & ThreadState.WaitSleepJoin) != 0
+                        && (secondThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                    TimeSpan.FromSeconds(5))
+                .Should().BeTrue();
+        }
+        firstThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+        secondThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        firstError.Should().BeNull();
+        secondError.Should().BeNull();
+        firstStatus.Should().Be(NavigationGuideStatus.Success);
+        secondStatus.Should().Be(firstStatus);
+        firstHeading.Should().Be(Vector3d.Backward);
+        secondHeading.Should().Be(firstHeading);
+        cache.ActiveLeaseCount.Should().Be(2);
+        first.Dispose();
         second.Dispose();
         cache.ActiveLeaseCount.Should().Be(0);
     }
@@ -112,6 +210,65 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         finally
         {
             Monitor.Exit(cacheSync);
+        }
+        sampleThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        sampleError.Should().BeNull();
+        sampleStatus.Should().Be(NavigationGuideStatus.Stale);
+        heading.Should().Be(Vector3d.Zero);
+        guide.Status.Should().Be(NavigationGuideStatus.Stale);
+        guide.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void WorldMutationWhileRejoinWaits_ShouldFailStickyStale()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        NavigationFlowFieldLease guide = CreateGuide(cache, fixture);
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        object raySync = cache.ImmediateRayWorkspace.SyncRoot;
+        using var sampleStarted = new ManualResetEventSlim();
+        NavigationGuideStatus sampleStatus = default;
+        Vector3d heading = default;
+        Exception? sampleError = null;
+        var sampleThread = new Thread(() =>
+        {
+            sampleStarted.Set();
+            try
+            {
+                sampleStatus = guide.TrySample(actualFoot, GenerousBudget, out heading);
+            }
+            catch (Exception error)
+            {
+                sampleError = error;
+            }
+        }) { IsBackground = true };
+
+        lock (raySync)
+        {
+            sampleThread.Start();
+            sampleStarted.Wait(5_000, TestContext.Current.CancellationToken)
+                .Should().BeTrue();
+            SpinWait.SpinUntil(
+                    () => (sampleThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                    TimeSpan.FromSeconds(5))
+                .Should().BeTrue("the rejoin must pause at the shared ray workspace");
+            fixture.World.TryAddGrid(
+                    new GridConfiguration(
+                        new Vector3d(64, 64, 64),
+                        new Vector3d(2, 2, 2)),
+                    out _)
+                .Should().BeTrue();
         }
         sampleThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
 
@@ -242,6 +399,54 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         cache.ActiveLeaseCount.Should().Be(0);
     }
 
+    [Fact]
+    public void WarmSameLeaseRejoinSample_ShouldAllocateZeroBytes()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        fixture.Graph.TryGetNodeRef(
+                fixture.FarOrigin,
+                out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        for (int i = 0; i < 16; i++)
+        {
+            NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
+            warm.TrySample(actualFoot, GenerousBudget, out _)
+                .Should().Be(NavigationGuideStatus.Success);
+            warm.Dispose();
+        }
+
+        bool succeeded = true;
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 256; i++)
+        {
+            NavigationFlowFieldLease guide = CreateGuideUnchecked(
+                cache,
+                fixture,
+                ref succeeded);
+            if (!succeeded)
+                break;
+            if (guide.TrySample(
+                    actualFoot,
+                    GenerousBudget,
+                    out _) != NavigationGuideStatus.Success)
+            {
+                succeeded = false;
+            }
+            guide.Dispose();
+        }
+        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+
+        succeeded.Should().BeTrue();
+        allocated.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
     private static GuideSampleWorkBudget GenerousBudget => new(
         128,
         128,
@@ -258,7 +463,8 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         fixture.Far.RetainedBytes,
         fixture.Far.RetainedBytes,
         1,
-        8);
+        8,
+        NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
     private static NavigationFlowFieldLease CreateGuide(
         NavigationFlowFieldPayloadCache cache,

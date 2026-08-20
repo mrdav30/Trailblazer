@@ -173,8 +173,6 @@ public partial class NavSteering : IRecordable
 
     private NavigationFlowFieldLease? _navigationFlowFieldLease;
 
-    private NavigationGuideLease? _flowRecoveryGuideLease;
-
     private HybridRouteGuide? _hybridRouteGuide;
 
     /// <inheritdoc cref="_volumeGuide"/>
@@ -228,7 +226,6 @@ public partial class NavSteering : IRecordable
     public bool HasNavigationGuidance => !HasLineOfSightPath
         && (_navigationGuideLease != null
             || _navigationFlowFieldLease != null
-            || _flowRecoveryGuideLease != null
             || _hybridRouteGuide != null
             || _volumeGuide != null);
 

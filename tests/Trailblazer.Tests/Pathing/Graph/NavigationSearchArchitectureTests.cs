@@ -17,6 +17,27 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed class NavigationSearchArchitectureTests
 {
+    [Fact]
+    public void DirectHeading_ShouldRunTheSharedRayToTerminalAndAlwaysResetIt()
+    {
+        string path = Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "Guide",
+            "TrailblazerGuideService.cs");
+        string source = File.ReadAllText(path);
+        int method = source.IndexOf(
+            "internal NavigationRayStatus TryGetDirectHeading",
+            StringComparison.Ordinal);
+        method.Should().BeGreaterThanOrEqualTo(0);
+        string body = source.Substring(method);
+
+        body.Should().Contain("while (status == NavigationRayStatus.Pending)");
+        body.Should().Contain("finally");
+        body.Should().Contain("ray.Reset();");
+    }
+
     private static readonly string[] ReviewedAStarFiles =
     {
         "NavigationAStarAdmissionGate.cs",
@@ -227,7 +248,7 @@ public sealed class NavigationSearchArchitectureTests
     }
 
     [Fact]
-    public void FlowRecoveryPostAdvanceRead_ShouldKeepStaleRecoveryOnly()
+    public void FlowRecoveryAStarBridge_ShouldBeDeleted()
     {
         string steeringPath = Path.Combine(
             GetSourceRoot(),
@@ -235,36 +256,151 @@ public sealed class NavigationSearchArchitectureTests
             "Steering",
             "NavSteering.Simulation.cs");
         string source = File.ReadAllText(steeringPath);
-        int methodIndex = source.IndexOf(
-            "private bool TryGetFlowRecoveryHeading",
-            StringComparison.Ordinal);
-        int advanceIndex = source.IndexOf(
-            "status = guide.TryAdvanceWaypoint();",
-            methodIndex,
-            StringComparison.Ordinal);
-        int readIndex = source.IndexOf(
-            "status = guide.TryGetCurrentWaypoint(out _, out waypoint);",
-            advanceIndex,
-            StringComparison.Ordinal);
-        int headingIndex = source.IndexOf(
-            "heading = waypoint - position;",
-            readIndex,
-            StringComparison.Ordinal);
+        string steeringState = File.ReadAllText(Path.Combine(
+            GetSourceRoot(),
+            "Navigation",
+            "Steering",
+            "NavSteering.cs"));
+        string serialization = File.ReadAllText(Path.Combine(
+            GetSourceRoot(),
+            "Navigation",
+            "Steering",
+            "NavSteering.Serialization.cs"));
 
-        methodIndex.Should().BeGreaterThanOrEqualTo(0);
-        advanceIndex.Should().BeGreaterThan(methodIndex);
-        readIndex.Should().BeGreaterThan(advanceIndex);
-        headingIndex.Should().BeGreaterThan(readIndex);
-        string postAdvanceRead = source.Substring(readIndex, headingIndex - readIndex);
-        postAdvanceRead.Should().Contain("status == NavigationGuideStatus.Stale");
-        postAdvanceRead.Should().Contain("_flowRecoveryGuideLease?.Dispose();");
-        postAdvanceRead.Should().Contain("_flowRecoveryGuideLease = null;");
-        postAdvanceRead.Should().Contain("return true;");
-        postAdvanceRead.Should().NotContain("_navigationFlowFieldLease");
-        postAdvanceRead.Should().NotContain("_currentQuery");
-        postAdvanceRead.Should().NotContain("PreparePathRetry");
-        postAdvanceRead.Should().NotContain("HandleInvalidPath");
-        postAdvanceRead.Should().NotContain("ReleaseNavigationGuidance");
+        source.Should().NotContain("TryGetFlowRecoveryHeading");
+        source.Should().NotContain("_flowRecoveryGuideLease");
+        source.Should().NotContain("ponytail:");
+        steeringState.Should().NotContain("_flowRecoveryGuideLease");
+        serialization.Should().NotContain("_flowRecoveryGuideLease");
+    }
+
+    [Fact]
+    public void FlowLocalRecovery_ShouldDebitOnlyInsideTheExactRebasePath()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "Flow",
+            "NavigationSelectedEdgeProgressWork.cs"));
+
+        source.Split("TryConsumeLocalRecoveryAttempts(", StringSplitOptions.None)
+            .Length.Should().Be(2,
+                "every local-recovery outcome must first attempt exact rebasing, then same-lease ray rejoin");
+        source.Should().NotContain(
+            "TryRequireLocalRecovery",
+            "local recovery cannot bypass exact rebasing or consume a second attempt debit");
+    }
+
+    [Fact]
+    public void FlowRejoin_ShouldResolveTheSelectedEdgeOnceBeforeTargetEnumeration()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "Flow",
+            "NavigationSelectedEdgeProgressWork.cs"));
+        int start = source.IndexOf(
+            "internal static bool TryGetRejoinTarget",
+            StringComparison.Ordinal);
+        int end = source.IndexOf(
+            "internal static NavigationGuideStatus TrySample",
+            start,
+            StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+
+        string targets = source.Substring(start, end - start);
+        targets.Should().Contain(
+            "internal static bool TryGetRejoinTarget",
+            "fixed scalar target enumeration needs only found-or-exhausted state");
+        targets.Should().NotContain(
+            "out bool complete",
+            "exhaustion is the false result rather than a second completion channel");
+        targets
+            .Should().NotContain(
+                "TryResolveSelectedEdge(",
+                "one rejoin attempt must resolve its exact selected edge only once");
+        targets.Should().NotContain(
+            "TryResolvePortal(",
+            "sampling must pass the already-resolved selected-edge exit into rejoin target enumeration");
+        targets.Should().NotContain(
+            "NavigationPortals",
+            "a selected explicit ray can finish only after the complete corridor reaches its exit");
+        source.Should().Contain(
+            "NavigationRayStatus.CostOverflow => NavigationGuideStatus.CostOverflow",
+            "the lower ray CostOverflow proof must propagate unchanged through Flow rejoin");
+        start = source.IndexOf(
+            "private static NavigationGuideStatus TryRejoin",
+            StringComparison.Ordinal);
+        end = source.IndexOf(
+            "private static NavigationGuideStatus MapRayStatus",
+            start,
+            StringComparison.Ordinal);
+        source.Substring(start, end - start)
+            .Should().NotContain(
+                "TryResolveSelectedEdge(",
+                "sampling already resolved and validated the exact selected edge");
+        source.Split("TryResolveSelectedEdge(", StringSplitOptions.None)
+            .Length.Should().Be(3,
+                "the sampler has one callsite and one implementation for selected-edge resolution");
+    }
+
+    [Fact]
+    public void FlowGuide_ShouldReachTheImmediateRayWorkspaceThroughItsOwner()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "Flow",
+            "NavigationFlowFieldGuideLease.cs"));
+
+        source.Should().NotContain("_immediateRayWorkspace");
+        source.Should().Contain("owner.ImmediateRayWorkspace");
+    }
+
+    [Fact]
+    public void FlowGuide_ShouldBracketSamplingWithTheWorldEpoch()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            GetSourceRoot(),
+            "Pathing",
+            "Search",
+            "Flow",
+            "NavigationFlowFieldGuideLease.cs"));
+
+        source.Split("world.ChangeSequence", StringSplitOptions.None)
+            .Length.Should().Be(3,
+                "the world epoch must be captured before sampling and checked at commit linearization");
+        int payloadValidation = source.IndexOf(
+            "!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload current)",
+            StringComparison.Ordinal);
+        int trailingWorld = source.IndexOf(
+            "world.ChangeSequence != worldSequence",
+            payloadValidation,
+            StringComparison.Ordinal);
+        payloadValidation.Should().BeGreaterThanOrEqualTo(0);
+        trailingWorld.Should().BeGreaterThan(payloadValidation,
+            "the world epoch must close the store dependency validation");
+    }
+
+    [Fact]
+    public void InitialGraphDirectTravel_ShouldUseOneSharedControllerBranch()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            GetSourceRoot(),
+            "Navigation",
+            "Steering",
+            "NavSteering.Simulation.cs"));
+
+        source.Split("Guides.TryGetDirectHeading(", StringSplitOptions.None)
+            .Length.Should().Be(3,
+                "initial graph travel and periodic refresh each need one direct-ray callsite");
+        source.Split("TryHandleInitialGraphDirectTravel(", StringSplitOptions.None)
+            .Length.Should().Be(5,
+                "A-star, Flow, and hybrid Flow must share one initial direct-travel implementation");
     }
 
     [Fact]

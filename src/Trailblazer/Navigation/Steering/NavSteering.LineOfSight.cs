@@ -16,19 +16,6 @@ public partial class NavSteering
     #region Line-of-Sight & Reachability
 
     /// <summary>
-    /// Whether the destination is visible and reachable inside the supplied world context.
-    /// </summary>
-    public static bool IsDestinationInSight(
-        TrailblazerWorldContext context,
-        Vector3d position,
-        Vector3d destination,
-        Fixed64 unitSize,
-        bool allowUnwalkableEndpoints)
-    {
-        return !context.Pathing.NeedsPath(position, destination, unitSize, allowUnwalkableEndpoints);
-    }
-
-    /// <summary>
     /// Whether the destination is currently visible and reachable for raw-volume travel in the supplied context.
     /// </summary>
     public static bool IsVolumeDestinationInSight(

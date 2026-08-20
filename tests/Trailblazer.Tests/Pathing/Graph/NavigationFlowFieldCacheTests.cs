@@ -46,7 +46,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: newerPayload.RetainedBytes,
             maxActivePayloadBytes: newerPayload.RetainedBytes,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         cache.TryReservePayload(
                 newerPayload.RetainedBytes,
                 out NavigationFlowFieldReservation reservation)
@@ -96,7 +97,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: activeBytes,
             maxActiveLeases: 4,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
         NavigationFlowFieldPayloadLease nearLease = Publish(
             cache,
@@ -141,7 +143,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: activeBytes,
             maxActiveLeases: 4,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease nearLease = Publish(
             cache,
             fixture,
@@ -213,7 +216,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease first = Publish(
             cache,
             fixture,
@@ -286,7 +290,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Complete.RetainedBytes,
             maxActivePayloadBytes: fixture.Complete.RetainedBytes,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         cache.TryReservePayload(
                 fixture.Complete.RetainedBytes,
                 out NavigationFlowFieldReservation reservation)
@@ -326,7 +331,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: activeBytes,
             maxActiveLeases: 2,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation firstReservation)
@@ -462,7 +468,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
         NavigationFlowFieldPayloadLease lease = Publish(
             cache,
@@ -497,7 +504,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes - 1,
             maxActivePayloadBytes: fixture.Far.RetainedBytes - 1,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         oneByteShort.TryReservePayload(fixture.Far.RetainedBytes, out _)
             .Should().BeFalse();
 
@@ -507,7 +515,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease sole = Publish(
             leaseCapped,
             fixture,
@@ -540,7 +549,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: fixture.Far.RetainedBytes,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         Publish(lru, fixture, fixture.Far, fixture.FarOrigin).Dispose();
         Publish(lru, fixture, second, fixture.FarOrigin).Dispose();
         lru.TryCheckout(
@@ -583,7 +593,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: activeBytes,
             maxActiveLeases: 2,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease lease = Publish(
             cache,
             fixture,
@@ -699,7 +710,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: exactAggregate,
             maxActiveLeases: 2,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         exact.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation first)
@@ -718,7 +730,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: exactAggregate - 1,
             maxActiveLeases: 2,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         oneByteShort.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation accepted)
@@ -939,7 +952,8 @@ public sealed class NavigationFlowFieldCacheTests
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
             maxActivePayloadBytes: twoPayloadBytes,
             maxActiveLeases: 3,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         NavigationFlowFieldPayloadLease first = Publish(
             cache,
             fixture,
@@ -974,7 +988,8 @@ public sealed class NavigationFlowFieldCacheTests
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,
         maxActivePayloadBytes: checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes),
         maxActiveLeases: 4,
-        guideMapCapacity: 0);
+        guideMapCapacity: 0,
+        immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
     private static NavigationFlowFieldPayloadLease Publish(
         NavigationFlowFieldPayloadCache cache,
@@ -1000,6 +1015,9 @@ public sealed class NavigationFlowFieldCacheTests
 
 internal static class NavigationFlowFieldCacheTestHarness
 {
+    internal static NavigationImmediateRayWorkspace CreateImmediateRayWorkspace() =>
+        new(8, 64, 64, 128, 128);
+
     internal sealed class LineFixture : IDisposable
     {
         internal LineFixture(

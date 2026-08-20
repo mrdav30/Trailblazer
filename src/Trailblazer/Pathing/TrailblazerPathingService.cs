@@ -56,7 +56,8 @@ public sealed class TrailblazerPathingService
             context.World,
             _navigationGraph.Store,
             context.Settings.QueryLimits,
-            admissionCoordinator);
+            admissionCoordinator,
+            _immediateRayWorkspace);
         context.World.OnChangeCommitted += HandleCommittedChange;
     }
 
@@ -334,16 +335,6 @@ public sealed class TrailblazerPathingService
             ? startGrid!.ConfiguredVoxelCount
             : startGrid!.ConfiguredVoxelCount + endGrid!.ConfiguredVoxelCount;
         return true;
-    }
-
-    internal bool NeedsPath(
-        Vector3d startPosition,
-        Vector3d endPosition,
-        Fixed64 unitSize,
-        bool includeEnd = false)
-    {
-        using (EnterUsableState())
-            return PathManager.NeedsPath(_context.World, startPosition, endPosition, unitSize, includeEnd);
     }
 
     internal void HandleGridChanged(GridEventInfo eventInfo)

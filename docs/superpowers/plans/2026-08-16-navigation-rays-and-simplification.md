@@ -724,21 +724,21 @@ git commit -m "feat(pathing): simplify certified A-star guides"
 - Deletes both public `PathManager.NeedsPath` overloads, internal `TrailblazerPathingService.NeedsPath`, and public surface `NavSteering.IsDestinationInSight`; no aliases remain.
 - Retains explicitly volume-only `IsVolumeDestinationInSight` for the Phase 7 ledger.
 
-- [ ] **Step 1: Write direct-travel and deletion REDs**
+- [x] **Step 1: Write direct-travel and deletion REDs**
 
 Pin initial direct A*/Flow travel without guide acquisition, periodic guide release after a later clear ray, expensive passable terrain retaining weighted guidance, blocked/budget/cost/capacity fallback, stale retry, no `Pending` escape, arrival before combined steering, group steering not replacing retry-zero, blocking two-thread workspace result identity, warm 0 B, and compile/API source invariants proving deleted methods are absent.
 
-- [ ] **Step 2: Observe RED**
+- [x] **Step 2: Observe RED**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~TrailblazerGuideServiceTests|FullyQualifiedName~NavigatorTests|FullyQualifiedName~PathingNavigationMap|FullyQualifiedName~NavigationSearchArchitectureTests|FullyQualifiedName~PublicApiSnapshot"
 ```
 
-- [ ] **Step 3: Implement direct orchestration and delete legacy surface authority**
+- [x] **Step 3: Implement direct orchestration and delete legacy surface authority**
 
-Under the immediate workspace lock, acquire one graph lease, resolve only the query semantics consumed by `NavigationRayRequest`, create a fresh `NavigationWorkMeter(query.Budget)`, and run the ray synchronously to a terminal status. Translate a geometrically successful but semantic-cost-ineligible result to `Blocked` at this orchestration boundary, so `Success` always exposes an eligible heading. Wire pre-guide and cooldown checks through this method. Delete old surface LOS production/tests/docs rather than forwarding them.
+Under the immediate workspace lock, acquire one graph lease, resolve only the query semantics consumed by `NavigationRayRequest`, reset the workspace-owned `NavigationWorkMeter` from `query.Budget`, and run the ray synchronously to a terminal status. The reset produces a fresh logical meter without a per-check allocation. Translate a geometrically successful but semantic-cost-ineligible result to `Blocked` at this orchestration boundary, so `Success` always exposes an eligible heading. Wire pre-guide and cooldown checks through this method. Delete old surface LOS production/tests/docs rather than forwarding them.
 
-- [ ] **Step 4: Run focused controller/API/allocation gates and residue scans**
+- [x] **Step 4: Run focused controller/API/allocation gates and residue scans**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~TrailblazerGuideServiceTests|FullyQualifiedName~NavigatorTests|FullyQualifiedName~NavSteering|FullyQualifiedName~PublicApiSnapshot|FullyQualifiedName~NavigationSearchArchitectureTests"
@@ -747,13 +747,22 @@ rg -n "\bNeedsPath\b|IsDestinationInSight" src tests -g '*.cs'
 
 Expected residue: only `IsVolumeDestinationInSight`; zero surface/forwarding authority.
 
-- [ ] **Step 5: Review, tracker update, and commit**
+- [x] **Step 5: Review, tracker update, and commit**
 
 ```powershell
 git add --all -- src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs src/Trailblazer/Pathing/TrailblazerPathingService.cs src/Trailblazer/Pathing/PathManager.cs src/Trailblazer/Navigation/Steering/NavSteering.LineOfSight.cs src/Trailblazer/Navigation/Steering/NavSteering.Simulation.cs tests/Trailblazer.Tests docs/feature-work/gridTopologyNavigationMapRefactorPlan.md
 git diff --cached --check
 git commit -m "feat(navigation): steer through certified graph rays"
 ```
+
+Task 9 closed together with Task 10 because both intentionally share the
+context-owned immediate ray workspace and the same controller state boundary.
+The final combined focused matrix passed 243/243 in Release and 241/241 in
+ReleaseLean. Initial A*, ordinary Flow, and transition-enabled Flow use one
+direct-travel branch; weighted direct travel retains guidance, a later clear
+cooldown ray releases it, two blocking callers serialize deterministically,
+and warmed direct checks allocate 0 B. The legacy surface LOS APIs have no
+forwarding aliases.
 
 ---
 
@@ -770,29 +779,29 @@ git commit -m "feat(navigation): steer through certified graph rays"
 - Modify: Flow guide/concurrency/Navigator/architecture tests.
 
 **Interfaces:**
-- Pooled Flow guides receive one reference to the context-owned `NavigationImmediateRayWorkspace`; no guide owns ray scratch.
+- The Flow payload cache retains the context-owned `NavigationImmediateRayWorkspace`; pooled guides reach it through their existing cache owner and own no ray scratch or duplicate reference.
 - `NavigationSelectedEdgeProgressWork` exposes one fixed `NavigationFlowRejoinTarget` by stable ordinal, reusing its current selected-edge/corridor enumeration; no candidate array or variable-sized target value is materialized.
 - Deletes `_flowRecoveryGuideLease`, `TryGetFlowRecoveryHeading`, its sole `ponytail:` comment, and every recovery A* lifecycle branch.
 
-- [ ] **Step 1: Write Flow rejoin and deletion REDs**
+- [x] **Step 1: Write Flow rejoin and deletion REDs**
 
-Pin exact rebase first; displaced source-anchor ray constrained to the current source address; selected native/seam/explicit portal/target ray constrained to current source plus the exact canonical selected edge; rejection of an unrelated neutral corridor; cost-ineligible candidate; blocked candidates to `LocalRecoveryRequired`; exactly one total local-recovery debit; meter exhaustion to `BudgetExceeded`; cost/capacity propagation; publication race to sticky `Stale`; only success heading; no cursor mutation until exact node rebase; same Flow lease/cache identity; zero A* admissions; copied lease ABA/double dispose; two-guide blocking workspace determinism; warm 0 B; and zero recovery symbol/comment residue.
+Pin exact rebase first; displaced source-anchor ray constrained to the current source address; selected native/seam portal then target rays and selected explicit `ExitAnchor` then target rays constrained to current source plus the exact canonical selected edge; rejection of an unrelated neutral corridor; cost-ineligible candidate; blocked candidates to `LocalRecoveryRequired`; exactly one total local-recovery debit; meter exhaustion to `BudgetExceeded`; cost/capacity propagation; publication race to sticky `Stale`; only success heading; no cursor mutation until exact node rebase; same Flow lease/cache identity; zero A* admissions; copied lease ABA/double dispose; two-guide blocking workspace determinism; warm 0 B; and zero recovery symbol/comment residue. Intermediate explicit portal anchors are not candidates because exact selected-edge validation certifies the complete entry-to-exit corridor; Phase 7 may add partial-explicit authority only if a real transition or volume consumer requires it.
 
-- [ ] **Step 2: Observe RED**
+- [x] **Step 2: Observe RED**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationFlowFieldGuideTests|FullyQualifiedName~NavigationFlowFieldSamplingConcurrencyTests|FullyQualifiedName~NavigatorTests|FullyQualifiedName~NavigationSearchArchitectureTests"
 ```
 
-- [ ] **Step 3: Implement fixed-candidate ray rejoin**
+- [x] **Step 3: Implement fixed-candidate ray rejoin**
 
-Keep the existing exact covered-address rebase first. Move the existing `TryRequireLocalRecovery` debit into the rejoin branch so the entire failed-rebase/rejoin attempt consumes exactly one local-recovery unit total. Enumerate current source then selected-edge portal/target anchors one at a time by stable ordinal and ray-test each immediately. The source target uses the source-only chain constraint; every selected-edge target requires current source followed by the exact canonical selected edge. Do not scan payload nodes, materialize candidates, rebuild Flow, or submit A*. Commit only `Success`; preserve status mapping and sticky staleness exactly.
+Keep the existing exact covered-address rebase first. Move the existing `TryRequireLocalRecovery` debit into the rejoin branch so the entire failed-rebase/rejoin attempt consumes exactly one local-recovery unit total. Enumerate current source, then a native/seam target-side portal and target foot or an explicit `ExitAnchor` and target foot, one at a time by stable ordinal, and ray-test each immediately. The source target uses the source-only chain constraint and remains semantic-cost-neutral; every selected-edge target requires current source followed by the exact canonical selected edge and may carry that already-authorized edge's authored cost. Exact explicit selected-edge validation covers the full `EntryAnchor`-to-`ExitAnchor` corridor, so intermediate explicit portal anchors cannot terminate successfully and are deliberately not enumerated. Pass the selected-edge exit scalar already resolved by ordinary sampling into target enumeration; do not repeat portal/profile resolution. Do not scan payload nodes, materialize candidates, rebuild Flow, or submit A*. Commit only `Success`; preserve status mapping and sticky staleness exactly.
 
-- [ ] **Step 4: Delete recovery bridge and verify lifecycle**
+- [x] **Step 4: Delete recovery bridge and verify lifecycle**
 
 Remove fields/helpers/serialization cleanup/tests for the temporary A* bridge. Preserve the authoritative Flow query and one Flow lease across retry-neutral frames. `LocalRecoveryRequired`, `BudgetExceeded`, and other retry-neutral zero-heading frames retain that same Flow lease/query and bypass combined steering; they do not trigger a hidden guide rebuild or terminal arrival. Ensure arrival/stop/replacement/load releases exactly once.
 
-- [ ] **Step 5: Run focused Flow/controller/allocation gates, review, tracker update, commit**
+- [x] **Step 5: Run focused Flow/controller/allocation gates, review, tracker update, commit**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationFlowField|FullyQualifiedName~NavigatorTests|FullyQualifiedName~NavigationSearchArchitectureTests"
@@ -803,6 +812,16 @@ git commit -m "feat(pathing): rejoin flow fields through navigation rays"
 ```
 
 Expected: no source recovery symbol/comment; the tracker records deletion and Phase 7 ownership only.
+
+Task 10 closed with exact-rebase-first same-lease rejoin, one local-recovery
+debit, source/selected-exit/target scalar enumeration, sticky store/world
+staleness, serialized two-guide workspace use, and 0 B warmed rejoin sampling.
+An exact weighted selected-edge regression proves that only the uncovered
+prefix must be semantic-cost-neutral; the already-selected Flow edge may keep
+its authored target, area, or explicit surcharge. Intermediate explicit portal
+targets were deleted as unreachable under full-corridor selected-edge proof,
+with partial-explicit authority deferred to Phase 7 only on demonstrated need.
+Independent correctness and ponytail reviews reported no remaining P0-P2.
 
 ---
 

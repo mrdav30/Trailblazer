@@ -47,7 +47,6 @@ public partial class NavSteering
         _volumeGuide = null;
         _navigationGuideLease = null;
         _navigationFlowFieldLease = null;
-        _flowRecoveryGuideLease = null;
         _hybridRouteGuide = null;
         _requestedDestination = Vector3d.Zero;
         _movementGroupSession.Reset();
@@ -224,21 +223,6 @@ public partial class NavSteering
                 return true;
             }
         }
-        else
-        {
-            _hasLineOfSightPath = IsDestinationInSight(
-                _currentRequest.Context,
-                origin,
-                Destination,
-                _currentRequest.UnitSize,
-                _currentRequest.AllowUnwalkableEndpoints);
-            if (_hasLineOfSightPath)
-            {
-                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
-                return true;  // no path required
-            }
-        }
-
         // request guide
         ReleaseNavigationGuidance();
         _pathCheckCooldown = PathRecheckCooldownFrames;
@@ -258,6 +242,8 @@ public partial class NavSteering
 
     private bool ValidateGraphMovementPath(Vector3d origin)
     {
+        if (_hasLineOfSightPath && !_shouldRequestPathThisFrame)
+            return true;
         if (_currentQuery!.Value.Algorithm == PathAlgorithm.FlowField)
             return ValidateGraphFlowMovementPath(origin);
 
@@ -272,6 +258,8 @@ public partial class NavSteering
         _currentQuery = query;
         _requestedDestination = query.End.Position;
         _destination = _requestedDestination;
+        if (TryHandleInitialGraphDirectTravel(query, origin))
+            return true;
         ReleaseNavigationGuidance();
         _pathCheckCooldown = PathRecheckCooldownFrames;
 
@@ -327,6 +315,8 @@ public partial class NavSteering
         _currentQuery = query;
         _requestedDestination = query.End.Position;
         _destination = _requestedDestination;
+        if (TryHandleInitialGraphDirectTravel(query, origin))
+            return true;
         ReleaseNavigationGuidance();
         _pathCheckCooldown = PathRecheckCooldownFrames;
 
@@ -369,6 +359,8 @@ public partial class NavSteering
         _currentQuery = query;
         _requestedDestination = query.End.Position;
         _destination = _requestedDestination;
+        if (TryHandleInitialGraphDirectTravel(query, origin))
+            return true;
         ReleaseNavigationGuidance();
         _pathCheckCooldown = PathRecheckCooldownFrames;
 
@@ -390,6 +382,31 @@ public partial class NavSteering
         return true;
     }
 
+    private bool TryHandleInitialGraphDirectTravel(PathQuery query, Vector3d origin)
+    {
+        NavigationRayStatus status = ResolveContext().Guides.TryGetDirectHeading(
+            query,
+            origin,
+            out _);
+        if (status == NavigationRayStatus.Success)
+        {
+            _hasLineOfSightPath = true;
+            ReleaseNavigationGuidance();
+            _pathCheckCooldown = PathRecheckCooldownFrames;
+            PublishRouteTopology(
+                hasResolvedTopology: true,
+                usesGuideTopology: false,
+                requestsClimbIntent: false);
+            return true;
+        }
+
+        _hasLineOfSightPath = false;
+        if (status != NavigationRayStatus.Stale)
+            return false;
+        PreparePathRetry();
+        return true;
+    }
+
     /// <summary>
     /// Computes the steering direction toward the destination or along the path.
     /// </summary>
@@ -400,17 +417,10 @@ public partial class NavSteering
             targetDirection = Destination - position;
         else if (_hybridRouteGuide != null)
         {
-            PathQuery? previousSurfaceQuery = _hybridRouteGuide.ActiveSurfaceQuery;
             NavigationGuideStatus status = _hybridRouteGuide.TrySample(
                 position,
                 ResolveContext().Settings.GuideSampleBudget,
                 out targetDirection);
-            if (_flowRecoveryGuideLease != null
-                && previousSurfaceQuery != _hybridRouteGuide.ActiveSurfaceQuery)
-            {
-                _flowRecoveryGuideLease.Value.Dispose();
-                _flowRecoveryGuideLease = null;
-            }
             if (status is NavigationGuideStatus.Stale
                 or NavigationGuideStatus.CapacityExceeded)
             {
@@ -420,13 +430,7 @@ public partial class NavSteering
             if (status == NavigationGuideStatus.BudgetExceeded)
                 return Vector3d.Zero;
             if (status == NavigationGuideStatus.LocalRecoveryRequired)
-            {
-                if (!TryGetFlowRecoveryHeading(position, out targetDirection))
-                {
-                    HandleInvalidPath("Invalid flow recovery path detected!");
-                    return Vector3d.Zero;
-                }
-            }
+                return Vector3d.Zero;
             else if (status != NavigationGuideStatus.Success)
             {
                 HandleInvalidPath("Invalid hybrid path detected!");
@@ -434,11 +438,6 @@ public partial class NavSteering
             }
             else
             {
-                if (_flowRecoveryGuideLease != null)
-                {
-                    _flowRecoveryGuideLease.Value.Dispose();
-                    _flowRecoveryGuideLease = null;
-                }
                 if (targetDirection == Vector3d.Zero && _hybridRouteGuide.IsComplete)
                 {
                     Arrive();
@@ -461,13 +460,7 @@ public partial class NavSteering
             if (status == NavigationGuideStatus.BudgetExceeded)
                 return Vector3d.Zero;
             if (status == NavigationGuideStatus.LocalRecoveryRequired)
-            {
-                if (!TryGetFlowRecoveryHeading(position, out targetDirection))
-                {
-                    HandleInvalidPath("Invalid flow recovery path detected!");
-                    return Vector3d.Zero;
-                }
-            }
+                return Vector3d.Zero;
             else if (status != NavigationGuideStatus.Success)
             {
                 HandleInvalidPath("Invalid graph flow path detected!");
@@ -475,11 +468,6 @@ public partial class NavSteering
             }
             else
             {
-                if (_flowRecoveryGuideLease != null)
-                {
-                    _flowRecoveryGuideLease.Value.Dispose();
-                    _flowRecoveryGuideLease = null;
-                }
                 if (targetDirection == Vector3d.Zero)
                 {
                     Arrive();
@@ -547,94 +535,6 @@ public partial class NavSteering
 
         // This is now the direction we want to be travelling in
         return targetDirection.NormalizeInPlace(out _distanceToTarget);
-    }
-
-    private bool TryGetFlowRecoveryHeading(Vector3d position, out Vector3d heading)
-    {
-        heading = Vector3d.Zero;
-        if (_flowRecoveryGuideLease == null)
-        {
-            PathQuery flowQuery = _hybridRouteGuide?.ActiveSurfaceQuery
-                ?? _currentQuery!.Value;
-            // ponytail: Phase 5's only Flow recovery bridge uses destination-bound graph A* after LocalRecoveryRequired; Phase 6 deletes it when navigation-ray-certified rejoin can prove a safe return to the shared field.
-            var recoveryQuery = new PathQuery(
-                new NavigationEndpoint(
-                    position,
-                    flowQuery.Start.MapId,
-                    flowQuery.Start.Resolution,
-                    flowQuery.Start.MaxResolutionDistance),
-                flowQuery.End,
-                flowQuery.Agent,
-                flowQuery.AreaPolicy,
-                flowQuery.Traversal,
-                PathAlgorithm.AStar,
-                flowQuery.Budget,
-                allowTransitions: false);
-            NavigationGuideStatus requestStatus = ResolveContext().Guides.RequestGuide(
-                recoveryQuery,
-                out NavigationGuideLease? recovery);
-            if (requestStatus is NavigationGuideStatus.Stale
-                or NavigationGuideStatus.CapacityExceeded)
-            {
-                recovery?.Dispose();
-                return true;
-            }
-            if (requestStatus != NavigationGuideStatus.Success || recovery == null)
-            {
-                recovery?.Dispose();
-                return false;
-            }
-            _flowRecoveryGuideLease = recovery;
-        }
-
-        NavigationGuideLease guide = _flowRecoveryGuideLease.Value;
-        NavigationGuideStatus status = guide.TryGetCurrentWaypoint(out _, out Vector3d waypoint);
-        if (status == NavigationGuideStatus.Stale)
-        {
-            _flowRecoveryGuideLease?.Dispose();
-            _flowRecoveryGuideLease = null;
-            return true;
-        }
-        if (status != NavigationGuideStatus.Success)
-            return false;
-
-        heading = waypoint - position;
-        if (heading != Vector3d.Zero)
-            return true;
-        if (IsAtFinalWaypoint(guide))
-        {
-            if (_hybridRouteGuide != null)
-            {
-                _flowRecoveryGuideLease.Value.Dispose();
-                _flowRecoveryGuideLease = null;
-                return true;
-            }
-            ReleaseNavigationGuidance();
-            return true;
-        }
-
-        status = guide.TryAdvanceWaypoint();
-        if (status != NavigationGuideStatus.Success)
-        {
-            if (status == NavigationGuideStatus.Stale)
-            {
-                _flowRecoveryGuideLease?.Dispose();
-                _flowRecoveryGuideLease = null;
-                return true;
-            }
-            return false;
-        }
-        status = guide.TryGetCurrentWaypoint(out _, out waypoint);
-        if (status == NavigationGuideStatus.Stale)
-        {
-            _flowRecoveryGuideLease?.Dispose();
-            _flowRecoveryGuideLease = null;
-            return true;
-        }
-        if (status != NavigationGuideStatus.Success)
-            return false;
-        heading = waypoint - position;
-        return true;
     }
 
     /// <summary>
@@ -714,11 +614,35 @@ public partial class NavSteering
 
     private void RefreshLineOfSightState(Vector3d position)
     {
-        if (_currentQuery.HasValue)
-            return;
-
         if (_pathCheckCooldown > 0)
             return;
+
+        if (_currentQuery is PathQuery currentQuery)
+        {
+            bool wasDirect = _hasLineOfSightPath;
+            PathQuery query = currentQuery.WithStartPosition(position);
+            NavigationRayStatus status = ResolveContext().Guides.TryGetDirectHeading(
+                query,
+                position,
+                out _);
+            if (status == NavigationRayStatus.Success)
+            {
+                _currentQuery = query;
+                _hasLineOfSightPath = true;
+                ReleaseNavigationGuidance();
+                PublishRouteTopology(
+                    hasResolvedTopology: true,
+                    usesGuideTopology: false,
+                    requestsClimbIntent: false);
+            }
+            else if (status == NavigationRayStatus.Stale || wasDirect)
+            {
+                _hasLineOfSightPath = false;
+                PreparePathRetry();
+            }
+            _pathCheckCooldown = PathRecheckCooldownFrames;
+            return;
+        }
 
         if (_currentRequest is VolumePathRequest volumeRequest)
         {
@@ -738,20 +662,6 @@ public partial class NavSteering
                 PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
             }
         }
-        else
-        {
-            IPathRequest currentRequest = _currentRequest!;
-            _hasLineOfSightPath = IsDestinationInSight(
-                currentRequest.Context,
-                position,
-                Destination,
-                currentRequest.UnitSize,
-                currentRequest.AllowUnwalkableEndpoints);
-
-            if (_hasLineOfSightPath)
-                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
-        }
-
         _pathCheckCooldown = PathRecheckCooldownFrames;
     }
 

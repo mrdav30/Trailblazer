@@ -36,7 +36,8 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         GridWorld world,
         NavigationWorldGraphStore store,
         NavigationQueryLimits limits,
-        NavigationQueryAdmissionCoordinator coordinator)
+        NavigationQueryAdmissionCoordinator coordinator,
+        NavigationImmediateRayWorkspace immediateRayWorkspace)
     {
         SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
@@ -54,7 +55,8 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
             limits.MaxFlowSinglePayloadBytes,
             limits.MaxFlowActivePayloadBytes,
             limits.MaxFlowActivePayloadLeases,
-            limits.FlowWorkspaceMapCapacity);
+            limits.FlowWorkspaceMapCapacity,
+            immediateRayWorkspace);
         _queries = new NavigationFlowQueryWork[limits.MaxConcurrentNavigationQueries];
         _leases = new NavigationWorldGraphLease[limits.MaxConcurrentNavigationQueries];
         for (int i = 0; i < _queries.Length; i++)

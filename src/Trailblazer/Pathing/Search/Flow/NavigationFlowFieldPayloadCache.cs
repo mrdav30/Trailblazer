@@ -73,6 +73,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     private NavigationFlowFieldGuideLease?[] _freeGuides;
     private int _freeGuideCount;
     private readonly int _guideMapCapacity;
+    private readonly NavigationImmediateRayWorkspace _immediateRayWorkspace;
 
     internal NavigationFlowFieldPayloadCache(
         int maxEntries,
@@ -80,7 +81,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         long maxSinglePayloadBytes,
         long maxActivePayloadBytes,
         int maxActiveLeases,
-        int guideMapCapacity)
+        int guideMapCapacity,
+        NavigationImmediateRayWorkspace immediateRayWorkspace)
     {
         SwiftThrowHelper.ThrowIfNegative(maxEntries, nameof(maxEntries));
         if (maxReusableBytes < 0)
@@ -91,6 +93,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             throw new ArgumentOutOfRangeException(nameof(maxActivePayloadBytes));
         SwiftThrowHelper.ThrowIfNegative(maxActiveLeases, nameof(maxActiveLeases));
         SwiftThrowHelper.ThrowIfNegative(guideMapCapacity, nameof(guideMapCapacity));
+        SwiftThrowHelper.ThrowIfNull(immediateRayWorkspace, nameof(immediateRayWorkspace));
         SwiftThrowHelper.ThrowIfArgument(
             maxSinglePayloadBytes > maxActivePayloadBytes,
             nameof(maxSinglePayloadBytes),
@@ -123,6 +126,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             _freeGuides[i] = new NavigationFlowFieldGuideLease(guideMapCapacity);
         _freeGuideCount = _freeGuides.Length;
         _guideMapCapacity = guideMapCapacity;
+        _immediateRayWorkspace = immediateRayWorkspace;
         _mask = tableSize - 1;
         _maximumEntries = maxEntries;
         _maximumReusableBytes = maxReusableBytes;
@@ -134,6 +138,9 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     {
         get { lock (_sync) return _count; }
     }
+
+    internal NavigationImmediateRayWorkspace ImmediateRayWorkspace =>
+        _immediateRayWorkspace;
 
     internal long CachedBytes
     {

@@ -71,7 +71,6 @@ public sealed class NavigationRayTests
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
 
         context.Pathing.ImmediateRayWorkspace.SyncRoot.Should().NotBeNull();
-        context.Pathing.ImmediateRayWorkspace.Workspace.Should().NotBeNull();
     }
 
     [Fact]
@@ -335,6 +334,20 @@ public sealed class NavigationRayTests
                 graph,
                 NavigationAStarExitTestHarness.Profile(),
                 sourceState.FootAnchor,
+                sourceState.FootAnchor,
+                NavigationRayChainConstraint.SelectedEdge(
+                    fixture.FarOrigin,
+                    selectedAddress,
+                    selectedOrdinal)))
+            .Status.Should().Be(NavigationRayStatus.Blocked,
+                "a selected-edge constraint must actually traverse its exact edge");
+
+        RunRay(CreateRequest(
+                fixture.World,
+                fixture.Store,
+                graph,
+                NavigationAStarExitTestHarness.Profile(),
+                sourceState.FootAnchor,
                 selectedState.FootAnchor,
                 NavigationRayChainConstraint.SourceOnly(fixture.FarOrigin)))
             .Status.Should().Be(NavigationRayStatus.Blocked);
@@ -365,6 +378,76 @@ public sealed class NavigationRayTests
                     selectedAddress,
                     selectedOrdinal + 1)))
             .Status.Should().Be(NavigationRayStatus.Blocked);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void OrderedRay_StartPrefixShouldRejectEarlierMappedCellOutsideRequiredChain(
+        bool selectedEdge,
+        bool weightedPrefix)
+    {
+        using var world = new GridForge.Grids.GridWorld();
+        var prefix = new VoxelIndex(0, 0, 0);
+        var source = new VoxelIndex(1, 0, 0);
+        var target = new VoxelIndex(2, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(3),
+                new[] { prefix, source, target },
+                "ray-start-prefix-chain",
+                new[]
+                {
+                    weightedPrefix
+                        ? NavigationAStarExitTestHarness.ExpensiveCell
+                        : NavigationAStarExitTestHarness.Cell,
+                    NavigationAStarExitTestHarness.Cell,
+                    NavigationAStarExitTestHarness.Cell
+                });
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
+        var sourceAddress = new NavigationCellAddress(fixture.MapId, source);
+        var targetAddress = new NavigationCellAddress(fixture.MapId, target);
+        fixture.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef sourceNode)
+            .Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator edges =
+            fixture.Graph.EnumerateSurfaceEdges(sourceNode);
+        int selectedOrdinal = -1;
+        while (edges.MoveNext())
+        {
+            if (fixture.Graph.TryGetNodeAddress(
+                    edges.Current.Target,
+                    out NavigationCellAddress address)
+                && address == targetAddress)
+            {
+                selectedOrdinal = edges.CurrentOrdinal;
+                break;
+            }
+        }
+        selectedOrdinal.Should().BeGreaterThanOrEqualTo(0);
+        NavigationRayChainConstraint constraint = selectedEdge
+            ? NavigationRayChainConstraint.SelectedEdge(
+                sourceAddress,
+                targetAddress,
+                selectedOrdinal)
+            : NavigationRayChainConstraint.SourceOnly(sourceAddress);
+
+        NavigationRayResult result = RunRay(CreateRequest(
+            world,
+            store,
+            fixture.Graph,
+            fixture.DefaultProfile,
+            NavigationAStarExitTestHarness.GetFoot(fixture.Binding, prefix),
+            NavigationAStarExitTestHarness.GetFoot(
+                fixture.Binding,
+                selectedEdge ? target : source),
+            constraint,
+            NavigationRayEndpointAllowance.StartPrefix));
+
+        result.Status.Should().Be(NavigationRayStatus.Blocked);
     }
 
     [Theory]

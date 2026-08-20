@@ -353,10 +353,11 @@ requests no longer bypass it.
 - At this orchestration boundary, a geometrically successful but
   semantic-cost-ineligible ray is normalized to `Blocked`; `Success` therefore
   always means the returned direct heading is eligible.
-- Each steering check is a distinct bounded internal operation with a fresh
-  `NavigationWorkMeter` created from the query's immutable
-  `NavigationWorkBudget`. It does not consume or refresh the separate public
-  guide request's meter.
+- Each steering check is a distinct bounded internal operation. Under the
+  immediate-workspace lock it resets one reusable `NavigationWorkMeter` from
+  the query's immutable `NavigationWorkBudget`, giving each check fresh logical
+  limits without allocating. It does not consume or refresh the separate
+  public guide request's meter.
 - Every synchronous non-success (`Blocked`, `BudgetExceeded`, `CostOverflow`,
   or `CapacityExceeded`) means "direct travel not proven" and falls back to or
   retains normal guidance. `Pending` never escapes the synchronous check.
@@ -371,16 +372,22 @@ This is orchestration reuse, not a second LOS system.
 When ordinary Flow sampling returns `LocalRecoveryRequired`, the guide first
 uses its existing exact covered-address rebase. If that fails, it ray-tests only
 the fixed geometry already named by its current cursor: the current source
-anchor followed by the selected edge's compiled portal/target anchors. Each
-target is exposed and tested immediately by stable ordinal; no candidate array
-is retained. It does not scan or rank the Flow payload and owns no second
-candidate table.
+anchor; for native or automatic-seam edges, the target-side portal followed by
+the target foot; and for explicit edges, the `ExitAnchor` followed by the target
+foot. Each target is exposed and tested immediately by stable ordinal; no
+candidate array is retained. It does not scan or rank the Flow payload and owns
+no second candidate table. Intermediate explicit portal anchors are omitted
+because exact selected-edge validation requires the complete
+`EntryAnchor`-to-`ExitAnchor` corridor and therefore cannot successfully
+terminate at one of those intermediate anchors.
 
 For each fixed candidate, the guide runs the same navigation ray from the actual
 foot to the certified anchor/selected-edge entry. The source-anchor candidate is
 confined to current-source geometry; selected-edge candidates require current
 source followed by that exact canonical edge. Any semantic travel before the
-already-selected Flow edge must be cost-neutral. A successful ray
+already-selected Flow edge must be cost-neutral; the selected edge's own cell,
+area, or explicit surcharge is already authorized by the Flow cursor and does
+not reject rejoin. A successful ray
 returns the ray heading for that frame while retaining the original Flow lease
 and cache identity. The Flow cursor is committed/rebased only after the actual
 foot reaches a payload-covered node; until then each sample revalidates the
@@ -521,3 +528,7 @@ follow-ups:
    keep it internal—never add a forwarding alias;
 5. retain the reusable upstream vertical-portal primitive tests and add the
    first real runtime volume consumer without a test-only production hook.
+6. add partial-explicit rejoin authority only if a real transition or volume
+   consumer proves that it needs to terminate within a compiled explicit
+   corridor; Phase 6 deliberately supports only the full-corridor explicit
+   `ExitAnchor` and target candidates.

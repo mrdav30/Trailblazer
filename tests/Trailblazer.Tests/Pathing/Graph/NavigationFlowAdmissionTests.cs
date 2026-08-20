@@ -41,7 +41,8 @@ public sealed class NavigationFlowAdmissionTests
             world,
             store,
             limits,
-            new NavigationQueryAdmissionCoordinator(1));
+            new NavigationQueryAdmissionCoordinator(1),
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         RunSuccessfulQuery(gate, query);
         RunSuccessfulQuery(gate, query);
 
@@ -124,7 +125,8 @@ public sealed class NavigationFlowAdmissionTests
             world,
             store,
             limits,
-            coordinator);
+            coordinator,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         var batch = new PathQueryBatch(
             new[]
             {
@@ -184,7 +186,8 @@ public sealed class NavigationFlowAdmissionTests
                 maxBatchItems: 1,
                 maxConcurrentQueries: 1,
                 maxBatchDescriptorBytes: exactBytes - 1),
-            coordinator);
+            coordinator,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
         rejectedGate.Begin(
                 new PathQueryBatch(Array.Empty<PathQueryBatchItem>(), 0),
@@ -204,7 +207,8 @@ public sealed class NavigationFlowAdmissionTests
                 maxBatchItems: 1,
                 maxConcurrentQueries: 1,
                 maxBatchDescriptorBytes: exactBytes),
-            coordinator);
+            coordinator,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         acceptedGate.Begin(query, out NavigationFlowBatchWork accepted)
             .Should().Be(NavigationFlowQueryStatus.Pending);
         accepted.Dispose();
@@ -236,7 +240,8 @@ public sealed class NavigationFlowAdmissionTests
             world,
             store,
             limits,
-            coordinator);
+            coordinator,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
         gate.Begin(query, out NavigationFlowBatchWork work)
             .Should().Be(NavigationFlowQueryStatus.Pending);
@@ -285,7 +290,8 @@ public sealed class NavigationFlowAdmissionTests
             world,
             store,
             limits,
-            coordinator);
+            coordinator,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 
         aStarGate.Begin(aStar, out NavigationAStarBatchWork aStarWork)
             .Should().Be(NavigationAStarQueryStatus.Pending);
@@ -331,7 +337,8 @@ public sealed class NavigationFlowAdmissionTests
             world,
             store,
             limits,
-            coordinator);
+            coordinator,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         var batch = new PathQueryBatch(
             new[]
             {
@@ -393,7 +400,8 @@ public sealed class NavigationFlowAdmissionTests
             maxSinglePayloadBytes: 2_048,
             maxActivePayloadBytes: 2_048,
             maxActiveLeases: 1,
-            guideMapCapacity: 0);
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         using var work = new NavigationFlowQueryWork(
             world,
             store,

@@ -46,7 +46,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 NavigationAStarExitTestHarness.CreateExplicitMap(
                     world,
                     NavigationAStarExitTestHarness.RectangularLine(8),
-                    new[] { start, destination },
+                    LineCells(4),
                     "explicit-equivalence",
                     new[]
                     {
@@ -55,14 +55,17 @@ public sealed class NavigationFlowFieldEquivalenceTests
                             start,
                             destination,
                             corridorCost: (Fixed64)4,
-                            radiusClearance: Fixed64.Zero),
+                            radiusClearance: Fixed64.Zero,
+                            witnesses: Between(0, 4)),
                         new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
                             "wide",
                             start,
                             destination,
                             corridorCost: (Fixed64)6,
-                            radiusClearance: (Fixed64)2)
-                    });
+                            radiusClearance: (Fixed64)2,
+                            witnesses: Between(0, 4))
+                    },
+                    NavigationAStarExitTestHarness.ExpensiveCell);
             var point = new NavigationAgentProfile(
                 new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
                 Fixed64.Zero,
@@ -71,7 +74,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 TraversalMedia.Solid,
                 TraversalCapability.None);
             var wide = new NavigationAgentProfile(
-                new KinematicBodyShape(Fixed64.One, Fixed64.One, Fixed64.Zero),
+                new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
                 Fixed64.Zero,
                 Fixed64.Zero,
                 Fixed64.Zero,
@@ -402,10 +405,14 @@ public sealed class NavigationFlowFieldEquivalenceTests
         var destination = new VoxelIndex(12, 0, 0);
         NavigationAStarExitTestHarness.ExplicitEdgeSpec[] edges =
         {
-            new("a-origin-later", origin, later, (Fixed64)4, (Fixed64)2),
-            new("later-terminal", later, destination, (Fixed64)8, (Fixed64)2),
-            new("z-origin-earlier", origin, earlier, originToEarlierCost, (Fixed64)2),
-            new("earlier-terminal", earlier, destination, (Fixed64)4, (Fixed64)2)
+            new("a-origin-later", origin, later, (Fixed64)4, (Fixed64)2,
+                witnesses: Between(0, 4)),
+            new("later-terminal", later, destination, (Fixed64)8, (Fixed64)2,
+                witnesses: Between(4, 12)),
+            new("z-origin-earlier", origin, earlier, originToEarlierCost, (Fixed64)2,
+                witnesses: Between(0, 8)),
+            new("earlier-terminal", earlier, destination, (Fixed64)4, (Fixed64)2,
+                witnesses: Between(8, 12))
         };
         if (reverseInsertion)
             Array.Reverse(edges);
@@ -413,9 +420,10 @@ public sealed class NavigationFlowFieldEquivalenceTests
             NavigationAStarExitTestHarness.CreateExplicitMap(
                 world,
                 NavigationAStarExitTestHarness.RectangularLine(16),
-                new[] { origin, later, earlier, destination },
+                LineCells(12),
                 reverseInsertion ? "diamond-reverse" : "diamond-forward",
-                edges);
+                edges,
+                NavigationAStarExitTestHarness.ExpensiveCell);
         PathQuery query = fixture.CreateQuery(
             origin,
             destination,
@@ -434,7 +442,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
             originAddress,
             destinationAddress);
 
-        oracle.Cost.Should().Be((Fixed64)12, "the independent diamond oracle");
+        oracle.Cost.Should().Be((Fixed64)212, "the independent diamond oracle");
         aStar.Cost.Should().Be(oracle.Cost, "A* must match the independent oracle");
         payload.TryGetNode(
                 originAddress,
@@ -448,14 +456,30 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 new NavigationCellAddress(fixture.MapId, earlier),
                 out NavigationFlowFieldNode flowEarlier)
             .Should().BeTrue();
-        flowLater.IntegrationCost.Should().Be((Fixed64)8);
-        flowEarlier.IntegrationCost.Should().Be((Fixed64)4);
+        flowLater.IntegrationCost.Should().Be((Fixed64)108);
+        flowEarlier.IntegrationCost.Should().Be((Fixed64)104);
         flowOrigin.IntegrationCost.Should().Be(
             oracle.Cost,
             "the immutable flow payload must copy the decreased origin cost");
         flowOrigin.SelectedEdge.Target.Should().Be(
             new NavigationCellAddress(fixture.MapId, later));
-        flowOrigin.SelectedEdge.CanonicalOutgoingOrdinal.Should().Be(0);
+        flowOrigin.SelectedEdge.CanonicalOutgoingOrdinal.Should().Be(1);
+    }
+
+    private static VoxelIndex[] LineCells(int lastX)
+    {
+        var result = new VoxelIndex[lastX + 1];
+        for (int x = 0; x <= lastX; x++)
+            result[x] = new VoxelIndex(x, 0, 0);
+        return result;
+    }
+
+    private static VoxelIndex[] Between(int sourceX, int destinationX)
+    {
+        var result = new VoxelIndex[destinationX - sourceX - 1];
+        for (int ordinal = 0; ordinal < result.Length; ordinal++)
+            result[ordinal] = new VoxelIndex(sourceX + ordinal + 1, 0, 0);
+        return result;
     }
 
     private static void AssertHexMatrix(HexOrientation orientation)

@@ -18,7 +18,7 @@ internal sealed class NavigationAStarGuideLease
     private NavigationWorldGraphStore? _store;
     private NavigationAStarPayloadLease? _payloadLease;
     private NavigationAStarQueryStatus _status;
-    private int _currentNodeOrdinal;
+    private int _currentWaypointOrdinal;
     private long _generation;
 
     internal NavigationAStarGuideLease(NavigationAStarPayloadCache owner)
@@ -51,7 +51,7 @@ internal sealed class NavigationAStarGuideLease
             _generation++;
             _store = store;
             _payloadLease = payloadLease;
-            _currentNodeOrdinal = 0;
+            _currentWaypointOrdinal = 0;
             _status = NavigationAStarQueryStatus.Success;
         }
     }
@@ -66,10 +66,10 @@ internal sealed class NavigationAStarGuideLease
         }
     }
 
-    internal int GetCurrentNodeOrdinal(long generation)
+    internal int GetCurrentWaypointOrdinal(long generation)
     {
         lock (_sync)
-            return IsGenerationActiveUnderLock(generation) ? _currentNodeOrdinal : -1;
+            return IsGenerationActiveUnderLock(generation) ? _currentWaypointOrdinal : -1;
     }
 
     internal int GetWaypointCount(long generation)
@@ -77,7 +77,7 @@ internal sealed class NavigationAStarGuideLease
         lock (_sync)
         {
             return IsGenerationActiveUnderLock(generation)
-                ? _payloadLease!.Payload.Nodes.Length
+                ? _payloadLease!.Payload.GuidePoints.Length
                 : 0;
         }
     }
@@ -131,7 +131,7 @@ internal sealed class NavigationAStarGuideLease
             _store = null;
             payloadLease = _payloadLease;
             _payloadLease = null;
-            _currentNodeOrdinal = 0;
+            _currentWaypointOrdinal = 0;
             _status = NavigationAStarQueryStatus.Pending;
             return true;
         }
@@ -165,19 +165,18 @@ internal sealed class NavigationAStarGuideLease
             NavigationAStarPayload payload = payloadLease.Payload;
             NavigationWorldGraph graph = graphLease.Graph;
             if (!graph.IsDependencyCurrent(payload.Dependencies)
-                || (uint)_currentNodeOrdinal >= (uint)payload.Nodes.Length)
+                || (uint)_currentWaypointOrdinal >= (uint)payload.GuidePoints.Length)
             {
                 return MarkStaleUnderLock();
             }
-            NavigationCellAddress current = payload.Nodes[_currentNodeOrdinal];
-            if (!graph.TryGetNodeRef(current, out NavigationNodeRef node)
-                || !graph.TryGetNodeState(node, out NavigationNodeState state)
-                || !store.Current.IsDependencyCurrent(payload.Dependencies))
+            NavigationAStarGuidePoint current =
+                payload.GuidePoints[_currentWaypointOrdinal];
+            if (!store.Current.IsDependencyCurrent(payload.Dependencies))
             {
                 return MarkStaleUnderLock();
             }
-            address = current;
-            footPosition = state.FootAnchor;
+            address = current.Address;
+            footPosition = current.Position;
             return NavigationAStarQueryStatus.Success;
         }
     }
@@ -201,8 +200,8 @@ internal sealed class NavigationAStarGuideLease
             {
                 return MarkStaleUnderLock();
             }
-            if (_currentNodeOrdinal + 1 < payload.Nodes.Length)
-                _currentNodeOrdinal++;
+            if (_currentWaypointOrdinal + 1 < payload.GuidePoints.Length)
+                _currentWaypointOrdinal++;
             return NavigationAStarQueryStatus.Success;
         }
     }

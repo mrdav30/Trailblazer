@@ -1111,12 +1111,12 @@ public sealed class NavigationAutomaticSeamTests
             policy,
             TraversalMedium.Solid);
 
-        evaluator.EvaluateEdge(lowerNode, up, out Fixed64 upCost)
+        evaluator.EvaluateEdge(lowerNode, up, out TraversalEdgeEvidence upEvidence)
             .Should().Be(TraversalEvaluationStatus.Passable);
-        evaluator.EvaluateEdge(upperNode, down, out Fixed64 downCost)
+        evaluator.EvaluateEdge(upperNode, down, out TraversalEdgeEvidence downEvidence)
             .Should().Be(TraversalEvaluationStatus.Passable);
-        upCost.Should().Be(Fixed64.One);
-        downCost.Should().Be(upCost,
+        upEvidence.Cost.Should().Be(Fixed64.One);
+        downEvidence.Cost.Should().Be(upEvidence.Cost,
             "reverse traversal must swap the one canonical portal's resolved feet");
     }
 

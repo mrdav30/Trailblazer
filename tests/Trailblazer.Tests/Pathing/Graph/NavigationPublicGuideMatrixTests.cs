@@ -26,8 +26,12 @@ public sealed class NavigationPublicGuideMatrixTests
         {
             new NavigationCellAddress("storage-matrix", new VoxelIndex(0, 0, 1)),
             new NavigationCellAddress("storage-matrix", new VoxelIndex(0, 0, 0)),
+            new NavigationCellAddress("storage-matrix", new VoxelIndex(0, 0, 0)),
+            new NavigationCellAddress("storage-matrix", new VoxelIndex(1, 0, 0)),
             new NavigationCellAddress("storage-matrix", new VoxelIndex(1, 0, 0)),
             new NavigationCellAddress("storage-matrix", new VoxelIndex(2, 0, 0)),
+            new NavigationCellAddress("storage-matrix", new VoxelIndex(2, 0, 0)),
+            new NavigationCellAddress("storage-matrix", new VoxelIndex(2, 0, 1)),
             new NavigationCellAddress("storage-matrix", new VoxelIndex(2, 0, 1))
         };
 
@@ -212,6 +216,8 @@ public sealed class NavigationPublicGuideMatrixTests
         initialRoute.Addresses.Should().Equal(
             new NavigationCellAddress("storage-matrix", cells[0]),
             new NavigationCellAddress("storage-matrix", cells[1]),
+            new NavigationCellAddress("storage-matrix", cells[1]),
+            new NavigationCellAddress("storage-matrix", cells[2]),
             new NavigationCellAddress("storage-matrix", cells[2]));
         initialRoute.TotalCost.Should().Be((Fixed64)2);
         restoredRoute.Addresses.Should().Equal(initialRoute.Addresses);

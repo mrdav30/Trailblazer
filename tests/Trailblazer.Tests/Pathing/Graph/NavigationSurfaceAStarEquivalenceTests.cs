@@ -128,7 +128,7 @@ public sealed class NavigationSurfaceAStarEquivalenceTests
     {
         using var world = new GridWorld();
         VoxelIndex start = default;
-        var end = new VoxelIndex(4, 0, 0);
+        var end = new VoxelIndex(1, 0, 0);
         GridConfiguration configuration = NavigationAStarExitTestHarness.RectangularLine(8);
         NavigationAStarExitTestHarness.GraphFixture fixture =
             NavigationAStarExitTestHarness.CreateExplicitMap(
@@ -142,7 +142,7 @@ public sealed class NavigationSurfaceAStarEquivalenceTests
                         "bridge",
                         start,
                         end,
-                        corridorCost: (Fixed64)4,
+                        corridorCost: Fixed64.One,
                         radiusClearance: (Fixed64)2)
                 });
         PathQuery query = fixture.CreateQuery(start, end, fixture.DefaultProfile);
@@ -176,7 +176,7 @@ public sealed class NavigationSurfaceAStarEquivalenceTests
     {
         using var world = new GridWorld();
         VoxelIndex start = default;
-        var end = new VoxelIndex(4, 0, 0);
+        var end = new VoxelIndex(1, 0, 0);
         NavigationAStarExitTestHarness.GraphFixture fixture =
             NavigationAStarExitTestHarness.CreateExplicitMap(
                 world,
@@ -189,14 +189,16 @@ public sealed class NavigationSurfaceAStarEquivalenceTests
                         "narrow",
                         start,
                         end,
-                        corridorCost: (Fixed64)4,
-                        radiusClearance: Fixed64.Zero),
+                        corridorCost: Fixed64.One / (Fixed64)4,
+                        radiusClearance: Fixed64.Zero,
+                        lowerBoundCertified: false),
                     new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
                         "wide",
                         start,
                         end,
-                        corridorCost: (Fixed64)6,
-                        radiusClearance: (Fixed64)2)
+                        corridorCost: Fixed64.One / (Fixed64)2,
+                        radiusClearance: Fixed64.One / (Fixed64)4,
+                        lowerBoundCertified: false)
                 });
         var pointProfile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
@@ -206,7 +208,10 @@ public sealed class NavigationSurfaceAStarEquivalenceTests
             TraversalMedia.Solid,
             TraversalCapability.None);
         var wideProfile = new NavigationAgentProfile(
-            new KinematicBodyShape(Fixed64.One, Fixed64.One, Fixed64.Zero),
+            new KinematicBodyShape(
+                Fixed64.One / (Fixed64)4,
+                Fixed64.One,
+                Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
@@ -217,15 +222,15 @@ public sealed class NavigationSurfaceAStarEquivalenceTests
             world,
             fixture.Graph,
             fixture.CreateQuery(start, end, pointProfile),
-            expectedHeuristic: true);
+            expectedHeuristic: false);
         NavigationAStarExitTestHarness.SearchResult wide = AssertEquivalent(
             world,
             fixture.Graph,
             fixture.CreateQuery(start, end, wideProfile),
-            expectedHeuristic: true);
+            expectedHeuristic: false);
 
-        point.Cost.Should().Be((Fixed64)4);
-        wide.Cost.Should().Be((Fixed64)6);
+        point.Cost.Should().Be(Fixed64.One / (Fixed64)4);
+        wide.Cost.Should().Be(Fixed64.One / (Fixed64)2);
     }
 
     private static NavigationAStarExitTestHarness.SearchResult AssertEquivalent(
@@ -439,6 +444,14 @@ internal static class NavigationAStarExitTestHarness
         (Fixed64)4,
         (Fixed64)4);
 
+    internal static readonly NavigationCell ExpensiveCell = new(
+        TraversalMedia.Solid,
+        TraversalCapability.None,
+        default,
+        (Fixed64)100,
+        (Fixed64)4,
+        (Fixed64)4);
+
     internal static readonly NavigationAreaPolicy Policy = new(
         new NavigationAreaPolicyKey("phase-34e-exit", 1),
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });
@@ -452,7 +465,11 @@ internal static class NavigationAStarExitTestHarness
             Fixed64 corridorCost,
             Fixed64 radiusClearance,
             Vector3d entryOffset = default,
-            Vector3d exitOffset = default)
+            Vector3d exitOffset = default,
+            bool lowerBoundCertified = true,
+            VoxelIndex[]? witnesses = null,
+            bool omitPortalCertificates = false,
+            Vector3d portalTranslation = default)
         {
             Id = id;
             Source = source;
@@ -461,6 +478,10 @@ internal static class NavigationAStarExitTestHarness
             RadiusClearance = radiusClearance;
             EntryOffset = entryOffset;
             ExitOffset = exitOffset;
+            LowerBoundCertified = lowerBoundCertified;
+            Witnesses = witnesses ?? Array.Empty<VoxelIndex>();
+            OmitPortalCertificates = omitPortalCertificates;
+            PortalTranslation = portalTranslation;
         }
 
         internal string Id { get; }
@@ -470,6 +491,10 @@ internal static class NavigationAStarExitTestHarness
         internal Fixed64 RadiusClearance { get; }
         internal Vector3d EntryOffset { get; }
         internal Vector3d ExitOffset { get; }
+        internal bool LowerBoundCertified { get; }
+        internal VoxelIndex[] Witnesses { get; }
+        internal bool OmitPortalCertificates { get; }
+        internal Vector3d PortalTranslation { get; }
     }
 
     internal readonly struct GraphFixture
@@ -583,14 +608,15 @@ internal static class NavigationAStarExitTestHarness
         GridConfiguration configuration,
         VoxelIndex[] cells,
         string mapId,
-        ExplicitEdgeSpec[] edges)
+        ExplicitEdgeSpec[] edges,
+        NavigationCell? cell = null)
     {
         world.TryAddGrid(configuration, cells, out _).Should().BeTrue();
         configuration.TryNormalize(out NormalizedGridConfiguration binding)
             .Should().BeTrue();
         var builder = new NavigationMapBuilder(mapId, binding);
         for (int i = 0; i < cells.Length; i++)
-            builder.AddCell(cells[i], Cell);
+            builder.AddCell(cells[i], cell ?? Cell);
         NavigationMapInstance instance = Compose(world, builder.Build());
         NavigationExplicitConnectionIndex index = BuildExplicitIndex(
             binding,
@@ -699,7 +725,10 @@ internal static class NavigationAStarExitTestHarness
         }
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
         NavigationNodeRef startNode = admission.Result.Start.Node;
-        using var search = new NavigationSurfaceAStarWork(admission.Result, workspace);
+        using var search = new NavigationSurfaceAStarWork(
+            admission.Result,
+            workspace,
+            long.MaxValue);
         for (int step = 0;
             step < 4_096 && search.Status == NavigationSurfaceAStarStatus.Pending;
             step++)
@@ -726,10 +755,16 @@ internal static class NavigationAStarExitTestHarness
                 certifiedEdgesConsistent: true);
         }
         NavigationAStarPayload payload = search.Result;
+        var pathAddresses = new NavigationCellAddress[workspace.PathNodeCount];
+        for (int i = 0; i < pathAddresses.Length; i++)
+        {
+            graph.TryGetNodeAddress(workspace.PathNodes[i], out pathAddresses[i])
+                .Should().BeTrue();
+        }
         return new SearchResult(
             payload.Status,
             payload.Cost,
-            (NavigationCellAddress[])payload.Nodes.Clone(),
+            pathAddresses,
             heuristic,
             directFloor,
             certifiedEdgesConsistent: true,
@@ -808,7 +843,7 @@ internal static class NavigationAStarExitTestHarness
                     TraversalEvaluationStatus evaluation = evaluator.EvaluateEdge(
                         nodes[current],
                         edge,
-                        out Fixed64 edgeCost);
+                        out TraversalEdgeEvidence evidence);
                     if (evaluation == TraversalEvaluationStatus.CostOverflow)
                     {
                         return new SearchResult(
@@ -826,7 +861,7 @@ internal static class NavigationAStarExitTestHarness
                         nodes[current],
                         edge.Target,
                         endState.FootAnchor,
-                        edgeCost);
+                        evidence.Cost);
                     int target = FindNode(nodes, count, edge.Target);
                     if (target < 0)
                     {
@@ -837,7 +872,7 @@ internal static class NavigationAStarExitTestHarness
                     }
                     Fixed64.TryAdd(
                             distances[current],
-                            edgeCost,
+                            evidence.Cost,
                             out Fixed64 candidate)
                         .Should().BeTrue();
                     if (closed[target] || candidate >= distances[target])
@@ -1003,6 +1038,13 @@ internal static class NavigationAStarExitTestHarness
         for (int i = 0; i < specs.Length; i++)
         {
             ExplicitEdgeSpec spec = specs[i];
+            var witnessAddresses = new NavigationCellAddress[spec.Witnesses.Length];
+            for (int witness = 0; witness < witnessAddresses.Length; witness++)
+            {
+                witnessAddresses[witness] = new NavigationCellAddress(
+                    mapId,
+                    spec.Witnesses[witness]);
+            }
             var definition = new NavigationConnection(
                 spec.Id,
                 spec.Source,
@@ -1010,28 +1052,51 @@ internal static class NavigationAStarExitTestHarness
                 GetFoot(binding, spec.Source) + spec.EntryOffset,
                 GetFoot(binding, spec.Destination) + spec.ExitOffset,
                 spec.RadiusClearance,
-                portalHeightClearance: (Fixed64)4);
-            NavigationPagedSequence<GridNavigationPortal> portals =
-                NavigationPagedSequence<GridNavigationPortal>.Empty;
-            if (binding.TryGetCellPrism(spec.Source, out GridCellPrism sourcePrism)
-                && binding.TryGetCellPrism(spec.Destination, out GridCellPrism destinationPrism)
-                && GridCellGeometry.TryCreateNavigationPortal(
-                    sourcePrism,
-                    destinationPrism,
-                    out GridNavigationPortal portal))
+                portalHeightClearance: (Fixed64)4,
+                witnesses: witnessAddresses);
+            var portalBuilder = new NavigationPagedSequence<GridNavigationPortal>.Builder(
+                GridNavigationPortal.SizeInBytes);
+            VoxelIndex previous = spec.Source;
+            bool portalsValid = true;
+            for (int portalOrdinal = 0;
+                portalOrdinal <= spec.Witnesses.Length;
+                portalOrdinal++)
             {
-                var portalBuilder = new NavigationPagedSequence<GridNavigationPortal>.Builder(
-                    GridNavigationPortal.SizeInBytes);
+                VoxelIndex next = portalOrdinal < spec.Witnesses.Length
+                    ? spec.Witnesses[portalOrdinal]
+                    : spec.Destination;
+                if (!binding.TryGetCellPrism(previous, out GridCellPrism sourcePrism)
+                    || !binding.TryGetCellPrism(next, out GridCellPrism destinationPrism)
+                    || !GridCellGeometry.TryCreateNavigationPortal(
+                        sourcePrism,
+                        destinationPrism,
+                        out GridNavigationPortal portal))
+                {
+                    portalsValid = false;
+                    break;
+                }
+                if (spec.PortalTranslation != Vector3d.Zero
+                    && !portal.TryTranslate(
+                        spec.PortalTranslation,
+                        out portal))
+                {
+                    portalsValid = false;
+                    break;
+                }
                 portalBuilder.Append(portal);
-                portals = portalBuilder.Seal();
+                previous = next;
             }
+            NavigationPagedSequence<GridNavigationPortal> portals = portalsValid
+                && !spec.OmitPortalCertificates
+                ? portalBuilder.Seal()
+                : NavigationPagedSequence<GridNavigationPortal>.Empty;
             records[i] = new NavigationExplicitConnectionRecord(
                 new NavigationConnectionOwnerKey(mapId, spec.Id),
                 definition,
                 isActive: true,
                 spec.CorridorCost,
                 portals,
-                isLowerBoundCertified: true);
+                isLowerBoundCertified: spec.LowerBoundCertified);
             index = index.SetOwner(records[i], out _);
         }
         var rows = new SortedDictionary<NavigationCellAddress, List<NavigationConnectionOwnerKey>>();

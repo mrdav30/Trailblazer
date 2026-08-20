@@ -38,14 +38,14 @@ public sealed class TrailblazerGuideServiceTests
         NavigationGuideLease guide = TestRequire.NotNull(exactResult);
         try
         {
-            guide.WaypointCount.Should().Be(63);
+            guide.WaypointCount.Should().Be(125);
             guide.TotalCost.Should().Be((Fixed64)62);
             guide.TryGetCurrentWaypoint(out NavigationCellAddress first, out _)
                 .Should().Be(NavigationGuideStatus.Success);
             first.Should().Be(new NavigationCellAddress(
                 "guide-open-plane-32",
                 default));
-            for (int ordinal = 1; ordinal < 63; ordinal++)
+            for (int ordinal = 1; ordinal < 125; ordinal++)
             {
                 guide.TryAdvanceWaypoint().Should().Be(NavigationGuideStatus.Success);
             }
@@ -697,7 +697,7 @@ public sealed class TrailblazerGuideServiceTests
         maxLookupProbes: 4_096,
         maxEndpointCandidates: 2,
         maxExpandedNodes,
-        maxEvaluatedEdges: 4_096,
+        maxEvaluatedEdges: 8_192,
         maxConnectionLegs: 4,
         maxTransitionCandidates: 0,
         maxTransitionPairs: 0,

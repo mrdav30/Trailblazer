@@ -417,30 +417,25 @@ internal sealed class NavigationRayWork
             if (edge.Kind == NavigationGraphEdgeKind.Explicit)
             {
                 NavigationRayStatus explicitStatus = EvaluateExplicitEdge(
+                    sourceOrdinal,
                     sourceRecord.Node,
                     edge,
+                    incomingPortal,
                     queryMeter,
                     ref guideMeter,
                     useGuideMeter,
-                    out edgeCost);
+                    out edgeCost,
+                    out targetOrdinal,
+                    out targetParameter);
                 if (explicitStatus == NavigationRayStatus.BudgetExceeded
-                    || explicitStatus == NavigationRayStatus.CostOverflow)
+                    || explicitStatus == NavigationRayStatus.CostOverflow
+                    || explicitStatus == NavigationRayStatus.CapacityExceeded
+                    || explicitStatus == NavigationRayStatus.Stale)
                 {
                     return explicitStatus;
                 }
-                if (explicitStatus != NavigationRayStatus.Success
-                    || !TryGetExplicitTraversal(
-                        sourceOrdinal,
-                        edge,
-                        incomingPortal,
-                        sourcePrism,
-                        ref guideMeter,
-                        useGuideMeter,
-                        out targetOrdinal,
-                        out targetParameter))
+                if (explicitStatus != NavigationRayStatus.Success)
                 {
-                    if (_meterBlocked)
-                        return NavigationRayStatus.BudgetExceeded;
                     continue;
                 }
                 incomingExplicit = edge.ExplicitConnection;
@@ -450,24 +445,19 @@ internal sealed class NavigationRayWork
                 TraversalEvaluationStatus evaluation = _evaluator.EvaluateEdge(
                     sourceRecord.Node,
                     edge,
-                    out edgeCost);
+                    out TraversalEdgeEvidence evidence);
+                edgeCost = evidence.Cost;
                 if (evaluation == TraversalEvaluationStatus.CostOverflow)
                     return NavigationRayStatus.CostOverflow;
+                if (evaluation == TraversalEvaluationStatus.Stale)
+                    return NavigationRayStatus.Stale;
                 if (evaluation != TraversalEvaluationStatus.Passable)
                     continue;
                 if (!TryConsumePortal(ref guideMeter, useGuideMeter)
-                    || !graph.TryGetNodeAddress(
-                        edge.Target,
-                        out NavigationCellAddress targetAddress)
-                    || !graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism)
-                    || !GridCellGeometry.TryCreateNavigationPortal(
-                        sourcePrism,
-                        targetPrism,
-                        out GridNavigationPortal outgoingPortal)
                     || !GridCellGeometry.TryGetNavigationPortalTraversalParameters(
-                        sourcePrism,
-                        targetPrism,
-                        outgoingPortal,
+                        evidence.SourcePrism,
+                        evidence.TargetPrism,
+                        evidence.Portal,
                         _request.Start,
                         _request.End,
                         _request.Profile.Shape.Radius,
@@ -512,7 +502,7 @@ internal sealed class NavigationRayWork
                         _request.Profile.Shape.Radius,
                         _request.Profile.Shape.Height,
                         incomingPortal,
-                        outgoingPortal,
+                        evidence.Portal,
                         GetEndpointAllowance(
                             sourceOrdinal,
                             sourceRecord,
@@ -552,18 +542,37 @@ internal sealed class NavigationRayWork
     }
 
     private NavigationRayStatus EvaluateExplicitEdge(
+        int sourceOrdinal,
         NavigationNodeRef source,
         in NavigationGraphEdge edge,
+        in GridNavigationPortal incomingPortal,
         NavigationWorkMeter? queryMeter,
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter,
-        out Fixed64 cost)
+        out Fixed64 cost,
+        out int targetOrdinal,
+        out Fixed64 targetParameter)
     {
         cost = Fixed64.Zero;
+        targetOrdinal = -1;
+        targetParameter = default;
         TraversalExplicitEdgeStatus status = _evaluator.BeginExplicitEdge(
             source,
             edge,
             out TraversalExplicitEdgeWork work);
+        if (status != TraversalExplicitEdgeStatus.Pending)
+            return MapExplicitStatus(status);
+
+        NavigationExplicitConnectionRecord record = edge.ExplicitConnection;
+        NavigationConnection connection = record.Definition;
+        var path = new FixedSegment(_request.Start, _request.End);
+        bool geometryPassable = path.Contains(connection.EntryAnchor)
+            && path.Contains(connection.ExitAnchor);
+        int currentOrdinal = sourceOrdinal;
+        Fixed64 currentParameter =
+            _workspace.ChainRecords[sourceOrdinal].ArrivalParameter;
+        GridNavigationPortal currentIncoming = incomingPortal;
+        int portalOrdinal = 0;
         while (status == TraversalExplicitEdgeStatus.Pending)
         {
             if (!TryConsumeConnectionLeg(
@@ -571,63 +580,33 @@ internal sealed class NavigationRayWork
                     ref guideMeter,
                     useGuideMeter))
                 return NavigationRayStatus.BudgetExceeded;
-            status = _evaluator.AdvanceExplicitEdge(ref work, out _, out cost);
-        }
-        return status switch
-        {
-            TraversalExplicitEdgeStatus.Passable => NavigationRayStatus.Success,
-            TraversalExplicitEdgeStatus.CostOverflow => NavigationRayStatus.CostOverflow,
-            _ => NavigationRayStatus.Blocked
-        };
-    }
-
-    private bool TryGetExplicitTraversal(
-        int sourceOrdinal,
-        in NavigationGraphEdge edge,
-        in GridNavigationPortal incomingPortal,
-        in GridCellPrism sourcePrism,
-        ref GuideSampleWorkMeter guideMeter,
-        bool useGuideMeter,
-        out int targetOrdinal,
-        out Fixed64 targetParameter)
-    {
-        targetOrdinal = -1;
-        targetParameter = default;
-        NavigationExplicitConnectionRecord record = edge.ExplicitConnection;
-        NavigationConnection connection = record.Definition;
-        NavigationPagedSequence<GridNavigationPortal> portals = record.NavigationPortals;
-        if (portals.Count != connection.Witnesses.Count + 1)
-            return false;
-
-        var path = new FixedSegment(_request.Start, _request.End);
-        if (!path.Contains(connection.EntryAnchor)
-            || !path.Contains(connection.ExitAnchor))
-        {
-            return false;
-        }
-
-        NavigationWorldGraph graph = _request.ExpectedGraph;
-        int currentOrdinal = sourceOrdinal;
-        NavigationNodeRef currentNode = _workspace.ChainRecords[sourceOrdinal].Node;
-        GridCellPrism currentPrism = sourcePrism;
-        Fixed64 currentParameter = _workspace.ChainRecords[sourceOrdinal].ArrivalParameter;
-        GridNavigationPortal currentIncoming = incomingPortal;
-        for (int portalOrdinal = 0; portalOrdinal < portals.Count; portalOrdinal++)
-        {
-            NavigationCellAddress nextAddress = portalOrdinal < connection.Witnesses.Count
-                ? connection.Witnesses[portalOrdinal]
-                : record.Destination;
-            if (!graph.TryGetNodeRef(nextAddress, out NavigationNodeRef nextNode)
-                || !graph.TryGetSeamPrism(nextAddress, out GridCellPrism nextPrism))
+            status = _evaluator.AdvanceExplicitEdge(
+                ref work,
+                out TraversalEdgeEvidence evidence);
+            if (status == TraversalExplicitEdgeStatus.CostOverflow
+                || status == TraversalExplicitEdgeStatus.Stale)
             {
-                return false;
+                return MapExplicitStatus(status);
             }
-            GridNavigationPortal outgoing = portals[portalOrdinal];
-            if (!TryConsumePortal(ref guideMeter, useGuideMeter)
-                || !GridCellGeometry.TryGetNavigationPortalTraversalParameters(
-                    currentPrism,
-                    nextPrism,
-                    outgoing,
+            bool dependencyRecorded = !evidence.DependencyNode.IsValid
+                || TryRecordDependencyNode(evidence.DependencyNode);
+            if (!dependencyRecorded)
+                return NavigationRayStatus.CapacityExceeded;
+            if (status == TraversalExplicitEdgeStatus.Impassable)
+                return NavigationRayStatus.Blocked;
+
+            cost = evidence.Cost;
+            if (!geometryPassable)
+                continue;
+            if (!TryConsumePortal(ref guideMeter, useGuideMeter))
+            {
+                geometryPassable = false;
+                continue;
+            }
+            if (!GridCellGeometry.TryGetNavigationPortalTraversalParameters(
+                    evidence.SourcePrism,
+                    evidence.TargetPrism,
+                    evidence.Portal,
                     _request.Start,
                     _request.End,
                     _request.Profile.Shape.Radius,
@@ -637,11 +616,15 @@ internal sealed class NavigationRayWork
                 || sourceParameter < currentParameter
                 || !ContainsParameter(currentOrdinal, sourceParameter))
             {
-                return false;
+                geometryPassable = false;
+                continue;
             }
-            int nextOrdinal = FindMapped(nextNode, nextParameter);
+            int nextOrdinal = FindMapped(evidence.DependencyNode, nextParameter);
             if (nextOrdinal < 0)
-                return false;
+            {
+                geometryPassable = false;
+                continue;
+            }
             Vector3d currentPoint = Vector3d.Lerp(
                 _request.Start,
                 _request.End,
@@ -653,28 +636,32 @@ internal sealed class NavigationRayWork
             if (portalOrdinal == 0)
             {
                 var firstLeg = new FixedSegment(currentPoint, outgoingPoint);
-                if (!firstLeg.Contains(connection.EntryAnchor))
-                    return false;
                 NavigationExplicitConnectionRecord prior =
                     _workspace.ChainRecords[sourceOrdinal].IncomingExplicitConnection;
-                if (prior != null
-                    && (!firstLeg.Contains(prior.Definition.ExitAnchor)
-                        || !AreOrderedAlongRay(
-                            prior.Definition.ExitAnchor,
-                            connection.EntryAnchor)))
+                if (!firstLeg.Contains(connection.EntryAnchor)
+                    || (prior != null
+                        && (!firstLeg.Contains(prior.Definition.ExitAnchor)
+                            || !AreOrderedAlongRay(
+                                prior.Definition.ExitAnchor,
+                                connection.EntryAnchor))))
                 {
-                    return false;
+                    geometryPassable = false;
+                    continue;
                 }
             }
-            if (!TryConsumePrism(ref guideMeter, useGuideMeter)
-                || !GridCellGeometry.IsNavigationBodySegmentValid(
-                    currentPrism,
+            if (!TryConsumePrism(ref guideMeter, useGuideMeter))
+            {
+                geometryPassable = false;
+                continue;
+            }
+            if (!GridCellGeometry.IsNavigationBodySegmentValid(
+                    evidence.SourcePrism,
                     currentPoint,
                     outgoingPoint,
                     _request.Profile.Shape.Radius,
                     _request.Profile.Shape.Height,
                     currentIncoming,
-                    outgoing,
+                    evidence.Portal,
                     portalOrdinal == 0
                         ? GetEndpointAllowance(
                             sourceOrdinal,
@@ -682,32 +669,45 @@ internal sealed class NavigationRayWork
                             isFinalSegment: false)
                         : GridNavigationBodySegmentEndpointAllowance.None))
             {
-                return false;
+                geometryPassable = false;
+                continue;
             }
 
             currentOrdinal = nextOrdinal;
-            currentNode = nextNode;
-            currentPrism = nextPrism;
             currentParameter = nextParameter;
-            currentIncoming = outgoing;
+            currentIncoming = evidence.Portal;
+            portalOrdinal++;
         }
 
+        if (_meterBlocked)
+            return NavigationRayStatus.BudgetExceeded;
+        if (!geometryPassable)
+            return NavigationRayStatus.Blocked;
         Vector3d finalPortalPoint = Vector3d.Lerp(
             _request.Start,
             _request.End,
             currentParameter);
         if (!new FixedSegment(finalPortalPoint, _request.End).Contains(
                 connection.ExitAnchor)
-            || currentNode != edge.Target
+            || _workspace.ChainRecords[currentOrdinal].Node != edge.Target
             || _workspace.ChainRecords[currentOrdinal].State
                 == NavigationRayChainRecordState.Unavailable)
         {
-            return false;
+            return NavigationRayStatus.Blocked;
         }
         targetOrdinal = currentOrdinal;
         targetParameter = currentParameter;
-        return true;
+        return NavigationRayStatus.Success;
     }
+
+    private static NavigationRayStatus MapExplicitStatus(
+        TraversalExplicitEdgeStatus status) => status switch
+        {
+            TraversalExplicitEdgeStatus.Passable => NavigationRayStatus.Success,
+            TraversalExplicitEdgeStatus.CostOverflow => NavigationRayStatus.CostOverflow,
+            TraversalExplicitEdgeStatus.Stale => NavigationRayStatus.Stale,
+            _ => NavigationRayStatus.Blocked
+        };
 
     private bool AreOrderedAlongRay(Vector3d first, Vector3d second) =>
         TryCompareAlongRay(first, second, out int comparison) && comparison <= 0;
@@ -982,15 +982,9 @@ internal sealed class NavigationRayWork
                 portal = default;
                 return false;
             }
-            NavigationPagedSequence<GridNavigationPortal> portals =
-                record.IncomingExplicitConnection.NavigationPortals;
-            if (portals.Count > 0)
-            {
-                portal = portals[portals.Count - 1];
-                return portal.IsValid;
-            }
-            portal = default;
-            return false;
+            var portals = record.IncomingExplicitConnection.NavigationPortals;
+            portal = portals[portals.Count - 1];
+            return portal.IsValid;
         }
         NavigationRayChainRecord predecessor =
             _workspace.ChainRecords[record.PredecessorOrdinal];
@@ -1019,6 +1013,23 @@ internal sealed class NavigationRayWork
             && rule.AdditionalEnterCost == Fixed64.Zero
             && (edge.Kind != NavigationGraphEdgeKind.Explicit
                 || edge.ExplicitConnection.Definition.AdditionalCost == Fixed64.Zero);
+    }
+
+    private bool TryRecordDependencyNode(NavigationNodeRef node)
+    {
+        NavigationWorldGraph graph = _request.ExpectedGraph;
+        if (!graph.TryGetNodeAddress(node, out NavigationCellAddress address)
+            || !_workspace.Dependencies.TryRecordPage(
+                address.MapId,
+                node.CellSlot / NavigationSemanticPage.SlotCount))
+        {
+            return false;
+        }
+        return graph.TryGetSurfaceComponent(
+                address,
+                out NavigationSurfaceComponentKey component,
+                out _)
+            && _workspace.Dependencies.TryRecordComponent(component);
     }
 
     private NavigationRayStatus FinishSuccess(int ordinal)

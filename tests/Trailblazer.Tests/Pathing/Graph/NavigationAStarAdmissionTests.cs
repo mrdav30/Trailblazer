@@ -35,6 +35,31 @@ public sealed class NavigationAStarAdmissionTests
         Fixed64.One);
 
     [Fact]
+    public void DefaultLimits_ShouldReserveTheExactCapacityEnvelope()
+    {
+        using var world = new GridWorld();
+        using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
+        NavigationQueryLimits limits = NavigationQueryLimits.Default;
+        using var gate = CreateGate(world, store, limits);
+
+        gate.Begin(Query(maxExpandedNodes: 0), out NavigationAStarBatchWork work)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+
+        work.AdmittedCount.Should().Be(1);
+        gate.PayloadCache.ReservedPayloadBytes.Should().Be(
+            Math.Min(
+                NavigationAStarPayload.GetMaximumRetainedBytes(
+                    limits.AStarWorkspaceGuidePointCapacity,
+                    limits.AStarWorkspaceComponentCapacity,
+                    limits.AStarWorkspaceEndpointPageCapacity),
+                limits.MaxAStarSinglePayloadBytes));
+        gate.PayloadCache.ReservedLeaseCount.Should().Be(1);
+        work.Dispose();
+        gate.PayloadCache.ReservedPayloadBytes.Should().Be(0);
+        gate.PayloadCache.ReservedLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
     public void AggregateCoordinator_ShouldBoundAStarAgainstFlowReservation()
     {
         using var world = new GridWorld();
@@ -194,7 +219,7 @@ public sealed class NavigationAStarAdmissionTests
                 maxBatchItems: 3,
                 maxConcurrentQueries: 3,
                 maxSinglePayloadBytes: 472,
-                maxActivePayloadBytes: 1_000,
+                maxActivePayloadBytes: 472,
                 maxActivePayloadLeases: 3));
         PathQuery small = Query(maxExpandedNodes: 0);
         PathQuery oversized = Query(maxExpandedNodes: 4);
@@ -248,7 +273,7 @@ public sealed class NavigationAStarAdmissionTests
             end,
             reverseCompletion: false);
 
-        reverse.Nodes.Should().Equal(forward.Nodes);
+        reverse.GuidePoints.Should().Equal(forward.GuidePoints);
         reverse.Cost.Should().Be(forward.Cost);
         reverse.Status.Should().Be(forward.Status);
     }
@@ -315,7 +340,7 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceNodeCapacity: 2,
                 rayWorkspaceCoveredAddressCapacity: 2,
                 rayWorkspaceTraceIntervalCapacity: 2,
-                aStarWorkspaceGuidePointCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 3,
                 maxFlowCacheEntries: 1,
                 maxFlowReusablePayloadBytes: 2_048,
                 maxFlowSinglePayloadBytes: 1_024,
@@ -407,7 +432,7 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceNodeCapacity: 2,
                 rayWorkspaceCoveredAddressCapacity: 2,
                 rayWorkspaceTraceIntervalCapacity: 2,
-                aStarWorkspaceGuidePointCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 3,
                 maxFlowCacheEntries: 1,
                 maxFlowReusablePayloadBytes: 2_048,
                 maxFlowSinglePayloadBytes: 1_024,
@@ -545,7 +570,7 @@ public sealed class NavigationAStarAdmissionTests
             out Vector3d start,
             out Vector3d end);
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
-        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 2);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 1,
             maxReusableBytes: 2_048,
@@ -617,7 +642,7 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceNodeCapacity: 2,
                 rayWorkspaceCoveredAddressCapacity: 2,
                 rayWorkspaceTraceIntervalCapacity: 2,
-                aStarWorkspaceGuidePointCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 3,
                 maxFlowCacheEntries: 2,
                 maxFlowReusablePayloadBytes: 4_096,
                 maxFlowSinglePayloadBytes: 1_024,
@@ -787,7 +812,7 @@ public sealed class NavigationAStarAdmissionTests
                 flowWorkspaceNodeCapacity: 2,
                 rayWorkspaceCoveredAddressCapacity: 2,
                 rayWorkspaceTraceIntervalCapacity: 2,
-                aStarWorkspaceGuidePointCapacity: 2,
+                aStarWorkspaceGuidePointCapacity: 3,
                 maxFlowCacheEntries: 1,
                 maxFlowReusablePayloadBytes: 4_096,
                 maxFlowSinglePayloadBytes: 1_024,
@@ -876,7 +901,7 @@ public sealed class NavigationAStarAdmissionTests
         NavigationWorldGraphLease? lease = store.TryAcquire();
         lease.Should().NotBeNull();
         long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
-            Math.Min(workspace.PathNodes.Length, query.Budget.MaxExpandedNodes),
+            workspace.GuidePoints.Length,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         cache.TryReservePayload(maximumBytes, out NavigationAStarPayloadReservation reservation)

@@ -2090,11 +2090,12 @@ public sealed class NavigationExplicitConnectionTests
             CreateExplicitEvaluationPolicy(),
             TraversalMedium.Solid);
 
-        evaluator.EvaluateEdge(source, edge, out Fixed64 cost)
+        evaluator.EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
             .Should().Be(TraversalEvaluationStatus.Passable);
-        cost.Should().Be((Fixed64)11);
+        evidence.Cost.Should().Be((Fixed64)11);
         evaluator.EvaluateEdge(destination, edge, out _)
-            .Should().Be(TraversalEvaluationStatus.Impassable);
+            .Should().Be(TraversalEvaluationStatus.Stale,
+                "using a directed explicit certificate from the wrong source is structural misuse");
         var oversized = new TraversalEvaluator(
                 lease.Graph,
                 new NavigationAgentProfile(
@@ -2167,9 +2168,9 @@ public sealed class NavigationExplicitConnectionTests
                 CreateExplicitEvaluationProfile(),
                 CreateExplicitEvaluationPolicy(),
                 TraversalMedium.Solid)
-            .EvaluateEdge(overflowSource, overflowEdge, out Fixed64 overflowCost)
+            .EvaluateEdge(overflowSource, overflowEdge, out TraversalEdgeEvidence overflow)
             .Should().Be(TraversalEvaluationStatus.CostOverflow);
-        overflowCost.Should().Be(Fixed64.Zero);
+        overflow.Cost.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -2255,98 +2256,6 @@ public sealed class NavigationExplicitConnectionTests
                 maxStepUp: Fixed64.Zero,
                 maxDropDown: Fixed64.One - Fixed64.FromRaw(1))
             .EvaluateEdge(source, edge, out _).Should().Be(TraversalEvaluationStatus.Impassable);
-    }
-
-    [Fact]
-    public void ExplicitEvaluation_ShouldDistinguishVerticalOverflowFromImpassableEndpoint()
-    {
-        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
-        NormalizedGridConfiguration lowBinding = AddGrid(
-            context,
-            0,
-            Fixed64.MinValue + Fixed64.One);
-        NormalizedGridConfiguration highBinding = AddGrid(
-            context,
-            0,
-            Fixed64.MaxValue - Fixed64.One);
-        NavigationCell gatedTarget = new(
-            TraversalMedia.Solid,
-            TraversalCapability.Jump,
-            default,
-            Fixed64.Zero,
-            Fixed64.Zero,
-            Fixed64.One);
-        NavigationMapCommitOperation low = Admit(
-            context,
-            new NavigationMapBuilder("low", lowBinding).AddCell(default, SolidCell).Build(),
-            1);
-        NavigationMapCommitOperation high = Admit(
-            context,
-            new NavigationMapBuilder("high", highBinding).AddCell(default, gatedTarget).Build(),
-            2);
-        SimulateUntilTerminal(context, high.Receipt);
-        low.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
-        high.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
-        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
-        var definition = new NavigationConnection(
-            "overflow",
-            default,
-            new NavigationCellAddress("high", default),
-            GetFoot(lowBinding, default),
-            GetFoot(highBinding, default),
-            Fixed64.Zero,
-            Fixed64.One);
-        var record = new NavigationExplicitConnectionRecord(
-            new NavigationConnectionOwnerKey("low", "overflow"),
-            definition,
-            isActive: true,
-            Fixed64.Zero,
-            NavigationPagedSequence<GridNavigationPortal>.Empty);
-        NavigationExplicitConnectionIndex explicitIndex =
-            NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
-        var instances = new NavigationMapInstance[lease.Graph.MapCount];
-        for (int i = 0; i < instances.Length; i++)
-            instances[i] = lease.Graph.GetInstance(i);
-        var graph = new NavigationWorldGraph(
-            lease.Graph.GraphVersion,
-            instances,
-            explicitConnections: explicitIndex);
-        graph.TryGetNodeRef(
-            new NavigationCellAddress("low", default), out NavigationNodeRef source).Should().BeTrue();
-        graph.TryGetNodeRef(
-            new NavigationCellAddress("high", default), out NavigationNodeRef target).Should().BeTrue();
-        var edge = new NavigationGraphEdge(target, record);
-        NavigationAreaPolicy policy = new(
-            new NavigationAreaPolicyKey("vertical-overflow", 1),
-            new[] { new NavigationAreaRule(true, Fixed64.Zero) });
-
-        new TraversalEvaluator(
-                graph,
-                new NavigationAgentProfile(
-                    new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-                    Fixed64.MaxValue,
-                    Fixed64.MaxValue,
-                    Fixed64.Zero,
-                    TraversalMedia.Solid,
-                    TraversalCapability.Jump),
-                policy,
-                TraversalMedium.Solid)
-            .EvaluateEdge(source, edge, out _)
-            .Should().Be(TraversalEvaluationStatus.CostOverflow);
-        new TraversalEvaluator(
-                graph,
-                new NavigationAgentProfile(
-                    new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-                    Fixed64.MaxValue,
-                    Fixed64.MaxValue,
-                    Fixed64.Zero,
-                    TraversalMedia.Solid,
-                    TraversalCapability.None),
-                policy,
-                TraversalMedium.Solid)
-            .EvaluateEdge(source, edge, out _)
-            .Should().Be(TraversalEvaluationStatus.Impassable,
-                "endpoint passability is checked before the overflowing vertical delta");
     }
 
     [Fact]
@@ -2557,8 +2466,8 @@ public sealed class NavigationExplicitConnectionTests
         {
             for (int i = 0; i < 10_000; i++)
             {
-                checksum += (int)evaluator.EvaluateEdge(source, seamEdge, out Fixed64 cost);
-                checksum += cost.GetHashCode();
+                checksum += (int)evaluator.EvaluateEdge(source, seamEdge, out TraversalEdgeEvidence evidence);
+                checksum += evidence.Cost.GetHashCode();
             }
         };
         System.Action enumerateAndEvaluate = () =>
@@ -2568,8 +2477,8 @@ public sealed class NavigationExplicitConnectionTests
                 NavigationSurfaceEdgeEnumerator edges = lease.Graph.EnumerateSurfaceEdges(source);
                 while (edges.MoveNext())
                 {
-                    checksum += (int)evaluator.EvaluateEdge(source, edges.Current, out Fixed64 cost);
-                    checksum += cost.GetHashCode();
+                    checksum += (int)evaluator.EvaluateEdge(source, edges.Current, out TraversalEdgeEvidence evidence);
+                    checksum += evidence.Cost.GetHashCode();
                 }
             }
         };

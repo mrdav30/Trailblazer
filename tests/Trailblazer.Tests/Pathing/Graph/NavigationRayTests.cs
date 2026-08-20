@@ -552,6 +552,42 @@ public sealed class NavigationRayTests
             record.IncomingExplicitConnection == null);
     }
 
+    [Fact]
+    public void OrderedRay_ShouldPropagateMissingExplicitPortalCertificatesAsStale()
+    {
+        using var world = new GridForge.Grids.GridWorld();
+        VoxelIndex source = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateExplicitMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { source, destination },
+                "ray-explicit-stale",
+                new[]
+                {
+                    new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+                        "missing-certificate",
+                        source,
+                        destination,
+                        corridorCost: Fixed64.Zero,
+                        radiusClearance: Fixed64.One,
+                        omitPortalCertificates: true)
+                });
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
+
+        NavigationRayResult result = RunRay(CreateRequest(
+            world,
+            store,
+            fixture.Graph,
+            fixture.DefaultProfile,
+            NavigationAStarExitTestHarness.GetFoot(fixture.Binding, source),
+            NavigationAStarExitTestHarness.GetFoot(fixture.Binding, destination)));
+
+        result.Status.Should().Be(NavigationRayStatus.Stale);
+    }
+
     [Theory]
     [InlineData((int)GridTopologyKind.RectangularPrism, (int)HexOrientation.PointyTop)]
     [InlineData((int)GridTopologyKind.HexPrism, (int)HexOrientation.PointyTop)]

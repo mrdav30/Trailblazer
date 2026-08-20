@@ -19,6 +19,14 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationAStarOrderingTests
 {
+    private static readonly NavigationCell WeightedCell = new(
+        TraversalMedia.Solid,
+        TraversalCapability.None,
+        default,
+        enterCost: (Fixed64)100,
+        radiusClearance: (Fixed64)4,
+        heightClearance: (Fixed64)4);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -41,7 +49,7 @@ public sealed class NavigationAStarOrderingTests
             start,
             preferred,
             end,
-            (Fixed64)6,
+            (Fixed64)206,
             reverseDefinitionOrder ? Reverse(edges) : edges);
     }
 
@@ -67,7 +75,7 @@ public sealed class NavigationAStarOrderingTests
             start,
             preferred,
             end,
-            (Fixed64)6,
+            (Fixed64)206,
             reverseDefinitionOrder ? Reverse(edges) : edges);
     }
 
@@ -93,7 +101,7 @@ public sealed class NavigationAStarOrderingTests
             start,
             canonical,
             end,
-            (Fixed64)4,
+            (Fixed64)204,
             reverseDefinitionOrder ? Reverse(edges) : edges);
     }
 
@@ -108,7 +116,14 @@ public sealed class NavigationAStarOrderingTests
             NavigationAStarExitTestHarness.CreateExplicitMap(
                 world,
                 NavigationAStarExitTestHarness.RectangularLine(8),
-                new[] { start, middle, end },
+                new[]
+                {
+                    start,
+                    new VoxelIndex(1, 0, 0),
+                    middle,
+                    new VoxelIndex(3, 0, 0),
+                    end
+                },
                 "overflow",
                 new[]
                 {
@@ -118,7 +133,8 @@ public sealed class NavigationAStarOrderingTests
                         middle,
                         Fixed64.MaxValue - Fixed64.One),
                     Edge("finish", middle, end, 2)
-                });
+                },
+                WeightedCell);
 
         NavigationAStarExitTestHarness.SearchResult result =
             NavigationAStarExitTestHarness.RunAStar(
@@ -142,6 +158,8 @@ public sealed class NavigationAStarOrderingTests
         for (int i = 0; i < edges.Length; i++)
         {
             AddUnique(cells, edges[i].Source);
+            for (int witness = 0; witness < edges[i].Witnesses.Length; witness++)
+                AddUnique(cells, edges[i].Witnesses[witness]);
             AddUnique(cells, edges[i].Destination);
         }
         NavigationAStarExitTestHarness.GraphFixture fixture =
@@ -150,7 +168,8 @@ public sealed class NavigationAStarOrderingTests
                 NavigationAStarExitTestHarness.RectangularLine(8),
                 cells.ToArray(),
                 "diamond",
-                edges);
+                edges,
+                WeightedCell);
 
         NavigationAStarExitTestHarness.SearchResult result =
             NavigationAStarExitTestHarness.RunAStar(
@@ -185,7 +204,8 @@ public sealed class NavigationAStarOrderingTests
         source,
         destination,
         cost,
-        radiusClearance: (Fixed64)2);
+        radiusClearance: (Fixed64)2,
+        witnesses: BuildWitnesses(source, destination));
 
     private static NavigationAStarExitTestHarness.ExplicitEdgeSpec Edge(
         string id,
@@ -199,5 +219,33 @@ public sealed class NavigationAStarOrderingTests
         var reversed = (NavigationAStarExitTestHarness.ExplicitEdgeSpec[])source.Clone();
         Array.Reverse(reversed);
         return reversed;
+    }
+
+    private static VoxelIndex[] BuildWitnesses(
+        VoxelIndex source,
+        VoxelIndex destination)
+    {
+        var witnesses = new List<VoxelIndex>();
+        VoxelIndex current = source;
+        while (!current.Equals(destination))
+        {
+            current = current.x != destination.x
+                ? new VoxelIndex(
+                    current.x + (current.x < destination.x ? 1 : -1),
+                    current.y,
+                    current.z)
+                : current.y != destination.y
+                    ? new VoxelIndex(
+                        current.x,
+                        current.y + (current.y < destination.y ? 1 : -1),
+                        current.z)
+                    : new VoxelIndex(
+                        current.x,
+                        current.y,
+                        current.z + (current.z < destination.z ? 1 : -1));
+            if (!current.Equals(destination))
+                witnesses.Add(current);
+        }
+        return witnesses.ToArray();
     }
 }

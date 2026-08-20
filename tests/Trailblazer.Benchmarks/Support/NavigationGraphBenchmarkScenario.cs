@@ -128,8 +128,9 @@ internal static class NavigationGraphBenchmarkScenario
     {
         int pageCapacity = checked(((nodeCapacity + NavigationSemanticPage.SlotCount - 1)
             / NavigationSemanticPage.SlotCount) + 2);
+        int guidePointCapacity = checked((nodeCapacity * 2) - 1);
         long maximumAStarPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
-            nodeCapacity,
+            guidePointCapacity,
             componentCount: 1,
             pageCapacity);
         long maximumFlowPayloadBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
@@ -160,7 +161,7 @@ internal static class NavigationGraphBenchmarkScenario
             maxFlowActivePayloadLeases: concurrentQueries,
             rayWorkspaceCoveredAddressCapacity: nodeCapacity,
             rayWorkspaceTraceIntervalCapacity: nodeCapacity,
-            aStarWorkspaceGuidePointCapacity: nodeCapacity);
+            aStarWorkspaceGuidePointCapacity: guidePointCapacity);
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,

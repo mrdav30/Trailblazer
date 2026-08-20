@@ -1958,7 +1958,7 @@ Exit criteria:
 
 **Goal:** close the geometry-sensitive correctness paths.
 
-**Living status (2026-08-16):** architecture plus the complete cross-repository
+**Living status (2026-08-20):** architecture plus the complete cross-repository
 implementation plan have independent correctness/ponytail approval. The written
 design is
 `docs/superpowers/specs/2026-08-16-navigation-rays-and-simplification-design.md`;
@@ -1978,7 +1978,7 @@ compiled explicit corridors through one packed canonical closure, with exact
 query/guide metering, endpoint allowances, semantic cost/overflow facts,
 dependency/current revalidation, and warmed zero-allocation behavior. Its
 53-case focused matrix is green; the relevant graph aggregate is 128/128,
-Release is 1,386/1,386, ReleaseLean is 1,355/1,355, both target-framework
+Release is 1,416/1,416, ReleaseLean is 1,385/1,385, both target-framework
 builds are warning-free, and independent correctness/ponytail review found no
 P0-P2 issue. The selected
 shape remains one internal bounded ray kernel, canonical A* payload-time
@@ -1990,13 +1990,22 @@ identity, directed portal traversal, dependency-bearing blocked proofs, and
 final world/page/component validation. Candidate rays are atomic but yield the
 outer admission call immediately after completion, so local work chunks never
 perform additional endpoint work while the shared meter records the full ray.
+Portal-correct raw A* guide construction is complete and independently reviewed.
+The search records the exact winning canonical edge ordinal, validates the full
+active-profile route before relaxation, then replays that same bounded route
+during reconstruction. Payloads retain node feet, directed native/seam portal
+anchors, and explicit entry/portal/exit anchors; explicit witness feet and the
+legacy node-only payload are absent. Explicit semantic evaluation, Flow, and ray
+geometry share one portal-certificate evidence pass; cached negative proofs keep
+impassable witness dependencies. The public guide lease shape is unchanged.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
 | FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479`, `1170bd9`, `e29b6df` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 713/713, 0 B, exact endpoint cropping/combined trace budget/high-water identity; independent correctness and lean reviews approved |
 | Ordered navigation-ray core | Complete — GridForge ordered trace discovery `bc60dd7`; Trailblazer kernel `f54dcb5` | Focused 53/53, relevant aggregate 128/128, Release 1,386/1,386, ReleaseLean 1,355/1,355, both TFMs 0 warnings/errors, warmed query/guide 0 B, independent correctness/lean approval |
 | Role-aware nearest-endpoint ray proof | Complete — exact overlapping-candidate identity, directed start/destination seams, blocked-negative dependencies, and A*/Flow parity | Focused 53/53, graph/pathing aggregate 479/479, Release 1,404/1,404, ReleaseLean 1,373/1,373, both TFMs/configurations 0 warnings/errors, independent correctness/lean approval |
-| Portal-aware A* guide points and bounded simplification | Planned | Canonical payload, less-simplified success on ray-budget exhaustion, exact bytes |
+| Portal-aware A* guide points | Complete — raw guide and structural-certificate closure independently approved | Focused 83/83; Release 1,419/1,419; ReleaseLean 1,388/1,388; both TFMs/configurations and benchmark build 0 warnings/errors. Exact parent ordinal, zero/multi-witness portal replay, isolated positive-radius source/exit leg rejection, equal-cost parallel-edge geometry, canonical duplicate ownership, exact payload bytes, dependency-bearing negative proofs, and sticky structural `Stale` are pinned; explicit rays use one evidence pass and no per-interval portal storage |
+| Bounded A* simplification | Planned | Canonical farthest-valid node anchors, less-simplified success on ray-budget exhaustion, exact dependency union |
 | Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
 | Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |
 
@@ -2029,8 +2038,10 @@ Frozen Phase 6 decisions:
   dependencies and merges those dependencies into endpoint admission before
   the shared ray workspace resets; union overflow is terminal capacity failure.
 - Public query limits own three explicit finite ceilings: 4,096 covered
-  addresses, 4,096 retained trace intervals, and 65,536 A* guide points by
-  default. Every A*/Flow admission slot owns one exclusive ray workspace;
+  addresses, 4,096 retained trace intervals, and 8,191 A* guide points by
+  default. The guide ceiling covers the worst `2N-1` raw portal route for the
+  4,096-node workspace and fits, with full dependency ceilings, beneath the
+  512 KiB single-payload envelope. Every A*/Flow admission slot owns one exclusive ray workspace;
   synchronous consumers share exactly one separately locked context workspace.
   Direct workspace construction requires every ray/guide ceiling explicitly,
   and ray dependency scratch retains only page/component accumulation rather
@@ -2050,6 +2061,10 @@ Frozen Phase 6 decisions:
 - A* simplification runs once before cache publication. Optional simplification
   exhaustion appends the valid raw suffix rather than failing the successful
   query.
+- Raw A* guide storage owns only stable address/position pairs. Cumulative
+  graph costs remain in the existing A* node table; Phase 8 adds one bounded
+  node-to-raw-guide ordinal array only when simplification consumes that
+  relationship, and it does not add a per-guide cost array.
 - A shortcut is accepted only when its certified traversal cost does not exceed
   the exact node-foot-anchor raw subroute it replaces; portal and connection
   guide points remain raw fallback geometry rather than shortcut endpoints.

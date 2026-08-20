@@ -108,7 +108,7 @@ public sealed class NavigationAStarConcurrencyTests
     }
 
     [Fact]
-    public void PublicationDuringSearch_ShouldReturnStaleAndReleaseEveryLeaseAndReservation()
+    public void PublicationAfterSearchBeforeReconstruction_ShouldReturnStaleWithoutPublishingRawLegs()
     {
         using var world = new GridWorld();
         VoxelIndex[] cells = CreateLine(16);
@@ -138,7 +138,23 @@ public sealed class NavigationAStarConcurrencyTests
             workspace,
             cache);
         Prepare(work);
-        work.AdvanceSearch(lookupStepLimit: 0, nodeStepLimit: 1, edgeStepLimit: 1, connectionStepLimit: 0);
+        NavigationSurfaceAStarWork search = (NavigationSurfaceAStarWork)typeof(
+                NavigationAStarQueryWork)
+            .GetField("_search", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(work)!;
+        FieldInfo stage = typeof(NavigationSurfaceAStarWork)
+            .GetField("_stage", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        for (int step = 0;
+            step < cells.Length && stage.GetValue(search)!.ToString() == "Search";
+            step++)
+        {
+            work.AdvanceSearch(
+                lookupStepLimit: int.MaxValue,
+                nodeStepLimit: 1,
+                edgeStepLimit: int.MaxValue,
+                connectionStepLimit: int.MaxValue);
+        }
+        stage.GetValue(search)!.ToString().Should().Be("Reconstruct");
         work.Status.Should().Be(NavigationAStarQueryStatus.Pending);
         work.IsReadyToPublish.Should().BeFalse();
 
@@ -305,7 +321,7 @@ public sealed class NavigationAStarConcurrencyTests
         NavigationWorldGraphLease? lease = store.TryAcquire();
         lease.Should().NotBeNull();
         long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
-            System.Math.Min(workspace.PathNodes.Length, query.Budget.MaxExpandedNodes),
+            workspace.GuidePoints.Length,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         cache.TryReservePayload(

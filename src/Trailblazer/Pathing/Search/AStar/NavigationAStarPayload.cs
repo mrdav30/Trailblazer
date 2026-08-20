@@ -7,6 +7,7 @@
 
 using FixedMathSharp;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
 
@@ -32,21 +33,21 @@ internal sealed class NavigationAStarPayload
 
     internal NavigationAStarPayload(
         NavigationAStarPayloadKey key,
-        NavigationCellAddress[] nodes,
+        NavigationAStarGuidePoint[] guidePoints,
         Fixed64 cost,
         GraphDependencyStamp dependencies,
         NavigationSurfaceAStarStatus status)
     {
-        SwiftThrowHelper.ThrowIfNull(nodes, nameof(nodes));
+        SwiftThrowHelper.ThrowIfNull(guidePoints, nameof(guidePoints));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
-        if (!IsReusableResult(status, nodes.Length))
+        if (!IsReusableResult(status, guidePoints.Length))
         {
             throw new ArgumentException(
                 "Only successful paths and exact no-path results are reusable.",
                 nameof(status));
         }
         Key = key;
-        Nodes = nodes;
+        GuidePoints = guidePoints;
         Cost = cost;
         Dependencies = dependencies;
         Status = status;
@@ -54,9 +55,9 @@ internal sealed class NavigationAStarPayload
 
     internal NavigationAStarPayloadKey Key { get; }
 
-    internal NavigationCellAddress[] Nodes { get; }
+    internal NavigationAStarGuidePoint[] GuidePoints { get; }
 
-    internal bool HasPath => Nodes.Length != 0;
+    internal bool HasPath => GuidePoints.Length != 0;
 
     internal Fixed64 Cost { get; }
 
@@ -65,43 +66,45 @@ internal sealed class NavigationAStarPayload
     internal NavigationSurfaceAStarStatus Status { get; }
 
     internal long RetainedBytes => GetRetainedBytes(
-        Nodes.Length,
+        GuidePoints.Length,
         Dependencies);
 
     internal static long GetRetainedBytes(
-        int nodeCount,
+        int guidePointCount,
         GraphDependencyStamp dependencies)
     {
-        SwiftThrowHelper.ThrowIfNegative(nodeCount, nameof(nodeCount));
+        SwiftThrowHelper.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         return checked(
         BaseRetainedBytes
-        + GetNodeArrayRetainedBytes(nodeCount)
+        + GetGuidePointArrayRetainedBytes(guidePointCount)
         + dependencies.RetainedBytes);
     }
 
     internal static long GetMaximumRetainedBytes(
-        int nodeCount,
+        int guidePointCount,
         int componentCount,
         int pageCount)
     {
-        SwiftThrowHelper.ThrowIfNegative(nodeCount, nameof(nodeCount));
+        SwiftThrowHelper.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
         return checked(
             BaseRetainedBytes
-            + GetNodeArrayRetainedBytes(nodeCount)
+            + GetGuidePointArrayRetainedBytes(guidePointCount)
             + GraphDependencyStamp.GetRetainedBytes(componentCount, pageCount));
     }
 
     internal static bool IsReusableResult(
         NavigationSurfaceAStarStatus status,
-        int nodeCount) =>
-        (status == NavigationSurfaceAStarStatus.Success && nodeCount > 0)
-        || (status == NavigationSurfaceAStarStatus.NoPath && nodeCount == 0);
+        int guidePointCount) =>
+        (status == NavigationSurfaceAStarStatus.Success && guidePointCount > 0)
+        || (status == NavigationSurfaceAStarStatus.NoPath && guidePointCount == 0);
 
-    private static long GetNodeArrayRetainedBytes(int length) =>
+    private static long GetGuidePointArrayRetainedBytes(int length) =>
         length == 0
             ? 0L
-            : Align8(checked(ArrayHeaderBytes + ((long)length * NavigationCellAddressBytes)));
+            : Align8(checked(
+                ArrayHeaderBytes
+                + ((long)length * Unsafe.SizeOf<NavigationAStarGuidePoint>())));
 
     private static long Align8(long value) => checked((value + 7L) & ~7L);
 }

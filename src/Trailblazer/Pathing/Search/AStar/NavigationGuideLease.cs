@@ -27,7 +27,7 @@ public readonly struct NavigationGuideLease : IDisposable
         _inner?.GetStatus(_generation) ?? NavigationAStarQueryStatus.Stale);
 
     /// <summary>Gets the zero-based guide-local waypoint cursor.</summary>
-    public int CurrentWaypointIndex => _inner?.GetCurrentNodeOrdinal(_generation) ?? -1;
+    public int CurrentWaypointIndex => _inner?.GetCurrentWaypointOrdinal(_generation) ?? -1;
 
     /// <summary>Gets the immutable number of waypoints in the leased route.</summary>
     public int WaypointCount => _inner?.GetWaypointCount(_generation) ?? 0;

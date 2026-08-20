@@ -79,11 +79,11 @@ public sealed class NavigationFlowFieldTests
     {
         using var world = new GridWorld();
         VoxelIndex start = default;
-        var destination = new VoxelIndex(4, 0, 0);
+        var destination = new VoxelIndex(1, 0, 0);
         NavigationAStarExitTestHarness.GraphFixture fixture =
             NavigationAStarExitTestHarness.CreateExplicitMap(
                 world,
-                NavigationAStarExitTestHarness.RectangularLine(8),
+                NavigationAStarExitTestHarness.RectangularLine(2),
                 new[] { start, destination },
                 "explicit",
                 new[]
@@ -115,6 +115,51 @@ public sealed class NavigationFlowFieldTests
         blocked.Status.Should().Be(NavigationFlowFieldStatus.BudgetExceeded);
         exact.Status.Should().Be(NavigationFlowFieldStatus.Success);
         exact.ConnectionLegs.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ExplicitReverseIntegration_ShouldRejectStructuralPortalCertificatesAsStale(
+        bool omitPortalCertificates)
+    {
+        using var world = new GridWorld();
+        VoxelIndex source = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateExplicitMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { source, destination },
+                "explicit-stale",
+                new[]
+                {
+                    new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+                        "missing-certificate",
+                        source,
+                        destination,
+                        corridorCost: Fixed64.Zero,
+                        radiusClearance: Fixed64.One,
+                        omitPortalCertificates: omitPortalCertificates,
+                        portalTranslation: omitPortalCertificates
+                            ? default
+                            : new Vector3d(
+                                Fixed64.Zero,
+                                Fixed64.Zero,
+                                Fixed64.MinIncrement))
+                });
+        PathQuery query = ToFlowField(
+            fixture.CreateQuery(source, destination, fixture.DefaultProfile),
+            Fixed64.Zero);
+
+        FlowResult result = RunFlow(
+            fixture.Graph,
+            query,
+            new NavigationCellAddress(fixture.MapId, source),
+            new NavigationCellAddress(fixture.MapId, destination));
+
+        result.Status.Should().Be(NavigationFlowFieldStatus.Stale);
+        result.HasPayload.Should().BeFalse();
     }
 
     [Fact]
@@ -271,11 +316,11 @@ public sealed class NavigationFlowFieldTests
     {
         using var world = new GridWorld();
         VoxelIndex origin = default;
-        var destination = new VoxelIndex(4, 0, 0);
+        var destination = new VoxelIndex(1, 0, 0);
         NavigationAStarExitTestHarness.GraphFixture fixture =
             NavigationAStarExitTestHarness.CreateExplicitMap(
                 world,
-                NavigationAStarExitTestHarness.RectangularLine(8),
+                NavigationAStarExitTestHarness.RectangularLine(2),
                 new[] { origin, destination },
                 "tie",
                 new[]
@@ -284,13 +329,13 @@ public sealed class NavigationFlowFieldTests
                         "zeta",
                         origin,
                         destination,
-                        corridorCost: (Fixed64)4,
+                        corridorCost: Fixed64.Zero,
                         radiusClearance: (Fixed64)2),
                     new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
                         "alpha",
                         origin,
                         destination,
-                        corridorCost: (Fixed64)4,
+                        corridorCost: Fixed64.Zero,
                         radiusClearance: (Fixed64)2)
                 });
         PathQuery query = ToFlowField(
@@ -307,8 +352,22 @@ public sealed class NavigationFlowFieldTests
                 new NavigationCellAddress(fixture.MapId, origin),
                 out NavigationFlowFieldNode node)
             .Should().BeTrue();
-        node.IntegrationCost.Should().Be((Fixed64)4);
-        node.SelectedEdge.CanonicalOutgoingOrdinal.Should().Be(0);
+        fixture.Graph.TryGetNodeRef(
+                new NavigationCellAddress(fixture.MapId, origin),
+                out NavigationNodeRef originNode)
+            .Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator edges = fixture.Graph.EnumerateSurfaceEdges(originNode);
+        int canonicalExplicitOrdinal = -1;
+        while (edges.MoveNext())
+        {
+            if (edges.Current.Kind == NavigationGraphEdgeKind.Explicit
+                && edges.Current.ExplicitConnection.Owner.ConnectionId == "alpha")
+            {
+                canonicalExplicitOrdinal = edges.CurrentOrdinal;
+            }
+        }
+        node.IntegrationCost.Should().Be(Fixed64.Zero);
+        node.SelectedEdge.CanonicalOutgoingOrdinal.Should().Be(canonicalExplicitOrdinal);
     }
 
     [Fact]
@@ -400,12 +459,12 @@ public sealed class NavigationFlowFieldTests
     {
         using var world = new GridWorld();
         VoxelIndex origin = default;
-        var middle = new VoxelIndex(4, 0, 0);
-        var destination = new VoxelIndex(8, 0, 0);
+        var middle = new VoxelIndex(1, 0, 0);
+        var destination = new VoxelIndex(2, 0, 0);
         NavigationAStarExitTestHarness.GraphFixture fixture =
             NavigationAStarExitTestHarness.CreateExplicitMap(
                 world,
-                NavigationAStarExitTestHarness.RectangularLine(12),
+                NavigationAStarExitTestHarness.RectangularLine(3),
                 new[] { origin, middle, destination },
                 "relaxation-overflow",
                 new[]

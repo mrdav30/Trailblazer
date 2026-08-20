@@ -592,27 +592,46 @@ internal readonly struct NavigationAStarGuidePoint
 
 `NavigationAStarPayload.GuidePoints` replaces `Nodes`; no compatibility property remains. Public `NavigationGuideLease.TryGetCurrentWaypoint` is unchanged.
 
-- [ ] **Step 1: Write raw-guide REDs**
+- [x] **Step 1: Write raw-guide REDs**
 
 Assert native/seam active-profile portal anchors, explicit zero/multi-witness active-profile portal anchors without witness-foot waypoints, horizontal source/target anchors, source-to-entry and exit-to-target mid-leg corner clips selecting an alternate valid edge or producing NoPath, duplicate removal, canonical predecessor ordinal under equal-cost competition, guide-point capacity one-below, exact retained bytes, duplicate cache convergence, mutation staleness, and unchanged public lease shape.
 
-- [ ] **Step 2: Observe RED**
+- [x] **Step 2: Observe RED**
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationSurfaceAStarTests|FullyQualifiedName~NavigationPublicGuideMatrixTests"
 ```
 
-- [ ] **Step 3: Implement canonical predecessor and raw expansion**
+- [x] **Step 3: Implement canonical predecessor and raw expansion**
 
-Store `ParentEdgeOrdinal` on every winning relaxation. Before relaxing an edge, run `NavigationSurfaceEdgeRouteWork` over its complete active-profile authored route and skip the edge when any source-foot-to-entry/portal, portal-to-portal, or exit-to-target-foot swept leg fails. During reconstruction, re-enumerate the parent in canonical order to that ordinal, verify the exact child, and rerun the same route work against the current snapshot before emitting source foot, active-profile portal source/target points in semantic order, explicit entry and exit anchors, and target foot. Explicit witness cell foot anchors are never emitted; the compiled portals already define their corridor. Associate every point with a stable address and keep parallel workspace metadata that marks exact node-foot anchors. Assign cumulative raw cost only at the reached target node-foot anchor, where the complete edge cost becomes exact; intermediate portal/connection points inherit the preceding node cost. Remove exact consecutive duplicate positions.
+Store `ParentEdgeOrdinal` on every winning relaxation. Before relaxing an edge, run `NavigationSurfaceEdgeRouteWork` over its complete active-profile authored route and skip the edge when any source-foot-to-entry/portal, portal-to-portal, or exit-to-target-foot swept leg fails. During reconstruction, re-enumerate the parent in canonical order to that ordinal, verify the exact child, and rerun the same route work against the current snapshot before emitting source foot, active-profile portal source/target points in semantic order, explicit entry and exit anchors, and target foot. Explicit witness cell foot anchors are never emitted; the compiled portals already define their corridor. Associate every point with a stable address and remove exact consecutive duplicate positions while preserving node-foot ownership. Task 7 adds no per-guide cost or node-ordinal array: the existing node table remains the cumulative node-foot cost authority, and Task 8 adds its node-to-guide ordinal scratch only when simplification consumes it.
 
 The search and reconstruction calls share the same iterative helper and GridForge authorities. Geometry-invalid edges are rejected during relaxation so A* can choose an alternate route; a publication/dependency change before reconstruction returns `Stale` rather than publishing an uncertified raw leg.
 
-- [ ] **Step 4: Convert payload/cache/guide accounting**
+The resumable evaluator validates every explicit portal count and retained
+certificate once per semantic leg and returns the resolved portal, prisms,
+profile anchors, addressed endpoints, dependency node, and final cost as one
+evidence value. A* consumes that evidence directly, Flow discards only the
+route geometry it does not retain, and Ray treats any structural failure as
+sticky `Stale` before its separate line-intersection proof. Missing records,
+wrong directed endpoints, missing witnesses, and portal mismatches are
+structural; profile/body rejection is impassable and checked arithmetic failure
+is cost overflow.
+
+- [x] **Step 4: Convert payload/cache/guide accounting**
 
 Use the exact runtime size of `NavigationAStarGuidePoint`; reserve maximum bytes from `AStarWorkspaceGuidePointCapacity`; make NoPath carry an empty array; return stored positions directly from the guide lease; update all clone/equality/accounting tests and snapshots. Do not keep `Nodes` as an alias.
 
-- [ ] **Step 5: Run focused/full A* gates, review, tracker update, commit**
+- [x] **Step 5: Run focused/full A* gates, review, tracker update, commit**
+
+Closure: focused route/ray/evaluator/A* review gates passed 83/83; full
+Release passed 1,419/1,419 and ReleaseLean passed 1,388/1,388; Release and
+ReleaseLean builds for `netstandard2.1` and `net8.0`, plus the benchmark
+Release build, completed with zero warnings/errors. Cached negative proofs
+retain impassable explicit-witness dependencies, explicit rays consume one
+shared evidence pass, and each reached explicit target performs only one O(1)
+read of its immutable final portal certificate. Independent correctness and
+ponytail re-reviews found no remaining P0-P2 issues.
 
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~NavigationSurfaceAStar|FullyQualifiedName~NavigationAStar|FullyQualifiedName~NavigationPublicGuideMatrix"
@@ -648,7 +667,7 @@ dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Rel
 
 - [ ] **Step 3: Implement mandatory-raw-first optional work**
 
-Keep the complete raw dependency set in fixed workspace storage and reserve the exact sort/copy work needed to publish that raw set before optional rays begin. From each exact node-foot anchor, attempt later node-foot anchors in farthest-to-nearest route order; portal and connection points remain raw-guide-only. Commit only a `Success` whose `TraversalCost` is no greater than the exact difference between the two node-anchor cumulative costs. Hold ray dependencies in temporary sorted scratch; before committing, require enough fixed capacity and unreserved lookup work to merge them into the final set. If optional ray count/work/union capacity is unavailable, stop and append the untouched raw suffix. Sort/capture the final raw-plus-accepted-ray dependency stamp exactly once. `Stale` remains terminal; optional blocked/cost-ineligible candidates continue.
+Keep the complete raw dependency set in fixed workspace storage and reserve the exact sort/copy work needed to publish that raw set before optional rays begin. Add one fixed node-to-raw-guide ordinal array here, initialize it while scanning the already-built raw guide, and use the existing node-table cumulative costs at those ordinals; do not add a per-guide cost array. From each exact node-foot anchor, attempt later node-foot anchors in farthest-to-nearest route order; portal and connection points remain raw-guide-only. Commit only a `Success` whose `TraversalCost` is no greater than the exact difference between the two node-anchor cumulative costs. Hold ray dependencies in temporary sorted scratch; before committing, require enough fixed capacity and unreserved lookup work to merge them into the final set. If optional ray count/work/union capacity is unavailable, stop and append the untouched raw suffix. Sort/capture the final raw-plus-accepted-ray dependency stamp exactly once. `Stale` remains terminal; optional blocked/cost-ineligible candidates continue.
 
 - [ ] **Step 4: Run focused/allocation/determinism gates and review**
 

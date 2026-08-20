@@ -168,12 +168,12 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         for (; admitted < leased; admitted++)
         {
             PathQuery query = _descriptors[admitted].Query;
-            long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
-                Math.Min(
-                    _limits.AStarWorkspaceNodeCapacity,
-                    query.Budget.MaxExpandedNodes),
-                _limits.AStarWorkspaceComponentCapacity,
-                _limits.AStarWorkspaceEndpointPageCapacity);
+            long maximumBytes = Math.Min(
+                NavigationAStarPayload.GetMaximumRetainedBytes(
+                    _limits.AStarWorkspaceGuidePointCapacity,
+                    _limits.AStarWorkspaceComponentCapacity,
+                    _limits.AStarWorkspaceEndpointPageCapacity),
+                _limits.MaxAStarSinglePayloadBytes);
             if (!_cache.TryReservePayload(maximumBytes, out _reservations[admitted]))
                 break;
         }

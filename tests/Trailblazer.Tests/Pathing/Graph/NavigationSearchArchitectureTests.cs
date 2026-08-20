@@ -21,6 +21,7 @@ public sealed class NavigationSearchArchitectureTests
     {
         "NavigationAStarAdmissionGate.cs",
         "NavigationAStarGuideLease.cs",
+        "NavigationAStarGuidePoint.cs",
         "NavigationAStarNodeTable.cs",
         "NavigationAStarPayload.cs",
         "NavigationAStarPayloadCache.cs",
@@ -41,6 +42,7 @@ public sealed class NavigationSearchArchitectureTests
     private static readonly string[] ReviewedSupportingFiles =
     {
         "Pathing/Graph/NavigationDistanceMath.cs",
+        "Pathing/Graph/NavigationSurfaceEdgeRouteWork.cs",
         "Pathing/Graph/NavigationSurfaceEdgeEnumerator.cs",
         "Pathing/Graph/TraversalEvaluator.cs",
         "Pathing/Query/NavigationQueryLimits.cs",
@@ -85,7 +87,6 @@ public sealed class NavigationSearchArchitectureTests
         "ReusableSurveyResultCache",
         "SolidChart",
         "SolidVoxelFinder",
-        "TryCreateNavigationPortal",
         "VoxelFinder",
         "WorldVoxelIndex"
     };
@@ -175,6 +176,54 @@ public sealed class NavigationSearchArchitectureTests
         source.Should().Contain(
             "_corridorCursor.TryGetCurrentPortal",
             "every one-unit cursor advance must consume its emitted certificate immediately");
+    }
+
+    [Fact]
+    public void NavigationRay_ShouldConsumeOneExplicitEvidenceLoopWithoutRetainingTheEdgeTwice()
+    {
+        string sourceRoot = GetSourceRoot();
+        string raySource = File.ReadAllText(Path.Combine(
+            sourceRoot,
+            "Pathing",
+            "Search",
+            "Ray",
+            "NavigationRayWork.cs"));
+        string workspaceSource = File.ReadAllText(Path.Combine(
+            sourceRoot,
+            "Pathing",
+            "Search",
+            "Ray",
+            "NavigationRayWorkspace.cs"));
+        string evaluatorSource = File.ReadAllText(Path.Combine(
+            sourceRoot,
+            "Pathing",
+            "Graph",
+            "TraversalEvaluator.cs"));
+
+        raySource.Split("BeginExplicitEdge(", StringSplitOptions.None)
+            .Length.Should().Be(2,
+                "the ray must have one semantic and geometric explicit-edge loop");
+        raySource.Split("AdvanceExplicitEdge(", StringSplitOptions.None)
+            .Length.Should().Be(2,
+                "each explicit corridor leg must emit evidence exactly once");
+        raySource.Should().NotContain(
+            "TryGetExplicitTraversal(",
+            "the ray must not reconstruct explicit traversal after semantic evaluation");
+        raySource.Split(".NavigationPortals", StringSplitOptions.None)
+            .Length.Should().Be(2,
+                "only the reached target's final incoming certificate may be indexed");
+        raySource.Should().Contain(
+            "portal = portals[portals.Count - 1];",
+            "the immutable final certificate is an O(1) indexed read, not a corridor pass");
+        raySource.Should().NotContain(
+            ".NavigationPortals.GetEnumerator()",
+            "the ray must never enumerate an explicit corridor a second time");
+        workspaceSource.Should().NotContain(
+            "IncomingExplicitPortal",
+            "one retained portal per chain slot multiplies across every ray workspace");
+        evaluatorSource.Should().NotContain(
+            "internal NavigationGraphEdge Edge;",
+            "route work already retains the edge; explicit traversal needs only its record and target");
     }
 
     [Fact]

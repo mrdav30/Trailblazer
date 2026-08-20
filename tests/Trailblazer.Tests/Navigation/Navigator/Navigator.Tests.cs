@@ -429,13 +429,13 @@ public class NavigatorTests : IDisposable
 
         steering.GetHeading(navigator).Should().Be(Vector3d.Right);
         steering.HasNavigationGuidance.Should().BeTrue();
-        ReadGraphWaypointIndex(JsonRecordSerializer.Serialize(navigator)).Should().Be(1);
+        ReadGraphWaypointIndex(JsonRecordSerializer.Serialize(navigator)).Should().Be(2);
         cache.ActiveLeaseCount.Should().Be(1);
 
         navigator.SetTestPosition(middle);
         steering.GetHeading(navigator).Should().Be(Vector3d.Right);
         steering.HasNavigationGuidance.Should().BeTrue();
-        ReadGraphWaypointIndex(JsonRecordSerializer.Serialize(navigator)).Should().Be(2);
+        ReadGraphWaypointIndex(JsonRecordSerializer.Serialize(navigator)).Should().Be(4);
         cache.ActiveLeaseCount.Should().Be(1);
 
         navigator.SetTestPosition(end);

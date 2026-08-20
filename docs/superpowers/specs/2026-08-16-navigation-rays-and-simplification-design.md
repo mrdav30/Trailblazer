@@ -234,8 +234,8 @@ skipped and the next canonical candidate is considered.
 Search cost and predecessor selection remain unchanged. Each winning node record
 adds only a compact canonical predecessor-edge ordinal. During reconstruction,
 the edge is re-resolved from the parent in canonical enumeration order and its
-compiled geometry expands the raw route. Caller-owned scratch also records the
-exact cumulative raw-route cost at every expanded guide point:
+compiled geometry expands the raw route. Task 7 stores only each guide point's
+stable address and exact position:
 
 - node foot anchors remain graph-addressed guide points;
 - native and automatic seams add active-profile source/target portal anchors
@@ -249,11 +249,11 @@ exact cumulative raw-route cost at every expanded guide point:
 - every raw consecutive leg is certified by its compiled edge/corridor
   authority before simplification begins. Explicit routes emit entry, compiled
   portal source/target points, and exit; witness cell foot anchors are not
-  synthetic corridor waypoints;
-- exact cumulative graph cost is recorded at node foot anchors. Intermediate
-  portal/connection guide points inherit the preceding node cost and are not
-  shortcut endpoints, avoiding any fractional attribution of an authored edge
-  cost to geometry inside that edge.
+  synthetic corridor waypoints.
+
+The existing `NavigationAStarNodeTable` remains the cumulative node-foot cost
+authority. Task 8 alone adds bounded node-to-guide ordinal scratch when
+simplification consumes those costs; no per-guide cost array is retained.
 
 The immutable A* payload changes from an address-only node array to a bounded
 array of internal guide points containing the stable associated address and

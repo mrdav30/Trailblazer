@@ -34,6 +34,30 @@ public sealed class NavigationSurfaceAStarTests
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });
 
     [Fact]
+    public void Payload_ShouldRetainGuidePointsWithoutALegacyNodeAlias()
+    {
+        var dependencies = new GraphDependencyStamp(
+            Policy.Key,
+            Array.Empty<GraphComponentDependency>(),
+            Array.Empty<GraphPageDependency>());
+        var address = new NavigationCellAddress("map", default);
+        var guidePoint = new NavigationAStarGuidePoint(address, Vector3d.One);
+        var payload = new NavigationAStarPayload(
+            default,
+            new[] { guidePoint },
+            Fixed64.Zero,
+            dependencies,
+            NavigationSurfaceAStarStatus.Success);
+
+        payload.GuidePoints.Should().Equal(guidePoint);
+        typeof(NavigationAStarPayload).GetProperty(
+                "Nodes",
+                System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.NonPublic)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void RetainedBytes_ShouldMatchMaximumForEmptyAndPopulatedLogicalLayouts()
     {
         var emptyDependencies = new GraphDependencyStamp(
@@ -87,7 +111,7 @@ public sealed class NavigationSurfaceAStarTests
         var key = new NavigationAStarPayloadKey(query, start, end);
         var emptyPayload = new NavigationAStarPayload(
             key,
-            new NavigationCellAddress[0],
+            Array.Empty<NavigationAStarGuidePoint>(),
             Fixed64.Zero,
             emptyDependencies,
             NavigationSurfaceAStarStatus.NoPath);
@@ -95,9 +119,11 @@ public sealed class NavigationSurfaceAStarTests
             key,
             new[]
             {
-                start,
-                new NavigationCellAddress("map-a", new VoxelIndex(1, 0, 0)),
-                end
+                new NavigationAStarGuidePoint(start, Vector3d.Zero),
+                new NavigationAStarGuidePoint(
+                    new NavigationCellAddress("map-a", new VoxelIndex(1, 0, 0)),
+                    Vector3d.One),
+                new NavigationAStarGuidePoint(end, Vector3d.One + Vector3d.One)
             },
             Fixed64.One,
             populatedDependencies,
@@ -106,9 +132,9 @@ public sealed class NavigationSurfaceAStarTests
         emptyPayload.RetainedBytes.Should().Be(384L);
         NavigationAStarPayload.GetMaximumRetainedBytes(0, 0, 0)
             .Should().Be(emptyPayload.RetainedBytes);
-        populatedPayload.RetainedBytes.Should().Be(784L);
+        populatedPayload.RetainedBytes.Should().Be(856L);
         NavigationAStarPayload.GetMaximumRetainedBytes(
-                populatedPayload.Nodes.Length,
+                populatedPayload.GuidePoints.Length,
                 components.Length,
                 pages.Length)
             .Should().Be(populatedPayload.RetainedBytes);
@@ -186,7 +212,7 @@ public sealed class NavigationSurfaceAStarTests
                 maxLookupProbes: 64,
                 maxEndpointCandidates: 2,
                 maxExpandedNodes: 3,
-                maxEvaluatedEdges: 3,
+                maxEvaluatedEdges: 6,
                 maxConnectionLegs: 0,
                 maxTransitionCandidates: 0,
                 maxTransitionPairs: 0,
@@ -217,7 +243,10 @@ public sealed class NavigationSurfaceAStarTests
             admission.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
         }
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
-        using var search = new NavigationSurfaceAStarWork(admission.Result, workspace);
+        using var search = new NavigationSurfaceAStarWork(
+            admission.Result,
+            workspace,
+            long.MaxValue);
 
         for (int step = 0;
              step < 64 && search.Status == NavigationSurfaceAStarStatus.Pending;
@@ -232,17 +261,61 @@ public sealed class NavigationSurfaceAStarTests
 
         search.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
         search.Result.Cost.Should().Be((Fixed64)4);
-        search.Result.Nodes.Should().Equal(
-            new NavigationCellAddress("map", addresses[0]),
-            new NavigationCellAddress("map", addresses[1]),
+        search.Result.GuidePoints[0].Address.Should().Be(
+            new NavigationCellAddress("map", addresses[0]));
+        search.Result.GuidePoints[^1].Address.Should().Be(
             new NavigationCellAddress("map", addresses[2]));
+        binding.TryGetCellPrism(addresses[1], out GridCellPrism middlePrism)
+            .Should().BeTrue();
+        GridCellGeometry.TryCreateNavigationPortal(
+                startPrism,
+                middlePrism,
+                out GridNavigationPortal firstPortal)
+            .Should().BeTrue();
+        GridCellGeometry.TryCreateNavigationPortal(
+                middlePrism,
+                endPrism,
+                out GridNavigationPortal secondPortal)
+            .Should().BeTrue();
+        firstPortal.TryResolveProfile(
+                Profile().Shape.Radius,
+                Profile().Shape.Height,
+                out _,
+                out Vector3d firstTargetAnchor)
+            .Should().BeTrue();
+        secondPortal.TryResolveProfile(
+                Profile().Shape.Radius,
+                Profile().Shape.Height,
+                out _,
+                out Vector3d secondTargetAnchor)
+            .Should().BeTrue();
+        Vector3d middleFoot = new(
+            middlePrism.Center.X,
+            middlePrism.VerticalMin,
+            middlePrism.Center.Z);
+        search.Result.GuidePoints.Should().Equal(
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress("map", addresses[0]),
+                query.Start.Position),
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress("map", addresses[1]),
+                firstTargetAnchor),
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress("map", addresses[1]),
+                middleFoot),
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress("map", addresses[2]),
+                secondTargetAnchor),
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress("map", addresses[2]),
+                query.End.Position));
         workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
             .Should().BeTrue();
         NavigationAStarNodeRecord startRecord = workspace.NodeTable.GetRecord(startSlot);
         startRecord.Heuristic.Should().Be((Fixed64)4);
         startRecord.EstimatedTotalCost.Should().Be((Fixed64)4);
         admission.Meter.ExpandedNodes.Should().Be(3);
-        admission.Meter.EvaluatedEdges.Should().Be(3);
+        admission.Meter.EvaluatedEdges.Should().Be(6);
         search.Result.RetainedBytes.Should().BeGreaterThan(0);
         var resultBoundedCache = new NavigationAStarPayloadCache(
             maxEntries: 0,
@@ -256,7 +329,7 @@ public sealed class NavigationSurfaceAStarTests
         rejectedReservation.Should().Be(default(NavigationAStarPayloadReservation));
 
         long maximumPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
-            Math.Min(workspace.PathNodes.Length, query.Budget.MaxExpandedNodes),
+            workspace.GuidePoints.Length,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         var cache = new NavigationAStarPayloadCache(
@@ -271,13 +344,13 @@ public sealed class NavigationSurfaceAStarTests
         checkoutLease.Payload.Should().BeSameAs(search.Result);
         var duplicate = new NavigationAStarPayload(
             search.Result.Key,
-            (NavigationCellAddress[])search.Result.Nodes.Clone(),
+            (NavigationAStarGuidePoint[])search.Result.GuidePoints.Clone(),
             search.Result.Cost,
             search.Result.Dependencies,
             search.Result.Status);
         FluentActions.Invoking(() => new NavigationAStarPayload(
                 search.Result.Key,
-                (NavigationCellAddress[])search.Result.Nodes.Clone(),
+                (NavigationAStarGuidePoint[])search.Result.GuidePoints.Clone(),
                 search.Result.Cost,
                 search.Result.Dependencies,
                 NavigationSurfaceAStarStatus.BudgetExceeded))
@@ -487,6 +560,396 @@ public sealed class NavigationSurfaceAStarTests
             "warmed cache-hit checkout and return use a cache-owned lease shell");
     }
 
+    [Theory]
+    [InlineData(2, (int)NavigationSurfaceAStarStatus.CapacityExceeded)]
+    [InlineData(3, (int)NavigationSurfaceAStarStatus.Success)]
+    public void Advance_ShouldEnforceExactGuidePointCapacity(
+        int guidePointCapacity,
+        int expectedStatusValue)
+    {
+        using var world = new GridWorld();
+        VoxelIndex start = default;
+        var end = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                new GridConfiguration(
+                    Vector3d.Zero,
+                    new Vector3d((Fixed64)4, (Fixed64)2, (Fixed64)2),
+                    topologyKind: GridTopologyKind.RectangularPrism,
+                    topologyMetrics: GridTopologyMetrics.Rectangular(
+                        (Fixed64)2,
+                        (Fixed64)2,
+                        (Fixed64)2),
+                    storageKind: GridStorageKind.Sparse),
+                new[] { start, end },
+                "capacity");
+        using NavigationWorldGraphStore store = CreateStore(fixture.Graph);
+        NavigationWorldGraphLease lease = store.TryAcquire()!;
+        var workspace = new NavigationAStarWorkspace(
+            1,
+            4,
+            6,
+            2,
+            4,
+            4,
+            guidePointCapacity);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        admission.Begin(lease, fixture.CreateQuery(start, end, fixture.DefaultProfile));
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 8);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        using var search = new NavigationSurfaceAStarWork(
+            admission.Result,
+            workspace,
+            long.MaxValue);
+
+        while (search.Status == NavigationSurfaceAStarStatus.Pending)
+            search.Advance(64, 64, 64, 64);
+
+        search.Status.Should().Be((NavigationSurfaceAStarStatus)expectedStatusValue);
+        if (search.Status == NavigationSurfaceAStarStatus.Success)
+            search.Result.GuidePoints.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void Payload_ShouldReplayAZeroWitnessExplicitPortalWithoutWitnessFeet()
+    {
+        using var world = new GridWorld();
+        VoxelIndex source = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateExplicitMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { source, destination },
+                "zero-witness",
+                new[]
+                {
+                    new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+                        "preferred",
+                        source,
+                        destination,
+                        corridorCost: Fixed64.Zero,
+                        radiusClearance: Fixed64.One)
+                });
+        NavigationAStarExitTestHarness.SearchResult result =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                fixture.CreateQuery(source, destination, fixture.DefaultProfile));
+        GridCellPrism sourcePrism = GetPrism(fixture.Binding, source);
+        GridCellPrism targetPrism = GetPrism(fixture.Binding, destination);
+        GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                targetPrism,
+                out GridNavigationPortal portal)
+            .Should().BeTrue();
+
+        result.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        result.Cost.Should().Be(Fixed64.Zero);
+        result.Payload!.GuidePoints.Should().Equal(
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress(fixture.MapId, source),
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, source)),
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress(fixture.MapId, destination),
+                portal.CanonicalFacePoint),
+            new NavigationAStarGuidePoint(
+                new NavigationCellAddress(fixture.MapId, destination),
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, destination)));
+    }
+
+    [Fact]
+    public void Search_ShouldRejectAPositiveRadiusCornerClippingExplicitEntryLegAndUseTheNativeAlternative()
+    {
+        using var world = new GridWorld();
+        VoxelIndex source = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        Vector3d blockedOffset = new(
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Half);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateExplicitMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { source, destination },
+                "corner-alternative",
+                new[]
+                {
+                    new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+                        "blocked-corner",
+                        source,
+                        destination,
+                        corridorCost: Fixed64.Zero,
+                        radiusClearance: Fixed64.One,
+                        entryOffset: blockedOffset)
+                });
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(
+                Fixed64.One / (Fixed64)4,
+                Fixed64.One,
+                Fixed64.Zero),
+            maxStepUp: Fixed64.Zero,
+            maxDropDown: Fixed64.Zero,
+            arrivalRadius: Fixed64.Zero,
+            allowedMedia: TraversalMedia.Solid,
+            capabilities: TraversalCapability.None);
+
+        NavigationAStarExitTestHarness.SearchResult result =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                fixture.CreateQuery(source, destination, profile));
+        Vector3d blockedAnchor = NavigationAStarExitTestHarness.GetFoot(
+                fixture.Binding,
+                source)
+            + blockedOffset;
+
+        result.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        result.Cost.Should().Be(Fixed64.One);
+        result.Payload!.GuidePoints.Should().NotContain(
+            point => point.Position == blockedAnchor,
+            "the cheaper explicit endpoint leg clips a non-selected wall");
+    }
+
+    [Fact]
+    public void Search_ShouldRejectAnExplicitExitToTargetFootLegThatClipsTheOppositeWall()
+    {
+        using var world = new GridWorld();
+        var sourceConfiguration = new GridConfiguration(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(
+                (Fixed64)3 / (Fixed64)2,
+                (Fixed64)2,
+                Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        var targetCenter = new Vector3d(
+            Fixed64.One,
+            Fixed64.Zero,
+            Fixed64.Zero);
+        var targetConfiguration = new GridConfiguration(
+            targetCenter,
+            targetCenter,
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(
+                Fixed64.Half,
+                (Fixed64)2,
+                Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        world.TryAddGrid(sourceConfiguration, out _).Should().BeTrue();
+        world.TryAddGrid(targetConfiguration, out _).Should().BeTrue();
+        sourceConfiguration.TryNormalize(out NormalizedGridConfiguration sourceBinding)
+            .Should().BeTrue();
+        targetConfiguration.TryNormalize(out NormalizedGridConfiguration targetBinding)
+            .Should().BeTrue();
+        GridCellPrism sourcePrism = GetPrism(sourceBinding, default);
+        GridCellPrism targetPrism = GetPrism(targetBinding, default);
+        GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                targetPrism,
+                out GridNavigationPortal portal)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(
+                (Fixed64)3 / (Fixed64)10,
+                Fixed64.One,
+                Fixed64.Zero),
+            maxStepUp: Fixed64.Zero,
+            maxDropDown: Fixed64.Zero,
+            arrivalRadius: Fixed64.Zero,
+            allowedMedia: TraversalMedia.Solid,
+            capabilities: TraversalCapability.None);
+        portal.TryResolveProfile(
+                profile.Shape.Radius,
+                profile.Shape.Height,
+                out Vector3d sourcePortalAnchor,
+                out Vector3d targetPortalAnchor)
+            .Should().BeTrue();
+        Vector3d exitAnchor = targetPortalAnchor + new Vector3d(
+            Fixed64.One / (Fixed64)20,
+            Fixed64.Zero,
+            Fixed64.Zero);
+        var targetFoot = new Vector3d(
+            targetPrism.Center.X,
+            targetPrism.VerticalMin,
+            targetPrism.Center.Z);
+
+        GridCellGeometry.IsNavigationBodySegmentValid(
+                targetPrism,
+                targetPortalAnchor,
+                exitAnchor,
+                profile.Shape.Radius,
+                profile.Shape.Height,
+                portal,
+                default,
+                GridNavigationBodySegmentEndpointAllowance.None)
+            .Should().BeTrue("the target-side portal-to-exit leg must reach the predicate under test");
+        GridCellGeometry.IsNavigationBodySegmentValid(
+                targetPrism,
+                exitAnchor,
+                targetFoot,
+                profile.Shape.Radius,
+                profile.Shape.Height,
+                portal,
+                default,
+                GridNavigationBodySegmentEndpointAllowance.None)
+            .Should().BeFalse("the target foot is closer than the body radius to the opposite wall");
+
+        NavigationMapInstance Compose(string mapId, NormalizedGridConfiguration binding)
+        {
+            NavigationMap map = new NavigationMapBuilder(mapId, binding)
+                .AddCell(default, Cell)
+                .Build();
+            var prepared = new PreparedNavigationMap(map, bakeVersion: 1);
+            var state = new NavigationOperationCandidate.MapState(
+                prepared.Map,
+                prepared.BakeVersion,
+                prepared.RetainedBytes,
+                NavigationMapOverlayState.Empty,
+                dynamicSlotGeneration: 0,
+                bakedCellLookup: prepared.BakedCellLookup);
+            return NavigationMapInstanceTestFactory.Compose(
+                world,
+                state,
+                previous: null,
+                instanceVersion: 1);
+        }
+
+        NavigationMapInstance sourceInstance = Compose("A", sourceBinding);
+        NavigationMapInstance targetInstance = Compose("B", targetBinding);
+        var definition = new NavigationConnection(
+            "blocked-exit",
+            default,
+            new NavigationCellAddress("B", default),
+            sourcePortalAnchor,
+            exitAnchor,
+            portalRadiusClearance: Fixed64.One,
+            portalHeightClearance: (Fixed64)2);
+        var portalBuilder = new NavigationPagedSequence<GridNavigationPortal>.Builder(
+            GridNavigationPortal.SizeInBytes);
+        portalBuilder.Append(portal);
+        var record = new NavigationExplicitConnectionRecord(
+            new NavigationConnectionOwnerKey("A", definition.Id),
+            definition,
+            isActive: true,
+            corridorCost: Fixed64.Zero,
+            portalBuilder.Seal());
+        NavigationExplicitConnectionIndex connections =
+            NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
+        var rowBuilder =
+            new NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder(16);
+        rowBuilder.Append(record.Owner);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> row = rowBuilder.Seal();
+        connections = connections.SetEndpointRow(
+            record.Source,
+            NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty,
+            row,
+            out _);
+        connections = connections.SetEndpointRow(
+            record.Destination,
+            NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty,
+            row,
+            out _);
+        NavigationWorldGraph graph = CreateGraph(
+            new[] { sourceInstance, targetInstance },
+            connections);
+        Vector3d sourceFoot = new(
+            sourcePrism.Center.X,
+            sourcePrism.VerticalMin,
+            sourcePrism.Center.Z);
+        var query = new PathQuery(
+            new NavigationEndpoint(sourceFoot, mapId: "A"),
+            new NavigationEndpoint(targetFoot, mapId: "B"),
+            profile,
+            Policy.Key,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(128, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0),
+            allowTransitions: false);
+
+        NavigationAStarExitTestHarness.SearchResult result =
+            NavigationAStarExitTestHarness.RunAStar(world, graph, query);
+
+        result.Status.Should().Be(NavigationSurfaceAStarStatus.NoPath);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EqualCostParallelExplicitEdges_ShouldReplayTheCanonicalEdgeGeometry(
+        bool reverseDefinitionOrder)
+    {
+        using var world = new GridWorld();
+        VoxelIndex source = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        Vector3d canonicalOffset = new(
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.One / (Fixed64)4);
+        Vector3d alternateOffset = -canonicalOffset;
+        var canonical = new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+            "alpha",
+            source,
+            destination,
+            corridorCost: Fixed64.Zero,
+            radiusClearance: Fixed64.One,
+            entryOffset: canonicalOffset,
+            exitOffset: canonicalOffset);
+        var alternate = new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+            "zeta",
+            source,
+            destination,
+            corridorCost: Fixed64.Zero,
+            radiusClearance: Fixed64.One,
+            entryOffset: alternateOffset,
+            exitOffset: alternateOffset);
+        NavigationAStarExitTestHarness.ExplicitEdgeSpec[] edges = reverseDefinitionOrder
+            ? new[] { alternate, canonical }
+            : new[] { canonical, alternate };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateExplicitMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { source, destination },
+                "parallel-geometry",
+                edges);
+
+        NavigationAStarExitTestHarness.SearchResult result =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                fixture.CreateQuery(source, destination, fixture.DefaultProfile));
+        Vector3d sourceFoot = NavigationAStarExitTestHarness.GetFoot(
+            fixture.Binding,
+            source);
+        Vector3d targetFoot = NavigationAStarExitTestHarness.GetFoot(
+            fixture.Binding,
+            destination);
+
+        result.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        result.Cost.Should().Be(Fixed64.Half);
+        result.Payload!.GuidePoints.Should().Contain(
+            point => point.Position == sourceFoot + canonicalOffset);
+        result.Payload.GuidePoints.Should().Contain(
+            point => point.Position == targetFoot + canonicalOffset);
+        result.Payload.GuidePoints.Should().NotContain(
+            point => point.Position == sourceFoot + alternateOffset
+                || point.Position == targetFoot + alternateOffset,
+            "equal-cost parallel geometry is reconstructed by the exact canonical edge ordinal");
+    }
+
     [Fact]
     public void Advance_ShouldTraverseAutomaticSeamAndCaptureBothMapPages()
     {
@@ -579,7 +1042,7 @@ public sealed class NavigationSurfaceAStarTests
                 TraversalMedium.Solid,
                 TraversalDomain.Surface),
             PathAlgorithm.AStar,
-            new NavigationWorkBudget(64, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0),
+            new NavigationWorkBudget(64, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
         var workspace = new NavigationAStarWorkspace(2, 4, 6, 4, 4, 4, 4);
         var cache = new NavigationAStarPayloadCache(1);
@@ -593,8 +1056,9 @@ public sealed class NavigationSurfaceAStarTests
         queryWork.Status.Should().Be(NavigationAStarQueryStatus.Success);
         NavigationAStarPayloadLease payloadLease = queryWork.TakeResult();
         NavigationAStarPayload payload = payloadLease.Payload;
-        payload.Nodes.Should().Equal(
-            new NavigationCellAddress("source", default),
+        payload.GuidePoints[0].Address.Should().Be(
+            new NavigationCellAddress("source", default));
+        payload.GuidePoints[^1].Address.Should().Be(
             new NavigationCellAddress("target", default));
         payload.Dependencies.Pages.Should().Contain(
             dependency => dependency.MapId == "source");
@@ -602,6 +1066,53 @@ public sealed class NavigationSurfaceAStarTests
             dependency => dependency.MapId == "target");
         payloadLease.Dispose();
         store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Payload_ShouldRetainBothDirectedHorizontalSeamAnchors()
+    {
+        using NavigationAStarExitTestHarness.SeamFixture fixture =
+            NavigationAStarExitTestHarness.CreateAutomaticSeam(stacked: true);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            maxStepUp: (Fixed64)2,
+            maxDropDown: (Fixed64)2,
+            arrivalRadius: Fixed64.Zero,
+            allowedMedia: TraversalMedia.Solid,
+            capabilities: TraversalCapability.None);
+        PathQuery query = fixture.CreateQuery(profile);
+
+        NavigationAStarExitTestHarness.SearchResult result =
+            NavigationAStarExitTestHarness.RunAStar(
+                fixture.Context.World,
+                fixture.Graph,
+                query);
+
+        result.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        result.Payload.Should().NotBeNull();
+        var sourceAddress = new NavigationCellAddress("source", default);
+        var targetAddress = new NavigationCellAddress("target", default);
+        fixture.Graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
+            .Should().BeTrue();
+        fixture.Graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism)
+            .Should().BeTrue();
+        GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                targetPrism,
+                out GridNavigationPortal portal)
+            .Should().BeTrue();
+        portal.TryResolveProfile(
+                profile.Shape.Radius,
+                profile.Shape.Height,
+                out Vector3d sourceAnchor,
+                out Vector3d targetAnchor)
+            .Should().BeTrue();
+        targetAnchor.Should().Be(fixture.End,
+            "the target portal anchor and graph node intentionally coalesce");
+        result.Payload!.GuidePoints.Should().Equal(
+            new NavigationAStarGuidePoint(sourceAddress, fixture.Start),
+            new NavigationAStarGuidePoint(sourceAddress, sourceAnchor),
+            new NavigationAStarGuidePoint(targetAddress, fixture.End));
     }
 
     [Fact]
@@ -677,7 +1188,7 @@ public sealed class NavigationSurfaceAStarTests
                 maxLookupProbes: 256,
                 maxEndpointCandidates: 2,
                 maxExpandedNodes: 64,
-                maxEvaluatedEdges: 126,
+                maxEvaluatedEdges: 189,
                 maxConnectionLegs: 0,
                 maxTransitionCandidates: 0,
                 maxTransitionPairs: 0,
@@ -693,7 +1204,7 @@ public sealed class NavigationSurfaceAStarTests
             nodeCapacity: 65,
             rayCoveredAddressCapacity: 65,
             rayTraceIntervalCapacity: 65,
-            guidePointCapacity: 65);
+            guidePointCapacity: 256);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             store,
@@ -708,7 +1219,10 @@ public sealed class NavigationSurfaceAStarTests
             admission.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
         }
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
-        using var search = new NavigationSurfaceAStarWork(admission.Result, workspace);
+        using var search = new NavigationSurfaceAStarWork(
+            admission.Result,
+            workspace,
+            long.MaxValue);
 
         for (int step = 0;
              step < 2_048 && search.Status == NavigationSurfaceAStarStatus.Pending;
@@ -725,7 +1239,7 @@ public sealed class NavigationSurfaceAStarTests
     }
 
     [Fact]
-    public void Advance_ShouldStampDisconnectedExplicitWitnessComponentAndPage()
+    public void Advance_ShouldRebuildCachedNegativeProofWhenBlockedExplicitWitnessChanges()
     {
         using var world = new GridWorld();
         var sourceConfiguration = new GridConfiguration(
@@ -734,25 +1248,24 @@ public sealed class NavigationSurfaceAStarTests
             topologyKind: GridTopologyKind.RectangularPrism,
             topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
             storageKind: GridStorageKind.Dense);
-        var destinationCenter = new Vector3d(10, 0, 0);
+        var witnessCenter = new Vector3d(1, 0, 0);
+        var witnessConfiguration = new GridConfiguration(
+            witnessCenter,
+            witnessCenter,
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        var destinationCenter = new Vector3d(2, 0, 0);
         var destinationConfiguration = new GridConfiguration(
             destinationCenter,
             destinationCenter,
             topologyKind: GridTopologyKind.RectangularPrism,
             topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
             storageKind: GridStorageKind.Dense);
-        var witnessCenter = new Vector3d(20, 0, 0);
-        var witnessMaximum = new Vector3d(24, 0, 0);
-        var witnessConfiguration = new GridConfiguration(
-            witnessCenter,
-            witnessMaximum,
-            topologyKind: GridTopologyKind.RectangularPrism,
-            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
-            storageKind: GridStorageKind.Dense);
         world.TryAddGrid(sourceConfiguration, out _).Should().BeTrue();
-        world.TryAddGrid(destinationConfiguration, out _).Should().BeTrue();
         world.TryAddGrid(witnessConfiguration, out ushort witnessGridIndex)
             .Should().BeTrue();
+        world.TryAddGrid(destinationConfiguration, out _).Should().BeTrue();
         sourceConfiguration.TryNormalize(out NormalizedGridConfiguration sourceBinding)
             .Should().BeTrue();
         destinationConfiguration.TryNormalize(
@@ -778,8 +1291,6 @@ public sealed class NavigationSurfaceAStarTests
             .Build();
         NavigationMap witnessMap = new NavigationMapBuilder("C", witnessBinding)
             .AddCell(default, Cell)
-            .AddCell(new VoxelIndex(2, 0, 0), Cell)
-            .AddCell(new VoxelIndex(4, 0, 0), Cell)
             .Build();
         NavigationOperationCandidate.MapState CreateState(NavigationMap map)
         {
@@ -810,26 +1321,52 @@ public sealed class NavigationSurfaceAStarTests
             witnessState,
             previous: null,
             instanceVersion: 1);
+        var portalBuilder = new NavigationPagedSequence<GridNavigationPortal>.Builder(
+            GridNavigationPortal.SizeInBytes);
+        GridCellPrism witnessPrism = GetPrism(witnessBinding, default);
+        GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                witnessPrism,
+                out GridNavigationPortal sourcePortal)
+            .Should().BeTrue();
+        GridCellGeometry.TryCreateNavigationPortal(
+                witnessPrism,
+                destinationPrism,
+                out GridNavigationPortal destinationPortal)
+            .Should().BeTrue();
+        KinematicBodyShape shape = Profile().Shape;
+        sourcePortal.TryResolveProfile(
+                shape.Radius,
+                shape.Height,
+                out Vector3d entryAnchor,
+                out _)
+            .Should().BeTrue();
+        destinationPortal.TryResolveProfile(
+                shape.Radius,
+                shape.Height,
+                out _,
+                out Vector3d exitAnchor)
+            .Should().BeTrue();
         var connection = new NavigationConnection(
             "a-to-b",
             default,
             new NavigationCellAddress("B", default),
-            sourceFoot,
-            destinationFoot,
+            entryAnchor,
+            exitAnchor,
             portalRadiusClearance: Fixed64.One,
             portalHeightClearance: (Fixed64)2,
             witnesses: new[]
             {
-                new NavigationCellAddress("C", default),
-                new NavigationCellAddress("C", new VoxelIndex(2, 0, 0)),
-                new NavigationCellAddress("C", new VoxelIndex(4, 0, 0))
+                new NavigationCellAddress("C", default)
             });
+        portalBuilder.Append(sourcePortal);
+        portalBuilder.Append(destinationPortal);
         var record = new NavigationExplicitConnectionRecord(
             new NavigationConnectionOwnerKey("A", connection.Id),
             connection,
             isActive: true,
-            corridorCost: (Fixed64)20,
-            NavigationPagedSequence<GridNavigationPortal>.Empty);
+            corridorCost: (Fixed64)2,
+            portalBuilder.Seal());
         NavigationExplicitConnectionIndex connections =
             NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
         var endpointRowBuilder =
@@ -850,20 +1387,10 @@ public sealed class NavigationSurfaceAStarTests
         NavigationWorldGraph graph = CreateGraph(
             new[] { sourceInstance, destinationInstance, witnessInstance },
             connections);
-        var witnessComponents = new NavigationSurfaceComponentKey[3];
+        var witnessComponents = new NavigationSurfaceComponentKey[1];
         graph.TryGetSurfaceComponent(
                 new NavigationCellAddress("C", default),
                 out witnessComponents[0],
-                out _)
-            .Should().BeTrue();
-        graph.TryGetSurfaceComponent(
-                new NavigationCellAddress("C", new VoxelIndex(2, 0, 0)),
-                out witnessComponents[1],
-                out _)
-            .Should().BeTrue();
-        graph.TryGetSurfaceComponent(
-                new NavigationCellAddress("C", new VoxelIndex(4, 0, 0)),
-                out witnessComponents[2],
                 out _)
             .Should().BeTrue();
         graph.TryGetSurfaceComponent(
@@ -871,9 +1398,8 @@ public sealed class NavigationSurfaceAStarTests
                 out NavigationSurfaceComponentKey sourceComponent,
                 out _)
             .Should().BeTrue();
-        witnessComponents.Should().OnlyHaveUniqueItems();
         witnessComponents.Should().NotContain(sourceComponent,
-            "same-page witnesses remain structurally disconnected from the explicit endpoints");
+            "an authored corridor witness remains a dependency, not a graph edge endpoint");
         using NavigationWorldGraphStore store = CreateStore(graph);
         var query = new PathQuery(
             new NavigationEndpoint(sourceFoot, mapId: "A"),
@@ -885,16 +1411,16 @@ public sealed class NavigationSurfaceAStarTests
                 TraversalMedium.Solid,
                 TraversalDomain.Surface),
             PathAlgorithm.AStar,
-            new NavigationWorkBudget(128, 2, 2, 1, 4, 0, 0, 0, 0, 0, 0),
+            new NavigationWorkBudget(128, 2, 2, 2, 4, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
         var insufficientWorkspace = new NavigationAStarWorkspace(
             mapCapacity: 3,
             endpointPageCapacity: 3,
-            componentCapacity: 3,
-            nodeCapacity: 4,
+            componentCapacity: 1,
+            nodeCapacity: 3,
             rayCoveredAddressCapacity: 4,
             rayTraceIntervalCapacity: 4,
-            guidePointCapacity: 4);
+            guidePointCapacity: 8);
         var insufficientCache = new NavigationAStarPayloadCache(1);
         using (NavigationAStarQueryWork insufficient = BeginReservedQuery(
             world,
@@ -906,7 +1432,7 @@ public sealed class NavigationSurfaceAStarTests
             DrainQuery(insufficient, 256);
             insufficient.Status.Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
         }
-        var workspace = new NavigationAStarWorkspace(3, 3, 4, 4, 4, 4, 4);
+        var workspace = new NavigationAStarWorkspace(3, 3, 2, 3, 4, 4, 8);
         var cache = new NavigationAStarPayloadCache(1);
         GraphDependencyStamp dependencies;
         using (NavigationAStarQueryWork work = BeginReservedQuery(
@@ -919,9 +1445,23 @@ public sealed class NavigationSurfaceAStarTests
             DrainQuery(work, 256);
             work.Status.Should().Be(NavigationAStarQueryStatus.Success);
             NavigationAStarPayloadLease payloadLease = work.TakeResult();
-            payloadLease.Payload.Nodes.Should().Equal(
-                new NavigationCellAddress("A", default),
+            payloadLease.Payload.GuidePoints[0].Address.Should().Be(
+                new NavigationCellAddress("A", default));
+            payloadLease.Payload.GuidePoints[^1].Address.Should().Be(
                 new NavigationCellAddress("B", default));
+            Vector3d witnessFoot = new(
+                witnessPrism.Center.X,
+                witnessPrism.VerticalMin,
+                witnessPrism.Center.Z);
+            payloadLease.Payload.GuidePoints.Should().NotContain(
+                point => point.Position == witnessFoot,
+                "semantic witness feet are dependencies, not authored guide points");
+            payloadLease.Payload.GuidePoints.Should().ContainSingle(
+                point => point.Address == new NavigationCellAddress("C", default)
+                    && point.Position == sourcePortal.CanonicalFacePoint);
+            payloadLease.Payload.GuidePoints.Should().ContainSingle(
+                point => point.Address == new NavigationCellAddress("B", default)
+                    && point.Position == destinationPortal.CanonicalFacePoint);
             foreach (NavigationSurfaceComponentKey witnessComponent in witnessComponents)
             {
                 payloadLease.Payload.Dependencies.Components.Should().ContainSingle(
@@ -937,9 +1477,10 @@ public sealed class NavigationSurfaceAStarTests
         VoxelGrid witnessGrid = world.ActiveGrids[witnessGridIndex];
         witnessGrid.TryGetVoxel(default(VoxelIndex), out Voxel? witnessVoxel)
             .Should().BeTrue();
+        var witnessObstacle = world.AllocateObstacleToken();
         witnessGrid.TryAddObstacle(
                 witnessVoxel!,
-                world.AllocateObstacleToken())
+                witnessObstacle)
             .Should().BeTrue();
         NavigationMapInstance changedWitness = NavigationMapInstanceTestFactory.Compose(
             world,
@@ -948,13 +1489,62 @@ public sealed class NavigationSurfaceAStarTests
             instanceVersion: 2);
         NavigationWorldGraph changedGraph = CreateGraph(
             new[] { sourceInstance, destinationInstance, changedWitness },
-            connections);
+            connections).WithGraphVersion(graph.GraphVersion + 1);
         changedGraph.IsDependencyCurrent(dependencies).Should().BeFalse(
             "a physical mutation of the consumed witness page invalidates the result");
+        store.TryPublish(changedGraph).Should().Be(NavigationCandidatePublication.Published);
+        using (NavigationAStarQueryWork blocked = BeginReservedQuery(
+            world,
+            store,
+            query,
+            workspace,
+            cache))
+        {
+            DrainQuery(blocked, 256);
+            blocked.Status.Should().Be(NavigationAStarQueryStatus.NoPath);
+        }
+
+        var key = new NavigationAStarPayloadKey(
+            query,
+            new NavigationCellAddress("A", default),
+            new NavigationCellAddress("B", default));
+        cache.TryCheckout(
+                key,
+                changedGraph,
+                out NavigationAStarPayloadLease blockedLease)
+            .Should().BeTrue();
+        GraphDependencyStamp blockedDependencies = blockedLease.Payload.Dependencies;
+        blockedDependencies.Pages.Should().ContainSingle(
+            dependency => dependency.MapId == "C" && dependency.PageIndex == 0,
+            "the impassable witness page is part of the cached negative proof");
+        blockedLease.Dispose();
+
+        witnessGrid.TryRemoveObstacle(witnessVoxel!, witnessObstacle).Should().BeTrue();
+        NavigationMapInstance reopenedWitness = NavigationMapInstanceTestFactory.Compose(
+            world,
+            witnessState,
+            changedWitness,
+            instanceVersion: 3);
+        NavigationWorldGraph reopenedGraph = CreateGraph(
+            new[] { sourceInstance, destinationInstance, reopenedWitness },
+            connections).WithGraphVersion(changedGraph.GraphVersion + 1);
+        reopenedGraph.IsDependencyCurrent(blockedDependencies).Should().BeFalse(
+            "changing the blocked witness invalidates the cached negative proof");
+        store.TryPublish(reopenedGraph).Should().Be(NavigationCandidatePublication.Published);
+        using NavigationAStarQueryWork rebuilt = BeginReservedQuery(
+            world,
+            store,
+            query,
+            workspace,
+            cache);
+        DrainQuery(rebuilt, 256);
+        rebuilt.Status.Should().Be(NavigationAStarQueryStatus.Success,
+            "the stale negative result must be rebuilt after its witness changes");
+        rebuilt.TakeResult().Dispose();
     }
 
     [Theory]
-    [InlineData(4, (int)NavigationSurfaceAStarStatus.Success)]
+    [InlineData(6, (int)NavigationSurfaceAStarStatus.Success)]
     [InlineData(1, (int)NavigationSurfaceAStarStatus.BudgetExceeded)]
     public void Advance_ShouldMeterEveryExplicitConnectionLeg(
         int maximumConnectionLegs,
@@ -972,19 +1562,17 @@ public sealed class NavigationSurfaceAStarTests
                 (Fixed64)2,
                 (Fixed64)4),
             storageKind: GridStorageKind.Sparse);
-        VoxelIndex sourceIndex = default;
-        VoxelIndex witnessIndex = new(65, 0, 0);
-        VoxelIndex destinationIndex = new(2, 0, 0);
+        VoxelIndex sourceIndex = new(63, 0, 0);
+        VoxelIndex witnessIndex = new(64, 0, 0);
+        VoxelIndex destinationIndex = new(65, 0, 0);
         world.TryAddGrid(
                 configuration,
                 new[] { sourceIndex, witnessIndex, destinationIndex },
                 out _)
             .Should().BeTrue();
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
-        var mapBuilder = new NavigationMapBuilder("map", binding)
-            .AddCell(sourceIndex, Cell)
-            .AddCell(destinationIndex, Cell);
-        for (int i = 3; i <= witnessIndex.x; i++)
+        var mapBuilder = new NavigationMapBuilder("map", binding);
+        for (int i = 0; i <= destinationIndex.x; i++)
             mapBuilder.AddCell(new VoxelIndex(i, 0, 0), Cell);
         NavigationMap map = mapBuilder.Build();
         var prepared = new PreparedNavigationMap(map, bakeVersion: 1);
@@ -1019,8 +1607,12 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationConnectionOwnerKey("map", definition.Id),
             definition,
             isActive: true,
-            corridorCost: (Fixed64)8,
-            NavigationPagedSequence<GridNavigationPortal>.Empty);
+            corridorCost: Fixed64.One,
+            CompilePortalSequence(
+                binding,
+                sourceIndex,
+                witnessIndex,
+                destinationIndex));
         var alternateDefinition = new NavigationConnection(
             "z-shortcut",
             sourceIndex,
@@ -1034,8 +1626,12 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationConnectionOwnerKey("map", alternateDefinition.Id),
             alternateDefinition,
             isActive: true,
-            corridorCost: (Fixed64)8,
-            NavigationPagedSequence<GridNavigationPortal>.Empty);
+            corridorCost: Fixed64.One / (Fixed64)2,
+            CompilePortalSequence(
+                binding,
+                sourceIndex,
+                witnessIndex,
+                destinationIndex));
         NavigationExplicitConnectionIndex connections =
             NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
         connections = connections.SetOwner(alternateRecord, out _);
@@ -1058,7 +1654,7 @@ public sealed class NavigationSurfaceAStarTests
             out _);
         NavigationWorldGraph graph = CreateGraph(instance, connections);
         graph.SurfaceComponents.TryGet(
-                new NavigationCellAddress("map", default),
+                new NavigationCellAddress("map", sourceIndex),
                 out NavigationSurfaceComponent component)
             .Should().BeTrue();
         component.AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
@@ -1080,7 +1676,7 @@ public sealed class NavigationSurfaceAStarTests
                 maxLookupProbes: 64,
                 maxEndpointCandidates: 2,
                 maxExpandedNodes: 2,
-                maxEvaluatedEdges: 3,
+                maxEvaluatedEdges: 8,
                 maxConnectionLegs: maximumConnectionLegs,
                 maxTransitionCandidates: 0,
                 maxTransitionPairs: 0,
@@ -1089,7 +1685,7 @@ public sealed class NavigationSurfaceAStarTests
                 maxCoveredVoxelIntervals: 0,
                 maxSimplificationRays: 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 4, 4, 4);
+        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 4, 4, 8);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             store,
@@ -1104,7 +1700,10 @@ public sealed class NavigationSurfaceAStarTests
             admission.Advance(1, 1);
         }
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
-        using var search = new NavigationSurfaceAStarWork(admission.Result, workspace);
+        using var search = new NavigationSurfaceAStarWork(
+            admission.Result,
+            workspace,
+            long.MaxValue);
 
         for (int step = 0;
              step < 64 && search.Status == NavigationSurfaceAStarStatus.Pending;
@@ -1115,12 +1714,13 @@ public sealed class NavigationSurfaceAStarTests
 
         search.Status.Should().Be(expectedStatus);
         admission.Meter.EvaluatedEdges.Should().Be(
-            expectedStatus == NavigationSurfaceAStarStatus.Success ? 3 : 2,
-            "each raw endpoint-row owner is bounded even when its record is missing");
+            expectedStatus == NavigationSurfaceAStarStatus.Success ? 8 : 3,
+            "search and exact parent-edge reconstruction meter every canonical owner");
         admission.Meter.ConnectionLegs.Should().Be(maximumConnectionLegs);
         if (expectedStatus == NavigationSurfaceAStarStatus.Success)
         {
-            search.Result.Cost.Should().Be((Fixed64)8);
+            search.Result.Cost.Should().Be(Fixed64.One / (Fixed64)2,
+                "the later canonical parallel edge owns the reconstructed route");
             workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
                 .Should().BeTrue();
             workspace.NodeTable.GetRecord(startSlot).Heuristic.Should().Be(Fixed64.Zero);
@@ -1261,10 +1861,32 @@ public sealed class NavigationSurfaceAStarTests
         NavigationAStarPayload source,
         NavigationCellAddress end) => new(
         new NavigationAStarPayloadKey(source.Key.Query, source.Key.Start, end),
-        (NavigationCellAddress[])source.Nodes.Clone(),
+        (NavigationAStarGuidePoint[])source.GuidePoints.Clone(),
         source.Cost,
         source.Dependencies,
         source.Status);
+
+    private static NavigationPagedSequence<GridNavigationPortal> CompilePortalSequence(
+        NormalizedGridConfiguration binding,
+        params VoxelIndex[] cells)
+    {
+        var builder = new NavigationPagedSequence<GridNavigationPortal>.Builder(
+            GridNavigationPortal.SizeInBytes);
+        for (int i = 0; i + 1 < cells.Length; i++)
+        {
+            binding.TryGetCellPrism(cells[i], out GridCellPrism source)
+                .Should().BeTrue();
+            binding.TryGetCellPrism(cells[i + 1], out GridCellPrism target)
+                .Should().BeTrue();
+            GridCellGeometry.TryCreateNavigationPortal(
+                    source,
+                    target,
+                    out GridNavigationPortal portal)
+                .Should().BeTrue();
+            builder.Append(portal);
+        }
+        return builder.Seal();
+    }
 
     private static NavigationAStarPayloadLease PublishPayload(
         NavigationAStarPayloadCache cache,
@@ -1291,7 +1913,7 @@ public sealed class NavigationSurfaceAStarTests
         NavigationWorldGraphLease? graphLease = store.TryAcquire();
         graphLease.Should().NotBeNull();
         long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
-            Math.Min(workspace.PathNodes.Length, query.Budget.MaxExpandedNodes),
+            workspace.GuidePoints.Length,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         cache.TryReservePayload(

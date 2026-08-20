@@ -64,7 +64,7 @@ public class NavigationSurfaceAStarBenchmarks
             nodeCapacity: ExpansionCount,
             rayCoveredAddressCapacity: ExpansionCount,
             rayTraceIntervalCapacity: ExpansionCount,
-            guidePointCapacity: ExpansionCount);
+            guidePointCapacity: checked((ExpansionCount * 2) - 1));
         _workspaceAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         _admission = new NavigationQueryAdmissionWork(
             _fixture.World,
@@ -117,7 +117,8 @@ public class NavigationSurfaceAStarBenchmarks
 
             using var search = new NavigationSurfaceAStarWork(
                 _admission.Result,
-                _workspace);
+                _workspace,
+                long.MaxValue);
             while (search.Status == NavigationSurfaceAStarStatus.Pending)
                 search.Advance(int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue);
             if (search.Status != NavigationSurfaceAStarStatus.Success)
@@ -129,7 +130,7 @@ public class NavigationSurfaceAStarBenchmarks
             _endpointCandidates = meter.EndpointCandidates;
             _expandedNodes = meter.ExpandedNodes;
             _evaluatedEdges = meter.EvaluatedEdges;
-            _heapWork = checked(meter.ExpandedNodes + payload.Nodes.Length);
+            _heapWork = checked(meter.ExpandedNodes + _workspace.PathNodeCount);
             _resultBytes = payload.RetainedBytes;
             return payload.Cost.m_rawValue;
         }

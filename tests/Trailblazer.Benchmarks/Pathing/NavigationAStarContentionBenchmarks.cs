@@ -88,7 +88,7 @@ public class NavigationAStarContentionBenchmarks
             nodeCapacity: CorridorLength,
             rayCoveredAddressCapacity: CorridorLength,
             rayTraceIntervalCapacity: CorridorLength,
-            guidePointCapacity: CorridorLength);
+            guidePointCapacity: checked((CorridorLength * 2) - 1));
         _workspaceBytesPerWorker = GC.GetAllocatedBytesForCurrentThread() - workspaceBefore;
         GC.KeepAlive(workspaceProbe);
         _retainedWorkspaceBytes = checked(_workspaceBytesPerWorker * WorkerCount);
@@ -281,7 +281,7 @@ public class NavigationAStarContentionBenchmarks
             RecordAccounting();
             if (cache.ActiveLeaseCount != 0 || cache.LeasedBytes != 0)
                 throw new InvalidOperationException("A* contention result leases were not released.");
-            return canonical.Nodes.Length + duplicates + 1L;
+            return canonical.GuidePoints.Length + duplicates + 1L;
         }
         finally
         {

@@ -64,15 +64,68 @@ public sealed class TraversalEvaluatorTests
             policy,
             TraversalMedium.Solid);
 
-        evaluator.EvaluateEdge(westNode, westToEast, out Fixed64 forward)
+        evaluator.EvaluateEdge(westNode, westToEast, out TraversalEdgeEvidence forward)
             .Should().Be(TraversalEvaluationStatus.Passable);
-        evaluator.EvaluateEdge(eastNode, eastToWest, out Fixed64 reverse)
+        evaluator.EvaluateEdge(eastNode, eastToWest, out TraversalEdgeEvidence reverse)
             .Should().Be(TraversalEvaluationStatus.Passable);
 
         // The anisotropic cells are two world units apart; native portal legs sum to two.
-        forward.Should().Be((Fixed64)12);
-        reverse.Should().Be((Fixed64)3);
+        forward.Cost.Should().Be((Fixed64)12);
+        reverse.Cost.Should().Be((Fixed64)3);
         westToEast.NativePortal.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EvaluateEdge_ShouldReportStaleForAnUncertifiedNativePortal()
+    {
+        using TrailblazerWorldContext context = CreateContext(Cell(), Cell());
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef source = Resolve(lease.Graph, default);
+        NavigationGraphEdge current = FindEdge(
+            lease.Graph,
+            source,
+            Resolve(lease.Graph, new VoxelIndex(1, 0, 0)));
+        var uncertified = new NavigationGraphEdge(
+            current.Target,
+            NavigationGraphEdgeKind.Native,
+            default,
+            current.NativeDirectionOrdinal);
+        var evaluator = new TraversalEvaluator(
+            lease.Graph,
+            Profile(),
+            DefaultPolicy,
+            TraversalMedium.Solid);
+
+        evaluator.EvaluateEdge(source, uncertified, out _)
+            .Should().Be(TraversalEvaluationStatus.Stale);
+    }
+
+    [Fact]
+    public void EvaluateEdge_ShouldReportStaleForAnUncertifiedAutomaticSeam()
+    {
+        using NavigationAStarExitTestHarness.SeamFixture fixture =
+            NavigationAStarExitTestHarness.CreateAutomaticSeam(stacked: false);
+        var sourceAddress = new NavigationCellAddress("source", default);
+        var targetAddress = new NavigationCellAddress("target", default);
+        fixture.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef source)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(targetAddress, out NavigationNodeRef target)
+            .Should().BeTrue();
+        var pair = new NavigationAutomaticSeamPair(
+            sourceAddress,
+            targetAddress,
+            default);
+        var edge = new NavigationGraphEdge(
+            target,
+            new NavigationAutomaticSeamRef(pair, reverse: false));
+        var evaluator = new TraversalEvaluator(
+            fixture.Graph,
+            fixture.DefaultProfile,
+            NavigationAStarExitTestHarness.Policy,
+            TraversalMedium.Solid);
+
+        evaluator.EvaluateEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.Stale);
     }
 
     [Fact]
@@ -326,7 +379,7 @@ public sealed class TraversalEvaluatorTests
             TraversalCapability.None);
 
         new TraversalEvaluator(lease.Graph, zeroRadiusProfile, DefaultPolicy, TraversalMedium.Solid)
-            .EvaluateEdge(source, edge, out Fixed64 traversalCost)
+            .EvaluateEdge(source, edge, out TraversalEdgeEvidence traversal)
             .Should().Be(TraversalEvaluationStatus.Passable);
         new TraversalEvaluator(
                 lease.Graph,
@@ -357,7 +410,7 @@ public sealed class TraversalEvaluatorTests
             .Should().BeTrue();
         Fixed64.TryAdd(sourceDistance, targetDistance, out Fixed64 expectedCost)
             .Should().BeTrue();
-        traversalCost.Should().Be(expectedCost);
+        traversal.Cost.Should().Be(expectedCost);
     }
 
     [Fact]
@@ -379,9 +432,9 @@ public sealed class TraversalEvaluatorTests
                 DefaultPolicy,
                 TraversalMedium.Solid);
 
-            evaluator.EvaluateEdge(source, edge, out Fixed64 cost)
+            evaluator.EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
                 .Should().Be(TraversalEvaluationStatus.CostOverflow);
-            cost.Should().Be(Fixed64.Zero);
+            evidence.Cost.Should().Be(Fixed64.Zero);
         }
 
         VoxelGrid grid = context.World.ActiveGrids[0];
@@ -424,8 +477,8 @@ public sealed class TraversalEvaluatorTests
         {
             for (int i = 0; i < 10_000; i++)
             {
-                checksum += (int)evaluator.EvaluateEdge(source, edge, out Fixed64 cost);
-                checksum += cost.GetHashCode();
+                checksum += (int)evaluator.EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence);
+                checksum += evidence.Cost.GetHashCode();
             }
         };
         evaluate();

@@ -142,7 +142,7 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         _search = new NavigationSurfaceAStarWork(
             resolved,
             _workspace,
-            _cache.MaximumSinglePayloadBytes);
+            _payloadReservation.MaximumBytes);
         DisposeAdmission();
         return Status;
     }

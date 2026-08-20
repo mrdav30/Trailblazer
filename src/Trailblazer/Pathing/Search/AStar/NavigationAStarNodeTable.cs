@@ -18,6 +18,7 @@ internal struct NavigationAStarNodeRecord
     internal Fixed64 EstimatedTotalCost;
     internal NavigationNodeRef Parent;
     internal int HeapIndex;
+    internal int ParentEdgeOrdinal;
     internal bool HasParent;
     internal bool Closed;
 }

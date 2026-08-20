@@ -29,9 +29,10 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         Search = 0,
         Reconstruct = 1,
         ReversePath = 2,
-        SortDependencies = 3,
-        CaptureDependencies = 4,
-        BuildPayload = 5
+        ExpandGuide = 3,
+        SortDependencies = 4,
+        CaptureDependencies = 5,
+        BuildPayload = 6
     }
 
     private NavigationResolvedPathQuery? _query;
@@ -43,27 +44,30 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
     private readonly Vector3d _targetFootAnchor;
     private readonly bool _useEuclideanHeuristic;
     private NavigationSurfaceEdgeEnumerator _edges;
-    private NavigationGraphEdge _pendingEdge;
-    private TraversalExplicitEdgeWork _explicitEdgeWork;
+    private NavigationSurfaceEdgeRouteWork _routeWork;
     private NavigationNodeRef _current;
     private NavigationNodeRef _pathCursor;
     private NavigationDependencySortWork _dependencySort;
     private NavigationDependencyStampWork? _dependencyStamp;
-    private NavigationCellAddress[]? _payloadNodes;
+    private NavigationAStarGuidePoint[]? _payloadGuidePoints;
     private NavigationSurfaceAStarStatus _resultStatus;
     private Stage _stage;
     private int _pathWrite;
     private int _reverseLeft;
     private int _reverseRight;
+    private int _pathEdgeOrdinal;
+    private int _routeEdgeOrdinal;
+    private int _guideRollback;
     private int _payloadWrite;
     private bool _hasCurrent;
-    private bool _hasPendingEdge;
-    private bool _explicitEdgeActive;
+    private bool _routeActive;
+    private bool _reconstructionEdgeActive;
+    private bool _lastGuidePointIsNode;
 
     internal NavigationSurfaceAStarWork(
         NavigationResolvedPathQuery query,
         NavigationAStarWorkspace workspace,
-        long maximumPayloadBytes = long.MaxValue)
+        long maximumPayloadBytes)
     {
         SwiftThrowHelper.ThrowIfNull(query, nameof(query));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
@@ -178,7 +182,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     _hasCurrent = true;
                 }
 
-                if (!_hasPendingEdge)
+                if (!_routeActive)
                 {
                     NavigationSurfaceEdgeAdvanceStatus edgeStatus =
                         _edges.AdvanceOne(_meter, ref edgeRemaining);
@@ -196,89 +200,64 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                         _hasCurrent = false;
                         continue;
                     }
-                    _pendingEdge = _edges.Current;
-                    _hasPendingEdge = true;
-                }
-                if (_explicitEdgeActive)
-                {
-                    if (connectionRemaining == 0)
+                    NavigationGraphEdge edge = _edges.Current;
+                    if (_workspace.NodeTable.TryGetSlot(
+                            edge.Target,
+                            out int existingSlot)
+                        && _workspace.NodeTable.GetRecord(existingSlot).Closed)
                     {
-                        return _meter.RemainingConnectionLegs == 0
-                            ? Finish(NavigationSurfaceAStarStatus.BudgetExceeded)
-                            : Status;
-                    }
-                    if (!_meter.TryConsumeConnectionLegs(1))
-                        return Finish(NavigationSurfaceAStarStatus.BudgetExceeded);
-                    connectionRemaining--;
-                    TraversalExplicitEdgeStatus explicitStatus =
-                        _evaluator.AdvanceExplicitEdge(
-                            ref _explicitEdgeWork,
-                            out NavigationNodeRef dependencyNode,
-                            out Fixed64 explicitCost);
-                    if (dependencyNode.IsValid
-                        && dependencyNode != _pendingEdge.Target
-                        && !RecordPage(dependencyNode, true))
-                        return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
-                    if (explicitStatus == TraversalExplicitEdgeStatus.Pending)
                         continue;
-                    TraversalEvaluationStatus explicitEvaluation = explicitStatus switch
+                    }
+                    if (!RecordPage(edge.Target, false))
+                        return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
+                    _routeEdgeOrdinal = _edges.CurrentOrdinal;
+                    NavigationSurfaceEdgeRouteStatus begin = _routeWork.Begin(
+                        _evaluator,
+                        _current,
+                        edge,
+                        emitPoints: false);
+                    if (begin == NavigationSurfaceEdgeRouteStatus.Stale)
+                        return Finish(NavigationSurfaceAStarStatus.Stale);
+                    if (begin == NavigationSurfaceEdgeRouteStatus.CostOverflow)
+                        return Finish(NavigationSurfaceAStarStatus.CostOverflow);
+                    if (begin == NavigationSurfaceEdgeRouteStatus.Impassable)
                     {
-                        TraversalExplicitEdgeStatus.Passable =>
-                            TraversalEvaluationStatus.Passable,
-                        TraversalExplicitEdgeStatus.CostOverflow =>
-                            TraversalEvaluationStatus.CostOverflow,
-                        _ => TraversalEvaluationStatus.Impassable
-                    };
-                    _explicitEdgeActive = false;
-                    NavigationSurfaceAStarStatus completion = ApplyPendingEdge(
-                        explicitEvaluation,
-                        explicitCost);
+                        _routeWork.Reset();
+                        continue;
+                    }
+                    _routeActive = true;
+                }
+                NavigationSurfaceEdgeRouteStatus routeStatus = _routeWork.Advance(
+                    _meter,
+                    ref connectionRemaining);
+                if (_routeWork.TryTakeDependencyNode(
+                        out NavigationNodeRef dependencyNode)
+                    && dependencyNode != _routeWork.Edge.Target
+                    && !RecordPage(dependencyNode, true))
+                {
+                    return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
+                }
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.Point)
+                {
+                    _routeWork.ConsumePoint();
+                    continue;
+                }
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.Pending)
+                    return Status;
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.BudgetExceeded)
+                    return Finish(NavigationSurfaceAStarStatus.BudgetExceeded);
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.CostOverflow)
+                    return Finish(NavigationSurfaceAStarStatus.CostOverflow);
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.Stale)
+                    return Finish(NavigationSurfaceAStarStatus.Stale);
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.Passable)
+                {
+                    NavigationSurfaceAStarStatus completion = ApplyRoute();
                     if (completion != NavigationSurfaceAStarStatus.Pending)
                         return completion;
                     continue;
                 }
-
-                NavigationGraphEdge edge = _pendingEdge;
-                if (_workspace.NodeTable.TryGetSlot(edge.Target, out int existingSlot)
-                    && _workspace.NodeTable.GetRecord(existingSlot).Closed)
-                {
-                    ClearPendingEdge();
-                    continue;
-                }
-                if (!RecordPage(edge.Target, false))
-                    return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
-                if (edge.Kind == NavigationGraphEdgeKind.Explicit)
-                {
-                    TraversalExplicitEdgeStatus explicitStatus =
-                        _evaluator.BeginExplicitEdge(
-                            _current,
-                            edge,
-                            out _explicitEdgeWork);
-                    if (explicitStatus == TraversalExplicitEdgeStatus.Pending)
-                    {
-                        _explicitEdgeActive = true;
-                        continue;
-                    }
-                    TraversalEvaluationStatus beginEvaluation = explicitStatus ==
-                        TraversalExplicitEdgeStatus.CostOverflow
-                            ? TraversalEvaluationStatus.CostOverflow
-                            : TraversalEvaluationStatus.Impassable;
-                    NavigationSurfaceAStarStatus beginCompletion = ApplyPendingEdge(
-                        beginEvaluation,
-                        Fixed64.Zero);
-                    if (beginCompletion != NavigationSurfaceAStarStatus.Pending)
-                        return beginCompletion;
-                    continue;
-                }
-                TraversalEvaluationStatus evaluation = _evaluator.EvaluateEdge(
-                    _current,
-                    edge,
-                    out Fixed64 edgeCost);
-                NavigationSurfaceAStarStatus edgeCompletion = ApplyPendingEdge(
-                    evaluation,
-                    edgeCost);
-                if (edgeCompletion != NavigationSurfaceAStarStatus.Pending)
-                    return edgeCompletion;
+                ClearRoute();
                 continue;
             }
 
@@ -320,8 +299,140 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     _reverseRight--;
                     continue;
                 }
-                _dependencySort = new NavigationDependencySortWork(_workspace);
-                _stage = Stage.SortDependencies;
+                if (_workspace.PathNodeCount == 0)
+                {
+                    _dependencySort = new NavigationDependencySortWork(_workspace);
+                    _stage = Stage.SortDependencies;
+                    continue;
+                }
+                if (nodeRemaining == 0)
+                    return Status;
+                nodeRemaining--;
+                NavigationNodeRef startNode = _workspace.PathNodes[0];
+                if (!_graph!.TryGetNodeAddress(
+                        startNode,
+                        out NavigationCellAddress startAddress)
+                    || !_graph.TryGetNodeState(
+                        startNode,
+                        out NavigationNodeState startState))
+                {
+                    return Finish(NavigationSurfaceAStarStatus.Stale);
+                }
+                if (!AppendGuidePoint(
+                        new NavigationAStarGuidePoint(
+                            startAddress,
+                            startState.FootAnchor),
+                        isNode: true))
+                {
+                    return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
+                }
+                _edges = _graph.EnumerateSurfaceEdges(startNode);
+                _pathEdgeOrdinal = 0;
+                _stage = Stage.ExpandGuide;
+                continue;
+            }
+
+            if (_stage == Stage.ExpandGuide)
+            {
+                if (_pathEdgeOrdinal + 1 >= _workspace.PathNodeCount)
+                {
+                    _routeWork.Reset();
+                    _edges = default;
+                    _dependencySort = new NavigationDependencySortWork(_workspace);
+                    _stage = Stage.SortDependencies;
+                    continue;
+                }
+                NavigationNodeRef sourceNode =
+                    _workspace.PathNodes[_pathEdgeOrdinal];
+                NavigationNodeRef targetNode =
+                    _workspace.PathNodes[_pathEdgeOrdinal + 1];
+                if (!_reconstructionEdgeActive)
+                {
+                    if (!_workspace.NodeTable.TryGetSlot(
+                            targetNode,
+                            out int targetSlot))
+                    {
+                        return Finish(NavigationSurfaceAStarStatus.Stale);
+                    }
+                    int parentEdgeOrdinal = _workspace.NodeTable
+                        .GetRecord(targetSlot)
+                        .ParentEdgeOrdinal;
+                    NavigationSurfaceEdgeAdvanceStatus edgeStatus =
+                        _edges.AdvanceOne(_meter, ref edgeRemaining);
+                    if (edgeStatus == NavigationSurfaceEdgeAdvanceStatus.Blocked)
+                    {
+                        return _meter.RemainingEvaluatedEdges == 0
+                            ? Finish(NavigationSurfaceAStarStatus.BudgetExceeded)
+                            : Status;
+                    }
+                    if (edgeStatus == NavigationSurfaceEdgeAdvanceStatus.Pending)
+                        continue;
+                    if (edgeStatus == NavigationSurfaceEdgeAdvanceStatus.Complete
+                        || _edges.CurrentOrdinal > parentEdgeOrdinal)
+                    {
+                        return Finish(NavigationSurfaceAStarStatus.Stale);
+                    }
+                    if (_edges.CurrentOrdinal < parentEdgeOrdinal)
+                        continue;
+                    NavigationGraphEdge edge = _edges.Current;
+                    if (edge.Target != targetNode)
+                        return Finish(NavigationSurfaceAStarStatus.Stale);
+                    NavigationSurfaceEdgeRouteStatus begin = _routeWork.Begin(
+                        _evaluator,
+                        sourceNode,
+                        edge,
+                        emitPoints: true);
+                    if (begin != NavigationSurfaceEdgeRouteStatus.Pending)
+                    {
+                        return Finish(begin == NavigationSurfaceEdgeRouteStatus.CostOverflow
+                            ? NavigationSurfaceAStarStatus.CostOverflow
+                            : NavigationSurfaceAStarStatus.Stale);
+                    }
+                    _guideRollback = _workspace.GuidePointCount;
+                    _reconstructionEdgeActive = true;
+                }
+
+                NavigationSurfaceEdgeRouteStatus routeStatus = _routeWork.Advance(
+                    _meter,
+                    ref connectionRemaining);
+                if (_routeWork.TryTakeDependencyNode(
+                        out NavigationNodeRef dependencyNode)
+                    && dependencyNode != targetNode
+                    && !RecordPage(dependencyNode, true))
+                {
+                    return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
+                }
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.Point)
+                {
+                    if (nodeRemaining == 0)
+                        return Status;
+                    nodeRemaining--;
+                    bool isTarget = _routeWork.CurrentPointIsTargetFootAnchor;
+                    if (!AppendGuidePoint(
+                            _routeWork.CurrentPoint,
+                            isTarget))
+                    {
+                        return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
+                    }
+                    _routeWork.ConsumePoint();
+                    continue;
+                }
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.Pending)
+                    return Status;
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.BudgetExceeded)
+                    return Finish(NavigationSurfaceAStarStatus.BudgetExceeded);
+                if (routeStatus == NavigationSurfaceEdgeRouteStatus.CostOverflow)
+                    return Finish(NavigationSurfaceAStarStatus.CostOverflow);
+                if (routeStatus != NavigationSurfaceEdgeRouteStatus.Passable
+                    || !HasExpectedRouteCost(sourceNode, targetNode))
+                {
+                    _workspace.GuidePointCount = _guideRollback;
+                    return Finish(NavigationSurfaceAStarStatus.Stale);
+                }
+                _routeWork.Reset();
+                _edges = _graph!.EnumerateSurfaceEdges(targetNode);
+                _reconstructionEdgeActive = false;
+                _pathEdgeOrdinal++;
                 continue;
             }
 
@@ -362,29 +473,24 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 if (!_dependencyStamp.IsValid)
                     return Finish(NavigationSurfaceAStarStatus.Stale);
                 long requiredPayloadBytes = NavigationAStarPayload.GetRetainedBytes(
-                    _workspace.PathNodeCount,
+                    _workspace.GuidePointCount,
                     _dependencyStamp.Result);
                 if (requiredPayloadBytes > _maximumPayloadBytes)
                     return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
-                _payloadNodes = _workspace.PathNodeCount == 0
-                    ? Array.Empty<NavigationCellAddress>()
-                    : new NavigationCellAddress[_workspace.PathNodeCount];
+                _payloadGuidePoints = _workspace.GuidePointCount == 0
+                    ? Array.Empty<NavigationAStarGuidePoint>()
+                    : new NavigationAStarGuidePoint[_workspace.GuidePointCount];
                 _stage = Stage.BuildPayload;
                 continue;
             }
 
-            if (_payloadWrite < _workspace.PathNodeCount)
+            if (_payloadWrite < _workspace.GuidePointCount)
             {
                 if (nodeRemaining == 0)
                     return Status;
                 nodeRemaining--;
-                if (!_graph!.TryGetNodeAddress(
-                        _workspace.PathNodes[_payloadWrite],
-                        out NavigationCellAddress address))
-                {
-                    return Finish(NavigationSurfaceAStarStatus.Stale);
-                }
-                _payloadNodes![_payloadWrite] = address;
+                _payloadGuidePoints![_payloadWrite] =
+                    _workspace.GuidePoints[_payloadWrite];
                 _payloadWrite++;
                 continue;
             }
@@ -400,7 +506,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     resolved.Query,
                     resolved.Start.Address,
                     resolved.End.Address),
-                _payloadNodes!,
+                _payloadGuidePoints!,
                 resultCost,
                 _dependencyStamp!.Result,
                 _resultStatus);
@@ -422,8 +528,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         _graph = null;
         _evaluator = default;
         _edges = default;
-        _pendingEdge = default;
-        _explicitEdgeWork = default;
+        _routeWork.Reset();
         _dependencySort = default;
     }
 
@@ -452,16 +557,12 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         return Status;
     }
 
-    private NavigationSurfaceAStarStatus ApplyPendingEdge(
-        TraversalEvaluationStatus evaluation,
-        Fixed64 edgeCost)
+    private NavigationSurfaceAStarStatus ApplyRoute()
     {
-        NavigationGraphEdge edge = _pendingEdge;
-        ClearPendingEdge();
-        if (evaluation == TraversalEvaluationStatus.CostOverflow)
-            return Finish(NavigationSurfaceAStarStatus.CostOverflow);
-        if (evaluation != TraversalEvaluationStatus.Passable)
-            return Status;
+        NavigationGraphEdge edge = _routeWork.Edge;
+        Fixed64 edgeCost = _routeWork.Cost;
+        int edgeOrdinal = _routeEdgeOrdinal;
+        ClearRoute();
         if (!_workspace.NodeTable.TryGetOrAdd(
                 edge.Target,
                 out int targetSlot,
@@ -487,6 +588,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             return Finish(NavigationSurfaceAStarStatus.CostOverflow);
         }
         target.Parent = _current;
+        target.ParentEdgeOrdinal = edgeOrdinal;
         target.HasParent = true;
         if (added)
             Push(edge.Target, targetSlot);
@@ -495,12 +597,54 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         return Status;
     }
 
-    private void ClearPendingEdge()
+    private void ClearRoute()
     {
-        _pendingEdge = default;
-        _hasPendingEdge = false;
-        _explicitEdgeActive = false;
-        _explicitEdgeWork = default;
+        _routeWork.Reset();
+        _routeActive = false;
+    }
+
+    private bool HasExpectedRouteCost(
+        NavigationNodeRef source,
+        NavigationNodeRef target)
+    {
+        if (!_workspace.NodeTable.TryGetSlot(source, out int sourceSlot)
+            || !_workspace.NodeTable.TryGetSlot(target, out int targetSlot))
+        {
+            return false;
+        }
+        Fixed64 sourceCost = _workspace.NodeTable.GetRecord(sourceSlot).Cost;
+        Fixed64 targetCost = _workspace.NodeTable.GetRecord(targetSlot).Cost;
+        return Fixed64.TrySubtract(
+                targetCost,
+                sourceCost,
+                out Fixed64 expectedCost)
+            && expectedCost == _routeWork.Cost;
+    }
+
+    private bool AppendGuidePoint(
+        NavigationAStarGuidePoint point,
+        bool isNode)
+    {
+        int count = _workspace.GuidePointCount;
+        if (count != 0
+            && _workspace.GuidePoints[count - 1].Position == point.Position)
+        {
+            NavigationAStarGuidePoint previous = _workspace.GuidePoints[count - 1];
+            if (_lastGuidePointIsNode && !isNode)
+                return true;
+            if (!_lastGuidePointIsNode || previous.Address == point.Address)
+            {
+                _workspace.GuidePoints[count - 1] = point;
+                _lastGuidePointIsNode = isNode;
+                return true;
+            }
+        }
+        if (count >= _workspace.GuidePoints.Length)
+            return false;
+        _workspace.GuidePoints[count] = point;
+        _workspace.GuidePointCount = count + 1;
+        _lastGuidePointIsNode = isNode;
+        return true;
     }
 
     private void Push(NavigationNodeRef node, int slot)

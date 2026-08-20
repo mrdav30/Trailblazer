@@ -68,8 +68,8 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.QueryLimits.AStarWorkspaceNodeCapacity.Should().Be(4_096);
         settings.QueryLimits.MaxAStarCacheEntries.Should().Be(128);
         settings.QueryLimits.MaxAStarReusablePayloadBytes.Should().Be(16_777_216);
-        settings.QueryLimits.MaxAStarSinglePayloadBytes.Should().Be(262_144);
-        settings.QueryLimits.MaxAStarActivePayloadBytes.Should().Be(2_097_152);
+        settings.QueryLimits.MaxAStarSinglePayloadBytes.Should().Be(524_288);
+        settings.QueryLimits.MaxAStarActivePayloadBytes.Should().Be(4_194_304);
         settings.QueryLimits.MaxAStarActivePayloadLeases.Should().Be(8);
         settings.QueryLimits.FlowWorkspaceMapCapacity.Should().Be(16);
         settings.QueryLimits.FlowWorkspaceEndpointPageCapacity.Should().Be(512);
@@ -77,7 +77,15 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.QueryLimits.FlowWorkspaceNodeCapacity.Should().Be(4_096);
         settings.QueryLimits.RayWorkspaceCoveredAddressCapacity.Should().Be(4_096);
         settings.QueryLimits.RayWorkspaceTraceIntervalCapacity.Should().Be(4_096);
-        settings.QueryLimits.AStarWorkspaceGuidePointCapacity.Should().Be(65_536);
+        settings.QueryLimits.AStarWorkspaceGuidePointCapacity.Should().Be(8_191);
+        settings.QueryLimits.AStarWorkspaceGuidePointCapacity.Should().Be(
+            (settings.QueryLimits.AStarWorkspaceNodeCapacity * 2) - 1);
+        NavigationAStarPayload.GetMaximumRetainedBytes(
+                settings.QueryLimits.AStarWorkspaceGuidePointCapacity,
+                settings.QueryLimits.AStarWorkspaceComponentCapacity,
+                settings.QueryLimits.AStarWorkspaceEndpointPageCapacity)
+            .Should().BeLessThanOrEqualTo(
+                settings.QueryLimits.MaxAStarSinglePayloadBytes);
         settings.QueryLimits.MaxFlowCacheEntries.Should().Be(128);
         settings.QueryLimits.MaxFlowReusablePayloadBytes.Should().Be(33_554_432);
         settings.QueryLimits.MaxFlowSinglePayloadBytes.Should().Be(524_288);

@@ -308,7 +308,9 @@ internal sealed class NavigationAStarPayloadCache
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         lease = null!;
         long retainedBytes = payload.RetainedBytes;
-        if (!NavigationAStarPayload.IsReusableResult(payload.Status, payload.Nodes.Length)
+        if (!NavigationAStarPayload.IsReusableResult(
+                payload.Status,
+                payload.GuidePoints.Length)
             || !reservation.HasLeaseSlot
             || retainedBytes > reservation.MaximumBytes
             || !store.Current.IsDependencyCurrent(payload.Dependencies))

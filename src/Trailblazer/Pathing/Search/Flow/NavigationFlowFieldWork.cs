@@ -179,8 +179,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                     TraversalExplicitEdgeStatus explicitStatus =
                         _evaluator.AdvanceExplicitEdge(
                             ref _explicitEdgeWork,
-                            out NavigationNodeRef dependencyNode,
-                            out Fixed64 explicitCost);
+                            out TraversalEdgeEvidence explicitEvidence);
+                    NavigationNodeRef dependencyNode = explicitEvidence.DependencyNode;
                     if (dependencyNode.IsValid
                         && dependencyNode != _pendingIncoming.ForwardEdge.Target
                         && !TryRecordDependencyNode(dependencyNode))
@@ -196,11 +196,13 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                             TraversalEvaluationStatus.Passable,
                         TraversalExplicitEdgeStatus.CostOverflow =>
                             TraversalEvaluationStatus.CostOverflow,
+                        TraversalExplicitEdgeStatus.Stale =>
+                            TraversalEvaluationStatus.Stale,
                         _ => TraversalEvaluationStatus.Impassable
                     };
                     NavigationFlowFieldStatus explicitCompletion = ApplyIncoming(
                         explicitEvaluation,
-                        explicitCost);
+                        explicitEvidence.Cost);
                     if (explicitCompletion != NavigationFlowFieldStatus.Pending)
                         return explicitCompletion;
                     continue;
@@ -220,10 +222,14 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                         _explicitEdgeActive = true;
                         continue;
                     }
-                    TraversalEvaluationStatus beginEvaluation = explicitStatus ==
-                        TraversalExplicitEdgeStatus.CostOverflow
-                            ? TraversalEvaluationStatus.CostOverflow
-                            : TraversalEvaluationStatus.Impassable;
+                    TraversalEvaluationStatus beginEvaluation = explicitStatus switch
+                    {
+                        TraversalExplicitEdgeStatus.CostOverflow =>
+                            TraversalEvaluationStatus.CostOverflow,
+                        TraversalExplicitEdgeStatus.Stale =>
+                            TraversalEvaluationStatus.Stale,
+                        _ => TraversalEvaluationStatus.Impassable
+                    };
                     NavigationFlowFieldStatus beginCompletion = ApplyIncoming(
                         beginEvaluation,
                         Fixed64.Zero);
@@ -234,8 +240,10 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 TraversalEvaluationStatus evaluation = _evaluator.EvaluateEdge(
                     _pendingIncoming.Predecessor,
                     _pendingIncoming.ForwardEdge,
-                    out Fixed64 edgeCost);
-                NavigationFlowFieldStatus applied = ApplyIncoming(evaluation, edgeCost);
+                    out TraversalEdgeEvidence evidence);
+                NavigationFlowFieldStatus applied = ApplyIncoming(
+                    evaluation,
+                    evidence.Cost);
                 if (applied != NavigationFlowFieldStatus.Pending)
                     return applied;
                 continue;
@@ -433,6 +441,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         ClearPendingIncoming();
         if (evaluation == TraversalEvaluationStatus.CostOverflow)
             return Finish(NavigationFlowFieldStatus.CostOverflow);
+        if (evaluation == TraversalEvaluationStatus.Stale)
+            return Finish(NavigationFlowFieldStatus.Stale);
         if (evaluation != TraversalEvaluationStatus.Passable)
             return Status;
         ref NavigationFlowFieldSearchNode current =

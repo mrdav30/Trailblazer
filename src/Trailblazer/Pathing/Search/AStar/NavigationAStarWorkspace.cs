@@ -43,7 +43,9 @@ internal sealed class NavigationAStarWorkspace
             componentCapacity,
             rayCoveredAddressCapacity,
             rayTraceIntervalCapacity);
-        GuidePointCapacity = guidePointCapacity;
+        GuidePoints = guidePointCapacity == 0
+            ? Array.Empty<NavigationAStarGuidePoint>()
+            : new NavigationAStarGuidePoint[guidePointCapacity];
     }
 
     internal NavigationEndpointWorkspace EndpointWorkspace { get; }
@@ -65,11 +67,13 @@ internal sealed class NavigationAStarWorkspace
 
     internal NavigationRayWorkspace RayWorkspace { get; }
 
-    internal int GuidePointCapacity { get; }
+    internal NavigationAStarGuidePoint[] GuidePoints { get; }
 
     internal int HeapCount { get; set; }
 
     internal int PathNodeCount { get; set; }
+
+    internal int GuidePointCount { get; set; }
 
     internal void Reset()
     {
@@ -93,5 +97,6 @@ internal sealed class NavigationAStarWorkspace
         NodeTable.Reset();
         HeapCount = 0;
         PathNodeCount = 0;
+        GuidePointCount = 0;
     }
 }

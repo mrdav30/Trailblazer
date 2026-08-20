@@ -33,6 +33,7 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-a-star-contention` | `NavigationAStarContentionBenchmarks` |
 | `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
 | `navigation-flow-field-contention` | `NavigationFlowFieldContentionBenchmarks` |
+| `navigation-ray` | `NavigationRayBenchmarks` |
 | `volume-path-request` | `VolumePathRequestBenchmarks` |
 | `path-heap` | `PathHeapBenchmarks` |
 | `navigation-map-bake` | `NavigationMapBakeBenchmarks` |
@@ -75,6 +76,17 @@ agent batches, affected/unaffected invalidation, and an exact 1,000,000-node
 articulation split. `NavigationFlowFieldContentionBenchmarks` covers same-key
 and near/far publication with persistent manual workers and reversed
 completion.
+
+`NavigationRayBenchmarks` covers short, medium, and long successful rays; a
+sparse blocked trace; one mixed seam/explicit world; worst-case raw A* guide
+points; bounded A* simplification; same-lease Flow rejoin; and contention on the
+context-owned immediate workspace. Global setup runs each real production
+workload twice before timing and fails on incorrect statuses, setup topology,
+counter/drain invariants, warmed direct-ray/Flow foreground allocation, or
+contention-worker allocation. A* cases intentionally record their result-
+payload allocation instead of requiring zero. Treat reported latency and
+allocation as environment-specific BenchmarkDotNet evidence, not product
+guarantees.
 
 The default Flow benchmark run uses the canonical three-launch, ten-warmup,
 100-iteration Monitoring job. The exact 1M articulation case uses a separately

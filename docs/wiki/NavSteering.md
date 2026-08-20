@@ -80,7 +80,7 @@ The implementation mirrors this separation across partial files:
 - `NavSteering.Requests.cs` owns public request and guide-session entry points.
 - `NavSteering.Simulation.cs` owns the per-frame `GetHeading(...)` pipeline,
   path validation, stuck handling, arrival, and stop behavior.
-- `NavSteering.LineOfSight.cs` owns chart and volume line-of-sight helpers.
+- `NavSteering.LineOfSight.cs` owns the retained volume-only direct-path helper.
 - `NavSteering.Groups.cs` owns combined steering, movement-group session state,
   and route-topology publication helpers.
 - `NavSteering.Serialization.cs` contains the Chronicler `RecordData(...)`
@@ -102,7 +102,7 @@ The main entry points are:
 - `LeaveMovementGroup()`
 - `Arrive()`
 - `StopMove()`
-- `IsDestinationInSight(...)`
+- `IsVolumeDestinationInSight(...)`
 - `ComputeCombinedSteering(...)`
 - `ShouldAdvanceToNextWaypoint()`
 
@@ -193,8 +193,9 @@ query value. `_currentRequest` remains only for volume sessions.
 
 `_navigationGuideLease` is the active graph A* cursor and
 `_navigationFlowFieldLease` is the active graph Flow sampler. The retained
-`_volumeGuide` is used only by volume sessions. Hybrid handoff and the bounded
-Flow recovery bridge have their own explicitly owned leases.
+`_volumeGuide` is used only by volume sessions. Hybrid handoff leases remain
+explicitly owned; Flow local rejoin uses the active Flow lease and its selected
+edge rather than acquiring a recovery A* lease.
 
 It may be:
 
@@ -322,7 +323,8 @@ re-evaluate:
 - whether the destination is directly reachable
 - whether the current guide may be unnecessary
 
-This keeps straight-line checks cheaper in the common case.
+Graph surface sessions run this cadence through the context's internal bounded
+navigation ray. Volume sessions retain their volume-only direct-path check.
 
 ### 7.4 Target Direction Resolution
 
@@ -379,7 +381,8 @@ It performs the following work:
 
 1. skip if no request pass is scheduled
 2. for a surface query, replace only the start foot position and request a new
-   dependency-validated A* or Flow lease through the context guide service
+   dependency-validated direct ray, A* lease, or Flow lease through the context
+   guide service
 3. for a remaining request, update its origin and validate endpoints
 4. apply direct line-of-sight shortcuts where that remaining branch supports it
 5. request a remaining guide if needed
@@ -389,16 +392,16 @@ revalidates from the current position.
 
 ### 8.2 Direct Travel
 
-If `PathManager.NeedsPath(...)` returns `false`, steering enters direct-travel
-mode:
+For a graph surface query, steering enters direct-travel mode only when the
+internal bounded navigation ray certifies the full swept corridor and every
+non-geometric cell, area-policy, and edge surcharge is zero:
 
 - `HasLineOfSightPath = true`
 - no guide is required
 - `FindTargetDirection(...)` aims directly at `Destination`
 
-This is the cheapest successful outcome for remaining volume sessions.
-The current graph surface path always consumes its certified waypoint lease;
-Phase 6 owns graph navigation-ray shortcuts.
+Volume sessions retain their separate volume-only straight-corridor check until
+the volume graph cutover.
 
 ### 8.3 Guided Travel
 
@@ -435,7 +438,8 @@ blending.
 It resolves in this order:
 
 - direct vector toward `Destination` if `HasLineOfSightPath`
-- current hybrid segment or graph Flow sample, including bounded A* recovery
+- current hybrid segment or graph Flow sample, including exact rebase and
+  bounded same-lease selected-edge rejoin
 - current graph waypoint from `NavigationGuideLease`
 - current volume waypoint or movement direction from `VolumeGuide`
 
@@ -533,23 +537,18 @@ Use this distinction when documenting or testing behavior:
 
 ## 12. Line-of-Sight and Reachability
 
-`IsDestinationInSight(...)` is a small but important wrapper around:
+Graph surface reachability is intentionally not a public `NavSteering` LOS
+method. Steering submits its immutable `PathQuery` to the context-owned internal
+navigation ray, which validates the ordered world trace, exact graph chain,
+profile clearance, portal geometry, traversal policies, dependencies, and
+finite work limits. Only a cost-neutral successful proof enables guide-free
+direct steering. `Blocked` continues through normal guide acquisition, while
+`Stale` or capacity exhaustion follows the deterministic retry path.
 
-- `PathManager.NeedsPath(...)`
-
-It answers:
-
-- can the agent move directly to the destination with the current unit size?
-
-It does not answer:
-
-- whether a global route exists through the map
-- whether the best path is direct
-
-This is why steering still needs guide resolution when LOS fails.
-
-This chart/volume LOS helper is not surface-A* authority. Graph surface shortcuts
-wait for the certified navigation-ray work in Phase 6.
+`IsVolumeDestinationInSight(...)` remains public only for the retained raw-
+volume branch and delegates to `VolumeVoxelFinder.IsDirectPathClear(...)`.
+Volume and transition graph wiring, plus the final public-versus-internal ray
+API decision, belong to the volume cutover.
 
 ## 13. Group and Avoidance Steering
 
@@ -696,8 +695,9 @@ visible to steering.
 `HasLineOfSightPath = true` means there may be no active guide at all. Do not
 assume every movement session owns a graph lease or `VolumeGuide`.
 
-This includes aerial and swim movement. Either mode can legitimately bounce
-between direct travel and a `VolumeGuide` over the life of one request.
+This includes graph surface travel after a cost-neutral certified ray, plus
+aerial and swim movement. Either volume mode can legitimately bounce between
+direct travel and a `VolumeGuide` over the life of one request.
 
 ### Treating StopMove() as arrival
 

@@ -103,7 +103,6 @@ The main entry points are:
 - `UnloadChart(NavigationChart chart)`
 - `Reset()`
 - `TryGetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)`
-- `NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkableEndpoints = false)`
 
 Important public state includes:
 
@@ -451,28 +450,10 @@ Behavior:
 This is not a geometric distance estimate. It is a grid-size-derived search cap
 hint.
 
-### 9.2 NeedsPath(...)
-
-`NeedsPath(...)` is the fast direct-travel viability check.
-
-It:
-
-1. line-traces between `startPos` and `endPos` through
-   `GridTracer.TraceLine(...)`
-2. walks the voxels touched by that trace
-3. requires a path if any voxel lacks a `SolidChartPartition`
-4. requires a path if any traversed partition is impassable for the given unit
-   size
-
-Important detail:
-
-- this is a straight-line viability test
-- it does not mean a route is impossible if it returns `true`
-- it only means a path guide is needed instead of direct travel
-
-### 9.3 `allowUnwalkableEndpoints`
-
-The `allowUnwalkableEndpoints` argument affects the direct-travel check.
+Surface direct travel no longer goes through `PathManager`. The graph guide
+service and `NavSteering` share one internal bounded navigation-ray authority.
+The retained volume-only check lives behind
+`VolumeVoxelFinder.IsDirectPathClear(...)` until the volume graph cutover.
 
 In the current implementation:
 
@@ -561,10 +542,6 @@ changes affect path validity.
 
 They are not. The edge-leg check rejects diagonals that would cut through
 blocked or missing side voxels.
-
-### Treating NeedsPath(...) as a full route solver
-
-It is only a direct-line viability check.
 
 ### Ignoring shared ownership
 

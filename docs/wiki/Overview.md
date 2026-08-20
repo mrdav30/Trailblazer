@@ -177,6 +177,10 @@ NavigationGuideStatus status = context.Guides.RequestGuide(
 A lease exists only for `Success`. Dispose it when finished. Its status and
 waypoint operations validate graph dependencies and can report `Stale`; finite
 admission/search limits report `BudgetExceeded` rather than running unbounded.
+The published guide preserves the exact winning portal route. Before cache
+publication, a bounded navigation ray removes only waypoint spans whose full
+swept corridor is valid and whose traversal cost does not exceed the raw A*
+subroute. Optional simplification exhaustion keeps the valid raw suffix.
 
 ### 3.2 Graph Flow `PathQuery`
 
@@ -209,6 +213,10 @@ Important cache behavior:
 - when a compatible cached field does not cover a farther start voxel,
   Trailblazer publishes the deterministic longer prefix while active leases may
   still reference the smaller payload
+- when a sampled agent needs local recovery, steering first rebases exactly and
+  then tests bounded rejoin candidates against the current selected edge using
+  the same Flow lease; it neither scans the field nor submits a recovery A*
+  query
 
 ### 3.3 VolumePathRequest
 
@@ -270,9 +278,10 @@ Trailblazer separates search payloads from runtime movement consumption.
 
 Graph surface searches publish immutable dependency-stamped payloads:
 
-- A* publishes ordered waypoint data behind `NavigationGuideLease`
+- A* publishes portal-correct, optionally ray-simplified waypoint data behind
+  `NavigationGuideLease`
 - Flow performs reverse integration and publishes selected edges and integration
-  costs behind `NavigationFlowFieldLease`
+  costs behind `NavigationFlowFieldLease`; local rejoin remains on that lease
 
 The retained `VolumeSurveyor` builds `VolumeSurveyResult` waypoint data for
 chart-optional volume travel. It is not surface-search authority.
@@ -506,8 +515,10 @@ Before runtime pathing works correctly:
   exact profile, valid foot endpoints, and a nonzero finite work budget.
 - If you request guides directly, forgetting `ReturnGuide(...)` will keep
   results checked out.
-- `NeedsPath(...)` is a line trace over voxels, not a guarantee that a long
-  route is globally optimal.
+- Surface direct travel is accepted only after the internal graph navigation
+  ray certifies the complete swept corridor and confirms that every non-
+  geometric surcharge is zero. The retained volume-only direct-path check is
+  not surface graph authority.
 - `Navigator.CommitFrameMotion()` is required to apply accumulated deltas and
   refresh velocity state.
 - Host code is still responsible for collision probing, surface detection, water

@@ -124,6 +124,13 @@ deriving path cost from a context-wide voxel size. Remaining chart-backed
 volume/handoff paths retain their existing constraints until their owning
 cutover phases.
 
+Graph surface travel uses one internal bounded navigation ray throughout the
+runtime stack. It certifies cost-neutral direct steering, simplifies A* guides
+without discarding required portal anchors, and lets Flow steering rejoin the
+selected local edge through the existing Flow lease. Failed or exhausted
+optional shortcuts retain the valid guided route; they do not bypass graph
+policy or clearance rules.
+
 ## Quick Start
 
 After publishing a navigation map and its area policy, construct one complete
@@ -186,12 +193,16 @@ if (status == NavigationGuideStatus.Success && lease != null)
 Use `PathQuery` with `PathAlgorithm.AStar` when one agent needs a concrete
 surface waypoint trail. A successful request returns a disposable
 `NavigationGuideLease`; every acquisition and cursor operation reports a
-`NavigationGuideStatus`.
+`NavigationGuideStatus`. Published waypoint trails preserve the exact winning
+portal route and are compacted only where the bounded navigation ray certifies
+an equal-or-cheaper replacement.
 
 Use `PathQuery` with `PathAlgorithm.FlowField` and `FlowFieldQueryOptions` when
 many agents can share a destination and sample local movement vectors from one
 cached graph field. `context.Guides.RequestFlowField(...)` returns a disposable
-`NavigationFlowFieldLease`.
+`NavigationFlowFieldLease`. If an agent drifts from its current sample, local
+rejoin stays on that same lease and selected edge; it does not submit a recovery
+A* query or rebuild the field.
 
 Use `VolumePathRequest` when movement should route through raw 3D voxel
 connectivity for gas, liquid, aerial, or chart-optional travel.

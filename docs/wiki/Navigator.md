@@ -376,6 +376,13 @@ It then:
 - gives the exact query to steering, which owns and disposes the resulting
   `NavigationGuideLease` or `NavigationFlowFieldLease`
 
+Before acquiring a graph lease, steering may use the context's internal bounded
+navigation ray to certify cost-neutral direct travel. A* leases expose the
+portal-correct guide after bounded simplification, while Flow local recovery
+rebases or rejoins the current selected edge through that same Flow lease. Flow
+rejoin does not allocate a second guide, rebuild the field, or submit a recovery
+A* request.
+
 For Flow queries, `query.AllowTransitions` controls whether Navigator may use
 the retained hybrid planner above the direct graph guide-service boundary. It
 also allows bounded swim-exit style handoffs

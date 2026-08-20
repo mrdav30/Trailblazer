@@ -1998,6 +1998,15 @@ anchors, and explicit entry/portal/exit anchors; explicit witness feet and the
 legacy node-only payload are absent. Explicit semantic evaluation, Flow, and ray
 geometry share one portal-certificate evidence pass; cached negative proofs keep
 impassable witness dependencies. The public guide lease shape is unchanged.
+Bounded A* simplification is now complete. It compacts the mandatory portal-
+correct guide in place using exact node-foot candidates, the shared bounded ray,
+the original optimal A* cost authority, atomic dependency union, and a
+conditional world epoch for every completed simplification proof. Optional
+budget/capacity/cost exhaustion retains a valid raw suffix, while `Stale`
+remains terminal. The local-stack build path was also completed in GridForge
+`1202e6d` and Trailblazer `be2d478`/`518c21a`, so Debug, Release, and
+ReleaseLean now consume the same sibling FixedMathSharp/GridForge geometry
+without package drift.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
@@ -2005,7 +2014,7 @@ impassable witness dependencies. The public guide lease shape is unchanged.
 | Ordered navigation-ray core | Complete — GridForge ordered trace discovery `bc60dd7`; Trailblazer kernel `f54dcb5` | Focused 53/53, relevant aggregate 128/128, Release 1,386/1,386, ReleaseLean 1,355/1,355, both TFMs 0 warnings/errors, warmed query/guide 0 B, independent correctness/lean approval |
 | Role-aware nearest-endpoint ray proof | Complete — exact overlapping-candidate identity, directed start/destination seams, blocked-negative dependencies, and A*/Flow parity | Focused 53/53, graph/pathing aggregate 479/479, Release 1,404/1,404, ReleaseLean 1,373/1,373, both TFMs/configurations 0 warnings/errors, independent correctness/lean approval |
 | Portal-aware A* guide points | Complete — raw guide and structural-certificate closure independently approved | Focused 83/83; Release 1,419/1,419; ReleaseLean 1,388/1,388; both TFMs/configurations and benchmark build 0 warnings/errors. Exact parent ordinal, zero/multi-witness portal replay, isolated positive-radius source/exit leg rejection, equal-cost parallel-edge geometry, canonical duplicate ownership, exact payload bytes, dependency-bearing negative proofs, and sticky structural `Stale` are pinned; explicit rays use one evidence pass and no per-interval portal storage |
-| Bounded A* simplification | Planned | Canonical farthest-valid node anchors, less-simplified success on ray-budget exhaustion, exact dependency union |
+| Bounded A* simplification | Complete — Trailblazer `893796b`; mandatory raw guide compacted in place with one shared ray worker | Focused Surface/concurrency/architecture 43/43 and admission/endpoint 40/40 in Release plus ReleaseLean; full Release 1,434/1,434; full ReleaseLean 1,403/1,403; Debug Surface A* 29/29; four source builds and benchmark build 0 warnings/errors; warmed candidate work 0 B; exact atomic dependency union, reservation-floor release, world-epoch invalidation, raw-suffix fallback, equality acceptance/greater-cost rejection, and independent correctness/lean approval |
 | Graph direct travel and Flow same-lease rejoin | Planned | No graph LOS bypass; no recovery A* or Flow rebuild |
 | Legacy/API/docs/benchmarks/full gates | Planned | Old surface LOS and recovery symbols zero; Phase 7 handoff complete |
 

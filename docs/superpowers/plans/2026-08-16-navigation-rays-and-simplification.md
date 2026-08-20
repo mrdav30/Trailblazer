@@ -699,7 +699,7 @@ destination identity and forcing a different identity made the route invalid;
 the lower ray/endpoint matrices already pin overlapping identity, while A*
 still postchecks both exact endpoint addresses before accepting a shortcut.
 
-- [ ] **Step 5: Tracker update and commit**
+- [x] **Step 5: Tracker update and commit**
 
 ```powershell
 git add -- src/Trailblazer/Pathing/Search/AStar/NavigationSurfaceAStarWork.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarWorkspace.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarAdmissionGate.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayload.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayloadCache.cs src/Trailblazer/Pathing/Search/AStar/NavigationAStarGuideLease.cs src/Trailblazer/Pathing/Search/AStar/NavigationDependencySortWork.cs src/Trailblazer/Pathing/Search/NavigationDependencyWorkspace.cs src/Trailblazer/Pathing/Query/NavigationWorkMeter.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationSurfaceAStarTests.cs tests/Trailblazer.Tests/Pathing/Graph/NavigationAStarConcurrencyTests.cs docs/superpowers/plans/2026-08-16-navigation-rays-and-simplification.md docs/superpowers/specs/2026-08-16-navigation-rays-and-simplification-design.md docs/feature-work/gridTopologyNavigationMapRefactorPlan.md

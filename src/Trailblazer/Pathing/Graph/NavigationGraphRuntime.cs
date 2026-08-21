@@ -594,7 +594,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
             _affectedMapOrdinals,
             _snapshotAffectedCount,
             _maintenanceEvents,
-            _publicationEventCount);
+            _publicationEventCount,
+            _operations.Candidate);
         bool complete = work.Advance(_maintenanceMeter);
         if (!IsWithinRetainedWorkCapacity(
                 GetCombinedMaterializedWorkBytes(work),

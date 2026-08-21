@@ -732,13 +732,16 @@ internal sealed partial class NavigationOperationCandidate
         MapState[] changedStates,
         bool allowDormantEndpoints)
     {
-        if (!TryGetValidationCell(
-                source,
-                transition.SourceIndex,
-                out NavigationCell sourceCell))
-            return allowDormantEndpoints;
-        if (!SupportsMedium(sourceCell, transition.SourceMedium))
+        if (!source.Map.GridBinding.IsValidIndex(transition.SourceIndex)
+            || (!HasDefinitionMedium(
+                    source,
+                    transition.SourceIndex,
+                    transition.SourceMedium)
+                && !(allowDormantEndpoints
+                    && _bakeVersionHighWater.ContainsKey(source.Map.MapId))))
+        {
             return false;
+        }
 
         if (transition.HasSourcePointOverride
             && (!source.Map.GridBinding.TryGetCellPrism(transition.SourceIndex, out GridForge.Grids.Topology.GridCellPrism sourcePrism)
@@ -750,13 +753,16 @@ internal sealed partial class NavigationOperationCandidate
         MapState? destination = FindChangedState(transition.Destination.MapId, changedMapIds, changedStates);
         if (destination == null && !_maps.TryGetValue(transition.Destination.MapId, out destination))
             return true;
-        if (!TryGetValidationCell(
-                destination,
-                transition.Destination.Index,
-                out NavigationCell destinationCell))
-            return allowDormantEndpoints;
-        if (!SupportsMedium(destinationCell, transition.DestinationMedium))
+        if (!destination.Map.GridBinding.IsValidIndex(transition.Destination.Index)
+            || (!HasDefinitionMedium(
+                    destination,
+                    transition.Destination.Index,
+                    transition.DestinationMedium)
+                && !(allowDormantEndpoints
+                    && _bakeVersionHighWater.ContainsKey(destination.Map.MapId))))
+        {
             return false;
+        }
 
         return !transition.HasDestinationPointOverride
             || (destination.Map.GridBinding.TryGetCellPrism(transition.Destination.Index, out GridForge.Grids.Topology.GridCellPrism destinationPrism)
@@ -773,24 +779,12 @@ internal sealed partial class NavigationOperationCandidate
             cell = operation.Cell;
             return operation.Kind == NavigationCellOverlayOperationKind.Set;
         }
-
-        int low = 0;
-        int high = state.Map.Cells.Count - 1;
-        while (low <= high)
+        int baked = state.BakedCellLookup.Find(index);
+        if (baked >= 0)
         {
-            int middle = low + ((high - low) >> 1);
-            int comparison = state.Map.Cells[middle].Index.CompareTo(index);
-            if (comparison == 0)
-            {
-                cell = state.Map.Cells[middle].Cell;
-                return true;
-            }
-            if (comparison < 0)
-                low = middle + 1;
-            else
-                high = middle - 1;
+            cell = state.Map.CellSpan[baked].Cell;
+            return true;
         }
-
         NavigationCell? defaultCell = state.Map.GridBinding.IsValidIndex(index)
             ? state.Map.DefaultCell
             : null;
@@ -798,10 +792,27 @@ internal sealed partial class NavigationOperationCandidate
         return defaultCell.HasValue;
     }
 
-    private static bool TryGetValidationCell(
+    private static bool HasDefinitionMedium(
         MapState state,
         GridForge.Spatial.VoxelIndex index,
-        out NavigationCell cell) => TryGetEffectiveCell(state, index, out cell);
+        TraversalMedium medium)
+    {
+        if (TryFindCellOverlay(
+                state.Overlay,
+                index,
+                out NavigationCellOverlayOperation operation)
+            && operation.Kind == NavigationCellOverlayOperationKind.Set
+            && SupportsMedium(operation.Cell, medium))
+        {
+            return true;
+        }
+        int baked = state.BakedCellLookup.Find(index);
+        if (baked >= 0)
+            return SupportsMedium(state.Map.CellSpan[baked].Cell, medium);
+        return state.Map.DefaultCell.HasValue
+            && state.Map.GridBinding.IsValidIndex(index)
+            && SupportsMedium(state.Map.DefaultCell.Value, medium);
+    }
 
     private static bool SupportsMedium(NavigationCell cell, TraversalMedium medium) => medium switch
     {

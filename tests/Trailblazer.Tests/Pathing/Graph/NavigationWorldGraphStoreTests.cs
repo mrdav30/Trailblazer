@@ -126,6 +126,8 @@ public sealed class NavigationWorldGraphStoreTests
             + NavigationSurfaceComponentIndex.Empty.RetainedBytes
             + NavigationExplicitConnectionIndex.Empty.RetainedBytes
             + NavigationAutomaticSeamIndex.Empty.RetainedBytes
+            + NavigationTransitionPageRoot.Empty.RetainedBytes
+            + NavigationTransitionRuleTable.Empty.RetainedBytes
             + catalog.RetainedBytes);
         graph.PersistentPageCount.Should().Be(
             NavigationInstanceDirectory.Create(Array.Empty<NavigationMapInstance>()).PersistentPageCount
@@ -134,6 +136,8 @@ public sealed class NavigationWorldGraphStoreTests
             + NavigationSurfaceComponentIndex.Empty.PersistentPageCount
             + NavigationExplicitConnectionIndex.Empty.PersistentPageCount
             + NavigationAutomaticSeamIndex.Empty.PersistentPageCount
+            + NavigationTransitionPageRoot.Empty.PersistentPageCount
+            + NavigationTransitionRuleTable.Empty.PersistentPageCount
             + catalog.PersistentPageCount);
     }
 

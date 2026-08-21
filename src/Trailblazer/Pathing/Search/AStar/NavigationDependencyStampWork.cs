@@ -18,6 +18,7 @@ internal sealed class NavigationDependencyStampWork
     private readonly GraphPageDependencyAddress[] _pageAddresses;
     private readonly GraphComponentDependency[] _components;
     private readonly GraphPageDependency[] _pages;
+    private readonly bool _includeTransitionRules;
     private int _componentOrdinal;
     private int _pageOrdinal;
 
@@ -27,7 +28,8 @@ internal sealed class NavigationDependencyStampWork
         NavigationSurfaceComponentKey[] componentAddresses,
         int componentCount,
         GraphPageDependencyAddress[] pageAddresses,
-        int pageCount)
+        int pageCount,
+        bool includeTransitionRules = false)
     {
         SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
@@ -47,6 +49,7 @@ internal sealed class NavigationDependencyStampWork
         _pageAddresses = pageAddresses;
         _components = new GraphComponentDependency[componentCount];
         _pages = new GraphPageDependency[pageCount];
+        _includeTransitionRules = includeTransitionRules;
         IsValid = true;
     }
 
@@ -95,6 +98,7 @@ internal sealed class NavigationDependencyStampWork
                         address) >= 0)
                 || !_graph.TryGetPageDependency(
                     address,
+                    _includeTransitionRules,
                     out _pages[_pageOrdinal]))
             {
                 return CompleteInvalid();
@@ -104,7 +108,9 @@ internal sealed class NavigationDependencyStampWork
         Result = new GraphDependencyStamp(
             _areaPolicy,
             _components,
-            _pages);
+            _pages,
+            _includeTransitionRules,
+            _graph.TransitionRules.Version);
         IsComplete = true;
         return true;
     }

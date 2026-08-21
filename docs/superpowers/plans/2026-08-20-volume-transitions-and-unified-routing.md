@@ -168,19 +168,26 @@
 
 - Add: `src/Trailblazer/Pathing/Graph/NavigationTransitionPage.cs`
 - Add: `src/Trailblazer/Pathing/Graph/NavigationTransitionRuleTable.cs`
-- Modify: `src/Trailblazer/Pathing/Graph/NavigationMapInstance.ComposeWork.cs`
+- Add: `src/Trailblazer/Pathing/Graph/NavigationTransitionRefreshWork.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationMapInstance.cs`
 - Modify: `src/Trailblazer/Pathing/Graph/NavigationWorldGraph.cs`
 - Modify: `src/Trailblazer/Pathing/Graph/NavigationWorldGraph.StructuralPreparationWork.cs`
-- Modify: `src/Trailblazer/Pathing/Graph/NavigationWorldGraphStore.cs`
-- Modify: `src/Trailblazer/Pathing/Map/Overlay/TraversalTransitionOverlayOperation.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationMaterializedComponentWork.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationGraphRuntime.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/GraphDependencyStamp.cs`
+- Modify: `src/Trailblazer/Pathing/Map/Operations/NavigationOperationCandidate.cs`
+- Modify: `src/Trailblazer/Pathing/Map/Operations/NavigationOperationCandidate.MapFold.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationDependencyStampWork.cs`
+- Modify accounting capacity defaults only: `src/Trailblazer/Runtime/TrailblazerWorldContextSettings.cs`
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/NavigationTransitionPublicationTests.cs`
+- Modify accounting/capacity/hash expectations only: `tests/Trailblazer.Tests/Pathing/Graph/NavigationWorldGraphStoreTests.cs`, `NavigationStructuralCompositionCarryoverTests.cs`, `NavigationMediumGraphTests.cs`, `NavigationMapStateOwnershipTests.cs`, `NavigationGraphCapacityTests.cs`, `NavigationSurfaceAStarTests.cs`, `NavigationFlowFieldTests.cs`, `Phase5GraphFlowDeterminismMatrixTests.cs`, and `tests/Trailblazer.Tests/Runtime/TrailblazerWorldContextSettingsTests.cs`
 
-- [ ] RED explicit baked and overlay `Upsert`/`Suppress`/`RevertToBake` composition into immutable source-outgoing and destination-incoming transition pages, including same-medium definitions.
-- [ ] RED inactive endpoints/media, exact definition/rule identity-kind ordering, forward/reverse parity, duplicate-owner rejection, and one-over rule/page/candidate byte capacities.
-- [ ] RED affected/unaffected cell/default/rule/transition changes, transactional rejection, exact page/component dependency stamps, retained-byte accounting, and current/retired graph lease drain.
-- [ ] Publish one canonical bounded rule table and source-owned transition pages in the same candidate graph transaction as effective cells; do not retain the old registry/query cache or add a separately named transition cache/index.
-- [ ] Keep the new table/pages and their enumeration entry points internal until Task 10; Task 6 consumes them directly.
-- [ ] Run publication/overlay/store/concurrency Release + ReleaseLean gates, reviews, and commit: `feat(pathing): publish transition graph pages`.
+- [x] RED explicit baked and overlay `Upsert`/`Suppress`/`RevertToBake` composition into immutable source-outgoing and destination-incoming transition pages, including same-medium definitions.
+- [x] RED inactive endpoints/media, exact explicit outgoing/incoming ordering, canonical ID-first rule-table ordering/reuse, forward/reverse parity, duplicate-owner rejection, and one-over rule/page/candidate byte capacities. Defer merged definition/rule tagged identity and tie ordering to Task 6.
+- [x] RED affected/unaffected cell/default/rule/transition changes, transactional rejection, exact page/component dependency stamps, retained-byte accounting, and current/retired graph lease drain.
+- [x] Publish one canonical bounded rule table and source-owned transition pages in the same candidate graph transaction as effective cells; do not retain the old registry/query cache or add a separately named transition cache/index.
+- [x] Keep the new table/pages and their enumeration entry points internal until Task 10; Task 6 consumes them directly.
+- [x] Run publication/overlay/store/concurrency Release + ReleaseLean gates, reviews, and commit: `feat(pathing): publish transition graph pages`.
 
 ## Task 5: Prepare Exact Medium Admission Internals
 
@@ -356,7 +363,7 @@
 - Modify: `tests/Trailblazer.Tests/Phase0/PublicApiSnapshot.txt`
 
 - [ ] RED the final public exact Solid/Gas/Liquid `StartMedium`, known nonempty `TargetMedia`, agent subset/Unknown rejection, and transition-disabled mismatch. Change `TraversalIntent`/`PathQuery`, migrate every source/test/benchmark reader returned by `rg "StartDomain|TargetDomain|CurrentMedium|TraversalDomain"`, then delete `TraversalDomain` with zero residue.
-- [ ] RED public map default/rule authoring and atomically expose the Task 2 types/members. Rename `TraversalTransitionDefinition.AdditionalCost` to `ActionCost` across every direct reader/named constructor with no alias; preserve physical `NavigationConnection.AdditionalCost`.
+- [ ] RED public map default/rule authoring and atomically expose the Task 2 types/members. Add final authored locomotion hints to explicit definitions, replacing Task 4's staged `None`; never infer them from `TraversalTransitionType`. Rename `TraversalTransitionDefinition.AdditionalCost` to `ActionCost` across every direct reader/named constructor with no alias; preserve physical `NavigationConnection.AdditionalCost`.
 - [ ] Replace Task 2's internal rule-limit derivation with required public `maxTransitionRulesPerMap`/`maxTransitionRules` constructor arguments and `MaxTransitionRulesPerMap`/`MaxTransitionRules` properties; migrate every settings/test/benchmark caller in the same atomic cut.
 - [ ] RED exact current-frame/start-medium mismatch before guide acquisition; no silent volume-first query synthesis.
 - [ ] RED movement step steering, transition pending exposure, zero ordinary heading while held, built-in locomotion hints, exact `CompletePendingTransition`, cancel/retry, stale action, StopMove/Arrive/load/dispose ownership.

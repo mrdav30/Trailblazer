@@ -26,6 +26,7 @@ internal sealed partial class NavigationWorldGraph
     private readonly bool _allStructuralComponentsClosed;
     private readonly NavigationExplicitConnectionIndex _explicitConnections;
     private readonly NavigationAutomaticSeamIndex _automaticSeams;
+    private readonly NavigationTransitionPageRoot _transitionPages;
     private int _leaseCount;
 
     internal NavigationWorldGraph(
@@ -44,6 +45,8 @@ internal sealed partial class NavigationWorldGraph
         _explicitConnections = explicitConnections ?? NavigationExplicitConnectionIndex.Empty;
         _automaticSeams = automaticSeams ?? NavigationAutomaticSeamIndex.Empty;
         SurfaceComponents = surfaceComponents ?? NavigationSurfaceComponentIndex.Empty;
+        _transitionPages = NavigationTransitionPageRoot.Empty;
+        TransitionRules = NavigationTransitionRuleTable.Empty;
         _closedStructuralComponents = NavigationSurfaceComponentKeySet.Empty;
         _additionalClosedStructuralComponents = NavigationSurfaceComponentKeySet.Empty;
         _allStructuralComponentsClosed = false;
@@ -55,6 +58,8 @@ internal sealed partial class NavigationWorldGraph
             + SurfaceComponents.RetainedBytes
             + _explicitConnections.RetainedBytes
             + _automaticSeams.RetainedBytes
+            + _transitionPages.RetainedBytes
+            + TransitionRules.RetainedBytes
             + AreaCatalog.RetainedBytes);
         PersistentPageCount = _instances.PersistentPageCount
             + 1 + _mapIndex.Count
@@ -62,6 +67,8 @@ internal sealed partial class NavigationWorldGraph
             + SurfaceComponents.PersistentPageCount
             + _explicitConnections.PersistentPageCount
             + _automaticSeams.PersistentPageCount
+            + _transitionPages.PersistentPageCount
+            + TransitionRules.PersistentPageCount
             + AreaCatalog.PersistentPageCount;
         for (int i = 0; i < instances.Length; i++)
         {
@@ -79,6 +86,8 @@ internal sealed partial class NavigationWorldGraph
         NavigationSurfaceComponentIndex surfaceComponents,
         NavigationExplicitConnectionIndex explicitConnections,
         NavigationAutomaticSeamIndex automaticSeams,
+        NavigationTransitionPageRoot transitionPages,
+        NavigationTransitionRuleTable transitionRules,
         NavigationSurfaceComponentKeySet closedStructuralComponents,
         NavigationSurfaceComponentKeySet additionalClosedStructuralComponents,
         bool allStructuralComponentsClosed,
@@ -92,6 +101,8 @@ internal sealed partial class NavigationWorldGraph
         SurfaceComponents = surfaceComponents;
         _explicitConnections = explicitConnections;
         _automaticSeams = automaticSeams;
+        _transitionPages = transitionPages;
+        TransitionRules = transitionRules;
         _closedStructuralComponents = closedStructuralComponents;
         _additionalClosedStructuralComponents = additionalClosedStructuralComponents;
         _allStructuralComponentsClosed = allStructuralComponentsClosed;
@@ -113,6 +124,10 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationExplicitConnectionIndex ExplicitConnections => _explicitConnections;
 
     internal NavigationAutomaticSeamIndex AutomaticSeams => _automaticSeams;
+
+    internal NavigationTransitionRuleTable TransitionRules { get; }
+
+    internal NavigationTransitionPageRoot TransitionPages => _transitionPages;
 
     internal bool TryGetMapId(GridConfigurationKey key, out string mapId) =>
         _mapIndex.TryGetValue(key, out mapId!);
@@ -153,6 +168,68 @@ internal sealed partial class NavigationWorldGraph
         hasCell = false;
         cell = default;
         return false;
+    }
+
+    internal NavigationTransitionPage.Enumerator EnumerateOutgoingTransitions(
+        NavigationMediumStateRef source)
+    {
+        if (!source.IsValid)
+            return default;
+        NavigationMapInstance instance = _instances.Get(source.Node.MapOrdinal);
+        _transitionPages.TryGet(
+            new NavigationTransitionPageAddress(
+                instance.MapId,
+                source.Node.CellSlot / NavigationSemanticPage.SlotCount),
+            out NavigationTransitionPage page);
+        return page?.GetOutgoingEnumerator(this, source) ?? default;
+    }
+
+    internal NavigationTransitionPage.Enumerator EnumerateIncomingTransitions(
+        NavigationMediumStateRef destination)
+    {
+        if (!destination.IsValid)
+            return default;
+        NavigationMapInstance instance = _instances.Get(destination.Node.MapOrdinal);
+        _transitionPages.TryGet(
+            new NavigationTransitionPageAddress(
+                instance.MapId,
+                destination.Node.CellSlot / NavigationSemanticPage.SlotCount),
+            out NavigationTransitionPage page);
+        return page?.GetIncomingEnumerator(this, destination) ?? default;
+    }
+
+    internal bool TryGetPublishedTransition(
+        NavigationIncomingTransitionRef incoming,
+        out NavigationPublishedTransition transition)
+    {
+        if (_transitionPages.TryGet(
+                incoming.SourcePage,
+                out NavigationTransitionPage page)
+            && page.TryGetOutgoing(incoming.Owner, out transition))
+        {
+            return true;
+        }
+        transition = default;
+        return false;
+    }
+
+    internal bool IsTransitionActive(
+        NavigationPublishedTransition transition,
+        NavigationMediumStateRef state,
+        bool outgoing)
+    {
+        if (!TryGetMediumStateRef(
+                transition.SourceAddress,
+                transition.Definition.SourceMedium,
+                out NavigationMediumStateRef source)
+            || !TryGetMediumStateRef(
+                transition.Definition.Destination,
+                transition.Definition.DestinationMedium,
+                out NavigationMediumStateRef destination))
+        {
+            return false;
+        }
+        return outgoing ? source.Equals(state) : destination.Equals(state);
     }
 
     internal int MapCount => _instances.Count;
@@ -289,6 +366,8 @@ internal sealed partial class NavigationWorldGraph
             surfaceComponents,
             _explicitConnections,
             _automaticSeams,
+            _transitionPages,
+            TransitionRules,
             _closedStructuralComponents,
             _additionalClosedStructuralComponents,
             _allStructuralComponentsClosed,
@@ -310,12 +389,52 @@ internal sealed partial class NavigationWorldGraph
             SurfaceComponents,
             _explicitConnections,
             seams,
+            _transitionPages,
+            TransitionRules,
             _closedStructuralComponents,
             _additionalClosedStructuralComponents,
             _allStructuralComponentsClosed,
             checked(RetainedBytes - _automaticSeams.RetainedBytes + seams.RetainedBytes),
             PersistentPageCount - _automaticSeams.PersistentPageCount
                 + seams.PersistentPageCount);
+    }
+
+    internal NavigationWorldGraph WithTransitionPublication(
+        NavigationTransitionPageRoot pages,
+        NavigationTransitionRuleTable rules)
+    {
+        if (ReferenceEquals(pages, _transitionPages)
+            && ReferenceEquals(rules, TransitionRules))
+        {
+            return this;
+        }
+        long priorBytes = checked(
+            _transitionPages.RetainedBytes
+            + TransitionRules.RetainedBytes);
+        long nextBytes = checked(
+            pages.RetainedBytes
+            + rules.RetainedBytes);
+        int priorPages = checked(
+            _transitionPages.PersistentPageCount
+            + TransitionRules.PersistentPageCount);
+        int nextPages = checked(
+            pages.PersistentPageCount
+            + rules.PersistentPageCount);
+        return new NavigationWorldGraph(
+            GraphVersion,
+            _instances,
+            AreaCatalog,
+            _mapIndex,
+            SurfaceComponents,
+            _explicitConnections,
+            _automaticSeams,
+            pages,
+            rules,
+            _closedStructuralComponents,
+            _additionalClosedStructuralComponents,
+            _allStructuralComponentsClosed,
+            checked(RetainedBytes - priorBytes + nextBytes),
+            PersistentPageCount - priorPages + nextPages);
     }
 
     internal static bool HasStructuralChanges(
@@ -368,6 +487,8 @@ internal sealed partial class NavigationWorldGraph
             SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
+            _transitionPages,
+            TransitionRules,
             closed,
             NavigationSurfaceComponentKeySet.Empty,
             closeAllStructuralComponents,
@@ -401,6 +522,8 @@ internal sealed partial class NavigationWorldGraph
             SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
+            _transitionPages,
+            TransitionRules,
             baseline,
             additional,
             false,
@@ -469,6 +592,8 @@ internal sealed partial class NavigationWorldGraph
             SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
+            _transitionPages,
+            TransitionRules,
             open,
             NavigationSurfaceComponentKeySet.Empty,
             false,
@@ -844,6 +969,8 @@ internal sealed partial class NavigationWorldGraph
                 SurfaceComponents,
                 _explicitConnections,
                 _automaticSeams,
+                _transitionPages,
+                TransitionRules,
                 _closedStructuralComponents,
                 _additionalClosedStructuralComponents,
                 _allStructuralComponentsClosed,
@@ -868,6 +995,8 @@ internal sealed partial class NavigationWorldGraph
             SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
+            _transitionPages,
+            TransitionRules,
             _closedStructuralComponents,
             _additionalClosedStructuralComponents,
             _allStructuralComponentsClosed,
@@ -887,6 +1016,8 @@ internal sealed partial class NavigationWorldGraph
             SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
+            _transitionPages,
+            TransitionRules,
             _closedStructuralComponents,
             _additionalClosedStructuralComponents,
             _allStructuralComponentsClosed,
@@ -898,6 +1029,18 @@ internal sealed partial class NavigationWorldGraph
         NavigationAreaPolicyKey areaPolicy,
         ReadOnlySpan<NavigationSurfaceComponentKey> componentKeys,
         ReadOnlySpan<GraphPageDependencyAddress> pageAddresses,
+        out GraphDependencyStamp stamp) => TryGetDependencyStamp(
+        areaPolicy,
+        componentKeys,
+        pageAddresses,
+        includeTransitionRules: false,
+        out stamp);
+
+    internal bool TryGetDependencyStamp(
+        NavigationAreaPolicyKey areaPolicy,
+        ReadOnlySpan<NavigationSurfaceComponentKey> componentKeys,
+        ReadOnlySpan<GraphPageDependencyAddress> pageAddresses,
+        bool includeTransitionRules,
         out GraphDependencyStamp stamp)
     {
         if (!AreaCatalog.TryGet(areaPolicy, out _))
@@ -935,6 +1078,7 @@ internal sealed partial class NavigationWorldGraph
                 || (mapComparison == 0 && address.PageIndex <= priorPageIndex)
                 || !TryGetPageDependency(
                     address,
+                    includeTransitionRules,
                     out pages[i]))
             {
                 stamp = null!;
@@ -947,7 +1091,9 @@ internal sealed partial class NavigationWorldGraph
         stamp = new GraphDependencyStamp(
             areaPolicy,
             components,
-            pages);
+            pages,
+            includeTransitionRules,
+            TransitionRules.Version);
         return true;
     }
 
@@ -970,6 +1116,14 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool TryGetPageDependency(
         GraphPageDependencyAddress address,
+        out GraphPageDependency dependency) => TryGetPageDependency(
+        address,
+        includeTransitionPage: false,
+        out dependency);
+
+    internal bool TryGetPageDependency(
+        GraphPageDependencyAddress address,
+        bool includeTransitionPage,
         out GraphPageDependency dependency)
     {
         if (!string.IsNullOrEmpty(address.MapId)
@@ -977,7 +1131,12 @@ internal sealed partial class NavigationWorldGraph
             && TryGetMap(address.MapId, out NavigationMapInstance? instance)
             && instance != null)
         {
-            dependency = instance.GetPageDependency(address.PageIndex);
+            long transitionVersion = includeTransitionPage && _transitionPages.TryGet(
+                new NavigationTransitionPageAddress(address.MapId, address.PageIndex),
+                out NavigationTransitionPage transitionPage)
+                    ? transitionPage.Version
+                    : 0;
+            dependency = instance.GetPageDependency(address.PageIndex, transitionVersion);
             return true;
         }
         dependency = default;
@@ -989,6 +1148,11 @@ internal sealed partial class NavigationWorldGraph
         if (stamp == null
             || !AreaCatalog.TryGet(stamp.AreaPolicy, out _))
             return false;
+        if (stamp.HasTransitionRuleDependency
+            && stamp.TransitionRuleVersion != TransitionRules.Version)
+        {
+            return false;
+        }
         for (int component = 0; component < stamp.Components.Length; component++)
         {
             GraphComponentDependency dependency = stamp.Components[component];
@@ -1005,7 +1169,11 @@ internal sealed partial class NavigationWorldGraph
             GraphPageDependency dependency = stamp.Pages[page];
             if (!TryGetMap(dependency.MapId, out NavigationMapInstance? instance)
                 || instance == null
-                || !instance.GetPageDependency(dependency.PageIndex).Equals(dependency))
+                || !TryGetPageDependency(
+                    new GraphPageDependencyAddress(dependency.MapId, dependency.PageIndex),
+                    stamp.HasTransitionRuleDependency,
+                    out GraphPageDependency current)
+                || !current.Equals(dependency))
                 return false;
         }
         return true;

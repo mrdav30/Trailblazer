@@ -1279,9 +1279,9 @@ public sealed class NavigationMediumGraphTests
     }
 
     [Fact]
-    public void RuntimeMaterializedComponentWork_ShouldApplyAtExactPeakAndRejectOneByteBelow()
+    public void RuntimeMaterializedTransitionReplacement_ShouldApplyAtExactPeakAndRejectOneByteBelow()
     {
-        const long ExactPeak = 1_072_572L;
+        const long ExactPeak = 1_073_852L;
 
         using (var exactWorld = new GridWorld())
         using (NavigationGraphRuntime exact = CreateMaterializedCapacityScenario(
@@ -1662,7 +1662,25 @@ public sealed class NavigationMediumGraphTests
         var graph = new NavigationWorldGraph(1, new[] { instance });
         NavigationSurfaceComponentIndex components =
             NavigationSurfaceComponentTestFactory.Build(graph);
-        return new NavigationWorldGraph(1, new[] { instance }, surfaceComponents: components);
+        graph = new NavigationWorldGraph(1, new[] { instance }, surfaceComponents: components);
+        if (map.TransitionSpan.Length == 0 && map.TransitionRuleSpan.Length == 0)
+            return graph;
+        var work = new NavigationTransitionRefreshWork(
+            NavigationWorldGraph.Empty,
+            graph,
+            operationCandidate: null,
+            PersistentStringMap<bool>.Empty.Set(map.MapId, true),
+            rebuildRules: true,
+            version: 1);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        for (int frame = 0; frame < 4096; frame++)
+        {
+            if (work.Advance(meter))
+                return graph.WithTransitionPublication(work.Pages, work.Rules);
+            meter.Reset();
+        }
+        throw new Xunit.Sdk.XunitException("Expected transition publication to complete.");
     }
 
     private static NavigationMapInstance ResnapshotDefault(
@@ -1732,6 +1750,20 @@ public sealed class NavigationMediumGraphTests
                     index,
                     x == 32 ? Cell(TraversalMedia.Liquid) : GasCell);
             }
+            sourceBuilder.AddTransition(new TraversalTransitionDefinition(
+                "capacity-transition",
+                TraversalTransitionType.Jump,
+                new VoxelIndex(0, 0, 0),
+                TraversalMedium.Gas,
+                new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                TraversalMedium.Gas));
+            replacementBuilder.AddTransition(new TraversalTransitionDefinition(
+                "capacity-transition",
+                TraversalTransitionType.Jump,
+                new VoxelIndex(0, 0, 0),
+                TraversalMedium.Gas,
+                new NavigationCellAddress("map", new VoxelIndex(2, 0, 0)),
+                TraversalMedium.Gas));
             NavigationWorldGraph source = BuildComponentGraph(world, sourceBuilder.Build());
             runtime.Store.TryPublish(source).Should().Be(NavigationCandidatePublication.Published);
             replacement = new NavigationMapCommitOperation(

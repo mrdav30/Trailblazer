@@ -326,9 +326,9 @@ public sealed class NavigationMapStateOwnershipTests
 
         candidate.WorkOwnedMapStatePayloadBytes.Should().Be(replacement.RetainedBytes);
         preparation.RetainedBytes.Should().Be(
-            128L + compose.AdditionalExclusiveRetainedBytes + 64L + 144L);
+            192L + compose.AdditionalExclusiveRetainedBytes + 64L + 144L + 664L);
         preparation.PersistentPageCount.Should().Be(
-            1 + compose.AdditionalExclusivePersistentPages + 2);
+            1 + compose.AdditionalExclusivePersistentPages + 4);
     }
 
     [Fact]
@@ -446,8 +446,8 @@ public sealed class NavigationMapStateOwnershipTests
             combinedCandidate,
             combinedChanges);
 
-        sequential.RetainedBytes.Should().Be(5_184L);
-        combined.RetainedBytes.Should().Be(5_184L);
+        sequential.RetainedBytes.Should().Be(5_912L);
+        combined.RetainedBytes.Should().Be(5_912L);
         sequential.PersistentPageCount.Should().Be(combined.PersistentPageCount);
     }
 

@@ -243,7 +243,7 @@ internal sealed partial class NavigationMapInstance
         && TryGetPhysicalState(slot, out bool isPresent, out _)
         && isPresent;
 
-    internal GraphPageDependency GetPageDependency(int pageIndex)
+    internal GraphPageDependency GetPageDependency(int pageIndex, long transitionVersion = 0)
     {
         _semanticPages.TryGetValue(pageIndex, out NavigationSemanticPage? semantic);
         _physicalPages.TryGetValue(pageIndex, out NavigationPhysicalPage? physical);
@@ -253,7 +253,8 @@ internal sealed partial class NavigationMapInstance
             DynamicSlotGeneration,
             pageIndex,
             semantic?.Version ?? 0,
-            physical?.Version ?? 0);
+            physical?.Version ?? 0,
+            transitionVersion);
     }
 
     internal NavigationMapInstance Apply(

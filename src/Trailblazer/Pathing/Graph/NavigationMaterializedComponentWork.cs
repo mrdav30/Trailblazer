@@ -16,7 +16,7 @@ namespace Trailblazer.Pathing;
 /// </summary>
 internal sealed class NavigationMaterializedComponentWork
 {
-    internal const long BaseRetainedBytes = 3_808L;
+    internal const long BaseRetainedBytes = 3_856L;
 
     private readonly NavigationWorldGraph _candidate;
     private readonly GridWorld? _world;
@@ -25,11 +25,15 @@ internal sealed class NavigationMaterializedComponentWork
     private readonly int _affectedMapCount;
     private readonly GridEventInfo[]? _events;
     private readonly int _eventCount;
+    private readonly NavigationOperationCandidate? _transitionCandidate;
     private readonly NavigationSurfaceComponentKeySet _initialAffectedKeys;
     private readonly NavigationCellAddressSet _initialSeeds;
     private readonly int _initialAffectedMemberCount;
     private NavigationSurfaceComponentKeySet _changedStates;
     private PersistentStringMap<bool> _seamDiscoveryMaps = PersistentStringMap<bool>.Empty;
+    private PersistentStringMap<bool> _transitionChangedMaps = PersistentStringMap<bool>.Empty;
+    private NavigationTransitionRefreshWork? _transitionRefresh;
+    private NavigationWorldGraph? _transitionGraph;
     private NavigationAutomaticSeamRefreshWork? _seamRefresh;
     private NavigationSurfaceComponentKeySet _affectedKeys =
         NavigationSurfaceComponentKeySet.Empty;
@@ -70,7 +74,8 @@ internal sealed class NavigationMaterializedComponentWork
         int[]? affectedMapOrdinals,
         int affectedMapCount,
         GridEventInfo[]? events,
-        int eventCount)
+        int eventCount,
+        NavigationOperationCandidate? transitionCandidate = null)
     {
         _candidate = candidate;
         _world = world;
@@ -79,6 +84,7 @@ internal sealed class NavigationMaterializedComponentWork
         _affectedMapCount = affectedMapCount;
         _events = events;
         _eventCount = eventCount;
+        _transitionCandidate = transitionCandidate;
         _changedStates = changedStates;
         _affectedKeys = affectedKeys;
         _seeds = seeds;
@@ -98,6 +104,7 @@ internal sealed class NavigationMaterializedComponentWork
     }
 
     internal bool IsComplete => _frontComplete
+        && (_transitionRefresh?.IsComplete ?? true)
         && (_hasNoChanges
             || ((_seamRefresh?.IsComplete ?? true)
                 && (_build?.IsComplete ?? false)));
@@ -128,11 +135,18 @@ internal sealed class NavigationMaterializedComponentWork
     internal long RetainedBytes => checked(
         BaseRetainedBytes
         + _candidate.RetainedBytes
-        + (_componentGraph == null || ReferenceEquals(_componentGraph, _candidate)
+        + (_transitionGraph == null || ReferenceEquals(_transitionGraph, _candidate)
             ? 0L
             : NavigationWorldGraph.BaseRetainedBytes)
+        + (_componentGraph == null
+            || ReferenceEquals(_componentGraph, _candidate)
+            || ReferenceEquals(_componentGraph, _transitionGraph)
+                ? 0L
+                : NavigationWorldGraph.BaseRetainedBytes)
         + _changedStates.RetainedBytes
         + (_seamRefresh == null ? _seamDiscoveryMaps.RetainedBytes : 0L)
+        + (_world == null ? 0L : _transitionChangedMaps.RetainedBytes)
+        + (_transitionRefresh?.RetainedBytes ?? 0L)
         + _affectedKeys.RetainedBytes
         + (ReferenceEquals(_initialAffectedKeys, _affectedKeys)
             ? 0L
@@ -147,6 +161,8 @@ internal sealed class NavigationMaterializedComponentWork
         + _candidate.PersistentPageCount
         + _changedStates.PersistentPageCount
         + (_seamRefresh == null ? 1 + _seamDiscoveryMaps.PersistentNodeCount : 0)
+        + (_world == null ? 0 : 1 + _transitionChangedMaps.PersistentNodeCount)
+        + (_transitionRefresh?.PersistentPageCount ?? 0)
         + _affectedKeys.PersistentPageCount
         + (ReferenceEquals(_initialAffectedKeys, _affectedKeys)
             ? 0
@@ -162,6 +178,26 @@ internal sealed class NavigationMaterializedComponentWork
     {
         if (!_frontComplete && !AdvanceFront(meter))
             return false;
+        if (_world != null)
+        {
+            _transitionRefresh ??= new NavigationTransitionRefreshWork(
+                _candidate,
+                _candidate,
+                _transitionCandidate,
+                _transitionChangedMaps,
+                rebuildRules: false,
+                _candidate.GraphVersion);
+            if (!_transitionRefresh.Advance(meter))
+                return false;
+            if (_transitionGraph == null)
+            {
+                _transitionGraph = _candidate.WithTransitionPublication(
+                    _transitionRefresh.Pages,
+                    _transitionRefresh.Rules);
+            }
+            if (_seamRefresh == null)
+                _componentGraph = _transitionGraph;
+        }
         if (_hasNoChanges)
             return true;
         if (_seamRefresh != null)
@@ -184,7 +220,8 @@ internal sealed class NavigationMaterializedComponentWork
             if (_componentGraph == null)
             {
                 _seamRevision = _seamRefresh.Revision;
-                _componentGraph = _candidate.WithAutomaticSeams(_seamRefresh.Result);
+                _componentGraph = (_transitionGraph ?? _candidate)
+                    .WithAutomaticSeams(_seamRefresh.Result);
             }
         }
         if (_build != null)
@@ -211,6 +248,8 @@ internal sealed class NavigationMaterializedComponentWork
             {
                 if (!meter.TryConsumeComponentNodes(1))
                     return false;
+                string changedMapId = _candidate.GetInstance(mapOrdinal).MapId;
+                _transitionChangedMaps = _transitionChangedMaps.Set(changedMapId, true);
                 if (capture.DefaultPhysicalAddressSetChanged)
                 {
                     _seamDiscoveryMaps = _seamDiscoveryMaps.Set(
@@ -249,8 +288,7 @@ internal sealed class NavigationMaterializedComponentWork
             if (!meter.TryConsumeDependencyEntries(1))
                 return false;
             GridEventInfo eventInfo = _events![_frontEventOrdinal++];
-            if (!eventInfo.HasVoxelState
-                || !_candidate.TryGetMapId(
+            if (!_candidate.TryGetMapId(
                     eventInfo.Configuration.ToGridKey(),
                     out string mapId)
                 || !_candidate.TryGetMap(mapId, out NavigationMapInstance? next)
@@ -258,14 +296,15 @@ internal sealed class NavigationMaterializedComponentWork
             {
                 continue;
             }
-            AddChangedMedia(next, eventInfo.VoxelIndex);
+            _transitionChangedMaps = _transitionChangedMaps.Set(mapId, true);
+            if (eventInfo.HasVoxelState)
+                AddChangedMedia(next, eventInfo.VoxelIndex);
         }
 
         _frontComplete = true;
         if (_changedStates.Count == 0)
         {
             _hasNoChanges = true;
-            _componentGraph = _candidate;
             return true;
         }
         _seamRefresh = _seamDiscoveryMaps.Count == 0
@@ -275,8 +314,6 @@ internal sealed class NavigationMaterializedComponentWork
                 _candidate,
                 _candidate,
                 _seamDiscoveryMaps);
-        if (_seamRefresh == null)
-            _componentGraph = _candidate;
         _changedStateEnumerator = _changedStates.GetEnumerator();
         return true;
     }
@@ -510,7 +547,7 @@ internal sealed class NavigationMaterializedComponentWork
         _statePhase = 0;
         _pendingNeighbor = null;
         _build = null;
-        _componentGraph = _seamRefresh == null ? _candidate : null;
+        _componentGraph = _seamRefresh == null ? _transitionGraph ?? _candidate : null;
         _seamRevision = _seamRefresh?.Revision ?? -1;
         CompleteState();
     }

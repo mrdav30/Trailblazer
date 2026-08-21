@@ -575,17 +575,17 @@ public sealed class NavigationFlowFieldTests
             query,
             origin,
             destination,
-            maximumPayloadBytes: 696);
+            maximumPayloadBytes: 720);
         FlowResult oneByteShort = RunFlow(
             fixture.Graph,
             query,
             origin,
             destination,
-            maximumPayloadBytes: 695);
+            maximumPayloadBytes: 719);
 
-        baseline.Payload.RetainedBytes.Should().Be(696);
+        baseline.Payload.RetainedBytes.Should().Be(720);
         NavigationFlowFieldPayload.GetMaximumRetainedBytes(3, 1, 1)
-            .Should().Be(696);
+            .Should().Be(720);
         exact.Status.Should().Be(NavigationFlowFieldStatus.Success);
         oneByteShort.Status.Should().Be(NavigationFlowFieldStatus.CapacityExceeded);
     }

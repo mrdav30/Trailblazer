@@ -19,20 +19,26 @@ internal sealed class GraphDependencyStamp
     private const long Int64Bytes = 8L;
     private const long NavigationAreaPolicyKeyBytes = ReferenceSlotBytes + Int64Bytes;
     private const long GraphComponentDependencyBytes = 32L;
-    private const long GraphPageDependencyBytes = 48L;
+    private const long GraphPageDependencyBytes = 56L;
     private static readonly long BaseRetainedBytes = Align8(
         ObjectHeaderBytes
         + NavigationAreaPolicyKeyBytes
-        + (2L * ReferenceSlotBytes));
+        + (2L * ReferenceSlotBytes)
+        + Int64Bytes
+        + Int64Bytes);
 
     internal GraphDependencyStamp(
         NavigationAreaPolicyKey areaPolicy,
         GraphComponentDependency[] components,
-        GraphPageDependency[] pages)
+        GraphPageDependency[] pages,
+        bool hasTransitionRuleDependency = false,
+        long transitionRuleVersion = 0)
     {
         AreaPolicy = areaPolicy;
         Components = components;
         Pages = pages;
+        HasTransitionRuleDependency = hasTransitionRuleDependency;
+        TransitionRuleVersion = hasTransitionRuleDependency ? transitionRuleVersion : 0;
     }
 
     internal NavigationAreaPolicyKey AreaPolicy { get; }
@@ -40,6 +46,10 @@ internal sealed class GraphDependencyStamp
     internal GraphComponentDependency[] Components { get; }
 
     internal GraphPageDependency[] Pages { get; }
+
+    internal bool HasTransitionRuleDependency { get; }
+
+    internal long TransitionRuleVersion { get; }
 
     internal long RetainedBytes => checked(
         BaseRetainedBytes
@@ -117,7 +127,8 @@ internal readonly struct GraphPageDependency : IEquatable<GraphPageDependency>
         long dynamicSlotGeneration,
         int pageIndex,
         long semanticVersion,
-        long physicalVersion)
+        long physicalVersion,
+        long transitionVersion = 0)
     {
         MapId = mapId;
         BakeVersion = bakeVersion;
@@ -125,6 +136,7 @@ internal readonly struct GraphPageDependency : IEquatable<GraphPageDependency>
         PageIndex = pageIndex;
         SemanticVersion = semanticVersion;
         PhysicalVersion = physicalVersion;
+        TransitionVersion = transitionVersion;
     }
 
     internal string MapId { get; }
@@ -133,6 +145,7 @@ internal readonly struct GraphPageDependency : IEquatable<GraphPageDependency>
     internal int PageIndex { get; }
     internal long SemanticVersion { get; }
     internal long PhysicalVersion { get; }
+    internal long TransitionVersion { get; }
 
     public bool Equals(GraphPageDependency other) =>
         string.Equals(MapId, other.MapId, StringComparison.Ordinal)
@@ -140,7 +153,8 @@ internal readonly struct GraphPageDependency : IEquatable<GraphPageDependency>
         && DynamicSlotGeneration == other.DynamicSlotGeneration
         && PageIndex == other.PageIndex
         && SemanticVersion == other.SemanticVersion
-        && PhysicalVersion == other.PhysicalVersion;
+        && PhysicalVersion == other.PhysicalVersion
+        && TransitionVersion == other.TransitionVersion;
 
     public override bool Equals(object? obj) => obj is GraphPageDependency other && Equals(other);
 
@@ -153,6 +167,7 @@ internal readonly struct GraphPageDependency : IEquatable<GraphPageDependency>
         hash = SwiftHashTools.CombineHashCodes(hash, DynamicSlotGeneration.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, PageIndex);
         hash = SwiftHashTools.CombineHashCodes(hash, SemanticVersion.GetHashCode());
-        return SwiftHashTools.CombineHashCodes(hash, PhysicalVersion.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, PhysicalVersion.GetHashCode());
+        return SwiftHashTools.CombineHashCodes(hash, TransitionVersion.GetHashCode());
     }
 }

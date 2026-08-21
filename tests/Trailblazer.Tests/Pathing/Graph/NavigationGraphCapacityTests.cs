@@ -507,19 +507,19 @@ public sealed class NavigationGraphCapacityTests
         }
 
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
-        maximumObservedActiveSnapshotBytes.Should().Be(49_557_632,
+        maximumObservedActiveSnapshotBytes.Should().Be(50_855_880,
             "the active envelope includes the published root plus retained operation, "
             + "composition, the exact unpublished materialized candidate, and affected-component "
             + "work at the largest overlay boundary "
-            + "with one retained 104-byte portal certificate and no duplicate waypoint sequence "
-            + "per explicit corridor leg");
-        maximumObservedPersistentGraphPages.Should().Be(527_200,
+            + "with one retained 104-byte portal certificate, immutable transition pages, "
+            + "and no duplicate waypoint sequence per explicit corridor leg");
+        maximumObservedPersistentGraphPages.Should().Be(527_615,
             "the conservative page envelope counts shared persistent ownership at every "
-            + "unpublished work boundary, including exact materialized candidate ownership; "
-            + "replacing waypoint sequences with portal-certificate sequences is page-neutral");
+            + "unpublished work boundary, including exact materialized candidate ownership "
+            + "and immutable transition-page roots");
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
-        diagnostics.ActiveSnapshotBytes.Should().Be(17_131_936,
+        diagnostics.ActiveSnapshotBytes.Should().Be(17_996_832,
             "endpoint incidence adds a 32-byte index field block, a 288-byte outer root, "
             + "262,528 bytes for four 1,025-address inner maps, and 885,600 bytes for "
             + "4,100 one-page owner rows; the automatic seam index adds its 224-byte "
@@ -529,15 +529,17 @@ public sealed class NavigationGraphCapacityTests
             + "a second waypoint sequence; the exact surface-component "
             + "membership, record, and member-sequence ownership remains after deleting the "
             + "2,080-byte duplicate composition carrier, with 112 bytes for the medium-partition "
-            + "index header and shared empty non-Solid roots");
-        diagnostics.PersistentGraphPageCount.Should().Be(148_091,
+            + "index header and shared empty non-Solid roots; immutable transition pages "
+            + "retain the source-full and destination-reference records");
+        diagnostics.PersistentGraphPageCount.Should().Be(148_365,
             "the endpoint index adds one root page, 4 outer/4,100 inner nodes, and "
             + "12,300 fixed-row pages for the 4,100 distinct endpoint addresses; the "
             + "empty automatic seam index owns four roots; exact surface components add "
             + "exact component ownership plus two shared empty non-Solid partition roots, and "
             + "explicit records replace the former waypoint page "
             + "with one portal-certificate page per adjacent leg without the deleted 30-page "
-            + "legacy carrier");
+            + "legacy carrier; transition pages add exact outer, map, page, and record-array "
+            + "ownership");
         for (int mapIndex = 0; mapIndex < 4; mapIndex++)
         {
             context.Pathing.TryGetNavigationGraphCellState(
@@ -1075,8 +1077,8 @@ public sealed class NavigationGraphCapacityTests
     [Fact]
     public void ChunkedBaseline_ShouldRespectExactPrefixPageBoundaryAndComplete()
     {
-        const int exactPageCeiling = 450;
-        const int oneBelowPageCeiling = 449;
+        const int exactPageCeiling = 458;
+        const int oneBelowPageCeiling = 457;
 
         using (TrailblazerWorldContext insufficient = CreateChunkedBaselineContext(
             oneBelowPageCeiling,
@@ -1087,9 +1089,9 @@ public sealed class NavigationGraphCapacityTests
                 insufficient.Pathing.GetNavigationGraphDiagnostics();
             belowMinimum.BaselineRebuildCount.Should().Be(1,
                 "the source root, retained operation state, baseline prefix, and exact-component "
-                + "preparation own 450 conservative pages after deleting the 16-page legacy "
+                + "preparation own 458 conservative pages after deleting the 16-page legacy "
                 + "composition carrier and adding exact ownership for the unpublished "
-                + "materialized component candidate; 449 retains the first baseline prefix "
+                + "materialized component candidate; 457 retains the first baseline prefix "
                 + "but cannot retain its later exact combined peak");
             belowMinimum.PersistentGraphPageCount.Should().BeLessThan(exactPageCeiling);
             for (int frame = 0; frame < 32; frame++)

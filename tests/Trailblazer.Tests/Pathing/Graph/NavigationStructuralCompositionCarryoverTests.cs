@@ -106,8 +106,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 2)
         };
 
-        const long exactPeak = 22_244L;
-        const long oneBelowPeak = 22_243L;
+        const long exactPeak = 23_212L;
+        const long oneBelowPeak = 23_211L;
 
         RunSeamWork(world, candidate, changes, exactPeak, out bool exactExceeded)
             .Should().BeTrue();
@@ -391,11 +391,11 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         preparationOnly.IsComplete.Should().BeTrue();
         withUpdate.IsComplete.Should().BeTrue();
         (withUpdate.RetainedBytes - preparationOnly.RetainedBytes).Should().Be(
-            41_826,
-            "the exact affected-component workspace counts its unpublished candidate once");
+            42_002,
+            "the exact affected-component workspace counts its unpublished candidate and transition roots once");
         (withUpdate.PersistentPageCount - preparationOnly.PersistentPageCount)
-            .Should().Be(204,
-                "the update accounts the one candidate root and exact component payload pages");
+            .Should().Be(206,
+                "the update accounts the candidate transition roots and exact component payload pages");
     }
 
     [Fact]

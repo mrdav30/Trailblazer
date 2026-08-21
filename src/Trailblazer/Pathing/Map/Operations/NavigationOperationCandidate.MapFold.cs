@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 using GridForge.Grids.Topology;
 
@@ -65,6 +66,10 @@ internal sealed partial class NavigationOperationCandidate
         private int _overlayCellIndex;
         private int _dynamicIndex;
         private int _authoredIndex;
+        private int _ruleValidationMapIndex;
+        private int _ruleValidationSourceIndex;
+        private int _ruleValidationTargetIndex;
+        private bool _ruleValidationMapDebited;
         private int _validationSourceIndex = -1;
         private int _validationStage;
         private int _validationIndex;
@@ -370,7 +375,59 @@ internal sealed partial class NavigationOperationCandidate
                     return true;
                 }
             }
+            if (!AdvanceRuleOwnershipValidation(meter))
+                return false;
+            if (_rejection != NavigationOperationRejection.None)
+                return true;
             _stage = Stage.Validation;
+            return true;
+        }
+
+        private bool AdvanceRuleOwnershipValidation(MaintenanceWorkMeter meter)
+        {
+            ReadOnlySpan<TraversalTransitionRule> sourceRules = _next!.Map.TransitionRuleSpan;
+            if (sourceRules.IsEmpty)
+                return true;
+            while (_ruleValidationMapIndex < _working._maps.Count)
+            {
+                if (!_ruleValidationMapDebited)
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    _ruleValidationMapDebited = true;
+                }
+                MapState target = _working._maps.GetValueAt(_ruleValidationMapIndex);
+                if (string.Equals(target.Map.MapId, _mapId, System.StringComparison.Ordinal))
+                {
+                    _ruleValidationMapIndex++;
+                    _ruleValidationMapDebited = false;
+                    continue;
+                }
+                ReadOnlySpan<TraversalTransitionRule> targetRules = target.Map.TransitionRuleSpan;
+                while (_ruleValidationSourceIndex < sourceRules.Length
+                    && _ruleValidationTargetIndex < targetRules.Length)
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    int comparison = string.CompareOrdinal(
+                        sourceRules[_ruleValidationSourceIndex].Id,
+                        targetRules[_ruleValidationTargetIndex].Id);
+                    if (comparison == 0)
+                    {
+                        _rejection = NavigationOperationRejection.ValidationFailed;
+                        _stage = Stage.Complete;
+                        return true;
+                    }
+                    if (comparison < 0)
+                        _ruleValidationSourceIndex++;
+                    else
+                        _ruleValidationTargetIndex++;
+                }
+                _ruleValidationMapIndex++;
+                _ruleValidationSourceIndex = 0;
+                _ruleValidationTargetIndex = 0;
+                _ruleValidationMapDebited = false;
+            }
             return true;
         }
 

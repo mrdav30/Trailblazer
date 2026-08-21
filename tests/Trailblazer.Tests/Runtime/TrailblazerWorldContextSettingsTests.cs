@@ -49,10 +49,10 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxIngressEntries.Should().Be(16_384);
         settings.MaxIngressBytes.Should().Be(4_194_304);
         settings.MaxActiveSnapshots.Should().Be(3);
-        settings.MaxActiveSnapshotBytes.Should().Be(64_431_784);
+        settings.MaxActiveSnapshotBytes.Should().Be(66_379_544);
         settings.MaxRetiredSnapshots.Should().Be(8);
         settings.MaxRetiredSnapshotBytes.Should().Be(67_108_864);
-        settings.MaxPersistentGraphPages.Should().Be(659_925);
+        settings.MaxPersistentGraphPages.Should().Be(660_550);
         settings.MaxDynamicCellSlotsPerMap.Should().Be(4_096);
         settings.MaxDynamicCellSlots.Should().Be(16_384);
         settings.MaxAreaPolicies.Should().Be(64);

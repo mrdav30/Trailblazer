@@ -14,6 +14,7 @@ internal sealed partial class NavigationWorldGraph
     /// <summary>Prepares changed instance and lookup roots without replaying payloads at publication.</summary>
     internal sealed class StructuralPreparationWork
     {
+        internal const long BaseRetainedBytes = 192L;
         private readonly NavigationWorldGraph _source;
         private readonly NavigationOperationCandidate _candidate;
         private readonly NavigationOperationFrameChange[] _changes;
@@ -36,6 +37,10 @@ internal sealed partial class NavigationWorldGraph
         private long _ownedInstanceExclusiveBytes;
         private int _ownedInstanceExclusivePages;
         private bool _composeOwnershipTransferred;
+        private NavigationWorldGraph? _prepared;
+        private NavigationTransitionRefreshWork? _transitionRefresh;
+        private bool _rootsPrepared;
+        private bool _rebuildTransitionRules;
 
         internal StructuralPreparationWork(
             NavigationWorldGraph source,
@@ -62,16 +67,23 @@ internal sealed partial class NavigationWorldGraph
         internal NavigationWorldGraph Result { get; private set; } = null!;
 
         internal long RetainedBytes => checked(
-            128L
+            BaseRetainedBytes
             + _ownedInstanceExclusiveBytes
             + _copiedPersistentBytes
-            + GetComposeAdditionalRetainedBytes());
+            + GetComposeAdditionalRetainedBytes()
+            + (Result == null
+                || _prepared == null
+                || ReferenceEquals(Result, _prepared)
+                    ? 0L
+                    : NavigationWorldGraph.BaseRetainedBytes)
+            + (_transitionRefresh?.RetainedBytes ?? 0L));
 
         internal int PersistentPageCount => checked(
             1
             + _ownedInstanceExclusivePages
             + _copiedPersistentPages
-            + GetComposeAdditionalPersistentPages());
+            + GetComposeAdditionalPersistentPages()
+            + (_transitionRefresh?.PersistentPageCount ?? 0));
 
         private long GetComposeAdditionalRetainedBytes()
         {
@@ -115,25 +127,43 @@ internal sealed partial class NavigationWorldGraph
                 }
                 _changeIndex++;
             }
-            _retainedBytes = checked(
-                _retainedBytes
-                - _source._explicitConnections.RetainedBytes
-                + _candidate.ExplicitConnections.RetainedBytes);
-            _persistentPages += _candidate.ExplicitConnections.PersistentPageCount
-                - _source._explicitConnections.PersistentPageCount;
-            Result = new NavigationWorldGraph(
-                _version,
-                _directory,
-                _source.AreaCatalog,
-                _mapIndex,
-                _source.SurfaceComponents,
-                _candidate.ExplicitConnections,
-                _source._automaticSeams,
-                _source._closedStructuralComponents,
-                _source._additionalClosedStructuralComponents,
-                _source._allStructuralComponentsClosed,
-                _retainedBytes,
-                _persistentPages);
+            if (!_rootsPrepared)
+            {
+                _retainedBytes = checked(
+                    _retainedBytes
+                    - _source._explicitConnections.RetainedBytes
+                    + _candidate.ExplicitConnections.RetainedBytes);
+                _persistentPages += _candidate.ExplicitConnections.PersistentPageCount
+                    - _source._explicitConnections.PersistentPageCount;
+                _prepared = new NavigationWorldGraph(
+                    _version,
+                    _directory,
+                    _source.AreaCatalog,
+                    _mapIndex,
+                    _source.SurfaceComponents,
+                    _candidate.ExplicitConnections,
+                    _source._automaticSeams,
+                    _source.TransitionPages,
+                    _source.TransitionRules,
+                    _source._closedStructuralComponents,
+                    _source._additionalClosedStructuralComponents,
+                    _source._allStructuralComponentsClosed,
+                    _retainedBytes,
+                    _persistentPages);
+                _transitionRefresh = new NavigationTransitionRefreshWork(
+                    _source,
+                    _prepared,
+                    _candidate,
+                    _changedMapIds,
+                    _rebuildTransitionRules,
+                    _version);
+                _rootsPrepared = true;
+            }
+            if (!_transitionRefresh!.Advance(meter))
+                return false;
+            Result = _prepared!.WithTransitionPublication(
+                _transitionRefresh.Pages,
+                _transitionRefresh.Rules);
             return true;
         }
 
@@ -233,6 +263,8 @@ internal sealed partial class NavigationWorldGraph
                 _persistentPages += _mapIndex.Count - before.Count;
                 _indexConsumed = true;
             }
+            if (_prior == null || !ReferenceEquals(_prior.Map, _next!.Map))
+                _rebuildTransitionRules = true;
             ResetItem();
             return true;
         }
@@ -284,6 +316,7 @@ internal sealed partial class NavigationWorldGraph
                 _persistentPages += _mapIndex.Count - before.Count;
                 _indexConsumed = true;
             }
+            _rebuildTransitionRules = true;
             ResetItem();
             return true;
         }

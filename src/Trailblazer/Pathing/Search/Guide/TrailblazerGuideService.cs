@@ -63,8 +63,7 @@ public sealed class TrailblazerGuideService
                 graph,
                 query.Agent,
                 areaPolicy,
-                query.Traversal,
-                query.AllowTransitions,
+                TraversalMedium.Solid,
                 actualFoot,
                 query.End.Position,
                 NavigationRayEndpointAllowance.None));

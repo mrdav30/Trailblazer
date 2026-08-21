@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 using GridForge.Grids;
 
@@ -93,8 +94,7 @@ internal readonly struct NavigationRayRequest
         NavigationWorldGraph expectedGraph,
         NavigationAgentProfile profile,
         NavigationAreaPolicy areaPolicy,
-        TraversalIntent intent,
-        bool allowTransitions,
+        TraversalMedium medium,
         Vector3d start,
         Vector3d end,
         NavigationRayEndpointAllowance endpointAllowance,
@@ -104,13 +104,18 @@ internal readonly struct NavigationRayRequest
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(expectedGraph, nameof(expectedGraph));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        if (medium is not TraversalMedium.Solid
+            and not TraversalMedium.Gas
+            and not TraversalMedium.Liquid)
+        {
+            throw new ArgumentOutOfRangeException(nameof(medium));
+        }
         World = world;
         Store = store;
         ExpectedGraph = expectedGraph;
         Profile = profile;
         AreaPolicy = areaPolicy;
-        Intent = intent;
-        AllowTransitions = allowTransitions;
+        Medium = medium;
         Start = start;
         End = end;
         EndpointAllowance = endpointAllowance;
@@ -127,9 +132,7 @@ internal readonly struct NavigationRayRequest
 
     internal NavigationAreaPolicy AreaPolicy { get; }
 
-    internal TraversalIntent Intent { get; }
-
-    internal bool AllowTransitions { get; }
+    internal TraversalMedium Medium { get; }
 
     internal Vector3d Start { get; }
 

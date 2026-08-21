@@ -95,11 +95,7 @@ public sealed class NavigationRayConcurrencyTests
             fixture.Graph,
             NavigationAStarExitTestHarness.Profile(),
             NavigationAStarExitTestHarness.Policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
-            allowTransitions: false,
+            TraversalMedium.Solid,
             baseline.Start,
             baseline.End,
             NavigationRayEndpointAllowance.None,
@@ -175,11 +171,7 @@ public sealed class NavigationRayConcurrencyTests
             fixture.Graph,
             NavigationAStarExitTestHarness.Profile(),
             NavigationAStarExitTestHarness.Policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
-            allowTransitions: false,
+            TraversalMedium.Solid,
             startState.FootAnchor,
             endState.FootAnchor,
             NavigationRayEndpointAllowance.None);

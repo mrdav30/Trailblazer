@@ -258,13 +258,14 @@
 - Modify only through the Task 6 dispatcher/evaluator authority: `src/Trailblazer/Pathing/Graph/NavigationVolumeEdgeEvaluator.cs`
 - Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationRayTests.cs`
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/NavigationVolumeRayTests.cs`
+- Update exact-medium internal ray request call sites only: `src/Trailblazer/Pathing/Search/AStar/NavigationEndpointResolutionWork.cs`, `src/Trailblazer/Pathing/Search/AStar/NavigationSurfaceAStarWork.cs`, `src/Trailblazer/Pathing/Search/Flow/NavigationSelectedEdgeProgressWork.cs`, `src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs`, and matching ray tests/benchmarks.
 
-- [ ] RED Gas/Liquid one-prism positive-face chains plus multi-cell/cross-grid covered-prism union fallback for rectangular, pointy hex, and flat hex worlds.
-- [ ] RED exact source/target medium identity, policy/capability/clearance rejection, missing physical evidence, affected/unaffected dependencies, stale world/publication, exact work/capacity one-below, and warmed zero allocation.
-- [ ] RED same-medium-only success and explicit refusal to cross or skip a semantic transition; volume shortcuts may be evaluated only through the Task 6 dispatcher and may not recursively invoke the ray.
-- [ ] Reuse the typed covered-cell result/scratch already added to `NavigationRayWorkspace` by Task 5 and the canonical dispatcher/union API; do not add a second buffer, scratch, ray, volume workspace, topology formula, or geometry helper.
-- [ ] Keep current public direct-heading behavior unchanged. Task 8 consumes this internal ray for A* simplification; Task 10 wires the final controller/public behavior and deletes the old direct-volume check.
-- [ ] Run ray/evaluator/GridForge integration Release + ReleaseLean gates, stale/allocation gates, reviews, and commit: `feat(pathing): trace volume navigation rays`.
+- [x] RED Gas/Liquid one-prism positive-face chains plus multi-cell/cross-grid covered-prism union fallback for rectangular, pointy hex, and flat hex worlds.
+- [x] RED exact source/target medium identity, policy/capability/clearance rejection, missing physical evidence, affected/unaffected dependencies, stale world/publication, exact work/capacity one-below, and warmed zero allocation.
+- [x] RED same-medium-only success and explicit refusal to cross or skip a semantic transition; volume shortcuts may be evaluated only through the Task 6 dispatcher and may not recursively invoke the ray.
+- [x] Reuse the typed covered-cell result/scratch already added to `NavigationRayWorkspace` by Task 5 and the canonical dispatcher/union API; do not add a second buffer, scratch, ray, volume workspace, topology formula, or geometry helper.
+- [x] Keep current public direct-heading behavior unchanged. Task 8 consumes this internal ray for A* simplification; Task 10 wires the final controller/public behavior and deletes the old direct-volume check.
+- [x] Run ray/evaluator/GridForge integration Release + ReleaseLean gates, stale/allocation gates, reviews, and commit: `feat(pathing): trace volume navigation rays`.
 
 ## Task 8: Extend A* To Medium States And Actionable Guide Steps
 

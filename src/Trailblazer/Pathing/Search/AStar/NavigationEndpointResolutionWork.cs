@@ -389,11 +389,7 @@ internal sealed class NavigationEndpointResolutionWork
             _graph,
             _evaluator.Profile,
             _evaluator.AreaPolicy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
-            allowTransitions: false,
+            TraversalMedium.Solid,
             start,
             end,
             _role == NavigationEndpointRole.Start

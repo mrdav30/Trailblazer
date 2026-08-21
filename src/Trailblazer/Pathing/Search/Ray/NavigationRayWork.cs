@@ -35,10 +35,7 @@ internal sealed class NavigationRayWork
 
     internal NavigationRayResult Result { get; private set; }
 
-    private TraversalMedium Medium => _request.Intent.CurrentMedium
-        == TraversalMedium.Unknown
-            ? TraversalMedium.Solid
-            : _request.Intent.CurrentMedium;
+    private TraversalMedium Medium => _request.Medium;
 
     internal void Begin(in NavigationRayRequest request)
     {
@@ -48,9 +45,7 @@ internal sealed class NavigationRayWork
             request.ExpectedGraph,
             request.Profile,
             request.AreaPolicy,
-            request.Intent.CurrentMedium == TraversalMedium.Unknown
-                ? TraversalMedium.Solid
-                : request.Intent.CurrentMedium);
+            request.Medium);
         Result = default;
         Status = NavigationRayStatus.Pending;
         _worldChangeSequence = 0;
@@ -89,6 +84,11 @@ internal sealed class NavigationRayWork
     {
         if (!_begun || Status != NavigationRayStatus.Pending)
             return Status;
+        if (useGuideMeter
+            && Medium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            return Finish(NavigationRayStatus.Blocked);
+        }
 
         NavigationRayStatus traceStatus = Trace(
             queryMeter,
@@ -295,6 +295,7 @@ internal sealed class NavigationRayWork
         {
             GridTraceInterval interval = _workspace.TraceIntervals[ordinal];
             ref NavigationRayChainRecord record = ref records[ordinal];
+            NavigationRayStatus seedStatus = NavigationRayStatus.Pending;
             if (record.State != NavigationRayChainRecordState.Unreached
                 || (permitsStartPrefix
                     ? interval.TEnter != firstSeedParameter
@@ -302,11 +303,15 @@ internal sealed class NavigationRayWork
                 || !CanSeed(
                     ordinal,
                     finishComponent,
+                    queryMeter,
                     ref guideMeter,
-                    useGuideMeter))
+                    useGuideMeter,
+                    out seedStatus))
             {
                 if (_meterBlocked)
                     return Finish(NavigationRayStatus.BudgetExceeded);
+                if (seedStatus != NavigationRayStatus.Pending)
+                    return Finish(seedStatus);
                 continue;
             }
             record.RootOrdinal = ordinal;
@@ -325,14 +330,19 @@ internal sealed class NavigationRayWork
                 ref NavigationRayChainRecord record = ref records[ordinal];
                 if (record.State != NavigationRayChainRecordState.Ready)
                     continue;
+                NavigationRayStatus finishStatus = NavigationRayStatus.Pending;
                 if (!permitsDestinationSuffix
                     && CanFinish(
                         ordinal,
+                        queryMeter,
                         ref guideMeter,
-                        useGuideMeter))
+                        useGuideMeter,
+                        out finishStatus))
                     return FinishSuccess(ordinal);
                 if (_meterBlocked)
                     return Finish(NavigationRayStatus.BudgetExceeded);
+                if (finishStatus != NavigationRayStatus.Pending)
+                    return Finish(finishStatus);
 
                 record.State = NavigationRayChainRecordState.Expanded;
                 progressed = true;
@@ -357,11 +367,12 @@ internal sealed class NavigationRayWork
         while (progressed);
 
         if (permitsDestinationSuffix)
-            return FinishDestinationSuffix(ref guideMeter, useGuideMeter);
+            return FinishDestinationSuffix(queryMeter, ref guideMeter, useGuideMeter);
         return FinishBlocked();
     }
 
     private NavigationRayStatus FinishDestinationSuffix(
+        NavigationWorkMeter? queryMeter,
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter)
     {
@@ -383,10 +394,17 @@ internal sealed class NavigationRayWork
             {
                 continue;
             }
-            if (CanFinish(ordinal, ref guideMeter, useGuideMeter))
+            if (CanFinish(
+                    ordinal,
+                    queryMeter,
+                    ref guideMeter,
+                    useGuideMeter,
+                    out NavigationRayStatus finishStatus))
                 return FinishSuccess(ordinal);
             if (_meterBlocked)
                 return Finish(NavigationRayStatus.BudgetExceeded);
+            if (finishStatus != NavigationRayStatus.Pending)
+                return Finish(finishStatus);
         }
         return FinishBlocked();
     }
@@ -397,6 +415,12 @@ internal sealed class NavigationRayWork
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter)
     {
+        if (!useGuideMeter
+            && Medium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            return ExpandVolume(sourceOrdinal, queryMeter!);
+        }
+
         NavigationWorldGraph graph = _request.ExpectedGraph;
         NavigationRayChainRecord[] records = _workspace.ChainRecords;
         ref NavigationRayChainRecord sourceRecord = ref records[sourceOrdinal];
@@ -429,7 +453,7 @@ internal sealed class NavigationRayWork
 
             NavigationGraphEdge edge = edges.Current;
             int edgeOrdinal = edges.CurrentOrdinal;
-            if (!AllowsEdge(sourceAddress, edge, edgeOrdinal))
+            if (!AllowsEdge(sourceAddress, edge.Target, edgeOrdinal))
                 continue;
             Fixed64 edgeCost;
             int targetOrdinal;
@@ -560,6 +584,179 @@ internal sealed class NavigationRayWork
                 && IsSemanticCostNeutral(edge);
             targetRecord.State = NavigationRayChainRecordState.Ready;
         }
+    }
+
+    private NavigationRayStatus ExpandVolume(
+        int sourceOrdinal,
+        NavigationWorkMeter meter)
+    {
+        NavigationWorldGraph graph = _request.ExpectedGraph;
+        NavigationRayChainRecord[] records = _workspace.ChainRecords;
+        ref NavigationRayChainRecord sourceRecord = ref records[sourceOrdinal];
+        var source = new NavigationMediumStateRef(sourceRecord.Node, Medium);
+        var edges = new NavigationTraversalEdgeEnumerator(
+            _request.World,
+            graph,
+            source,
+            _request.Profile,
+            _request.AreaPolicy,
+            _workspace,
+            allowTransitions: false);
+        var segmentEvaluator = new NavigationVolumeEdgeEvaluator(
+            _request.World,
+            graph,
+            _request.Profile,
+            _request.AreaPolicy,
+            Medium,
+            _workspace);
+        int edgeSteps = int.MaxValue;
+        while (true)
+        {
+            NavigationTraversalEdgeAdvanceStatus advance = edges.AdvanceOne(
+                meter,
+                _workspace.Dependencies,
+                ref edgeSteps);
+            if (advance == NavigationTraversalEdgeAdvanceStatus.Blocked
+                || advance == NavigationTraversalEdgeAdvanceStatus.BudgetExceeded)
+            {
+                return NavigationRayStatus.BudgetExceeded;
+            }
+            if (advance == NavigationTraversalEdgeAdvanceStatus.CapacityExceeded)
+                return NavigationRayStatus.CapacityExceeded;
+            if (advance == NavigationTraversalEdgeAdvanceStatus.CostOverflow)
+                return NavigationRayStatus.CostOverflow;
+            if (advance == NavigationTraversalEdgeAdvanceStatus.Stale)
+                return NavigationRayStatus.Stale;
+            if (advance == NavigationTraversalEdgeAdvanceStatus.Pending)
+                continue;
+            if (advance == NavigationTraversalEdgeAdvanceStatus.Complete)
+                return NavigationRayStatus.Pending;
+            if (edges.CurrentKind != NavigationTraversalEdgeKind.Volume
+                || edges.CurrentTarget.Medium != Medium
+                || !graph.TryGetNodeAddress(
+                    sourceRecord.Node,
+                    out NavigationCellAddress sourceAddress)
+                || !AllowsEdge(
+                    sourceAddress,
+                    edges.CurrentTarget.Node,
+                    edges.CurrentOrdinal))
+            {
+                continue;
+            }
+
+            int targetOrdinal = FindVolumeTarget(
+                sourceOrdinal,
+                edges.CurrentTarget.Node,
+                edges.CurrentVolumeIsShortcut,
+                out Fixed64 targetParameter);
+            if (targetOrdinal < 0)
+                continue;
+            Vector3d sourcePoint = Vector3d.Lerp(
+                _request.Start,
+                _request.End,
+                sourceRecord.ArrivalParameter);
+            Vector3d targetPoint = Vector3d.Lerp(
+                _request.Start,
+                _request.End,
+                targetParameter);
+            NavigationTraversalEvaluationStatus segmentStatus =
+                segmentEvaluator.CertifyRaySegment(
+                    source,
+                    edges.CurrentTarget,
+                    sourcePoint,
+                    targetPoint,
+                    meter,
+                    _workspace.Dependencies);
+            if (segmentStatus == NavigationTraversalEvaluationStatus.BudgetExceeded)
+                return NavigationRayStatus.BudgetExceeded;
+            if (segmentStatus == NavigationTraversalEvaluationStatus.CapacityExceeded)
+                return NavigationRayStatus.CapacityExceeded;
+            if (segmentStatus == NavigationTraversalEvaluationStatus.CostOverflow)
+                return NavigationRayStatus.CostOverflow;
+            if (segmentStatus == NavigationTraversalEvaluationStatus.Stale)
+                return NavigationRayStatus.Stale;
+            if (segmentStatus != NavigationTraversalEvaluationStatus.Passable)
+                continue;
+            if (!Fixed64.TryAdd(
+                    sourceRecord.TraversalCost,
+                    edges.CurrentCost,
+                    out Fixed64 traversalCost))
+            {
+                return NavigationRayStatus.CostOverflow;
+            }
+
+            ref NavigationRayChainRecord targetRecord = ref records[targetOrdinal];
+            if (targetRecord.State != NavigationRayChainRecordState.Unreached
+                && !IsEarlierContinuation(targetRecord, targetParameter, null!))
+            {
+                continue;
+            }
+            targetRecord.PredecessorOrdinal = sourceOrdinal;
+            targetRecord.RootOrdinal = sourceRecord.RootOrdinal;
+            targetRecord.ArrivalParameter = targetParameter;
+            targetRecord.TraversalCost = traversalCost;
+            targetRecord.IncomingExplicitConnection = null!;
+            targetRecord.IsSemanticCostNeutral = sourceRecord.IsSemanticCostNeutral
+                && IsSemanticCostNeutral(edges.CurrentTarget.Node);
+            targetRecord.State = NavigationRayChainRecordState.Ready;
+        }
+    }
+
+    private int FindVolumeTarget(
+        int sourceOrdinal,
+        NavigationNodeRef target,
+        bool isShortcut,
+        out Fixed64 targetParameter)
+    {
+        NavigationWorldGraph graph = _request.ExpectedGraph;
+        NavigationRayChainRecord sourceRecord = _workspace.ChainRecords[sourceOrdinal];
+        if (!isShortcut
+            && graph.TryGetNodeAddress(
+                sourceRecord.Node,
+                out NavigationCellAddress sourceAddress)
+            && graph.TryGetNodeAddress(target, out NavigationCellAddress targetAddress)
+            && graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
+            && graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism)
+            && GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                targetPrism,
+                out GridNavigationPortal portal))
+        {
+            if (GridCellGeometry.TryGetNavigationPortalTraversalParameters(
+                    sourcePrism,
+                    targetPrism,
+                    portal,
+                    _request.Start,
+                    _request.End,
+                    _request.Profile.Shape.Radius,
+                    _request.Profile.Shape.Height,
+                    out Fixed64 sourceParameter,
+                    out targetParameter))
+            {
+                return sourceParameter >= sourceRecord.ArrivalParameter
+                    && ContainsParameter(sourceOrdinal, sourceParameter)
+                    ? FindTarget(target, targetParameter)
+                    : -1;
+            }
+        }
+        for (int ordinal = 0; ordinal < _workspace.TraceIntervals.Count; ordinal++)
+        {
+            ref NavigationRayChainRecord targetRecord =
+                ref _workspace.ChainRecords[ordinal];
+            if (targetRecord.State == NavigationRayChainRecordState.Unavailable
+                || targetRecord.Node != target)
+            {
+                continue;
+            }
+            GridTraceInterval interval = _workspace.TraceIntervals[ordinal];
+            targetParameter = interval.TEnter < sourceRecord.ArrivalParameter
+                ? sourceRecord.ArrivalParameter
+                : interval.TEnter;
+            if (targetParameter <= interval.TExit)
+                return ordinal;
+        }
+        targetParameter = default;
+        return -1;
     }
 
     private NavigationRayStatus EvaluateExplicitEdge(
@@ -829,9 +1026,12 @@ internal sealed class NavigationRayWork
     private bool CanSeed(
         int ordinal,
         NavigationSurfaceComponentKey finishComponent,
+        NavigationWorkMeter? queryMeter,
         ref GuideSampleWorkMeter guideMeter,
-        bool useGuideMeter)
+        bool useGuideMeter,
+        out NavigationRayStatus terminalStatus)
     {
+        terminalStatus = NavigationRayStatus.Pending;
         NavigationNodeRef node = _workspace.ChainRecords[ordinal].Node;
         NavigationRayChainConstraint constraint = _request.ChainConstraint;
         NavigationCellAddress address;
@@ -857,6 +1057,18 @@ internal sealed class NavigationRayWork
             }
             if (_request.EndpointAllowance == NavigationRayEndpointAllowance.StartPrefix)
                 return true;
+        }
+        if (!useGuideMeter
+            && Medium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            var state = new NavigationMediumStateRef(node, Medium);
+            return CertifyVolumeSegment(
+                state,
+                state,
+                _request.Start,
+                _request.Start,
+                queryMeter!,
+                out terminalStatus);
         }
         if (!_request.ExpectedGraph.TryGetSeamPrism(address, out GridCellPrism prism))
         {
@@ -901,7 +1113,7 @@ internal sealed class NavigationRayWork
 
     private bool AllowsEdge(
         NavigationCellAddress source,
-        in NavigationGraphEdge edge,
+        NavigationNodeRef targetNode,
         int edgeOrdinal)
     {
         NavigationRayChainConstraint constraint = _request.ChainConstraint;
@@ -913,16 +1125,19 @@ internal sealed class NavigationRayWork
             && source == constraint.SourceAddress
             && edgeOrdinal == constraint.EdgeOrdinal
             && _request.ExpectedGraph.TryGetNodeAddress(
-                edge.Target,
+                targetNode,
                 out NavigationCellAddress target)
             && target == constraint.TargetAddress;
     }
 
     private bool CanFinish(
         int ordinal,
+        NavigationWorkMeter? queryMeter,
         ref GuideSampleWorkMeter guideMeter,
-        bool useGuideMeter)
+        bool useGuideMeter,
+        out NavigationRayStatus terminalStatus)
     {
+        terminalStatus = NavigationRayStatus.Pending;
         GridTraceInterval interval = _workspace.TraceIntervals[ordinal];
         ref NavigationRayChainRecord record = ref _workspace.ChainRecords[ordinal];
         bool permitsDestinationSuffix = _request.EndpointAllowance
@@ -938,13 +1153,7 @@ internal sealed class NavigationRayWork
             || (_request.ChainConstraint.Kind
                     == NavigationRayChainConstraintKind.SelectedEdge
                 && (record.PredecessorOrdinal < 0
-                    || address != _request.ChainConstraint.TargetAddress))
-            || !TryGetIncomingPortal(
-                ordinal,
-                ref guideMeter,
-                useGuideMeter,
-                out GridNavigationPortal incomingPortal)
-            || !_request.ExpectedGraph.TryGetSeamPrism(address, out GridCellPrism prism))
+                    || address != _request.ChainConstraint.TargetAddress)))
         {
             return false;
         }
@@ -958,7 +1167,47 @@ internal sealed class NavigationRayWork
         {
             return false;
         }
-        return TryConsumePrism(ref guideMeter, useGuideMeter)
+        if (!useGuideMeter
+            && Medium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            if (record.PredecessorOrdinal >= 0
+                && _request.ExpectedGraph.TryGetSeamPrism(
+                    address,
+                    out GridCellPrism targetPrism)
+                && TryGetIncomingPortal(
+                    ordinal,
+                    ref guideMeter,
+                    useGuideMeter,
+                    out GridNavigationPortal volumeIncoming)
+                && GridCellGeometry.IsNavigationBodySegmentValid(
+                    targetPrism,
+                    arrival,
+                    _request.End,
+                    _request.Profile.Shape.Radius,
+                    _request.Profile.Shape.Height,
+                    volumeIncoming,
+                    default,
+                    GetEndpointAllowance(ordinal, record, isFinalSegment: true)))
+            {
+                return true;
+            }
+            var state = new NavigationMediumStateRef(record.Node, Medium);
+            return CertifyVolumeSegment(
+                state,
+                state,
+                arrival,
+                _request.End,
+                queryMeter!,
+                out terminalStatus);
+        }
+        if (!_request.ExpectedGraph.TryGetSeamPrism(address, out GridCellPrism prism))
+            return false;
+        return TryGetIncomingPortal(
+                ordinal,
+                ref guideMeter,
+                useGuideMeter,
+                out GridNavigationPortal incomingPortal)
+            && TryConsumePrism(ref guideMeter, useGuideMeter)
             && GridCellGeometry.IsNavigationBodySegmentValid(
                 prism,
                 arrival,
@@ -968,6 +1217,42 @@ internal sealed class NavigationRayWork
                 incomingPortal,
                 default,
                 GetEndpointAllowance(ordinal, record, isFinalSegment: true));
+    }
+
+    private bool CertifyVolumeSegment(
+        NavigationMediumStateRef source,
+        NavigationMediumStateRef target,
+        Vector3d sourceFoot,
+        Vector3d targetFoot,
+        NavigationWorkMeter meter,
+        out NavigationRayStatus terminalStatus)
+    {
+        var evaluator = new NavigationVolumeEdgeEvaluator(
+            _request.World,
+            _request.ExpectedGraph,
+            _request.Profile,
+            _request.AreaPolicy,
+            Medium,
+            _workspace);
+        NavigationTraversalEvaluationStatus status = evaluator.CertifyRaySegment(
+            source,
+            target,
+            sourceFoot,
+            targetFoot,
+            meter,
+            _workspace.Dependencies);
+        terminalStatus = status switch
+        {
+            NavigationTraversalEvaluationStatus.BudgetExceeded =>
+                NavigationRayStatus.BudgetExceeded,
+            NavigationTraversalEvaluationStatus.CapacityExceeded =>
+                NavigationRayStatus.CapacityExceeded,
+            NavigationTraversalEvaluationStatus.CostOverflow =>
+                NavigationRayStatus.CostOverflow,
+            NavigationTraversalEvaluationStatus.Stale => NavigationRayStatus.Stale,
+            _ => NavigationRayStatus.Pending
+        };
+        return status == NavigationTraversalEvaluationStatus.Passable;
     }
 
     private GridNavigationBodySegmentEndpointAllowance GetEndpointAllowance(
@@ -1030,15 +1315,23 @@ internal sealed class NavigationRayWork
 
     private bool IsSemanticCostNeutral(in NavigationGraphEdge edge)
     {
-        if (!_request.ExpectedGraph.TryGetNodeState(edge.Target, out NavigationNodeState state)
+        return IsSemanticCostNeutral(edge.Target)
+            && (edge.Kind != NavigationGraphEdgeKind.Explicit
+                || edge.ExplicitConnection.Definition.AdditionalCost == Fixed64.Zero);
+    }
+
+    private bool IsSemanticCostNeutral(NavigationNodeRef target)
+    {
+        if (!_request.ExpectedGraph.TryGetNodeState(
+                target,
+                Medium,
+                out NavigationNodeState state)
             || !_request.AreaPolicy.TryGetRule(state.Cell.Area, out NavigationAreaRule rule))
         {
             return false;
         }
         return state.Cell.EnterCost == Fixed64.Zero
-            && rule.AdditionalEnterCost == Fixed64.Zero
-            && (edge.Kind != NavigationGraphEdgeKind.Explicit
-                || edge.ExplicitConnection.Definition.AdditionalCost == Fixed64.Zero);
+            && rule.AdditionalEnterCost == Fixed64.Zero;
     }
 
     private bool TryRecordDependencyNode(NavigationNodeRef node)

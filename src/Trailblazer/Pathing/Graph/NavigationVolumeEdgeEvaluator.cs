@@ -102,92 +102,30 @@ internal readonly struct NavigationVolumeEdgeEvaluator
         {
             return NavigationVolumeEdgeStatus.Stale;
         }
-        GridNavigationPortal portal = default;
-        Fixed64 sourceParameter = default;
-        Fixed64 targetParameter = default;
-        bool fastPath = isPrimary
-            && GridCellGeometry.TryCreateNavigationPortal(
-                sourcePrism,
-                targetPrism,
-                out portal)
-            && (!hasSeam
-                || TraversalEvaluator.IsSamePortal(
+        if (hasSeam
+            && (!GridCellGeometry.TryCreateNavigationPortal(
+                    sourcePrism,
+                    targetPrism,
+                    out GridNavigationPortal seamPortal)
+                || !TraversalEvaluator.IsSamePortal(
                     seam.Portal,
-                    portal,
-                    seam.IsReverse))
-            && GridCellGeometry.TryGetNavigationPortalTraversalParameters(
-                sourcePrism,
-                targetPrism,
-                portal,
-                sourceAnchor,
-                targetAnchor,
-                shape.Radius,
-                shape.Height,
-                out sourceParameter,
-                out targetParameter);
-        if (hasSeam && (!portal.IsValid
-            || !TraversalEvaluator.IsSamePortal(
-                seam.Portal,
-                portal,
-                seam.IsReverse)))
+                    seamPortal,
+                    seam.IsReverse)))
         {
             return NavigationVolumeEdgeStatus.Stale;
         }
-        if (fastPath)
-        {
-            Vector3d sourcePoint = Vector3d.Lerp(
-                sourceAnchor,
-                targetAnchor,
-                sourceParameter);
-            Vector3d targetPoint = Vector3d.Lerp(
-                sourceAnchor,
-                targetAnchor,
-                targetParameter);
-            fastPath = GridCellGeometry.IsNavigationBodySegmentValid(
-                    sourcePrism,
-                    sourceAnchor,
-                    sourcePoint,
-                    shape.Radius,
-                    shape.Height,
-                    default,
-                    portal,
-                    GridNavigationBodySegmentEndpointAllowance.None)
-                && GridCellGeometry.IsNavigationBodySegmentValid(
-                    targetPrism,
-                    targetPoint,
-                    targetAnchor,
-                    shape.Radius,
-                    shape.Height,
-                    portal,
-                    default,
-                    GridNavigationBodySegmentEndpointAllowance.None);
-        }
-        if (!fastPath)
-        {
-            var union = new NavigationVolumeAnchorEvaluator(
-                _world,
-                graph,
-                _nodes.Profile,
-                _nodes.AreaPolicy,
-                _workspace);
-            NavigationVolumeAnchorStatus unionStatus = union.EvaluateSegment(
-                source,
-                target,
-                sourceAnchor,
-                targetAnchor,
-                meter,
-                dependencies);
-            if (unionStatus == NavigationVolumeAnchorStatus.BudgetExceeded)
-                return NavigationVolumeEdgeStatus.BudgetExceeded;
-            if (unionStatus == NavigationVolumeAnchorStatus.CapacityExceeded)
-                return NavigationVolumeEdgeStatus.CapacityExceeded;
-            if (unionStatus == NavigationVolumeAnchorStatus.CostOverflow)
-                return NavigationVolumeEdgeStatus.CostOverflow;
-            if (unionStatus == NavigationVolumeAnchorStatus.Stale)
-                return NavigationVolumeEdgeStatus.Stale;
-            if (unionStatus != NavigationVolumeAnchorStatus.Success)
-                return NavigationVolumeEdgeStatus.Impassable;
-        }
+        NavigationVolumeEdgeStatus segmentStatus = CertifyResolvedSegment(
+            source,
+            target,
+            sourcePrism,
+            targetPrism,
+            sourceAnchor,
+            targetAnchor,
+            isPrimary,
+            meter,
+            dependencies);
+        if (segmentStatus != NavigationVolumeEdgeStatus.Passable)
+            return segmentStatus;
         if (!NavigationDistanceMath.TryCeiling(
                 sourceAnchor,
                 targetAnchor,
@@ -200,5 +138,140 @@ internal readonly struct NavigationVolumeEdgeEvaluator
 
         cost = total;
         return NavigationVolumeEdgeStatus.Passable;
+    }
+
+    internal NavigationVolumeEdgeStatus CertifyRaySegment(
+        NavigationMediumStateRef source,
+        NavigationMediumStateRef target,
+        Vector3d sourceFoot,
+        Vector3d targetFoot,
+        NavigationWorkMeter meter,
+        NavigationDependencyWorkspace dependencies)
+    {
+        NavigationWorldGraph graph = _nodes.Graph;
+        if (source.Medium != target.Medium
+            || !graph.TryGetNodeAddress(source.Node, out NavigationCellAddress sourceAddress)
+            || !graph.TryGetNodeAddress(target.Node, out NavigationCellAddress targetAddress)
+            || !graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
+            || !graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism))
+        {
+            return NavigationVolumeEdgeStatus.Stale;
+        }
+        if (!dependencies.TryRecordPage(
+                sourceAddress.MapId,
+                source.Node.CellSlot / NavigationSemanticPage.SlotCount)
+            || !dependencies.TryRecordPage(
+                targetAddress.MapId,
+                target.Node.CellSlot / NavigationSemanticPage.SlotCount))
+        {
+            return NavigationVolumeEdgeStatus.CapacityExceeded;
+        }
+        if (!_nodes.TryGetPassableNode(source.Node, out _, out _)
+            || !_nodes.TryGetPassableNode(target.Node, out _, out _))
+        {
+            return NavigationVolumeEdgeStatus.Impassable;
+        }
+
+        return CertifyResolvedSegment(
+            source,
+            target,
+            sourcePrism,
+            targetPrism,
+            sourceFoot,
+            targetFoot,
+            allowPortalFastPath: true,
+            meter,
+            dependencies);
+    }
+
+    private NavigationVolumeEdgeStatus CertifyResolvedSegment(
+        NavigationMediumStateRef source,
+        NavigationMediumStateRef target,
+        GridCellPrism sourcePrism,
+        GridCellPrism targetPrism,
+        Vector3d sourceFoot,
+        Vector3d targetFoot,
+        bool allowPortalFastPath,
+        NavigationWorkMeter meter,
+        NavigationDependencyWorkspace dependencies)
+    {
+        KinematicBodyShape shape = _nodes.Profile.Shape;
+        bool fastPath;
+        if (source.Node == target.Node)
+        {
+            fastPath = GridCellGeometry.IsNavigationBodySegmentValid(
+                sourcePrism,
+                sourceFoot,
+                targetFoot,
+                shape.Radius,
+                shape.Height,
+                default,
+                default,
+                GridNavigationBodySegmentEndpointAllowance.None);
+        }
+        else
+        {
+            fastPath = allowPortalFastPath
+                && GridCellGeometry.TryCreateNavigationPortal(
+                    sourcePrism,
+                    targetPrism,
+                    out GridNavigationPortal portal)
+                && GridCellGeometry.TryGetNavigationPortalTraversalParameters(
+                    sourcePrism,
+                    targetPrism,
+                    portal,
+                    sourceFoot,
+                    targetFoot,
+                    shape.Radius,
+                    shape.Height,
+                    out Fixed64 sourceParameter,
+                    out Fixed64 targetParameter)
+                && GridCellGeometry.IsNavigationBodySegmentValid(
+                    sourcePrism,
+                    sourceFoot,
+                    Vector3d.Lerp(sourceFoot, targetFoot, sourceParameter),
+                    shape.Radius,
+                    shape.Height,
+                    default,
+                    portal,
+                    GridNavigationBodySegmentEndpointAllowance.None)
+                && GridCellGeometry.IsNavigationBodySegmentValid(
+                    targetPrism,
+                    Vector3d.Lerp(sourceFoot, targetFoot, targetParameter),
+                    targetFoot,
+                    shape.Radius,
+                    shape.Height,
+                    portal,
+                    default,
+                    GridNavigationBodySegmentEndpointAllowance.None);
+        }
+        if (fastPath)
+            return NavigationVolumeEdgeStatus.Passable;
+
+        var union = new NavigationVolumeAnchorEvaluator(
+            _world,
+            _nodes.Graph,
+            _nodes.Profile,
+            _nodes.AreaPolicy,
+            _workspace);
+        NavigationVolumeAnchorStatus status = union.EvaluateSegment(
+            source,
+            target,
+            sourceFoot,
+            targetFoot,
+            meter,
+            dependencies);
+        return status switch
+        {
+            NavigationVolumeAnchorStatus.Success => NavigationVolumeEdgeStatus.Passable,
+            NavigationVolumeAnchorStatus.BudgetExceeded =>
+                NavigationVolumeEdgeStatus.BudgetExceeded,
+            NavigationVolumeAnchorStatus.CostOverflow =>
+                NavigationVolumeEdgeStatus.CostOverflow,
+            NavigationVolumeAnchorStatus.CapacityExceeded =>
+                NavigationVolumeEdgeStatus.CapacityExceeded,
+            NavigationVolumeAnchorStatus.Stale => NavigationVolumeEdgeStatus.Stale,
+            _ => NavigationVolumeEdgeStatus.Impassable
+        };
     }
 }

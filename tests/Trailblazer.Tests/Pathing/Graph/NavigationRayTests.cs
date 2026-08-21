@@ -258,11 +258,7 @@ public sealed class NavigationRayTests
             graph,
             NavigationAStarExitTestHarness.Profile(),
             policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
-            allowTransitions: false,
+            TraversalMedium.Solid,
             NavigationAStarExitTestHarness.GetFoot(binding, default),
             NavigationAStarExitTestHarness.GetFoot(binding, destination),
             NavigationRayEndpointAllowance.None);
@@ -1334,11 +1330,7 @@ public sealed class NavigationRayTests
         graph,
         profile,
         NavigationAStarExitTestHarness.Policy,
-        new TraversalIntent(
-            TraversalDomain.Surface,
-            TraversalMedium.Solid,
-            TraversalDomain.Surface),
-        allowTransitions: false,
+        TraversalMedium.Solid,
         start,
         end,
         endpointAllowance,

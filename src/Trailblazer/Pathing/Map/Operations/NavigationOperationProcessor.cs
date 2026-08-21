@@ -473,6 +473,9 @@ internal sealed class NavigationOperationProcessor
         if (operation.DescriptorBytes > _limits.MaxBatchDescriptorBytes
             || (operation.Kind == PendingOperationKind.MapCommit
                 && operation.PreparedMap!.Map.Cells.Count > _maxBakedCellsPerMap)
+            || (operation.Kind == PendingOperationKind.MapCommit
+                && operation.PreparedMap!.Map.TransitionRuleSpan.Length
+                    > _limits.MaxTransitionRulesPerMap)
             || WouldExceed(fixedScratchBytes, operation.CoalescingScratchBytes, _limits.MaxBatchSortScratchBytes)
             || _pending.Count >= _limits.MaxPendingOperations
             || WouldExceed(_pendingDescriptorBytes, operation.DescriptorBytes, _limits.MaxPendingDescriptorBytes)

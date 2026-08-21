@@ -25,6 +25,8 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     private readonly NavigationCellEntry[] _cells;
     private readonly NavigationConnection[] _connections;
     private readonly TraversalTransitionDefinition[] _transitions;
+    private readonly TraversalTransitionRule[] _transitionRules;
+    private readonly NavigationCell? _defaultCell;
     private readonly GridNavigationPortal[] _nativePortalTemplates;
     private readonly ReadOnlyCollection<NavigationCellEntry> _cellView;
     private readonly ReadOnlyCollection<NavigationConnection> _connectionView;
@@ -61,6 +63,10 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
 
     internal ReadOnlySpan<TraversalTransitionDefinition> TransitionSpan => _transitions;
 
+    internal ReadOnlySpan<TraversalTransitionRule> TransitionRuleSpan => _transitionRules;
+
+    internal NavigationCell? DefaultCell => _defaultCell;
+
     internal int NativePortalTemplateCount => _nativePortalTemplates.Length;
 
     internal long NativePortalTemplateRetainedBytes => checked(
@@ -71,13 +77,17 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         NormalizedGridConfiguration gridBinding,
         NavigationCellEntry[] cells,
         NavigationConnection[] connections,
-        TraversalTransitionDefinition[] transitions)
+        TraversalTransitionDefinition[] transitions,
+        TraversalTransitionRule[] transitionRules,
+        NavigationCell? defaultCell)
     {
         MapId = mapId;
         GridBinding = gridBinding;
         _cells = cells;
         _connections = connections;
         _transitions = transitions;
+        _transitionRules = transitionRules;
+        _defaultCell = defaultCell;
         _nativePortalTemplates = CompileNativePortalTemplates(gridBinding);
         _cellView = Array.AsReadOnly(_cells);
         _connectionView = Array.AsReadOnly(_connections);
@@ -95,9 +105,11 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
             || GridBinding.Width != other.GridBinding.Width
             || GridBinding.Height != other.GridBinding.Height
             || GridBinding.Length != other.GridBinding.Length
+            || !_defaultCell.Equals(other._defaultCell)
             || _cells.Length != other._cells.Length
             || _connections.Length != other._connections.Length
-            || _transitions.Length != other._transitions.Length)
+            || _transitions.Length != other._transitions.Length
+            || _transitionRules.Length != other._transitionRules.Length)
         {
             return false;
         }
@@ -120,6 +132,12 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
                 return false;
         }
 
+        for (int i = 0; i < _transitionRules.Length; i++)
+        {
+            if (!_transitionRules[i].Equals(other._transitionRules[i]))
+                return false;
+        }
+
         return true;
     }
 
@@ -134,12 +152,15 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         hash = SwiftHashTools.CombineHashCodes(hash, GridBinding.Width);
         hash = SwiftHashTools.CombineHashCodes(hash, GridBinding.Height);
         hash = SwiftHashTools.CombineHashCodes(hash, GridBinding.Length);
+        hash = SwiftHashTools.CombineHashCodes(hash, _defaultCell.GetHashCode());
         for (int i = 0; i < _cells.Length; i++)
             hash = SwiftHashTools.CombineHashCodes(hash, _cells[i].GetHashCode());
         for (int i = 0; i < _connections.Length; i++)
             hash = SwiftHashTools.CombineHashCodes(hash, _connections[i].GetHashCode());
         for (int i = 0; i < _transitions.Length; i++)
             hash = SwiftHashTools.CombineHashCodes(hash, _transitions[i].GetHashCode());
+        for (int i = 0; i < _transitionRules.Length; i++)
+            hash = SwiftHashTools.CombineHashCodes(hash, _transitionRules[i].GetHashCode());
         return hash;
     }
 

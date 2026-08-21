@@ -18,7 +18,7 @@ public enum NavigationCellOverlayOperationKind
     /// <summary>Tombstone effective traversal at the address.</summary>
     Suppress = 1,
 
-    /// <summary>Remove the override or tombstone and restore the baked value.</summary>
+    /// <summary>Remove the override or tombstone and restore explicit, then default, authoring.</summary>
     RevertToBake = 2
 }
 
@@ -55,7 +55,7 @@ public readonly struct NavigationCellOverlayOperation
     public static NavigationCellOverlayOperation Suppress(VoxelIndex index) =>
         new(index, NavigationCellOverlayOperationKind.Suppress, default);
 
-    /// <summary>Creates an operation that restores the baked value.</summary>
+    /// <summary>Creates an operation that restores explicit, then default, authoring.</summary>
     public static NavigationCellOverlayOperation RevertToBake(VoxelIndex index) =>
         new(index, NavigationCellOverlayOperationKind.RevertToBake, default);
 

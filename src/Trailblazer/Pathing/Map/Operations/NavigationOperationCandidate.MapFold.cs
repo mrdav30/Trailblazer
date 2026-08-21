@@ -60,6 +60,7 @@ internal sealed partial class NavigationOperationCandidate
         private readonly string[] _changedMapIds = new string[1];
         private readonly MapState[] _changedStates = new MapState[1];
         private NavigationOperationRejection _rejection;
+        private bool _defaultCellValidated;
         private int _cellIndex;
         private int _overlayCellIndex;
         private int _dynamicIndex;
@@ -246,6 +247,16 @@ internal sealed partial class NavigationOperationCandidate
                 _stage = Stage.Complete;
                 return;
             }
+            long retainedRuleCount = checked(
+                _working.TransitionRuleCount
+                - (_current?.Map.TransitionRuleSpan.Length ?? 0));
+            if (map.TransitionRuleSpan.Length > _limits.MaxTransitionRulesPerMap
+                || map.TransitionRuleSpan.Length > _limits.MaxTransitionRules - retainedRuleCount)
+            {
+                _rejection = NavigationOperationRejection.CapacityExceeded;
+                _stage = Stage.Complete;
+                return;
+            }
             if (_working._gridBindings.TryGetValue(map.GridBinding.Key, out string bound)
                 && !string.Equals(bound, _mapId, System.StringComparison.Ordinal))
             {
@@ -289,6 +300,18 @@ internal sealed partial class NavigationOperationCandidate
 
         private bool AdvanceCells(MaintenanceWorkMeter meter)
         {
+            if (!_defaultCellValidated && _next!.Map.DefaultCell.HasValue)
+            {
+                if (!meter.TryConsumeOverlaySlots(1))
+                    return false;
+                _defaultCellValidated = true;
+                if (_next.Map.DefaultCell.Value.Area.Value >= _working._navigationAreaCount)
+                {
+                    _rejection = NavigationOperationRejection.ValidationFailed;
+                    _stage = Stage.Complete;
+                    return true;
+                }
+            }
             while (_cellIndex < _next!.Map.CellSpan.Length)
             {
                 if (!meter.TryConsumeOverlaySlots(1))

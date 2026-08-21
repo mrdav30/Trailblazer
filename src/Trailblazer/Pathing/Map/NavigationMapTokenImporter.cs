@@ -19,7 +19,8 @@ namespace Trailblazer.Pathing;
 public static class NavigationMapTokenImporter
 {
     /// <summary>
-    /// Parses a rectangular token volume and emits canonical cells and addressed semantic transitions.
+    /// Parses a rectangular token volume and emits explicit canonical cells and addressed
+    /// semantic transitions. Token coverage is not retained as a default-cell mask.
     /// </summary>
     public static NavigationMap ImportRectangular(
         string mapId,

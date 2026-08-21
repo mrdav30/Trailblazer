@@ -125,18 +125,18 @@
 - Modify: `tests/Trailblazer.Tests/Pathing/Map/NavigationMapTokenImporterTests.cs`
 - Add: `tests/Trailblazer.Tests/Pathing/Map/NavigationMapDefaultAndTransitionRuleTests.cs`
 
-- [ ] RED absent/default/explicit/overlay precedence on dense and sparse maps; pin default coverage to physically present cells inside normalized `GridBinding`.
-- [ ] RED complete replacement semantics: no field merge; `Suppress` tombstones every lower layer; `RevertToBake` falls through baked -> default -> none.
-- [ ] RED Gas-default map replacement by Liquid-default map and exact malformed/default/rule transactional rejection.
-- [ ] RED rule validation for exact medium values, SameCell/PositiveFaceContact, capability flags, nonnegative `ActionCost`, locomotion hints, stable ID, duplicate IDs, canonical ordering, checked retained bytes, exact configured capacity, and one-over transactional rejection.
-- [ ] Stage positive finite rule ceilings internally in `NavigationOperationLimits`, derived from the existing transition per-map/total ceilings so no public constructor/property changes in this preparatory commit. Include canonical rule arrays in prepared-map/candidate retained-byte accounting and never partially publish an over-limit candidate. Task 10 replaces the temporary derivation with required public `MaxTransitionRulesPerMap`/`MaxTransitionRules` arguments and properties atomically with the final rule API.
-- [ ] Implement internal optional complete `NavigationCell? DefaultCell` and internal canonical `TraversalTransitionRule[]` storage in `NavigationMap`/prepared map. Keep the new authoring members/types internal until Task 10 exposes the one final public suite.
-- [ ] Keep `TraversalTransitionDefinition.AdditionalCost` unchanged during preparation. Task 10 performs the public clean rename to `ActionCost` across every direct reader/named constructor call; the distinct physical `NavigationConnection.AdditionalCost` is never renamed.
-- [ ] Keep one sorted rule array; do not add rule buckets/indexes.
-- [ ] Tag explicit/rule identity by kind; reject duplicates only within definition owner or rule array.
-- [ ] Update importer/builder XML docs and exact equality/hash/API snapshot expectations.
-- [ ] Run focused map/import/overlay/API Release + ReleaseLean gates and diff checks.
-- [ ] Review and commit: `feat(pathing): author medium defaults and transition rules`.
+- [x] RED absent/default/explicit/overlay precedence on dense and sparse maps; pin default coverage to physically present cells inside normalized `GridBinding`.
+- [x] RED complete replacement semantics: no field merge; `Suppress` tombstones every lower layer; `RevertToBake` falls through baked -> default -> none.
+- [x] RED Gas-default map replacement by Liquid-default map and exact malformed/default/rule transactional rejection.
+- [x] RED rule validation for exact medium values, SameCell/PositiveFaceContact, capability flags, nonnegative `ActionCost`, locomotion hints, stable ID, duplicate IDs, canonical ordering, checked retained bytes, exact configured capacity, and one-over transactional rejection.
+- [x] Stage positive finite rule ceilings internally in `NavigationOperationLimits`, derived from the existing transition per-map/total ceilings so no public constructor/property changes in this preparatory commit. Include canonical rule arrays in prepared-map/candidate retained-byte accounting and never partially publish an over-limit candidate. Task 10 replaces the temporary derivation with required public `MaxTransitionRulesPerMap`/`MaxTransitionRules` arguments and properties atomically with the final rule API.
+- [x] Implement internal optional complete `NavigationCell? DefaultCell` and internal canonical `TraversalTransitionRule[]` storage in `NavigationMap`/prepared map. Keep the new authoring members/types internal until Task 10 exposes the one final public suite.
+- [x] Keep `TraversalTransitionDefinition.AdditionalCost` unchanged during preparation. Task 10 performs the public clean rename to `ActionCost` across every direct reader/named constructor call; the distinct physical `NavigationConnection.AdditionalCost` is never renamed.
+- [x] Keep one sorted rule array; do not add rule buckets/indexes.
+- [x] Tag explicit/rule identity by kind; reject duplicates only within definition owner or rule array.
+- [x] Update importer/builder XML docs and exact equality/hash/API snapshot expectations.
+- [x] Run focused map/import/overlay/API Release + ReleaseLean gates and diff checks.
+- [x] Review and commit: `feat(pathing): author medium defaults and transition rules`.
 
 ## Task 3: Compose Medium Structural State And Volume Anchors
 

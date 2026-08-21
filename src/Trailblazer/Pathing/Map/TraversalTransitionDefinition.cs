@@ -180,7 +180,7 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
         || medium == TraversalMedium.Gas
         || medium == TraversalMedium.Liquid;
 
-    private static bool IsKnownType(TraversalTransitionType type) =>
+    internal static bool IsKnownType(TraversalTransitionType type) =>
         type >= TraversalTransitionType.Custom && type <= TraversalTransitionType.Climb;
 
     /// <summary>

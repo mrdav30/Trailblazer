@@ -28,6 +28,7 @@ internal sealed partial class NavigationOperationCandidate
     private long _overlaySlotCount;
     private long _overlayConnectionCount;
     private long _overlayTransitionCount;
+    private long _transitionRuleCount;
     private long _seamCandidateCount;
     private long _explicitEdgeCount;
     private int _dynamicCellCount;
@@ -58,10 +59,12 @@ internal sealed partial class NavigationOperationCandidate
 
     internal long OverlayTransitionCount => _overlayTransitionCount;
 
+    internal long TransitionRuleCount => _transitionRuleCount;
+
     internal int NavigationAreaCount => _navigationAreaCount;
 
     internal long RetainedBytes => checked(
-        104L
+        112L
         + _maps.RetainedBytes
         + _bakeVersionHighWater.RetainedBytes
         + _incomingSources.RetainedBytes
@@ -449,6 +452,7 @@ internal sealed partial class NavigationOperationCandidate
             _overlaySlotCount = _overlaySlotCount,
             _overlayConnectionCount = _overlayConnectionCount,
             _overlayTransitionCount = _overlayTransitionCount,
+            _transitionRuleCount = _transitionRuleCount,
             _seamCandidateCount = _seamCandidateCount,
             _explicitEdgeCount = _explicitEdgeCount,
             _dynamicCellCount = _dynamicCellCount,
@@ -575,9 +579,12 @@ internal sealed partial class NavigationOperationCandidate
         }
         if (dynamic)
         {
-            source = NavigationCellSemanticSource.DynamicInactive;
-            hasCell = false;
-            cell = default;
+            NavigationCell? defaultCell = state.Map.DefaultCell;
+            source = defaultCell.HasValue
+                ? NavigationCellSemanticSource.Baked
+                : NavigationCellSemanticSource.DynamicInactive;
+            hasCell = defaultCell.HasValue;
+            cell = defaultCell.GetValueOrDefault();
             return true;
         }
         source = NavigationCellSemanticSource.Baked;
@@ -640,6 +647,8 @@ internal sealed partial class NavigationOperationCandidate
             _overlaySlotCount -= previous.Overlay.CellCount;
             _overlayConnectionCount -= previous.Overlay.ConnectionCount;
             _overlayTransitionCount -= previous.Overlay.TransitionCount;
+            _transitionRuleCount = checked(
+                _transitionRuleCount - previous.Map.TransitionRuleSpan.Length);
             long previousConnections = previous.Map.ConnectionSpan.Length
                 + previous.Overlay.ConnectionCount;
             _seamCandidateCount -= previousConnections;
@@ -654,6 +663,8 @@ internal sealed partial class NavigationOperationCandidate
             _overlaySlotCount += next.Overlay.CellCount;
             _overlayConnectionCount += next.Overlay.ConnectionCount;
             _overlayTransitionCount += next.Overlay.TransitionCount;
+            _transitionRuleCount = checked(
+                _transitionRuleCount + next.Map.TransitionRuleSpan.Length);
             long nextConnections = next.Map.ConnectionSpan.Length
                 + next.Overlay.ConnectionCount;
             _seamCandidateCount += nextConnections;
@@ -780,8 +791,11 @@ internal sealed partial class NavigationOperationCandidate
                 high = middle - 1;
         }
 
-        cell = default;
-        return false;
+        NavigationCell? defaultCell = state.Map.GridBinding.IsValidIndex(index)
+            ? state.Map.DefaultCell
+            : null;
+        cell = defaultCell.GetValueOrDefault();
+        return defaultCell.HasValue;
     }
 
     private static bool TryGetValidationCell(

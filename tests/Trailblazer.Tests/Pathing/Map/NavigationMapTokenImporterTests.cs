@@ -25,6 +25,8 @@ public sealed class NavigationMapTokenImporterTests
             source);
 
         map.Cells.Should().HaveCount(2);
+        map.DefaultCell.Should().BeNull("token import emits explicit entries, not a coverage-history default");
+        map.TransitionRuleSpan.Length.Should().Be(0);
         map.Cells[0].Cell.Media.Should().Be(TraversalMedia.Solid);
         map.Cells[0].Cell.EnterCost.Should().Be(Fixed64.Parse("2.5"));
         map.Cells[0].Cell.Flags.Should().HaveFlag(NavigationCellFlags.TransitionSourceHint);

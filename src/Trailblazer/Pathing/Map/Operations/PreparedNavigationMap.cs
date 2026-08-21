@@ -12,6 +12,9 @@ namespace Trailblazer.Pathing;
 /// <summary>Wraps an inert validated map bake before deterministic runtime admission.</summary>
 public sealed class PreparedNavigationMap
 {
+    private const long DefaultCellRetainedBytes = 64L;
+    private const long TransitionRuleRetainedBytes = 80L;
+
     /// <summary>Creates an inert prepared-map descriptor from a validated immutable map.</summary>
     public PreparedNavigationMap(
         NavigationMap map,
@@ -64,6 +67,16 @@ public sealed class PreparedNavigationMap
             + (map.MapId.Length * sizeof(char))
             + map.NativePortalTemplateRetainedBytes);
         bytes = checked(bytes + ((long)map.Cells.Count * 96L));
+        if (map.DefaultCell.HasValue)
+            bytes = checked(bytes + DefaultCellRetainedBytes);
+        ReadOnlySpan<TraversalTransitionRule> rules = map.TransitionRuleSpan;
+        for (int i = 0; i < rules.Length; i++)
+        {
+            bytes = checked(
+                bytes
+                + TransitionRuleRetainedBytes
+                + (rules[i].Id.Length * sizeof(char)));
+        }
         for (int i = 0; i < map.Connections.Count; i++)
         {
             NavigationConnection connection = map.Connections[i];

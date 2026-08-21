@@ -453,6 +453,55 @@ public sealed class NavigationFlowAdmissionTests
     }
 
     [Fact]
+    public void QueryWork_UnsupportedResult_ShouldRejectSecondBeginBeforePublish()
+    {
+        using var world = new GridWorld();
+        VoxelIndex origin = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { origin, destination },
+                "flow-unsupported-reentry");
+        PathQuery baseline = ToFlowField(
+            fixture.CreateQuery(origin, destination, fixture.DefaultProfile));
+        var query = new PathQuery(
+            baseline.Start,
+            baseline.End,
+            baseline.Agent,
+            baseline.AreaPolicy,
+            baseline.Traversal,
+            baseline.Algorithm,
+            baseline.Budget,
+            allowTransitions: true,
+            baseline.FlowField);
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(
+                fixture.Graph,
+                maxConcurrentLeases: 2);
+        var workspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            maxEntries: 1,
+            maxReusableBytes: 4_096,
+            maxSinglePayloadBytes: 2_048,
+            maxActivePayloadBytes: 4_096,
+            maxActiveLeases: 2,
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        using var work = new NavigationFlowQueryWork(world, store, workspace, cache);
+        work.Begin(query, store.TryAcquire()!);
+        work.IsReadyToPublish.Should().BeTrue();
+
+        using NavigationWorldGraphLease secondLease = store.TryAcquire()!;
+        Action secondBegin = () => work.Begin(query, secondLease);
+
+        secondBegin.Should().Throw<InvalidOperationException>();
+        work.Publish().Should().Be(NavigationFlowQueryStatus.Unsupported);
+        store.ActiveLeaseCount.Should().Be(1);
+    }
+
+    [Fact]
     public void SharedEndpointWorkspace_ShouldResolveAFlowQuery()
     {
         using var world = new GridWorld();
@@ -493,7 +542,11 @@ public sealed class NavigationFlowAdmissionTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.FlowField);
-        admission.Begin(store.TryAcquire()!, query);
+        admission.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
 
         for (int step = 0;
             step < 32 && admission.Status == NavigationQueryAdmissionStatus.Pending;

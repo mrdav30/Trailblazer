@@ -106,27 +106,20 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             _graph,
             query.Query.Agent,
             query.AreaPolicy,
-            query.Medium);
+            query.StartMedium);
         _resultStatus = NavigationSurfaceAStarStatus.Success;
-        _useEuclideanHeuristic = _graph.SurfaceComponents.TryGet(
-            query.Start.Address,
-            query.Medium,
-            out NavigationSurfaceComponent startComponent)
+        _useEuclideanHeuristic = !query.Query.AllowTransitions
+            && _graph.SurfaceComponents.TryGet(
+                query.Start.Address,
+                query.StartMedium,
+                out NavigationSurfaceComponent startComponent)
             && startComponent.AllSurfaceEdgesEuclideanCertified;
-        bool targetResolved = _graph.TryGetNodeState(
-            query.End.Node,
-            out NavigationNodeState targetState);
-        _targetFootAnchor = targetState.FootAnchor;
-        if (!targetResolved)
-        {
-            Finish(NavigationSurfaceAStarStatus.Stale);
-            return;
-        }
+        _targetFootAnchor = query.End.FootAnchor;
         if (!_graph.AreInSameSurfaceComponent(
                 query.Start.Address,
-                query.Medium,
+                query.StartMedium,
                 query.End.Address,
-                query.Medium))
+                query.StartMedium))
         {
             _resultStatus = NavigationSurfaceAStarStatus.NoPath;
             _workspace.PathNodeCount = 0;
@@ -849,7 +842,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             || (recordComponent
                 && (!_graph.TryGetSurfaceComponent(
                         address,
-                        _query!.Medium,
+                        _query!.StartMedium,
                         out NavigationSurfaceComponentKey componentKey,
                         out _)
                     || !_workspace.TryRecordEndpointComponent(componentKey))))
@@ -1052,13 +1045,29 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
     {
         if (!_useEuclideanHeuristic
             || !_graph!.TryGetNodeState(node, out NavigationNodeState state)
+            || !TryGetHeuristicFootAnchor(state, out Vector3d footAnchor)
             || !NavigationDistanceMath.TryFloor(
-                state.FootAnchor,
+                footAnchor,
                 _targetFootAnchor,
                 out Fixed64 heuristic))
         {
             return Fixed64.Zero;
         }
         return heuristic;
+    }
+
+    private bool TryGetHeuristicFootAnchor(
+        NavigationNodeState state,
+        out Vector3d footAnchor)
+    {
+        if (_query!.StartMedium == TraversalMedium.Solid)
+        {
+            footAnchor = state.FootAnchor;
+            return true;
+        }
+
+        return state.TryGetCenteredVolumeFootAnchor(
+            _query.Query.Agent.Shape.Height,
+            out footAnchor);
     }
 }

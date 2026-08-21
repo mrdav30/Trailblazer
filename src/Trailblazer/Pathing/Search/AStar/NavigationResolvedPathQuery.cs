@@ -24,7 +24,8 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         NavigationResolvedEndpoint start,
         NavigationResolvedEndpoint end,
         NavigationAreaPolicy areaPolicy,
-        TraversalMedium medium,
+        TraversalMedium startMedium,
+        TraversalMedia targetMedia,
         NavigationWorkMeter meter)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
@@ -37,7 +38,8 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         Start = start;
         End = end;
         AreaPolicy = areaPolicy;
-        Medium = medium;
+        StartMedium = startMedium;
+        TargetMedia = targetMedia;
         Meter = meter;
     }
 
@@ -52,7 +54,9 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
 
     internal NavigationAreaPolicy AreaPolicy { get; private set; } = null!;
 
-    internal TraversalMedium Medium { get; private set; }
+    internal TraversalMedium StartMedium { get; private set; }
+
+    internal TraversalMedia TargetMedia { get; private set; }
 
     internal NavigationWorkMeter Meter { get; private set; } = null!;
 
@@ -70,7 +74,8 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         Start = default;
         End = default;
         AreaPolicy = null!;
-        Medium = default;
+        StartMedium = default;
+        TargetMedia = default;
         Meter = null!;
     }
 }

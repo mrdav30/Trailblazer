@@ -1147,7 +1147,9 @@ internal static class NavigationFlowFieldCacheTestHarness
         payload,
         new NavigationFlowFieldPayloadKey(
             WithExpandedNodeBudget(query, expansion),
-            payload.Key.DestinationAddress));
+            payload.Key.DestinationAddress,
+            payload.Key.StartMedium,
+            payload.Key.TargetMedia));
 
     internal static NavigationFlowFieldPayload RunFlow(
         NavigationWorldGraphStore store,
@@ -1167,10 +1169,23 @@ internal static class NavigationFlowFieldCacheTestHarness
         resolved.Bind(
             lease,
             query,
-            new NavigationResolvedEndpoint(originNode, origin, Fixed64.Zero),
-            new NavigationResolvedEndpoint(destinationNode, destination, Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                originNode,
+                origin,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                destinationNode,
+                destination,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
             policy!,
             TraversalMedium.Solid,
+            TraversalMedia.Solid,
             new NavigationWorkMeter(query.Budget));
         var workspace = new NavigationFlowFieldWorkspace(0, 128, 128, 128, 128, 128);
         using var work = new NavigationFlowFieldWork(resolved, workspace);

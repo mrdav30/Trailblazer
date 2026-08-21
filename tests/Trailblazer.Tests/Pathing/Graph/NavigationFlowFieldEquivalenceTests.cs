@@ -571,10 +571,23 @@ public sealed class NavigationFlowFieldEquivalenceTests
         resolved.Bind(
             lease,
             query,
-            new NavigationResolvedEndpoint(originNode, origin, Fixed64.Zero),
-            new NavigationResolvedEndpoint(destinationNode, destination, Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                originNode,
+                origin,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                destinationNode,
+                destination,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
             policy!,
             TraversalMedium.Solid,
+            TraversalMedia.Solid,
             new NavigationWorkMeter(query.Budget));
         var workspace = new NavigationFlowFieldWorkspace(0, 512, 512, 512, 512, 512);
         using var work = new NavigationFlowFieldWork(resolved, workspace);

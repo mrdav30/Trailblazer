@@ -717,7 +717,11 @@ internal static class NavigationAStarExitTestHarness
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        admission.Begin(lease, query);
+        admission.Begin(
+            lease,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         for (int step = 0;
             step < 1_024 && admission.Status == NavigationQueryAdmissionStatus.Pending;
             step++)
@@ -796,7 +800,11 @@ internal static class NavigationAStarExitTestHarness
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        admission.Begin(lease, query);
+        admission.Begin(
+            lease,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         for (int step = 0;
             step < 1_024 && admission.Status == NavigationQueryAdmissionStatus.Pending;
             step++)
@@ -811,7 +819,7 @@ internal static class NavigationAStarExitTestHarness
                 resolved.Graph,
                 resolved.Query.Agent,
                 resolved.AreaPolicy,
-                resolved.Medium);
+                resolved.StartMedium);
             const int Capacity = 128;
             var nodes = new NavigationNodeRef[Capacity];
             var distances = new Fixed64[Capacity];

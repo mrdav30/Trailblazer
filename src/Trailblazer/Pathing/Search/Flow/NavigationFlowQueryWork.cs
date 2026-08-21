@@ -106,6 +106,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             || _search != null
             || _hasPendingLease
             || _hasResult
+            || IsReadyToPublish
             || _payloadReservation.Owner != null)
         {
             throw new InvalidOperationException("The flow query work is already active.");
@@ -116,7 +117,19 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         _readyStatus = NavigationFlowQueryStatus.Pending;
         Volatile.Write(ref _readyToPublish, false);
         Status = NavigationFlowQueryStatus.Pending;
-        _admission.Begin(lease, query);
+        if (!NavigationQueryAdmissionWork.CanProjectPublicQuery(
+                query,
+                PathAlgorithm.FlowField))
+        {
+            lease.Dispose();
+            MarkReady(NavigationFlowQueryStatus.Unsupported);
+            return;
+        }
+        _admission.Begin(
+            lease,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         _admissionActive = true;
         if (_admission.Status != NavigationQueryAdmissionStatus.Pending)
             MarkReady(MapAdmissionStatus(_admission.Status));
@@ -148,7 +161,9 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         _resolvedOrigin = resolved.Start.Address;
         var key = new NavigationFlowFieldPayloadKey(
             resolved.Query,
-            resolved.End.Address);
+            resolved.End.Address,
+            resolved.StartMedium,
+            resolved.TargetMedia);
         NavigationFlowFieldStatus checkout = _cache.TryCheckout(
             _store,
             resolved.Graph,
@@ -325,6 +340,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             NavigationQueryAdmissionStatus.InvalidProfile => NavigationFlowQueryStatus.InvalidProfile,
             NavigationQueryAdmissionStatus.InvalidStart => NavigationFlowQueryStatus.InvalidStart,
             NavigationQueryAdmissionStatus.InvalidEnd => NavigationFlowQueryStatus.InvalidEnd,
+            NavigationQueryAdmissionStatus.NoPath => NavigationFlowQueryStatus.NoPath,
             NavigationQueryAdmissionStatus.BudgetExceeded => NavigationFlowQueryStatus.BudgetExceeded,
             NavigationQueryAdmissionStatus.CostOverflow => NavigationFlowQueryStatus.CostOverflow,
             NavigationQueryAdmissionStatus.CapacityExceeded => NavigationFlowQueryStatus.CapacityExceeded,

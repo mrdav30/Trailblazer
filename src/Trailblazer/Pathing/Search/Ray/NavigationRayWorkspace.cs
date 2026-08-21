@@ -41,6 +41,10 @@ internal sealed class NavigationRayWorkspace
         TraceIntervalCapacity = traceIntervalCapacity;
         TraceScratch = new GridTraceIntervalScratch(mapCapacity, coveredAddressCapacity);
         TraceIntervals = new SwiftList<GridTraceInterval>(traceIntervalCapacity);
+        BodyTraceCells = new SwiftList<GridNavigationBodyTraceCell>(coveredAddressCapacity);
+        BodyTraceScratch = new GridNavigationBodyTraceScratch(
+            mapCapacity,
+            coveredAddressCapacity);
         ChainRecords = traceIntervalCapacity == 0
             ? Array.Empty<NavigationRayChainRecord>()
             : new NavigationRayChainRecord[traceIntervalCapacity];
@@ -57,6 +61,10 @@ internal sealed class NavigationRayWorkspace
 
     internal SwiftList<GridTraceInterval> TraceIntervals { get; }
 
+    internal SwiftList<GridNavigationBodyTraceCell> BodyTraceCells { get; }
+
+    internal GridNavigationBodyTraceScratch BodyTraceScratch { get; }
+
     internal NavigationRayChainRecord[] ChainRecords { get; }
 
     internal NavigationDependencyWorkspace Dependencies { get; }
@@ -65,6 +73,8 @@ internal sealed class NavigationRayWorkspace
     {
         TraceScratch.Clear();
         TraceIntervals.Clear();
+        BodyTraceCells.Clear();
+        BodyTraceScratch.Clear();
         Dependencies.Reset();
     }
 }

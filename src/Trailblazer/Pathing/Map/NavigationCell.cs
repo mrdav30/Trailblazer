@@ -36,13 +36,16 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
         || medium == TraversalMedium.Gas
         || medium == TraversalMedium.Liquid;
 
-    internal bool SupportsMedium(TraversalMedium medium) => medium switch
+    internal static TraversalMedia ToMedia(TraversalMedium medium) => medium switch
     {
-        TraversalMedium.Solid => (Media & TraversalMedia.Solid) != 0,
-        TraversalMedium.Gas => (Media & TraversalMedia.Gas) != 0,
-        TraversalMedium.Liquid => (Media & TraversalMedia.Liquid) != 0,
-        _ => false
+        TraversalMedium.Solid => TraversalMedia.Solid,
+        TraversalMedium.Gas => TraversalMedia.Gas,
+        TraversalMedium.Liquid => TraversalMedia.Liquid,
+        _ => TraversalMedia.None
     };
+
+    internal bool SupportsMedium(TraversalMedium medium) =>
+        (Media & ToMedia(medium)) != 0;
 
     /// <summary>
     /// The traversal media supported by this cell.

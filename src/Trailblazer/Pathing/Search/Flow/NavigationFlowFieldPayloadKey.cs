@@ -16,10 +16,14 @@ internal readonly struct NavigationFlowFieldPayloadKey :
 {
     internal NavigationFlowFieldPayloadKey(
         PathQuery query,
-        NavigationCellAddress destinationAddress)
+        NavigationCellAddress destinationAddress,
+        TraversalMedium startMedium,
+        TraversalMedia targetMedia)
     {
         Destination = query.End;
         DestinationAddress = destinationAddress;
+        _startMedium = (byte)startMedium;
+        _targetMedia = (byte)targetMedia;
         Agent = query.Agent;
         AreaPolicy = query.AreaPolicy;
         Traversal = query.Traversal;
@@ -35,11 +39,17 @@ internal readonly struct NavigationFlowFieldPayloadKey :
     internal TraversalIntent Traversal { get; }
     internal NavigationWorkBudget Budget { get; }
     internal bool AllowTransitions { get; }
+    private readonly byte _startMedium;
+    private readonly byte _targetMedia;
+    internal TraversalMedium StartMedium => (TraversalMedium)_startMedium;
+    internal TraversalMedia TargetMedia => (TraversalMedia)_targetMedia;
     internal FlowFieldQueryOptions FlowField { get; }
 
     public bool Equals(NavigationFlowFieldPayloadKey other) =>
         Destination == other.Destination
         && DestinationAddress == other.DestinationAddress
+        && StartMedium == other.StartMedium
+        && TargetMedia == other.TargetMedia
         && Agent == other.Agent
         && AreaPolicy == other.AreaPolicy
         && Traversal == other.Traversal
@@ -55,6 +65,8 @@ internal readonly struct NavigationFlowFieldPayloadKey :
         int hash = SwiftHashTools.CombineHashCodes(
             Destination.GetHashCode(),
             DestinationAddress.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, (int)StartMedium);
+        hash = SwiftHashTools.CombineHashCodes(hash, (int)TargetMedia);
         hash = SwiftHashTools.CombineHashCodes(hash, Agent.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, AreaPolicy.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, Traversal.GetHashCode());

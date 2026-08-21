@@ -546,7 +546,11 @@ public class NavigationRayBenchmarks
         {
             NavigationWorldGraphLease lease = _fixture.Context.Pathing.TryAcquireNavigationGraph()
                 ?? throw new InvalidOperationException("A* ray benchmark could not acquire the graph.");
-            _admission.Begin(lease, _query);
+            _admission.Begin(
+                lease,
+                _query,
+                TraversalMedium.Solid,
+                TraversalMedia.Solid);
             try
             {
                 while (_admission.Status == NavigationQueryAdmissionStatus.Pending)

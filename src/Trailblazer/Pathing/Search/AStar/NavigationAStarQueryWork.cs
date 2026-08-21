@@ -86,7 +86,12 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
         if (!reservation.HasLeaseSlot)
             throw new ArgumentException("A batch query requires one payload reservation.", nameof(reservation));
-        if (_admissionActive || _search != null || _pendingLease != null || _result != null)
+        if (_admissionActive
+            || _search != null
+            || _pendingLease != null
+            || _result != null
+            || IsReadyToPublish
+            || _payloadReservation.HasLeaseSlot)
             throw new InvalidOperationException("The A* query work is already active.");
         _started = true;
         Volatile.Write(ref _readyToPublish, false);
@@ -94,7 +99,19 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         Status = NavigationAStarQueryStatus.Pending;
         _payloadReservation = reservation;
         reservation = default;
-        _admission.Begin(lease, query);
+        if (!NavigationQueryAdmissionWork.CanProjectPublicQuery(
+                query,
+                PathAlgorithm.AStar))
+        {
+            lease.Dispose();
+            MarkReady(NavigationAStarQueryStatus.Unsupported);
+            return;
+        }
+        _admission.Begin(
+            lease,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         _admissionActive = true;
         if (_admission.Status != NavigationQueryAdmissionStatus.Pending)
             MarkReady(MapAdmissionStatus(_admission.Status));
@@ -308,6 +325,7 @@ internal sealed class NavigationAStarQueryWork : IDisposable
             NavigationQueryAdmissionStatus.InvalidProfile => NavigationAStarQueryStatus.InvalidProfile,
             NavigationQueryAdmissionStatus.InvalidStart => NavigationAStarQueryStatus.InvalidStart,
             NavigationQueryAdmissionStatus.InvalidEnd => NavigationAStarQueryStatus.InvalidEnd,
+            NavigationQueryAdmissionStatus.NoPath => NavigationAStarQueryStatus.NoPath,
             NavigationQueryAdmissionStatus.BudgetExceeded => NavigationAStarQueryStatus.BudgetExceeded,
             NavigationQueryAdmissionStatus.CostOverflow => NavigationAStarQueryStatus.CostOverflow,
             NavigationQueryAdmissionStatus.CapacityExceeded => NavigationAStarQueryStatus.CapacityExceeded,

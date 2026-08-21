@@ -111,7 +111,11 @@ public class NavigationFlowFieldBenchmarks
     {
         NavigationWorldGraphLease lease = _fixture.Context.Pathing.TryAcquireNavigationGraph()
             ?? throw new InvalidOperationException("The cold Flow benchmark could not acquire its graph.");
-        _admission.Begin(lease, _query);
+        _admission.Begin(
+            lease,
+            _query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         try
         {
             while (_admission.Status == NavigationQueryAdmissionStatus.Pending)

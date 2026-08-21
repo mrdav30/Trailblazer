@@ -24,6 +24,67 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationFlowFieldTests
 {
     [Fact]
+    public void Constructor_ShouldRejectStagedGasUntilMediumStateSearchIsPorted()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = { default, new VoxelIndex(1, 0, 0) };
+        NavigationCell gas = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "gas-flow-gate",
+                new[] { gas, gas });
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        PathQuery surface = fixture.CreateQuery(cells[0], cells[1], profile);
+        var query = new PathQuery(
+            surface.Start,
+            surface.End,
+            surface.Agent,
+            surface.AreaPolicy,
+            surface.Traversal,
+            PathAlgorithm.FlowField,
+            new NavigationWorkBudget(
+                128, 16, 16, 64, 64, 0, 0, 0, 0, 32, 0),
+            allowTransitions: false);
+        var workspace = new NavigationFlowFieldWorkspace(1, 4, 6, 4, 16, 8);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.FlowField);
+        admission.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Gas,
+            TraversalMedia.Gas);
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 8);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+
+        Action construct = () =>
+            _ = new NavigationFlowFieldWork(admission.Result, workspace);
+
+        construct.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void ReverseIntegration_ShouldPublishDestinationFirstWithExactForwardCosts()
     {
         using var world = new GridWorld();
@@ -403,17 +464,29 @@ public sealed class NavigationFlowFieldTests
 
         var first = new NavigationFlowFieldPayloadKey(
             baseline,
-            addressedDestination);
+            addressedDestination,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         var sameField = new NavigationFlowFieldPayloadKey(
             differentOrigin,
-            addressedDestination);
+            addressedDestination,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         var differentField = new NavigationFlowFieldPayloadKey(
             differentTerminal,
-            addressedDestination);
+            addressedDestination,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
+        var differentMedia = new NavigationFlowFieldPayloadKey(
+            baseline,
+            addressedDestination,
+            TraversalMedium.Gas,
+            TraversalMedia.Gas | TraversalMedia.Liquid);
 
         sameField.Should().Be(first);
         sameField.GetHashCode().Should().Be(first.GetHashCode());
         differentField.Should().NotBe(first);
+        differentMedia.Should().NotBe(first);
     }
 
     [Fact]
@@ -1098,10 +1171,23 @@ public sealed class NavigationFlowFieldTests
         resolved.Bind(
             lease,
             query,
-            new NavigationResolvedEndpoint(startNode, start, Fixed64.Zero),
-            new NavigationResolvedEndpoint(destinationNode, destination, Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                startNode,
+                start,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                destinationNode,
+                destination,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
             policy!,
             TraversalMedium.Solid,
+            TraversalMedia.Solid,
             meter);
         var workspace = new NavigationFlowFieldWorkspace(
             mapCapacity: 0,
@@ -1189,10 +1275,23 @@ public sealed class NavigationFlowFieldTests
         resolved.Bind(
             lease,
             query,
-            new NavigationResolvedEndpoint(startNode, start, Fixed64.Zero),
-            new NavigationResolvedEndpoint(destinationNode, destination, Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                startNode,
+                start,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                destinationNode,
+                destination,
+                TraversalMedia.Solid,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
             policy!,
             TraversalMedium.Solid,
+            TraversalMedia.Solid,
             meter);
         return resolved;
     }

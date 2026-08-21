@@ -120,13 +120,7 @@ internal readonly struct TraversalEvaluator
         SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
         profile.Validate(nameof(profile));
-        TraversalMedia resolvedMedium = medium switch
-        {
-            TraversalMedium.Solid => TraversalMedia.Solid,
-            TraversalMedium.Gas => TraversalMedia.Gas,
-            TraversalMedium.Liquid => TraversalMedia.Liquid,
-            _ => TraversalMedia.None
-        };
+        TraversalMedia resolvedMedium = NavigationCell.ToMedia(medium);
         SwiftThrowHelper.ThrowIfArgument(
             resolvedMedium == TraversalMedia.None,
             nameof(medium),

@@ -211,10 +211,7 @@ public sealed class NavigationEndpointResolutionTests
             role,
             Profile(),
             Policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface));
+            TraversalMedia.Solid);
 
         Drain(work);
 
@@ -276,10 +273,7 @@ public sealed class NavigationEndpointResolutionTests
             NavigationEndpointRole.Start,
             Profile(),
             Policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface));
+            TraversalMedia.Solid);
 
         Drain(work);
 
@@ -331,10 +325,7 @@ public sealed class NavigationEndpointResolutionTests
             role,
             fixture.DefaultProfile,
             NavigationAStarExitTestHarness.Policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface));
+            TraversalMedia.Solid);
 
         Drain(work);
 
@@ -403,6 +394,83 @@ public sealed class NavigationEndpointResolutionTests
         work.Status.Should().Be((NavigationEndpointResolutionStatus)expectedStatusValue);
         if (work.Status == NavigationEndpointResolutionStatus.Success)
             work.Result.Address.MapId.Should().Be("z-farther");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void NearestNavigable_WhenSolidProofIsBlocked_ShouldRetainGasAtTheSameAddress(
+        int requestedHeight)
+    {
+        using var world = new GridWorld();
+        NavigationCell mixedCell = new(
+            TraversalMedia.Solid | TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        GridConfiguration candidateConfiguration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(
+            world,
+            "a-candidate",
+            candidateConfiguration,
+            physicallyPresent: true,
+            mixedCell);
+        NavigationMapInstance blocker = CreateInstance(
+            world,
+            "z-blocker",
+            CreateAlternateOverlapConfiguration(),
+            physicallyPresent: true,
+            mixedCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(candidate, blocker);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        candidateConfiguration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid | TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationAStarWorkspace(2, 4, 4, 2, 64, 32, 2);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        work.Begin(
+            graph,
+            new NavigationEndpoint(
+                new Vector3d(
+                    prism.Center.X + (Fixed64)0.75,
+                    requestedHeight switch
+                    {
+                        0 => prism.VerticalMin,
+                        1 => prism.VerticalMin + (Fixed64)0.25,
+                        _ => prism.VerticalMin + Fixed64.Half
+                    },
+                    prism.Center.Z),
+                "a-candidate",
+                EndpointResolutionPolicy.NearestNavigable,
+                Fixed64.One),
+            NavigationEndpointRole.Start,
+            profile,
+            Policy,
+            TraversalMedia.Solid | TraversalMedia.Gas);
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Success);
+        work.Result.Address.Should().Be(new NavigationCellAddress("a-candidate", default));
+        work.Result.Media.Should().Be(TraversalMedia.Gas);
+        work.Result.ResolutionMedium.Should().Be(TraversalMedium.Gas);
     }
 
     [Fact]
@@ -637,6 +705,99 @@ public sealed class NavigationEndpointResolutionTests
     }
 
     [Fact]
+    public void VolumeEndpoint_ShouldKeepWorldMutationStaleAfterAtomicBodyTrace()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 1, 64, 0, 1);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        work.Begin(
+            graph,
+            new NavigationEndpoint(
+                new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z)),
+            NavigationEndpointRole.Start,
+            profile,
+            Policy,
+            TraversalMedia.Gas);
+
+        work.Advance(64, 1).Should().Be(NavigationEndpointResolutionStatus.Pending);
+        workspace.RayWorkspace.BodyTraceCells.Count.Should().BeGreaterThan(0);
+        world.TryGetGrid(0, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxel(new VoxelIndex(1, 0, 0), out _).Should().BeTrue();
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Stale);
+        work.Result.Should().Be(default(NavigationResolvedEndpoint));
+    }
+
+    [Fact]
+    public void EndpointResolution_ShouldKeepOriginalWorldStaleAheadOfBudgetFailure()
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateDenseCellConfiguration(Vector3d.Zero),
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var workspace = new NavigationAStarWorkspace(1, 2, 2, 1, 1, 0, 1);
+        var meter = new NavigationWorkMeter(CreateBudget(0, 1));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(Vector3d.Zero, "map"),
+            NavigationEndpointRole.Start,
+            Profile());
+        world.TryAddGrid(
+                CreateDenseCellConfiguration(new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero)),
+                System.Array.Empty<VoxelIndex>(),
+                out _)
+            .Should().BeTrue();
+
+        work.Advance(1, 1).Should().Be(NavigationEndpointResolutionStatus.Stale);
+    }
+
+    [Fact]
     public void Advance_ZeroChunkLimits_ShouldYieldWithoutSpendingQueryBudget()
     {
         using var world = new GridWorld();
@@ -789,7 +950,7 @@ public sealed class NavigationEndpointResolutionTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        work.Begin(lease!, query);
+        work.Begin(lease!, query, TraversalMedium.Solid, TraversalMedia.Solid);
 
         for (int step = 0;
              step < 64 && work.Status == NavigationQueryAdmissionStatus.Pending;
@@ -892,7 +1053,7 @@ public sealed class NavigationEndpointResolutionTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             algorithm);
-        work.Begin(lease!, query);
+        work.Begin(lease!, query, TraversalMedium.Solid, TraversalMedia.Solid);
 
         for (int step = 0;
              step < 128 && work.Status == NavigationQueryAdmissionStatus.Pending;
@@ -960,7 +1121,11 @@ public sealed class NavigationEndpointResolutionTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             algorithm);
-        work.Begin(store.TryAcquire()!, query);
+        work.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
 
         FieldInfo endpointWorkField = typeof(NavigationQueryAdmissionWork).GetField(
             "_endpointWork",
@@ -1027,10 +1192,843 @@ public sealed class NavigationEndpointResolutionTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        work.Begin(lease!, default);
+        work.Begin(
+            lease!,
+            default,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
 
         work.Status.Should().Be(NavigationQueryAdmissionStatus.InvalidProfile);
         store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(
+        (int)TraversalMedium.Unknown,
+        (int)TraversalMedia.Solid,
+        (int)(TraversalMedia.Solid | TraversalMedia.Gas),
+        (int)NavigationQueryAdmissionStatus.InvalidStart)]
+    [InlineData(
+        (int)TraversalMedium.Solid,
+        (int)TraversalMedia.None,
+        (int)(TraversalMedia.Solid | TraversalMedia.Gas),
+        (int)NavigationQueryAdmissionStatus.InvalidEnd)]
+    [InlineData(
+        (int)TraversalMedium.Solid,
+        8,
+        (int)(TraversalMedia.Solid | TraversalMedia.Gas),
+        (int)NavigationQueryAdmissionStatus.InvalidEnd)]
+    [InlineData(
+        (int)TraversalMedium.Solid,
+        (int)TraversalMedia.Gas,
+        (int)TraversalMedia.Solid,
+        (int)NavigationQueryAdmissionStatus.InvalidProfile)]
+    [InlineData(
+        (int)TraversalMedium.Solid,
+        (int)TraversalMedia.Gas,
+        (int)(TraversalMedia.Solid | TraversalMedia.Gas),
+        (int)NavigationQueryAdmissionStatus.NoPath)]
+    public void ExactMediumAdmission_ShouldRejectMalformedOrUnreachableIntent(
+        int startMediumValue,
+        int targetMediaValue,
+        int allowedMediaValue,
+        int expectedStatusValue)
+    {
+        using var world = new GridWorld();
+        using var store = new NavigationWorldGraphStore(
+            maxActiveSnapshots: 2,
+            maxRetiredSnapshots: 1,
+            maxRetiredBytes: long.MaxValue,
+            maxActiveBytes: long.MaxValue,
+            maxPersistentPages: int.MaxValue,
+            maxConcurrentLeases: 1);
+        var workspace = new NavigationAStarWorkspace(1, 1, 1, 1, 1, 1, 1);
+        using var work = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        PathQuery query = CreateSurfaceQuery(Vector3d.Zero, CreateBudget(1, 1));
+        query = new PathQuery(
+            query.Start,
+            query.End,
+            new NavigationAgentProfile(
+                query.Agent.Shape,
+                query.Agent.MaxStepUp,
+                query.Agent.MaxDropDown,
+                query.Agent.ArrivalRadius,
+                (TraversalMedia)allowedMediaValue,
+                query.Agent.Capabilities),
+            query.AreaPolicy,
+            query.Traversal,
+            query.Algorithm,
+            query.Budget,
+            query.AllowTransitions);
+
+        work.Begin(
+            store.TryAcquire()!,
+            query,
+            (TraversalMedium)startMediumValue,
+            (TraversalMedia)targetMediaValue);
+
+        work.Status.Should().Be((NavigationQueryAdmissionStatus)expectedStatusValue);
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void ExactMediumAdmission_ShouldRetainEveryQualifyingMediumAtOneVolumeAddress()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
+        NavigationCell volumeCell = new(
+            TraversalMedia.Gas | TraversalMedia.Liquid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true,
+            volumeCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas | TraversalMedia.Liquid,
+            TraversalCapability.None);
+        var query = new PathQuery(
+            new NavigationEndpoint(Vector3d.Zero),
+            new NavigationEndpoint(Vector3d.Zero),
+            profile,
+            Policy.Key,
+            new TraversalIntent(
+                TraversalDomain.Volume,
+                TraversalMedium.Gas,
+                TraversalDomain.Volume),
+            PathAlgorithm.AStar,
+            CreateRayBudget(4),
+            allowTransitions: true);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 1, 64, 64, 1);
+        using var work = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+
+        work.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Gas,
+            TraversalMedia.Gas | TraversalMedia.Liquid);
+        Drain(work);
+
+        work.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        using NavigationResolvedPathQuery result = work.Result;
+        result.StartMedium.Should().Be(TraversalMedium.Gas);
+        result.TargetMedia.Should().Be(TraversalMedia.Gas | TraversalMedia.Liquid);
+        result.Start.Media.Should().Be(TraversalMedia.Gas);
+        result.End.Media.Should().Be(TraversalMedia.Gas | TraversalMedia.Liquid);
+        result.Start.FootAnchor.Should().Be(new Vector3d(Fixed64.Zero, -Fixed64.Half, Fixed64.Zero));
+        result.End.FootAnchor.Should().Be(result.Start.FootAnchor);
+    }
+
+    [Fact]
+    public void ExactMediumAdmission_ShouldRejectWorldMutationSinceQueryBegin()
+    {
+        using var world = new GridWorld();
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateDenseCellConfiguration(Vector3d.Zero),
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var query = new PathQuery(
+            new NavigationEndpoint(new Vector3d(Fixed64.Zero, -Fixed64.Half, Fixed64.Zero), "map"),
+            new NavigationEndpoint(new Vector3d(Fixed64.Zero, -Fixed64.Half, Fixed64.Zero), "map"),
+            profile,
+            Policy.Key,
+            new TraversalIntent(
+                TraversalDomain.Volume,
+                TraversalMedium.Gas,
+                TraversalDomain.Volume),
+            PathAlgorithm.AStar,
+            CreateRayBudget(8),
+            allowTransitions: false);
+        var workspace = new NavigationAStarWorkspace(1, 2, 2, 1, 8, 0, 1);
+        using var work = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        work.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Gas,
+            TraversalMedia.Gas);
+        world.TryAddGrid(
+                CreateDenseCellConfiguration(new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero)),
+                System.Array.Empty<VoxelIndex>(),
+                out _)
+            .Should().BeTrue();
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationQueryAdmissionStatus.Stale);
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData((int)TraversalMedium.Gas, (int)EndpointResolutionPolicy.Strict)]
+    [InlineData((int)TraversalMedium.Gas, (int)EndpointResolutionPolicy.NearestNavigable)]
+    [InlineData((int)TraversalMedium.Liquid, (int)EndpointResolutionPolicy.Strict)]
+    [InlineData((int)TraversalMedium.Liquid, (int)EndpointResolutionPolicy.NearestNavigable)]
+    public void VolumeEndpoint_ShouldResolveStrictAndNearestZeroLengthPlacement(
+        int mediumValue,
+        int resolutionValue)
+    {
+        TraversalMedium medium = (TraversalMedium)mediumValue;
+        TraversalMedia media = NavigationCell.ToMedia(medium);
+        using var world = new GridWorld();
+        NavigationCell volumeCell = new(
+            media,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateDenseCellConfiguration(Vector3d.Zero),
+            physicallyPresent: true,
+            volumeCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            media,
+            TraversalCapability.None);
+        var workspace = new NavigationAStarWorkspace(1, 2, 2, 1, 1, 0, 1);
+        var meter = new NavigationWorkMeter(
+            new NavigationWorkBudget(16, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        Vector3d footAnchor = new(Fixed64.Zero, -Fixed64.Half, Fixed64.Zero);
+        work.Begin(
+            graph,
+            new NavigationEndpoint(
+                footAnchor,
+                "map",
+                (EndpointResolutionPolicy)resolutionValue,
+                Fixed64.Zero),
+            NavigationEndpointRole.Start,
+            profile,
+            Policy,
+            media);
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Success);
+        work.Result.Media.Should().Be(media);
+        work.Result.ResolutionMedium.Should().Be(medium);
+        work.Result.FootAnchor.Should().Be(footAnchor);
+        work.Result.ResolutionDistance.Should().Be(Fixed64.Zero);
+    }
+
+    [Theory]
+    [InlineData(1, 1, 1, 1, (int)NavigationVolumeAnchorStatus.Success)]
+    [InlineData(0, 1, 1, 1, (int)NavigationVolumeAnchorStatus.BudgetExceeded)]
+    [InlineData(1, 1, 0, 1, (int)NavigationVolumeAnchorStatus.BudgetExceeded)]
+    [InlineData(1, 0, 1, 1, (int)NavigationVolumeAnchorStatus.CapacityExceeded)]
+    [InlineData(1, 1, 1, 0, (int)NavigationVolumeAnchorStatus.CapacityExceeded)]
+    public void VolumeAnchor_ShouldSeparateExactGridAndAddressBudgetFromCapacity(
+        int lookupBudget,
+        int mapCapacity,
+        int coveredBudget,
+        int coveredCapacity,
+        int expectedStatusValue)
+    {
+        using var world = new GridWorld();
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateDenseCellConfiguration(Vector3d.Zero),
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("map", default),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationRayWorkspace(
+            mapCapacity,
+            pageCapacity: 2,
+            componentCapacity: 2,
+            coveredAddressCapacity: coveredCapacity,
+            traceIntervalCapacity: 0);
+        var meter = new NavigationWorkMeter(new NavigationWorkBudget(
+            lookupBudget,
+            maxEndpointCandidates: 0,
+            maxExpandedNodes: 0,
+            maxEvaluatedEdges: 0,
+            maxConnectionLegs: 0,
+            maxTransitionCandidates: 0,
+            maxTransitionPairs: 0,
+            maxStagedLegAttempts: 0,
+            maxTraceIntervals: 0,
+            maxCoveredVoxelIntervals: coveredBudget,
+            maxSimplificationRays: 0));
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            Policy,
+            workspace);
+
+        NavigationVolumeAnchorStatus status = evaluator.Evaluate(
+            node,
+            TraversalMedia.Gas,
+            meter,
+            workspace.Dependencies,
+            out _,
+            out _);
+
+        status.Should().Be((NavigationVolumeAnchorStatus)expectedStatusValue);
+        meter.LookupProbes.Should().BeLessThanOrEqualTo(lookupBudget);
+        meter.CoveredVoxelIntervals.Should().BeLessThanOrEqualTo(coveredBudget);
+    }
+
+    [Fact]
+    public void VolumeAnchor_WarmedEvaluationAndReset_ShouldAllocateZeroBytes()
+    {
+        using var world = new GridWorld();
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateDenseCellConfiguration(Vector3d.Zero),
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("map", default),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var budget = new NavigationWorkBudget(1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+        var workspace = new NavigationRayWorkspace(1, 2, 2, 1, 0);
+        var meter = new NavigationWorkMeter(budget);
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            Policy,
+            workspace);
+        evaluator.Evaluate(
+                node,
+                TraversalMedia.Gas,
+                meter,
+                workspace.Dependencies,
+                out _,
+                out _)
+            .Should().Be(NavigationVolumeAnchorStatus.Success);
+        workspace.BodyTraceCells.Count.Should().Be(1);
+        workspace.Reset();
+        workspace.BodyTraceCells.Count.Should().Be(0);
+        meter.Reset(budget);
+        evaluator.Evaluate(
+                node,
+                TraversalMedia.Gas,
+                meter,
+                workspace.Dependencies,
+                out _,
+                out _)
+            .Should().Be(NavigationVolumeAnchorStatus.Success);
+
+        long before = System.GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 256; i++)
+        {
+            workspace.Reset();
+            meter.Reset(budget);
+            _ = evaluator.Evaluate(
+                node,
+                TraversalMedia.Gas,
+                meter,
+                workspace.Dependencies,
+                out _,
+                out _);
+        }
+        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+
+        allocated.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void VolumeAnchor_ShouldRejectAnyRequiredCellSemanticFailure(int failureKind)
+    {
+        using var world = new GridWorld();
+        TraversalMedia cellMedia = failureKind == 0
+            ? TraversalMedia.Liquid
+            : TraversalMedia.Gas;
+        TraversalCapability requiredCapability = failureKind == 1
+            ? TraversalCapability.Swim
+            : TraversalCapability.None;
+        Fixed64 radiusClearance = failureKind == 3
+            ? Fixed64.Zero
+            : Fixed64.One;
+        Fixed64 heightClearance = failureKind == 4
+            ? Fixed64.Half
+            : Fixed64.One;
+        NavigationCell cell = new(
+            cellMedia,
+            requiredCapability,
+            default,
+            Fixed64.Zero,
+            radiusClearance,
+            heightClearance);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateDenseCellConfiguration(Vector3d.Zero),
+            physicallyPresent: true,
+            cell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("map", default),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(
+                failureKind == 3 ? Fixed64.Half : Fixed64.Zero,
+                Fixed64.One,
+                Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        NavigationAreaPolicy policy = failureKind == 2
+            ? new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey("deny-volume", 1),
+                new[] { new NavigationAreaRule(false, Fixed64.Zero) })
+            : Policy;
+        var workspace = new NavigationRayWorkspace(1, 2, 2, 1, 0);
+        var meter = new NavigationWorkMeter(
+            new NavigationWorkBudget(1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0));
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            policy,
+            workspace);
+
+        NavigationVolumeAnchorStatus status = evaluator.Evaluate(
+            node,
+            TraversalMedia.Gas,
+            meter,
+            workspace.Dependencies,
+            out _,
+            out TraversalMedia media);
+
+        status.Should().Be(NavigationVolumeAnchorStatus.Unavailable);
+        media.Should().Be(TraversalMedia.None);
+        workspace.Dependencies.PageCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void VolumeAnchor_ShouldMapArithmeticOverflowToCostOverflow()
+    {
+        using var world = new GridWorld();
+        Fixed64 radius = Fixed64.MaxValue;
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.MaxValue,
+            Fixed64.One);
+        VoxelIndex[] cells =
+        {
+            default,
+            new VoxelIndex(1, 0, 0),
+            new VoxelIndex(2, 0, 0)
+        };
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+            cells,
+            cells,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("map", cells[1]),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(radius, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationRayWorkspace(1, 2, 2, 64, 0);
+        var meter = new NavigationWorkMeter(
+            new NavigationWorkBudget(1, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0));
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            Policy,
+            workspace);
+
+        NavigationVolumeAnchorStatus status = evaluator.Evaluate(
+            node,
+            TraversalMedia.Gas,
+            meter,
+            workspace.Dependencies,
+            out _,
+            out _);
+
+        status.Should().Be(NavigationVolumeAnchorStatus.CostOverflow);
+    }
+
+    [Fact]
+    public void VolumeAnchor_ShouldMapCenteredAnchorOverflowToCostOverflow()
+    {
+        using var world = new GridWorld();
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.MaxValue,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateDenseCellConfiguration(
+                new Vector3d(Fixed64.Zero, Fixed64.MinValue, Fixed64.Zero)),
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("map", default),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.MaxValue, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationRayWorkspace(1, 2, 2, 1, 0);
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            Policy,
+            workspace);
+
+        NavigationVolumeAnchorStatus status = evaluator.Evaluate(
+            node,
+            TraversalMedia.Gas,
+            new NavigationWorkMeter(CreateRayBudget(1)),
+            workspace.Dependencies,
+            out _,
+            out _);
+
+        status.Should().Be(NavigationVolumeAnchorStatus.CostOverflow);
+    }
+
+    [Fact]
+    public void VolumeAnchor_ShouldRequireEveryCoveredCellInOneGrid()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells =
+        {
+            default,
+            new VoxelIndex(1, 0, 0),
+            new VoxelIndex(2, 0, 0)
+        };
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                new GridConfiguration(
+                    Vector3d.Zero,
+                    new Vector3d((Fixed64)3, (Fixed64)2, (Fixed64)4),
+                    topologyKind: GridTopologyKind.RectangularPrism,
+                    topologyMetrics: GridTopologyMetrics.Rectangular(
+                        Fixed64.One,
+                        (Fixed64)2,
+                        (Fixed64)4),
+                    storageKind: GridStorageKind.Sparse),
+                cells,
+                "wide-gas",
+                new[] { gasCell, gasCell, gasCell });
+        fixture.Graph.TryGetNodeRef(
+                new NavigationCellAddress(fixture.MapId, cells[1]),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.One, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationRayWorkspace(1, 4, 4, 64, 0);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            fixture.Graph,
+            profile,
+            Policy,
+            workspace);
+
+        NavigationVolumeAnchorStatus status = evaluator.Evaluate(
+            node,
+            TraversalMedia.Gas,
+            meter,
+            workspace.Dependencies,
+            out _,
+            out TraversalMedia media);
+
+        status.Should().Be(NavigationVolumeAnchorStatus.Success);
+        media.Should().Be(TraversalMedia.Gas);
+        workspace.BodyTraceCells.Should().Contain(
+            cell => cell.Role == GridNavigationBodyTraceCellRole.RequiredCoverage
+                && cell.Cell.VoxelIndex == cells[0]);
+        workspace.BodyTraceCells.Should().Contain(
+            cell => cell.Role == GridNavigationBodyTraceCellRole.RequiredCoverage
+                && cell.Cell.VoxelIndex == cells[2]);
+    }
+
+    [Fact]
+    public void VolumeAnchor_ShouldRecordRequiredCoverageAcrossAdjacentGrids()
+    {
+        using var world = new GridWorld();
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationMapInstance source = CreateInstance(
+            world,
+            "source",
+            CreateWideDenseCellConfiguration(Fixed64.Zero),
+            physicallyPresent: true,
+            gasCell);
+        NavigationMapInstance left = CreateInstance(
+            world,
+            "left",
+            CreateWideDenseCellConfiguration((Fixed64)(-2)),
+            physicallyPresent: true,
+            gasCell);
+        NavigationMapInstance right = CreateInstance(
+            world,
+            "right",
+            CreateWideDenseCellConfiguration((Fixed64)2),
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(source, left, right);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("source", default),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape((Fixed64)1.5, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationRayWorkspace(3, 6, 6, 64, 0);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            Policy,
+            workspace);
+
+        NavigationVolumeAnchorStatus status = evaluator.Evaluate(
+            node,
+            TraversalMedia.Gas,
+            meter,
+            workspace.Dependencies,
+            out _,
+            out TraversalMedia media);
+
+        status.Should().Be(NavigationVolumeAnchorStatus.Success);
+        media.Should().Be(TraversalMedia.Gas);
+        workspace.Dependencies.PageCount.Should().Be(3);
+        workspace.BodyTraceCells.Should().Contain(
+            cell => cell.Role == GridNavigationBodyTraceCellRole.RequiredCoverage
+                && cell.ConfigurationKey.Equals(left.Map.GridBinding.Key));
+        workspace.BodyTraceCells.Should().Contain(
+            cell => cell.Role == GridNavigationBodyTraceCellRole.RequiredCoverage
+                && cell.ConfigurationKey.Equals(right.Map.GridBinding.Key));
+    }
+
+    [Theory]
+    [InlineData(true, (int)NavigationVolumeAnchorStatus.Unavailable)]
+    [InlineData(false, (int)NavigationVolumeAnchorStatus.Stale)]
+    public void VolumeAnchor_ShouldRecordMappedAlternativePagesBeforeSkippingSemantics(
+        bool authorAlternative,
+        int expectedStatusValue)
+    {
+        using var world = new GridWorld();
+        GridConfiguration routeConfiguration = new(
+            new Vector3d(-Fixed64.One, Fixed64.Zero, -Fixed64.One),
+            new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        VoxelIndex[] routeCells =
+        {
+            new(0, 0, 0), new(0, 0, 1), new(0, 0, 2),
+            new(1, 0, 0), new(1, 0, 1), new(1, 0, 2),
+            new(2, 0, 0), new(2, 0, 1), new(2, 0, 2)
+        };
+        VoxelIndex[] routePhysical =
+        {
+            routeCells[0], routeCells[1], routeCells[2],
+            routeCells[3], routeCells[4],
+            routeCells[6], routeCells[8]
+        };
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationMapInstance route = CreateInstance(
+            world,
+            "route",
+            routeConfiguration,
+            routePhysical,
+            routeCells,
+            gasCell);
+        NavigationMapInstance alternative = CreateInstance(
+            world,
+            "alternative",
+            new GridConfiguration(
+                new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+                new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+                storageKind: GridStorageKind.Sparse),
+            System.Array.Empty<VoxelIndex>(),
+            authorAlternative
+                ? new[] { default(VoxelIndex) }
+                : System.Array.Empty<VoxelIndex>(),
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(route, alternative);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("route", new VoxelIndex(1, 0, 1)),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape((Fixed64)0.75, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationRayWorkspace(2, 4, 4, 16, 0);
+        var meter = new NavigationWorkMeter(CreateRayBudget(16));
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            Policy,
+            workspace);
+
+        NavigationVolumeAnchorStatus status = evaluator.Evaluate(
+            node,
+            TraversalMedia.Gas,
+            meter,
+            workspace.Dependencies,
+            out _,
+            out _);
+
+        status.Should().Be((NavigationVolumeAnchorStatus)expectedStatusValue);
+        workspace.BodyTraceCells.Should().ContainSingle(
+            cell => cell.Role == GridNavigationBodyTraceCellRole.PhysicalAlternativeDependency);
+        if (authorAlternative)
+            workspace.Dependencies.PageCount.Should().Be(2);
     }
 
     [Fact]
@@ -1088,8 +2086,15 @@ public sealed class NavigationEndpointResolutionTests
         work.Result.Pages.Should().ContainSingle();
     }
 
-    [Fact]
-    public void QueryAdmission_ShouldAcceptExactSharedLookupBudgetAndRejectOneBelow()
+    [Theory]
+    [InlineData(7, (int)NavigationQueryAdmissionStatus.Success, 7, 2, 1)]
+    [InlineData(6, (int)NavigationQueryAdmissionStatus.BudgetExceeded, 6, 1, 0)]
+    public void QueryAdmission_ShouldEnforceExactSharedLookupBudget(
+        int lookupBudget,
+        int expectedStatusValue,
+        int expectedLookupProbes,
+        int expectedEndpointCandidates,
+        int expectedActiveLeases)
     {
         using var world = new GridWorld();
         GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
@@ -1102,63 +2107,36 @@ public sealed class NavigationEndpointResolutionTests
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
         binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
         Vector3d point = new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var query = CreateSurfaceQuery(point, CreateBudget(lookupBudget, 2));
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 2,
+            componentCapacity: 4,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
+        using var work = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        work.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
 
-        using (NavigationWorldGraphStore exactStore = CreateStore(graph))
-        {
-            NavigationWorldGraphLease? lease = exactStore.TryAcquire();
-            lease.Should().NotBeNull();
-            var query = CreateSurfaceQuery(point, CreateBudget(7, 2));
-            var workspace = new NavigationAStarWorkspace(
-                mapCapacity: 1,
-                endpointPageCapacity: 2,
-                componentCapacity: 4,
-                nodeCapacity: 1,
-                rayCoveredAddressCapacity: 1,
-                rayTraceIntervalCapacity: 1,
-                guidePointCapacity: 1);
-            using var exact = new NavigationQueryAdmissionWork(
-                world,
-                exactStore,
-                workspace.EndpointWorkspace,
-                workspace.RayWorkspace,
-                PathAlgorithm.AStar);
-            exact.Begin(lease!, query);
+        Drain(work);
 
-            Drain(exact);
-
-            exact.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
-            exact.Meter.LookupProbes.Should().Be(7);
-            exact.Meter.EndpointCandidates.Should().Be(2);
-            exact.Result.Dispose();
-        }
-
-        using (NavigationWorldGraphStore belowStore = CreateStore(graph))
-        {
-            NavigationWorldGraphLease? lease = belowStore.TryAcquire();
-            lease.Should().NotBeNull();
-            var query = CreateSurfaceQuery(point, CreateBudget(6, 2));
-            var workspace = new NavigationAStarWorkspace(
-                mapCapacity: 1,
-                endpointPageCapacity: 2,
-                componentCapacity: 4,
-                nodeCapacity: 1,
-                rayCoveredAddressCapacity: 1,
-                rayTraceIntervalCapacity: 1,
-                guidePointCapacity: 1);
-            using var below = new NavigationQueryAdmissionWork(
-                world,
-                belowStore,
-                workspace.EndpointWorkspace,
-                workspace.RayWorkspace,
-                PathAlgorithm.AStar);
-            below.Begin(lease!, query);
-
-            Drain(below);
-
-            below.Status.Should().Be(NavigationQueryAdmissionStatus.BudgetExceeded);
-            below.Meter.LookupProbes.Should().Be(6);
-            belowStore.ActiveLeaseCount.Should().Be(0);
-        }
+        work.Status.Should().Be((NavigationQueryAdmissionStatus)expectedStatusValue);
+        work.Meter.LookupProbes.Should().Be(expectedLookupProbes);
+        work.Meter.EndpointCandidates.Should().Be(expectedEndpointCandidates);
+        store.ActiveLeaseCount.Should().Be(expectedActiveLeases);
+        if (work.Status == NavigationQueryAdmissionStatus.Success)
+            work.Result.Dispose();
     }
 
     private static void Drain(NavigationEndpointResolutionWork work)
@@ -1196,26 +2174,42 @@ public sealed class NavigationEndpointResolutionTests
             role,
             profile,
             Policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface));
+            TraversalMedia.Solid);
     }
 
     private static NavigationMapInstance CreateInstance(
         GridWorld world,
         string mapId,
         GridConfiguration configuration,
-        bool physicallyPresent)
+        bool physicallyPresent,
+        NavigationCell? cell = null)
     {
         VoxelIndex[] physical = physicallyPresent
             ? new[] { default(VoxelIndex) }
             : System.Array.Empty<VoxelIndex>();
+        return CreateInstance(
+            world,
+            mapId,
+            configuration,
+            physical,
+            new[] { default(VoxelIndex) },
+            cell ?? Cell);
+    }
+
+    private static NavigationMapInstance CreateInstance(
+        GridWorld world,
+        string mapId,
+        GridConfiguration configuration,
+        VoxelIndex[] physical,
+        VoxelIndex[] authored,
+        NavigationCell cell)
+    {
         world.TryAddGrid(configuration, physical, out _).Should().BeTrue();
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
-        NavigationMap map = new NavigationMapBuilder(mapId, binding)
-            .AddCell(default, Cell)
-            .Build();
+        var builder = new NavigationMapBuilder(mapId, binding);
+        for (int i = 0; i < authored.Length; i++)
+            builder.AddCell(authored[i], cell);
+        NavigationMap map = builder.Build();
         var prepared = new PreparedNavigationMap(map, bakeVersion: 1);
         var state = new NavigationOperationCandidate.MapState(
             prepared.Map,
@@ -1311,6 +2305,16 @@ public sealed class NavigationEndpointResolutionTests
         center,
         topologyKind: GridTopologyKind.RectangularPrism,
         topologyMetrics: GridTopologyMetrics.Rectangular((Fixed64)2),
+        storageKind: GridStorageKind.Dense);
+
+    private static GridConfiguration CreateWideDenseCellConfiguration(Fixed64 centerX) => new(
+        new Vector3d(centerX, Fixed64.Zero, Fixed64.Zero),
+        new Vector3d(centerX, Fixed64.Zero, Fixed64.Zero),
+        topologyKind: GridTopologyKind.RectangularPrism,
+        topologyMetrics: GridTopologyMetrics.Rectangular(
+            (Fixed64)2,
+            (Fixed64)2,
+            (Fixed64)6),
         storageKind: GridStorageKind.Dense);
 
     private static NavigationAgentProfile Profile() => new(

@@ -274,7 +274,9 @@ public sealed class NavigationSurfaceAStarTests
                 cells[0],
                 cells[^1],
                 simplificationRays: 0,
-                lookupProbes: 8));
+                lookupProbes: 8),
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         while (admission.Status == NavigationQueryAdmissionStatus.Pending)
             admission.Advance(64, 16);
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
@@ -321,7 +323,9 @@ public sealed class NavigationSurfaceAStarTests
             PathAlgorithm.AStar);
         admission.Begin(
             store.TryAcquire()!,
-            CreateSimplificationQuery(fixture, cells[0], cells[^1], 1));
+            CreateSimplificationQuery(fixture, cells[0], cells[^1], 1),
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         while (admission.Status == NavigationQueryAdmissionStatus.Pending)
             admission.Advance(64, 16);
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
@@ -390,7 +394,9 @@ public sealed class NavigationSurfaceAStarTests
             PathAlgorithm.AStar);
         admission.Begin(
             store.TryAcquire()!,
-            query);
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         while (admission.Status == NavigationQueryAdmissionStatus.Pending)
             admission.Advance(64, 16);
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
@@ -820,7 +826,11 @@ public sealed class NavigationSurfaceAStarTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        admission.Begin(lease!, query);
+        admission.Begin(
+            lease!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         for (int step = 0;
              step < 64 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)
@@ -1199,7 +1209,11 @@ public sealed class NavigationSurfaceAStarTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        admission.Begin(lease, fixture.CreateQuery(start, end, fixture.DefaultProfile));
+        admission.Begin(
+            lease,
+            fixture.CreateQuery(start, end, fixture.DefaultProfile),
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         while (admission.Status == NavigationQueryAdmissionStatus.Pending)
             admission.Advance(64, 8);
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
@@ -1813,7 +1827,11 @@ public sealed class NavigationSurfaceAStarTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        admission.Begin(lease!, query);
+        admission.Begin(
+            lease!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         for (int step = 0;
              step < 256 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)
@@ -2300,7 +2318,11 @@ public sealed class NavigationSurfaceAStarTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        admission.Begin(lease!, query);
+        admission.Begin(
+            lease!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         for (int step = 0;
              step < 64 && admission.Status == NavigationQueryAdmissionStatus.Pending;
              step++)
@@ -2598,4 +2620,187 @@ public sealed class NavigationSurfaceAStarTests
         arrivalRadius: Fixed64.Zero,
         allowedMedia: TraversalMedia.Solid,
         capabilities: TraversalCapability.None);
+
+    [Fact]
+    public void Constructor_WhenTransitionsAreEnabled_ShouldUseZeroHeuristic()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = { default, new VoxelIndex(1, 0, 0) };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "transition-heuristic");
+        using NavigationWorldGraphStore store = CreateStore(fixture.Graph);
+        PathQuery baseline = fixture.CreateQuery(cells[0], cells[1], fixture.DefaultProfile);
+        var query = new PathQuery(
+            baseline.Start,
+            baseline.End,
+            baseline.Agent,
+            baseline.AreaPolicy,
+            baseline.Traversal,
+            baseline.Algorithm,
+            baseline.Budget,
+            allowTransitions: true);
+        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 4, 4, 4);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        admission.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 8);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+
+        using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
+            admission.Result,
+            workspace,
+            admission.RayWork,
+            long.MaxValue);
+
+        workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
+            .Should().BeTrue();
+        workspace.NodeTable.GetRecord(startSlot).Heuristic.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Constructor_ForDisabledGasQuery_ShouldFloorCenteredVolumeAnchors()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = { default, new VoxelIndex(1, 0, 0) };
+        NavigationCell gas = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "gas-heuristic",
+                new[] { gas, gas });
+        using NavigationWorldGraphStore store = CreateStore(fixture.Graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var query = new PathQuery(
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[0]),
+                fixture.MapId),
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[1]),
+                fixture.MapId),
+            profile,
+            NavigationAStarExitTestHarness.Policy.Key,
+            new TraversalIntent(
+                TraversalDomain.Volume,
+                TraversalMedium.Gas,
+                TraversalDomain.Volume),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(
+                128, 16, 16, 64, 64, 0, 0, 0, 0, 32, 0),
+            allowTransitions: false);
+        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 16, 8, 4);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        admission.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Gas,
+            TraversalMedia.Gas);
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 8);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+
+        using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
+            admission.Result,
+            workspace,
+            admission.RayWork,
+            long.MaxValue);
+
+        workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
+            .Should().BeTrue();
+        workspace.NodeTable.GetRecord(startSlot).Heuristic.Should().Be(Fixed64.One);
+    }
+
+    [Fact]
+    public void QueryWork_UnsupportedResult_ShouldRejectSecondBeginBeforePublish()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = { default, new VoxelIndex(1, 0, 0) };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "unsupported-reentry");
+        using NavigationWorldGraphStore store = CreateStore(
+            fixture.Graph,
+            maxConcurrentLeases: 2);
+        PathQuery baseline = fixture.CreateQuery(cells[0], cells[1], fixture.DefaultProfile);
+        var query = new PathQuery(
+            baseline.Start,
+            baseline.End,
+            baseline.Agent,
+            baseline.AreaPolicy,
+            baseline.Traversal,
+            baseline.Algorithm,
+            baseline.Budget,
+            allowTransitions: true);
+        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 4, 4, 4);
+        var cache = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 1,
+            maxActiveLeases: 2);
+        using var work = new NavigationAStarQueryWork(world, store, workspace, cache);
+        long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
+            workspace.GuidePoints.Length,
+            workspace.EndpointComponents.Length,
+            workspace.EndpointPages.Length);
+        cache.TryReservePayload(
+                maximumBytes,
+                out NavigationAStarPayloadReservation firstReservation)
+            .Should().BeTrue();
+        work.BeginReserved(query, store.TryAcquire()!, ref firstReservation);
+        work.IsReadyToPublish.Should().BeTrue();
+        cache.ReservedLeaseCount.Should().Be(1);
+
+        using NavigationWorldGraphLease secondLease = store.TryAcquire()!;
+        cache.TryReservePayload(
+                maximumBytes,
+                out NavigationAStarPayloadReservation secondReservation)
+            .Should().BeTrue();
+        Action secondBegin = () => work.BeginReserved(
+            query,
+            secondLease,
+            ref secondReservation);
+
+        secondBegin.Should().Throw<InvalidOperationException>();
+        cache.ReservedLeaseCount.Should().Be(2);
+        cache.ReleasePayloadReservation(ref secondReservation);
+        work.Publish().Should().Be(NavigationAStarQueryStatus.Unsupported);
+        cache.ReservedLeaseCount.Should().Be(0);
+    }
 }

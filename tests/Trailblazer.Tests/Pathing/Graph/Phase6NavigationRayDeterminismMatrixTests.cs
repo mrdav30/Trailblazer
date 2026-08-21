@@ -236,7 +236,11 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
-        admission.Begin(store.TryAcquire()!, query);
+        admission.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         while (admission.Status == NavigationQueryAdmissionStatus.Pending)
             admission.Advance(int.MaxValue, int.MaxValue);
         Assert.Equal(NavigationQueryAdmissionStatus.Success, admission.Status);

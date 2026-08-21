@@ -60,6 +60,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
             throw new ArgumentOutOfRangeException(nameof(maximumPayloadBytes));
         if (query.Query.Algorithm != PathAlgorithm.FlowField
             || query.Query.AllowTransitions
+            || query.StartMedium != TraversalMedium.Solid
+            || query.End.Media != TraversalMedia.Solid
             || query.Query.Traversal.StartDomain == TraversalDomain.Volume
             || query.Query.Traversal.TargetDomain == TraversalDomain.Volume)
         {
@@ -79,21 +81,21 @@ internal sealed class NavigationFlowFieldWork : IDisposable
             _graph,
             query.Query.Agent,
             query.AreaPolicy,
-            query.Medium);
+            query.StartMedium);
         _resultStatus = NavigationFlowFieldStatus.Success;
 
         if (!_graph.AreInSameSurfaceComponent(
                 query.Start.Address,
-                query.Medium,
+                query.StartMedium,
                 query.End.Address,
-                query.Medium))
+                query.StartMedium))
         {
             Finish(NavigationFlowFieldStatus.NoPath);
             return;
         }
         if (!_graph.TryGetSurfaceComponent(
                 query.End.Address,
-                query.Medium,
+                query.StartMedium,
                 out NavigationSurfaceComponentKey component,
                 out _)
             || !_workspace.TryRecordComponent(component)
@@ -353,7 +355,9 @@ internal sealed class NavigationFlowFieldWork : IDisposable
             Result = new NavigationFlowFieldPayload(
                 new NavigationFlowFieldPayloadKey(
                     resolved.Query,
-                    resolved.End.Address),
+                    resolved.End.Address,
+                    resolved.StartMedium,
+                    resolved.TargetMedia),
                 _payloadNodes!,
                 _payloadLookup!,
                 _dependencyStamp!.Result,
@@ -523,7 +527,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         }
         return _graph.TryGetSurfaceComponent(
                 address,
-                _query!.Medium,
+                _query!.StartMedium,
                 out NavigationSurfaceComponentKey component,
                 out _)
             && _workspace.TryRecordComponent(component);

@@ -23,7 +23,8 @@ internal enum NavigationQueryAdmissionStatus : byte
     BudgetExceeded = 7,
     CostOverflow = 8,
     CapacityExceeded = 9,
-    Stale = 10
+    Stale = 10,
+    NoPath = 11
 }
 
 /// <summary>Resolves one surface A* query against an exact leased graph generation.</summary>
@@ -37,6 +38,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     }
 
     private readonly NavigationEndpointWorkspace _workspace;
+    private readonly GridWorld _world;
     private readonly PathAlgorithm _expectedAlgorithm;
     private readonly NavigationWorkMeter _meter;
     private readonly NavigationRayWork _rayWork;
@@ -45,12 +47,14 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     private NavigationWorldGraphLease? _lease;
     private NavigationAreaPolicy? _areaPolicy;
     private PathQuery _query;
-    private TraversalMedium _medium;
+    private TraversalMedium _startMedium;
+    private TraversalMedia _targetMedia;
     private NavigationResolvedEndpoint _start;
     private NavigationResolvedEndpoint _end;
     private Stage _stage;
     private bool _endpointActive;
     private bool _active;
+    private ulong _worldChangeSequence;
 
     internal NavigationQueryAdmissionWork(
         GridWorld world,
@@ -64,6 +68,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
         SwiftThrowHelper.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
         _workspace = workspace;
+        _world = world;
         _expectedAlgorithm = expectedAlgorithm;
         _meter = new NavigationWorkMeter(default);
         _rayWork = new NavigationRayWork(rayWorkspace);
@@ -79,7 +84,9 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
 
     internal void Begin(
         NavigationWorldGraphLease lease,
-        PathQuery query)
+        PathQuery query,
+        TraversalMedium startMedium,
+        TraversalMedia targetMedia)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
         if (_active)
@@ -92,17 +99,34 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         _areaPolicy = null;
         _start = default;
         _end = default;
+        _worldChangeSequence = _world.ChangeSequence;
+        _startMedium = startMedium;
+        _targetMedia = targetMedia;
         _stage = Stage.ResolvePolicy;
         _endpointActive = false;
         Status = NavigationQueryAdmissionStatus.Pending;
-        bool supported = TryResolveSurfaceMedium(
-            query,
-            _expectedAlgorithm,
-            out _medium);
         if (!query.Agent.IsValid)
             Finish(NavigationQueryAdmissionStatus.InvalidProfile);
-        else if (!supported)
+        else if (query.Algorithm != _expectedAlgorithm
+            || _expectedAlgorithm is not (PathAlgorithm.AStar or PathAlgorithm.FlowField))
             Finish(NavigationQueryAdmissionStatus.Unsupported);
+        else if (!NavigationCell.IsKnownMedium(startMedium))
+            Finish(NavigationQueryAdmissionStatus.InvalidStart);
+        else if (targetMedia == TraversalMedia.None
+            || (targetMedia & ~NavigationCell.KnownMedia) != 0)
+        {
+            Finish(NavigationQueryAdmissionStatus.InvalidEnd);
+        }
+        else if ((query.Agent.AllowedMedia & NavigationCell.ToMedia(startMedium)) == 0
+            || (targetMedia & ~query.Agent.AllowedMedia) != 0)
+        {
+            Finish(NavigationQueryAdmissionStatus.InvalidProfile);
+        }
+        else if (!query.AllowTransitions
+            && (targetMedia & NavigationCell.ToMedia(startMedium)) == 0)
+        {
+            Finish(NavigationQueryAdmissionStatus.NoPath);
+        }
     }
 
     internal NavigationQueryAdmissionStatus Status { get; private set; }
@@ -112,6 +136,16 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     internal NavigationWorkMeter Meter => _meter;
 
     internal NavigationRayWork RayWork => _rayWork;
+
+    internal static bool CanProjectPublicQuery(
+        PathQuery query,
+        PathAlgorithm expectedAlgorithm) =>
+        query.Algorithm == expectedAlgorithm
+        && expectedAlgorithm is PathAlgorithm.AStar or PathAlgorithm.FlowField
+        && !query.AllowTransitions
+        && query.Traversal.StartDomain != TraversalDomain.Volume
+        && query.Traversal.TargetDomain != TraversalDomain.Volume
+        && query.Traversal.CurrentMedium is TraversalMedium.Unknown or TraversalMedium.Solid;
 
     internal NavigationQueryAdmissionStatus Advance(
         int lookupStepLimit,
@@ -187,6 +221,8 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                 }
                 else
                 {
+                    if (_world.ChangeSequence != _worldChangeSequence)
+                        return Finish(NavigationQueryAdmissionStatus.Stale);
                     _end = _endpointWork.Result;
                     _endpointWork.Reset();
                     NavigationWorldGraphLease lease = _lease!;
@@ -196,7 +232,8 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                         _start,
                         _end,
                         _areaPolicy!,
-                        _medium,
+                        _startMedium,
+                        _targetMedia,
                         _meter);
                     _lease = null;
                     Status = NavigationQueryAdmissionStatus.Success;
@@ -215,9 +252,11 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         _endpointWork.Reset();
         _areaPolicy = null;
         _query = default;
-        _medium = default;
+        _startMedium = default;
+        _targetMedia = default;
         _start = default;
         _end = default;
+        _worldChangeSequence = 0;
         _endpointActive = false;
         _active = false;
     }
@@ -227,13 +266,18 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         NavigationEndpointRole role)
     {
         NavigationWorldGraph graph = _lease!.Graph;
+        TraversalMedia effectiveTargetMedia = _query.AllowTransitions
+            ? _targetMedia
+            : NavigationCell.ToMedia(_startMedium);
         _endpointWork.Begin(
             graph,
             endpoint,
             role,
             _query.Agent,
             _areaPolicy!,
-            _query.Traversal);
+            role == NavigationEndpointRole.Start
+                ? NavigationCell.ToMedia(_startMedium)
+                : effectiveTargetMedia);
     }
 
     private NavigationQueryAdmissionStatus Finish(
@@ -263,18 +307,4 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
             _ => NavigationQueryAdmissionStatus.Stale
         };
 
-    private static bool TryResolveSurfaceMedium(
-        PathQuery query,
-        PathAlgorithm expectedAlgorithm,
-        out TraversalMedium medium)
-    {
-        bool supported = query.Algorithm == expectedAlgorithm
-            && expectedAlgorithm is PathAlgorithm.AStar or PathAlgorithm.FlowField
-            && !query.AllowTransitions
-            && query.Traversal.StartDomain != TraversalDomain.Volume
-            && query.Traversal.TargetDomain != TraversalDomain.Volume
-            && query.Traversal.CurrentMedium is TraversalMedium.Unknown or TraversalMedium.Solid;
-        medium = TraversalMedium.Solid;
-        return supported;
-    }
 }

@@ -38,15 +38,24 @@ internal readonly struct NavigationResolvedEndpoint
     internal NavigationResolvedEndpoint(
         NavigationNodeRef node,
         NavigationCellAddress address,
+        TraversalMedia media,
+        TraversalMedium resolutionMedium,
+        Vector3d footAnchor,
         Fixed64 resolutionDistance)
     {
         Node = node;
         Address = address;
+        Media = media;
+        ResolutionMedium = resolutionMedium;
+        FootAnchor = footAnchor;
         ResolutionDistance = resolutionDistance;
     }
 
     internal NavigationNodeRef Node { get; }
     internal NavigationCellAddress Address { get; }
+    internal TraversalMedia Media { get; }
+    internal TraversalMedium ResolutionMedium { get; }
+    internal Vector3d FootAnchor { get; }
     internal Fixed64 ResolutionDistance { get; }
 }
 
@@ -62,7 +71,8 @@ internal sealed class NavigationEndpointResolutionWork
     private NavigationWorldGraph _graph = null!;
     private NavigationEndpoint _endpoint;
     private TraversalEvaluator _evaluator;
-    private TraversalIntent _intent;
+    private NavigationVolumeAnchorEvaluator _volumeEvaluator;
+    private TraversalMedia _media;
     private NavigationEndpointRole _role;
     private NavigationResolvedEndpoint _pendingCandidate;
     private int _mapOrdinal;
@@ -72,10 +82,6 @@ internal sealed class NavigationEndpointResolutionWork
     private bool _cursorBegun;
     private bool _cursorComplete;
     private bool _hasResult;
-
-    private TraversalMedium Medium => _intent.CurrentMedium == TraversalMedium.Unknown
-        ? TraversalMedium.Solid
-        : _intent.CurrentMedium;
 
     internal NavigationEndpointResolutionWork(
         GridWorld world,
@@ -105,7 +111,7 @@ internal sealed class NavigationEndpointResolutionWork
         NavigationEndpointRole role,
         NavigationAgentProfile profile,
         NavigationAreaPolicy areaPolicy,
-        TraversalIntent intent)
+        TraversalMedia media)
     {
         SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
@@ -117,14 +123,18 @@ internal sealed class NavigationEndpointResolutionWork
         _graph = graph;
         _endpoint = endpoint;
         _role = role;
-        _intent = intent;
+        _media = media;
         _evaluator = new TraversalEvaluator(
             graph,
             profile,
             areaPolicy,
-            intent.CurrentMedium == TraversalMedium.Unknown
-                ? TraversalMedium.Solid
-                : intent.CurrentMedium);
+            TraversalMedium.Solid);
+        _volumeEvaluator = new NavigationVolumeAnchorEvaluator(
+            _world,
+            graph,
+            profile,
+            areaPolicy,
+            _rayWorkspace);
         _pendingCandidate = default;
         _mapOrdinal = 0;
         _generationInputOrdinal = 0;
@@ -149,7 +159,8 @@ internal sealed class NavigationEndpointResolutionWork
         _graph = null!;
         _endpoint = default;
         _evaluator = default;
-        _intent = default;
+        _volumeEvaluator = default;
+        _media = default;
         _role = default;
         _pendingCandidate = default;
         _mapOrdinal = 0;
@@ -330,36 +341,36 @@ internal sealed class NavigationEndpointResolutionWork
             Finish(NavigationEndpointResolutionStatus.CapacityExceeded);
             return false;
         }
-        if (!_evaluator.TryGetPassableNodeState(node, out NavigationNodeState state))
-            return true;
-        if (!Vector3d.TryGetDistance(
-                _endpoint.Position,
-                state.FootAnchor,
-                out Fixed64 distance))
+        bool consumedVolumeWork = false;
+        if (!_graph.TryGetNodeState(node, out NavigationNodeState state)
+            || !TryQualifyCandidate(
+                node,
+                state,
+                out TraversalMedia qualifyingMedia,
+                out TraversalMedium resolutionMedium,
+                out Vector3d footAnchor,
+                out Fixed64 distance,
+                out consumedVolumeWork))
         {
-            Finish(NavigationEndpointResolutionStatus.CostOverflow);
-            return false;
+            return !consumedVolumeWork;
         }
-        if (_endpoint.Resolution == EndpointResolutionPolicy.NearestNavigable
-            && distance > _endpoint.MaxResolutionDistance)
-        {
-            return true;
-        }
-
         var address = new NavigationCellAddress(mapId, candidate.VoxelIndex);
-        if (!_graph.TryGetSurfaceComponent(address, Medium, out _, out _))
-        {
-            Finish(NavigationEndpointResolutionStatus.Stale);
-            return false;
-        }
-        if (!CanBeatCurrentResult(address, distance))
+        if (!CanBeatCurrentResult(address, distance, resolutionMedium))
             return true;
 
-        var resolved = new NavigationResolvedEndpoint(node, address, distance);
-        if (_endpoint.Resolution == EndpointResolutionPolicy.Strict)
+        var resolved = new NavigationResolvedEndpoint(
+            node,
+            address,
+            qualifyingMedia,
+            resolutionMedium,
+            footAnchor,
+            distance);
+        if (_endpoint.Resolution == EndpointResolutionPolicy.Strict
+            || (qualifyingMedia & TraversalMedia.Solid) == 0)
         {
             AcceptCandidate(resolved);
-            return true;
+            return _endpoint.Resolution == EndpointResolutionPolicy.Strict
+                && resolutionMedium == TraversalMedium.Solid;
         }
 
         _pendingCandidate = resolved;
@@ -378,7 +389,10 @@ internal sealed class NavigationEndpointResolutionWork
             _graph,
             _evaluator.Profile,
             _evaluator.AreaPolicy,
-            _intent,
+            new TraversalIntent(
+                TraversalDomain.Surface,
+                TraversalMedium.Solid,
+                TraversalDomain.Surface),
             allowTransitions: false,
             start,
             end,
@@ -400,6 +414,8 @@ internal sealed class NavigationEndpointResolutionWork
                 return Finish(NavigationEndpointResolutionStatus.CapacityExceeded);
             if (rayStatus == NavigationRayStatus.Success)
                 AcceptCandidate(_pendingCandidate);
+            else
+                TryAcceptPendingVolumeFallback();
             _pendingCandidate = default;
             _rayWork.Reset();
             return Status;
@@ -433,13 +449,47 @@ internal sealed class NavigationEndpointResolutionWork
         return true;
     }
 
+    private void TryAcceptPendingVolumeFallback()
+    {
+        TraversalMedia volumeMedia = _pendingCandidate.Media & TraversalMedia.AnyVolume;
+        if (volumeMedia == TraversalMedia.None
+            || !_graph.TryGetNodeState(
+                _pendingCandidate.Node,
+                out NavigationNodeState state)
+            || !state.TryGetCenteredVolumeFootAnchor(
+                _evaluator.Profile.Shape.Height,
+                out Vector3d footAnchor)
+            || !Vector3d.TryGetDistance(
+                _endpoint.Position,
+                footAnchor,
+                out Fixed64 distance))
+        {
+            return;
+        }
+
+        TraversalMedium medium = FirstMedium(volumeMedia);
+        if (CanBeatCurrentResult(_pendingCandidate.Address, distance, medium))
+        {
+            AcceptCandidate(new NavigationResolvedEndpoint(
+                _pendingCandidate.Node,
+                _pendingCandidate.Address,
+                volumeMedia,
+                medium,
+                footAnchor,
+                distance));
+        }
+    }
+
     private bool CanBeatCurrentResult(
         NavigationCellAddress address,
-        Fixed64 distance) =>
+        Fixed64 distance,
+        TraversalMedium medium) =>
         !_hasResult
         || distance < Result.ResolutionDistance
         || (distance == Result.ResolutionDistance
-            && address.CompareTo(Result.Address) < 0);
+            && (address.CompareTo(Result.Address) < 0
+                || (address.Equals(Result.Address)
+                    && (int)medium < (int)Result.ResolutionMedium)));
 
     private void AcceptCandidate(NavigationResolvedEndpoint candidate)
     {
@@ -475,18 +525,7 @@ internal sealed class NavigationEndpointResolutionWork
         _rayWork.Reset();
         if (status == NavigationEndpointResolutionStatus.Success)
         {
-            if (!_graph.TryGetSurfaceComponent(
-                    Result.Address,
-                    Medium,
-                    out NavigationSurfaceComponentKey componentKey,
-                    out _))
-            {
-                status = NavigationEndpointResolutionStatus.Stale;
-            }
-            else if (!_workspace.TryRecordComponent(componentKey))
-            {
-                status = NavigationEndpointResolutionStatus.CapacityExceeded;
-            }
+            status = RecordResultComponents();
         }
         if ((status == NavigationEndpointResolutionStatus.Success
                 || (status == NavigationEndpointResolutionStatus.InvalidEndpoint
@@ -495,6 +534,8 @@ internal sealed class NavigationEndpointResolutionWork
         {
             status = NavigationEndpointResolutionStatus.Stale;
         }
+        if (_world.ChangeSequence != _worldChangeSequence)
+            status = NavigationEndpointResolutionStatus.Stale;
         Status = status;
         if (status != NavigationEndpointResolutionStatus.Success)
             Result = default;
@@ -542,4 +583,142 @@ internal sealed class NavigationEndpointResolutionWork
         }
         return _world.ChangeSequence == _worldChangeSequence;
     }
+
+    private bool TryQualifyCandidate(
+        NavigationNodeRef node,
+        NavigationNodeState state,
+        out TraversalMedia qualifyingMedia,
+        out TraversalMedium resolutionMedium,
+        out Vector3d footAnchor,
+        out Fixed64 distance,
+        out bool consumedVolumeWork)
+    {
+        qualifyingMedia = TraversalMedia.None;
+        resolutionMedium = default;
+        footAnchor = default;
+        distance = default;
+        consumedVolumeWork = false;
+        if ((_media & TraversalMedia.Solid) != 0
+            && _evaluator.TryGetPassableNodeState(node, out _))
+        {
+            if (!ConsiderMedium(
+                    TraversalMedium.Solid,
+                    state.FootAnchor,
+                    ref qualifyingMedia,
+                    ref resolutionMedium,
+                    ref footAnchor,
+                    ref distance))
+            {
+                Finish(NavigationEndpointResolutionStatus.CostOverflow);
+                return false;
+            }
+        }
+
+        TraversalMedia requestedVolume = _media & TraversalMedia.AnyVolume;
+        if (requestedVolume != TraversalMedia.None)
+        {
+            consumedVolumeWork = true;
+            NavigationVolumeAnchorStatus volumeStatus = _volumeEvaluator.Evaluate(
+                node,
+                requestedVolume,
+                _meter,
+                _workspace.Dependencies,
+                out Vector3d volumeFoot,
+                out TraversalMedia volumeMedia);
+            if (volumeStatus is NavigationVolumeAnchorStatus.BudgetExceeded
+                or NavigationVolumeAnchorStatus.CostOverflow
+                or NavigationVolumeAnchorStatus.CapacityExceeded
+                or NavigationVolumeAnchorStatus.Stale)
+            {
+                Finish(volumeStatus switch
+                {
+                    NavigationVolumeAnchorStatus.BudgetExceeded =>
+                        NavigationEndpointResolutionStatus.BudgetExceeded,
+                    NavigationVolumeAnchorStatus.CostOverflow =>
+                        NavigationEndpointResolutionStatus.CostOverflow,
+                    NavigationVolumeAnchorStatus.CapacityExceeded =>
+                        NavigationEndpointResolutionStatus.CapacityExceeded,
+                    _ => NavigationEndpointResolutionStatus.Stale
+                });
+                return false;
+            }
+            for (TraversalMedium medium = TraversalMedium.Gas;
+                 medium <= TraversalMedium.Liquid;
+                 medium++)
+            {
+                if ((volumeMedia & NavigationCell.ToMedia(medium)) != 0
+                    && !ConsiderMedium(
+                        medium,
+                        volumeFoot,
+                        ref qualifyingMedia,
+                        ref resolutionMedium,
+                        ref footAnchor,
+                        ref distance))
+                {
+                    Finish(NavigationEndpointResolutionStatus.CostOverflow);
+                    return false;
+                }
+            }
+        }
+        return qualifyingMedia != TraversalMedia.None;
+    }
+
+    private bool ConsiderMedium(
+        TraversalMedium medium,
+        Vector3d anchor,
+        ref TraversalMedia qualifyingMedia,
+        ref TraversalMedium resolutionMedium,
+        ref Vector3d footAnchor,
+        ref Fixed64 distance)
+    {
+        if (!Vector3d.TryGetDistance(_endpoint.Position, anchor, out Fixed64 candidateDistance))
+            return false;
+        if (_endpoint.Resolution == EndpointResolutionPolicy.NearestNavigable
+            && candidateDistance > _endpoint.MaxResolutionDistance)
+        {
+            return true;
+        }
+        qualifyingMedia |= NavigationCell.ToMedia(medium);
+        if (resolutionMedium == TraversalMedium.Unknown
+            || candidateDistance < distance
+            || (candidateDistance == distance && (int)medium < (int)resolutionMedium))
+        {
+            resolutionMedium = medium;
+            footAnchor = anchor;
+            distance = candidateDistance;
+        }
+        return true;
+    }
+
+    private NavigationEndpointResolutionStatus RecordResultComponents()
+    {
+        for (TraversalMedium medium = TraversalMedium.Solid;
+             medium <= TraversalMedium.Liquid;
+             medium++)
+        {
+            if ((Result.Media & NavigationCell.ToMedia(medium)) == 0)
+                continue;
+            if (!_graph.TryGetSurfaceComponent(
+                    Result.Address,
+                    medium,
+                    out NavigationSurfaceComponentKey componentKey,
+                    out _))
+            {
+                return NavigationEndpointResolutionStatus.Stale;
+            }
+            if (!_workspace.TryRecordComponent(componentKey))
+                return NavigationEndpointResolutionStatus.CapacityExceeded;
+        }
+        return NavigationEndpointResolutionStatus.Success;
+    }
+
+    private static TraversalMedium FirstMedium(TraversalMedia media)
+    {
+        if ((media & TraversalMedia.Solid) != 0)
+            return TraversalMedium.Solid;
+        if ((media & TraversalMedia.Gas) != 0)
+            return TraversalMedium.Gas;
+        return TraversalMedium.Liquid;
+    }
+
 }

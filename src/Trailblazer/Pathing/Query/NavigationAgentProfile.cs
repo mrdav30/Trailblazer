@@ -16,7 +16,6 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfile>
 {
-    private const TraversalMedia KnownMedia = TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid;
     private const TraversalCapability KnownCapabilities =
         TraversalCapability.Jump
         | TraversalCapability.Climb
@@ -84,7 +83,7 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
             nameof(arrivalRadius),
             "Arrival radius cannot be negative.");
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            (allowedMedia & ~KnownMedia) != 0,
+            (allowedMedia & ~NavigationCell.KnownMedia) != 0,
             (int)allowedMedia,
             nameof(allowedMedia),
             "Allowed media contains unknown flag bits.");
@@ -139,7 +138,7 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
         && MaxStepUp >= Fixed64.Zero
         && MaxDropDown >= Fixed64.Zero
         && ArrivalRadius >= Fixed64.Zero
-        && (AllowedMedia & ~KnownMedia) == 0
+        && (AllowedMedia & ~NavigationCell.KnownMedia) == 0
         && (Capabilities & ~KnownCapabilities) == 0;
 
     internal void Validate(string parameterName)
@@ -149,7 +148,7 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
             MaxStepUp < Fixed64.Zero
                 || MaxDropDown < Fixed64.Zero
                 || ArrivalRadius < Fixed64.Zero
-                || (AllowedMedia & ~KnownMedia) != 0
+                || (AllowedMedia & ~NavigationCell.KnownMedia) != 0
                 || (Capabilities & ~KnownCapabilities) != 0,
             parameterName,
             "Agent profile contains invalid distances or flag bits.");

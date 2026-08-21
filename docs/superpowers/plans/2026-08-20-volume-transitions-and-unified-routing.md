@@ -196,25 +196,29 @@
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationResolvedPathQuery.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationEndpointResolutionWork.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationQueryAdmissionWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowQueryWork.cs`
 - Add: `src/Trailblazer/Pathing/Graph/NavigationVolumeAnchorEvaluator.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/TraversalEvaluator.cs`
+- Modify: `src/Trailblazer/Pathing/Map/NavigationCell.cs`
+- Modify: `src/Trailblazer/Pathing/Query/NavigationAgentProfile.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Ray/NavigationRayWorkspace.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldPayloadKey.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldWork.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationSurfaceAStarWork.cs`
-- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationSelectedEdgeProgressWork.cs`
-- Modify: `src/Trailblazer/Pathing/Search/Ray/NavigationRayWork.cs`
 - Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationEndpointResolutionTests.cs`
 - Modify: internal graph query test factories only
+- Modify: internal benchmark query factories only
 
-- [ ] RED internal resolved Solid/Gas/Liquid start, nonempty known target-media mask, agent-subset validation, `Unknown` rejection, and transition-disabled mismatch -> NoPath.
-- [ ] RED endpoint candidates filtered before Strict/NearestNavigable ranking: exact start; disabled targets by StartMedium only; enabled targets by any requested medium. Pin only destination StartMedium when disabled and all qualifying media at the one winning address plus medium/address tie order when enabled.
-- [ ] RED Strict and NearestNavigable Gas/Liquid endpoints, including a zero-length route and large multi-cell/cross-grid bodies. A candidate is unavailable when any positive-overlap placement prism is physically missing, wrong-medium, capability-blocked, policy-blocked, or lacks clearance; pin exact dependencies, later stale insertion/mutation, exact capacity, and exact budget one-below.
-- [ ] Implement one internal degenerate-union `NavigationVolumeAnchorEvaluator` used by endpoint resolution and reused by Task 6 face/shortcut evaluation; do not let the endpoint cell alone certify placement.
-- [ ] Extend the existing `NavigationRayWorkspace` here with both caller-owned GridForge requirements: `SwiftList<GridNavigationBodyTraceCell>` and `GridNavigationBodyTraceScratch`, sized from the existing ray capacities. Admission, dispatcher, and ray work reuse this one storage owner with no per-call allocation.
-- [ ] RED disabled single-anchor floor heuristic and enabled zero A* heuristic plus Flow zero-cost multi-target seeds.
-- [ ] Extend the existing internal resolved-query/admission authority with exact medium fields; do not add a second query DTO. Keep the current public `TraversalIntent`/`PathQuery` surface and its existing projection unchanged until Task 10.
-- [ ] Do not modify or port `GuidedVolumeExitPlanner`, Hybrid types, Navigator, public guide wrappers, records, or benchmarks in this preparatory task.
-- [ ] Run internal query/admission/cache Release + ReleaseLean gates, reviews, and commit: `feat(pathing): prepare medium query admission`.
+- [x] RED internal resolved Solid/Gas/Liquid start, nonempty known target-media mask, agent-subset validation, `Unknown` rejection, and transition-disabled mismatch -> NoPath.
+- [x] RED endpoint candidates filtered before Strict/NearestNavigable ranking: exact start; disabled targets by StartMedium only; enabled targets by any requested medium. Retain all qualifying media at the one winning physical address plus one deterministic resolution medium/anchor and medium/address tie order.
+- [x] RED Strict and NearestNavigable Gas/Liquid endpoints, including a zero-length route and large multi-cell/cross-grid bodies. A candidate is unavailable when any positive-overlap placement prism is physically missing, wrong-medium, capability-blocked, policy-blocked, or lacks clearance; pin exact existing graph-page dependencies (record dependency-only mapped cells before skipping semantics, otherwise stale), world-stamp currentness, exact capacity, and exact budget one-below.
+- [x] Implement one internal degenerate-union `NavigationVolumeAnchorEvaluator` used by endpoint resolution and reused by Task 6 face/shortcut evaluation; do not let the endpoint cell alone certify placement.
+- [x] Extend the existing `NavigationRayWorkspace` here with both caller-owned GridForge requirements: `SwiftList<GridNavigationBodyTraceCell>` and `GridNavigationBodyTraceScratch`, sized from the existing ray capacities. Admission, dispatcher, and ray work reuse this one storage owner with no per-call allocation.
+- [x] RED disabled single-anchor floor heuristic and enabled zero A* heuristic. Prepare the Flow payload key with exact medium identity, but defer actual zero-cost multi-target medium seeds and Flow medium-state workspace to Task 9.
+- [x] Extend the existing internal resolved-query/admission authority with exact medium fields; do not add a second query DTO. Keep the current public `TraversalIntent`/`PathQuery` surface and its existing projection unchanged until Task 10.
+- [x] Do not modify or port `GuidedVolumeExitPlanner`, Hybrid types, Navigator, public guide wrappers, records, or benchmarks in this preparatory task.
+- [x] Run internal query/admission/cache Release + ReleaseLean gates, reviews, and commit: `feat(pathing): prepare medium query admission`.
 
 ## Task 6: Add One Canonical Medium Edge Dispatcher
 

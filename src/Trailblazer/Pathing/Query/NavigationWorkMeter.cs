@@ -25,6 +25,10 @@ internal sealed class NavigationWorkMeter
 
     internal int ConnectionLegs { get; private set; }
 
+    internal int TransitionCandidates { get; private set; }
+
+    internal int TransitionPairs { get; private set; }
+
     internal int TraceIntervals { get; private set; }
 
     internal int CoveredVoxelIntervals { get; private set; }
@@ -42,6 +46,11 @@ internal sealed class NavigationWorkMeter
     internal int RemainingEvaluatedEdges => _budget.MaxEvaluatedEdges - EvaluatedEdges;
 
     internal int RemainingConnectionLegs => _budget.MaxConnectionLegs - ConnectionLegs;
+
+    internal int RemainingTransitionCandidates =>
+        _budget.MaxTransitionCandidates - TransitionCandidates;
+
+    internal int RemainingTransitionPairs => _budget.MaxTransitionPairs - TransitionPairs;
 
     internal int RemainingTraceIntervals => _budget.MaxTraceIntervals - TraceIntervals;
 
@@ -101,6 +110,22 @@ internal sealed class NavigationWorkMeter
         return true;
     }
 
+    internal bool TryConsumeTransitionCandidates(int count)
+    {
+        if (count < 0 || count > RemainingTransitionCandidates)
+            return false;
+        TransitionCandidates += count;
+        return true;
+    }
+
+    internal bool TryConsumeTransitionPairs(int count)
+    {
+        if (count < 0 || count > RemainingTransitionPairs)
+            return false;
+        TransitionPairs += count;
+        return true;
+    }
+
     internal bool TryConsumeTraceIntervals(int count)
     {
         if (count < 0 || count > RemainingTraceIntervals)
@@ -133,6 +158,8 @@ internal sealed class NavigationWorkMeter
         ExpandedNodes = 0;
         EvaluatedEdges = 0;
         ConnectionLegs = 0;
+        TransitionCandidates = 0;
+        TransitionPairs = 0;
         TraceIntervals = 0;
         CoveredVoxelIntervals = 0;
         SimplificationRays = 0;

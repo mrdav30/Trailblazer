@@ -184,6 +184,20 @@ internal sealed partial class NavigationWorldGraph
         return page?.GetOutgoingEnumerator(this, source) ?? default;
     }
 
+    internal NavigationTransitionPage.Enumerator EnumerateOutgoingTransitionCandidates(
+        NavigationMediumStateRef source)
+    {
+        if (!source.IsValid)
+            return default;
+        NavigationMapInstance instance = _instances.Get(source.Node.MapOrdinal);
+        _transitionPages.TryGet(
+            new NavigationTransitionPageAddress(
+                instance.MapId,
+                source.Node.CellSlot / NavigationSemanticPage.SlotCount),
+            out NavigationTransitionPage page);
+        return page?.GetOutgoingCandidateEnumerator(this, source) ?? default;
+    }
+
     internal NavigationTransitionPage.Enumerator EnumerateIncomingTransitions(
         NavigationMediumStateRef destination)
     {
@@ -196,6 +210,20 @@ internal sealed partial class NavigationWorldGraph
                 destination.Node.CellSlot / NavigationSemanticPage.SlotCount),
             out NavigationTransitionPage page);
         return page?.GetIncomingEnumerator(this, destination) ?? default;
+    }
+
+    internal NavigationTransitionPage.Enumerator EnumerateIncomingTransitionCandidates(
+        NavigationMediumStateRef destination)
+    {
+        if (!destination.IsValid)
+            return default;
+        NavigationMapInstance instance = _instances.Get(destination.Node.MapOrdinal);
+        _transitionPages.TryGet(
+            new NavigationTransitionPageAddress(
+                instance.MapId,
+                destination.Node.CellSlot / NavigationSemanticPage.SlotCount),
+            out NavigationTransitionPage page);
+        return page?.GetIncomingCandidateEnumerator(this, destination) ?? default;
     }
 
     internal bool TryGetPublishedTransition(
@@ -230,6 +258,20 @@ internal sealed partial class NavigationWorldGraph
             return false;
         }
         return outgoing ? source.Equals(state) : destination.Equals(state);
+    }
+
+    internal bool IsTransitionEndpoint(
+        NavigationPublishedTransition transition,
+        NavigationMediumStateRef state,
+        bool outgoing)
+    {
+        if (!TryGetNodeAddress(state.Node, out NavigationCellAddress address))
+            return false;
+        return outgoing
+            ? state.Medium == transition.Definition.SourceMedium
+                && address.Equals(transition.SourceAddress)
+            : state.Medium == transition.Definition.DestinationMedium
+                && address.Equals(transition.Definition.Destination);
     }
 
     internal int MapCount => _instances.Count;

@@ -37,6 +37,8 @@ internal sealed class NavigationDependencyWorkspace
 
     internal int ComponentCount { get; private set; }
 
+    internal bool HasTransitionDependency { get; private set; }
+
     internal void Reset()
     {
         if (PageCount > 0)
@@ -45,6 +47,7 @@ internal sealed class NavigationDependencyWorkspace
             Array.Clear(Components, 0, ComponentCount);
         PageCount = 0;
         ComponentCount = 0;
+        HasTransitionDependency = false;
         _componentSet.Reset();
         _pageSet.Reset();
     }
@@ -68,6 +71,8 @@ internal sealed class NavigationDependencyWorkspace
         Pages[PageCount++] = new GraphPageDependencyAddress(mapId, pageIndex);
         return true;
     }
+
+    internal void RecordTransitionDependency() => HasTransitionDependency = true;
 
     internal bool TryCountMissing(
         NavigationDependencyWorkspace source,
@@ -114,5 +119,7 @@ internal sealed class NavigationDependencyWorkspace
             GraphPageDependencyAddress page = source.Pages[i];
             TryRecordPage(page.MapId, page.PageIndex);
         }
+        if (source.HasTransitionDependency)
+            HasTransitionDependency = true;
     }
 }

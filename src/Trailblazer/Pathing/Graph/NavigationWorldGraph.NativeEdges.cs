@@ -59,12 +59,48 @@ internal sealed partial class NavigationWorldGraph
     }
 
     internal bool TryGetNodeState(NavigationNodeRef node, out NavigationNodeState state)
+        => TryGetNodeState(node, TraversalMedium.Solid, out state);
+
+    internal bool TryGetNodeState(
+        NavigationNodeRef node,
+        TraversalMedium medium,
+        out NavigationNodeState state)
     {
         if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out VoxelIndex index)
+            || !NavigationCell.IsKnownMedium(medium)
             || IsSurfaceAddressClosed(
                 new NavigationCellAddress(instance!.MapId, index),
-                TraversalMedium.Solid)
-            || !instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell)
+                medium)
+            || !TryGetRawNodeState(node, instance, index, out state))
+        {
+            state = default;
+            return false;
+        }
+
+        return true;
+    }
+
+    internal bool TryGetRawNodeState(
+        NavigationNodeRef node,
+        out NavigationNodeState state)
+    {
+        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out VoxelIndex index)
+            || !TryGetRawNodeState(node, instance!, index, out state))
+        {
+            state = default;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryGetRawNodeState(
+        NavigationNodeRef node,
+        NavigationMapInstance instance,
+        VoxelIndex index,
+        out NavigationNodeState state)
+    {
+        if (!instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell)
             || !instance.Map.GridBinding.TryGetCellPrism(index, out GridCellPrism prism))
         {
             state = default;
@@ -79,6 +115,87 @@ internal sealed partial class NavigationWorldGraph
             prism.Center,
             new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z));
         return true;
+    }
+
+    internal int GetCompleteDirectionCount(NavigationNodeRef node)
+    {
+        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out _))
+            return 0;
+        return instance!.Map.GridBinding.Configuration.TopologyKind
+            == GridTopologyKind.HexPrism
+                ? HexDirectionUtility.Offsets.Length
+                : RectangularDirectionUtility.Offsets.Length;
+    }
+
+    internal bool TryGetStructuralCompleteMediumNeighbor(
+        NavigationMediumStateRef source,
+        int directionOrdinal,
+        out NavigationMediumStateRef neighbor,
+        out bool isPrimary)
+    {
+        if (!TryGetCompleteNeighbor(
+                source.Node,
+                directionOrdinal,
+                out NavigationNodeRef neighborNode,
+                out isPrimary)
+            || !TryGetNodeAddress(neighborNode, out NavigationCellAddress address))
+        {
+            neighbor = default;
+            return false;
+        }
+        return TryGetStructuralMediumStateRef(address, source.Medium, out neighbor);
+    }
+
+    internal bool TryGetCompleteNeighbor(
+        NavigationNodeRef source,
+        int directionOrdinal,
+        out NavigationNodeRef neighbor,
+        out bool isPrimary)
+    {
+        if (!TryGetNodeLocation(
+                source,
+                out NavigationMapInstance? instance,
+                out VoxelIndex index))
+        {
+            neighbor = default;
+            isPrimary = false;
+            return false;
+        }
+
+        bool hex = instance!.Map.GridBinding.Configuration.TopologyKind
+            == GridTopologyKind.HexPrism;
+        int count = hex
+            ? HexDirectionUtility.Offsets.Length
+            : RectangularDirectionUtility.Offsets.Length;
+        if ((uint)directionOrdinal >= (uint)count)
+        {
+            neighbor = default;
+            isPrimary = false;
+            return false;
+        }
+
+        VoxelIndex offset;
+        if (hex)
+        {
+            HexDirection direction = HexDirectionUtility.All[directionOrdinal];
+            offset = HexDirectionUtility.GetOffset(direction);
+            isPrimary = HexDirectionUtility.IsPlanar(direction)
+                || HexDirectionUtility.IsVertical(direction);
+        }
+        else
+        {
+            RectangularDirection direction = RectangularDirectionUtility.All[
+                directionOrdinal];
+            (int x, int y, int z) rectangular = RectangularDirectionUtility.Offsets[
+                directionOrdinal];
+            offset = new VoxelIndex(rectangular.x, rectangular.y, rectangular.z);
+            isPrimary = RectangularDirectionUtility.IsPerpendicularNeighbor(direction);
+        }
+
+        var address = new NavigationCellAddress(
+            instance.MapId,
+            new VoxelIndex(index.x + offset.x, index.y + offset.y, index.z + offset.z));
+        return TryGetNodeRef(address, out neighbor);
     }
 
     internal bool TryGetMediumStateRef(
@@ -138,8 +255,25 @@ internal sealed partial class NavigationWorldGraph
         int directionOrdinal,
         out NavigationMediumStateRef neighbor)
     {
-        if (!TryGetNodeLocation(
+        if (!TryGetPrimaryNeighbor(
                 source.Node,
+                directionOrdinal,
+                out NavigationNodeRef neighborNode)
+            || !TryGetNodeAddress(neighborNode, out NavigationCellAddress address))
+        {
+            neighbor = default;
+            return false;
+        }
+        return TryGetStructuralMediumStateRef(address, source.Medium, out neighbor);
+    }
+
+    internal bool TryGetPrimaryNeighbor(
+        NavigationNodeRef source,
+        int directionOrdinal,
+        out NavigationNodeRef neighbor)
+    {
+        if (!TryGetNodeLocation(
+                source,
                 out NavigationMapInstance? instance,
                 out VoxelIndex index))
         {
@@ -171,7 +305,7 @@ internal sealed partial class NavigationWorldGraph
         var address = new NavigationCellAddress(
             instance.MapId,
             new VoxelIndex(index.x + offset.x, index.y + offset.y, index.z + offset.z));
-        return TryGetStructuralMediumStateRef(address, source.Medium, out neighbor);
+        return TryGetNodeRef(address, out neighbor);
     }
 
     internal NavigationNativeSurfaceEdgeEnumerator EnumerateNativeSurfaceEdges(

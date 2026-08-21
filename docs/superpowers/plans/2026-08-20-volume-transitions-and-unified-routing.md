@@ -224,31 +224,30 @@
 
 **Files:**
 
-- Modify: `src/Trailblazer/Pathing/Graph/NavigationGraphEdge.cs`
 - Add: `src/Trailblazer/Pathing/Graph/NavigationTraversalEdgeEnumerator.cs`
 - Add: `src/Trailblazer/Pathing/Graph/NavigationIncomingTraversalEdgeEnumerator.cs`
 - Add: `src/Trailblazer/Pathing/Graph/NavigationVolumeEdgeEvaluator.cs`
 - Add: `src/Trailblazer/Pathing/Graph/NavigationTransitionEdgeEvaluator.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationWorldGraph.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationWorldGraph.NativeEdges.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationTransitionPage.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationVolumeAnchorEvaluator.cs`
 - Modify: `src/Trailblazer/Pathing/Graph/TraversalEvaluator.cs`
-- Modify: `src/Trailblazer/Pathing/Graph/NavigationSurfaceEdgeEnumerator.cs`
-- Modify only as needed for composition: `src/Trailblazer/Pathing/Graph/NavigationIncomingSurfaceEdgeEnumerator.cs`
-- Modify: `src/Trailblazer/Pathing/Graph/NavigationDistanceMath.cs`
 - Modify: `src/Trailblazer/Pathing/Search/NavigationDependencyWorkspace.cs`
-- Modify: `src/Trailblazer/Pathing/Query/NavigationWorkBudget.cs`
 - Modify: `src/Trailblazer/Pathing/Query/NavigationWorkMeter.cs`
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/NavigationVolumeEdgeTests.cs`
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/NavigationTransitionEdgeTests.cs`
 
-- [ ] RED unchanged Solid native/seam/explicit behavior through the dispatcher.
-- [ ] RED Gas/Liquid positive-face movement using resolved volume anchors plus existing GridForge portal/traversal/body-segment fast path without step/drop checks, and covered-prism union fallback for multi-cell/cross-grid bodies.
-- [ ] RED rectangular 2-axis/3-axis and pointy/flat hex shortcuts through GridForge's complete direction sets and swept-body operation; missing/wrong-medium/blocked/forbidden/large-body witnesses reject and record dependencies.
-- [ ] RED exact Fixed64 shortcut costs: anisotropic sqrt2/sqrt3 geometry with `TryCeiling`; target cell/area enter cost once; witness enter cost zero.
-- [ ] RED same-medium Jump/Climb plus medium-changing anchored/rule actions, SameCell medium-anchor points, PositiveFaceContact directed contact points, explicit point-override leg validation, forward/reverse canonical ordinals, capabilities, policy, locomotion hints, teleporter `ActionCost`, and zero heuristic when transitions are enabled.
-- [ ] Implement one dispatcher that delegates to existing surface, stateless volume, or transition evaluation; retain yielding state only for the case that needs it.
-- [ ] Meter base edges, shortcut candidates, swept coverage, union checks, rule candidates, transition checks, and dependency merges exactly once.
-- [ ] Keep query-time volume candidate count <=20 rect / <=12 hex; no per-node generated edge storage, recursive ray, topology formulas, or per-edge allocation.
-- [ ] Reuse both GridForge covered-cell result/scratch objects already owned by the A*/Flow slot's existing `NavigationRayWorkspace`; do not add a volume-shortcut workspace, duplicate buffer/scratch, capacity family, or pool.
-- [ ] Run evaluator/geometry/work-meter Release + ReleaseLean gates, warmed allocation checks, reviews, and commit: `feat(pathing): evaluate unified medium edges`.
+- [x] RED unchanged Solid native/seam/explicit behavior through the dispatcher.
+- [x] RED Gas/Liquid positive-face movement using resolved volume anchors plus existing GridForge portal/traversal/body-segment fast path without step/drop checks, and covered-prism union fallback for multi-cell/cross-grid bodies. Semantic `PositiveFaceContact` requires the actual agent profile to fit its directed portal; same-medium/override volume action legs retain the shared swept-union authority.
+- [x] RED rectangular 2-axis/3-axis and pointy/flat hex shortcuts through GridForge's complete direction sets and swept-body operation; missing/wrong-medium/blocked/forbidden/large-body witnesses reject and record dependencies.
+- [x] RED exact Fixed64 shortcut costs: anisotropic sqrt2/sqrt3 geometry with `TryCeiling`; target cell/area enter cost once; witness enter cost zero.
+- [x] RED same-medium Jump/Climb plus medium-changing anchored/rule actions, SameCell medium-anchor points, PositiveFaceContact directed contact points, explicit point-override leg validation, forward/reverse canonical ordinals, capabilities, policy, locomotion hints, teleporter `ActionCost`, and zero heuristic when transitions are enabled.
+- [x] Implement one dispatcher that delegates to existing surface, stateless volume, or transition evaluation; retain yielding state only for the case that needs it. Base-family order remains unchanged; semantic definitions/rules then use destination/medium/type/tag/ID order, and incoming traversal replays the predecessor's forward dispatcher to recover the exact ordinal.
+- [x] Meter base edges, shortcut candidates, swept coverage, union checks, rule rows, each procedural primary/seam contact, transition checks, and dependency merges exactly once; long seam rows resume through the existing cursor with no unmetered scan.
+- [x] Keep query-time volume candidate count <=20 rect / <=12 hex; no per-node generated edge storage, recursive ray, topology formulas, or per-edge allocation.
+- [x] Reuse both GridForge covered-cell result/scratch objects already owned by the A*/Flow slot's existing `NavigationRayWorkspace`; do not add a volume-shortcut workspace, duplicate buffer/scratch, capacity family, or pool.
+- [x] Run evaluator/geometry/work-meter Release + ReleaseLean gates, warmed allocation checks, reviews, and commit: `feat(pathing): evaluate unified medium edges`.
 
 ## Task 7: Activate Volume-Aware Navigation Rays
 

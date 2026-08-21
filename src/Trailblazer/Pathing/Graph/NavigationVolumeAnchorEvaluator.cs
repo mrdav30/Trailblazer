@@ -56,9 +56,8 @@ internal readonly struct NavigationVolumeAnchorEvaluator
     {
         footAnchor = default;
         qualifyingMedia = TraversalMedia.None;
-        ulong before = _world.ChangeSequence;
         if (!_graph.TryGetNodeAddress(node, out NavigationCellAddress address)
-            || !_graph.TryGetNodeState(node, out NavigationNodeState state))
+            || !_graph.TryGetRawNodeState(node, out NavigationNodeState state))
         {
             return NavigationVolumeAnchorStatus.Stale;
         }
@@ -68,18 +67,76 @@ internal readonly struct NavigationVolumeAnchorEvaluator
         {
             return NavigationVolumeAnchorStatus.CostOverflow;
         }
-        if (!_graph.TryGetMap(address.MapId, out NavigationMapInstance? instance)
-            || instance == null)
+
+        return Trace(
+            address,
+            address,
+            footAnchor,
+            footAnchor,
+            requestedMedia,
+            meter,
+            dependencies,
+            out qualifyingMedia);
+    }
+
+    internal NavigationVolumeAnchorStatus EvaluateSegment(
+        NavigationMediumStateRef source,
+        NavigationMediumStateRef target,
+        Vector3d sourceFootAnchor,
+        Vector3d targetFootAnchor,
+        NavigationWorkMeter meter,
+        NavigationDependencyWorkspace dependencies)
+    {
+        if (source.Medium != target.Medium
+            || !_graph.TryGetNodeAddress(source.Node, out NavigationCellAddress sourceAddress)
+            || !_graph.TryGetNodeAddress(target.Node, out NavigationCellAddress targetAddress))
         {
             return NavigationVolumeAnchorStatus.Stale;
         }
 
-        NavigationGridGenerationIdentity identity = instance.GridIdentity;
-        var cell = new WorldVoxelIndex(
-            identity.WorldSpawnToken,
-            identity.GridIndex,
-            identity.GridSpawnToken,
-            address.Index);
+        return Trace(
+            sourceAddress,
+            targetAddress,
+            sourceFootAnchor,
+            targetFootAnchor,
+            NavigationCell.ToMedia(source.Medium),
+            meter,
+            dependencies,
+            out _);
+    }
+
+    private NavigationVolumeAnchorStatus Trace(
+        NavigationCellAddress sourceAddress,
+        NavigationCellAddress targetAddress,
+        Vector3d sourceFootAnchor,
+        Vector3d targetFootAnchor,
+        TraversalMedia requestedMedia,
+        NavigationWorkMeter meter,
+        NavigationDependencyWorkspace dependencies,
+        out TraversalMedia qualifyingMedia)
+    {
+        qualifyingMedia = TraversalMedia.None;
+        ulong before = _world.ChangeSequence;
+        if (!_graph.TryGetMap(sourceAddress.MapId, out NavigationMapInstance? sourceInstance)
+            || sourceInstance == null
+            || !_graph.TryGetMap(targetAddress.MapId, out NavigationMapInstance? targetInstance)
+            || targetInstance == null)
+        {
+            return NavigationVolumeAnchorStatus.Stale;
+        }
+
+        NavigationGridGenerationIdentity sourceIdentity = sourceInstance.GridIdentity;
+        NavigationGridGenerationIdentity targetIdentity = targetInstance.GridIdentity;
+        var sourceCell = new WorldVoxelIndex(
+            sourceIdentity.WorldSpawnToken,
+            sourceIdentity.GridIndex,
+            sourceIdentity.GridSpawnToken,
+            sourceAddress.Index);
+        var targetCell = new WorldVoxelIndex(
+            targetIdentity.WorldSpawnToken,
+            targetIdentity.GridIndex,
+            targetIdentity.GridSpawnToken,
+            targetAddress.Index);
         int gridLimit = Math.Min(_workspace.MapCapacity, meter.RemainingLookupProbes);
         int addressLimit = Math.Min(
             _workspace.CoveredAddressCapacity,
@@ -87,10 +144,10 @@ internal readonly struct NavigationVolumeAnchorEvaluator
         long candidateWorkLimit = checked((long)gridLimit + addressLimit);
         GridNavigationBodyTraceReport report = GridTracer.TraceNavigationBodyInto(
             _world,
-            cell,
-            cell,
-            footAnchor,
-            footAnchor,
+            sourceCell,
+            targetCell,
+            sourceFootAnchor,
+            targetFootAnchor,
             _profile.Shape.Radius,
             _profile.Shape.Height,
             _workspace.BodyTraceCells,

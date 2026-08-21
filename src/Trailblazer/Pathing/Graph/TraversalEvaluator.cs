@@ -110,6 +110,7 @@ internal readonly struct TraversalEvaluator
     private readonly NavigationAgentProfile _profile;
     private readonly NavigationAreaPolicy _areaPolicy;
     private readonly TraversalMedia _medium;
+    private readonly TraversalMedium _exactMedium;
 
     internal TraversalEvaluator(
         NavigationWorldGraph graph,
@@ -130,11 +131,14 @@ internal readonly struct TraversalEvaluator
         _profile = profile;
         _areaPolicy = areaPolicy;
         _medium = resolvedMedium;
+        _exactMedium = medium;
     }
 
     internal NavigationAgentProfile Profile => _profile;
 
     internal NavigationAreaPolicy AreaPolicy => _areaPolicy;
+
+    internal NavigationWorldGraph Graph => _graph;
 
     internal bool TryGetPassableNodeState(
         NavigationNodeRef node,
@@ -640,13 +644,13 @@ internal readonly struct TraversalEvaluator
             : TraversalEvaluationStatus.Impassable;
     }
 
-    private bool TryGetPassableNode(
+    internal bool TryGetPassableNode(
         NavigationNodeRef node,
         out NavigationNodeState state,
         out NavigationAreaRule areaRule)
     {
         areaRule = default;
-        if (!_graph.TryGetNodeState(node, out state)
+        if (!_graph.TryGetNodeState(node, _exactMedium, out state)
             || !state.IsPresent
             || state.ObstacleCount != 0
             || (_profile.AllowedMedia & _medium) != _medium

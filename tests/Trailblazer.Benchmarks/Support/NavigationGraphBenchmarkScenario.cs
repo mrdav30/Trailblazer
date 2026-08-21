@@ -136,6 +136,7 @@ internal static class NavigationGraphBenchmarkScenario
             pageCapacity);
         long maximumFlowPayloadBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
             nodeCapacity,
+            nodeCapacity - 1,
             componentCount: 1,
             pageCapacity);
         NavigationQueryLimits queryLimits = new(
@@ -196,6 +197,7 @@ internal static class NavigationGraphBenchmarkScenario
         NavigationQueryLimits query = settings.QueryLimits;
         long maximumFlowPayloadBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
             nodeCapacity,
+            nodeCapacity - 1,
             componentCount: 2,
             query.FlowWorkspaceEndpointPageCapacity);
         var articulationQueryLimits = new NavigationQueryLimits(

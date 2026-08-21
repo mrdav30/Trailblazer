@@ -72,6 +72,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
         var workspace = NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace();
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             1,
             fixture.Far.RetainedBytes,
             fixture.Far.RetainedBytes,
@@ -108,7 +109,10 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             {
                 firstError = error;
             }
-        }) { IsBackground = true };
+        })
+        {
+            IsBackground = true
+        };
         var secondThread = new Thread(() =>
         {
             secondStarted.Set();
@@ -120,7 +124,10 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             {
                 secondError = error;
             }
-        }) { IsBackground = true };
+        })
+        {
+            IsBackground = true
+        };
 
         lock (workspace.SyncRoot)
         {
@@ -252,7 +259,10 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             {
                 sampleError = error;
             }
-        }) { IsBackground = true };
+        })
+        {
+            IsBackground = true
+        };
 
         lock (raySync)
         {
@@ -341,7 +351,6 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
 
         long before = System.GC.GetAllocatedBytesForCurrentThread();
         NavigationGuideStatus status = cache.TryCreateGuide(
-            fixture.World,
             fixture.Store,
             new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
             out NavigationFlowFieldLease guide);
@@ -458,6 +467,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
 
     private static NavigationFlowFieldPayloadCache CreateCache(
         NavigationFlowFieldCacheTestHarness.LineFixture fixture) => new(
+        fixture.World,
         1,
         fixture.Far.RetainedBytes,
         fixture.Far.RetainedBytes,
@@ -489,7 +499,8 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             fixture.Store.Current,
             fixture.Far.Key,
             fixture.FarOrigin,
-            out NavigationFlowFieldPayloadLease payloadLease);
+            out NavigationFlowFieldPayloadLease payloadLease,
+            out _);
         if (checkout == NavigationFlowFieldStatus.Pending)
         {
             if (!cache.TryReservePayload(
@@ -512,7 +523,6 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             return default;
         }
         if (cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide) != NavigationGuideStatus.Success)

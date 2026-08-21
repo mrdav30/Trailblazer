@@ -157,7 +157,7 @@ internal sealed class NavigationAStarGuideLease
                     >= (uint)payload.TransitionInstructions.Length
                 || !instruction.MatchesCompletion(
                     this,
-                    generation,
+                    (ulong)generation,
                     _currentWaypointOrdinal))
             {
                 return NavigationAStarQueryStatus.Stale;
@@ -238,7 +238,7 @@ internal sealed class NavigationAStarGuideLease
         }
         NavigationTransitionInstruction stamped = payload
             .TransitionInstructions[current.TransitionOrdinal]
-            .WithCompletionStamp(this, _generation, _currentWaypointOrdinal);
+            .WithCompletionStamp(this, (ulong)_generation, _currentWaypointOrdinal);
         step = new NavigationGuideStep(
             current.Address,
             current.Position,

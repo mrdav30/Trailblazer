@@ -20,14 +20,16 @@ internal sealed class NavigationFlowFieldGuideLease
     private readonly GridCoveredAddressGeneration[] _coveredAddressGenerations;
     private readonly GridCoveredAddress[] _coveredAddressOutput;
     private NavigationFlowFieldPayloadCache? _owner;
-    private GridWorld? _world;
     private NavigationWorldGraphStore? _store;
     private NavigationCellAddress _currentSource;
+    private TraversalMedium _currentMedium;
     private Fixed64 _originIntegrationCost;
     private NavigationGuideStatus _status;
     private int _payloadSlot;
     private ulong _payloadGeneration;
     private ulong _generation;
+    private long _sampleOrdinal;
+    private bool _hasPendingTransition;
 
     internal NavigationFlowFieldGuideLease(int coveredAddressGenerationCapacity)
     {
@@ -52,17 +54,16 @@ internal sealed class NavigationFlowFieldGuideLease
 
     internal void Bind(
         NavigationFlowFieldPayloadCache owner,
-        GridWorld world,
         NavigationWorldGraphStore store,
         int payloadSlot,
         ulong payloadGeneration,
         NavigationCellAddress resolvedOrigin,
+        TraversalMedium startMedium,
         Fixed64 originIntegrationCost)
     {
         lock (_sync)
         {
             if (_owner != null
-                || _world != null
                 || _store != null
                 || _payloadSlot >= 0)
                 throw new InvalidOperationException("The flow guide lease is already active.");
@@ -70,12 +71,14 @@ internal sealed class NavigationFlowFieldGuideLease
                 throw new InvalidOperationException("The flow guide generation is exhausted.");
             _generation++;
             _owner = owner;
-            _world = world;
             _store = store;
             _payloadSlot = payloadSlot;
             _payloadGeneration = payloadGeneration;
             _currentSource = resolvedOrigin;
+            _currentMedium = startMedium;
             _originIntegrationCost = originIntegrationCost;
+            _sampleOrdinal = 0;
+            _hasPendingTransition = false;
             _status = NavigationGuideStatus.Success;
         }
     }
@@ -107,26 +110,12 @@ internal sealed class NavigationFlowFieldGuideLease
     internal NavigationGuideStatus TrySample(
         ulong generation,
         Vector3d actualFootPosition,
-        GuideSampleWorkBudget budget,
-        out Vector3d heading)
-    {
-        var meter = new GuideSampleWorkMeter(budget);
-        return TrySample(
-            generation,
-            actualFootPosition,
-            ref meter,
-            out heading);
-    }
-
-    internal NavigationGuideStatus TrySample(
-        ulong generation,
-        Vector3d actualFootPosition,
         ref GuideSampleWorkMeter meter,
-        out Vector3d heading)
+        out NavigationFlowSample sample)
     {
         lock (_sync)
         {
-            heading = Vector3d.Zero;
+            sample = default;
             if (!IsGenerationActiveUnderLock(generation))
                 return NavigationGuideStatus.Stale;
             if (_status != NavigationGuideStatus.Success)
@@ -134,7 +123,7 @@ internal sealed class NavigationFlowFieldGuideLease
             if (!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload payload))
                 return MarkStaleUnderLock();
             NavigationFlowFieldPayloadCache owner = _owner!;
-            GridWorld world = _world!;
+            GridWorld world = owner.World;
             ulong worldSequence = world.ChangeSequence;
             NavigationWorldGraphStore store = _store!;
             NavigationWorldGraphLease? graphLease = store.TryAcquire();
@@ -152,13 +141,16 @@ internal sealed class NavigationFlowFieldGuideLease
                     graph,
                     payload,
                     _currentSource,
+                    _currentMedium,
                     actualFootPosition,
                     ref meter,
                     _coveredAddressCursor,
                     _coveredAddressGenerations,
                     _coveredAddressOutput,
                     owner.ImmediateRayWorkspace,
+                    out NavigationFlowFieldNode currentNode,
                     out candidateSource,
+                    out Vector3d target,
                     out Vector3d candidateHeading);
                 if (!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload current)
                     || !ReferenceEquals(current, payload)
@@ -170,11 +162,97 @@ internal sealed class NavigationFlowFieldGuideLease
                     return MarkStaleUnderLock();
                 if (status == NavigationGuideStatus.Success)
                 {
+                    bool sourceChanged = candidateSource != _currentSource;
+                    if (sourceChanged && _sampleOrdinal == long.MaxValue)
+                        return MarkStaleUnderLock();
+                    long candidateSampleOrdinal = sourceChanged
+                        ? _sampleOrdinal + 1L
+                        : _sampleOrdinal;
+                    if (currentNode.TransitionInstructionOrdinal >= 0)
+                    {
+                        NavigationGuideStatus transitionStatus =
+                            TrySampleTransitionUnderLock(
+                            generation,
+                            world,
+                            store,
+                            graph,
+                            owner,
+                            payload,
+                            currentNode,
+                            candidateSource,
+                            candidateSampleOrdinal,
+                            actualFootPosition,
+                            ref meter,
+                            out sample);
+                        if (transitionStatus == NavigationGuideStatus.Stale)
+                            return MarkStaleUnderLock();
+                        if (transitionStatus != NavigationGuideStatus.Success)
+                            return transitionStatus;
+                        if (!TryGetCurrentPayloadUnderLock(
+                                out NavigationFlowFieldPayload transitionPayload)
+                            || !ReferenceEquals(transitionPayload, payload)
+                            || world.ChangeSequence != worldSequence)
+                        {
+                            sample = default;
+                            return MarkStaleUnderLock();
+                        }
+                        _currentSource = candidateSource;
+                        _sampleOrdinal = candidateSampleOrdinal;
+                        _hasPendingTransition = sample.HasTransition;
+                        return NavigationGuideStatus.Success;
+                    }
                     _currentSource = candidateSource;
-                    heading = candidateHeading;
+                    _sampleOrdinal = candidateSampleOrdinal;
+                    sample = new NavigationFlowSample(
+                        candidateHeading,
+                        target,
+                        _currentMedium,
+                        default,
+                        hasTransition: false);
                 }
                 return status;
             }
+        }
+    }
+
+    internal NavigationGuideStatus CompletePendingTransition(
+        ulong generation,
+        in NavigationTransitionInstruction instruction)
+    {
+        lock (_sync)
+        {
+            if (!IsGenerationActiveUnderLock(generation)
+                || !_hasPendingTransition
+                || !TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload payload)
+                || !payload.TryGetNode(
+                    _currentSource,
+                    _currentMedium,
+                    out NavigationFlowFieldNode current)
+                || (uint)current.TransitionInstructionOrdinal
+                    >= (uint)payload.TransitionInstructions.Length
+                || !instruction.MatchesCompletion(
+                    this,
+                    generation,
+                    _sampleOrdinal))
+            {
+                return NavigationGuideStatus.Stale;
+            }
+            NavigationTransitionInstruction expected =
+                payload.TransitionInstructions[current.TransitionInstructionOrdinal];
+            if (expected.SourceAddress != _currentSource
+                || expected.SourceMedium != _currentMedium
+                || expected.DestinationAddress != current.SelectedEdge.Target
+                || expected.DestinationMedium != current.SelectedEdge.TargetMedium)
+            {
+                return MarkStaleUnderLock();
+            }
+            if (_sampleOrdinal == long.MaxValue)
+                return MarkStaleUnderLock();
+            _currentSource = expected.DestinationAddress;
+            _currentMedium = expected.DestinationMedium;
+            _hasPendingTransition = false;
+            _sampleOrdinal++;
+            return NavigationGuideStatus.Success;
         }
     }
 
@@ -192,10 +270,12 @@ internal sealed class NavigationFlowFieldGuideLease
             payloadSlot = _payloadSlot;
             payloadGeneration = _payloadGeneration;
             _owner = null;
-            _world = null;
             _store = null;
             _currentSource = default;
+            _currentMedium = TraversalMedium.Unknown;
             _originIntegrationCost = Fixed64.Zero;
+            _sampleOrdinal = 0;
+            _hasPendingTransition = false;
             _status = NavigationGuideStatus.Stale;
             _payloadSlot = -1;
             _payloadGeneration = 0;
@@ -215,7 +295,6 @@ internal sealed class NavigationFlowFieldGuideLease
         generation != 0
         && generation == _generation
         && _owner != null
-        && _world != null
         && _store != null
         && _payloadSlot >= 0;
 
@@ -230,7 +309,8 @@ internal sealed class NavigationFlowFieldGuideLease
                     _payloadSlot,
                     _payloadGeneration,
                     out payload) == NavigationFlowFieldStatus.Success
-            && store.Current.IsDependencyCurrent(payload.Dependencies))
+            && store.Current.IsDependencyCurrent(payload.Dependencies)
+            && owner.IsWorldCurrent(payload))
         {
             return true;
         }
@@ -242,5 +322,75 @@ internal sealed class NavigationFlowFieldGuideLease
     {
         _status = NavigationGuideStatus.Stale;
         return _status;
+    }
+
+    private NavigationGuideStatus TrySampleTransitionUnderLock(
+        ulong generation,
+        GridWorld world,
+        NavigationWorldGraphStore store,
+        NavigationWorldGraph graph,
+        NavigationFlowFieldPayloadCache owner,
+        NavigationFlowFieldPayload payload,
+        in NavigationFlowFieldNode node,
+        NavigationCellAddress candidateSource,
+        long candidateSampleOrdinal,
+        Vector3d actualFootPosition,
+        ref GuideSampleWorkMeter meter,
+        out NavigationFlowSample sample)
+    {
+        sample = default;
+        if ((uint)node.TransitionInstructionOrdinal
+                >= (uint)payload.TransitionInstructions.Length)
+        {
+            return MarkStaleUnderLock();
+        }
+        NavigationTransitionInstruction instruction =
+            payload.TransitionInstructions[node.TransitionInstructionOrdinal];
+        if (instruction.SourceAddress != candidateSource
+            || instruction.SourceMedium != _currentMedium
+            || instruction.DestinationAddress != node.SelectedEdge.Target
+            || instruction.DestinationMedium != node.SelectedEdge.TargetMedium)
+        {
+            return MarkStaleUnderLock();
+        }
+        NavigationGuideStatus headingStatus;
+        Vector3d heading;
+        if (_hasPendingTransition)
+        {
+            headingStatus = NavigationGuideStatus.Success;
+            heading = Vector3d.Zero;
+        }
+        else
+        {
+            headingStatus = NavigationSelectedEdgeProgressWork.TrySampleTransitionApproach(
+                world,
+                store,
+                graph,
+                payload,
+                candidateSource,
+                _currentMedium,
+                actualFootPosition,
+                instruction.SourcePosition,
+                ref meter,
+                owner.ImmediateRayWorkspace,
+                out heading);
+        }
+        if (headingStatus != NavigationGuideStatus.Success)
+            return headingStatus;
+        bool hasTransition = heading == Vector3d.Zero;
+        if (hasTransition && candidateSampleOrdinal == long.MaxValue)
+            return NavigationGuideStatus.Stale;
+        sample = new NavigationFlowSample(
+            heading,
+            instruction.SourcePosition,
+            _currentMedium,
+            hasTransition
+                ? instruction.WithCompletionStamp(
+                    this,
+                    generation,
+                    candidateSampleOrdinal)
+                : default,
+            hasTransition);
+        return NavigationGuideStatus.Success;
     }
 }

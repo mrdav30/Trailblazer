@@ -24,9 +24,9 @@ internal readonly struct NavigationTransitionInstruction
         Vector3d sourcePosition,
         Vector3d destinationPosition,
         TraversalTransitionLocomotionHints locomotionHints,
-        NavigationAStarGuideLease? completionOwner = null,
-        long acquisitionGeneration = 0,
-        int stepOrdinal = -1)
+        object? completionOwner = null,
+        ulong acquisitionGeneration = 0,
+        long stepOrdinal = -1)
     {
         IdentityKind = identityKind;
         OwnerMapId = ownerMapId;
@@ -66,16 +66,16 @@ internal readonly struct NavigationTransitionInstruction
 
     internal TraversalTransitionLocomotionHints LocomotionHints { get; }
 
-    private long AcquisitionGeneration { get; }
+    private ulong AcquisitionGeneration { get; }
 
-    private int StepOrdinal { get; }
+    private long StepOrdinal { get; }
 
-    private NavigationAStarGuideLease? CompletionOwner { get; }
+    private object? CompletionOwner { get; }
 
     internal NavigationTransitionInstruction WithCompletionStamp(
-        NavigationAStarGuideLease completionOwner,
-        long acquisitionGeneration,
-        int stepOrdinal) => new(
+        object completionOwner,
+        ulong acquisitionGeneration,
+        long stepOrdinal) => new(
         IdentityKind,
         OwnerMapId,
         Id,
@@ -92,9 +92,9 @@ internal readonly struct NavigationTransitionInstruction
         stepOrdinal);
 
     internal bool MatchesCompletion(
-        NavigationAStarGuideLease completionOwner,
-        long acquisitionGeneration,
-        int stepOrdinal) =>
+        object completionOwner,
+        ulong acquisitionGeneration,
+        long stepOrdinal) =>
         ReferenceEquals(CompletionOwner, completionOwner)
         && AcquisitionGeneration == acquisitionGeneration
         && StepOrdinal == stepOrdinal;

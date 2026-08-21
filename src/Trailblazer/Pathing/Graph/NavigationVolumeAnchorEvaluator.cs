@@ -141,7 +141,7 @@ internal readonly struct NavigationVolumeAnchorEvaluator
         int addressLimit = Math.Min(
             _workspace.CoveredAddressCapacity,
             meter.RemainingCoveredVoxelIntervals);
-        long candidateWorkLimit = checked((long)gridLimit + addressLimit);
+        long candidateWorkLimit = meter.RemainingGridCandidateWork;
         GridNavigationBodyTraceReport report = GridTracer.TraceNavigationBodyInto(
             _world,
             sourceCell,

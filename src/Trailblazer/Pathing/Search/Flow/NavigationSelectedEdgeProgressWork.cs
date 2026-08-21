@@ -80,17 +80,39 @@ internal static class NavigationSelectedEdgeProgressWork
         NavigationWorldGraph graph,
         NavigationFlowFieldPayload payload,
         NavigationCellAddress sourceAddress,
+        TraversalMedium medium,
         Vector3d actualFootPosition,
         ref GuideSampleWorkMeter meter,
         GridCoveredAddressCursor coveredAddressCursor,
         GridCoveredAddressGeneration[] coveredAddressGenerations,
         GridCoveredAddress[] coveredAddressOutput,
         NavigationImmediateRayWorkspace immediateRayWorkspace,
+        out NavigationFlowFieldNode currentNode,
         out NavigationCellAddress nextSourceAddress,
+        out Vector3d target,
         out Vector3d heading)
     {
+        currentNode = default;
         nextSourceAddress = sourceAddress;
+        target = default;
         heading = Vector3d.Zero;
+        if (medium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        {
+            return TrySampleVolume(
+                world,
+                store,
+                graph,
+                payload,
+                sourceAddress,
+                medium,
+                actualFootPosition,
+                ref meter,
+                immediateRayWorkspace,
+                out currentNode,
+                out nextSourceAddress,
+                out target,
+                out heading);
+        }
         NavigationCellAddress currentSource = sourceAddress;
         bool allowRecovery = true;
         while (true)
@@ -98,6 +120,7 @@ internal static class NavigationSelectedEdgeProgressWork
             NodeLookupStatus lookup = TryGetNode(
                 payload,
                 currentSource,
+                medium,
                 ref meter,
                 out NavigationFlowFieldNode node);
             if (lookup != NodeLookupStatus.Success)
@@ -106,8 +129,17 @@ internal static class NavigationSelectedEdgeProgressWork
                     ? NavigationGuideStatus.BudgetExceeded
                     : NavigationGuideStatus.Stale;
             }
+            currentNode = node;
+            if (node.TransitionInstructionOrdinal >= 0)
+            {
+                nextSourceAddress = currentSource;
+                return NavigationGuideStatus.Success;
+            }
             if (!graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef)
-                || !graph.TryGetNodeState(sourceRef, out NavigationNodeState sourceState)
+                || !graph.TryGetNodeState(
+                    sourceRef,
+                    medium,
+                    out NavigationNodeState sourceState)
                 || !graph.TryGetSeamPrism(currentSource, out GridCellPrism sourcePrism))
             {
                 return NavigationGuideStatus.Stale;
@@ -115,6 +147,7 @@ internal static class NavigationSelectedEdgeProgressWork
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             bool sourceContains = sourcePrism.Contains(actualFootPosition);
+            target = sourceState.FootAnchor;
             if (currentSource == payload.Key.DestinationAddress)
             {
                 if (sourceContains
@@ -137,6 +170,7 @@ internal static class NavigationSelectedEdgeProgressWork
                     store,
                     graph,
                     payload,
+                    medium,
                     actualFootPosition,
                     ref meter,
                     coveredAddressCursor,
@@ -173,7 +207,11 @@ internal static class NavigationSelectedEdgeProgressWork
                 out NavigationGraphEdge edge);
             if (edgeStatus != NavigationGuideStatus.Success)
                 return edgeStatus;
-            if (!graph.TryGetNodeState(edge.Target, out NavigationNodeState targetState)
+            if (node.SelectedEdge.TargetMedium != medium
+                || !graph.TryGetNodeState(
+                    edge.Target,
+                    medium,
+                    out NavigationNodeState targetState)
                 || !graph.TryGetSeamPrism(
                     node.SelectedEdge.Target,
                     out GridCellPrism targetPrism))
@@ -183,6 +221,7 @@ internal static class NavigationSelectedEdgeProgressWork
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             bool targetContains = targetPrism.Contains(actualFootPosition);
+            target = targetState.FootAnchor;
 
             if (edge.Kind == NavigationGraphEdgeKind.Explicit)
             {
@@ -208,6 +247,7 @@ internal static class NavigationSelectedEdgeProgressWork
                         store,
                         graph,
                         payload,
+                        medium,
                         actualFootPosition,
                         ref meter,
                         coveredAddressCursor,
@@ -276,6 +316,7 @@ internal static class NavigationSelectedEdgeProgressWork
                     store,
                     graph,
                     payload,
+                    medium,
                     actualFootPosition,
                     ref meter,
                     coveredAddressCursor,
@@ -373,9 +414,248 @@ internal static class NavigationSelectedEdgeProgressWork
         return NavigationGuideStatus.Stale;
     }
 
+    private static NavigationGuideStatus TrySampleVolume(
+        GridWorld world,
+        NavigationWorldGraphStore store,
+        NavigationWorldGraph graph,
+        NavigationFlowFieldPayload payload,
+        NavigationCellAddress sourceAddress,
+        TraversalMedium medium,
+        Vector3d actualFootPosition,
+        ref GuideSampleWorkMeter meter,
+        NavigationImmediateRayWorkspace immediateRayWorkspace,
+        out NavigationFlowFieldNode currentNode,
+        out NavigationCellAddress nextSourceAddress,
+        out Vector3d target,
+        out Vector3d heading)
+    {
+        currentNode = default;
+        nextSourceAddress = sourceAddress;
+        target = default;
+        heading = Vector3d.Zero;
+        NavigationCellAddress currentSource = sourceAddress;
+        if (!graph.AreaCatalog.TryGet(
+                payload.Key.AreaPolicy,
+                out NavigationAreaPolicy? areaPolicy)
+            || areaPolicy == null)
+        {
+            return NavigationGuideStatus.Stale;
+        }
+        while (true)
+        {
+            NodeLookupStatus lookup = TryGetNode(
+                payload,
+                currentSource,
+                medium,
+                ref meter,
+                out NavigationFlowFieldNode node);
+            if (lookup != NodeLookupStatus.Success)
+            {
+                return lookup == NodeLookupStatus.BudgetExceeded
+                    ? NavigationGuideStatus.BudgetExceeded
+                    : NavigationGuideStatus.Stale;
+            }
+            currentNode = node;
+            if (node.TransitionInstructionOrdinal >= 0)
+            {
+                nextSourceAddress = currentSource;
+                return NavigationGuideStatus.Success;
+            }
+            if (!graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef)
+                || !graph.TryGetNodeState(
+                    sourceRef,
+                    medium,
+                    out NavigationNodeState sourceState)
+                || !sourceState.TryGetCenteredVolumeFootAnchor(
+                    payload.Key.Agent.Shape.Height,
+                    out Vector3d sourceAnchor))
+            {
+                return NavigationGuideStatus.Stale;
+            }
+            target = sourceAnchor;
+            if (!node.SelectedEdge.IsValid)
+            {
+                nextSourceAddress = currentSource;
+                NavigationGuideStatus destination = RunRay(
+                    world,
+                    store,
+                    graph,
+                    payload,
+                    areaPolicy,
+                    medium,
+                    actualFootPosition,
+                    sourceAnchor,
+                    NavigationRayChainConstraint.SourceOnly(currentSource),
+                    ref meter,
+                    immediateRayWorkspace);
+                return destination == NavigationGuideStatus.Success
+                    ? TrySetHeadingUnchecked(actualFootPosition, sourceAnchor, out heading)
+                    : destination;
+            }
+            if (node.SelectedEdge.TargetMedium != medium
+                || !graph.TryGetNodeRef(
+                    node.SelectedEdge.Target,
+                    out NavigationNodeRef targetRef)
+                || !graph.TryGetNodeState(
+                    targetRef,
+                    medium,
+                    out NavigationNodeState targetState)
+                || !targetState.TryGetCenteredVolumeFootAnchor(
+                    payload.Key.Agent.Shape.Height,
+                    out Vector3d targetAnchor))
+            {
+                return NavigationGuideStatus.Stale;
+            }
+            target = targetAnchor;
+            if (actualFootPosition == targetAnchor)
+            {
+                NavigationGuideStatus arrived = RunRay(
+                    world,
+                    store,
+                    graph,
+                    payload,
+                    areaPolicy,
+                    medium,
+                    actualFootPosition,
+                    actualFootPosition,
+                    NavigationRayChainConstraint.SourceOnly(node.SelectedEdge.Target),
+                    ref meter,
+                    immediateRayWorkspace);
+                if (arrived != NavigationGuideStatus.Success)
+                    return arrived;
+                if (!meter.TryConsumeCursorRebases(1))
+                    return NavigationGuideStatus.BudgetExceeded;
+                currentSource = node.SelectedEdge.Target;
+                nextSourceAddress = currentSource;
+                continue;
+            }
+
+            NavigationGuideStatus status = RunRay(
+                world,
+                store,
+                graph,
+                payload,
+                areaPolicy,
+                medium,
+                actualFootPosition,
+                targetAnchor,
+                NavigationRayChainConstraint.SelectedEdge(
+                    currentSource,
+                    node.SelectedEdge.Target,
+                    node.SelectedEdge.CanonicalOutgoingOrdinal),
+                ref meter,
+                immediateRayWorkspace);
+            if (status != NavigationGuideStatus.Success)
+                return status;
+            nextSourceAddress = currentSource;
+            return TrySetHeadingUnchecked(actualFootPosition, targetAnchor, out heading);
+        }
+    }
+
+    internal static NavigationGuideStatus TrySampleTransitionApproach(
+        GridWorld world,
+        NavigationWorldGraphStore store,
+        NavigationWorldGraph graph,
+        NavigationFlowFieldPayload payload,
+        NavigationCellAddress source,
+        TraversalMedium medium,
+        Vector3d actualFootPosition,
+        Vector3d actionPosition,
+        ref GuideSampleWorkMeter meter,
+        NavigationImmediateRayWorkspace immediateRayWorkspace,
+        out Vector3d heading)
+    {
+        heading = Vector3d.Zero;
+        if (!graph.AreaCatalog.TryGet(
+                payload.Key.AreaPolicy,
+                out NavigationAreaPolicy? areaPolicy)
+            || areaPolicy == null)
+        {
+            return NavigationGuideStatus.Stale;
+        }
+        NavigationGuideStatus status = RunRay(
+            world,
+            store,
+            graph,
+            payload,
+            areaPolicy,
+            medium,
+            actualFootPosition,
+            actionPosition,
+            NavigationRayChainConstraint.SourceOnly(source),
+            ref meter,
+            immediateRayWorkspace);
+        return status == NavigationGuideStatus.Success
+            ? TrySetHeadingUnchecked(actualFootPosition, actionPosition, out heading)
+            : status;
+    }
+
+    private static NavigationGuideStatus RunRay(
+        GridWorld world,
+        NavigationWorldGraphStore store,
+        NavigationWorldGraph graph,
+        NavigationFlowFieldPayload payload,
+        NavigationAreaPolicy areaPolicy,
+        TraversalMedium medium,
+        Vector3d start,
+        Vector3d end,
+        NavigationRayChainConstraint constraint,
+        ref GuideSampleWorkMeter meter,
+        NavigationImmediateRayWorkspace immediateRayWorkspace)
+    {
+        lock (immediateRayWorkspace.SyncRoot)
+        {
+            NavigationWorkMeter rayMeter = immediateRayWorkspace.WorkMeter;
+            rayMeter.ResetForGuideSample(
+                meter.GetCurrentNodeLookupAllowance(),
+                meter.GetCursorLegScanAllowance(),
+                meter.GetPortalCheckAllowance(),
+                meter.GetPrismCheckAllowance(),
+                meter.GetTraceIntervalAllowance());
+            NavigationRayWork ray = immediateRayWorkspace.RayWork;
+            ray.Begin(new NavigationRayRequest(
+                world,
+                store,
+                graph,
+                payload.Key.Agent,
+                areaPolicy,
+                medium,
+                start,
+                end,
+                NavigationRayEndpointAllowance.StartPrefix,
+                constraint));
+            NavigationRayStatus status;
+            try
+            {
+                do
+                {
+                    status = ray.Advance(rayMeter);
+                }
+                while (status == NavigationRayStatus.Pending);
+            }
+            finally
+            {
+                ray.Reset();
+            }
+            bool consumed = meter.TryConsumeCurrentNodeLookupProbes(
+                    checked(rayMeter.LookupProbes + rayMeter.CoveredVoxelIntervals))
+                && meter.TryConsumeCursorLegScans(
+                    checked(rayMeter.EvaluatedEdges + rayMeter.ConnectionLegs))
+                && meter.TryConsumePortalChecks(rayMeter.GuidePortalChecks)
+                && meter.TryConsumePrismChecks(rayMeter.GuidePrismChecks)
+                && meter.TryConsumeTraceIntervals(rayMeter.TraceIntervals);
+            if (!consumed)
+                return NavigationGuideStatus.BudgetExceeded;
+            return status == NavigationRayStatus.Success
+                ? NavigationGuideStatus.Success
+                : MapRayStatus(status);
+        }
+    }
+
     private static NodeLookupStatus TryGetNode(
         NavigationFlowFieldPayload payload,
         NavigationCellAddress address,
+        TraversalMedium medium,
         ref GuideSampleWorkMeter meter,
         out NavigationFlowFieldNode node)
     {
@@ -392,6 +672,8 @@ internal static class NavigationSelectedEdgeProgressWork
             NavigationFlowFieldNode candidate =
                 payload.Nodes[payload.AddressLookupOrdinals[middle]];
             int comparison = candidate.Address.CompareTo(address);
+            if (comparison == 0)
+                comparison = ((int)candidate.Medium).CompareTo((int)medium);
             if (comparison == 0)
             {
                 node = candidate;
@@ -411,6 +693,7 @@ internal static class NavigationSelectedEdgeProgressWork
         NavigationWorldGraphStore store,
         NavigationWorldGraph graph,
         NavigationFlowFieldPayload payload,
+        TraversalMedium medium,
         Vector3d actualFootPosition,
         ref GuideSampleWorkMeter meter,
         GridCoveredAddressCursor coveredAddressCursor,
@@ -437,6 +720,7 @@ internal static class NavigationSelectedEdgeProgressWork
             world,
             graph,
             payload,
+            medium,
             actualFootPosition,
             ref meter,
             coveredAddressCursor,
@@ -450,6 +734,7 @@ internal static class NavigationSelectedEdgeProgressWork
             store,
             graph,
             payload,
+            medium,
             sourceAddress,
             sourceState,
             selected,
@@ -469,6 +754,7 @@ internal static class NavigationSelectedEdgeProgressWork
         NavigationWorldGraphStore store,
         NavigationWorldGraph graph,
         NavigationFlowFieldPayload payload,
+        TraversalMedium medium,
         NavigationCellAddress sourceAddress,
         NavigationNodeState sourceState,
         NavigationSelectedEdgeRef selected,
@@ -513,7 +799,7 @@ internal static class NavigationSelectedEdgeProgressWork
                     graph,
                     payload.Key.Agent,
                     areaPolicy,
-                    TraversalMedium.Solid,
+                    medium,
                     actualFootPosition,
                     target.Position,
                     NavigationRayEndpointAllowance.StartPrefix,
@@ -902,7 +1188,7 @@ internal static class NavigationSelectedEdgeProgressWork
             : NavigationGuideStatus.CostOverflow;
     }
 
-    private static NavigationGuideStatus TrySetHeading(
+    internal static NavigationGuideStatus TrySetHeading(
         Vector3d actualFootPosition,
         Vector3d target,
         ref GuideSampleWorkMeter meter,
@@ -956,6 +1242,7 @@ internal static class NavigationSelectedEdgeProgressWork
         GridWorld world,
         NavigationWorldGraph graph,
         NavigationFlowFieldPayload payload,
+        TraversalMedium medium,
         Vector3d actualFootPosition,
         ref GuideSampleWorkMeter meter,
         GridCoveredAddressCursor cursor,
@@ -1049,6 +1336,7 @@ internal static class NavigationSelectedEdgeProgressWork
                 NavigationGuideStatus candidateStatus = ConsiderCandidate(
                     graph,
                     payload,
+                    medium,
                     actualFootPosition,
                     output[0],
                     ref meter,
@@ -1101,6 +1389,7 @@ internal static class NavigationSelectedEdgeProgressWork
     private static NavigationGuideStatus ConsiderCandidate(
         NavigationWorldGraph graph,
         NavigationFlowFieldPayload payload,
+        TraversalMedium medium,
         Vector3d actualFootPosition,
         GridCoveredAddress candidate,
         ref GuideSampleWorkMeter meter,
@@ -1119,12 +1408,17 @@ internal static class NavigationSelectedEdgeProgressWork
             return NavigationGuideStatus.Success;
         }
         if (!graph.TryGetNodeRef(address, out NavigationNodeRef node)
-            || !graph.TryGetNodeState(node, out NavigationNodeState state)
+            || !graph.TryGetNodeState(node, medium, out NavigationNodeState state)
             || !state.IsPresent)
         {
             return NavigationGuideStatus.Success;
         }
-        NodeLookupStatus lookup = TryGetNode(payload, address, ref meter, out _);
+        NodeLookupStatus lookup = TryGetNode(
+            payload,
+            address,
+            medium,
+            ref meter,
+            out _);
         if (lookup != NodeLookupStatus.Success)
         {
             return lookup == NodeLookupStatus.BudgetExceeded

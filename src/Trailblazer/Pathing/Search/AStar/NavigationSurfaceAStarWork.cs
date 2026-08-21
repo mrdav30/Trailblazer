@@ -102,8 +102,9 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         _workspace.ResetSearch();
         _meter = query.Meter;
         _maximumPayloadBytes = maximumPayloadBytes;
-        _simplificationWorldChangeSequence = world.ChangeSequence;
-        _requiresWorldStamp = query.StartMedium == TraversalMedium.Gas
+        _simplificationWorldChangeSequence = query.WorldChangeSequence;
+        _requiresWorldStamp = query.RequiresWorldStamp
+            || query.StartMedium == TraversalMedium.Gas
             || query.StartMedium == TraversalMedium.Liquid;
         _resultStatus = NavigationSurfaceAStarStatus.Success;
         _useEuclideanHeuristic = !query.Query.AllowTransitions

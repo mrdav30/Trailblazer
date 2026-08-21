@@ -140,6 +140,14 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         }
 
         NavigationResolvedPathQuery resolved = _admission.Result;
+        if (resolved.RequiresWorldStamp
+            && _cache.World.ChangeSequence != resolved.WorldChangeSequence)
+        {
+            resolved.Dispose();
+            DisposeAdmission();
+            MarkReady(NavigationAStarQueryStatus.Stale);
+            return Status;
+        }
         var key = new NavigationAStarPayloadKey(
             resolved.Query,
             resolved.Start.Address,

@@ -209,7 +209,6 @@ public sealed class TrailblazerGuideService
 
             using NavigationFlowQueryResult flowResult = work.TakeResult(inputIndex: 0);
             NavigationGuideStatus guideStatus = gate.PayloadCache.TryCreateGuide(
-                _context.World,
                 _context.Pathing.NavigationGraphStore,
                 flowResult,
                 out NavigationFlowFieldLease guide);

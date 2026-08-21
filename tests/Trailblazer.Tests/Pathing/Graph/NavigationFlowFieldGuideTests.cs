@@ -66,6 +66,7 @@ public sealed class NavigationFlowFieldGuideTests
         NavigationFlowFieldPayloadLease staleAlias = payloadLease;
         fixture.Far.TryGetNode(
                 fixture.FarOrigin,
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode originNode)
             .Should().BeTrue();
         fixture.Graph.TryGetNodeRef(
@@ -82,7 +83,6 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().BeTrue();
 
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -114,7 +114,6 @@ public sealed class NavigationFlowFieldGuideTests
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -158,12 +157,14 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
             .Should().Be(NavigationGuideStatus.Success);
-        payload.TryGetNode(origin, out NavigationFlowFieldNode sourceNode)
+        payload.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode sourceNode)
             .Should().BeTrue();
         fixture.Graph.TryGetNodeRef(origin, out NavigationNodeRef sourceRef)
             .Should().BeTrue();
@@ -227,6 +228,7 @@ public sealed class NavigationFlowFieldGuideTests
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         using NavigationFlowFieldPayloadCache cache = new(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -241,16 +243,15 @@ public sealed class NavigationFlowFieldGuideTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out secondPayload)
+                out secondPayload,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Success);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, firstPayload),
                 out NavigationFlowFieldLease retryGuide)
             .Should().Be(NavigationGuideStatus.Success);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, secondPayload),
                 out NavigationFlowFieldLease freshGuide)
@@ -321,6 +322,7 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress(fixture.MapId, start);
         var target = new NavigationCellAddress(fixture.MapId, destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -328,6 +330,7 @@ public sealed class NavigationFlowFieldGuideTests
             target,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -341,7 +344,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -365,7 +367,10 @@ public sealed class NavigationFlowFieldGuideTests
                 out Vector3d sourcePortal,
                 out _)
             .Should().BeTrue();
-        payload.TryGetNode(origin, out NavigationFlowFieldNode flowNode)
+        payload.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode flowNode)
             .Should().BeTrue();
         NavigationSurfaceEdgeEnumerator edges =
             fixture.Graph.EnumerateStructuralSurfaceEdges(sourceRef);
@@ -478,6 +483,7 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress(fixture.MapId, start);
         var target = new NavigationCellAddress(fixture.MapId, destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -485,6 +491,7 @@ public sealed class NavigationFlowFieldGuideTests
             target,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -498,7 +505,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -566,6 +572,7 @@ public sealed class NavigationFlowFieldGuideTests
             fixture.MapId,
             destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -573,6 +580,7 @@ public sealed class NavigationFlowFieldGuideTests
             destinationAddress,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -586,7 +594,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -623,6 +630,7 @@ public sealed class NavigationFlowFieldGuideTests
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -636,16 +644,15 @@ public sealed class NavigationFlowFieldGuideTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease secondPayload)
+                out NavigationFlowFieldPayloadLease secondPayload,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Success);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, firstPayload),
                 out NavigationFlowFieldLease first)
             .Should().Be(NavigationGuideStatus.Success);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, secondPayload),
                 out NavigationFlowFieldLease second)
@@ -673,7 +680,7 @@ public sealed class NavigationFlowFieldGuideTests
 
         results[0].Status.Should().Be(NavigationGuideStatus.Success);
         results[1].Status.Should().Be(NavigationGuideStatus.BudgetExceeded);
-        results[1].Heading.Should().Be(Vector3d.Zero);
+        results[1].Sample.Heading.Should().Be(Vector3d.Zero);
         first.Dispose();
         second.Dispose();
     }
@@ -749,6 +756,7 @@ public sealed class NavigationFlowFieldGuideTests
         NavigationCellAddress origin = reverse ? targetAddress : sourceAddress;
         NavigationCellAddress destination = reverse ? sourceAddress : targetAddress;
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            fixture.Context.World,
             store,
             fixture.Graph,
             query,
@@ -756,6 +764,7 @@ public sealed class NavigationFlowFieldGuideTests
             destination,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.Context.World,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -769,12 +778,14 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                fixture.Context.World,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
             .Should().Be(NavigationGuideStatus.Success);
-        payload.TryGetNode(origin, out NavigationFlowFieldNode flowNode)
+        payload.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode flowNode)
             .Should().BeTrue();
         fixture.Graph.TryGetNodeRef(origin, out NavigationNodeRef sourceRef)
             .Should().BeTrue();
@@ -860,6 +871,7 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress(fixture.MapId, source);
         var destination = new NavigationCellAddress(fixture.MapId, target);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -867,6 +879,7 @@ public sealed class NavigationFlowFieldGuideTests
             destination,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -880,7 +893,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -948,6 +960,7 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress(fixture.MapId, originIndex);
         var target = new NavigationCellAddress(fixture.MapId, destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -955,6 +968,7 @@ public sealed class NavigationFlowFieldGuideTests
             target,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -968,7 +982,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1037,6 +1050,7 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress(fixture.MapId, originIndex);
         var target = new NavigationCellAddress(fixture.MapId, destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -1044,6 +1058,7 @@ public sealed class NavigationFlowFieldGuideTests
             target,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -1057,7 +1072,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1124,6 +1138,7 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress(fixture.MapId, originIndex);
         var target = new NavigationCellAddress(fixture.MapId, destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -1131,6 +1146,7 @@ public sealed class NavigationFlowFieldGuideTests
             target,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -1144,7 +1160,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1206,6 +1221,7 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress(fixture.MapId, originIndex);
         var target = new NavigationCellAddress(fixture.MapId, destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
             store,
             fixture.Graph,
             query,
@@ -1213,6 +1229,7 @@ public sealed class NavigationFlowFieldGuideTests
             target,
             NavigationFlowFieldStatus.Success);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -1226,7 +1243,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                world,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1369,13 +1385,17 @@ public sealed class NavigationFlowFieldGuideTests
         var origin = new NavigationCellAddress("sample-multi", source);
         var destinationAddress = new NavigationCellAddress("sample-multi", destination);
         NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.RunFlow(
+            context.World,
             store,
             graph,
             query,
             origin,
             destinationAddress,
             NavigationFlowFieldStatus.Success);
-        payload.TryGetNode(origin, out NavigationFlowFieldNode originNode)
+        payload.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode originNode)
             .Should().BeTrue();
         originNode.SelectedEdge.Target.Should().Be(destinationAddress,
             "the explicit connection must beat the expensive native witness route");
@@ -1408,6 +1428,7 @@ public sealed class NavigationFlowFieldGuideTests
         exitTarget.Position.Should().Be(
             selectedEdge.ExplicitConnection.Definition.ExitAnchor);
         using var cache = new NavigationFlowFieldPayloadCache(
+            context.World,
             1,
             payload.RetainedBytes,
             payload.RetainedBytes,
@@ -1421,7 +1442,6 @@ public sealed class NavigationFlowFieldGuideTests
             payload,
             origin);
         cache.TryCreateGuide(
-                context.World,
                 store,
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1527,7 +1547,6 @@ public sealed class NavigationFlowFieldGuideTests
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1573,7 +1592,6 @@ public sealed class NavigationFlowFieldGuideTests
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1615,7 +1633,6 @@ public sealed class NavigationFlowFieldGuideTests
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1652,7 +1669,6 @@ public sealed class NavigationFlowFieldGuideTests
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1667,13 +1683,13 @@ public sealed class NavigationFlowFieldGuideTests
             + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
         var meter = new GuideSampleWorkMeter(GenerousSampleBudget);
 
-        guide.TrySample(actualFoot, ref meter, out Vector3d firstHeading)
+        guide.TrySample(actualFoot, ref meter, out NavigationFlowSample firstSample)
             .Should().Be(NavigationGuideStatus.Success);
-        guide.TrySample(actualFoot, ref meter, out Vector3d exhaustedHeading)
+        guide.TrySample(actualFoot, ref meter, out NavigationFlowSample exhaustedSample)
             .Should().Be(NavigationGuideStatus.BudgetExceeded);
 
-        firstHeading.Should().Be(Vector3d.Backward);
-        exhaustedHeading.Should().Be(Vector3d.Zero);
+        firstSample.Heading.Should().Be(Vector3d.Backward);
+        exhaustedSample.Heading.Should().Be(Vector3d.Zero);
         guide.Dispose();
     }
 
@@ -1696,6 +1712,7 @@ public sealed class NavigationFlowFieldGuideTests
             ? new NavigationImmediateRayWorkspace(8, 64, 64, 128, 0)
             : NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace();
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             1,
             fixture.Far.RetainedBytes,
             fixture.Far.RetainedBytes,
@@ -1705,7 +1722,6 @@ public sealed class NavigationFlowFieldGuideTests
             workspace);
         NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
         cache.TryCreateGuide(
-                fixture.World,
                 fixture.Store,
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
@@ -1730,6 +1746,7 @@ public sealed class NavigationFlowFieldGuideTests
             NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
         fixture.Far.TryGetNode(
                 fixture.FarOrigin,
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode flowNode)
             .Should().BeTrue();
         fixture.Graph.TryGetNodeRef(
@@ -1820,6 +1837,7 @@ public sealed class NavigationFlowFieldGuideTests
 
     private static NavigationFlowFieldPayloadCache CreateCache(
         NavigationFlowFieldCacheTestHarness.LineFixture fixture) => new(
+        fixture.World,
         maxEntries: 1,
         maxReusableBytes: fixture.Far.RetainedBytes,
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,

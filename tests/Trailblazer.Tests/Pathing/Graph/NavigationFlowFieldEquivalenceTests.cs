@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -12,7 +13,6 @@ using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -122,21 +122,28 @@ public sealed class NavigationFlowFieldEquivalenceTests
         NavigationAStarExitTestHarness.SearchResult oracle =
             NavigationAStarExitTestHarness.RunDijkstra(world, fixture.Graph, query);
         NavigationFlowFieldPayload payload = RunFlow(
+            world,
             fixture.Graph,
             ToFlowField(query),
             origin,
             destination);
 
         oracle.Cost.Should().Be((Fixed64)18);
-        payload.TryGetNode(origin, out NavigationFlowFieldNode start).Should().BeTrue();
+        payload.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode start)
+            .Should().BeTrue();
         start.IntegrationCost.Should().Be((Fixed64)18);
         payload.TryGetNode(
                 new NavigationCellAddress(fixture.MapId, cells[1]),
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode first)
             .Should().BeTrue();
         first.IntegrationCost.Should().Be((Fixed64)10);
         payload.TryGetNode(
                 new NavigationCellAddress(fixture.MapId, cells[2]),
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode second)
             .Should().BeTrue();
         second.IntegrationCost.Should().Be((Fixed64)9);
@@ -156,6 +163,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 fixture.Cells[0],
                 fixture.Cells[fixture.Cells.Length - 1]);
             first = RunFlow(
+                firstWorld,
                 fixture.Graph,
                 ToFlowField(query),
                 new NavigationCellAddress(fixture.MapId, fixture.Cells[0]),
@@ -172,6 +180,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 fixture.Cells[0],
                 fixture.Cells[fixture.Cells.Length - 1]);
             second = RunFlow(
+                secondWorld,
                 fixture.Graph,
                 ToFlowField(query),
                 new NavigationCellAddress(fixture.MapId, fixture.Cells[0]),
@@ -211,6 +220,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 source.Cells[0],
                 source.Cells[source.Cells.Length - 1]);
             payload = RunFlow(
+                sourceWorld,
                 source.Graph,
                 ToFlowField(query),
                 new NavigationCellAddress(source.MapId, source.Cells[0]),
@@ -297,6 +307,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
         NavigationCellAddress destination = new(MapId, destinationIndex);
 
         NavigationFlowFieldPayload noPath = RunFlow(
+            world,
             absentGraph,
             ToFlowField(query),
             origin,
@@ -342,11 +353,15 @@ public sealed class NavigationFlowFieldEquivalenceTests
         presentGraph.IsDependencyCurrent(noPath.Dependencies).Should().BeFalse(
             "the structurally adjacent missing predecessor page can restore reachability");
         NavigationFlowFieldPayload reachable = RunFlow(
+            world,
             presentGraph,
             ToFlowField(query),
             origin,
             destination);
-        reachable.TryGetNode(origin, out NavigationFlowFieldNode restored)
+        reachable.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode restored)
             .Should().BeTrue();
         restored.IntegrationCost.Should().Be((Fixed64)2);
     }
@@ -437,6 +452,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
             fixture.MapId,
             destination);
         NavigationFlowFieldPayload payload = RunFlow(
+            world,
             fixture.Graph,
             ToFlowField(query),
             originAddress,
@@ -446,14 +462,17 @@ public sealed class NavigationFlowFieldEquivalenceTests
         aStar.Cost.Should().Be(oracle.Cost, "A* must match the independent oracle");
         payload.TryGetNode(
                 originAddress,
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode flowOrigin)
             .Should().BeTrue();
         payload.TryGetNode(
                 new NavigationCellAddress(fixture.MapId, later),
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode flowLater)
             .Should().BeTrue();
         payload.TryGetNode(
                 new NavigationCellAddress(fixture.MapId, earlier),
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode flowEarlier)
             .Should().BeTrue();
         flowLater.IntegrationCost.Should().Be((Fixed64)108);
@@ -539,6 +558,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
             NavigationAStarExitTestHarness.RunAStar(world, graph, aStarQuery);
         PathQuery flowQuery = ToFlowField(aStarQuery);
         NavigationFlowFieldPayload payload = RunFlow(
+            world,
             graph,
             flowQuery,
             origin,
@@ -547,12 +567,16 @@ public sealed class NavigationFlowFieldEquivalenceTests
         oracle.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
         aStar.Status.Should().Be(oracle.Status);
         aStar.Cost.Should().Be(oracle.Cost);
-        payload.TryGetNode(origin, out NavigationFlowFieldNode flowOrigin)
+        payload.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode flowOrigin)
             .Should().BeTrue();
         flowOrigin.IntegrationCost.Should().Be(oracle.Cost);
     }
 
     private static NavigationFlowFieldPayload RunFlow(
+        GridWorld world,
         NavigationWorldGraph graph,
         PathQuery query,
         NavigationCellAddress origin,
@@ -588,9 +612,11 @@ public sealed class NavigationFlowFieldEquivalenceTests
             policy!,
             TraversalMedium.Solid,
             TraversalMedia.Solid,
-            new NavigationWorkMeter(query.Budget));
+            new NavigationWorkMeter(query.Budget),
+            world.ChangeSequence,
+            requiresWorldStamp: false);
         var workspace = new NavigationFlowFieldWorkspace(0, 512, 512, 512, 512, 512);
-        using var work = new NavigationFlowFieldWork(resolved, workspace);
+        using var work = new NavigationFlowFieldWork(world, resolved, workspace);
         for (int step = 0;
             step < 16_384 && work.Status == NavigationFlowFieldStatus.Pending;
             step++)

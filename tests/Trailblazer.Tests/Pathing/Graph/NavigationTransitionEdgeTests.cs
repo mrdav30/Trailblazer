@@ -9,7 +9,6 @@ using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
@@ -1245,6 +1244,61 @@ public sealed class NavigationTransitionEdgeTests
         status.Should().Be(NavigationTraversalEdgeAdvanceStatus.Complete);
         workspace.Dependencies.PageCount.Should().Be(2);
         meter.TransitionPairs.Should().Be(1);
+    }
+
+    [Fact]
+    public void IncomingRejectedVolumeSource_ShouldRequireTheWorldStamp()
+    {
+        VoxelIndex index = default;
+        var transition = new TraversalTransitionDefinition(
+            "dormant-gas",
+            TraversalTransitionType.Landing,
+            index,
+            TraversalMedium.Gas,
+            new NavigationCellAddress("map", index),
+            TraversalMedium.Solid,
+            additionalCost: Fixed64.Zero);
+        using TrailblazerWorldContext context = CreateContext(
+            index,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            index,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            transition);
+        using NavigationWorldGraphLease lease =
+            context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", index),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef destination)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var incoming = new NavigationIncomingTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            destination,
+            Profile(TraversalMedia.Solid),
+            Policy,
+            workspace,
+            allowTransitions: true);
+        var meter = new NavigationWorkMeter(Budget());
+        NavigationTraversalEdgeAdvanceStatus status =
+            NavigationTraversalEdgeAdvanceStatus.Pending;
+
+        for (int call = 0;
+            call < 256 && status != NavigationTraversalEdgeAdvanceStatus.Complete;
+            call++)
+        {
+            int remaining = 16;
+            int connectionRemaining = int.MaxValue;
+            status = incoming.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+
+        status.Should().Be(NavigationTraversalEdgeAdvanceStatus.Complete);
+        incoming.RequiresWorldStamp.Should().BeTrue();
     }
 
     [Fact]

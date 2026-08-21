@@ -5,11 +5,11 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Grids;
 using GridForge.Spatial;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -17,6 +17,33 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed class NavigationFlowAdmissionTests
 {
+    [Fact]
+    public void DefaultLimits_ShouldCoverTheExactTransitionEnabledFlowEnvelope()
+    {
+        NavigationQueryLimits limits = NavigationQueryLimits.Default;
+        long exactBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
+            limits.FlowWorkspaceNodeCapacity,
+            limits.FlowWorkspaceNodeCapacity - 1,
+            limits.FlowWorkspaceComponentCapacity,
+            limits.FlowWorkspaceEndpointPageCapacity);
+
+        exactBytes.Should().Be(1_012_024L);
+        limits.MaxFlowSinglePayloadBytes.Should().Be(exactBytes);
+
+        using var world = new GridWorld();
+        using var oneByteShort = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: exactBytes,
+            maxSinglePayloadBytes: exactBytes - 1,
+            maxActivePayloadBytes: exactBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        oneByteShort.TryReservePayload(exactBytes, out _).Should().BeFalse();
+    }
+
     [Fact]
     public void WarmCacheHitAdmissionAndPublication_ShouldAllocateZeroBytes()
     {
@@ -324,6 +351,7 @@ public sealed class NavigationFlowAdmissionTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, maxConcurrentLeases: 3);
         long maximumPayloadBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
             nodeCount: 2,
+            transitionInstructionCount: query.AllowTransitions ? 1 : 0,
             componentCount: 1,
             pageCount: 1);
         NavigationQueryLimits limits = CreateLimits(
@@ -395,6 +423,7 @@ public sealed class NavigationFlowAdmissionTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         var workspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             maxEntries: 2,
             maxReusableBytes: 4_096,
             maxSinglePayloadBytes: 2_048,
@@ -403,7 +432,6 @@ public sealed class NavigationFlowAdmissionTests
             guideMapCapacity: 0,
             immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         using var work = new NavigationFlowQueryWork(
-            world,
             store,
             workspace,
             cache);
@@ -429,13 +457,16 @@ public sealed class NavigationFlowAdmissionTests
             new NavigationCellAddress(fixture.MapId, origin));
         result.PayloadLease.TryGetPayload(out NavigationFlowFieldPayload payload)
             .Should().Be(NavigationFlowFieldStatus.Success);
-        payload.TryGetNode(result.ResolvedOrigin, out _).Should().BeTrue();
+        payload.TryGetNode(
+                result.ResolvedOrigin,
+                TraversalMedium.Solid,
+                out _)
+            .Should().BeTrue();
         result.Dispose();
         work.Dispose();
 
         var warmWorkspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2);
         using var warm = new NavigationFlowQueryWork(
-            world,
             store,
             warmWorkspace,
             cache);
@@ -450,6 +481,191 @@ public sealed class NavigationFlowAdmissionTests
         warm.Publish().Should().Be(NavigationFlowQueryStatus.Success);
         using NavigationFlowQueryResult warmResult = warm.TakeResult();
         warmResult.ResolvedOrigin.Should().Be(result.ResolvedOrigin);
+    }
+
+    [Fact]
+    public void CachedSuccess_ShouldRejectGraphMutationBeforePublication()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: fixture.Far.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                fixture.Far.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                fixture.Far,
+                fixture.FarOrigin,
+                ref reservation,
+                out NavigationFlowFieldPayloadLease seeded)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        seeded.Dispose();
+        using var work = new NavigationFlowQueryWork(
+            fixture.Store,
+            new NavigationFlowFieldWorkspace(1, 1, 1, 8, 8, 8),
+            cache);
+        work.Begin(fixture.FarQuery, fixture.Store.TryAcquire()!);
+        for (int step = 0; step < 64 && !work.IsReadyToPublish; step++)
+            work.PrepareSearchOrCheckout(8, 4);
+        work.IsReadyToPublish.Should().BeTrue();
+
+        NavigationWorldGraph changed = fixture.Graph
+            .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+            .WithGraphVersion(fixture.Graph.GraphVersion + 1);
+        fixture.Store.TryPublish(changed)
+            .Should().Be(NavigationCandidatePublication.Published);
+
+        work.Publish().Should().Be(NavigationFlowQueryStatus.Stale);
+        cache.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void CachedNoPath_ShouldRejectRawWorldMutationBeforePublication()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        var proof = new NavigationFlowFieldPayload(
+            fixture.Complete.Key,
+            new[] { fixture.Complete.Nodes[0] },
+            new[] { 0 },
+            Array.Empty<NavigationTransitionInstruction>(),
+            fixture.Complete.Dependencies,
+            isComplete: true,
+            worldChangeSequence: fixture.World.ChangeSequence);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: proof.RetainedBytes,
+            maxSinglePayloadBytes: proof.RetainedBytes,
+            maxActivePayloadBytes: proof.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                proof.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                proof,
+                fixture.FarOrigin,
+                ref reservation,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.NoPath);
+        using var work = new NavigationFlowQueryWork(
+            fixture.Store,
+            new NavigationFlowFieldWorkspace(1, 1, 1, 8, 8, 8),
+            cache);
+        work.Begin(fixture.FarQuery, fixture.Store.TryAcquire()!);
+        for (int step = 0; step < 64 && !work.IsReadyToPublish; step++)
+            work.PrepareSearchOrCheckout(8, 4);
+        work.IsReadyToPublish.Should().BeTrue();
+
+        VoxelGrid grid = fixture.World.ActiveGrids[0];
+        grid.TryGetVoxel(default(VoxelIndex), out Voxel? voxel).Should().BeTrue();
+        grid.TryAddObstacle(voxel!, fixture.World.AllocateObstacleToken())
+            .Should().BeTrue();
+
+        work.Publish().Should().Be(NavigationFlowQueryStatus.Stale);
+        cache.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void QueryWork_ShouldReserveTheExactNoTransitionEnvelope()
+    {
+        using var world = new GridWorld();
+        VoxelIndex origin = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { origin, destination },
+                "flow-transition-envelope");
+        PathQuery baseline = ToFlowField(
+            fixture.CreateQuery(origin, destination, fixture.DefaultProfile));
+        var query = new PathQuery(
+            baseline.Start,
+            baseline.End,
+            baseline.Agent,
+            baseline.AreaPolicy,
+            baseline.Traversal,
+            baseline.Algorithm,
+            baseline.Budget,
+            allowTransitions: false,
+            baseline.FlowField);
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        long exactBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
+            nodeCount: 2,
+            transitionInstructionCount: 0,
+            componentCount: 1,
+            pageCount: 1);
+
+        using (var exactCache = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: exactBytes,
+            maxSinglePayloadBytes: exactBytes,
+            maxActivePayloadBytes: exactBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace()))
+        using (var exact = new NavigationFlowQueryWork(
+            store,
+            new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2),
+            exactCache))
+        {
+            exact.Begin(query, store.TryAcquire()!);
+            for (int step = 0; step < 32 && !exact.IsPrepared; step++)
+            {
+                exact.PrepareSearchOrCheckout(
+                    lookupStepLimit: 4,
+                    endpointCandidateStepLimit: 2);
+            }
+
+            exact.IsPrepared.Should().BeTrue();
+            exact.Status.Should().Be(NavigationFlowQueryStatus.Pending);
+            exactCache.ReservedPayloadBytes.Should().Be(exactBytes);
+        }
+
+        using var shortCache = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: exactBytes,
+            maxSinglePayloadBytes: exactBytes - 1,
+            maxActivePayloadBytes: exactBytes - 1,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        using var oneByteShort = new NavigationFlowQueryWork(
+            store,
+            new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2),
+            shortCache);
+        oneByteShort.Begin(query, store.TryAcquire()!);
+        for (int step = 0; step < 32 && !oneByteShort.IsPrepared; step++)
+        {
+            oneByteShort.PrepareSearchOrCheckout(
+                lookupStepLimit: 4,
+                endpointCandidateStepLimit: 2);
+        }
+
+        oneByteShort.IsPrepared.Should().BeTrue();
+        oneByteShort.Publish().Should().Be(NavigationFlowQueryStatus.CapacityExceeded);
+        shortCache.ReservedPayloadBytes.Should().Be(0);
     }
 
     [Fact]
@@ -482,6 +698,7 @@ public sealed class NavigationFlowAdmissionTests
                 maxConcurrentLeases: 2);
         var workspace = new NavigationFlowFieldWorkspace(1, 1, 1, 2, 2, 2);
         using var cache = new NavigationFlowFieldPayloadCache(
+            world,
             maxEntries: 1,
             maxReusableBytes: 4_096,
             maxSinglePayloadBytes: 2_048,
@@ -489,7 +706,7 @@ public sealed class NavigationFlowAdmissionTests
             maxActiveLeases: 2,
             guideMapCapacity: 0,
             immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
-        using var work = new NavigationFlowQueryWork(world, store, workspace, cache);
+        using var work = new NavigationFlowQueryWork(store, workspace, cache);
         work.Begin(query, store.TryAcquire()!);
         work.IsReadyToPublish.Should().BeTrue();
 

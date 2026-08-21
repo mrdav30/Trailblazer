@@ -5,12 +5,12 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using FluentAssertions;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using FluentAssertions;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing.Graph;
@@ -90,6 +90,7 @@ public sealed class NavigationSearchArchitectureTests
         "NavigationFlowFieldWork.cs",
         "NavigationFlowFieldWorkspace.cs",
         "NavigationFlowQueryWork.cs",
+        "NavigationFlowSample.cs",
         "NavigationSelectedEdgeProgressWork.cs"
     };
 
@@ -372,8 +373,8 @@ public sealed class NavigationSearchArchitectureTests
             "NavigationFlowFieldGuideLease.cs"));
 
         source.Split("world.ChangeSequence", StringSplitOptions.None)
-            .Length.Should().Be(3,
-                "the world epoch must be captured before sampling and checked at commit linearization");
+            .Length.Should().Be(4,
+                "the world epoch must be captured before sampling and checked after progress and at action commit linearization");
         int payloadValidation = source.IndexOf(
             "!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload current)",
             StringComparison.Ordinal);

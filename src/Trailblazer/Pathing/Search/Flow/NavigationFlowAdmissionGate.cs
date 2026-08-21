@@ -50,6 +50,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         _limits = limits;
         _coordinator = coordinator;
         _cache = new NavigationFlowFieldPayloadCache(
+            world,
             limits.MaxFlowCacheEntries,
             limits.MaxFlowReusablePayloadBytes,
             limits.MaxFlowSinglePayloadBytes,
@@ -68,7 +69,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
                 limits.FlowWorkspaceNodeCapacity,
                 limits.RayWorkspaceCoveredAddressCapacity,
                 limits.RayWorkspaceTraceIntervalCapacity);
-            _queries[i] = new NavigationFlowQueryWork(world, store, workspace, _cache);
+            _queries[i] = new NavigationFlowQueryWork(store, workspace, _cache);
         }
         _descriptors = new BatchDescriptor[limits.MaxBatchItems];
     }

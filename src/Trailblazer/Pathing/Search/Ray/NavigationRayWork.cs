@@ -125,7 +125,7 @@ internal sealed class NavigationRayWork
                 : queryMeter!.RemainingTraceIntervals);
         long candidateWorkLimit = useGuideMeter
             ? guideMeter.GetCurrentNodeLookupAllowance()
-            : checked((long)gridLimit + addressLimit);
+            : queryMeter!.RemainingGridCandidateWork;
         ulong before = _request.World.ChangeSequence;
         GridTraceIntervalReport report = GridTracer.TraceIntervalsInto(
             _request.World,
@@ -426,6 +426,7 @@ internal sealed class NavigationRayWork
         ref NavigationRayChainRecord sourceRecord = ref records[sourceOrdinal];
         if (!TryGetIncomingPortal(
                 sourceOrdinal,
+                queryMeter,
                 ref guideMeter,
                 useGuideMeter,
                 out GridNavigationPortal incomingPortal)
@@ -498,7 +499,7 @@ internal sealed class NavigationRayWork
                     return NavigationRayStatus.Stale;
                 if (evaluation != TraversalEvaluationStatus.Passable)
                     continue;
-                if (!TryConsumePortal(ref guideMeter, useGuideMeter)
+                if (!TryConsumePortal(queryMeter, ref guideMeter, useGuideMeter)
                     || !GridCellGeometry.TryGetNavigationPortalTraversalParameters(
                         evidence.SourcePrism,
                         evidence.TargetPrism,
@@ -539,7 +540,7 @@ internal sealed class NavigationRayWork
                 {
                     continue;
                 }
-                if (!TryConsumePrism(ref guideMeter, useGuideMeter)
+                if (!TryConsumePrism(queryMeter, ref guideMeter, useGuideMeter)
                     || !GridCellGeometry.IsNavigationBodySegmentValid(
                         sourcePrism,
                         sourcePoint,
@@ -819,7 +820,7 @@ internal sealed class NavigationRayWork
             cost = evidence.Cost;
             if (!geometryPassable)
                 continue;
-            if (!TryConsumePortal(ref guideMeter, useGuideMeter))
+            if (!TryConsumePortal(queryMeter, ref guideMeter, useGuideMeter))
             {
                 geometryPassable = false;
                 continue;
@@ -870,7 +871,7 @@ internal sealed class NavigationRayWork
                     continue;
                 }
             }
-            if (!TryConsumePrism(ref guideMeter, useGuideMeter))
+            if (!TryConsumePrism(queryMeter, ref guideMeter, useGuideMeter))
             {
                 geometryPassable = false;
                 continue;
@@ -1077,7 +1078,7 @@ internal sealed class NavigationRayWork
         {
             return false;
         }
-        return TryConsumePrism(ref guideMeter, useGuideMeter)
+        return TryConsumePrism(queryMeter, ref guideMeter, useGuideMeter)
             && GridCellGeometry.IsNavigationBodySegmentValid(
                 prism,
                 _request.Start,
@@ -1179,6 +1180,7 @@ internal sealed class NavigationRayWork
                     out GridCellPrism targetPrism)
                 && TryGetIncomingPortal(
                     ordinal,
+                    queryMeter,
                     ref guideMeter,
                     useGuideMeter,
                     out GridNavigationPortal volumeIncoming)
@@ -1207,10 +1209,11 @@ internal sealed class NavigationRayWork
             return false;
         return TryGetIncomingPortal(
                 ordinal,
+                queryMeter,
                 ref guideMeter,
                 useGuideMeter,
                 out GridNavigationPortal incomingPortal)
-            && TryConsumePrism(ref guideMeter, useGuideMeter)
+            && TryConsumePrism(queryMeter, ref guideMeter, useGuideMeter)
             && GridCellGeometry.IsNavigationBodySegmentValid(
                 prism,
                 arrival,
@@ -1279,6 +1282,7 @@ internal sealed class NavigationRayWork
 
     private bool TryGetIncomingPortal(
         int ordinal,
+        NavigationWorkMeter? queryMeter,
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter,
         out GridNavigationPortal portal)
@@ -1291,7 +1295,7 @@ internal sealed class NavigationRayWork
         }
         if (record.IncomingExplicitConnection != null)
         {
-            if (!TryConsumePortal(ref guideMeter, useGuideMeter))
+            if (!TryConsumePortal(queryMeter, ref guideMeter, useGuideMeter))
             {
                 portal = default;
                 return false;
@@ -1303,7 +1307,7 @@ internal sealed class NavigationRayWork
         NavigationRayChainRecord predecessor =
             _workspace.ChainRecords[record.PredecessorOrdinal];
         NavigationWorldGraph graph = _request.ExpectedGraph;
-        if (TryConsumePortal(ref guideMeter, useGuideMeter)
+        if (TryConsumePortal(queryMeter, ref guideMeter, useGuideMeter)
             && graph.TryGetNodeAddress(predecessor.Node, out NavigationCellAddress source)
             && graph.TryGetNodeAddress(record.Node, out NavigationCellAddress target)
             && graph.TryGetSeamPrism(source, out GridCellPrism sourcePrism)
@@ -1443,19 +1447,29 @@ internal sealed class NavigationRayWork
     }
 
     private bool TryConsumePortal(
+        NavigationWorkMeter? queryMeter,
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter)
     {
-        bool consumed = !useGuideMeter || guideMeter.TryConsumePortalChecks(1);
+        bool consumed = useGuideMeter
+            ? guideMeter.TryConsumePortalChecks(1)
+            : queryMeter == null
+                || !queryMeter.IsGuideSampleBridge
+                || queryMeter.TryConsumeGuidePortalChecks(1);
         _meterBlocked |= !consumed;
         return consumed;
     }
 
     private bool TryConsumePrism(
+        NavigationWorkMeter? queryMeter,
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter)
     {
-        bool consumed = !useGuideMeter || guideMeter.TryConsumePrismChecks(1);
+        bool consumed = useGuideMeter
+            ? guideMeter.TryConsumePrismChecks(1)
+            : queryMeter == null
+                || !queryMeter.IsGuideSampleBridge
+                || queryMeter.TryConsumeGuidePrismChecks(1);
         _meterBlocked |= !consumed;
         return consumed;
     }

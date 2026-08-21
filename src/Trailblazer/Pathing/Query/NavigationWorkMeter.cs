@@ -5,6 +5,8 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+
 namespace Trailblazer.Pathing;
 
 /// <summary>Tracks deterministic work consumed by one complete navigation query.</summary>
@@ -12,6 +14,10 @@ internal sealed class NavigationWorkMeter
 {
     private NavigationWorkBudget _budget;
     private int _lookupReservationFloor;
+    private int _guideLookupAndCoveredLimit;
+    private int _guideEdgeAndConnectionLimit;
+    private int _guidePortalLimit;
+    private int _guidePrismLimit;
 
     internal NavigationWorkMeter(NavigationWorkBudget budget) => Reset(budget);
 
@@ -35,17 +41,28 @@ internal sealed class NavigationWorkMeter
 
     internal int SimplificationRays { get; private set; }
 
-    internal int RemainingLookupProbes =>
-        _budget.MaxLookupProbes - LookupProbes - _lookupReservationFloor;
+    internal int RemainingLookupProbes => IsGuideSampleBridge
+        ? Math.Min(
+            _budget.MaxLookupProbes - LookupProbes - _lookupReservationFloor,
+            _guideLookupAndCoveredLimit - LookupProbes - CoveredVoxelIntervals)
+        : _budget.MaxLookupProbes - LookupProbes - _lookupReservationFloor;
 
     internal int RemainingEndpointCandidates =>
         _budget.MaxEndpointCandidates - EndpointCandidates;
 
     internal int RemainingExpandedNodes => _budget.MaxExpandedNodes - ExpandedNodes;
 
-    internal int RemainingEvaluatedEdges => _budget.MaxEvaluatedEdges - EvaluatedEdges;
+    internal int RemainingEvaluatedEdges => IsGuideSampleBridge
+        ? Math.Min(
+            _budget.MaxEvaluatedEdges - EvaluatedEdges,
+            _guideEdgeAndConnectionLimit - EvaluatedEdges - ConnectionLegs)
+        : _budget.MaxEvaluatedEdges - EvaluatedEdges;
 
-    internal int RemainingConnectionLegs => _budget.MaxConnectionLegs - ConnectionLegs;
+    internal int RemainingConnectionLegs => IsGuideSampleBridge
+        ? Math.Min(
+            _budget.MaxConnectionLegs - ConnectionLegs,
+            _guideEdgeAndConnectionLimit - EvaluatedEdges - ConnectionLegs)
+        : _budget.MaxConnectionLegs - ConnectionLegs;
 
     internal int RemainingTransitionCandidates =>
         _budget.MaxTransitionCandidates - TransitionCandidates;
@@ -54,8 +71,21 @@ internal sealed class NavigationWorkMeter
 
     internal int RemainingTraceIntervals => _budget.MaxTraceIntervals - TraceIntervals;
 
-    internal int RemainingCoveredVoxelIntervals =>
-        _budget.MaxCoveredVoxelIntervals - CoveredVoxelIntervals;
+    internal int RemainingCoveredVoxelIntervals => IsGuideSampleBridge
+        ? Math.Min(
+            _budget.MaxCoveredVoxelIntervals - CoveredVoxelIntervals,
+            _guideLookupAndCoveredLimit - LookupProbes - CoveredVoxelIntervals)
+        : _budget.MaxCoveredVoxelIntervals - CoveredVoxelIntervals;
+
+    internal long RemainingGridCandidateWork => IsGuideSampleBridge
+        ? (long)_guideLookupAndCoveredLimit - LookupProbes - CoveredVoxelIntervals
+        : checked((long)RemainingLookupProbes + RemainingCoveredVoxelIntervals);
+
+    internal bool IsGuideSampleBridge => _guideLookupAndCoveredLimit >= 0;
+
+    internal int GuidePortalChecks { get; private set; }
+
+    internal int GuidePrismChecks { get; private set; }
 
     internal int RemainingSimplificationRays =>
         _budget.MaxSimplificationRays - SimplificationRays;
@@ -150,6 +180,56 @@ internal sealed class NavigationWorkMeter
         return true;
     }
 
+    internal bool TryConsumeGuidePortalChecks(int count)
+    {
+        if (!IsGuideSampleBridge
+            || count < 0
+            || count > _guidePortalLimit - GuidePortalChecks)
+        {
+            return false;
+        }
+        GuidePortalChecks += count;
+        return true;
+    }
+
+    internal bool TryConsumeGuidePrismChecks(int count)
+    {
+        if (!IsGuideSampleBridge
+            || count < 0
+            || count > _guidePrismLimit - GuidePrismChecks)
+        {
+            return false;
+        }
+        GuidePrismChecks += count;
+        return true;
+    }
+
+    internal void ResetForGuideSample(
+        int lookupAndCoveredLimit,
+        int edgeAndConnectionLimit,
+        int portalLimit,
+        int prismLimit,
+        int traceIntervalLimit)
+    {
+        var budget = new NavigationWorkBudget(
+            lookupAndCoveredLimit,
+            maxEndpointCandidates: 0,
+            maxExpandedNodes: 0,
+            edgeAndConnectionLimit,
+            edgeAndConnectionLimit,
+            maxTransitionCandidates: 0,
+            maxTransitionPairs: 0,
+            maxStagedLegAttempts: 0,
+            traceIntervalLimit,
+            lookupAndCoveredLimit,
+            maxSimplificationRays: 0);
+        Reset(budget);
+        _guideLookupAndCoveredLimit = lookupAndCoveredLimit;
+        _guideEdgeAndConnectionLimit = edgeAndConnectionLimit;
+        _guidePortalLimit = portalLimit;
+        _guidePrismLimit = prismLimit;
+    }
+
     internal void Reset(NavigationWorkBudget budget)
     {
         _budget = budget;
@@ -163,6 +243,12 @@ internal sealed class NavigationWorkMeter
         TraceIntervals = 0;
         CoveredVoxelIntervals = 0;
         SimplificationRays = 0;
+        GuidePortalChecks = 0;
+        GuidePrismChecks = 0;
         _lookupReservationFloor = 0;
+        _guideLookupAndCoveredLimit = -1;
+        _guideEdgeAndConnectionLimit = -1;
+        _guidePortalLimit = 0;
+        _guidePrismLimit = 0;
     }
 }

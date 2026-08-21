@@ -26,7 +26,9 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         NavigationAreaPolicy areaPolicy,
         TraversalMedium startMedium,
         TraversalMedia targetMedia,
-        NavigationWorkMeter meter)
+        NavigationWorkMeter meter,
+        ulong worldChangeSequence,
+        bool requiresWorldStamp)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
@@ -41,6 +43,8 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         StartMedium = startMedium;
         TargetMedia = targetMedia;
         Meter = meter;
+        WorldChangeSequence = worldChangeSequence;
+        RequiresWorldStamp = requiresWorldStamp;
     }
 
     internal NavigationWorldGraph Graph => _lease?.Graph
@@ -60,6 +64,10 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
 
     internal NavigationWorkMeter Meter { get; private set; } = null!;
 
+    internal ulong WorldChangeSequence { get; private set; }
+
+    internal bool RequiresWorldStamp { get; private set; }
+
     internal void ReleaseLease()
     {
         NavigationWorldGraphLease? lease = _lease;
@@ -77,5 +85,7 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         StartMedium = default;
         TargetMedia = default;
         Meter = null!;
+        WorldChangeSequence = 0;
+        RequiresWorldStamp = false;
     }
 }

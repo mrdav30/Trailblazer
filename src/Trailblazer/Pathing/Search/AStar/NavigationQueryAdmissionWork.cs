@@ -55,6 +55,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     private bool _endpointActive;
     private bool _active;
     private ulong _worldChangeSequence;
+    private bool _requiresWorldStamp;
 
     internal NavigationQueryAdmissionWork(
         GridWorld world,
@@ -104,6 +105,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         _targetMedia = targetMedia;
         _stage = Stage.ResolvePolicy;
         _endpointActive = false;
+        _requiresWorldStamp = false;
         Status = NavigationQueryAdmissionStatus.Pending;
         if (!query.Agent.IsValid)
             Finish(NavigationQueryAdmissionStatus.InvalidProfile);
@@ -213,6 +215,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                 {
                     return Finish(MapEndpointFailure(endpointStatus, _stage));
                 }
+                _requiresWorldStamp |= _endpointWork.RequiresWorldStamp;
                 if (_stage == Stage.ResolveStart)
                 {
                     _start = _endpointWork.Result;
@@ -234,7 +237,9 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                         _areaPolicy!,
                         _startMedium,
                         _targetMedia,
-                        _meter);
+                        _meter,
+                        _worldChangeSequence,
+                        _requiresWorldStamp);
                     _lease = null;
                     Status = NavigationQueryAdmissionStatus.Success;
                     _endpointActive = false;
@@ -257,6 +262,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         _start = default;
         _end = default;
         _worldChangeSequence = 0;
+        _requiresWorldStamp = false;
         _endpointActive = false;
         _active = false;
     }

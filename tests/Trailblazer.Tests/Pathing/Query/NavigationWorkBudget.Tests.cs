@@ -48,6 +48,25 @@ public sealed class NavigationWorkBudgetTests
     }
 
     [Fact]
+    public void NavigationWorkMeter_ShouldPreserveTheFullGridCandidateDomain()
+    {
+        var meter = new NavigationWorkMeter(new NavigationWorkBudget(
+            maxLookupProbes: int.MaxValue,
+            maxEndpointCandidates: 0,
+            maxExpandedNodes: 0,
+            maxEvaluatedEdges: 0,
+            maxConnectionLegs: 0,
+            maxTransitionCandidates: 0,
+            maxTransitionPairs: 0,
+            maxStagedLegAttempts: 0,
+            maxTraceIntervals: 0,
+            maxCoveredVoxelIntervals: int.MaxValue,
+            maxSimplificationRays: 0));
+
+        meter.RemainingGridCandidateWork.Should().Be(2L * int.MaxValue);
+    }
+
+    [Fact]
     public void GuideSampleWorkBudget_ShouldPreserveEveryCounterInExactIdentity()
     {
         GuideSampleWorkBudget first = CreateGuideBudget(1, 2, 3, 4, 5, 6, 7);

@@ -68,7 +68,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.QueryLimits.AStarWorkspaceNodeCapacity.Should().Be(4_096);
         settings.QueryLimits.MaxAStarCacheEntries.Should().Be(128);
         settings.QueryLimits.MaxAStarReusablePayloadBytes.Should().Be(16_777_216);
-        settings.QueryLimits.MaxAStarSinglePayloadBytes.Should().Be(1_126_720);
+        settings.QueryLimits.MaxAStarSinglePayloadBytes.Should().Be(1_159_480);
         settings.QueryLimits.MaxAStarActivePayloadBytes.Should().Be(4_194_304);
         settings.QueryLimits.MaxAStarActivePayloadLeases.Should().Be(8);
         settings.QueryLimits.FlowWorkspaceMapCapacity.Should().Be(16);
@@ -89,7 +89,7 @@ public sealed class TrailblazerWorldContextSettingsTests
                 settings.QueryLimits.MaxAStarSinglePayloadBytes);
         settings.QueryLimits.MaxFlowCacheEntries.Should().Be(128);
         settings.QueryLimits.MaxFlowReusablePayloadBytes.Should().Be(33_554_432);
-        settings.QueryLimits.MaxFlowSinglePayloadBytes.Should().Be(524_288);
+        settings.QueryLimits.MaxFlowSinglePayloadBytes.Should().Be(1_012_024);
         settings.QueryLimits.MaxFlowActivePayloadBytes.Should().Be(4_194_304);
         settings.QueryLimits.MaxFlowActivePayloadLeases.Should().Be(8);
     }

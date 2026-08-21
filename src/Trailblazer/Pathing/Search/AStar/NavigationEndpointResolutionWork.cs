@@ -82,6 +82,7 @@ internal sealed class NavigationEndpointResolutionWork
     private bool _cursorBegun;
     private bool _cursorComplete;
     private bool _hasResult;
+    private bool _requiresWorldStamp;
 
     internal NavigationEndpointResolutionWork(
         GridWorld world,
@@ -142,6 +143,7 @@ internal sealed class NavigationEndpointResolutionWork
         _cursorBegun = false;
         _cursorComplete = false;
         _hasResult = false;
+        _requiresWorldStamp = false;
         Result = default;
         _rayWork.Reset();
         _workspace.ResetResolution();
@@ -170,6 +172,7 @@ internal sealed class NavigationEndpointResolutionWork
         _cursorBegun = false;
         _cursorComplete = false;
         _hasResult = false;
+        _requiresWorldStamp = false;
         _rayWork.Reset();
         Status = default;
         Result = default;
@@ -178,6 +181,8 @@ internal sealed class NavigationEndpointResolutionWork
     internal NavigationEndpointResolutionStatus Status { get; private set; }
 
     internal NavigationResolvedEndpoint Result { get; private set; }
+
+    internal bool RequiresWorldStamp => _requiresWorldStamp;
 
     internal NavigationEndpointResolutionStatus Advance(
         int lookupStepLimit,
@@ -342,18 +347,20 @@ internal sealed class NavigationEndpointResolutionWork
             return false;
         }
         bool consumedVolumeWork = false;
-        if (!_graph.TryGetNodeState(node, out NavigationNodeState state)
-            || !TryQualifyCandidate(
+        if (!_graph.TryGetNodeState(node, out NavigationNodeState state))
+            return true;
+        bool qualified = TryQualifyCandidate(
                 node,
                 state,
                 out TraversalMedia qualifyingMedia,
                 out TraversalMedium resolutionMedium,
                 out Vector3d footAnchor,
                 out Fixed64 distance,
-                out consumedVolumeWork))
-        {
+                out consumedVolumeWork);
+        if (consumedVolumeWork)
+            _requiresWorldStamp = true;
+        if (!qualified)
             return !consumedVolumeWork;
-        }
         var address = new NavigationCellAddress(mapId, candidate.VoxelIndex);
         if (!CanBeatCurrentResult(address, distance, resolutionMedium))
             return true;

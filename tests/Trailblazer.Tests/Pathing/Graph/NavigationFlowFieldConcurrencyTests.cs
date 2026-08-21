@@ -25,6 +25,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
         long twoMaximumPayloads = checked(fixture.Far.RetainedBytes * 2);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -63,7 +64,10 @@ public sealed class NavigationFlowFieldConcurrencyTests
             {
                 nearError = error;
             }
-        }) { IsBackground = true };
+        })
+        {
+            IsBackground = true
+        };
         var farThread = new Thread(() =>
         {
             try
@@ -80,7 +84,10 @@ public sealed class NavigationFlowFieldConcurrencyTests
             {
                 farError = error;
             }
-        }) { IsBackground = true };
+        })
+        {
+            IsBackground = true
+        };
 
         nearThread.Start();
         farThread.Start();
@@ -114,6 +121,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
         long twoMaximumPayloads = checked(fixture.Far.RetainedBytes * 2);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -150,7 +158,8 @@ public sealed class NavigationFlowFieldConcurrencyTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease canonicalLease)
+                out NavigationFlowFieldPayloadLease canonicalLease,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.CapacityExceeded,
                 "both reserved slots were atomically transferred to active leases");
         farLease.TryGetPayload(out NavigationFlowFieldPayload farPayload)
@@ -301,7 +310,8 @@ public sealed class NavigationFlowFieldConcurrencyTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease checkout)
+                out NavigationFlowFieldPayloadLease checkout,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Stale);
 
         checkout.Should().Be(default(NavigationFlowFieldPayloadLease));
@@ -371,6 +381,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
+                out _,
                 out _)
             .Should().Be(NavigationFlowFieldStatus.Stale);
         cache.ReleasePayloadReservation(ref reservation);
@@ -404,6 +415,7 @@ public sealed class NavigationFlowFieldConcurrencyTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
+                out _,
                 out _)
             .Should().Be(NavigationFlowFieldStatus.Pending);
     }
@@ -411,11 +423,12 @@ public sealed class NavigationFlowFieldConcurrencyTests
     private static NavigationFlowFieldPayloadCache CreateCache(
         NavigationFlowFieldCacheTestHarness.LineFixture fixture,
         int maxActiveLeases) => new(
+        fixture.World,
         maxEntries: 1,
         maxReusableBytes: fixture.Far.RetainedBytes,
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,
         maxActivePayloadBytes: checked(fixture.Far.RetainedBytes * maxActiveLeases),
-        maxActiveLeases,
+        maxActiveLeases: maxActiveLeases,
         guideMapCapacity: 0,
         immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
 

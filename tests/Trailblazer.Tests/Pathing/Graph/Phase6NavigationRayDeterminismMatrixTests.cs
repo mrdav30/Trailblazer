@@ -331,7 +331,6 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
         using NavigationFlowFieldPayloadCache cache = CreateFlowCache(fixture);
         NavigationFlowFieldPayloadLease payloadLease = PublishFlow(cache, fixture);
         NavigationGuideStatus createStatus = cache.TryCreateGuide(
-            fixture.World,
             fixture.Store,
             new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
             out NavigationFlowFieldLease guide);
@@ -344,7 +343,8 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
         NavigationGuideStatus sampleStatus = guide.TrySample(
             actualFoot,
             ref meter,
-            out Vector3d heading);
+            out NavigationFlowSample sample);
+        Vector3d heading = sample.Heading;
         Assert.Equal(NavigationGuideStatus.Success, sampleStatus);
         Assert.Equal(Vector3d.Backward, heading);
 
@@ -358,7 +358,8 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
         NavigationGuideStatus exhaustedStatus = guide.TrySample(
             actualFoot,
             ref meter,
-            out Vector3d exhaustedHeading);
+            out NavigationFlowSample exhaustedSample);
+        Vector3d exhaustedHeading = exhaustedSample.Heading;
         Assert.Equal(NavigationGuideStatus.BudgetExceeded, exhaustedStatus);
         Assert.Equal(Vector3d.Zero, exhaustedHeading);
         Append(builder, "second-sample", (int)exhaustedStatus);
@@ -520,6 +521,7 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
 
     private static NavigationFlowFieldPayloadCache CreateFlowCache(
         NavigationFlowFieldCacheTestHarness.LineFixture fixture) => new(
+        fixture.World,
         1,
         fixture.Far.RetainedBytes,
         fixture.Far.RetainedBytes,

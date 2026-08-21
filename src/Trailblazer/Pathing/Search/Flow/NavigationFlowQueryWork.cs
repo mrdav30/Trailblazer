@@ -7,7 +7,6 @@
 
 using System;
 using System.Threading;
-using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
@@ -55,6 +54,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     private readonly NavigationQueryAdmissionWork _admission;
     private NavigationFlowFieldWork? _search;
     private NavigationFlowFieldPayloadLease _pendingLease;
+    private NavigationFlowFieldPayload? _pendingProof;
     private NavigationFlowQueryResult _result;
     private NavigationFlowFieldReservation _payloadReservation;
     private NavigationCellAddress _resolvedOrigin;
@@ -67,12 +67,10 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     private bool _admissionActive;
 
     internal NavigationFlowQueryWork(
-        GridWorld world,
         NavigationWorldGraphStore store,
         NavigationFlowFieldWorkspace workspace,
         NavigationFlowFieldPayloadCache cache)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
         SwiftThrowHelper.ThrowIfNull(cache, nameof(cache));
@@ -80,7 +78,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         _cache = cache;
         _workspace = workspace;
         _admission = new NavigationQueryAdmissionWork(
-            world,
+            cache.World,
             store,
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
@@ -158,6 +156,14 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         }
 
         NavigationResolvedPathQuery resolved = _admission.Result;
+        if (resolved.RequiresWorldStamp
+            && _cache.World.ChangeSequence != resolved.WorldChangeSequence)
+        {
+            resolved.Dispose();
+            DisposeAdmission();
+            MarkReady(NavigationFlowQueryStatus.Stale);
+            return Status;
+        }
         _resolvedOrigin = resolved.Start.Address;
         var key = new NavigationFlowFieldPayloadKey(
             resolved.Query,
@@ -169,7 +175,8 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             resolved.Graph,
             key,
             _resolvedOrigin,
-            out _pendingLease);
+            out _pendingLease,
+            out _pendingProof);
         if (checkout != NavigationFlowFieldStatus.Pending)
         {
             _hasPendingLease = checkout == NavigationFlowFieldStatus.Success;
@@ -181,8 +188,15 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             return Status;
         }
 
+        int maximumNodes = Math.Min(
+            _workspace.NodeCapacity,
+            resolved.Query.Budget.MaxExpandedNodes);
+        int maximumTransitions = resolved.Query.AllowTransitions
+            ? Math.Max(0, maximumNodes - 1)
+            : 0;
         long maximumBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(
-            Math.Min(_workspace.NodeCapacity, resolved.Query.Budget.MaxExpandedNodes),
+            maximumNodes,
+            maximumTransitions,
             _workspace.DependencyComponentCapacity,
             _workspace.DependencyPageCapacity);
         if (!_cache.TryReservePayload(maximumBytes, out _payloadReservation))
@@ -194,6 +208,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             return Status;
         }
         _search = new NavigationFlowFieldWork(
+            _cache.World,
             resolved,
             _workspace,
             _cache.MaximumSinglePayloadBytes);
@@ -239,6 +254,26 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             _hasPendingLease = false;
             return FinishCached(lease);
         }
+        if (_pendingProof != null)
+        {
+            NavigationFlowFieldStatus expected = _readyStatus switch
+            {
+                NavigationFlowQueryStatus.NoPath => NavigationFlowFieldStatus.NoPath,
+                NavigationFlowQueryStatus.CostOverflow =>
+                    NavigationFlowFieldStatus.CostOverflow,
+                _ => NavigationFlowFieldStatus.Pending
+            };
+            if (expected == NavigationFlowFieldStatus.Pending
+                || !_cache.IsExactProofCurrent(
+                    _store,
+                    _pendingProof,
+                    _resolvedOrigin,
+                    expected))
+            {
+                return Finish(NavigationFlowQueryStatus.Stale);
+            }
+            _pendingProof = null;
+        }
         if (_search?.Result == null)
             return Finish(_readyStatus);
 
@@ -273,6 +308,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             _pendingLease.Dispose();
         _pendingLease = default;
         _hasPendingLease = false;
+        _pendingProof = null;
         if (_hasResult)
             _result.Dispose();
         _result = default;
@@ -294,7 +330,8 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         NavigationFlowFieldStatus leaseStatus = lease.TryGetPayload(
             out NavigationFlowFieldPayload payload);
         if (leaseStatus != NavigationFlowFieldStatus.Success
-            || !_store.Current.IsDependencyCurrent(payload.Dependencies))
+            || !_store.Current.IsDependencyCurrent(payload.Dependencies)
+            || !_cache.IsWorldCurrent(payload))
         {
             if (leaseStatus == NavigationFlowFieldStatus.Success)
                 _cache.RemoveExact(payload);
@@ -314,6 +351,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
 
     private NavigationFlowQueryStatus Finish(NavigationFlowQueryStatus status)
     {
+        _pendingProof = null;
         Status = status;
         Volatile.Write(ref _readyToPublish, false);
         DisposeAdmission();

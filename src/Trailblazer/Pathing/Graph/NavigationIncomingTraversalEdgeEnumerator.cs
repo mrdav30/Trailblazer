@@ -129,6 +129,8 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         CurrentTransitionType = default;
         CurrentTransitionHints = default;
         CurrentTransitionIdentityKind = default;
+        RequiresWorldStamp = destination.Medium == TraversalMedium.Gas
+            || destination.Medium == TraversalMedium.Liquid;
     }
 
     internal NavigationMediumStateRef CurrentPredecessor { get; private set; }
@@ -148,6 +150,8 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
     internal TraversalTransitionLocomotionHints CurrentTransitionHints { get; private set; }
 
     internal NavigationTransitionIdentityKind CurrentTransitionIdentityKind { get; private set; }
+
+    internal bool RequiresWorldStamp { get; private set; }
 
     internal Vector3d CurrentTransitionSourceAction =>
         CurrentKind == NavigationTraversalEdgeKind.Transition
@@ -219,6 +223,8 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
                 dependencies,
                 ref edgeStepRemaining,
                 ref connectionStepRemaining);
+            if (_outgoing.RequiresWorldStamp)
+                RequiresWorldStamp = true;
             if (status == NavigationTraversalEdgeAdvanceStatus.Complete)
             {
                 _rescanActive = false;
@@ -361,6 +367,11 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
 
     private void BeginOutgoingRescan()
     {
+        if (_candidateSource.Medium == TraversalMedium.Gas
+            || _candidateSource.Medium == TraversalMedium.Liquid)
+        {
+            RequiresWorldStamp = true;
+        }
         _outgoing = new NavigationTraversalEdgeEnumerator(
             _world,
             _graph!,

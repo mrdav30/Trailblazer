@@ -42,29 +42,32 @@ public readonly struct NavigationFlowFieldLease : IDisposable
             heading = Vector3d.Zero;
             return NavigationGuideStatus.Stale;
         }
-        return inner.TrySample(
+        var meter = new GuideSampleWorkMeter(budget);
+        NavigationGuideStatus status = inner.TrySample(
             _generation,
             actualFootPosition,
-            budget,
-            out heading);
+            ref meter,
+            out NavigationFlowSample sample);
+        heading = sample.Heading;
+        return status;
     }
 
     internal NavigationGuideStatus TrySample(
         Vector3d actualFootPosition,
         ref GuideSampleWorkMeter meter,
-        out Vector3d heading)
+        out NavigationFlowSample sample)
     {
         NavigationFlowFieldGuideLease? inner = _inner;
         if (inner == null)
         {
-            heading = Vector3d.Zero;
+            sample = default;
             return NavigationGuideStatus.Stale;
         }
         return inner.TrySample(
             _generation,
             actualFootPosition,
             ref meter,
-            out heading);
+            out sample);
     }
 
     /// <inheritdoc />

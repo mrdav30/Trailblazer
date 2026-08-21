@@ -146,6 +146,7 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
                 forwardEdge,
                 new NavigationSelectedEdgeRef(
                     _destinationAddress,
+                    TraversalMedium.Solid,
                     _outgoingEdges.CurrentOrdinal));
             ClearIncomingCandidate();
             return NavigationSurfaceEdgeAdvanceStatus.Edge;

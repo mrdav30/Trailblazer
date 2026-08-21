@@ -14,17 +14,25 @@ internal readonly struct NavigationFlowFieldNode
 {
     internal NavigationFlowFieldNode(
         NavigationCellAddress address,
+        TraversalMedium medium,
         Fixed64 integrationCost,
-        NavigationSelectedEdgeRef selectedEdge)
+        NavigationSelectedEdgeRef selectedEdge,
+        int transitionInstructionOrdinal)
     {
         Address = address;
+        Medium = medium;
         IntegrationCost = integrationCost;
         SelectedEdge = selectedEdge;
+        TransitionInstructionOrdinal = transitionInstructionOrdinal;
     }
 
     internal NavigationCellAddress Address { get; }
 
+    internal TraversalMedium Medium { get; }
+
     internal Fixed64 IntegrationCost { get; }
 
     internal NavigationSelectedEdgeRef SelectedEdge { get; }
+
+    internal int TransitionInstructionOrdinal { get; }
 }

@@ -750,7 +750,7 @@ public sealed class NavigationSurfaceAStarTests
 
         Unsafe.SizeOf<NavigationAStarPayloadKey>().Should().Be(296);
         Unsafe.SizeOf<NavigationAStarGuidePoint>().Should().Be(56);
-        Unsafe.SizeOf<NavigationTransitionInstruction>().Should().Be(152);
+        Unsafe.SizeOf<NavigationTransitionInstruction>().Should().Be(160);
         emptyPayload.RetainedBytes.Should().Be(432L);
         NavigationAStarPayload.GetMaximumRetainedBytes(0, 0, 0, 0)
             .Should().Be(emptyPayload.RetainedBytes);
@@ -760,7 +760,7 @@ public sealed class NavigationSurfaceAStarTests
                 transitionInstructionCount: 0,
                 populatedDependencies)
             .Should().Be(populatedPayload.RetainedBytes);
-        worstPayload.RetainedBytes.Should().Be(1_440L);
+        worstPayload.RetainedBytes.Should().Be(1_464L);
         NavigationAStarPayload.GetMaximumRetainedBytes(
                 populatedPayload.GuidePoints.Length,
                 worstPayload.TransitionInstructions.Length,

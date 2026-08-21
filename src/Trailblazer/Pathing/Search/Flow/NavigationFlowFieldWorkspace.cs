@@ -16,14 +16,14 @@ internal struct NavigationFlowFieldSearchNode
     internal Fixed64 IntegrationCost;
     internal NavigationSelectedEdgeRef SelectedEdge;
     internal int HeapIndex;
-    internal bool HasSelectedEdge;
+    internal bool SelectedIsTransition;
     internal bool Closed;
 }
 
 /// <summary>Owns reusable fixed-capacity buffers for one exclusive flow query.</summary>
 internal sealed class NavigationFlowFieldWorkspace
 {
-    private readonly NavigationNodeRef[] _keys;
+    private readonly NavigationMediumStateRef[] _keys;
     private readonly NavigationFlowFieldSearchNode[] _records;
     private readonly long[] _stamps;
     private readonly int[] _activeSlots;
@@ -51,7 +51,7 @@ internal sealed class NavigationFlowFieldWorkspace
         int required = checked(Math.Max(1, nodeCapacity * 2));
         while (tableSize < required)
             tableSize = checked(tableSize * 2);
-        _keys = new NavigationNodeRef[tableSize];
+        _keys = new NavigationMediumStateRef[tableSize];
         _records = new NavigationFlowFieldSearchNode[tableSize];
         _stamps = new long[tableSize];
         _activeSlots = nodeCapacity == 0 ? Array.Empty<int>() : new int[nodeCapacity];
@@ -123,7 +123,7 @@ internal sealed class NavigationFlowFieldWorkspace
         SettledCount = 0;
     }
 
-    private bool TryGetSlot(NavigationNodeRef node, out int slot)
+    internal bool TryGetSlot(NavigationMediumStateRef node, out int slot)
     {
         slot = node.GetHashCode() & _mask;
         while (_stamps[slot] == _generation)
@@ -136,7 +136,7 @@ internal sealed class NavigationFlowFieldWorkspace
     }
 
     internal bool TryGetOrAdd(
-        NavigationNodeRef node,
+        NavigationMediumStateRef node,
         out int slot,
         out bool added)
     {
@@ -161,7 +161,7 @@ internal sealed class NavigationFlowFieldWorkspace
     internal ref NavigationFlowFieldSearchNode GetRecord(int slot) =>
         ref _records[slot];
 
-    internal NavigationNodeRef GetNode(int slot) => _keys[slot];
+    internal NavigationMediumStateRef GetNode(int slot) => _keys[slot];
 
     internal bool TryRecordComponent(NavigationSurfaceComponentKey key)
     {

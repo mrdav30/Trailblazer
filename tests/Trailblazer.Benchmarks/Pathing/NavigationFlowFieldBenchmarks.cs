@@ -123,6 +123,7 @@ public class NavigationFlowFieldBenchmarks
             if (_admission.Status != NavigationQueryAdmissionStatus.Success)
                 throw new InvalidOperationException($"Cold Flow admission failed with {_admission.Status}.");
             using var work = new NavigationFlowFieldWork(
+                _fixture.World,
                 _admission.Result,
                 _workspace,
                 _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.MaximumSinglePayloadBytes);
@@ -268,7 +269,7 @@ public class NavigationFlowFieldPromotionBenchmarks
                     + $"reserved_leases={cache.ReservedLeaseCount}/0, "
                     + $"reserved_bytes={cache.ReservedPayloadBytes}/0.");
             }
-            return _nearNodes + _farNodes + far. ResolvedOrigin.Index.x;
+            return _nearNodes + _farNodes + far.ResolvedOrigin.Index.x;
         }
         finally
         {

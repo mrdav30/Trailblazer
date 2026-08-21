@@ -308,24 +308,29 @@
 **Files:**
 
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldNode.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldOpenHeap.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldWorkspace.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldWork.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldPayload.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldPayloadCache.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowQueryWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowAdmissionGate.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldGuideLease.cs`
-- Defer public wrapper cutover: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldLease.cs`
+- Modify only the existing public wrapper's internal meter projection while deferring its public cutover: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowFieldLease.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationSelectedEdgeProgressWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Flow/GuideSampleWorkMeter.cs`
 - Modify: `src/Trailblazer/Pathing/Search/Flow/GuideSampleBatch.cs`
 - Add: `src/Trailblazer/Pathing/Search/Flow/NavigationFlowSample.cs`
-- Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowFieldTests.cs`
-- Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowFieldGuideTests.cs`
-- Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowFieldConcurrencyTests.cs`
+- Modify only as required for shared dispatcher/world/dependency/sample metering: `src/Trailblazer/Pathing/Graph/NavigationIncomingSurfaceEdgeEnumerator.cs`, `NavigationIncomingTraversalEdgeEnumerator.cs`, `NavigationSelectedEdgeRef.cs`, `NavigationVolumeAnchorEvaluator.cs`, `src/Trailblazer/Pathing/Query/NavigationWorkMeter.cs`, `src/Trailblazer/Pathing/Search/Ray/NavigationRayWork.cs`, `src/Trailblazer/Pathing/Search/Guide/NavigationTransitionInstruction.cs`, `TrailblazerGuideService.cs`, and `src/Trailblazer/Pathing/Search/AStar/NavigationAStarGuideLease.cs`
+- Modify the shared endpoint-to-search raw-world handoff only as required to preserve one admission baseline across A* and Flow: `src/Trailblazer/Pathing/Search/AStar/NavigationEndpointResolutionWork.cs`, `NavigationQueryAdmissionWork.cs`, `NavigationResolvedPathQuery.cs`, `NavigationAStarQueryWork.cs`, and `NavigationSurfaceAStarWork.cs`.
+- Modify matching Flow/transition/cache/admission/concurrency/equivalence/determinism/architecture tests and Flow benchmark construction only; do not widen public API/controller/serialization coverage before Task 10.
 
-- [ ] RED reverse incoming native/shortcut/explicit/rule traversal parity with A*, including multi-target seeds and exact canonical selected action.
-- [ ] RED the inner `NavigationFlowFieldGuideLease.TrySample(... out NavigationFlowSample)` ordinary heading/target/medium and transition instruction. Keep the public wrapper unchanged until Task 10's atomic consumer cutover; do not add a temporary public overload or forwarding facade.
-- [ ] RED per-lease pending action/current medium, explicit completion, same-lease rejoin constrained to selected medium/action, stale/capacity/budget/cost propagation, copied/double-dispose/ABA, and zero warm allocation.
-- [ ] Merge every blocked shortcut/rule dependency into reusable NoPath proof before workspace reset.
-- [ ] Update batch sampling to the new result directly; no translation facade.
-- [ ] Run Flow/A* parity/cache/guide/concurrency Release + ReleaseLean gates, reviews, and commit: `feat(pathing): flow through medium states`.
+- [x] RED reverse incoming native/shortcut/explicit/rule traversal parity with A*, including multi-target seeds and exact canonical selected action.
+- [x] RED the inner `NavigationFlowFieldGuideLease.TrySample(... out NavigationFlowSample)` ordinary heading/target/medium and transition instruction. Keep the public wrapper unchanged until Task 10's atomic consumer cutover; do not add a temporary public overload or forwarding facade.
+- [x] RED per-lease pending action/current medium, explicit completion, same-lease rejoin constrained to selected medium/action, stale/capacity/budget/cost propagation, copied/double-dispose/ABA, and zero warm allocation.
+- [x] Merge every blocked shortcut/rule dependency into reusable NoPath proof before workspace reset.
+- [x] Update batch sampling to the new result directly; no translation facade.
+- [x] Run Flow/A* parity/cache/guide/concurrency Release + ReleaseLean gates, reviews, and commit: `feat(pathing): guide flow through medium states`.
 
 ## Task 10: Atomically Cut Public APIs, Controllers, Serialization, And Legacy Providers
 

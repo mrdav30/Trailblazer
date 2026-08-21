@@ -56,6 +56,15 @@ internal struct GuideSampleWorkMeter
     internal readonly int GetTraceIntervalAllowance() =>
         _remainingTraceIntervals;
 
+    internal readonly int GetCursorLegScanAllowance() =>
+        _remainingCursorLegScans;
+
+    internal readonly int GetPortalCheckAllowance() =>
+        _remainingPortalChecks;
+
+    internal readonly int GetPrismCheckAllowance() =>
+        _remainingPrismChecks;
+
     private static bool TryConsume(ref int remaining, int count)
     {
         if (count < 0 || count > remaining)

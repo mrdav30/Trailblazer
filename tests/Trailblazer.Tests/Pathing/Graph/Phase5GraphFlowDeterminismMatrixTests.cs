@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading;
 using Chronicler;
 using FixedMathSharp;
-using GridForge.Spatial;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
@@ -24,10 +23,10 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
         _output = output;
 
     [Theory]
-    [InlineData("near-far", "782F61E8247F5DDBEC7C1FD9DF80AE4CAD565032E70AB72F60FB45FEA90924D4")]
-    [InlineData("same-key", "EADDBFE19DE9C0D03C73BF886EE550B1EB2C2275F23B96988332BA5CE5EDD200")]
-    [InlineData("mutation", "87E3DBF8DCFD642705E26523F6CCBBDE15777E312EC2BA6ED9A5472CC59BFAB5")]
-    [InlineData("sampling", "7C00B98966297D059426AFFB5D6E160FF1DEA7EF4FD1493D7BE9E96E28E4C1AD")]
+    [InlineData("near-far", "A9850EEC1BCF5DB8053152E112E753CEFA67C8C72C44E8D63016CA194350E22B")]
+    [InlineData("same-key", "E6686D2BF5F32985B8EE7695CA66E9C38422853BB336376C723AACDB760F220A")]
+    [InlineData("mutation", "5FEBF2281EAE7450D09C1449F576B901D024F83810D76059B26F49FFB229A015")]
+    [InlineData("sampling", "B0C8829BC6BA97E674E7B986CCF03FFE4E62E1214CDF12C16898A06921CB6A26")]
     [InlineData("hybrid", "255298CF18C1B54296EDCFAB015E88B73D1D8B695F5A41B4372E245C51ACB9D4")]
     [InlineData("volume-exit", "812576B2D2DC6A5356540F353BF79A6AC7A7AE29402054921A7BBF19C629756F")]
     [InlineData("navigator", "5A2D9C9B7822F97F6E64F2E9C11A84AC937249378B7CB5517DE214891EA9FFD9")]
@@ -120,7 +119,10 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
             {
                 firstFailure = exception;
             }
-        }) { IsBackground = true };
+        })
+        {
+            IsBackground = true
+        };
         var second = new Thread(() =>
         {
             try
@@ -137,7 +139,10 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
             {
                 secondFailure = exception;
             }
-        }) { IsBackground = true };
+        })
+        {
+            IsBackground = true
+        };
 
         first.Start();
         second.Start();
@@ -199,13 +204,15 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
             affected.Store.Current,
             affected.Far.Key,
             affected.FarOrigin,
-            out NavigationFlowFieldPayloadLease affectedCheckout);
+            out NavigationFlowFieldPayloadLease affectedCheckout,
+            out _);
         NavigationFlowFieldStatus unaffectedStatus = unaffectedCache.TryCheckout(
             unaffected.Store,
             unaffected.Store.Current,
             unaffected.Far.Key,
             unaffected.FarOrigin,
-            out NavigationFlowFieldPayloadLease unaffectedCheckout);
+            out NavigationFlowFieldPayloadLease unaffectedCheckout,
+            out _);
 
         var builder = Begin("mutation", affectedStatus);
         Append(builder, "unaffected-status", unaffectedStatus);
@@ -234,7 +241,6 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
             fixture.Far,
             fixture.FarOrigin);
         NavigationGuideStatus createStatus = cache.TryCreateGuide(
-            fixture.World,
             fixture.Store,
             new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
             out NavigationFlowFieldLease guide);
@@ -386,6 +392,7 @@ public sealed class Phase5GraphFlowDeterminismMatrixTests
         NavigationFlowFieldCacheTestHarness.LineFixture fixture,
         int activeLeases,
         int guideCapacity) => new(
+        fixture.World,
         maxEntries: 1,
         maxReusableBytes: fixture.Far.RetainedBytes,
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,

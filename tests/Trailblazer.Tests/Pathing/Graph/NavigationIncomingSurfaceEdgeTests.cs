@@ -150,7 +150,10 @@ public sealed class NavigationIncomingSurfaceEdgeTests
         incoming.Current.ForwardEdge.ExplicitConnection.Owner.ConnectionId
             .Should().Be("to-destination");
         incoming.Current.SelectedEdge.Should().Be(
-            new NavigationSelectedEdgeRef(destinationAddress, canonicalOutgoingOrdinal: 2));
+            new NavigationSelectedEdgeRef(
+                destinationAddress,
+                TraversalMedium.Solid,
+                canonicalOutgoingOrdinal: 2));
     }
 
     [Fact]

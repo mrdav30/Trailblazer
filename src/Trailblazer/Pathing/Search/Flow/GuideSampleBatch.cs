@@ -33,14 +33,14 @@ internal readonly struct GuideSampleBatchResult
 {
     internal GuideSampleBatchResult(
         NavigationGuideStatus status,
-        Vector3d heading)
+        NavigationFlowSample sample)
     {
         Status = status;
-        Heading = heading;
+        Sample = sample;
     }
 
     internal NavigationGuideStatus Status { get; }
-    internal Vector3d Heading { get; }
+    internal NavigationFlowSample Sample { get; }
 }
 
 /// <summary>Samples caller-owned items in stable ordinal order with one shared meter.</summary>
@@ -70,8 +70,8 @@ internal static class GuideSampleBatch
             NavigationGuideStatus status = item.Lease.TrySample(
                 item.ActualFootPosition,
                 ref meter,
-                out Vector3d heading);
-            results[inputIndex] = new GuideSampleBatchResult(status, heading);
+                out NavigationFlowSample sample);
+            results[inputIndex] = new GuideSampleBatchResult(status, sample);
         }
     }
 }

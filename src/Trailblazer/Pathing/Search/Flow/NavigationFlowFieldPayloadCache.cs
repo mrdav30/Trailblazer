@@ -47,6 +47,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     }
 
     private readonly object _sync = new();
+    private readonly GridWorld _world;
     private readonly NavigationFlowFieldPayloadKey[] _keys;
     private readonly CacheEntry?[] _entries;
     private readonly byte[] _states;
@@ -76,6 +77,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     private readonly NavigationImmediateRayWorkspace _immediateRayWorkspace;
 
     internal NavigationFlowFieldPayloadCache(
+        GridWorld world,
         int maxEntries,
         long maxReusableBytes,
         long maxSinglePayloadBytes,
@@ -84,6 +86,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         int guideMapCapacity,
         NavigationImmediateRayWorkspace immediateRayWorkspace)
     {
+        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNegative(maxEntries, nameof(maxEntries));
         if (maxReusableBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxReusableBytes));
@@ -103,6 +106,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         int required = checked(Math.Max(1, maxEntries * 2));
         while (tableSize < required)
             tableSize = checked(tableSize * 2);
+        _world = world;
         _keys = new NavigationFlowFieldPayloadKey[tableSize];
         _entries = new CacheEntry[tableSize];
         _states = new byte[tableSize];
@@ -142,6 +146,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     internal NavigationImmediateRayWorkspace ImmediateRayWorkspace =>
         _immediateRayWorkspace;
 
+    internal GridWorld World => _world;
+
     internal long CachedBytes
     {
         get { lock (_sync) return _cachedBytes; }
@@ -175,12 +181,10 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     internal long MaximumSinglePayloadBytes => _maximumSinglePayloadBytes;
 
     internal NavigationGuideStatus TryCreateGuide(
-        GridWorld world,
         NavigationWorldGraphStore store,
         NavigationFlowQueryResult result,
         out NavigationFlowFieldLease guide)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         guide = default;
         NavigationFlowFieldPayloadLease payloadLease = result.PayloadLease;
@@ -208,12 +212,14 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     {
                         status = NavigationGuideStatus.CapacityExceeded;
                     }
-                    else if (!current.IsDependencyCurrent(payload.Dependencies))
+                    else if (!current.IsDependencyCurrent(payload.Dependencies)
+                        || !IsWorldCurrent(payload))
                     {
                         leaseSlot.Entry.IsInvalidated = true;
                     }
                     else if (!payload.TryGetNode(
                             result.ResolvedOrigin,
+                            payload.Key.StartMedium,
                             out NavigationFlowFieldNode origin))
                     {
                         status = NavigationGuideStatus.Stale;
@@ -242,16 +248,17 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         }
         inner.Bind(
             this,
-            world,
             store,
             slot,
             generation,
             result.ResolvedOrigin,
+            payload.Key.StartMedium,
             originIntegrationCost);
         if (TryGetGuidePayload(slot, generation, out NavigationFlowFieldPayload attached)
                 != NavigationFlowFieldStatus.Success
             || !ReferenceEquals(attached, payload)
-            || !store.Current.IsDependencyCurrent(payload.Dependencies))
+            || !store.Current.IsDependencyCurrent(payload.Dependencies)
+            || !IsWorldCurrent(payload))
         {
             inner.Dispose(inner.Generation);
             return NavigationGuideStatus.Stale;
@@ -313,11 +320,13 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationWorldGraph expectedGraph,
         NavigationFlowFieldPayloadKey key,
         NavigationCellAddress requiredOrigin,
-        out NavigationFlowFieldPayloadLease lease)
+        out NavigationFlowFieldPayloadLease lease,
+        out NavigationFlowFieldPayload? proof)
     {
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(expectedGraph, nameof(expectedGraph));
         lease = default;
+        proof = null;
         NavigationFlowFieldPayload? checkedPayload = null;
         NavigationFlowFieldStatus status;
         lock (_sync)
@@ -329,12 +338,14 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 return NavigationFlowFieldStatus.Pending;
             CacheEntry entry = _entries[slot]!;
             NavigationWorldGraph graph = store.Current;
-            if (!graph.IsDependencyCurrent(entry.Payload.Dependencies))
+            if (!graph.IsDependencyCurrent(entry.Payload.Dependencies)
+                || !IsWorldCurrent(entry.Payload))
             {
                 RemoveAt(slot, invalidate: true);
                 return NavigationFlowFieldStatus.Stale;
             }
-            if (!expectedGraph.IsDependencyCurrent(entry.Payload.Dependencies))
+            if (!expectedGraph.IsDependencyCurrent(entry.Payload.Dependencies)
+                || !IsWorldCurrent(entry.Payload))
                 return NavigationFlowFieldStatus.Pending;
             checkedPayload = entry.Payload;
             status = ClassifyCoverage(checkedPayload, requiredOrigin);
@@ -352,14 +363,46 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         }
         if (checkedPayload != null
             && status != NavigationFlowFieldStatus.Pending
-            && !store.Current.IsDependencyCurrent(checkedPayload.Dependencies))
+            && (!store.Current.IsDependencyCurrent(checkedPayload.Dependencies)
+                || !IsWorldCurrent(checkedPayload)))
         {
             InvalidateExact(checkedPayload);
             lease.Dispose();
             lease = default;
             return NavigationFlowFieldStatus.Stale;
         }
+        if (status != NavigationFlowFieldStatus.Pending)
+            proof = checkedPayload;
         return status;
+    }
+
+    internal bool IsExactProofCurrent(
+        NavigationWorldGraphStore store,
+        NavigationFlowFieldPayload proof,
+        NavigationCellAddress requiredOrigin,
+        NavigationFlowFieldStatus expectedStatus)
+    {
+        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
+        SwiftThrowHelper.ThrowIfNull(proof, nameof(proof));
+        bool current;
+        lock (_sync)
+        {
+            FindSlot(proof.Key, out int slot, out bool found);
+            current = !_disposed
+                && found
+                && ReferenceEquals(_entries[slot]!.Payload, proof)
+                && store.Current.IsDependencyCurrent(proof.Dependencies)
+                && IsWorldCurrent(proof)
+                && ClassifyCoverage(proof, requiredOrigin) == expectedStatus;
+        }
+        if (current
+            && store.Current.IsDependencyCurrent(proof.Dependencies)
+            && IsWorldCurrent(proof))
+        {
+            return true;
+        }
+        InvalidateExact(proof);
+        return false;
     }
 
     internal NavigationFlowFieldStatus TryPublishOrPromote(
@@ -384,12 +427,14 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             if (payload.RetainedBytes > reserved.MaximumBytes)
                 return NavigationFlowFieldStatus.CapacityExceeded;
             NavigationWorldGraph graph = store.Current;
-            if (!graph.IsDependencyCurrent(payload.Dependencies))
+            if (!graph.IsDependencyCurrent(payload.Dependencies)
+                || !IsWorldCurrent(payload))
                 return NavigationFlowFieldStatus.Stale;
 
             FindSlot(payload.Key, out int currentSlot, out bool found);
             if (found
-                && !graph.IsDependencyCurrent(_entries[currentSlot]!.Payload.Dependencies))
+                && (!graph.IsDependencyCurrent(_entries[currentSlot]!.Payload.Dependencies)
+                    || !IsWorldCurrent(_entries[currentSlot]!.Payload)))
             {
                 RemoveAt(currentSlot, invalidate: true);
                 found = false;
@@ -460,7 +505,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         }
 
         if (canonical != null
-            && !store.Current.IsDependencyCurrent(canonical.Dependencies))
+            && (!store.Current.IsDependencyCurrent(canonical.Dependencies)
+                || !IsWorldCurrent(canonical)))
         {
             InvalidateExact(canonical);
             lease.Dispose();
@@ -770,7 +816,10 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowFieldPayload payload,
         NavigationCellAddress requiredOrigin)
     {
-        if (!payload.TryGetNode(requiredOrigin, out NavigationFlowFieldNode origin))
+        if (!payload.TryGetNode(
+                requiredOrigin,
+                payload.Key.StartMedium,
+                out NavigationFlowFieldNode origin))
         {
             return payload.IsComplete
                 ? NavigationFlowFieldStatus.NoPath
@@ -800,8 +849,16 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             NavigationFlowFieldNode left = existing.Nodes[i];
             NavigationFlowFieldNode right = candidate.Nodes[i];
             if (left.Address != right.Address
+                || left.Medium != right.Medium
                 || left.IntegrationCost != right.IntegrationCost
-                || left.SelectedEdge != right.SelectedEdge)
+                || left.SelectedEdge != right.SelectedEdge
+                || left.TransitionInstructionOrdinal
+                    != right.TransitionInstructionOrdinal
+                || !NodeTransitionInstructionsAreEqual(
+                    existing,
+                    left,
+                    candidate,
+                    right))
             {
                 throw new InvalidOperationException(
                     "Same-key flow payloads do not share one canonical node prefix.");
@@ -811,6 +868,9 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         if (existing.Nodes.Length == candidate.Nodes.Length)
         {
             if (existing.IsComplete != candidate.IsComplete
+                || existing.WorldChangeSequence != candidate.WorldChangeSequence
+                || existing.TransitionInstructions.Length
+                    != candidate.TransitionInstructions.Length
                 || !DependenciesAreEqual(existing.Dependencies, candidate.Dependencies))
             {
                 throw new InvalidOperationException(
@@ -826,6 +886,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             ? candidate
             : existing;
         if (shorter.IsComplete
+            || !WorldDependencyIsSubset(shorter, longer)
             || longer.Nodes[shorter.Nodes.Length].IntegrationCost
                 <= shorter.LastSettledCost
             || !DependenciesAreSubset(shorter.Dependencies, longer.Dependencies))
@@ -838,19 +899,65 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             : PrefixRelation.ExistingLonger;
     }
 
+    internal bool IsWorldCurrent(NavigationFlowFieldPayload payload) =>
+        !payload.WorldChangeSequence.HasValue
+        || _world.ChangeSequence == payload.WorldChangeSequence.GetValueOrDefault();
+
     private static bool DependenciesAreEqual(
         GraphDependencyStamp left,
         GraphDependencyStamp right) =>
         left.Components.Length == right.Components.Length
         && left.Pages.Length == right.Pages.Length
+        && left.HasTransitionRuleDependency == right.HasTransitionRuleDependency
+        && left.TransitionRuleVersion == right.TransitionRuleVersion
         && DependenciesAreSubset(left, right);
 
     private static bool DependenciesAreSubset(
         GraphDependencyStamp shorter,
         GraphDependencyStamp longer) =>
         shorter.AreaPolicy == longer.AreaPolicy
+        && (!shorter.HasTransitionRuleDependency
+            || (longer.HasTransitionRuleDependency
+                && shorter.TransitionRuleVersion == longer.TransitionRuleVersion))
         && ComponentDependenciesAreSubset(shorter.Components, longer.Components)
         && PageDependenciesAreSubset(shorter.Pages, longer.Pages);
+
+    private static bool WorldDependencyIsSubset(
+        NavigationFlowFieldPayload shorter,
+        NavigationFlowFieldPayload longer) =>
+        !shorter.WorldChangeSequence.HasValue
+        || longer.WorldChangeSequence == shorter.WorldChangeSequence;
+
+    private static bool NodeTransitionInstructionsAreEqual(
+        NavigationFlowFieldPayload leftPayload,
+        NavigationFlowFieldNode left,
+        NavigationFlowFieldPayload rightPayload,
+        NavigationFlowFieldNode right)
+    {
+        int ordinal = left.TransitionInstructionOrdinal;
+        if (ordinal < 0)
+            return true;
+        return (uint)ordinal < (uint)leftPayload.TransitionInstructions.Length
+            && (uint)ordinal < (uint)rightPayload.TransitionInstructions.Length
+            && TransitionInstructionsAreEqual(
+                leftPayload.TransitionInstructions[ordinal],
+                rightPayload.TransitionInstructions[ordinal]);
+    }
+
+    private static bool TransitionInstructionsAreEqual(
+        in NavigationTransitionInstruction left,
+        in NavigationTransitionInstruction right) =>
+        left.IdentityKind == right.IdentityKind
+        && string.Equals(left.OwnerMapId, right.OwnerMapId, StringComparison.Ordinal)
+        && string.Equals(left.Id, right.Id, StringComparison.Ordinal)
+        && left.Type == right.Type
+        && left.SourceAddress == right.SourceAddress
+        && left.DestinationAddress == right.DestinationAddress
+        && left.SourceMedium == right.SourceMedium
+        && left.DestinationMedium == right.DestinationMedium
+        && left.SourcePosition == right.SourcePosition
+        && left.DestinationPosition == right.DestinationPosition
+        && left.LocomotionHints == right.LocomotionHints;
 
     private static bool ComponentDependenciesAreSubset(
         GraphComponentDependency[] shorter,

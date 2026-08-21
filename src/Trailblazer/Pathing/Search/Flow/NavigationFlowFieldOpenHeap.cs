@@ -89,9 +89,13 @@ internal struct NavigationFlowFieldOpenHeap
         ref NavigationFlowFieldSearchNode right = ref _workspace.GetRecord(
             _workspace.HeapSlots[rightIndex]);
         int comparison = left.IntegrationCost.CompareTo(right.IntegrationCost);
+        if (comparison != 0)
+            return comparison;
+        comparison = left.Address.CompareTo(right.Address);
         return comparison != 0
             ? comparison
-            : left.Address.CompareTo(right.Address);
+            : _workspace.GetNode(_workspace.HeapSlots[leftIndex]).Medium.CompareTo(
+                _workspace.GetNode(_workspace.HeapSlots[rightIndex]).Medium);
     }
 
     private void Swap(int left, int right)

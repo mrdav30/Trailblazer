@@ -5,6 +5,9 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -12,9 +15,6 @@ using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using System;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -24,7 +24,7 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationFlowFieldTests
 {
     [Fact]
-    public void Constructor_ShouldRejectStagedGasUntilMediumStateSearchIsPorted()
+    public void ReverseIntegration_ShouldTraverseGasUsingUnifiedMediumStateSearch()
     {
         using var world = new GridWorld();
         VoxelIndex[] cells = { default, new VoxelIndex(1, 0, 0) };
@@ -78,10 +78,26 @@ public sealed class NavigationFlowFieldTests
             admission.Advance(64, 8);
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
 
+        NavigationFlowFieldWork? work = null;
         Action construct = () =>
-            _ = new NavigationFlowFieldWork(admission.Result, workspace);
+            work = new NavigationFlowFieldWork(world, admission.Result, workspace);
 
-        construct.Should().Throw<ArgumentException>();
+        construct.Should().NotThrow();
+        using (work)
+        {
+            for (int step = 0;
+                step < 256 && work!.Status == NavigationFlowFieldStatus.Pending;
+                step++)
+            {
+                work.Advance(64, 64, 64, 64);
+            }
+            work!.Status.Should().Be(NavigationFlowFieldStatus.Success);
+            work.Result.Should().NotBeNull();
+            work.Result!.Nodes.Should().HaveCount(2);
+            work.Result.Nodes[0].IntegrationCost.Should().Be(Fixed64.Zero);
+            work.Result.Nodes[1].IntegrationCost.Should().Be(Fixed64.One);
+            work.Result.WorldChangeSequence.Should().Be(world.ChangeSequence);
+        }
     }
 
     [Fact]
@@ -131,6 +147,7 @@ public sealed class NavigationFlowFieldTests
             new NavigationCellAddress(fixture.MapId, middle));
         result.Payload.TryGetNode(
                 new NavigationCellAddress(fixture.MapId, new VoxelIndex(9, 0, 0)),
+                TraversalMedium.Solid,
                 out _)
             .Should().BeFalse();
     }
@@ -368,6 +385,7 @@ public sealed class NavigationFlowFieldTests
             new NavigationCellAddress(fixture.MapId, cells[3]));
         result.Payload.TryGetNode(
                 new NavigationCellAddress(fixture.MapId, cells[4]),
+                TraversalMedium.Solid,
                 out _)
             .Should().BeFalse();
     }
@@ -411,6 +429,7 @@ public sealed class NavigationFlowFieldTests
 
         result.Payload.TryGetNode(
                 new NavigationCellAddress(fixture.MapId, origin),
+                TraversalMedium.Solid,
                 out NavigationFlowFieldNode node)
             .Should().BeTrue();
         fixture.Graph.TryGetNodeRef(
@@ -611,12 +630,15 @@ public sealed class NavigationFlowFieldTests
     public void PayloadByteAccounting_ShouldMatchTheExactMaximumAndRejectNegativeCounts()
     {
         Unsafe.SizeOf<NavigationFlowFieldPayloadKey>().Should().Be(216);
-        Unsafe.SizeOf<NavigationFlowFieldNode>().Should().Be(64);
-        ((Action)(() => NavigationFlowFieldPayload.GetMaximumRetainedBytes(-1, 0, 0)))
+        Unsafe.SizeOf<NavigationFlowFieldNode>().Should().Be(72);
+        Unsafe.SizeOf<NavigationFlowSample>().Should().Be(216);
+        ((Action)(() => NavigationFlowFieldPayload.GetMaximumRetainedBytes(-1, 0, 0, 0)))
             .Should().Throw<ArgumentOutOfRangeException>();
-        ((Action)(() => NavigationFlowFieldPayload.GetMaximumRetainedBytes(0, -1, 0)))
+        ((Action)(() => NavigationFlowFieldPayload.GetMaximumRetainedBytes(0, -1, 0, 0)))
             .Should().Throw<ArgumentOutOfRangeException>();
-        ((Action)(() => NavigationFlowFieldPayload.GetMaximumRetainedBytes(0, 0, -1)))
+        ((Action)(() => NavigationFlowFieldPayload.GetMaximumRetainedBytes(0, 0, -1, 0)))
+            .Should().Throw<ArgumentOutOfRangeException>();
+        ((Action)(() => NavigationFlowFieldPayload.GetMaximumRetainedBytes(0, 0, 0, -1)))
             .Should().Throw<ArgumentOutOfRangeException>();
 
         using var world = new GridWorld();
@@ -648,17 +670,17 @@ public sealed class NavigationFlowFieldTests
             query,
             origin,
             destination,
-            maximumPayloadBytes: 720);
+            maximumPayloadBytes: 768);
         FlowResult oneByteShort = RunFlow(
             fixture.Graph,
             query,
             origin,
             destination,
-            maximumPayloadBytes: 719);
+            maximumPayloadBytes: 767);
 
-        baseline.Payload.RetainedBytes.Should().Be(720);
-        NavigationFlowFieldPayload.GetMaximumRetainedBytes(3, 1, 1)
-            .Should().Be(720);
+        baseline.Payload.RetainedBytes.Should().Be(768);
+        NavigationFlowFieldPayload.GetMaximumRetainedBytes(3, 0, 1, 1)
+            .Should().Be(768);
         exact.Status.Should().Be(NavigationFlowFieldStatus.Success);
         oneByteShort.Status.Should().Be(NavigationFlowFieldStatus.CapacityExceeded);
     }
@@ -713,7 +735,7 @@ public sealed class NavigationFlowFieldTests
 
         FlowResult exact = RunFlow(
             fixture.Graph,
-            WithBudget(query, maxExpandedNodes: 3, maxEvaluatedEdges: 9),
+            WithBudget(query, maxExpandedNodes: 3, maxEvaluatedEdges: 14),
             origin,
             destination,
             dependencyPageCapacity: 1,
@@ -726,7 +748,7 @@ public sealed class NavigationFlowFieldTests
             destination);
         FlowResult edgeBudgetShort = RunFlow(
             fixture.Graph,
-            WithBudget(query, maxEvaluatedEdges: 8),
+            WithBudget(query, maxEvaluatedEdges: 13),
             origin,
             destination);
         FlowResult nodeCapacityShort = RunFlow(
@@ -750,7 +772,7 @@ public sealed class NavigationFlowFieldTests
 
         exact.Status.Should().Be(NavigationFlowFieldStatus.Success);
         exact.ExpandedNodes.Should().Be(3);
-        exact.EvaluatedEdges.Should().Be(9);
+        exact.EvaluatedEdges.Should().Be(14);
         exact.LookupProbes.Should().Be(8);
         nodeBudgetShort.Status.Should().Be(NavigationFlowFieldStatus.BudgetExceeded);
         edgeBudgetShort.Status.Should().Be(NavigationFlowFieldStatus.BudgetExceeded);
@@ -790,19 +812,26 @@ public sealed class NavigationFlowFieldTests
             .Should().BeTrue();
         var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 2, 2, 2);
 
-        workspace.TryGetOrAdd(originNode, out int originSlot, out _)
+        var originState = new NavigationMediumStateRef(
+            originNode,
+            TraversalMedium.Solid);
+        var destinationState = new NavigationMediumStateRef(
+            destinationNode,
+            TraversalMedium.Solid);
+        workspace.TryGetOrAdd(originState, out int originSlot, out _)
             .Should().BeTrue();
         ref NavigationFlowFieldSearchNode originRecord =
             ref workspace.GetRecord(originSlot);
         originRecord.Address = originAddress;
         originRecord.SelectedEdge = new NavigationSelectedEdgeRef(
             destinationAddress,
+            TraversalMedium.Solid,
             0);
         workspace.TryRecordPage(fixture.MapId, 0).Should().BeTrue();
         workspace.TryRecordComponent(component).Should().BeTrue();
         workspace.Reset();
 
-        workspace.TryGetOrAdd(originNode, out _, out bool originReadded)
+        workspace.TryGetOrAdd(originState, out _, out bool originReadded)
             .Should().BeTrue();
         originReadded.Should().BeTrue();
         workspace.GetRecord(originSlot).Address.Should().Be(
@@ -816,7 +845,7 @@ public sealed class NavigationFlowFieldTests
         workspace.DependencyPageCount.Should().Be(0);
         workspace.DependencyComponentCount.Should().Be(0);
 
-        workspace.TryGetOrAdd(destinationNode, out int destinationSlot, out _)
+        workspace.TryGetOrAdd(destinationState, out int destinationSlot, out _)
             .Should().BeTrue();
         workspace.GetRecord(destinationSlot).Address = destinationAddress;
         workspace.TryRecordPage(fixture.MapId, 0).Should().BeTrue();
@@ -827,7 +856,7 @@ public sealed class NavigationFlowFieldTests
 
         allocated.Should().Be(0);
         workspace.TryGetOrAdd(
-                destinationNode,
+                destinationState,
                 out int resetDestinationSlot,
                 out bool destinationReadded)
             .Should().BeTrue();
@@ -867,6 +896,7 @@ public sealed class NavigationFlowFieldTests
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         using var work = new NavigationFlowFieldWork(
+            world,
             Resolve(
                 store,
                 fixture.Graph,
@@ -915,6 +945,7 @@ public sealed class NavigationFlowFieldTests
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
         using (NavigationFlowFieldWork warm = new(
+            world,
             Resolve(warmStore, fixture.Graph, query, origin, destination, out _),
             workspace))
         {
@@ -925,6 +956,7 @@ public sealed class NavigationFlowFieldTests
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         using var work = new NavigationFlowFieldWork(
+            world,
             Resolve(store, fixture.Graph, query, origin, destination, out _),
             workspace);
         work.Advance(1, 1, 1, 1).Should().Be(NavigationFlowFieldStatus.Pending);
@@ -964,6 +996,7 @@ public sealed class NavigationFlowFieldTests
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
         using (NavigationFlowFieldWork warm = new(
+            world,
             Resolve(warmStore, fixture.Graph, query, origin, destination, out _),
             workspace))
         {
@@ -973,6 +1006,7 @@ public sealed class NavigationFlowFieldTests
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         using var work = new NavigationFlowFieldWork(
+            world,
             Resolve(store, fixture.Graph, query, origin, destination, out _),
             workspace);
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -1010,6 +1044,7 @@ public sealed class NavigationFlowFieldTests
         using (NavigationWorldGraphStore warmStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
         using (NavigationFlowFieldWork warm = new(
+            world,
             Resolve(warmStore, fixture.Graph, query, origin, destination, out _),
             workspace,
             maximumPayloadBytes: 0))
@@ -1021,6 +1056,7 @@ public sealed class NavigationFlowFieldTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         store.TryAcquire()!.Dispose();
         using var work = new NavigationFlowFieldWork(
+            world,
             Resolve(store, fixture.Graph, query, origin, destination, out _),
             workspace,
             maximumPayloadBytes: 0);
@@ -1057,6 +1093,7 @@ public sealed class NavigationFlowFieldTests
         using (var completedStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
         using (var completed = new NavigationFlowFieldWork(
+            world,
             Resolve(
                 completedStore,
                 fixture.Graph,
@@ -1079,7 +1116,10 @@ public sealed class NavigationFlowFieldTests
             AssertScratchReleased(completed);
         }
 
-        payload.TryGetNode(originAddress, out NavigationFlowFieldNode node)
+        payload.TryGetNode(
+                originAddress,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode node)
             .Should().BeTrue();
         node.IntegrationCost.Should().Be(Fixed64.One);
 
@@ -1087,6 +1127,7 @@ public sealed class NavigationFlowFieldTests
         using (var failedStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph))
         using (var failed = new NavigationFlowFieldWork(
+            world,
             Resolve(
                 failedStore,
                 fixture.Graph,
@@ -1105,6 +1146,7 @@ public sealed class NavigationFlowFieldTests
         using var abandonedStore =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         var abandoned = new NavigationFlowFieldWork(
+            world,
             Resolve(
                 abandonedStore,
                 fixture.Graph,
@@ -1158,6 +1200,7 @@ public sealed class NavigationFlowFieldTests
         int dependencyComponentCapacity = 128,
         int nodeCapacity = 128)
     {
+        using var world = new GridWorld();
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(graph);
         NavigationWorldGraphLease lease = store.TryAcquire()!;
@@ -1188,7 +1231,9 @@ public sealed class NavigationFlowFieldTests
             policy!,
             TraversalMedium.Solid,
             TraversalMedia.Solid,
-            meter);
+            meter,
+            world.ChangeSequence,
+            requiresWorldStamp: false);
         var workspace = new NavigationFlowFieldWorkspace(
             mapCapacity: 0,
             dependencyPageCapacity,
@@ -1197,6 +1242,7 @@ public sealed class NavigationFlowFieldTests
             rayCoveredAddressCapacity: nodeCapacity,
             rayTraceIntervalCapacity: nodeCapacity);
         using var work = new NavigationFlowFieldWork(
+            world,
             resolved,
             workspace,
             maximumPayloadBytes);
@@ -1292,7 +1338,9 @@ public sealed class NavigationFlowFieldTests
             policy!,
             TraversalMedium.Solid,
             TraversalMedia.Solid,
-            meter);
+            meter,
+            worldChangeSequence: 0,
+            requiresWorldStamp: false);
         return resolved;
     }
 

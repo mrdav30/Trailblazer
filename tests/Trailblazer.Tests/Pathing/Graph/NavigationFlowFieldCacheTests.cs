@@ -8,7 +8,10 @@
 using System;
 using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Grids.Storage;
+using GridForge.Grids.Topology;
 using GridForge.Spatial;
 using Trailblazer.Pathing;
 using Xunit;
@@ -31,6 +34,7 @@ public sealed class NavigationFlowFieldCacheTests
             NavigationAStarExitTestHarness.CreateStore(newer);
         NavigationFlowFieldPayload newerPayload =
             NavigationFlowFieldCacheTestHarness.RunFlow(
+                fixture.World,
                 newerStore,
                 newer,
                 fixture.FarQuery,
@@ -41,6 +45,7 @@ public sealed class NavigationFlowFieldCacheTests
         fixture.Store.TryPublish(newer)
             .Should().Be(NavigationCandidatePublication.Published);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: newerPayload.RetainedBytes,
             maxSinglePayloadBytes: newerPayload.RetainedBytes,
@@ -66,7 +71,8 @@ public sealed class NavigationFlowFieldCacheTests
                 olderLease.Graph,
                 newerPayload.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease rejected)
+                out NavigationFlowFieldPayloadLease rejected,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Pending);
         rejected.Should().Be(default(NavigationFlowFieldPayloadLease));
         cache.Count.Should().Be(1,
@@ -77,7 +83,8 @@ public sealed class NavigationFlowFieldCacheTests
                 newer,
                 newerPayload.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease current)
+                out NavigationFlowFieldPayloadLease current,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Success);
         current.TryGetPayload(out NavigationFlowFieldPayload retained)
             .Should().Be(NavigationFlowFieldStatus.Success);
@@ -92,6 +99,7 @@ public sealed class NavigationFlowFieldCacheTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
         long activeBytes = checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -138,6 +146,7 @@ public sealed class NavigationFlowFieldCacheTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
         long activeBytes = checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -192,14 +201,19 @@ public sealed class NavigationFlowFieldCacheTests
             fixture.NearOrigin);
         lease.Dispose();
 
-        fixture.Near.TryGetNode(fixture.MarginOrigin, out _).Should().BeTrue(
+        fixture.Near.TryGetNode(
+                fixture.MarginOrigin,
+                TraversalMedium.Solid,
+                out _)
+            .Should().BeTrue(
             "the cache must check the requested extra-cost margin, not just node presence");
         cache.TryCheckout(
                 fixture.Store,
                 fixture.Store.Current,
                 fixture.Near.Key,
                 fixture.MarginOrigin,
-                out NavigationFlowFieldPayloadLease checkout)
+                out NavigationFlowFieldPayloadLease checkout,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Pending);
         checkout.Should().Be(default(NavigationFlowFieldPayloadLease));
         cache.ActiveLeaseCount.Should().Be(0);
@@ -211,6 +225,7 @@ public sealed class NavigationFlowFieldCacheTests
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -231,7 +246,8 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease rebound)
+                out NavigationFlowFieldPayloadLease rebound,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Success);
         staleCopy.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Stale);
         staleCopy.Dispose();
@@ -264,7 +280,8 @@ public sealed class NavigationFlowFieldCacheTests
                     fixture.Store.Current,
                     fixture.Far.Key,
                     fixture.NearOrigin,
-                    out NavigationFlowFieldPayloadLease lease)
+                    out NavigationFlowFieldPayloadLease lease,
+                    out _)
                 .Should().Be(NavigationFlowFieldStatus.Success);
             lease.TryGetPayload(out NavigationFlowFieldPayload payload)
                 .Should().Be(NavigationFlowFieldStatus.Success);
@@ -285,6 +302,7 @@ public sealed class NavigationFlowFieldCacheTests
             fixture.FarOrigin.MapId,
             new VoxelIndex(99, 0, 0));
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Complete.RetainedBytes,
             maxSinglePayloadBytes: fixture.Complete.RetainedBytes,
@@ -314,7 +332,8 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Complete.Key,
                 unreachable,
-                out NavigationFlowFieldPayloadLease checkout)
+                out NavigationFlowFieldPayloadLease checkout,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.NoPath);
         checkout.Should().Be(default(NavigationFlowFieldPayloadLease));
     }
@@ -326,6 +345,7 @@ public sealed class NavigationFlowFieldCacheTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         long activeBytes = checked(fixture.Far.RetainedBytes * 2);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -386,14 +406,18 @@ public sealed class NavigationFlowFieldCacheTests
         NavigationFlowFieldNode first = malformedNodes[0];
         malformedNodes[0] = new NavigationFlowFieldNode(
             first.Address,
+            first.Medium,
             Fixed64.One,
-            first.SelectedEdge);
+            first.SelectedEdge,
+            first.TransitionInstructionOrdinal);
         var malformed = new NavigationFlowFieldPayload(
             fixture.Far.Key,
             malformedNodes,
             (int[])fixture.Far.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])fixture.Far.TransitionInstructions.Clone(),
             fixture.Far.Dependencies,
-            fixture.Far.IsComplete);
+            fixture.Far.IsComplete,
+            fixture.Far.WorldChangeSequence);
         cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation reservation)
@@ -430,14 +454,18 @@ public sealed class NavigationFlowFieldCacheTests
         NavigationFlowFieldNode firstExtra = malformedNodes[firstExtraOrdinal];
         malformedNodes[firstExtraOrdinal] = new NavigationFlowFieldNode(
             firstExtra.Address,
+            firstExtra.Medium,
             useLowerCost ? Fixed64.Zero : fixture.Near.LastSettledCost,
-            firstExtra.SelectedEdge);
+            firstExtra.SelectedEdge,
+            firstExtra.TransitionInstructionOrdinal);
         var malformed = new NavigationFlowFieldPayload(
             fixture.Far.Key,
             malformedNodes,
             (int[])fixture.Far.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])fixture.Far.TransitionInstructions.Clone(),
             fixture.Far.Dependencies,
-            fixture.Far.IsComplete);
+            fixture.Far.IsComplete,
+            fixture.Far.WorldChangeSequence);
         cache.TryReservePayload(
                 malformed.RetainedBytes,
                 out NavigationFlowFieldReservation reservation)
@@ -458,11 +486,282 @@ public sealed class NavigationFlowFieldCacheTests
     }
 
     [Fact]
+    public void SameKeyPrefixWithDifferentNodeMedium_ShouldFailTheInvariant()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        using var cache = CreateCache(fixture);
+        Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
+        NavigationFlowFieldNode[] malformedNodes =
+            (NavigationFlowFieldNode[])fixture.Far.Nodes.Clone();
+        NavigationFlowFieldNode first = malformedNodes[0];
+        malformedNodes[0] = new NavigationFlowFieldNode(
+            first.Address,
+            TraversalMedium.Gas,
+            first.IntegrationCost,
+            first.SelectedEdge,
+            first.TransitionInstructionOrdinal);
+        var malformed = new NavigationFlowFieldPayload(
+            fixture.Far.Key,
+            malformedNodes,
+            (int[])fixture.Far.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])fixture.Far.TransitionInstructions.Clone(),
+            fixture.Far.Dependencies,
+            fixture.Far.IsComplete,
+            fixture.Far.WorldChangeSequence);
+        cache.TryReservePayload(
+                malformed.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        FluentActions.Invoking(() => cache.TryPublishOrPromote(
+                fixture.Store,
+                malformed,
+                fixture.FarOrigin,
+                ref reservation,
+                out _))
+            .Should().Throw<InvalidOperationException>();
+
+        cache.ReleasePayloadReservation(ref reservation);
+    }
+
+    [Fact]
+    public void SameKeyPrefixWithDifferentTransitionInstruction_ShouldFailTheInvariant()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        NavigationFlowFieldNode[] nodes =
+            (NavigationFlowFieldNode[])fixture.Far.Nodes.Clone();
+        int nodeOrdinal = -1;
+        for (int i = 0; i < nodes.Length; i++)
+        {
+            if (nodes[i].SelectedEdge.IsValid)
+            {
+                nodeOrdinal = i;
+                break;
+            }
+        }
+        nodeOrdinal.Should().BeGreaterThanOrEqualTo(0);
+        NavigationFlowFieldNode selected = nodes[nodeOrdinal];
+        nodes[nodeOrdinal] = new NavigationFlowFieldNode(
+            selected.Address,
+            selected.Medium,
+            selected.IntegrationCost,
+            selected.SelectedEdge,
+            transitionInstructionOrdinal: 0);
+        NavigationTransitionInstruction Instruction(string id) => new(
+            NavigationTransitionIdentityKind.Definition,
+            selected.Address.MapId,
+            id,
+            TraversalTransitionType.Jump,
+            selected.Address,
+            selected.SelectedEdge.Target,
+            selected.Medium,
+            selected.SelectedEdge.TargetMedium,
+            Vector3d.Zero,
+            Vector3d.Zero,
+            TraversalTransitionLocomotionHints.None);
+        NavigationFlowFieldPayload Payload(string id) => new(
+            fixture.Far.Key,
+            (NavigationFlowFieldNode[])nodes.Clone(),
+            (int[])fixture.Far.AddressLookupOrdinals.Clone(),
+            new[] { Instruction(id) },
+            fixture.Far.Dependencies,
+            fixture.Far.IsComplete,
+            fixture.Far.WorldChangeSequence);
+        NavigationFlowFieldPayload first = Payload("first");
+        NavigationFlowFieldPayload different = Payload("different");
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: first.RetainedBytes,
+            maxSinglePayloadBytes: first.RetainedBytes,
+            maxActivePayloadBytes: first.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                first.RetainedBytes,
+                out NavigationFlowFieldReservation firstReservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                first,
+                fixture.FarOrigin,
+                ref firstReservation,
+                out NavigationFlowFieldPayloadLease firstLease)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        firstLease.Dispose();
+        cache.TryReservePayload(
+                different.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        FluentActions.Invoking(() => cache.TryPublishOrPromote(
+                fixture.Store,
+                different,
+                fixture.FarOrigin,
+                ref reservation,
+                out _))
+            .Should().Throw<InvalidOperationException>();
+
+        cache.ReleasePayloadReservation(ref reservation);
+    }
+
+    [Fact]
+    public void WorldStampedPayload_ShouldBeRejectedAfterGridWorldMutation()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        var stamped = new NavigationFlowFieldPayload(
+            fixture.Far.Key,
+            (NavigationFlowFieldNode[])fixture.Far.Nodes.Clone(),
+            (int[])fixture.Far.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])fixture.Far.TransitionInstructions.Clone(),
+            fixture.Far.Dependencies,
+            fixture.Far.IsComplete,
+            fixture.World.ChangeSequence);
+        using var cache = CreateCache(fixture);
+        Publish(cache, fixture, stamped, fixture.FarOrigin).Dispose();
+        GridConfiguration added = new(
+            new Vector3d(100, 0, 0),
+            Vector3d.One,
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        fixture.World.TryAddGrid(added, new[] { default(VoxelIndex) }, out _)
+            .Should().BeTrue();
+
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                stamped.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease lease,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Stale);
+
+        lease.Should().Be(default(NavigationFlowFieldPayloadLease));
+        cache.Count.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StrictPrefix_ShouldPreserveTransitionRuleDependencySubset(
+        bool shorterDependsOnRules)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        long ruleVersion = fixture.Graph.TransitionRules.Version;
+        GraphDependencyStamp WithRuleDependency(
+            GraphDependencyStamp source,
+            bool hasDependency) => new(
+            source.AreaPolicy,
+            source.Components,
+            source.Pages,
+            hasDependency,
+            ruleVersion);
+        NavigationFlowFieldPayload WithDependencies(
+            NavigationFlowFieldPayload source,
+            bool hasDependency) => new(
+            source.Key,
+            (NavigationFlowFieldNode[])source.Nodes.Clone(),
+            (int[])source.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])source.TransitionInstructions.Clone(),
+            WithRuleDependency(source.Dependencies, hasDependency),
+            source.IsComplete,
+            source.WorldChangeSequence);
+        NavigationFlowFieldPayload near = WithDependencies(
+            fixture.Near,
+            shorterDependsOnRules);
+        NavigationFlowFieldPayload far = WithDependencies(
+            fixture.Far,
+            !shorterDependsOnRules);
+        using var cache = CreateCache(fixture);
+        Publish(cache, fixture, near, fixture.NearOrigin).Dispose();
+        cache.TryReservePayload(
+                far.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        Action publish = () => cache.TryPublishOrPromote(
+            fixture.Store,
+            far,
+            fixture.FarOrigin,
+            ref reservation,
+            out _);
+
+        if (shorterDependsOnRules)
+        {
+            publish.Should().Throw<InvalidOperationException>();
+            cache.ReleasePayloadReservation(ref reservation);
+        }
+        else
+        {
+            publish.Should().NotThrow();
+            reservation.Should().Be(default(NavigationFlowFieldReservation));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StrictPrefix_ShouldPreserveWorldDependencySubset(
+        bool shorterHasWorldStamp)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        NavigationFlowFieldPayload WithWorldStamp(
+            NavigationFlowFieldPayload source,
+            bool hasStamp) => new(
+            source.Key,
+            (NavigationFlowFieldNode[])source.Nodes.Clone(),
+            (int[])source.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])source.TransitionInstructions.Clone(),
+            source.Dependencies,
+            source.IsComplete,
+            hasStamp ? fixture.World.ChangeSequence : null);
+        NavigationFlowFieldPayload near = WithWorldStamp(
+            fixture.Near,
+            shorterHasWorldStamp);
+        NavigationFlowFieldPayload far = WithWorldStamp(
+            fixture.Far,
+            !shorterHasWorldStamp);
+        using var cache = CreateCache(fixture);
+        Publish(cache, fixture, near, fixture.NearOrigin).Dispose();
+        cache.TryReservePayload(
+                far.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        Action publish = () => cache.TryPublishOrPromote(
+            fixture.Store,
+            far,
+            fixture.FarOrigin,
+            ref reservation,
+            out _);
+
+        if (shorterHasWorldStamp)
+        {
+            publish.Should().Throw<InvalidOperationException>();
+            cache.ReleasePayloadReservation(ref reservation);
+        }
+        else
+        {
+            publish.Should().NotThrow();
+            reservation.Should().Be(default(NavigationFlowFieldReservation));
+        }
+    }
+
+    [Fact]
     public void NonReusablePayload_ShouldRemainDetachedOnlyUntilReturn()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 0,
             maxReusableBytes: 0,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -486,6 +785,7 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
+                out _,
                 out _)
             .Should().Be(NavigationFlowFieldStatus.Pending);
         lease.Dispose();
@@ -499,6 +799,7 @@ public sealed class NavigationFlowFieldCacheTests
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         using var oneByteShort = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes - 1,
@@ -510,6 +811,7 @@ public sealed class NavigationFlowFieldCacheTests
             .Should().BeFalse();
 
         using var leaseCapped = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -527,6 +829,7 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
+                out _,
                 out _)
             .Should().Be(NavigationFlowFieldStatus.CapacityExceeded,
                 "lease count is independent even when unique active bytes do not grow");
@@ -544,6 +847,7 @@ public sealed class NavigationFlowFieldCacheTests
                 2);
         long twoPayloadBytes = checked(fixture.Far.RetainedBytes * 2);
         using var lru = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 2,
             maxReusableBytes: twoPayloadBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -558,7 +862,8 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease touched)
+                out NavigationFlowFieldPayloadLease touched,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Success);
         touched.Dispose();
         Publish(lru, fixture, third, fixture.FarOrigin).Dispose();
@@ -569,6 +874,7 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 second.Key,
                 fixture.FarOrigin,
+                out _,
                 out _)
             .Should().Be(NavigationFlowFieldStatus.Pending);
         lru.TryCheckout(
@@ -576,7 +882,8 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease retained)
+                out NavigationFlowFieldPayloadLease retained,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Success);
         retained.Dispose();
     }
@@ -588,6 +895,7 @@ public sealed class NavigationFlowFieldCacheTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         long activeBytes = checked(fixture.Far.RetainedBytes * 2);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -648,6 +956,7 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
+                out _,
                 out _)
             .Should().Be(NavigationFlowFieldStatus.Pending);
         Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
@@ -668,7 +977,8 @@ public sealed class NavigationFlowFieldCacheTests
                     fixture.Store.Current,
                     fixture.Far.Key,
                     fixture.FarOrigin,
-                    out NavigationFlowFieldPayloadLease warm)
+                    out NavigationFlowFieldPayloadLease warm,
+                    out _)
                 .Should().Be(NavigationFlowFieldStatus.Success);
             warm.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Success);
             warm.Dispose();
@@ -683,7 +993,8 @@ public sealed class NavigationFlowFieldCacheTests
                     fixture.Store.Current,
                     fixture.Far.Key,
                     fixture.FarOrigin,
-                    out NavigationFlowFieldPayloadLease lease)
+                    out NavigationFlowFieldPayloadLease lease,
+                    out _)
                 != NavigationFlowFieldStatus.Success
                 || lease.TryGetPayload(out _) != NavigationFlowFieldStatus.Success)
             {
@@ -705,6 +1016,7 @@ public sealed class NavigationFlowFieldCacheTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         long exactAggregate = checked(fixture.Far.RetainedBytes * 2);
         using var exact = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -725,6 +1037,7 @@ public sealed class NavigationFlowFieldCacheTests
         exact.ReleasePayloadReservation(ref first);
 
         using var oneByteShort = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -778,8 +1091,10 @@ public sealed class NavigationFlowFieldCacheTests
             fixture.Near.Key,
             (NavigationFlowFieldNode[])fixture.Near.Nodes.Clone(),
             (int[])fixture.Near.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])fixture.Near.TransitionInstructions.Clone(),
             fixture.Near.Dependencies,
-            isComplete: true);
+            isComplete: true,
+            fixture.Near.WorldChangeSequence);
         Publish(cache, fixture, malformedCompletePrefix, fixture.NearOrigin).Dispose();
         cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
@@ -813,8 +1128,10 @@ public sealed class NavigationFlowFieldCacheTests
             fixture.Far.Key,
             (NavigationFlowFieldNode[])fixture.Far.Nodes.Clone(),
             (int[])fixture.Far.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])fixture.Far.TransitionInstructions.Clone(),
             missingDependencies,
-            fixture.Far.IsComplete);
+            fixture.Far.IsComplete,
+            fixture.Far.WorldChangeSequence);
         cache.TryReservePayload(
                 fixture.Far.RetainedBytes,
                 out NavigationFlowFieldReservation reservation)
@@ -878,16 +1195,19 @@ public sealed class NavigationFlowFieldCacheTests
         fixture.Near.RetainedBytes.Should().Be(
             NavigationFlowFieldPayload.GetMaximumRetainedBytes(
                 fixture.Near.Nodes.Length,
+                fixture.Near.TransitionInstructions.Length,
                 fixture.Near.Dependencies.Components.Length,
                 fixture.Near.Dependencies.Pages.Length));
         fixture.Far.RetainedBytes.Should().Be(
             NavigationFlowFieldPayload.GetMaximumRetainedBytes(
                 fixture.Far.Nodes.Length,
+                fixture.Far.TransitionInstructions.Length,
                 fixture.Far.Dependencies.Components.Length,
                 fixture.Far.Dependencies.Pages.Length));
         fixture.Complete.RetainedBytes.Should().Be(
             NavigationFlowFieldPayload.GetMaximumRetainedBytes(
                 fixture.Complete.Nodes.Length,
+                fixture.Complete.TransitionInstructions.Length,
                 fixture.Complete.Dependencies.Components.Length,
                 fixture.Complete.Dependencies.Pages.Length));
         using var cache = CreateCache(fixture);
@@ -947,6 +1267,7 @@ public sealed class NavigationFlowFieldCacheTests
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         long twoPayloadBytes = checked(fixture.Far.RetainedBytes * 2);
         using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
             maxEntries: 1,
             maxReusableBytes: fixture.Far.RetainedBytes,
             maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -969,7 +1290,8 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Store.Current,
                 fixture.Far.Key,
                 fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease shared)
+                out NavigationFlowFieldPayloadLease shared,
+                out _)
             .Should().Be(NavigationFlowFieldStatus.Success,
                 "a second lease of the same immutable field adds no unique payload bytes");
 
@@ -983,6 +1305,7 @@ public sealed class NavigationFlowFieldCacheTests
 
     private static NavigationFlowFieldPayloadCache CreateCache(
         NavigationFlowFieldCacheTestHarness.LineFixture fixture) => new(
+        fixture.World,
         maxEntries: 2,
         maxReusableBytes: checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes),
         maxSinglePayloadBytes: fixture.Far.RetainedBytes,
@@ -1096,6 +1419,7 @@ internal static class NavigationFlowFieldCacheTestHarness
         NavigationCellAddress farOrigin = new(graphFixture.MapId, cells[3]);
         NavigationCellAddress completeOrigin = new(graphFixture.MapId, cells[4]);
         NavigationFlowFieldPayload near = RunFlow(
+            world,
             store,
             graphFixture.Graph,
             nearQuery,
@@ -1103,6 +1427,7 @@ internal static class NavigationFlowFieldCacheTestHarness
             destination,
             NavigationFlowFieldStatus.Success);
         NavigationFlowFieldPayload far = RunFlow(
+            world,
             store,
             graphFixture.Graph,
             farQuery,
@@ -1110,6 +1435,7 @@ internal static class NavigationFlowFieldCacheTestHarness
             destination,
             NavigationFlowFieldStatus.Success);
         NavigationFlowFieldPayload complete = RunFlow(
+            world,
             store,
             graphFixture.Graph,
             completeQuery,
@@ -1137,8 +1463,10 @@ internal static class NavigationFlowFieldCacheTestHarness
         key,
         (NavigationFlowFieldNode[])payload.Nodes.Clone(),
         (int[])payload.AddressLookupOrdinals.Clone(),
+        (NavigationTransitionInstruction[])payload.TransitionInstructions.Clone(),
         payload.Dependencies,
-        payload.IsComplete);
+        payload.IsComplete,
+        payload.WorldChangeSequence);
 
     internal static NavigationFlowFieldPayload CloneWithExpandedNodeBudget(
         NavigationFlowFieldPayload payload,
@@ -1152,6 +1480,7 @@ internal static class NavigationFlowFieldCacheTestHarness
             payload.Key.TargetMedia));
 
     internal static NavigationFlowFieldPayload RunFlow(
+        GridWorld world,
         NavigationWorldGraphStore store,
         NavigationWorldGraph graph,
         PathQuery query,
@@ -1186,9 +1515,11 @@ internal static class NavigationFlowFieldCacheTestHarness
             policy!,
             TraversalMedium.Solid,
             TraversalMedia.Solid,
-            new NavigationWorkMeter(query.Budget));
+            new NavigationWorkMeter(query.Budget),
+            world.ChangeSequence,
+            requiresWorldStamp: false);
         var workspace = new NavigationFlowFieldWorkspace(0, 128, 128, 128, 128, 128);
-        using var work = new NavigationFlowFieldWork(resolved, workspace);
+        using var work = new NavigationFlowFieldWork(world, resolved, workspace);
         for (int step = 0;
             step < 4_096 && work.Status == NavigationFlowFieldStatus.Pending;
             step++)

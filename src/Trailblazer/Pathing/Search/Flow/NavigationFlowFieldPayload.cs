@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using System.Runtime.CompilerServices;
 using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
@@ -16,47 +17,60 @@ internal sealed class NavigationFlowFieldPayload
     private const long ObjectHeaderBytes = 16L;
     private const long ArrayHeaderBytes = 24L;
     private const long ReferenceSlotBytes = 8L;
-    private const long NavigationFlowFieldPayloadKeyBytes = 216L;
-    private const long NavigationFlowFieldNodeBytes = 64L;
     private const long Int32Bytes = 4L;
+    private const long NullableUInt64Bytes = 16L;
     private const long BooleanBytes = 1L;
     private static readonly long BaseRetainedBytes = Align8(
         ObjectHeaderBytes
-        + NavigationFlowFieldPayloadKeyBytes
-        + (3L * ReferenceSlotBytes)
+        + Unsafe.SizeOf<NavigationFlowFieldPayloadKey>()
+        + (4L * ReferenceSlotBytes)
+        + NullableUInt64Bytes
         + BooleanBytes);
 
     internal NavigationFlowFieldPayload(
         NavigationFlowFieldPayloadKey key,
         NavigationFlowFieldNode[] nodes,
         int[] addressLookupOrdinals,
+        NavigationTransitionInstruction[] transitionInstructions,
         GraphDependencyStamp dependencies,
-        bool isComplete)
+        bool isComplete,
+        ulong? worldChangeSequence)
     {
         SwiftThrowHelper.ThrowIfNull(nodes, nameof(nodes));
         SwiftThrowHelper.ThrowIfNull(addressLookupOrdinals, nameof(addressLookupOrdinals));
+        SwiftThrowHelper.ThrowIfNull(
+            transitionInstructions,
+            nameof(transitionInstructions));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         if (nodes.Length == 0 || addressLookupOrdinals.Length != nodes.Length)
             throw new ArgumentException("Flow payload arrays must be non-empty and aligned.");
         Key = key;
         Nodes = nodes;
         AddressLookupOrdinals = addressLookupOrdinals;
+        TransitionInstructions = transitionInstructions;
         Dependencies = dependencies;
         IsComplete = isComplete;
+        WorldChangeSequence = worldChangeSequence;
     }
 
     internal NavigationFlowFieldPayloadKey Key { get; }
     internal NavigationFlowFieldNode[] Nodes { get; }
     internal int[] AddressLookupOrdinals { get; }
+    internal NavigationTransitionInstruction[] TransitionInstructions { get; }
     internal GraphDependencyStamp Dependencies { get; }
     internal bool IsComplete { get; }
+    internal ulong? WorldChangeSequence { get; }
     internal Fixed64 LastSettledCost => Nodes[Nodes.Length - 1].IntegrationCost;
     internal NavigationCellAddress LastSettledAddress => Nodes[Nodes.Length - 1].Address;
 
-    internal long RetainedBytes => GetRetainedBytes(Nodes.Length, Dependencies);
+    internal long RetainedBytes => GetRetainedBytes(
+        Nodes.Length,
+        TransitionInstructions.Length,
+        Dependencies);
 
     internal bool TryGetNode(
         NavigationCellAddress address,
+        TraversalMedium medium,
         out NavigationFlowFieldNode node)
     {
         int low = 0;
@@ -66,6 +80,8 @@ internal sealed class NavigationFlowFieldPayload
             int middle = low + ((high - low) >> 1);
             NavigationFlowFieldNode candidate = Nodes[AddressLookupOrdinals[middle]];
             int comparison = candidate.Address.CompareTo(address);
+            if (comparison == 0)
+                comparison = ((int)candidate.Medium).CompareTo((int)medium);
             if (comparison == 0)
             {
                 node = candidate;
@@ -82,29 +98,47 @@ internal sealed class NavigationFlowFieldPayload
 
     internal static long GetRetainedBytes(
         int nodeCount,
+        int transitionInstructionCount,
         GraphDependencyStamp dependencies)
     {
         SwiftThrowHelper.ThrowIfNegative(nodeCount, nameof(nodeCount));
+        SwiftThrowHelper.ThrowIfNegative(
+            transitionInstructionCount,
+            nameof(transitionInstructionCount));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         return checked(
             BaseRetainedBytes
-            + GetArrayRetainedBytes(nodeCount, NavigationFlowFieldNodeBytes)
+            + GetArrayRetainedBytes(
+                nodeCount,
+                Unsafe.SizeOf<NavigationFlowFieldNode>())
             + GetArrayRetainedBytes(nodeCount, Int32Bytes)
+            + GetArrayRetainedBytes(
+                transitionInstructionCount,
+                Unsafe.SizeOf<NavigationTransitionInstruction>())
             + dependencies.RetainedBytes);
     }
 
     internal static long GetMaximumRetainedBytes(
         int nodeCount,
+        int transitionInstructionCount,
         int componentCount,
         int pageCount)
     {
         SwiftThrowHelper.ThrowIfNegative(nodeCount, nameof(nodeCount));
+        SwiftThrowHelper.ThrowIfNegative(
+            transitionInstructionCount,
+            nameof(transitionInstructionCount));
         SwiftThrowHelper.ThrowIfNegative(componentCount, nameof(componentCount));
         SwiftThrowHelper.ThrowIfNegative(pageCount, nameof(pageCount));
         return checked(
             BaseRetainedBytes
-            + GetArrayRetainedBytes(nodeCount, NavigationFlowFieldNodeBytes)
+            + GetArrayRetainedBytes(
+                nodeCount,
+                Unsafe.SizeOf<NavigationFlowFieldNode>())
             + GetArrayRetainedBytes(nodeCount, Int32Bytes)
+            + GetArrayRetainedBytes(
+                transitionInstructionCount,
+                Unsafe.SizeOf<NavigationTransitionInstruction>())
             + GraphDependencyStamp.GetRetainedBytes(componentCount, pageCount));
     }
 

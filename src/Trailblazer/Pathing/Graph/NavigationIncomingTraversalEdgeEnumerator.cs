@@ -162,11 +162,15 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
     internal NavigationTraversalEdgeAdvanceStatus AdvanceOne(
         NavigationWorkMeter meter,
         NavigationDependencyWorkspace dependencies,
-        ref int edgeStepRemaining)
+        ref int edgeStepRemaining,
+        ref int connectionStepRemaining)
     {
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         SwiftThrowHelper.ThrowIfNegative(edgeStepRemaining, nameof(edgeStepRemaining));
+        SwiftThrowHelper.ThrowIfNegative(
+            connectionStepRemaining,
+            nameof(connectionStepRemaining));
         if (_graph == null)
             return Complete();
         if (!_started && _allowTransitions)
@@ -213,7 +217,8 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
             NavigationTraversalEdgeAdvanceStatus status = _outgoing.AdvanceOne(
                 meter,
                 dependencies,
-                ref edgeStepRemaining);
+                ref edgeStepRemaining,
+                ref connectionStepRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Complete)
             {
                 _rescanActive = false;
@@ -363,7 +368,8 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
             _profile,
             _areaPolicy,
             _workspace,
-            _allowTransitions);
+            _allowTransitions,
+            emittedSurfaceOrdinal: -1);
         _rescanActive = true;
     }
 

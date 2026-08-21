@@ -601,7 +601,8 @@ internal sealed class NavigationRayWork
             _request.Profile,
             _request.AreaPolicy,
             _workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var segmentEvaluator = new NavigationVolumeEdgeEvaluator(
             _request.World,
             graph,
@@ -610,12 +611,14 @@ internal sealed class NavigationRayWork
             Medium,
             _workspace);
         int edgeSteps = int.MaxValue;
+        int connectionSteps = int.MaxValue;
         while (true)
         {
             NavigationTraversalEdgeAdvanceStatus advance = edges.AdvanceOne(
                 meter,
                 _workspace.Dependencies,
-                ref edgeSteps);
+                ref edgeSteps,
+                ref connectionSteps);
             if (advance == NavigationTraversalEdgeAdvanceStatus.Blocked
                 || advance == NavigationTraversalEdgeAdvanceStatus.BudgetExceeded)
             {

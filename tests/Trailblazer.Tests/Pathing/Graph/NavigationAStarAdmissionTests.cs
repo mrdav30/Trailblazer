@@ -42,21 +42,51 @@ public sealed class NavigationAStarAdmissionTests
         NavigationQueryLimits limits = NavigationQueryLimits.Default;
         using var gate = CreateGate(world, store, limits);
 
-        gate.Begin(Query(maxExpandedNodes: 0), out NavigationAStarBatchWork work)
+        PathQuery disabledQuery = Query(maxExpandedNodes: 0);
+        gate.Begin(disabledQuery, out NavigationAStarBatchWork work)
             .Should().Be(NavigationAStarQueryStatus.Pending);
 
+        long disabledMaximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
+            limits.AStarWorkspaceGuidePointCapacity,
+            transitionInstructionCount: 0,
+            limits.AStarWorkspaceComponentCapacity,
+            limits.AStarWorkspaceEndpointPageCapacity);
+        long maximumPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
+            limits.AStarWorkspaceGuidePointCapacity,
+            limits.AStarWorkspaceNodeCapacity - 1,
+            limits.AStarWorkspaceComponentCapacity,
+            limits.AStarWorkspaceEndpointPageCapacity);
+        maximumPayloadBytes.Should().Be(limits.MaxAStarSinglePayloadBytes);
         work.AdmittedCount.Should().Be(1);
-        gate.PayloadCache.ReservedPayloadBytes.Should().Be(
-            Math.Min(
-                NavigationAStarPayload.GetMaximumRetainedBytes(
-                    limits.AStarWorkspaceGuidePointCapacity,
-                    limits.AStarWorkspaceComponentCapacity,
-                    limits.AStarWorkspaceEndpointPageCapacity),
-                limits.MaxAStarSinglePayloadBytes));
+        gate.PayloadCache.ReservedPayloadBytes.Should().Be(disabledMaximumBytes);
         gate.PayloadCache.ReservedLeaseCount.Should().Be(1);
         work.Dispose();
         gate.PayloadCache.ReservedPayloadBytes.Should().Be(0);
         gate.PayloadCache.ReservedLeaseCount.Should().Be(0);
+
+        var transitionQuery = new PathQuery(
+            disabledQuery.Start,
+            disabledQuery.End,
+            disabledQuery.Agent,
+            disabledQuery.AreaPolicy,
+            disabledQuery.Traversal,
+            disabledQuery.Algorithm,
+            disabledQuery.Budget,
+            allowTransitions: true);
+        gate.Begin(transitionQuery, out NavigationAStarBatchWork transitionWork)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+        transitionWork.AdmittedCount.Should().Be(1);
+        gate.PayloadCache.ReservedPayloadBytes.Should().Be(maximumPayloadBytes);
+        transitionWork.Dispose();
+
+        var oneByteBelow = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 0,
+            maxReusableBytes: 0,
+            maxSinglePayloadBytes: maximumPayloadBytes - 1,
+            maxActivePayloadBytes: maximumPayloadBytes - 1);
+        oneByteBelow.TryReservePayload(maximumPayloadBytes, out _)
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -573,12 +603,17 @@ public sealed class NavigationAStarAdmissionTests
             out Vector3d end);
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
         var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        long maximumPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
+            workspace.GuidePoints.Length,
+            workspace.PathNodes.Length - 1,
+            workspace.EndpointComponents.Length,
+            workspace.EndpointPages.Length);
         var cache = new NavigationAStarPayloadCache(
             world,
             maxEntries: 1,
-            maxReusableBytes: 2_048,
-            maxSinglePayloadBytes: 1_024,
-            maxActivePayloadBytes: 1_024,
+            maxReusableBytes: maximumPayloadBytes,
+            maxSinglePayloadBytes: maximumPayloadBytes,
+            maxActivePayloadBytes: maximumPayloadBytes,
             maxActiveLeases: 1);
         PathQuery query = Query(start, end, maxExpandedNodes: 2);
         using (NavigationAStarQueryWork seed = BeginReservedQuery(
@@ -905,6 +940,7 @@ public sealed class NavigationAStarAdmissionTests
         lease.Should().NotBeNull();
         long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
             workspace.GuidePoints.Length,
+            workspace.PathNodes.Length - 1,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         cache.TryReservePayload(maximumBytes, out NavigationAStarPayloadReservation reservation)

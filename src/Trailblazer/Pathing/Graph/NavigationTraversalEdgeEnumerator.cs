@@ -48,7 +48,7 @@ internal struct NavigationTraversalEdgeEnumerator
     private NavigationSurfaceEdgeEnumerator _surfaceEdges;
     private TraversalEvaluator _surfaceEvaluator;
     private NavigationGraphEdge _surfaceEdge;
-    private TraversalExplicitEdgeWork _explicitWork;
+    private NavigationSurfaceEdgeRouteWork _surfaceRouteWork;
     private NavigationVolumeEdgeEvaluator _volumeEvaluator;
     private NavigationAutomaticSeamIndex.EndpointEnumerator _volumeSeams;
     private NavigationAutomaticSeamRef _volumeSeamLookahead;
@@ -59,7 +59,8 @@ internal struct NavigationTraversalEdgeEnumerator
     private int _volumeEdgeOrdinal;
     private int _transitionOrdinal;
     private uint _visitedVolumeDirections;
-    private bool _explicitActive;
+    private bool _surfaceRouteActive;
+    private int _emittedSurfaceOrdinal;
     private bool _hasVolumeSeamLookahead;
     private bool _volumeSeamsComplete;
     private bool _allowTransitions;
@@ -90,7 +91,8 @@ internal struct NavigationTraversalEdgeEnumerator
         NavigationAgentProfile profile,
         NavigationAreaPolicy areaPolicy,
         NavigationRayWorkspace workspace,
-        bool allowTransitions)
+        bool allowTransitions,
+        int emittedSurfaceOrdinal)
     {
         SwiftThrowHelper.ThrowIfNull(world, nameof(world));
         SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
@@ -105,7 +107,7 @@ internal struct NavigationTraversalEdgeEnumerator
             ? new TraversalEvaluator(graph, profile, areaPolicy, TraversalMedium.Solid)
             : default;
         _surfaceEdge = default;
-        _explicitWork = default;
+        _surfaceRouteWork = default;
         _volumeEvaluator = source.Medium == TraversalMedium.Gas
             || source.Medium == TraversalMedium.Liquid
                 ? new NavigationVolumeEdgeEvaluator(
@@ -138,7 +140,8 @@ internal struct NavigationTraversalEdgeEnumerator
         _volumeEdgeOrdinal = -1;
         _transitionOrdinal = -1;
         _visitedVolumeDirections = 0;
-        _explicitActive = false;
+        _surfaceRouteActive = false;
+        _emittedSurfaceOrdinal = emittedSurfaceOrdinal;
         _hasVolumeSeamLookahead = false;
         _volumeSeamsComplete = source.Medium != TraversalMedium.Gas
             && source.Medium != TraversalMedium.Liquid;
@@ -175,6 +178,8 @@ internal struct NavigationTraversalEdgeEnumerator
         CurrentTransitionIdentityKind = default;
         CurrentTransitionSourceAction = default;
         CurrentTransitionDestinationAction = default;
+        RequiresWorldStamp = source.Medium == TraversalMedium.Gas
+            || source.Medium == TraversalMedium.Liquid;
     }
 
     internal NavigationMediumStateRef CurrentTarget { get; private set; }
@@ -203,14 +208,33 @@ internal struct NavigationTraversalEdgeEnumerator
 
     internal Vector3d CurrentTransitionDestinationAction { get; private set; }
 
+    internal bool RequiresWorldStamp { get; private set; }
+
+    internal bool RequiresConnectionProgress => _surfaceRouteActive
+        && _surfaceEdge.Kind == NavigationGraphEdgeKind.Explicit;
+
+    internal bool HasCurrentSurfacePoint => _surfaceRouteWork.HasCurrentPoint;
+
+    internal NavigationAStarGuidePoint CurrentSurfacePoint =>
+        _surfaceRouteWork.CurrentPoint;
+
+    internal bool CurrentSurfacePointIsTargetFootAnchor =>
+        _surfaceRouteWork.CurrentPointIsTargetFootAnchor;
+
+    internal void ConsumeCurrentSurfacePoint() => _surfaceRouteWork.ConsumePoint();
+
     internal NavigationTraversalEdgeAdvanceStatus AdvanceOne(
         NavigationWorkMeter meter,
         NavigationDependencyWorkspace dependencies,
-        ref int edgeStepRemaining)
+        ref int edgeStepRemaining,
+        ref int connectionStepRemaining)
     {
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         SwiftThrowHelper.ThrowIfNegative(edgeStepRemaining, nameof(edgeStepRemaining));
+        SwiftThrowHelper.ThrowIfNegative(
+            connectionStepRemaining,
+            nameof(connectionStepRemaining));
         if (_graph == null)
             return Complete();
         if (_baseComplete)
@@ -223,8 +247,13 @@ internal struct NavigationTraversalEdgeEnumerator
         if (_source.Medium != TraversalMedium.Solid)
             return Complete();
 
-        if (_explicitActive)
-            return AdvanceExplicit(meter, dependencies, ref edgeStepRemaining);
+        if (_surfaceRouteActive)
+        {
+            return AdvanceSurfaceRoute(
+                meter,
+                dependencies,
+                ref connectionStepRemaining);
+        }
 
         NavigationSurfaceEdgeAdvanceStatus status = _surfaceEdges.AdvanceOne(
             meter,
@@ -245,33 +274,34 @@ internal struct NavigationTraversalEdgeEnumerator
 
         _surfaceOrdinal = _surfaceEdges.CurrentOrdinal;
         _surfaceEdge = _surfaceEdges.Current;
-        if (_surfaceEdge.Kind == NavigationGraphEdgeKind.Explicit)
+        if (!_graph!.TryGetNodeAddress(
+                _surfaceEdge.Target,
+                out NavigationCellAddress targetAddress)
+            || !dependencies.TryRecordPage(
+                targetAddress.MapId,
+                _surfaceEdge.Target.CellSlot / NavigationSemanticPage.SlotCount))
         {
-            TraversalExplicitEdgeStatus begin = _surfaceEvaluator.BeginExplicitEdge(
-                _source.Node,
-                _surfaceEdge,
-                out _explicitWork);
-            if (begin == TraversalExplicitEdgeStatus.Stale)
-                return NavigationTraversalEdgeAdvanceStatus.Stale;
-            if (begin == TraversalExplicitEdgeStatus.CostOverflow)
-                return NavigationTraversalEdgeAdvanceStatus.CostOverflow;
-            if (begin != TraversalExplicitEdgeStatus.Pending)
-                return NavigationTraversalEdgeAdvanceStatus.Pending;
-            _explicitActive = true;
-            return AdvanceExplicit(meter, dependencies, ref edgeStepRemaining);
+            return NavigationTraversalEdgeAdvanceStatus.CapacityExceeded;
         }
-
-        TraversalEvaluationStatus evaluation = _surfaceEvaluator.EvaluateEdge(
+        if (_emittedSurfaceOrdinal >= 0)
+        {
+            if (_surfaceOrdinal < _emittedSurfaceOrdinal)
+                return NavigationTraversalEdgeAdvanceStatus.Pending;
+            if (_surfaceOrdinal > _emittedSurfaceOrdinal)
+                return NavigationTraversalEdgeAdvanceStatus.Stale;
+        }
+        NavigationSurfaceEdgeRouteStatus begin = _surfaceRouteWork.Begin(
+            _surfaceEvaluator,
             _source.Node,
             _surfaceEdge,
-            out TraversalEdgeEvidence evidence);
-        if (evaluation == TraversalEvaluationStatus.Stale)
-            return NavigationTraversalEdgeAdvanceStatus.Stale;
-        if (evaluation == TraversalEvaluationStatus.CostOverflow)
-            return NavigationTraversalEdgeAdvanceStatus.CostOverflow;
-        if (evaluation != TraversalEvaluationStatus.Passable)
-            return NavigationTraversalEdgeAdvanceStatus.Pending;
-        return SetCurrent(evidence.Cost);
+            emitPoints: _emittedSurfaceOrdinal >= 0);
+        _surfaceRouteActive = begin == NavigationSurfaceEdgeRouteStatus.Pending;
+        return _surfaceRouteActive
+            ? AdvanceSurfaceRoute(
+                meter,
+                dependencies,
+                ref connectionStepRemaining)
+            : MapSurfaceRoute(begin);
     }
 
     private NavigationTraversalEdgeAdvanceStatus AdvanceVolume(
@@ -467,6 +497,8 @@ internal struct NavigationTraversalEdgeEnumerator
             if (_transitions.MoveNext())
             {
                 _definitionLookahead = _transitions.Current;
+                MarkWorldDependency(
+                    _definitionLookahead.Definition.DestinationMedium);
                 _hasDefinitionLookahead = true;
                 _definitionNeedsDebit = true;
                 hasDefinition = true;
@@ -501,6 +533,7 @@ internal struct NavigationTraversalEdgeEnumerator
         while (_ruleScanIndex < _graph!.TransitionRules.Count)
         {
             TraversalTransitionRule candidate = _graph.TransitionRules[_ruleScanIndex];
+            MarkWorldDependency(candidate.DestinationMedium);
             if (_ruleContactDirection < 0)
             {
                 if (!TryConsumeTransitionCandidate(
@@ -840,46 +873,60 @@ internal struct NavigationTraversalEdgeEnumerator
         return directionOrdinal >= 0;
     }
 
-    private NavigationTraversalEdgeAdvanceStatus AdvanceExplicit(
+    private NavigationTraversalEdgeAdvanceStatus AdvanceSurfaceRoute(
         NavigationWorkMeter meter,
         NavigationDependencyWorkspace dependencies,
-        ref int edgeStepRemaining)
+        ref int connectionStepRemaining)
     {
-        if (edgeStepRemaining == 0)
-        {
-            return meter.RemainingConnectionLegs == 0
-                ? NavigationTraversalEdgeAdvanceStatus.BudgetExceeded
-                : NavigationTraversalEdgeAdvanceStatus.Blocked;
-        }
-        if (!meter.TryConsumeConnectionLegs(1))
-            return NavigationTraversalEdgeAdvanceStatus.BudgetExceeded;
-        edgeStepRemaining--;
-        TraversalExplicitEdgeStatus status = _surfaceEvaluator.AdvanceExplicitEdge(
-            ref _explicitWork,
-            out TraversalEdgeEvidence evidence);
-        NavigationNodeRef dependencyNode = evidence.DependencyNode;
-        if (dependencyNode.IsValid
+        NavigationSurfaceEdgeRouteStatus status = _surfaceRouteWork.Advance(
+            meter,
+            ref connectionStepRemaining);
+        if (_surfaceRouteWork.TryTakeDependencyNode(out NavigationNodeRef dependencyNode)
             && (!_graph!.TryGetNodeAddress(
                     dependencyNode,
                     out NavigationCellAddress dependencyAddress)
+                || (dependencyNode != _surfaceEdge.Target
+                    && _graph.TryGetSurfaceComponent(
+                        dependencyAddress,
+                        TraversalMedium.Solid,
+                        out NavigationSurfaceComponentKey dependencyComponent,
+                        out _)
+                    && !dependencies.TryRecordComponent(dependencyComponent))
                 || !dependencies.TryRecordPage(
                     dependencyAddress.MapId,
                     dependencyNode.CellSlot / NavigationSemanticPage.SlotCount)))
         {
-            _explicitActive = false;
+            _surfaceRouteActive = false;
             return NavigationTraversalEdgeAdvanceStatus.CapacityExceeded;
         }
-        if (status == TraversalExplicitEdgeStatus.Pending)
+        if (status == NavigationSurfaceEdgeRouteStatus.Point)
             return NavigationTraversalEdgeAdvanceStatus.Pending;
-        _explicitActive = false;
-        if (status == TraversalExplicitEdgeStatus.CostOverflow)
-            return NavigationTraversalEdgeAdvanceStatus.CostOverflow;
-        if (status == TraversalExplicitEdgeStatus.Stale)
-            return NavigationTraversalEdgeAdvanceStatus.Stale;
-        if (status != TraversalExplicitEdgeStatus.Passable)
-            return NavigationTraversalEdgeAdvanceStatus.Pending;
-        return SetCurrent(evidence.Cost);
+        if (status == NavigationSurfaceEdgeRouteStatus.Pending)
+        {
+            return connectionStepRemaining == 0
+                && meter.RemainingConnectionLegs > 0
+                    ? NavigationTraversalEdgeAdvanceStatus.Blocked
+                    : NavigationTraversalEdgeAdvanceStatus.Pending;
+        }
+        _surfaceRouteActive = false;
+        return status == NavigationSurfaceEdgeRouteStatus.Passable
+            ? SetCurrent(_surfaceRouteWork.Cost)
+            : MapSurfaceRoute(status);
     }
+
+    private static NavigationTraversalEdgeAdvanceStatus MapSurfaceRoute(
+        NavigationSurfaceEdgeRouteStatus status) => status switch
+        {
+            NavigationSurfaceEdgeRouteStatus.Passable =>
+                NavigationTraversalEdgeAdvanceStatus.Edge,
+            NavigationSurfaceEdgeRouteStatus.BudgetExceeded =>
+                NavigationTraversalEdgeAdvanceStatus.BudgetExceeded,
+            NavigationSurfaceEdgeRouteStatus.CostOverflow =>
+                NavigationTraversalEdgeAdvanceStatus.CostOverflow,
+            NavigationSurfaceEdgeRouteStatus.Stale =>
+                NavigationTraversalEdgeAdvanceStatus.Stale,
+            _ => NavigationTraversalEdgeAdvanceStatus.Pending
+        };
 
     private NavigationTraversalEdgeAdvanceStatus SetCurrent(Fixed64 cost)
     {
@@ -892,6 +939,12 @@ internal struct NavigationTraversalEdgeEnumerator
         CurrentSurfaceEdge = _surfaceEdge;
         CurrentVolumeIsShortcut = false;
         return NavigationTraversalEdgeAdvanceStatus.Edge;
+    }
+
+    private void MarkWorldDependency(TraversalMedium medium)
+    {
+        if (medium == TraversalMedium.Gas || medium == TraversalMedium.Liquid)
+            RequiresWorldStamp = true;
     }
 
     private NavigationTraversalEdgeAdvanceStatus Complete()

@@ -16,7 +16,8 @@ internal struct NavigationAStarNodeRecord
     internal Fixed64 Heuristic;
     // The search-only f-score adds eight bytes per workspace node, never to cached payloads.
     internal Fixed64 EstimatedTotalCost;
-    internal NavigationNodeRef Parent;
+    internal NavigationMediumStateRef Parent;
+    internal NavigationTraversalEdgeKind ParentEdgeKind;
     internal int HeapIndex;
     internal int ParentEdgeOrdinal;
     internal bool HasParent;
@@ -26,7 +27,7 @@ internal struct NavigationAStarNodeRecord
 /// <summary>Stores fixed-capacity generation-stamped A* metadata.</summary>
 internal sealed class NavigationAStarNodeTable
 {
-    private readonly NavigationNodeRef[] _keys;
+    private readonly NavigationMediumStateRef[] _keys;
     private readonly NavigationAStarNodeRecord[] _records;
     private readonly long[] _stamps;
     private readonly int _mask;
@@ -42,7 +43,7 @@ internal sealed class NavigationAStarNodeTable
         int required = checked(Math.Max(1, capacity * 2));
         while (tableSize < required)
             tableSize = checked(tableSize * 2);
-        _keys = new NavigationNodeRef[tableSize];
+        _keys = new NavigationMediumStateRef[tableSize];
         _records = new NavigationAStarNodeRecord[tableSize];
         _stamps = new long[tableSize];
         _mask = tableSize - 1;
@@ -57,7 +58,7 @@ internal sealed class NavigationAStarNodeTable
         _count = 0;
     }
 
-    internal bool TryGetSlot(NavigationNodeRef node, out int slot)
+    internal bool TryGetSlot(NavigationMediumStateRef node, out int slot)
     {
         slot = node.GetHashCode() & _mask;
         while (_stamps[slot] == _generation)
@@ -70,7 +71,7 @@ internal sealed class NavigationAStarNodeTable
     }
 
     internal bool TryGetOrAdd(
-        NavigationNodeRef node,
+        NavigationMediumStateRef node,
         out int slot,
         out bool added)
     {

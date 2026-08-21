@@ -109,6 +109,8 @@ internal struct NavigationSurfaceEdgeRouteWork
 
     internal Fixed64 Cost => _cost;
 
+    internal bool HasCurrentPoint => _pointOrdinal < _pointCount;
+
     internal NavigationAStarGuidePoint CurrentPoint => new(
         _pointOrdinal < _secondPointAddressOrdinal
             ? _pointAddress0
@@ -120,7 +122,8 @@ internal struct NavigationSurfaceEdgeRouteWork
             2 => _pointPosition2,
             3 => _pointPosition3,
             _ => _pointPosition4
-        });
+        },
+        TraversalMedium.Solid);
 
     internal bool CurrentPointIsTargetFootAnchor =>
         _pointOrdinal == _targetPointOrdinal;

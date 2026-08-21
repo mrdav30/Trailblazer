@@ -117,7 +117,8 @@ public sealed class TrailblazerGuideServiceTests
             {
                 firstError = error;
             }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         var second = new Thread(() =>
         {
             secondStarted.Set();
@@ -132,7 +133,8 @@ public sealed class TrailblazerGuideServiceTests
             {
                 secondError = error;
             }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
 
         lock (sync)
@@ -329,7 +331,9 @@ public sealed class TrailblazerGuideServiceTests
         var key = new NavigationAStarPayloadKey(
             query,
             new NavigationCellAddress("guide-allocation", new VoxelIndex(4, 4, 4)),
-            new NavigationCellAddress("guide-allocation", new VoxelIndex(6, 4, 4)));
+            new NavigationCellAddress("guide-allocation", new VoxelIndex(6, 4, 4)),
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         using var sampleStarted = new ManualResetEventSlim();
         using var sampleCompleted = new ManualResetEventSlim();
         using var replacementStarted = new ManualResetEventSlim();

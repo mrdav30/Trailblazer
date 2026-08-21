@@ -131,6 +131,7 @@ internal static class NavigationGraphBenchmarkScenario
         int guidePointCapacity = checked((nodeCapacity * 2) - 1);
         long maximumAStarPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
             guidePointCapacity,
+            nodeCapacity - 1,
             componentCount: 1,
             pageCapacity);
         long maximumFlowPayloadBytes = NavigationFlowFieldPayload.GetMaximumRetainedBytes(

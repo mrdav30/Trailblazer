@@ -5,6 +5,8 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+using System.Collections.Generic;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -12,8 +14,6 @@ using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using System;
-using System.Collections.Generic;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -744,7 +744,10 @@ internal static class NavigationAStarExitTestHarness
             search.Advance(64, 64, 64, 64);
         }
         search.Status.Should().NotBe(NavigationSurfaceAStarStatus.Pending);
-        workspace.NodeTable.TryGetSlot(startNode, out int startSlot).Should().BeTrue();
+        workspace.NodeTable.TryGetSlot(
+                new NavigationMediumStateRef(startNode, TraversalMedium.Solid),
+                out int startSlot)
+            .Should().BeTrue();
         Fixed64 heuristic = workspace.NodeTable.GetRecord(startSlot).Heuristic;
         NavigationDistanceMath.TryFloor(
                 query.Start.Position,
@@ -766,7 +769,7 @@ internal static class NavigationAStarExitTestHarness
         var pathAddresses = new NavigationCellAddress[workspace.PathNodeCount];
         for (int i = 0; i < pathAddresses.Length; i++)
         {
-            graph.TryGetNodeAddress(workspace.PathNodes[i], out pathAddresses[i])
+            graph.TryGetNodeAddress(workspace.PathNodes[i].Node, out pathAddresses[i])
                 .Should().BeTrue();
         }
         return new SearchResult(

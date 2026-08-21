@@ -172,6 +172,9 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             long maximumBytes = Math.Min(
                 NavigationAStarPayload.GetMaximumRetainedBytes(
                     _limits.AStarWorkspaceGuidePointCapacity,
+                    query.AllowTransitions
+                        ? _limits.AStarWorkspaceNodeCapacity - 1
+                        : 0,
                     _limits.AStarWorkspaceComponentCapacity,
                     _limits.AStarWorkspaceEndpointPageCapacity),
                 _limits.MaxAStarSinglePayloadBytes);

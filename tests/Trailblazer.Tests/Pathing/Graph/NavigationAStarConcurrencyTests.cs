@@ -392,6 +392,7 @@ public sealed class NavigationAStarConcurrencyTests
         lease.Should().NotBeNull();
         long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
             workspace.GuidePoints.Length,
+            workspace.PathNodes.Length - 1,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         cache.TryReservePayload(

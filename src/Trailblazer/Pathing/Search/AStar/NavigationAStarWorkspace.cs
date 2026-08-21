@@ -32,11 +32,11 @@ internal sealed class NavigationAStarWorkspace
             componentCapacity);
         NodeTable = new NavigationAStarNodeTable(nodeCapacity);
         HeapNodes = nodeCapacity == 0
-            ? Array.Empty<NavigationNodeRef>()
-            : new NavigationNodeRef[nodeCapacity];
+            ? Array.Empty<NavigationMediumStateRef>()
+            : new NavigationMediumStateRef[nodeCapacity];
         PathNodes = nodeCapacity == 0
-            ? Array.Empty<NavigationNodeRef>()
-            : new NavigationNodeRef[nodeCapacity];
+            ? Array.Empty<NavigationMediumStateRef>()
+            : new NavigationMediumStateRef[nodeCapacity];
         PathNodeGuidePointOrdinals = nodeCapacity == 0
             ? Array.Empty<int>()
             : new int[nodeCapacity];
@@ -64,9 +64,9 @@ internal sealed class NavigationAStarWorkspace
 
     internal NavigationAStarNodeTable NodeTable { get; }
 
-    internal NavigationNodeRef[] HeapNodes { get; }
+    internal NavigationMediumStateRef[] HeapNodes { get; }
 
-    internal NavigationNodeRef[] PathNodes { get; }
+    internal NavigationMediumStateRef[] PathNodes { get; }
 
     internal int[] PathNodeGuidePointOrdinals { get; }
 

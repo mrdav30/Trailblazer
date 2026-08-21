@@ -275,22 +275,33 @@
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarWorkspace.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationSurfaceAStarWork.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayload.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarPayloadKey.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarGuidePoint.cs`
 - Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarGuideLease.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationTraversalEdgeEnumerator.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationIncomingTraversalEdgeEnumerator.cs`
+- Modify: `src/Trailblazer/Pathing/Graph/NavigationSurfaceEdgeRouteWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Ray/NavigationRayWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarAdmissionGate.cs`
+- Modify: `src/Trailblazer/Pathing/Query/NavigationQueryLimits.cs`
 - Defer public wrapper cutover: `src/Trailblazer/Pathing/Search/AStar/NavigationGuideLease.cs`
 - Add: `src/Trailblazer/Pathing/Search/Guide/NavigationGuideStep.cs`
 - Add: `src/Trailblazer/Pathing/Search/Guide/NavigationTransitionInstruction.cs`
 - Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationSurfaceAStarTests.cs`
-- Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationAStarOrderingTests.cs`
+- Modify: A*/dispatcher/ray compatibility tests for the direct medium-state and
+  split connection-step signature cutovers
+- Modify: A* admission/concurrency, runtime default-limit, and benchmark
+  accounting call sites for the exact transition-payload bound
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/NavigationTransitionGuideTests.cs`
 
-- [ ] RED A* Gas/Liquid open face/shortcut paths, multiple target media, mixed same/change-medium actions, exact costs, canonical ties, and blocked face fallback.
-- [ ] RED the inner `NavigationAStarGuideLease.TryGetCurrentStep` movement and transition results. Keep the public wrapper unchanged until Task 10's atomic consumer cutover; do not add a temporary public overload or forwarding facade.
-- [ ] RED held action, zero movement advancement while pending, exact completion, wrong instruction, copied lease, double completion, remove/re-add ABA, stale mutation, and disposal.
-- [ ] Store transition payload only for transition guide entries. Keep cached payload immutable; stamp only the existing lease-acquisition generation plus step ordinal and keep current medium per acquired lease. Existing lease/dependency validation remains the publication-staleness authority.
-- [ ] Prevent simplification from crossing a semantic transition; reuse the same volume-aware ray only for same-medium subsequences.
-- [ ] Update cache byte reservations/accounting with exact `Unsafe.SizeOf` values and exact capacity one-below tests.
-- [ ] Run A*/guide/cache/concurrency/allocation Release + ReleaseLean gates, reviews, and commit: `feat(pathing): guide astar through medium states`.
+- [x] RED A* Gas/Liquid open face/shortcut paths, multiple target media, mixed same/change-medium actions, exact costs, canonical ties, and blocked face fallback.
+- [x] RED the inner `NavigationAStarGuideLease.TryGetCurrentStep` movement and transition results. Keep the public wrapper unchanged until Task 10's atomic consumer cutover; do not add a temporary public overload or forwarding facade.
+- [x] RED held action, zero movement advancement while pending, exact completion, wrong instruction, copied lease, double completion, remove/re-add ABA, stale mutation, and disposal.
+- [x] Store transition payload only for transition guide entries. Keep cached payload immutable; stamp only the existing lease-acquisition generation plus step ordinal and keep current medium per acquired lease. Existing lease/dependency validation remains the publication-staleness authority.
+- [x] Prevent simplification from crossing a semantic transition; reuse the same volume-aware ray only for same-medium subsequences.
+- [x] Update cache byte reservations/accounting with exact `Unsafe.SizeOf` values and exact capacity one-below tests.
+- [x] Run A*/guide/cache/concurrency/allocation Release + ReleaseLean gates, reviews, and commit: `feat(pathing): guide astar through medium states`.
 
 ## Task 9: Extend Flow To The Same Medium/Transition Authority
 

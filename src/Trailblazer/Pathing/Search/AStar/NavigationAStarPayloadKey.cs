@@ -16,11 +16,15 @@ internal readonly struct NavigationAStarPayloadKey : IEquatable<NavigationAStarP
     internal NavigationAStarPayloadKey(
         PathQuery query,
         NavigationCellAddress start,
-        NavigationCellAddress end)
+        NavigationCellAddress end,
+        TraversalMedium startMedium,
+        TraversalMedia targetMedia)
     {
         Query = query;
         Start = start;
         End = end;
+        _startMedium = (byte)startMedium;
+        _targetMedia = (byte)targetMedia;
     }
 
     internal PathQuery Query { get; }
@@ -29,10 +33,20 @@ internal readonly struct NavigationAStarPayloadKey : IEquatable<NavigationAStarP
 
     internal NavigationCellAddress End { get; }
 
+    private readonly byte _startMedium;
+
+    private readonly byte _targetMedia;
+
+    internal TraversalMedium StartMedium => (TraversalMedium)_startMedium;
+
+    internal TraversalMedia TargetMedia => (TraversalMedia)_targetMedia;
+
     public bool Equals(NavigationAStarPayloadKey other) =>
         Query == other.Query
         && Start == other.Start
-        && End == other.End;
+        && End == other.End
+        && StartMedium == other.StartMedium
+        && TargetMedia == other.TargetMedia;
 
     public override bool Equals(object? obj) =>
         obj is NavigationAStarPayloadKey other && Equals(other);
@@ -40,7 +54,9 @@ internal readonly struct NavigationAStarPayloadKey : IEquatable<NavigationAStarP
     public override int GetHashCode()
     {
         int hash = SwiftHashTools.CombineHashCodes(Query.GetHashCode(), Start.GetHashCode());
-        return SwiftHashTools.CombineHashCodes(hash, End.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, End.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, (int)StartMedium);
+        return SwiftHashTools.CombineHashCodes(hash, (int)TargetMedia);
     }
 
     public static bool operator ==(

@@ -5,9 +5,9 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using FixedMathSharp;
 using System;
 using System.Runtime.CompilerServices;
+using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
@@ -21,14 +21,10 @@ internal sealed class NavigationAStarPayload
     private const long ByteBytes = 1L;
     private const long Fixed64Bytes = Int64Bytes;
     private const long NullableUInt64Bytes = 16L;
-    private const long NavigationCellAddressBytes = 24L;
-    private const long PathQueryBytes = 240L;
-    private const long NavigationAStarPayloadKeyBytes =
-        PathQueryBytes + (2L * NavigationCellAddressBytes);
     private static readonly long BaseRetainedBytes = Align8(
         ObjectHeaderBytes
-        + NavigationAStarPayloadKeyBytes
-        + (2L * ReferenceSlotBytes)
+        + Unsafe.SizeOf<NavigationAStarPayloadKey>()
+        + (3L * ReferenceSlotBytes)
         + Fixed64Bytes
         + NullableUInt64Bytes
         + ByteBytes);
@@ -36,12 +32,16 @@ internal sealed class NavigationAStarPayload
     internal NavigationAStarPayload(
         NavigationAStarPayloadKey key,
         NavigationAStarGuidePoint[] guidePoints,
+        NavigationTransitionInstruction[] transitionInstructions,
         Fixed64 cost,
         GraphDependencyStamp dependencies,
         ulong? worldChangeSequence,
         NavigationSurfaceAStarStatus status)
     {
         SwiftThrowHelper.ThrowIfNull(guidePoints, nameof(guidePoints));
+        SwiftThrowHelper.ThrowIfNull(
+            transitionInstructions,
+            nameof(transitionInstructions));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         if (!IsReusableResult(status, guidePoints.Length))
         {
@@ -51,6 +51,7 @@ internal sealed class NavigationAStarPayload
         }
         Key = key;
         GuidePoints = guidePoints;
+        TransitionInstructions = transitionInstructions;
         Cost = cost;
         Dependencies = dependencies;
         WorldChangeSequence = worldChangeSequence;
@@ -60,6 +61,8 @@ internal sealed class NavigationAStarPayload
     internal NavigationAStarPayloadKey Key { get; }
 
     internal NavigationAStarGuidePoint[] GuidePoints { get; }
+
+    internal NavigationTransitionInstruction[] TransitionInstructions { get; }
 
     internal bool HasPath => GuidePoints.Length != 0;
 
@@ -73,29 +76,40 @@ internal sealed class NavigationAStarPayload
 
     internal long RetainedBytes => GetRetainedBytes(
         GuidePoints.Length,
+        TransitionInstructions.Length,
         Dependencies);
 
     internal static long GetRetainedBytes(
         int guidePointCount,
+        int transitionInstructionCount,
         GraphDependencyStamp dependencies)
     {
         SwiftThrowHelper.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
+        SwiftThrowHelper.ThrowIfNegative(
+            transitionInstructionCount,
+            nameof(transitionInstructionCount));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         return checked(
         BaseRetainedBytes
         + GetGuidePointArrayRetainedBytes(guidePointCount)
+        + GetTransitionInstructionArrayRetainedBytes(transitionInstructionCount)
         + dependencies.RetainedBytes);
     }
 
     internal static long GetMaximumRetainedBytes(
         int guidePointCount,
+        int transitionInstructionCount,
         int componentCount,
         int pageCount)
     {
         SwiftThrowHelper.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
+        SwiftThrowHelper.ThrowIfNegative(
+            transitionInstructionCount,
+            nameof(transitionInstructionCount));
         return checked(
             BaseRetainedBytes
             + GetGuidePointArrayRetainedBytes(guidePointCount)
+            + GetTransitionInstructionArrayRetainedBytes(transitionInstructionCount)
             + GraphDependencyStamp.GetRetainedBytes(componentCount, pageCount));
     }
 
@@ -111,6 +125,13 @@ internal sealed class NavigationAStarPayload
             : Align8(checked(
                 ArrayHeaderBytes
                 + ((long)length * Unsafe.SizeOf<NavigationAStarGuidePoint>())));
+
+    private static long GetTransitionInstructionArrayRetainedBytes(int length) =>
+        length == 0
+            ? 0L
+            : Align8(checked(
+                ArrayHeaderBytes
+                + ((long)length * Unsafe.SizeOf<NavigationTransitionInstruction>())));
 
     private static long Align8(long value) => checked((value + 7L) & ~7L);
 }

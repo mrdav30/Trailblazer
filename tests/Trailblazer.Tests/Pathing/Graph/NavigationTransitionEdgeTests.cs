@@ -66,13 +66,15 @@ public sealed class NavigationTransitionEdgeTests
             Profile(),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending
             || (status == NavigationTraversalEdgeAdvanceStatus.Edge
@@ -140,14 +142,16 @@ public sealed class NavigationTransitionEdgeTests
             Profile(),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -210,9 +214,11 @@ public sealed class NavigationTransitionEdgeTests
             Profile(),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 128;
+        int connectionRemaining = int.MaxValue;
         var ids = new SwiftList<string>(3);
         var kinds = new SwiftList<NavigationTransitionIdentityKind>(3);
         var ordinals = new SwiftList<int>(3);
@@ -222,7 +228,7 @@ public sealed class NavigationTransitionEdgeTests
             NavigationTraversalEdgeAdvanceStatus status = dispatcher.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Complete)
                 break;
             if (status != NavigationTraversalEdgeAdvanceStatus.Edge)
@@ -282,14 +288,16 @@ public sealed class NavigationTransitionEdgeTests
                 TraversalCapability.Fly),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 128;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending
             || (status == NavigationTraversalEdgeAdvanceStatus.Edge
@@ -377,11 +385,12 @@ public sealed class NavigationTransitionEdgeTests
             Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         remaining = 128;
         do
         {
-            status = grounded.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = grounded.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -453,10 +462,11 @@ public sealed class NavigationTransitionEdgeTests
         for (int call = 0; call < 256 && ids.Count < 3; call++)
         {
             int remaining = 1;
+            int connectionRemaining = int.MaxValue;
             NavigationTraversalEdgeAdvanceStatus status = incoming.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status != NavigationTraversalEdgeAdvanceStatus.Edge)
             {
                 status.Should().BeOneOf(
@@ -518,7 +528,8 @@ public sealed class NavigationTransitionEdgeTests
             Profile(),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int baseOrdinal = -1;
         int transitionOrdinal = -1;
@@ -528,10 +539,11 @@ public sealed class NavigationTransitionEdgeTests
         for (int call = 0; call < 64 && transitionOrdinal < 0; call++)
         {
             int remaining = 64;
+            int connectionRemaining = int.MaxValue;
             NavigationTraversalEdgeAdvanceStatus status = forward.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status != NavigationTraversalEdgeAdvanceStatus.Edge)
                 continue;
             if (forward.CurrentKind == NavigationTraversalEdgeKind.Surface)
@@ -558,10 +570,11 @@ public sealed class NavigationTransitionEdgeTests
         for (int call = 0; call < 128 && recoveredOrdinal < 0; call++)
         {
             int remaining = 64;
+            int connectionRemaining = int.MaxValue;
             NavigationTraversalEdgeAdvanceStatus status = incoming.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Edge
                 && incoming.CurrentKind == NavigationTraversalEdgeKind.Transition
                 && incoming.CurrentTransitionId == "adjacent-jump")
@@ -623,17 +636,19 @@ public sealed class NavigationTransitionEdgeTests
             Profile(),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         var ids = new SwiftList<string>(2);
 
         for (int call = 0; call < 32 && ids.Count < 2; call++)
         {
             int remaining = 1;
+            int connectionRemaining = int.MaxValue;
             NavigationTraversalEdgeAdvanceStatus status = dispatcher.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Edge)
                 ids.Add(dispatcher.CurrentTransitionId);
             else
@@ -670,14 +685,16 @@ public sealed class NavigationTransitionEdgeTests
             Profile(TraversalMedia.Solid),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -735,14 +752,16 @@ public sealed class NavigationTransitionEdgeTests
                 radius: Fixed64.FromFraction(3, 2)),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 128;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -789,9 +808,11 @@ public sealed class NavigationTransitionEdgeTests
                 radius: Fixed64.FromFraction(3, 2)),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(LargeBudget());
         int remaining = 4096;
+        int connectionRemaining = int.MaxValue;
         int transitionCoveredIntervals = -1;
         bool emittedTransition = false;
 
@@ -800,7 +821,7 @@ public sealed class NavigationTransitionEdgeTests
         {
             int priorPairs = meter.TransitionPairs;
             int priorCoveredIntervals = meter.CoveredVoxelIntervals;
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
             emittedTransition |= status == NavigationTraversalEdgeAdvanceStatus.Edge
                 && dispatcher.CurrentKind == NavigationTraversalEdgeKind.Transition;
             if (meter.TransitionPairs != priorPairs)
@@ -866,14 +887,16 @@ public sealed class NavigationTransitionEdgeTests
                 radius: Fixed64.FromFraction(3, 2)),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(LargeBudget());
         int remaining = 4_096;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status != NavigationTraversalEdgeAdvanceStatus.Complete
             && (status != NavigationTraversalEdgeAdvanceStatus.Edge
@@ -923,12 +946,14 @@ public sealed class NavigationTransitionEdgeTests
             Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         int remaining = 256;
+        int connectionRemaining = int.MaxValue;
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = forward.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = forward.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status != NavigationTraversalEdgeAdvanceStatus.Complete
             && (status != NavigationTraversalEdgeAdvanceStatus.Edge
@@ -954,7 +979,7 @@ public sealed class NavigationTransitionEdgeTests
             status = incoming.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status != NavigationTraversalEdgeAdvanceStatus.Edge
                 || incoming.CurrentKind != NavigationTraversalEdgeKind.Transition)
             {
@@ -990,7 +1015,8 @@ public sealed class NavigationTransitionEdgeTests
             Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         const int exactCandidates = 40;
         var meter = new NavigationWorkMeter(Budget(exactCandidates));
         NavigationTraversalEdgeAdvanceStatus status = NavigationTraversalEdgeAdvanceStatus.Pending;
@@ -999,7 +1025,8 @@ public sealed class NavigationTransitionEdgeTests
         {
             int priorCandidates = meter.TransitionCandidates;
             int remaining = 1;
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            int connectionRemaining = int.MaxValue;
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
             (meter.TransitionCandidates - priorCandidates).Should().BeLessThanOrEqualTo(1,
                 "one AdvanceOne may inspect at most one rule/contact candidate");
             status.Should().BeOneOf(
@@ -1021,12 +1048,14 @@ public sealed class NavigationTransitionEdgeTests
             Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         meter = new NavigationWorkMeter(Budget(exactCandidates - 1));
         int unbounded = 512;
+        int unboundedConnections = int.MaxValue;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref unbounded);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref unbounded, ref unboundedConnections);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -1064,7 +1093,8 @@ public sealed class NavigationTransitionEdgeTests
         {
             int priorCandidates = meter.TransitionCandidates;
             int remaining = 1;
-            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            int connectionRemaining = int.MaxValue;
+            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
             (meter.TransitionCandidates - priorCandidates).Should().BeLessThanOrEqualTo(1,
                 "incoming discovery and its forward replay share the same bounded rule/contact scan");
             status.Should().BeOneOf(
@@ -1089,9 +1119,10 @@ public sealed class NavigationTransitionEdgeTests
             allowTransitions: true);
         meter = new NavigationWorkMeter(Budget(exactCandidates - 1));
         int unbounded = 1_024;
+        int unboundedConnections = int.MaxValue;
         do
         {
-            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref unbounded);
+            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref unbounded, ref unboundedConnections);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -1145,14 +1176,16 @@ public sealed class NavigationTransitionEdgeTests
             Profile(),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 256;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending
             || (status == NavigationTraversalEdgeAdvanceStatus.Edge
@@ -1196,14 +1229,16 @@ public sealed class NavigationTransitionEdgeTests
             Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 256;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -1237,11 +1272,13 @@ public sealed class NavigationTransitionEdgeTests
             Profile(TraversalMedia.Solid),
             Policy,
             workspace,
-            allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
-        dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining)
+        dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining)
             .Should().Be(NavigationTraversalEdgeAdvanceStatus.Complete);
         workspace.Dependencies.HasTransitionDependency.Should().BeTrue();
         meter.TransitionCandidates.Should().Be(0);
@@ -1298,14 +1335,16 @@ public sealed class NavigationTransitionEdgeTests
                 Profile(),
                 Policy,
                 workspace,
-                allowTransitions: true);
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
             int remaining = 64;
+            int connectionRemaining = int.MaxValue;
             while (true)
             {
                 NavigationTraversalEdgeAdvanceStatus status = dispatcher.AdvanceOne(
                     meter,
                     workspace.Dependencies,
-                    ref remaining);
+                    ref remaining, ref connectionRemaining);
                 if (status == NavigationTraversalEdgeAdvanceStatus.Complete)
                     break;
                 if (status == NavigationTraversalEdgeAdvanceStatus.Edge)

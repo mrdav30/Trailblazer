@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationAStarGuidePoint.cs
+// NavigationGuideStep.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -9,19 +9,21 @@ using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Stores one immutable addressed waypoint in a certified A* guide.</summary>
-internal readonly struct NavigationAStarGuidePoint
+/// <summary>Stores one medium-specific movement target or semantic action.</summary>
+internal readonly struct NavigationGuideStep
 {
-    internal NavigationAStarGuidePoint(
+    internal NavigationGuideStep(
         NavigationCellAddress address,
         Vector3d position,
         TraversalMedium medium,
-        int transitionOrdinal = -1)
+        NavigationTransitionInstruction transition,
+        bool hasTransition)
     {
         Address = address;
         Position = position;
         Medium = medium;
-        TransitionOrdinal = transitionOrdinal;
+        Transition = transition;
+        HasTransition = hasTransition;
     }
 
     internal NavigationCellAddress Address { get; }
@@ -30,7 +32,7 @@ internal readonly struct NavigationAStarGuidePoint
 
     internal TraversalMedium Medium { get; }
 
-    internal int TransitionOrdinal { get; }
+    internal NavigationTransitionInstruction Transition { get; }
 
-    internal bool HasTransition => TransitionOrdinal >= 0;
+    internal bool HasTransition { get; }
 }

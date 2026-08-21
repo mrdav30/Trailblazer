@@ -53,13 +53,19 @@ public sealed class NavigationVolumeEdgeTests
             profile,
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         int remaining = 64;
+        int connectionRemaining = 64;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -103,13 +109,15 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -154,14 +162,16 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -193,13 +203,15 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status != NavigationTraversalEdgeAdvanceStatus.Complete
             && (status != NavigationTraversalEdgeAdvanceStatus.Edge
@@ -254,14 +266,16 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(LargeBudget());
         int remaining = 4096;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status != NavigationTraversalEdgeAdvanceStatus.Complete
             && (status != NavigationTraversalEdgeAdvanceStatus.Edge
@@ -302,14 +316,16 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -338,11 +354,12 @@ public sealed class NavigationVolumeEdgeTests
             allowTransitions: false);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -377,11 +394,12 @@ public sealed class NavigationVolumeEdgeTests
             allowTransitions: false);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -418,14 +436,16 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -447,7 +467,7 @@ public sealed class NavigationVolumeEdgeTests
         remaining = 64;
         do
         {
-            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = incoming.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
         status.Should().Be(NavigationTraversalEdgeAdvanceStatus.Edge);
@@ -476,14 +496,16 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -511,14 +533,16 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = 64;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
 
@@ -563,14 +587,16 @@ public sealed class NavigationVolumeEdgeTests
                 radius: Fixed64.FromFraction(3, 2)),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(LargeBudget());
         int remaining = 4096;
+        int connectionRemaining = int.MaxValue;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
-            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining);
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
         }
         while (status != NavigationTraversalEdgeAdvanceStatus.Complete
             && (status != NavigationTraversalEdgeAdvanceStatus.Edge
@@ -609,9 +635,11 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(LargeBudget());
         int remaining = 4096;
+        int connectionRemaining = int.MaxValue;
         bool emittedTarget = false;
 
         while (true)
@@ -619,7 +647,7 @@ public sealed class NavigationVolumeEdgeTests
             NavigationTraversalEdgeAdvanceStatus status = dispatcher.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Complete)
                 break;
             status.Should().BeOneOf(
@@ -838,9 +866,11 @@ public sealed class NavigationVolumeEdgeTests
             Profile(TraversalMedia.Gas),
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(LargeBudget());
         int remaining = 4096;
+        int connectionRemaining = int.MaxValue;
         int faces = 0;
         int shortcuts = 0;
 
@@ -849,7 +879,7 @@ public sealed class NavigationVolumeEdgeTests
             NavigationTraversalEdgeAdvanceStatus status = dispatcher.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Complete)
                 break;
             status.Should().BeOneOf(

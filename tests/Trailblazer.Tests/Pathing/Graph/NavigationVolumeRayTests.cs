@@ -1132,15 +1132,17 @@ public sealed class NavigationVolumeRayTests
             profile,
             Policy,
             workspace,
-            allowTransitions: false);
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
         var meter = new NavigationWorkMeter(Budget());
         int remaining = int.MaxValue;
+        int connectionRemaining = int.MaxValue;
         for (int step = 0; step < 256; step++)
         {
             NavigationTraversalEdgeAdvanceStatus status = edges.AdvanceOne(
                 meter,
                 workspace.Dependencies,
-                ref remaining);
+                ref remaining, ref connectionRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Edge
                 && edges.CurrentKind == NavigationTraversalEdgeKind.Volume
                 && edges.CurrentTarget == new NavigationMediumStateRef(target, medium))

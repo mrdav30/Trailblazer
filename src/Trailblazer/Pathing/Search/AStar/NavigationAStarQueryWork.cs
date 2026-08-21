@@ -143,7 +143,9 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         var key = new NavigationAStarPayloadKey(
             resolved.Query,
             resolved.Start.Address,
-            resolved.End.Address);
+            resolved.End.Address,
+            resolved.StartMedium,
+            resolved.TargetMedia);
         bool cacheHit = _cache.TryCheckoutReserved(
             key,
             resolved.Graph,

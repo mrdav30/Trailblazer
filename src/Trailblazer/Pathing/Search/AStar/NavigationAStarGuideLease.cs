@@ -19,6 +19,7 @@ internal sealed class NavigationAStarGuideLease
     private NavigationAStarPayloadLease? _payloadLease;
     private NavigationAStarQueryStatus _status;
     private int _currentWaypointOrdinal;
+    private TraversalMedium _currentMedium;
     private long _generation;
 
     internal NavigationAStarGuideLease(NavigationAStarPayloadCache owner)
@@ -52,6 +53,7 @@ internal sealed class NavigationAStarGuideLease
             _store = store;
             _payloadLease = payloadLease;
             _currentWaypointOrdinal = 0;
+            _currentMedium = payloadLease.Payload.Key.StartMedium;
             _status = NavigationAStarQueryStatus.Success;
         }
     }
@@ -119,6 +121,56 @@ internal sealed class NavigationAStarGuideLease
         }
     }
 
+    internal NavigationAStarQueryStatus TryGetCurrentStep(
+        long generation,
+        out NavigationGuideStep step)
+    {
+        lock (_sync)
+        {
+            if (!IsGenerationActiveUnderLock(generation))
+            {
+                step = default;
+                return NavigationAStarQueryStatus.Stale;
+            }
+            return TryGetCurrentStepUnderLock(out step);
+        }
+    }
+
+    internal NavigationAStarQueryStatus CompletePendingTransition(
+        long generation,
+        in NavigationTransitionInstruction instruction)
+    {
+        lock (_sync)
+        {
+            if (!IsGenerationActiveUnderLock(generation))
+                return NavigationAStarQueryStatus.Stale;
+            NavigationAStarQueryStatus status = ValidateCurrentPayloadUnderLock(
+                out NavigationAStarPayload? payload);
+            if (status != NavigationAStarQueryStatus.Success || payload == null)
+                return status;
+            if ((uint)_currentWaypointOrdinal >= (uint)payload.GuidePoints.Length)
+                return MarkStaleUnderLock();
+            NavigationAStarGuidePoint current =
+                payload.GuidePoints[_currentWaypointOrdinal];
+            if (!current.HasTransition
+                || (uint)current.TransitionOrdinal
+                    >= (uint)payload.TransitionInstructions.Length
+                || !instruction.MatchesCompletion(
+                    this,
+                    generation,
+                    _currentWaypointOrdinal))
+            {
+                return NavigationAStarQueryStatus.Stale;
+            }
+            _currentMedium = payload
+                .TransitionInstructions[current.TransitionOrdinal]
+                .DestinationMedium;
+            if (_currentWaypointOrdinal + 1 < payload.GuidePoints.Length)
+                _currentWaypointOrdinal++;
+            return NavigationAStarQueryStatus.Success;
+        }
+    }
+
     internal bool TryDetach(
         long generation,
         out NavigationAStarPayloadLease? payloadLease)
@@ -132,6 +184,7 @@ internal sealed class NavigationAStarGuideLease
             payloadLease = _payloadLease;
             _payloadLease = null;
             _currentWaypointOrdinal = 0;
+            _currentMedium = TraversalMedium.Unknown;
             _status = NavigationAStarQueryStatus.Pending;
             return true;
         }
@@ -149,42 +202,72 @@ internal sealed class NavigationAStarGuideLease
         out NavigationCellAddress address,
         out Vector3d footPosition)
     {
-        address = default;
-        footPosition = default;
-        if (_status != NavigationAStarQueryStatus.Success)
-            return _status;
-        NavigationWorldGraphStore? store = _store;
-        NavigationAStarPayloadLease? payloadLease = _payloadLease;
-        if (store == null || payloadLease == null)
-            return MarkStaleUnderLock();
-        NavigationWorldGraphLease? graphLease = store.TryAcquire();
-        if (graphLease == null)
-            return NavigationAStarQueryStatus.CapacityExceeded;
-        using (graphLease)
+        NavigationAStarQueryStatus status = TryGetCurrentStepUnderLock(
+            out NavigationGuideStep step);
+        address = step.Address;
+        footPosition = step.Position;
+        return status;
+    }
+
+    private NavigationAStarQueryStatus TryGetCurrentStepUnderLock(
+        out NavigationGuideStep step)
+    {
+        step = default;
+        NavigationAStarQueryStatus status = ValidateCurrentPayloadUnderLock(
+            out NavigationAStarPayload? payload);
+        if (status != NavigationAStarQueryStatus.Success || payload == null)
+            return status;
+        NavigationAStarGuidePoint current = payload.GuidePoints[_currentWaypointOrdinal];
+        if (!current.HasTransition)
         {
-            NavigationAStarPayload payload = payloadLease.Payload;
-            NavigationWorldGraph graph = graphLease.Graph;
-            if (!graph.IsDependencyCurrent(payload.Dependencies)
-                || (uint)_currentWaypointOrdinal >= (uint)payload.GuidePoints.Length
-                || !_owner.IsWorldCurrent(payload))
-            {
+            if (current.Medium != _currentMedium)
                 return MarkStaleUnderLock();
-            }
-            NavigationAStarGuidePoint current =
-                payload.GuidePoints[_currentWaypointOrdinal];
-            if (!store.Current.IsDependencyCurrent(payload.Dependencies)
-                || !_owner.IsWorldCurrent(payload))
-            {
-                return MarkStaleUnderLock();
-            }
-            address = current.Address;
-            footPosition = current.Position;
+            step = new NavigationGuideStep(
+                current.Address,
+                current.Position,
+                current.Medium,
+                default,
+                hasTransition: false);
             return NavigationAStarQueryStatus.Success;
         }
+        if ((uint)current.TransitionOrdinal
+                >= (uint)payload.TransitionInstructions.Length
+            || current.Medium != _currentMedium)
+        {
+            return MarkStaleUnderLock();
+        }
+        NavigationTransitionInstruction stamped = payload
+            .TransitionInstructions[current.TransitionOrdinal]
+            .WithCompletionStamp(this, _generation, _currentWaypointOrdinal);
+        step = new NavigationGuideStep(
+            current.Address,
+            current.Position,
+            current.Medium,
+            stamped,
+            hasTransition: true);
+        return NavigationAStarQueryStatus.Success;
     }
 
     private NavigationAStarQueryStatus TryAdvanceWaypointUnderLock()
     {
+        NavigationAStarQueryStatus status = ValidateCurrentPayloadUnderLock(
+            out NavigationAStarPayload? payload);
+        if (status != NavigationAStarQueryStatus.Success || payload == null)
+            return status;
+        NavigationAStarGuidePoint current = payload.GuidePoints[_currentWaypointOrdinal];
+        if (current.HasTransition)
+            return NavigationAStarQueryStatus.Pending;
+        if (current.Medium != _currentMedium)
+            return MarkStaleUnderLock();
+        if (_currentWaypointOrdinal + 1 < payload.GuidePoints.Length)
+            _currentWaypointOrdinal++;
+        return NavigationAStarQueryStatus.Success;
+    }
+
+    private NavigationAStarQueryStatus ValidateCurrentPayloadUnderLock(
+        out NavigationAStarPayload? payload)
+    {
+        payload = null;
         if (_status != NavigationAStarQueryStatus.Success)
             return _status;
         NavigationWorldGraphStore? store = _store;
@@ -196,15 +279,16 @@ internal sealed class NavigationAStarGuideLease
             return NavigationAStarQueryStatus.CapacityExceeded;
         using (graphLease)
         {
-            NavigationAStarPayload payload = payloadLease.Payload;
+            payload = payloadLease.Payload;
             if (!graphLease.Graph.IsDependencyCurrent(payload.Dependencies)
+                || (uint)_currentWaypointOrdinal >= (uint)payload.GuidePoints.Length
+                || !_owner.IsWorldCurrent(payload)
                 || !store.Current.IsDependencyCurrent(payload.Dependencies)
                 || !_owner.IsWorldCurrent(payload))
             {
+                payload = null;
                 return MarkStaleUnderLock();
             }
-            if (_currentWaypointOrdinal + 1 < payload.GuidePoints.Length)
-                _currentWaypointOrdinal++;
             return NavigationAStarQueryStatus.Success;
         }
     }

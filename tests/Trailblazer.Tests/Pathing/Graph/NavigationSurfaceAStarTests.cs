@@ -5,9 +5,10 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+using System.Runtime.CompilerServices;
 using FixedMathSharp;
 using FluentAssertions;
-using System;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Grids.Storage;
@@ -61,10 +62,12 @@ public sealed class NavigationSurfaceAStarTests
         result.Payload!.GuidePoints.Should().Equal(
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress(fixture.MapId, cells[0]),
-                start),
+                start,
+                TraversalMedium.Solid),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress(fixture.MapId, cells[2]),
-                end));
+                end,
+                TraversalMedium.Solid));
     }
 
     [Fact]
@@ -626,10 +629,14 @@ public sealed class NavigationSurfaceAStarTests
             Array.Empty<GraphComponentDependency>(),
             Array.Empty<GraphPageDependency>());
         var address = new NavigationCellAddress("map", default);
-        var guidePoint = new NavigationAStarGuidePoint(address, Vector3d.One);
+        var guidePoint = new NavigationAStarGuidePoint(
+            address,
+            Vector3d.One,
+            TraversalMedium.Solid);
         var payload = new NavigationAStarPayload(
             default,
             new[] { guidePoint },
+            Array.Empty<NavigationTransitionInstruction>(),
             Fixed64.Zero,
             dependencies,
             null,
@@ -696,10 +703,16 @@ public sealed class NavigationSurfaceAStarTests
             allowTransitions: false);
         var start = new NavigationCellAddress("map-a", default);
         var end = new NavigationCellAddress("map-b", new VoxelIndex(2, 0, 0));
-        var key = new NavigationAStarPayloadKey(query, start, end);
+        var key = new NavigationAStarPayloadKey(
+            query,
+            start,
+            end,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         var emptyPayload = new NavigationAStarPayload(
             key,
             Array.Empty<NavigationAStarGuidePoint>(),
+            Array.Empty<NavigationTransitionInstruction>(),
             Fixed64.Zero,
             emptyDependencies,
             null,
@@ -708,26 +721,52 @@ public sealed class NavigationSurfaceAStarTests
             key,
             new[]
             {
-                new NavigationAStarGuidePoint(start, Vector3d.Zero),
+                new NavigationAStarGuidePoint(
+                    start,
+                    Vector3d.Zero,
+                    TraversalMedium.Solid),
                 new NavigationAStarGuidePoint(
                     new NavigationCellAddress("map-a", new VoxelIndex(1, 0, 0)),
-                    Vector3d.One),
-                new NavigationAStarGuidePoint(end, Vector3d.One + Vector3d.One)
+                    Vector3d.One,
+                    TraversalMedium.Solid),
+                new NavigationAStarGuidePoint(
+                    end,
+                    Vector3d.One + Vector3d.One,
+                    TraversalMedium.Solid)
             },
+            Array.Empty<NavigationTransitionInstruction>(),
+            Fixed64.One,
+            populatedDependencies,
+            null,
+            NavigationSurfaceAStarStatus.Success);
+        var worstPayload = new NavigationAStarPayload(
+            key,
+            (NavigationAStarGuidePoint[])populatedPayload.GuidePoints.Clone(),
+            new NavigationTransitionInstruction[populatedPayload.GuidePoints.Length],
             Fixed64.One,
             populatedDependencies,
             null,
             NavigationSurfaceAStarStatus.Success);
 
-        emptyPayload.RetainedBytes.Should().Be(416L);
-        NavigationAStarPayload.GetMaximumRetainedBytes(0, 0, 0)
+        Unsafe.SizeOf<NavigationAStarPayloadKey>().Should().Be(296);
+        Unsafe.SizeOf<NavigationAStarGuidePoint>().Should().Be(56);
+        Unsafe.SizeOf<NavigationTransitionInstruction>().Should().Be(152);
+        emptyPayload.RetainedBytes.Should().Be(432L);
+        NavigationAStarPayload.GetMaximumRetainedBytes(0, 0, 0, 0)
             .Should().Be(emptyPayload.RetainedBytes);
-        populatedPayload.RetainedBytes.Should().Be(920L);
+        populatedPayload.RetainedBytes.Should().Be(960L);
+        NavigationAStarPayload.GetRetainedBytes(
+                populatedPayload.GuidePoints.Length,
+                transitionInstructionCount: 0,
+                populatedDependencies)
+            .Should().Be(populatedPayload.RetainedBytes);
+        worstPayload.RetainedBytes.Should().Be(1_440L);
         NavigationAStarPayload.GetMaximumRetainedBytes(
                 populatedPayload.GuidePoints.Length,
+                worstPayload.TransitionInstructions.Length,
                 components.Length,
                 pages.Length)
-            .Should().Be(populatedPayload.RetainedBytes);
+            .Should().Be(worstPayload.RetainedBytes);
     }
 
     [Fact]
@@ -895,22 +934,31 @@ public sealed class NavigationSurfaceAStarTests
         {
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress("map", addresses[0]),
-                query.Start.Position),
+                query.Start.Position,
+                TraversalMedium.Solid),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress("map", addresses[1]),
-                firstTargetAnchor),
+                firstTargetAnchor,
+                TraversalMedium.Solid),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress("map", addresses[1]),
-                middleFoot),
+                middleFoot,
+                TraversalMedium.Solid),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress("map", addresses[2]),
-                secondTargetAnchor),
+                secondTargetAnchor,
+                TraversalMedium.Solid),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress("map", addresses[2]),
-                query.End.Position)
+                query.End.Position,
+                TraversalMedium.Solid)
         };
         search.Result.GuidePoints.Should().Equal(expectedGuidePoints);
-        workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
+        workspace.NodeTable.TryGetSlot(
+                new NavigationMediumStateRef(
+                    admission.Result.Start.Node,
+                    admission.Result.StartMedium),
+                out int startSlot)
             .Should().BeTrue();
         NavigationAStarNodeRecord startRecord = workspace.NodeTable.GetRecord(startSlot);
         startRecord.Heuristic.Should().Be((Fixed64)4);
@@ -932,6 +980,7 @@ public sealed class NavigationSurfaceAStarTests
 
         long maximumPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
             workspace.GuidePoints.Length,
+            workspace.PathNodes.Length - 1,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         var cache = new NavigationAStarPayloadCache(
@@ -948,6 +997,7 @@ public sealed class NavigationSurfaceAStarTests
         var duplicate = new NavigationAStarPayload(
             search.Result.Key,
             (NavigationAStarGuidePoint[])search.Result.GuidePoints.Clone(),
+            (NavigationTransitionInstruction[])search.Result.TransitionInstructions.Clone(),
             search.Result.Cost,
             search.Result.Dependencies,
             search.Result.WorldChangeSequence,
@@ -955,6 +1005,7 @@ public sealed class NavigationSurfaceAStarTests
         FluentActions.Invoking(() => new NavigationAStarPayload(
                 search.Result.Key,
                 (NavigationAStarGuidePoint[])search.Result.GuidePoints.Clone(),
+                (NavigationTransitionInstruction[])search.Result.TransitionInstructions.Clone(),
                 search.Result.Cost,
                 search.Result.Dependencies,
                 search.Result.WorldChangeSequence,
@@ -1272,13 +1323,16 @@ public sealed class NavigationSurfaceAStarTests
         result.Payload!.GuidePoints.Should().Equal(
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress(fixture.MapId, source),
-                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, source)),
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, source),
+                TraversalMedium.Solid),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress(fixture.MapId, destination),
-                portal.CanonicalFacePoint),
+                portal.CanonicalFacePoint,
+                TraversalMedium.Solid),
             new NavigationAStarGuidePoint(
                 new NavigationCellAddress(fixture.MapId, destination),
-                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, destination)));
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, destination),
+                TraversalMedium.Solid));
     }
 
     [Fact]
@@ -1726,9 +1780,18 @@ public sealed class NavigationSurfaceAStarTests
         targetAnchor.Should().Be(fixture.End,
             "the target portal anchor and graph node intentionally coalesce");
         result.Payload!.GuidePoints.Should().Equal(
-            new NavigationAStarGuidePoint(sourceAddress, fixture.Start),
-            new NavigationAStarGuidePoint(sourceAddress, sourceAnchor),
-            new NavigationAStarGuidePoint(targetAddress, fixture.End));
+            new NavigationAStarGuidePoint(
+                sourceAddress,
+                fixture.Start,
+                TraversalMedium.Solid),
+            new NavigationAStarGuidePoint(
+                sourceAddress,
+                sourceAnchor,
+                TraversalMedium.Solid),
+            new NavigationAStarGuidePoint(
+                targetAddress,
+                fixture.End,
+                TraversalMedium.Solid));
     }
 
     [Fact]
@@ -2036,7 +2099,7 @@ public sealed class NavigationSurfaceAStarTests
                 TraversalMedium.Solid,
                 TraversalDomain.Surface),
             PathAlgorithm.AStar,
-            new NavigationWorkBudget(128, 2, 2, 2, 4, 0, 0, 0, 0, 0, 0),
+            new NavigationWorkBudget(128, 2, 2, 2, 6, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
         var insufficientWorkspace = new NavigationAStarWorkspace(
             mapCapacity: 3,
@@ -2118,6 +2181,26 @@ public sealed class NavigationSurfaceAStarTests
         changedGraph.IsDependencyCurrent(dependencies).Should().BeFalse(
             "a physical mutation of the consumed witness page invalidates the result");
         store.TryPublish(changedGraph).Should().Be(NavigationCandidatePublication.Published);
+        var blockedInsufficientWorkspace = new NavigationAStarWorkspace(
+            mapCapacity: 3,
+            endpointPageCapacity: 3,
+            componentCapacity: 1,
+            nodeCapacity: 3,
+            rayCoveredAddressCapacity: 4,
+            rayTraceIntervalCapacity: 4,
+            guidePointCapacity: 8);
+        var blockedInsufficientCache = new NavigationAStarPayloadCache(world, 1);
+        using (NavigationAStarQueryWork blockedInsufficient = BeginReservedQuery(
+            world,
+            store,
+            query,
+            blockedInsufficientWorkspace,
+            blockedInsufficientCache))
+        {
+            DrainQuery(blockedInsufficient, 256);
+            blockedInsufficient.Status.Should().Be(
+                NavigationAStarQueryStatus.CapacityExceeded);
+        }
         using (NavigationAStarQueryWork blocked = BeginReservedQuery(
             world,
             store,
@@ -2132,16 +2215,33 @@ public sealed class NavigationSurfaceAStarTests
         var key = new NavigationAStarPayloadKey(
             query,
             new NavigationCellAddress("A", default),
-            new NavigationCellAddress("B", default));
+            new NavigationCellAddress("B", default),
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         cache.TryCheckout(
                 key,
                 changedGraph,
                 out NavigationAStarPayloadLease blockedLease)
             .Should().BeTrue();
         GraphDependencyStamp blockedDependencies = blockedLease.Payload.Dependencies;
+        changedGraph.TryGetSurfaceComponent(
+                new NavigationCellAddress("C", default),
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey blockedWitnessComponent,
+                out _)
+            .Should().BeTrue();
+        blockedDependencies.Components.Should().ContainSingle(
+            dependency => dependency.Key == blockedWitnessComponent,
+            "the rejected explicit witness component participates in the negative proof");
         blockedDependencies.Pages.Should().ContainSingle(
             dependency => dependency.MapId == "C" && dependency.PageIndex == 0,
             "the impassable witness page is part of the cached negative proof");
+        NavigationWorldGraph componentChanged = changedGraph.WithClosedStructuralComponents(
+            NavigationSurfaceComponentKeySet.Empty.Add(blockedWitnessComponent),
+            closeAllStructuralComponents: false,
+            changedGraph.GraphVersion + 1);
+        componentChanged.IsDependencyCurrent(blockedDependencies).Should().BeFalse(
+            "a component-only witness mutation invalidates the cached negative proof");
         blockedLease.Dispose();
 
         witnessGrid.TryRemoveObstacle(witnessVoxel!, witnessObstacle).Should().BeTrue();
@@ -2166,11 +2266,61 @@ public sealed class NavigationSurfaceAStarTests
         rebuilt.Status.Should().Be(NavigationAStarQueryStatus.Success,
             "the stale negative result must be rebuilt after its witness changes");
         rebuilt.TakeResult().Dispose();
+
+        var wrongMediumCell = new NavigationCell(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationMap wrongMediumMap = new NavigationMapBuilder("C", witnessBinding)
+            .AddCell(default, wrongMediumCell)
+            .Build();
+        NavigationOperationCandidate.MapState wrongMediumState =
+            CreateState(wrongMediumMap);
+        NavigationMapInstance wrongMediumWitness =
+            NavigationMapInstanceTestFactory.Compose(
+                world,
+                wrongMediumState,
+                reopenedWitness,
+                instanceVersion: 4);
+        NavigationWorldGraph wrongMediumGraph = CreateGraph(
+            new[] { sourceInstance, destinationInstance, wrongMediumWitness },
+            connections).WithGraphVersion(reopenedGraph.GraphVersion + 1);
+        wrongMediumGraph.TryGetSurfaceComponent(
+                new NavigationCellAddress("C", default),
+                TraversalMedium.Solid,
+                out _,
+                out _)
+            .Should().BeFalse();
+        store.TryPublish(wrongMediumGraph)
+            .Should().Be(NavigationCandidatePublication.Published);
+        using (NavigationAStarQueryWork wrongMedium = BeginReservedQuery(
+            world,
+            store,
+            query,
+            workspace,
+            cache))
+        {
+            DrainQuery(wrongMedium, 256);
+            wrongMedium.Status.Should().Be(NavigationAStarQueryStatus.NoPath,
+                "a present wrong-medium corridor witness is semantic rejection, not capacity exhaustion");
+        }
+        cache.TryCheckout(
+                key,
+                wrongMediumGraph,
+                out NavigationAStarPayloadLease wrongMediumLease)
+            .Should().BeTrue();
+        wrongMediumLease.Payload.Dependencies.Pages.Should().ContainSingle(
+            dependency => dependency.MapId == "C" && dependency.PageIndex == 0,
+            "the wrong-medium witness page remains part of the negative proof");
+        wrongMediumLease.Dispose();
     }
 
     [Theory]
     [InlineData(6, (int)NavigationSurfaceAStarStatus.Success)]
-    [InlineData(1, (int)NavigationSurfaceAStarStatus.BudgetExceeded)]
+    [InlineData(5, (int)NavigationSurfaceAStarStatus.BudgetExceeded)]
     public void Advance_ShouldMeterEveryExplicitConnectionLeg(
         int maximumConnectionLegs,
         int expectedStatusValue)
@@ -2338,6 +2488,11 @@ public sealed class NavigationSurfaceAStarTests
             admission.RayWork,
             long.MaxValue);
 
+        search.Advance(64, 64, 64, connectionStepLimit: 0)
+            .Should().Be(NavigationSurfaceAStarStatus.Pending);
+        admission.Meter.ConnectionLegs.Should().Be(0,
+            "a zero local connection slice retains the explicit route work");
+
         for (int step = 0;
              step < 64 && search.Status == NavigationSurfaceAStarStatus.Pending;
              step++)
@@ -2346,15 +2501,18 @@ public sealed class NavigationSurfaceAStarTests
         }
 
         search.Status.Should().Be(expectedStatus);
-        admission.Meter.EvaluatedEdges.Should().Be(
-            expectedStatus == NavigationSurfaceAStarStatus.Success ? 8 : 3,
+        admission.Meter.EvaluatedEdges.Should().Be(8,
             "search and exact parent-edge reconstruction meter every canonical owner");
         admission.Meter.ConnectionLegs.Should().Be(maximumConnectionLegs);
         if (expectedStatus == NavigationSurfaceAStarStatus.Success)
         {
             search.Result.Cost.Should().Be(Fixed64.One / (Fixed64)2,
                 "the later canonical parallel edge owns the reconstructed route");
-            workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
+            workspace.NodeTable.TryGetSlot(
+                    new NavigationMediumStateRef(
+                        admission.Result.Start.Node,
+                        admission.Result.StartMedium),
+                    out int startSlot)
                 .Should().BeTrue();
             workspace.NodeTable.GetRecord(startSlot).Heuristic.Should().Be(Fixed64.Zero);
             search.Result.Dependencies.Pages.Should().ContainSingle(
@@ -2441,7 +2599,9 @@ public sealed class NavigationSurfaceAStarTests
         var key = new NavigationAStarPayloadKey(
             query,
             new NavigationCellAddress("map", startIndex),
-            new NavigationCellAddress("map", endIndex));
+            new NavigationCellAddress("map", endIndex),
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
         cache.TryCheckout(key, graph, out NavigationAStarPayloadLease payloadLease)
             .Should().BeTrue("dependency-stamped negative results remain reusable");
         payloadLease.Payload.Status.Should().Be(NavigationSurfaceAStarStatus.NoPath);
@@ -2493,8 +2653,14 @@ public sealed class NavigationSurfaceAStarTests
     private static NavigationAStarPayload ClonePayload(
         NavigationAStarPayload source,
         NavigationCellAddress end) => new(
-        new NavigationAStarPayloadKey(source.Key.Query, source.Key.Start, end),
+        new NavigationAStarPayloadKey(
+            source.Key.Query,
+            source.Key.Start,
+            end,
+            source.Key.StartMedium,
+            source.Key.TargetMedia),
         (NavigationAStarGuidePoint[])source.GuidePoints.Clone(),
+        (NavigationTransitionInstruction[])source.TransitionInstructions.Clone(),
         source.Cost,
         source.Dependencies,
         source.WorldChangeSequence,
@@ -2548,6 +2714,7 @@ public sealed class NavigationSurfaceAStarTests
         graphLease.Should().NotBeNull();
         long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
             workspace.GuidePoints.Length,
+            workspace.PathNodes.Length - 1,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         cache.TryReservePayload(
@@ -2667,7 +2834,11 @@ public sealed class NavigationSurfaceAStarTests
             admission.RayWork,
             long.MaxValue);
 
-        workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
+        workspace.NodeTable.TryGetSlot(
+                new NavigationMediumStateRef(
+                    admission.Result.Start.Node,
+                    admission.Result.StartMedium),
+                out int startSlot)
             .Should().BeTrue();
         workspace.NodeTable.GetRecord(startSlot).Heuristic.Should().Be(Fixed64.Zero);
     }
@@ -2740,7 +2911,11 @@ public sealed class NavigationSurfaceAStarTests
             admission.RayWork,
             long.MaxValue);
 
-        workspace.NodeTable.TryGetSlot(admission.Result.Start.Node, out int startSlot)
+        workspace.NodeTable.TryGetSlot(
+                new NavigationMediumStateRef(
+                    admission.Result.Start.Node,
+                    admission.Result.StartMedium),
+                out int startSlot)
             .Should().BeTrue();
         workspace.NodeTable.GetRecord(startSlot).Heuristic.Should().Be(Fixed64.One);
     }
@@ -2777,6 +2952,7 @@ public sealed class NavigationSurfaceAStarTests
         using var work = new NavigationAStarQueryWork(world, store, workspace, cache);
         long maximumBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
             workspace.GuidePoints.Length,
+            workspace.PathNodes.Length - 1,
             workspace.EndpointComponents.Length,
             workspace.EndpointPages.Length);
         cache.TryReservePayload(

@@ -20,8 +20,7 @@ namespace Trailblazer;
 /// </summary>
 /// <remarks>
 /// This is the context-first host API for multi-world Trailblazer usage. It owns world lifetime,
-/// deterministic clock state, pathing state, transition state, volume rules, reachability snapshots,
-/// and guide caches. Later phases move navigation coordination state behind this context.
+/// deterministic clock state, pathing state, reachability snapshots, and guide caches.
 /// </remarks>
 public sealed class TrailblazerWorldContext : IDisposable
 {
@@ -46,9 +45,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         Settings = settings;
         _ownsWorld = ownsWorld;
         Pathing = new TrailblazerPathingService(this);
-        Transitions = new TrailblazerTransitionService(this, Pathing.State);
-        VolumeRules = new TrailblazerVolumeRulesService(this, Pathing.State);
-        Guides = new TrailblazerGuideService(this, Pathing.State);
+        Guides = new TrailblazerGuideService(this);
         Navigation = new TrailblazerNavigationService(this);
         Heightmaps = new TrailblazerHeightmapService(this);
     }
@@ -65,16 +62,6 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// Gets this context's world-local pathing service.
     /// </summary>
     public TrailblazerPathingService Pathing { get; }
-
-    /// <summary>
-    /// Gets this context's world-local traversal transition service.
-    /// </summary>
-    public TrailblazerTransitionService Transitions { get; }
-
-    /// <summary>
-    /// Gets this context's world-local raw-volume medium rule service.
-    /// </summary>
-    public TrailblazerVolumeRulesService VolumeRules { get; }
 
     /// <summary>
     /// Gets this context's world-local path guide service.
@@ -250,7 +237,6 @@ public sealed class TrailblazerWorldContext : IDisposable
         _clock.Simulate();
         Pathing.FlushPendingGridChanges();
         Pathing.MaintainNavigationGraph(_clock.FrameCount);
-        Guides.CullExpiredGuides(_clock.FrameCount);
         _hooks.InvokeSimulate();
     }
 

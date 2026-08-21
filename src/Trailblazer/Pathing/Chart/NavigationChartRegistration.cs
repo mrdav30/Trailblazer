@@ -6,7 +6,6 @@
 //=======================================================================
 
 using System;
-using SwiftCollections;
 
 namespace Trailblazer.Pathing;
 
@@ -14,8 +13,8 @@ namespace Trailblazer.Pathing;
 /// Stores live registration state for one authored <see cref="NavigationChart"/> inside a pathing owner.
 /// </summary>
 /// <remarks>
-/// Authored chart data is reusable. Initialization state, same-priority overlap order, and managed
-/// generated transition ids belong to the registration owned by a runtime context.
+/// Authored chart data is reusable. Initialization state and same-priority overlap order belong to
+/// the registration owned by a runtime context.
 /// </remarks>
 public sealed class NavigationChartRegistration
 {
@@ -24,22 +23,12 @@ public sealed class NavigationChartRegistration
     /// </summary>
     /// <param name="chart">The authored chart data.</param>
     /// <param name="registrationOrder">The deterministic order assigned by the owner.</param>
-    /// <param name="generatedTransitionIdPrefix">The prefix used for generated transition ids.</param>
     public NavigationChartRegistration(
         NavigationChart chart,
-        int registrationOrder,
-        string generatedTransitionIdPrefix)
+        int registrationOrder)
     {
         Chart = chart ?? throw new ArgumentNullException(nameof(chart));
-        if (string.IsNullOrWhiteSpace(generatedTransitionIdPrefix))
-        {
-            throw new ArgumentException(
-                "Generated transition id prefix cannot be null or whitespace.",
-                nameof(generatedTransitionIdPrefix));
-        }
-
         RegistrationOrder = registrationOrder;
-        TransitionIdPrefix = generatedTransitionIdPrefix;
     }
 
     /// <summary>
@@ -57,18 +46,4 @@ public sealed class NavigationChartRegistration
     /// </summary>
     public bool IsInitialized { get; internal set; }
 
-    /// <summary>
-    /// Gets the generated transition id prefix for this chart registration.
-    /// </summary>
-    internal string TransitionIdPrefix { get; }
-
-    /// <summary>
-    /// Gets the priority used for managed generated transitions created by this chart registration.
-    /// </summary>
-    internal int Priority => Chart.Priority;
-
-    /// <summary>
-    /// Gets the managed generated transition ids currently associated with this registration.
-    /// </summary>
-    internal SwiftHashSet<string> TransitionIds { get; } = new();
 }

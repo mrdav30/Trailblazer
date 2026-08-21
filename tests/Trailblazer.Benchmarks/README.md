@@ -1,7 +1,7 @@
 # Trailblazer Benchmarks
 
-This project uses BenchmarkDotNet to measure current graph, flow-field, volume,
-heap, and map-authoring hot paths. The retired chart-backed A* provider, cache,
+This project uses BenchmarkDotNet to measure current graph, flow-field, ray,
+and map-publication hot paths. Retired chart-backed search providers, caches,
 hybrid fallback, and legacy steering scenarios are intentionally absent.
 
 ## Requirements
@@ -34,8 +34,6 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
 | `navigation-flow-field-contention` | `NavigationFlowFieldContentionBenchmarks` |
 | `navigation-ray` | `NavigationRayBenchmarks` |
-| `volume-path-request` | `VolumePathRequestBenchmarks` |
-| `path-heap` | `PathHeapBenchmarks` |
 | `navigation-map-bake` | `NavigationMapBakeBenchmarks` |
 | `navigation-graph-lifecycle` | `NavigationGraphLifecycleBenchmarks` |
 | `navigation-graph-composition` | `NavigationGraphCompositionBenchmarks` |
@@ -94,8 +92,6 @@ named one-launch, zero-warmup, one-iteration `SingleShot` job because it builds
 and mutates the real million-node world. Do not compare those job boundaries as
 like-for-like. An explicit CLI `--job dry` or `--job short` replaces the default
 job for bounded preflight or smoke runs.
-
-`VolumePathRequestBenchmarks` remains with the retained volume/handoff branch.
 
 ## Benchmark design
 

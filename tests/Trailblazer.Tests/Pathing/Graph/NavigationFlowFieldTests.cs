@@ -51,17 +51,21 @@ public sealed class NavigationFlowFieldTests
             Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
-        PathQuery surface = fixture.CreateQuery(cells[0], cells[1], profile);
         var query = new PathQuery(
-            surface.Start,
-            surface.End,
-            surface.Agent,
-            surface.AreaPolicy,
-            surface.Traversal,
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[0]),
+                fixture.MapId),
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[1]),
+                fixture.MapId),
+            profile,
+            NavigationAStarExitTestHarness.Policy.Key,
+            new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas),
             PathAlgorithm.FlowField,
             new NavigationWorkBudget(
                 128, 16, 16, 64, 64, 0, 0, 0, 0, 32, 0),
-            allowTransitions: false);
+            allowTransitions: false,
+            new FlowFieldQueryOptions(Fixed64.Zero));
         var workspace = new NavigationFlowFieldWorkspace(1, 4, 6, 4, 16, 8);
         using var admission = new NavigationQueryAdmissionWork(
             world,
@@ -461,7 +465,9 @@ public sealed class NavigationFlowFieldTests
                 "map",
                 NavigationAStarExitTestHarness.Profile()),
             Fixed64.Zero);
-        PathQuery differentOrigin = baseline.WithStartPosition(new Vector3d(1, 0, 0));
+        PathQuery differentOrigin = baseline.WithStartState(
+            new Vector3d(1, 0, 0),
+            baseline.Traversal.StartMedium);
         PathQuery differentTerminal = new(
             baseline.Start,
             new NavigationEndpoint(

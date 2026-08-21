@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System.Reflection;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -12,7 +13,6 @@ using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -929,10 +929,7 @@ public sealed class NavigationEndpointResolutionTests
             new NavigationEndpoint(point),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             CreateBudget(32, 4),
             allowTransitions: false);
@@ -1032,10 +1029,7 @@ public sealed class NavigationEndpointResolutionTests
                 maxResolutionDistance: Fixed64.One),
             PointProfile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             algorithm,
             CreateRayBudget(64),
             allowTransitions: false);
@@ -1107,10 +1101,7 @@ public sealed class NavigationEndpointResolutionTests
                 (Fixed64)4),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             algorithm,
             CreateRayBudget(64),
             allowTransitions: false);
@@ -1308,10 +1299,7 @@ public sealed class NavigationEndpointResolutionTests
             new NavigationEndpoint(Vector3d.Zero),
             profile,
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Volume,
-                TraversalMedium.Gas,
-                TraversalDomain.Volume),
+            new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas),
             PathAlgorithm.AStar,
             CreateRayBudget(4),
             allowTransitions: true);
@@ -1371,10 +1359,7 @@ public sealed class NavigationEndpointResolutionTests
             new NavigationEndpoint(new Vector3d(Fixed64.Zero, -Fixed64.Half, Fixed64.Zero), "map"),
             profile,
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Volume,
-                TraversalMedium.Gas,
-                TraversalDomain.Volume),
+            new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas),
             PathAlgorithm.AStar,
             CreateRayBudget(8),
             allowTransitions: false);
@@ -2265,10 +2250,7 @@ public sealed class NavigationEndpointResolutionTests
         new NavigationEndpoint(point),
         Profile(),
         Policy.Key,
-        new TraversalIntent(
-            TraversalDomain.Surface,
-            TraversalMedium.Solid,
-            TraversalDomain.Surface),
+        new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
         PathAlgorithm.AStar,
         budget,
         allowTransitions: false);

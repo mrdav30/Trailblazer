@@ -5,7 +5,6 @@ using FixedMathSharp;
 using FluentAssertions;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
-using Trailblazer.Pathing;
 using Trailblazer.Tests.Navigation.Steering;
 using Trailblazer.Tests.Navigation.Turning;
 using Xunit;
@@ -86,11 +85,11 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
         steering.PauseAutoStop();
 
         for (int i = 0; i < 7; i++)
-            steering.GetHeading(agent);
+            steering.GetHeading(agent, out _);
 
         steering.CanAutoStop.Should().BeFalse();
 
-        steering.GetHeading(agent);
+        steering.GetHeading(agent, out _);
 
         steering.CanAutoStop.Should().BeTrue();
     }

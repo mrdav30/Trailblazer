@@ -55,14 +55,6 @@ internal sealed class PathingWorldState : IDisposable
 
     internal int NextChartRegistrationOrder { get; set; }
 
-    internal TraversalTransitionRegistryState TransitionRegistryState { get; } = new();
-
-    internal TraversalTransitionQueryCache TransitionQueryCache { get; } = new();
-
-    internal VolumeMediumRulesState VolumeRulesState { get; } = new();
-
-    internal TrailblazerGuideState GuideState { get; } = new();
-
     internal SwiftDictionary<ushort, ExternalGridEventObservation> ExternalGridEventObservationsByGridIndex { get; } = new();
 
     internal SwiftDictionary<ushort, PendingExternalGridChange> PendingGridChangesByGridIndex { get; } = new();
@@ -104,8 +96,6 @@ internal sealed class PathingWorldState : IDisposable
 
         _disposed = true;
         ExternalGridBridge.Dispose();
-        GuideState.Dispose();
-        TransitionRegistryState.Dispose();
         NavigationChartMapLock.Dispose();
     }
 }

@@ -391,7 +391,9 @@ public sealed class NavigationAreaCatalogProcessorTests
             limits.MaxOverlayTransitionsPerMap,
             limits.MaxOverlayCells,
             limits.MaxOverlayConnections,
-            limits.MaxOverlayTransitions);
+            limits.MaxOverlayTransitions,
+            limits.MaxTransitionRulesPerMap,
+            limits.MaxTransitionRules);
         MaintenanceWorkBudget budget = defaults.MaintenanceBudget;
         var maintenanceBudget = new MaintenanceWorkBudget(
             budget.MaxConsumedEnvelopes,

@@ -1857,7 +1857,9 @@ public sealed class NavigationGraphCapacityTests
         maxOverlayTransitionsPerMap: 32,
         maxOverlayCells,
         maxOverlayConnections: 64,
-        maxOverlayTransitions: 64);
+        maxOverlayTransitions: 64,
+        maxTransitionRulesPerMap: 32,
+        maxTransitionRules: 64);
 
     private static GridConfiguration CreateConfiguration() => new(
         Vector3d.Zero,

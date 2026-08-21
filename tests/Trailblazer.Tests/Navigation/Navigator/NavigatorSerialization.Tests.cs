@@ -49,14 +49,15 @@ public class NavigatorSerializationTests : IDisposable
     }
 
     [Fact]
-    public void JsonWire_ShouldPublishGraphGuidanceAsDiscriminatorTwo()
+    public void JsonWire_ShouldPublishRequiredNavigatorAndPathSessionSchemas()
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
 
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("GuidedPathMode").GetInt32().Should().Be(2);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(1);
+        document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
     }
 
     [Theory]
@@ -84,150 +85,72 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(false, 1)]
     [InlineData(false, 2)]
     [InlineData(false, 3)]
-    [InlineData(false, 4)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true, 0)]
     [InlineData(true, 1)]
     [InlineData(true, 2)]
     [InlineData(true, 3)]
-    [InlineData(true, 4)]
 #endif
-    public void RoundTrip_ShouldRejectInvalidPendingHandoffWithoutMutatingExistingState(
+    public void RoundTrip_ShouldRejectMissingOrInvalidFinalSchemaTransactionally(
         bool useMemoryPack,
         int invalidKind)
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        PathQuery query = new(
-            new NavigationEndpoint(source.FootPosition, "handoff-map"),
-            new NavigationEndpoint(Vector3d.Right, "handoff-map"),
-            source.NavigationProfile,
-            new NavigationAreaPolicyKey("handoff-policy", 1),
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
-            PathAlgorithm.FlowField,
-            new NavigationWorkBudget(16, 16, 16, 16, 16, 4, 4, 4, 0, 0, 0),
-            allowTransitions: true);
-        FieldInfo pendingField = TestRequire.NotNull(typeof(Navigator).GetField(
-            "_pendingGuidedVolumeExitHandoff",
-            BindingFlags.Instance | BindingFlags.NonPublic));
-        pendingField.SetValue(source, new GuidedVolumeExitHandoff
-        {
-            TransitionId = "handoff-transition",
-            FollowupQuery = query
-        });
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
         payload = invalidKind switch
         {
-            0 => SerializationUtility.SetPayloadValue(
-                payload,
-                useMemoryPack,
-                source.NavigationProfile.MaxStepUp + Fixed64.One,
-                "PendingGuidedVolumeExitHandoff",
-                "FollowupQuery",
-                "Agent",
-                "MaxStepUp"),
-            1 => SerializationUtility.SetPayloadValue(
-                payload,
-                useMemoryPack,
-                99,
-                "PendingGuidedVolumeExitHandoff",
-                "FollowupQuery",
-                "Algorithm"),
+            0 => SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "SchemaVersion"),
+            1 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 99, "SchemaVersion"),
             2 => SerializationUtility.RemovePayloadEntry(
                 payload,
                 useMemoryPack,
-                "PendingGuidedVolumeExitHandoff",
-                "ChartPathMode"),
+                "PathSession",
+                "SchemaVersion"),
             3 => SerializationUtility.SetPayloadValue(
                 payload,
                 useMemoryPack,
-                1,
-                "PendingGuidedVolumeExitHandoff",
-                "ChartPathMode"),
-            4 => SerializationUtility.SetPayloadValue(
-                payload,
-                useMemoryPack,
                 99,
-                "PendingGuidedVolumeExitHandoff",
-                "ChartPathMode"),
+                "FrameCondition",
+                "Medium"),
             _ => throw new InvalidOperationException()
         };
-        var target = CreateNavigator(Vector3d.Left, profile: source.NavigationProfile);
-        var sentinel = new GuidedVolumeExitHandoff
-        {
-            TransitionId = "sentinel-transition",
-            FollowupQuery = query.WithStartPosition(Vector3d.Left),
-            MovementGroupId = 42,
-            IsRequestingClimb = true
-        };
+
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        PathQuery shellQuery = new(
+            new NavigationEndpoint(target.FootPosition),
+            new NavigationEndpoint(new Vector3d(2, 0, 0)),
+            target.NavigationProfile,
+            new NavigationAreaPolicyKey("serialization-shell", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1),
+            allowTransitions: true);
+        target.ApplyGuidedTrekRequest(shellQuery);
+        var sentinel = new NavigationTransitionInstruction(
+            NavigationTransitionIdentityKind.Definition,
+            "shell-map",
+            "shell-transition",
+            TraversalTransitionType.Jump,
+            default,
+            default,
+            TraversalMedium.Solid,
+            TraversalMedium.Gas,
+            target.FootPosition,
+            target.FootPosition,
+            TraversalTransitionLocomotionHints.None);
+        FieldInfo pendingField = TestRequire.NotNull(typeof(Navigator).GetField(
+            "_pendingTransition",
+            BindingFlags.Instance | BindingFlags.NonPublic));
         pendingField.SetValue(target, sentinel);
-
-        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
-
-        populate.Should().Throw<InvalidOperationException>();
-        pendingField.GetValue(target).Should().BeSameAs(sentinel);
-        sentinel.TransitionId.Should().Be("sentinel-transition");
-        sentinel.FollowupQuery.Should().Be(query.WithStartPosition(Vector3d.Left));
-        sentinel.MovementGroupId.Should().Be(42);
-        sentinel.IsRequestingClimb.Should().BeTrue();
-        TestRequire.NotNull(target.Steering).CurrentQuery.Should().BeNull();
-    }
-
-    [Theory]
-    [InlineData(false)]
-#if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true)]
-#endif
-    public void RoundTrip_ShouldRestoreNonDefaultVolumeHeuristicFromLegacyWireKey(bool useMemoryPack)
-    {
-        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
-        payload = SerializationUtility.SetPayloadValue(
-            payload,
-            useMemoryPack,
-            HeuristicMethod.Euclidean,
-            "GuidedAStarHeuristic");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "GuidedVolumeHeuristic");
-        var target = CreateNavigator(new Vector3d(-2, 0, -2), profile: source.NavigationProfile);
-
-        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
-
-        target.GuidedVolumeHeuristic.Should().Be(HeuristicMethod.Euclidean);
-    }
-
-    [Theory]
-    [InlineData(false, true, 0)]
-    [InlineData(false, false, 1)]
-    [InlineData(false, false, 99)]
-#if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true, true, 0)]
-    [InlineData(true, false, 1)]
-    [InlineData(true, false, 99)]
-#endif
-    public void RoundTrip_ShouldRejectMissingRetiredOrUnknownGuidedPathMode(
-        bool useMemoryPack,
-        bool omitMode,
-        int serializedMode)
-    {
-        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
-        payload = omitMode
-            ? SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "GuidedPathMode")
-            : SerializationUtility.SetPayloadValue(
-                payload,
-                useMemoryPack,
-                serializedMode,
-                "GuidedPathMode");
-        var target = CreateNavigator(new Vector3d(-2, 0, -2), profile: source.NavigationProfile);
         Vector3d shellPosition = target.Position;
 
         Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         populate.Should().Throw<InvalidOperationException>();
         target.Position.Should().Be(shellPosition);
-        TestRequire.NotNull(target.Steering).CurrentQuery.Should().BeNull();
+        TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
+        target.PendingTransition.Should().NotBeNull();
+        target.PendingTransition!.Value.Id.Should().Be("shell-transition");
     }
 
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
@@ -370,30 +293,6 @@ public class NavigatorSerializationTests : IDisposable
         targetSteering.StopMultiplier.Should().Be((Fixed64)0.33f);
         targetTurning.TurnRate.Should().Be((Fixed64)0.72f);
         targetMotor.Handler.Move.MaxFastSpeed.Should().Be((Fixed64)8);
-    }
-
-    [Theory]
-    [InlineData(false)]
-#if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true)]
-#endif
-    public void RoundTrip_ShouldLoadSetupOnlyNavigatorWithoutControllers(bool useMemoryPack)
-    {
-        var source = new TestNavigator(TestWorld.Context);
-        source.Setup(new Vector3d(1, 0, 1), PathTestFactory.DefaultNavigationProfile);
-
-        var target = new TestNavigator(TestWorld.Context);
-        target.Setup(new Vector3d(-4, 0, -4), source.NavigationProfile);
-        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
-
-        target.Position.Should().Be(new Vector3d(1, 0, 1));
-        target.LastPosition.Should().Be(new Vector3d(1, 0, 1));
-        target.Rotation.Should().Be(FixedQuaternion.Identity);
-        target.Forward.Should().Be(Vector3d.Forward);
-        target.Steering.Should().BeNull();
-        target.Turning.Should().BeNull();
-        target.Motor.Should().BeNull();
-        target.IsActive.Should().BeFalse();
     }
 
     [Theory]
@@ -626,96 +525,6 @@ public class NavigatorSerializationTests : IDisposable
         return source;
     }
 
-    private static void RegisterGuidedPathChart(string chartKey)
-    {
-        bool[,,] data = new bool[1, 5, 3]
-        {
-            {
-                { true, true, true },
-                { true, true, true },
-                { false, true, false },
-                { true, true, true },
-                { true, true, true }
-            }
-        };
-
-        PathTestFactory.RegisterFromData(TestWorld.Context, chartKey, data, Vector3d.Zero);
-    }
-
-    private static void RegisterVolumeExitHandoffScene(string chartKey)
-    {
-        NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1]
-        {
-            {
-                { NavigationChartCell.SolidLiquid },
-                { NavigationChartCell.Solid },
-                { NavigationChartCell.Solid }
-            }
-        };
-
-        PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
-
-        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: $"{chartKey}-exit",
-            type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
-            pathCostModifier: 1)).Should().BeTrue();
-    }
-
-    private static void RegisterAerialLandingHandoffScene(string sceneKey)
-    {
-        PathTestFactory.RegisterSingleTraversalPoint(
-            TestWorld.Context, $"{sceneKey}-Landing",
-            new Vector3d(1, 0, 0),
-            TraversalMedia.Solid | TraversalMedia.Gas);
-        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, $"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
-
-        GuidedPathTestScene.AddObstaclePlaneAtX(TestWorld.Context, 2);
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: $"{sceneKey}-landing",
-            type: TraversalTransitionType.Landing,
-            source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
-            pathCostModifier: 1)).Should().BeTrue();
-
-        TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: $"{sceneKey}-chart-hop",
-            type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
-            pathCostModifier: 2)).Should().BeTrue();
-    }
-
-    private static void UnloadAerialLandingHandoffScene(string sceneKey)
-    {
-        PathManager.UnloadChart($"{sceneKey}-Landing");
-        PathManager.UnloadChart($"{sceneKey}-Target");
-    }
-
-    private static void RegisterMovementGroupFormationChart(string chartKey)
-    {
-        bool[,,] data = new bool[1, 7, 1]
-        {
-            {
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true },
-                { true }
-            }
-        };
-
-        PathTestFactory.RegisterFromData(TestWorld.Context, chartKey, data, Vector3d.Zero);
-    }
-
     private static void RegisterHeightmapSurface(
         string name,
         int height,
@@ -811,70 +620,6 @@ public class NavigatorSerializationTests : IDisposable
         actualPlatform.PreviousPlatform?.Transform.Should().Be(expectedPlatform.PreviousPlatform?.Transform);
         actualPlatform.HoldPlatform?.Id.Should().Be(expectedPlatform.HoldPlatform?.Id);
         actualPlatform.HoldPlatform?.Transform.Should().Be(expectedPlatform.HoldPlatform?.Transform);
-    }
-
-    private static void AssertSteeringStateMatches(NavSteering expected, NavSteering actual)
-    {
-        actual.CanPathfind.Should().Be(expected.CanPathfind);
-        actual.Destination.Should().Be(expected.Destination);
-        actual.PathRecheckCooldownFrames.Should().Be(expected.PathRecheckCooldownFrames);
-        actual.TargetDirection.Should().Be(expected.TargetDirection);
-        actual.LastTargetDirection.Should().Be(expected.LastTargetDirection);
-        actual.ShouldMove.Should().Be(expected.ShouldMove);
-        actual.IsStuck.Should().Be(expected.IsStuck);
-        actual.HasLineOfSightPath.Should().Be(expected.HasLineOfSightPath);
-        actual.CurrentRouteRequestsClimbIntent.Should().Be(expected.CurrentRouteRequestsClimbIntent);
-        actual.CurrentRouteTopologyVersion.Should().Be(expected.CurrentRouteTopologyVersion);
-        actual.DistanceToTarget.Should().Be(expected.DistanceToTarget);
-        actual.IsAtDestination.Should().Be(expected.IsAtDestination);
-        actual.CanMove.Should().Be(expected.CanMove);
-        actual.StoppedFrameCount.Should().Be(expected.StoppedFrameCount);
-        actual.CanAutoStop.Should().Be(expected.CanAutoStop);
-        actual.StopMultiplier.Should().Be(expected.StopMultiplier);
-        actual.GroupFactor.Should().Be(expected.GroupFactor);
-        actual.AvoidFactor.Should().Be(expected.AvoidFactor);
-        actual.BehaviorWeights.Separation.Should().Be(expected.BehaviorWeights.Separation);
-        actual.BehaviorWeights.Alignment.Should().Be(expected.BehaviorWeights.Alignment);
-        actual.BehaviorWeights.Cohesion.Should().Be(expected.BehaviorWeights.Cohesion);
-        actual.BehaviorWeights.Avoidance.Should().Be(expected.BehaviorWeights.Avoidance);
-        actual.BrakingPower.Should().Be(expected.BrakingPower);
-        actual.MovementGroupID.Should().Be(expected.MovementGroupID);
-
-        if (expected.CurrentRequest == null)
-        {
-            actual.CurrentRequest.Should().BeNull();
-        }
-        else
-        {
-            IPathRequest actualRequest = TestRequire.NotNull(actual.CurrentRequest);
-            actualRequest.GetType().Should().Be(expected.CurrentRequest.GetType());
-            actualRequest.Origin.Should().Be(expected.CurrentRequest.Origin);
-            actualRequest.TargetPosition.Should().Be(expected.CurrentRequest.TargetPosition);
-            actualRequest.UnitSize.Should().Be(expected.CurrentRequest.UnitSize);
-            actualRequest.AllowUnwalkableEndpoints.Should().Be(expected.CurrentRequest.AllowUnwalkableEndpoints);
-            actualRequest.MaxPathSearchRange.Should().Be(expected.CurrentRequest.MaxPathSearchRange);
-
-            if (expected.CurrentRequest is VolumePathRequest expectedVolume
-                && actualRequest is VolumePathRequest actualVolume)
-            {
-                actualVolume.Heuristic.Should().Be(expectedVolume.Heuristic);
-                actualVolume.Medium.Should().Be(expectedVolume.Medium);
-            }
-
-        }
-
-        if (expected.VolumeGuide == null)
-        {
-            actual.VolumeGuide.Should().BeNull();
-        }
-        else
-        {
-            VolumeGuide actualVolumeGuide = TestRequire.NotNull(actual.VolumeGuide);
-            actualVolumeGuide.GetType().Should().Be(expected.VolumeGuide.GetType());
-
-            actualVolumeGuide.CurrentWaypointIndex.Should().Be(expected.VolumeGuide.CurrentWaypointIndex);
-
-        }
     }
 
     private static void AssertTurningStateMatches(NavTurning expected, NavTurning actual)

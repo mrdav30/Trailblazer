@@ -33,14 +33,12 @@ public sealed class NavigationChartRegistrationTests : IDisposable
     public void NavigationChartRegistration_ShouldAllowOneAuthoredChartToHaveIndependentLiveState()
     {
         NavigationChart chart = BuildSinglePointChart("ReusableAuthoredChart");
-        var first = new NavigationChartRegistration(chart, registrationOrder: 1, generatedTransitionIdPrefix: "first");
-        var second = new NavigationChartRegistration(chart, registrationOrder: 2, generatedTransitionIdPrefix: "second");
+        var first = new NavigationChartRegistration(chart, registrationOrder: 1);
+        var second = new NavigationChartRegistration(chart, registrationOrder: 2);
 
         first.IsInitialized = true;
-        first.TransitionIds.Add("first-generated");
 
         second.IsInitialized.Should().BeFalse();
-        second.TransitionIds.Should().BeEmpty();
         first.Chart.Should().BeSameAs(chart);
         second.Chart.Should().BeSameAs(chart);
         first.RegistrationOrder.Should().Be(1);

@@ -68,14 +68,13 @@ public sealed class NavigationPublicGuideMatrixTests
         lease.Dispose();
 
         lease.Status.Should().Be(NavigationGuideStatus.Stale);
-        lease.CurrentWaypointIndex.Should().Be(-1);
-        lease.WaypointCount.Should().Be(0);
+        lease.CurrentStepIndex.Should().Be(-1);
+        lease.StepCount.Should().Be(0);
         lease.TotalCost.Should().Be(Fixed64.Zero);
-        lease.TryGetCurrentWaypoint(out NavigationCellAddress address, out Vector3d foot)
+        lease.TryGetCurrentStep(out NavigationGuideStep step)
             .Should().Be(NavigationGuideStatus.Stale);
-        address.Should().Be(default);
-        foot.Should().Be(default);
-        lease.TryAdvanceWaypoint().Should().Be(NavigationGuideStatus.Stale);
+        step.Should().Be(default(NavigationGuideStep));
+        lease.TryAdvanceStep().Should().Be(NavigationGuideStatus.Stale);
         cache.ActiveLeaseCount.Should().Be(0);
     }
 
@@ -199,7 +198,7 @@ public sealed class NavigationPublicGuideMatrixTests
         grid.TryAddObstacle(middle!, obstacle).Should().BeTrue();
         context.Simulate();
 
-        original.TryGetCurrentWaypoint(out _, out _).Should().Be(NavigationGuideStatus.Stale);
+        original.TryGetCurrentStep(out _).Should().Be(NavigationGuideStatus.Stale);
         original.Status.Should().Be(NavigationGuideStatus.Stale);
         context.Guides.RequestGuide(query, out NavigationGuideLease? blocked)
             .Should().Be(NavigationGuideStatus.NoPath);
@@ -245,14 +244,14 @@ public sealed class NavigationPublicGuideMatrixTests
 
     private static RouteResult ReadRoute(NavigationGuideLease lease)
     {
-        var addresses = new List<NavigationCellAddress>(lease.WaypointCount);
-        for (int ordinal = 0; ordinal < lease.WaypointCount; ordinal++)
+        var addresses = new List<NavigationCellAddress>(lease.StepCount);
+        for (int ordinal = 0; ordinal < lease.StepCount; ordinal++)
         {
-            lease.TryGetCurrentWaypoint(out NavigationCellAddress address, out _)
+            lease.TryGetCurrentStep(out NavigationGuideStep step)
                 .Should().Be(NavigationGuideStatus.Success);
-            addresses.Add(address);
-            if (ordinal + 1 < lease.WaypointCount)
-                lease.TryAdvanceWaypoint().Should().Be(NavigationGuideStatus.Success);
+            addresses.Add(step.Address);
+            if (ordinal + 1 < lease.StepCount)
+                lease.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
         }
 
         return new RouteResult(addresses.ToArray(), lease.TotalCost);

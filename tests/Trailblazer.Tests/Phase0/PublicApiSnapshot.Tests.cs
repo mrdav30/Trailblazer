@@ -29,7 +29,7 @@ public sealed class PublicApiSnapshotTests
         typeof(NavSteering).GetMethod(
                 "IsVolumeDestinationInSight",
                 BindingFlags.Public | BindingFlags.Static)
-            .Should().NotBeNull("volume direct-path authority remains Phase 7-owned");
+            .Should().BeNull();
     }
 
     [Theory]
@@ -42,12 +42,55 @@ public sealed class PublicApiSnapshotTests
     }
 
     [Fact]
-    public void RetainedVolumeAndHybridCarriers_ShouldExposeOnlyConcreteLiveState()
+    public void RetiredVolumeAndHybridCarriers_ShouldBeDeleted()
     {
-        typeof(VolumeGuide).GetProperty("TrailMap").Should().BeNull();
-        typeof(VolumeGuide).GetProperty("VolumeResult").Should().NotBeNull();
-        typeof(VolumeSurveyor).GetProperty("Shared").Should().BeNull();
-        typeof(HybridRouteStep).GetProperty("AdditionalCost").Should().BeNull();
+        string[] retiredTypes =
+        {
+            "Trailblazer.Pathing.VolumeGuide",
+            "Trailblazer.Pathing.VolumeSurveyor",
+            "Trailblazer.Pathing.HybridRouteStep",
+            "Trailblazer.Pathing.VolumePathRequest"
+        };
+
+        retiredTypes.Should().OnlyContain(
+            typeName => typeof(TrailblazerWorldContext).Assembly.GetType(typeName) == null);
+    }
+
+    [Fact]
+    public void UnifiedMediumGuidance_ShouldExposeOnlyActionablePublicResults()
+    {
+        Type assemblyType = typeof(TrailblazerWorldContext);
+        Type stepType = assemblyType.Assembly.GetType(
+            "Trailblazer.Pathing.NavigationGuideStep",
+            throwOnError: true)!;
+        Type sampleType = assemblyType.Assembly.GetType(
+            "Trailblazer.Pathing.NavigationFlowSample",
+            throwOnError: true)!;
+        Type instructionType = assemblyType.Assembly.GetType(
+            "Trailblazer.Pathing.NavigationTransitionInstruction",
+            throwOnError: true)!;
+        Type identityKindType = assemblyType.Assembly.GetType(
+            "Trailblazer.Pathing.NavigationTransitionIdentityKind",
+            throwOnError: true)!;
+
+        stepType.IsPublic.Should().BeTrue();
+        sampleType.IsPublic.Should().BeTrue();
+        instructionType.IsPublic.Should().BeTrue();
+        identityKindType.IsPublic.Should().BeTrue();
+        typeof(NavigationGuideLease).GetMethod("TryGetCurrentStep").Should().NotBeNull();
+        typeof(NavigationGuideLease).GetMethod("CompletePendingTransition").Should().NotBeNull();
+        typeof(NavigationGuideLease).GetMethod("TryGetCurrentWaypoint").Should().BeNull();
+        typeof(NavigationGuideLease).GetMethod("TryAdvanceWaypoint").Should().BeNull();
+        typeof(NavigationGuideLease).GetProperty("CurrentWaypointIndex").Should().BeNull();
+        typeof(NavigationGuideLease).GetProperty("WaypointCount").Should().BeNull();
+        typeof(NavigationGuideLease).GetMethod("TryAdvanceStep").Should().NotBeNull();
+        typeof(NavigationGuideLease).GetProperty("CurrentStepIndex").Should().NotBeNull();
+        typeof(NavigationGuideLease).GetProperty("StepCount").Should().NotBeNull();
+        typeof(NavigationFlowFieldLease).GetMethods()
+            .Where(method => method.Name == "TrySample")
+            .Should().ContainSingle();
+        typeof(NavigationFlowFieldLease).GetMethod("CompletePendingTransition")
+            .Should().NotBeNull();
     }
 
     [Fact]

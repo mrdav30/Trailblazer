@@ -75,7 +75,12 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
     /// <summary>
     /// The non-negative surcharge for performing this semantic action.
     /// </summary>
-    public Fixed64 AdditionalCost { get; }
+    public Fixed64 ActionCost { get; }
+
+    /// <summary>
+    /// The authored built-in locomotion intent for this semantic action.
+    /// </summary>
+    public TraversalTransitionLocomotionHints LocomotionHints { get; }
 
     /// <summary>
     /// Creates one complete directed semantic transition definition.
@@ -88,7 +93,8 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
         NavigationCellAddress destination,
         TraversalMedium destinationMedium,
         TraversalCapability requiredCapabilities = TraversalCapability.None,
-        Fixed64 additionalCost = default,
+        Fixed64 actionCost = default,
+        TraversalTransitionLocomotionHints locomotionHints = TraversalTransitionLocomotionHints.None,
         Vector3d sourcePointOverride = default,
         bool hasSourcePointOverride = false,
         Vector3d destinationPointOverride = default,
@@ -115,9 +121,13 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
             nameof(requiredCapabilities),
             "Required capabilities contain an unknown bit.");
         SwiftThrowHelper.ThrowIfArgument(
-            additionalCost < Fixed64.Zero,
-            nameof(additionalCost),
-            "Additional cost must be non-negative.");
+            actionCost < Fixed64.Zero,
+            nameof(actionCost),
+            "Action cost must be non-negative.");
+        SwiftThrowHelper.ThrowIfArgument(
+            (locomotionHints & ~TraversalTransitionRule.KnownLocomotionHints) != 0,
+            nameof(locomotionHints),
+            "Locomotion hints contain an unknown bit.");
         SwiftThrowHelper.ThrowIfArgument(
             string.IsNullOrWhiteSpace(destination.MapId),
             nameof(destination),
@@ -130,7 +140,8 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
         Destination = destination;
         DestinationMedium = destinationMedium;
         RequiredCapabilities = requiredCapabilities;
-        AdditionalCost = additionalCost;
+        ActionCost = actionCost;
+        LocomotionHints = locomotionHints;
         SourcePointOverride = hasSourcePointOverride ? sourcePointOverride : default;
         HasSourcePointOverride = hasSourcePointOverride;
         DestinationPointOverride = hasDestinationPointOverride ? destinationPointOverride : default;
@@ -150,7 +161,8 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
         && HasDestinationPointOverride == other.HasDestinationPointOverride
         && DestinationPointOverride == other.DestinationPointOverride
         && RequiredCapabilities == other.RequiredCapabilities
-        && AdditionalCost == other.AdditionalCost;
+        && ActionCost == other.ActionCost
+        && LocomotionHints == other.LocomotionHints;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) =>
@@ -172,7 +184,8 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
         hash = SwiftHashTools.CombineHashCodes(hash, HasDestinationPointOverride ? 1 : 0);
         hash = SwiftHashTools.CombineHashCodes(hash, DestinationPointOverride.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, (int)RequiredCapabilities);
-        return SwiftHashTools.CombineHashCodes(hash, AdditionalCost.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, ActionCost.GetHashCode());
+        return SwiftHashTools.CombineHashCodes(hash, (int)LocomotionHints);
     }
 
     internal static bool IsKnownMedium(TraversalMedium medium) =>

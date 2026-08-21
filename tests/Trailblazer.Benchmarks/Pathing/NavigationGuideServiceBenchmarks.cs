@@ -121,13 +121,13 @@ public class NavigationGuideServiceBenchmarks
             NavigationGuideStatus sample = guide.TrySample(
                 _query.Start.Position,
                 SampleBudget,
-                out FixedMathSharp.Vector3d heading);
-            if (sample != NavigationGuideStatus.Success || heading == FixedMathSharp.Vector3d.Zero)
+                out NavigationFlowSample flowSample);
+            if (sample != NavigationGuideStatus.Success || flowSample.Heading == FixedMathSharp.Vector3d.Zero)
             {
                 throw new InvalidOperationException(
-                    $"Warm Flow sample failed: sample={sample}, heading={heading}.");
+                    $"Warm Flow sample failed: sample={sample}, heading={flowSample.Heading}.");
             }
-            return guide.OriginIntegrationCost.m_rawValue ^ heading.GetHashCode();
+            return guide.OriginIntegrationCost.m_rawValue ^ flowSample.Heading.GetHashCode();
         }
         finally
         {

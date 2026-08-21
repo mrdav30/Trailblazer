@@ -96,10 +96,7 @@ public sealed class NavigationFlowAdmissionTests
                 allowedMedia: TraversalMedia.Solid,
                 capabilities: TraversalCapability.None),
             new NavigationAreaPolicyKey("flow-reset", 1),
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.FlowField,
             new NavigationWorkBudget(
                 maxLookupProbes: 8,
@@ -680,18 +677,10 @@ public sealed class NavigationFlowAdmissionTests
                 NavigationAStarExitTestHarness.RectangularLine(2),
                 new[] { origin, destination },
                 "flow-unsupported-reentry");
-        PathQuery baseline = ToFlowField(
-            fixture.CreateQuery(origin, destination, fixture.DefaultProfile));
-        var query = new PathQuery(
-            baseline.Start,
-            baseline.End,
-            baseline.Agent,
-            baseline.AreaPolicy,
-            baseline.Traversal,
-            baseline.Algorithm,
-            baseline.Budget,
-            allowTransitions: true,
-            baseline.FlowField);
+        PathQuery query = fixture.CreateQuery(
+            origin,
+            destination,
+            fixture.DefaultProfile);
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(
                 fixture.Graph,

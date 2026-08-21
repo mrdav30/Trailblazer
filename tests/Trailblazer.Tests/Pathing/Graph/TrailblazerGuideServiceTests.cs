@@ -183,20 +183,20 @@ public sealed class TrailblazerGuideServiceTests
         NavigationGuideLease guide = TestRequire.NotNull(exactResult);
         try
         {
-            guide.WaypointCount.Should().Be(125);
+            guide.StepCount.Should().Be(125);
             guide.TotalCost.Should().Be((Fixed64)62);
-            guide.TryGetCurrentWaypoint(out NavigationCellAddress first, out _)
+            guide.TryGetCurrentStep(out NavigationGuideStep first)
                 .Should().Be(NavigationGuideStatus.Success);
-            first.Should().Be(new NavigationCellAddress(
+            first.Address.Should().Be(new NavigationCellAddress(
                 "guide-open-plane-32",
                 default));
             for (int ordinal = 1; ordinal < 125; ordinal++)
             {
-                guide.TryAdvanceWaypoint().Should().Be(NavigationGuideStatus.Success);
+                guide.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
             }
-            guide.TryGetCurrentWaypoint(out NavigationCellAddress last, out _)
+            guide.TryGetCurrentStep(out NavigationGuideStep last)
                 .Should().Be(NavigationGuideStatus.Success);
-            last.Should().Be(new NavigationCellAddress(
+            last.Address.Should().Be(new NavigationCellAddress(
                 "guide-open-plane-32",
                 new VoxelIndex(31, 0, 31)));
         }
@@ -221,7 +221,7 @@ public sealed class TrailblazerGuideServiceTests
             context.Guides.RequestGuide(query, out NavigationGuideLease? warmGuide)
                 .Should().Be(NavigationGuideStatus.Success);
             NavigationGuideLease warm = TestRequire.NotNull(warmGuide);
-            warm.TryGetCurrentWaypoint(out _, out _)
+            warm.TryGetCurrentStep(out _)
                 .Should().Be(NavigationGuideStatus.Success);
             warm.Dispose();
         }
@@ -231,8 +231,7 @@ public sealed class TrailblazerGuideServiceTests
         GC.Collect();
         NavigationGuideStatus requestStatus = default;
         NavigationGuideStatus sampleStatus = default;
-        NavigationCellAddress sampledAddress = default;
-        Vector3d sampledPosition = default;
+        NavigationGuideStep sampledStep = default;
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 256; i++)
         {
@@ -242,19 +241,17 @@ public sealed class TrailblazerGuideServiceTests
             if (!guide.HasValue)
                 break;
             NavigationGuideLease activeGuide = guide.Value;
-            sampleStatus = activeGuide.TryGetCurrentWaypoint(
-                out sampledAddress,
-                out sampledPosition);
+            sampleStatus = activeGuide.TryGetCurrentStep(out sampledStep);
             activeGuide.Dispose();
         }
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         requestStatus.Should().Be(NavigationGuideStatus.Success);
         sampleStatus.Should().Be(NavigationGuideStatus.Success);
-        sampledAddress.Should().Be(new NavigationCellAddress(
+        sampledStep.Address.Should().Be(new NavigationCellAddress(
             "guide-allocation",
             new VoxelIndex(4, 4, 4)));
-        sampledPosition.Should().Be(new Vector3d(
+        sampledStep.Position.Should().Be(new Vector3d(
             Fixed64.Zero,
             -Fixed64.Half,
             Fixed64.Zero));
@@ -277,11 +274,11 @@ public sealed class TrailblazerGuideServiceTests
         NavigationGuideLease second = TestRequire.NotNull(secondResult);
 
         staleCopy.Status.Should().Be(NavigationGuideStatus.Stale);
-        staleCopy.TryGetCurrentWaypoint(out _, out _)
+        staleCopy.TryGetCurrentStep(out _)
             .Should().Be(NavigationGuideStatus.Stale);
         staleCopy.Dispose();
         second.Status.Should().Be(NavigationGuideStatus.Success);
-        second.TryGetCurrentWaypoint(out _, out _)
+        second.TryGetCurrentStep(out _)
             .Should().Be(NavigationGuideStatus.Success);
         second.Dispose();
     }
@@ -351,7 +348,8 @@ public sealed class TrailblazerGuideServiceTests
             sampleStarted.Set();
             try
             {
-                sampleStatus = staleCopy.TryGetCurrentWaypoint(out sampledAddress, out _);
+                sampleStatus = staleCopy.TryGetCurrentStep(out NavigationGuideStep step);
+                sampledAddress = step.Address;
             }
             catch (Exception error)
             {
@@ -382,7 +380,7 @@ public sealed class TrailblazerGuideServiceTests
                         payloadLease,
                         out replacementInner);
                     if (replacementInner != null)
-                        new NavigationGuideLease(replacementInner).TryAdvanceWaypoint();
+                        new NavigationGuideLease(replacementInner).TryAdvanceStep();
                 }
             }
             catch (Exception error)
@@ -485,10 +483,7 @@ public sealed class TrailblazerGuideServiceTests
             new NavigationEndpoint(Vector3d.Right),
             profile,
             new NavigationAreaPolicyKey("test-policy", 1),
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.FlowField,
             new NavigationWorkBudget(
                 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0),
@@ -540,9 +535,9 @@ public sealed class TrailblazerGuideServiceTests
         lease.TrySample(
                 source.FootAnchor,
                 context.Settings.GuideSampleBudget,
-                out Vector3d heading)
+                out NavigationFlowSample sample)
             .Should().Be(NavigationGuideStatus.Success);
-        heading.Should().Be(Vector3d.Right);
+        sample.Heading.Should().Be(Vector3d.Right);
         cache.ActiveLeaseCount.Should().Be(1);
 
         lease.Dispose();
@@ -555,8 +550,7 @@ public sealed class TrailblazerGuideServiceTests
     [Theory]
     [InlineData("algorithm", NavigationGuideStatus.Unsupported)]
     [InlineData("start", NavigationGuideStatus.InvalidStart)]
-    [InlineData("transition", NavigationGuideStatus.Unsupported)]
-    [InlineData("volume", NavigationGuideStatus.Unsupported)]
+    [InlineData("volume", NavigationGuideStatus.BudgetExceeded)]
     public void RequestFlowField_ShouldRejectUnsupportedOrUnresolvableQueryShape(
         string mismatch,
         NavigationGuideStatus expected)
@@ -574,26 +568,21 @@ public sealed class TrailblazerGuideServiceTests
         PathQuery query = mismatch switch
         {
             "algorithm" => aStarQuery,
-            "start" => flowQuery.WithStartPosition(new Vector3d(100, 0, 0)),
-            "transition" => new PathQuery(
-                flowQuery.Start,
-                flowQuery.End,
-                flowQuery.Agent,
-                flowQuery.AreaPolicy,
-                flowQuery.Traversal,
-                flowQuery.Algorithm,
-                flowQuery.Budget,
-                allowTransitions: true,
-                flowQuery.FlowField),
+            "start" => flowQuery.WithStartState(
+                new Vector3d(100, 0, 0),
+                flowQuery.Traversal.StartMedium),
             "volume" => new PathQuery(
                 flowQuery.Start,
                 flowQuery.End,
-                flowQuery.Agent,
+                new NavigationAgentProfile(
+                    flowQuery.Agent.Shape,
+                    flowQuery.Agent.MaxStepUp,
+                    flowQuery.Agent.MaxDropDown,
+                    flowQuery.Agent.ArrivalRadius,
+                    flowQuery.Agent.AllowedMedia | TraversalMedia.Gas,
+                    flowQuery.Agent.Capabilities),
                 flowQuery.AreaPolicy,
-                new TraversalIntent(
-                    TraversalDomain.Volume,
-                    TraversalMedium.Gas,
-                    TraversalDomain.Volume),
+                new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas),
                 flowQuery.Algorithm,
                 flowQuery.Budget,
                 allowTransitions: false,
@@ -622,10 +611,7 @@ public sealed class TrailblazerGuideServiceTests
             TraversalMedia.Solid,
             TraversalCapability.None),
         new NavigationAreaPolicyKey("test-policy", 1),
-        new TraversalIntent(
-            TraversalDomain.Surface,
-            TraversalMedium.Solid,
-            TraversalDomain.Surface),
+        new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
         PathAlgorithm.AStar,
         budget ?? new NavigationWorkBudget(
             1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0),
@@ -734,10 +720,7 @@ public sealed class TrailblazerGuideServiceTests
                 "guide-allocation"),
             profile,
             policyKey,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
@@ -861,10 +844,7 @@ public sealed class TrailblazerGuideServiceTests
             Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
-        var traversal = new TraversalIntent(
-            TraversalDomain.Surface,
-            TraversalMedium.Solid,
-            TraversalDomain.Surface);
+        var traversal = new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid);
         exactQuery = new PathQuery(
             new NavigationEndpoint(start, mapId),
             new NavigationEndpoint(end, mapId),

@@ -11,7 +11,7 @@ namespace Trailblazer.Pathing;
 
 /// <summary>Stores the compact built-in locomotion intent carried by a transition action.</summary>
 [Flags]
-internal enum TraversalTransitionLocomotionHints
+public enum TraversalTransitionLocomotionHints
 {
     /// <summary>No built-in locomotion intent is requested.</summary>
     None = 0,

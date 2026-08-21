@@ -126,8 +126,8 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         _admission.Begin(
             lease,
             query,
-            TraversalMedium.Solid,
-            TraversalMedia.Solid);
+            query.Traversal.StartMedium,
+            query.Traversal.TargetMedia);
         _admissionActive = true;
         if (_admission.Status != NavigationQueryAdmissionStatus.Pending)
             MarkReady(MapAdmissionStatus(_admission.Status));

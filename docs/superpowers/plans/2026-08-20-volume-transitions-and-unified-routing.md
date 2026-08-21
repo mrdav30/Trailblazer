@@ -354,8 +354,10 @@
 - Modify: `src/Trailblazer/Navigation/Steering/NavSteering.Serialization.cs`
 - Modify: `src/Trailblazer/Navigation/Navigator/Navigator.cs`
 - Modify: `src/Trailblazer/Navigation/Navigator/Navigator.Serialization.cs`
-- Modify: `src/Trailblazer/Navigation/Navigator/Guidance/NavigatorGuidedTraversalState.cs`
+- Delete after direct instruction migration: `src/Trailblazer/Navigation/Navigator/Guidance/NavigatorGuidedTraversalState.cs` and `GuidedClimbIntentMode.cs`
 - Modify: `src/Trailblazer/Navigation/Steering/Serialization/PathQueryRecord.cs`
+- Add: `src/Trailblazer/Navigation/Steering/Serialization/NavigatorPathSessionRecord.cs`
+- Add final public identity discriminator: `src/Trailblazer/Pathing/Search/Guide/NavigationTransitionIdentityKind.cs`
 - Delete: `src/Trailblazer/Navigation/Steering/Serialization/PathRequestRecord.cs`
 - Modify: `tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs`
 - Modify: `tests/Trailblazer.Tests/Navigation/Navigator/Navigator.Tests.cs`
@@ -379,25 +381,25 @@
 - Delete exact legacy request files: `IPathRequest.cs`, `PathRequestCacheKey.cs`, `PathRequestHashBuilder.cs`; retain or relocate the live `PathRequestContextResolver.cs`
 - Delete when their final consumer is gone: `src/Trailblazer/Pathing/Search/Survey/**`, `IGuide.cs`, `IWaypointGuide.cs`, `GuidePool.cs`, `PathGuideFactory.cs`, `TrailblazerGuideState.cs`, `src/Trailblazer/Pathing/Search/OpenSet/**`, `AStarWaypoint.cs`, and volume `HeuristicMethod.cs`
 - Delete: `src/Trailblazer/Navigation/Navigator/Guidance/VolumeExit/**`
-- Delete corresponding tests and `tests/Trailblazer.Benchmarks/Pathing/VolumePathRequestBenchmarks.cs`
+- Delete corresponding tests, `tests/Trailblazer.Benchmarks/Pathing/VolumePathRequestBenchmarks.cs`, and the obsolete `PathHeapBenchmarks.cs` benchmark/README registration with `Search/OpenSet/**`
 - Modify: `tests/Trailblazer.Tests/Phase0/PublicApiSnapshot.txt`
 
-- [ ] RED the final public exact Solid/Gas/Liquid `StartMedium`, known nonempty `TargetMedia`, agent subset/Unknown rejection, and transition-disabled mismatch. Change `TraversalIntent`/`PathQuery`, migrate every source/test/benchmark reader returned by `rg "StartDomain|TargetDomain|CurrentMedium|TraversalDomain"`, then delete `TraversalDomain` with zero residue.
-- [ ] RED public map default/rule authoring and atomically expose the Task 2 types/members. Add final authored locomotion hints to explicit definitions, replacing Task 4's staged `None`; never infer them from `TraversalTransitionType`. Rename `TraversalTransitionDefinition.AdditionalCost` to `ActionCost` across every direct reader/named constructor with no alias; preserve physical `NavigationConnection.AdditionalCost`.
-- [ ] Replace Task 2's internal rule-limit derivation with required public `maxTransitionRulesPerMap`/`maxTransitionRules` constructor arguments and `MaxTransitionRulesPerMap`/`MaxTransitionRules` properties; migrate every settings/test/benchmark caller in the same atomic cut.
-- [ ] RED exact current-frame/start-medium mismatch before guide acquisition; no silent volume-first query synthesis.
-- [ ] RED movement step steering, transition pending exposure, zero ordinary heading while held, built-in locomotion hints, exact `CompletePendingTransition`, cancel/retry, stale action, StopMove/Arrive/load/dispose ownership.
-- [ ] RED standalone query exact JSON/MemoryPack round-trip and Navigator session load that rebuilds start position/medium from host-restored state while retaining durable destination/profile/policy/algorithm/budget/target-media intent.
-- [ ] RED malformed/missing/old Volume/Hybrid/handoff/guide-cursor wire shapes in both transports; preserve existing shell transactionally.
-- [ ] Atomically expose only public `TryGetCurrentStep`/`NavigationFlowSample`, migrate all guide-service, NavSteering, batch, test, benchmark, and serialization consumers, then delete `TryGetCurrentWaypoint` and heading-only `TrySample`. No intermediate commit may expose both public suites.
-- [ ] RED and expose `CompletePendingTransition(in NavigationTransitionInstruction)` on both public `NavigationGuideLease` and `NavigationFlowFieldLease`, with mismatch, stale, copied-lease, and double-completion failure that leaves cursor state unchanged; cover XML docs and public API fingerprints.
-- [ ] Remove automatic guided-volume handoff activation and every `_hybridRouteGuide`, `_volumeGuide`, `_currentRequest`, unit-size, range, heuristic, waypoint-index, and old-mode field after direct migration.
-- [ ] Keep one Navigator pending instruction field only; the lease remains cursor/action owner.
-- [ ] Build all production/test/benchmark projects and enumerate the real final owners in `PathManager`, `PathingWorldState`, `TrailblazerWorldContext`, `TrailblazerTransitionService`, and `TrailblazerGuideService`; migrate/delete each owner before its provider. Do not port `GuidedVolumeExitPlanner` or any Hybrid carrier to the final query.
-- [ ] Delete the complete duplicate `TraversalAuthoringMap`/`TraversalBuildResult`/legend/parser/diagnostic-extension lane and its `PathManager`/`TrailblazerPathingService` overloads/tests in the same compile-clean cut; only then delete `GeneratedTraversalTransitionBuilder`. Do not port this chart-era authoring lane beside `NavigationMapTokenImporter`.
-- [ ] Delete the legacy families atomically with the public cutover; preserve no alias, forwarding constructor, compatibility factory, dormant discriminator, old serialized key, or historical API snapshot entry.
-- [ ] Add source-architecture tests proving exactly one query/guide/cache/publication authority and zero exact retired source/test/benchmark/API/JSON/MemoryPack tokens. Task 12 owns the final docs-zero gate.
-- [ ] Run clean multi-target Release + ReleaseLean builds, full direct tests, Navigator/NavSteering/serialization/public API gates, reviews, and one atomic commit: `refactor(pathing): cut over unified medium routing`.
+- [x] RED the final public exact Solid/Gas/Liquid `StartMedium`, known nonempty `TargetMedia`, agent subset/Unknown rejection, and transition-disabled mismatch. Change `TraversalIntent`/`PathQuery`, migrate every source/test/benchmark reader returned by `rg "StartDomain|TargetDomain|CurrentMedium|TraversalDomain"`, then delete `TraversalDomain` with zero residue.
+- [x] RED public map default/rule authoring and atomically expose the Task 2 types/members. Add final authored locomotion hints to explicit definitions, replacing Task 4's staged `None`; never infer them from `TraversalTransitionType`. Rename `TraversalTransitionDefinition.AdditionalCost` to `ActionCost` across every direct reader/named constructor with no alias; preserve physical `NavigationConnection.AdditionalCost`.
+- [x] Replace Task 2's internal rule-limit derivation with required public `maxTransitionRulesPerMap`/`maxTransitionRules` constructor arguments and `MaxTransitionRulesPerMap`/`MaxTransitionRules` properties; migrate every settings/test/benchmark caller in the same atomic cut.
+- [x] RED exact current-frame/start-medium mismatch before guide acquisition; no silent volume-first query synthesis.
+- [x] RED movement step steering, transition pending exposure, zero ordinary heading while held, built-in locomotion hints, exact `CompletePendingTransition`, cancel/retry, stale action, StopMove/Arrive/load/dispose ownership.
+- [x] RED standalone query exact JSON/MemoryPack round-trip and Navigator session load that rebuilds start position/medium from host-restored state while retaining durable destination/profile/policy/algorithm/budget/target-media intent.
+- [x] RED malformed/missing/old Volume/Hybrid/handoff/guide-cursor wire shapes in both transports; preserve existing shell transactionally.
+- [x] Atomically expose only public `TryGetCurrentStep`/`NavigationFlowSample`, migrate all guide-service, NavSteering, batch, test, benchmark, and serialization consumers, then delete `TryGetCurrentWaypoint` and heading-only `TrySample`. No intermediate commit may expose both public suites.
+- [x] RED and expose `CompletePendingTransition(in NavigationTransitionInstruction)` on both public `NavigationGuideLease` and `NavigationFlowFieldLease`, with mismatch, stale, copied-lease, and double-completion failure that leaves cursor state unchanged; cover XML docs and public API fingerprints.
+- [x] Remove automatic guided-volume handoff activation and every `_hybridRouteGuide`, `_volumeGuide`, `_currentRequest`, unit-size, range, heuristic, waypoint-index, and old-mode field after direct migration.
+- [x] Keep one Navigator pending instruction field only; the lease remains cursor/action owner.
+- [x] Build all production/test/benchmark projects and enumerate the real final owners in `PathManager`, `PathingWorldState`, `TrailblazerWorldContext`, `TrailblazerTransitionService`, and `TrailblazerGuideService`; migrate/delete each owner before its provider. Do not port `GuidedVolumeExitPlanner` or any Hybrid carrier to the final query.
+- [x] Delete the complete duplicate `TraversalAuthoringMap`/`TraversalBuildResult`/legend/parser/diagnostic-extension lane and its `PathManager`/`TrailblazerPathingService` overloads/tests in the same compile-clean cut; only then delete `GeneratedTraversalTransitionBuilder`. Do not port this chart-era authoring lane beside `NavigationMapTokenImporter`.
+- [x] Delete the legacy families atomically with the public cutover; preserve no alias, forwarding constructor, compatibility factory, dormant discriminator, old serialized key, or historical API snapshot entry.
+- [x] Add source-architecture tests proving exactly one query/guide/cache/publication authority and zero exact retired source/test/benchmark/API/JSON/MemoryPack tokens. Task 12 owns the final docs-zero gate.
+- [x] Run clean multi-target Release + ReleaseLean builds, full direct tests, Navigator/NavSteering/serialization/public API gates, reviews, and one atomic commit: `refactor(pathing): cut over unified medium routing`.
 
 ## Task 11: Prove Ladder And Duck Simulation Scenarios
 

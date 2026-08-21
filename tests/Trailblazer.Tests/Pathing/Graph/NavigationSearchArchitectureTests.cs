@@ -400,8 +400,8 @@ public sealed class NavigationSearchArchitectureTests
             .Length.Should().Be(3,
                 "initial graph travel and periodic refresh each need one direct-ray callsite");
         source.Split("TryHandleInitialGraphDirectTravel(", StringSplitOptions.None)
-            .Length.Should().Be(5,
-                "A-star, Flow, and hybrid Flow must share one initial direct-travel implementation");
+            .Length.Should().Be(4,
+                "A-star and Flow must share one initial direct-travel implementation");
     }
 
     [Fact]

@@ -922,10 +922,7 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 MapId),
             NavigationAStarExitTestHarness.Profile(),
             Policy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(
                 8_192,

@@ -94,23 +94,6 @@ internal sealed class NavigationAStarGuideLease
         }
     }
 
-    internal NavigationAStarQueryStatus TryGetCurrentWaypoint(
-        long generation,
-        out NavigationCellAddress address,
-        out Vector3d footPosition)
-    {
-        lock (_sync)
-        {
-            if (!IsGenerationActiveUnderLock(generation))
-            {
-                address = default;
-                footPosition = default;
-                return NavigationAStarQueryStatus.Stale;
-            }
-            return TryGetCurrentWaypointUnderLock(out address, out footPosition);
-        }
-    }
-
     internal NavigationAStarQueryStatus TryAdvanceWaypoint(long generation)
     {
         lock (_sync)
@@ -197,17 +180,6 @@ internal sealed class NavigationAStarGuideLease
         && generation == _generation
         && _store != null
         && _payloadLease != null;
-
-    private NavigationAStarQueryStatus TryGetCurrentWaypointUnderLock(
-        out NavigationCellAddress address,
-        out Vector3d footPosition)
-    {
-        NavigationAStarQueryStatus status = TryGetCurrentStepUnderLock(
-            out NavigationGuideStep step);
-        address = step.Address;
-        footPosition = step.Position;
-        return status;
-    }
 
     private NavigationAStarQueryStatus TryGetCurrentStepUnderLock(
         out NavigationGuideStep step)

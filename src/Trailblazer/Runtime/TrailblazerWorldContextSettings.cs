@@ -208,7 +208,9 @@ public sealed class TrailblazerWorldContextSettings
             maxOverlayTransitionsPerMap: 1_024,
             maxOverlayCells: 16_384,
             maxOverlayConnections: 4_096,
-            maxOverlayTransitions: 4_096),
+            maxOverlayTransitions: 4_096,
+            maxTransitionRulesPerMap: 1_024,
+            maxTransitionRules: 4_096),
         new MaintenanceWorkBudget(
             maxConsumedEnvelopes: 4_096,
             maxBaselineAddresses: 65_536,

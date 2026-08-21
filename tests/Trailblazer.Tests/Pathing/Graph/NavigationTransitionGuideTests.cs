@@ -121,7 +121,8 @@ public sealed class NavigationTransitionGuideTests
             TraversalMedium.Solid,
             new NavigationCellAddress("map", targetIndex),
             TraversalMedium.Gas,
-            additionalCost: (Fixed64)5);
+            actionCost: (Fixed64)5,
+            locomotionHints: TraversalTransitionLocomotionHints.RequestClimb);
         using TrailblazerWorldContext context = CreateTransitionContext(
             sourceIndex,
             Cell(TraversalMedia.Solid),
@@ -214,6 +215,8 @@ public sealed class NavigationTransitionGuideTests
             .Should().Be(NavigationAStarQueryStatus.Success);
         long generation = guide!.Generation;
         long secondGeneration = secondGuide!.Generation;
+        var publicGuide = new NavigationGuideLease(guide);
+        var secondPublicGuide = new NavigationGuideLease(secondGuide);
         generation.Should().Be(secondGeneration,
             "fresh guide objects both begin at acquisition generation one");
         guide.TryGetCurrentStep(generation, out NavigationGuideStep startStep)
@@ -242,7 +245,10 @@ public sealed class NavigationTransitionGuideTests
         instruction.SourcePosition.Should().Be(start);
         instruction.DestinationPosition.Should().Be(end);
         instruction.LocomotionHints.Should().Be(
-            TraversalTransitionLocomotionHints.None);
+            TraversalTransitionLocomotionHints.RequestClimb);
+        publicGuide.TryGetCurrentStep(out NavigationGuideStep publicTransitionStep)
+            .Should().Be(NavigationGuideStatus.Success);
+        publicTransitionStep.Transition.Should().Be(instruction);
         guide.TryGetCurrentStep(generation, out _)
             .Should().Be(NavigationAStarQueryStatus.Success);
         long allocationBefore = GC.GetAllocatedBytesForCurrentThread();
@@ -262,10 +268,12 @@ public sealed class NavigationTransitionGuideTests
                 secondGeneration,
                 out NavigationGuideStep secondTransitionStep)
             .Should().Be(NavigationAStarQueryStatus.Success);
-        secondGuide.CompletePendingTransition(secondGeneration, instruction)
-            .Should().Be(NavigationAStarQueryStatus.Stale,
+        secondPublicGuide.CompletePendingTransition(instruction)
+            .Should().Be(NavigationGuideStatus.Stale,
                 "an instruction is owned by the exact producing guide lease");
         secondGuide.GetCurrentWaypointOrdinal(secondGeneration).Should().Be(1);
+        publicGuide.TryAdvanceStep().Should().Be(NavigationGuideStatus.Stale,
+            "the copied public lease observes the exact owner status");
         guide.TryAdvanceWaypoint(generation).Should().Be(NavigationAStarQueryStatus.Pending);
         guide.GetCurrentWaypointOrdinal(generation).Should().Be(1);
         guide.CompletePendingTransition(
@@ -275,10 +283,10 @@ public sealed class NavigationTransitionGuideTests
                 "the immutable cached instruction has no lease completion stamp");
         guide.GetCurrentWaypointOrdinal(generation).Should().Be(1);
 
-        guide.CompletePendingTransition(generation, instruction)
-            .Should().Be(NavigationAStarQueryStatus.Success);
-        guide.TryGetCurrentStep(generation, out NavigationGuideStep destinationStep)
-            .Should().Be(NavigationAStarQueryStatus.Success);
+        publicGuide.CompletePendingTransition(instruction)
+            .Should().Be(NavigationGuideStatus.Success);
+        publicGuide.TryGetCurrentStep(out NavigationGuideStep destinationStep)
+            .Should().Be(NavigationGuideStatus.Success);
         destinationStep.HasTransition.Should().BeFalse();
         destinationStep.Address.Should().Be(
             new NavigationCellAddress("map", targetIndex));
@@ -454,10 +462,7 @@ public sealed class NavigationTransitionGuideTests
             exactAStar.End,
             exactAStar.Agent,
             exactAStar.AreaPolicy,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.FlowField,
             exactAStar.Budget,
             allowTransitions: true,
@@ -720,7 +725,8 @@ public sealed class NavigationTransitionGuideTests
             TraversalMedium.Solid,
             new NavigationCellAddress("map", targetIndex),
             TraversalMedium.Gas,
-            additionalCost: (Fixed64)5);
+            actionCost: (Fixed64)5,
+            locomotionHints: TraversalTransitionLocomotionHints.RequestClimb);
         using TrailblazerWorldContext context = CreateTransitionContext(
             sourceIndex,
             Cell(TraversalMedia.Solid),
@@ -815,7 +821,7 @@ public sealed class NavigationTransitionGuideTests
         instruction.SourcePosition.Should().Be(start);
         instruction.DestinationPosition.Should().Be(end);
         instruction.LocomotionHints.Should().Be(
-            TraversalTransitionLocomotionHints.None);
+            TraversalTransitionLocomotionHints.RequestClimb);
         using var flowCache = new NavigationFlowFieldPayloadCache(
             context.World,
             maxEntries: 1,
@@ -932,9 +938,7 @@ public sealed class NavigationTransitionGuideTests
             maxPrismChecks: 64,
             maxTraceIntervals: 256,
             maxLocalRecoveryAttempts: 4);
-        Sample(
-                inner,
-                flowGeneration,
+        flowGuide.TrySample(
                 start,
                 exactTransitionLookupBudget,
                 out NavigationFlowSample sample)
@@ -945,9 +949,7 @@ public sealed class NavigationTransitionGuideTests
         sample.Target.Should().Be(start);
         sample.Medium.Should().Be(TraversalMedium.Solid);
         sample.Transition.Id.Should().Be("takeoff");
-        Sample(
-                inner,
-                flowGeneration,
+        flowGuide.TrySample(
                 end,
                 GenerousSampleBudget,
                 out NavigationFlowSample pending)
@@ -971,27 +973,21 @@ public sealed class NavigationTransitionGuideTests
                 out NavigationFlowFieldLease secondFlowGuide)
             .Should().Be(NavigationGuideStatus.Success);
         NavigationFlowFieldGuideLease secondInner = GetInner(secondFlowGuide);
-        Sample(
-                secondInner,
-                secondInner.Generation,
+        secondFlowGuide.TrySample(
                 start,
                 GenerousSampleBudget,
                 out NavigationFlowSample secondSample)
             .Should().Be(NavigationGuideStatus.Success);
 
-        secondInner.CompletePendingTransition(
-                secondInner.Generation,
-                sample.Transition)
+        secondFlowGuide.CompletePendingTransition(sample.Transition)
             .Should().Be(NavigationGuideStatus.Stale,
                 "an instruction belongs to the exact producing lease");
-        inner.CompletePendingTransition(flowGeneration, sample.Transition)
+        flowGuide.CompletePendingTransition(sample.Transition)
             .Should().Be(NavigationGuideStatus.Success);
-        inner.CompletePendingTransition(flowGeneration, sample.Transition)
+        flowGuide.CompletePendingTransition(sample.Transition)
             .Should().Be(NavigationGuideStatus.Stale,
                 "the completed sample ordinal cannot be replayed");
-        secondInner.CompletePendingTransition(
-                secondInner.Generation,
-                secondSample.Transition)
+        secondFlowGuide.CompletePendingTransition(secondSample.Transition)
             .Should().Be(NavigationGuideStatus.Success);
         SetPrivateField(secondInner, "_currentSource", sourceAddress);
         SetPrivateField(secondInner, "_currentMedium", TraversalMedium.Solid);
@@ -1283,7 +1279,7 @@ public sealed class NavigationTransitionGuideTests
             TraversalMedium.Solid,
             new NavigationCellAddress("map", targetIndex),
             TraversalMedium.Solid,
-            additionalCost: (Fixed64)5);
+            actionCost: (Fixed64)5);
         using TrailblazerWorldContext context = CreateTransitionContext(
             sourceIndex,
             Cell(TraversalMedia.Solid),
@@ -1353,7 +1349,7 @@ public sealed class NavigationTransitionGuideTests
             TraversalMedium.Solid,
             new NavigationCellAddress("map", targetIndex),
             destinationMedium,
-            additionalCost: (Fixed64)5);
+            actionCost: (Fixed64)5);
         using TrailblazerWorldContext context = CreateTransitionContext(
             sourceIndex,
             Cell(TraversalMedia.Solid),
@@ -1935,7 +1931,7 @@ public sealed class NavigationTransitionGuideTests
                 TraversalMedium.Gas,
                 new NavigationCellAddress("map", indices[1]),
                 TraversalMedium.Solid,
-                additionalCost: (Fixed64)5);
+                actionCost: (Fixed64)5);
             NavigationMap map = new NavigationMapBuilder("map", binding)
                 .AddCell(indices[0], Cell(TraversalMedia.Gas))
                 .AddCell(indices[1], Cell(TraversalMedia.Solid))
@@ -1995,7 +1991,7 @@ public sealed class NavigationTransitionGuideTests
                 movementMedium,
                 new NavigationCellAddress("map", indices[0]),
                 destinationMedium,
-                additionalCost: (Fixed64)5);
+                actionCost: (Fixed64)5);
             NavigationMap map = new NavigationMapBuilder("map", binding)
                 .AddCell(indices[0], Cell(NavigationCell.ToMedia(destinationMedium)))
                 .AddCell(indices[1], Cell(NavigationCell.ToMedia(movementMedium)))
@@ -2188,16 +2184,11 @@ public sealed class NavigationTransitionGuideTests
         Policy.Key,
         new TraversalIntent(
             media == TraversalMedia.Solid
-                ? TraversalDomain.Surface
-                : TraversalDomain.Volume,
-            media == TraversalMedia.Solid
                 ? TraversalMedium.Solid
                 : media == TraversalMedia.Gas
                     ? TraversalMedium.Gas
                     : TraversalMedium.Liquid,
-            media == TraversalMedia.Solid
-                ? TraversalDomain.Surface
-                : TraversalDomain.Volume),
+            media),
         PathAlgorithm.AStar,
         new NavigationWorkBudget(
             maxLookupProbes: 8_192,

@@ -309,7 +309,7 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
         navigator.Initialize(CreateTrekCondition());
         navigator.ApplyGuidedTrekRequest(query);
         NavSteering steering = navigator.Steering!;
-        Vector3d heading = steering.GetHeading(navigator);
+        Vector3d heading = steering.GetHeading(navigator, out _);
         Assert.Equal(Vector3d.Right, heading);
         Assert.True(steering.HasLineOfSightPath);
         Assert.False(steering.HasNavigationGuidance);
@@ -421,7 +421,7 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
         source.Setup(query.Start.Position, query.Agent);
         source.Initialize(CreateTrekCondition());
         source.ApplyGuidedTrekRequest(query, TrekRate.Moderate, groupId: 17);
-        Vector3d sourceHeading = source.Steering!.GetHeading(source);
+        Vector3d sourceHeading = source.Steering!.GetHeading(source, out _);
         Assert.True(source.Steering.HasLineOfSightPath);
         string json = JsonRecordSerializer.Serialize(source);
         var restored = new TestNavigator(context);
@@ -610,9 +610,8 @@ public sealed class Phase6NavigationRayDeterminismMatrixTests
         maxSimplificationRays);
 
     private static TraversalIntent SurfaceIntent => new(
-        TraversalDomain.Surface,
         TraversalMedium.Solid,
-        TraversalDomain.Surface);
+        TraversalMedia.Solid);
 
     private static GuideSampleWorkBudget GenerousSampleBudget => new(
         128,

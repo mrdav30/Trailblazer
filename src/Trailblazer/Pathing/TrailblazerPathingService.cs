@@ -149,13 +149,6 @@ public sealed class TrailblazerPathingService
             return PathManager.Register(_context.World, chart, initializeChart);
     }
 
-    /// <inheritdoc cref="PathManager.Register(TraversalBuildResult,bool)"/>
-    public bool Register(TraversalBuildResult buildResult, bool initializeChart = true)
-    {
-        using (EnterUsableState())
-            return PathManager.Register(_context.World, buildResult, initializeChart);
-    }
-
     /// <inheritdoc cref="PathManager.IsChartRegistered(string)"/>
     public bool IsChartRegistered(string name)
     {

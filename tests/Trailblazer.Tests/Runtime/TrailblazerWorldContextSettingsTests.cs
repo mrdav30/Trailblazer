@@ -349,7 +349,9 @@ public sealed class TrailblazerWorldContextSettingsTests
         maxOverlayTransitionsPerMap: 0,
         maxOverlayCells: 0,
         maxOverlayConnections: 0,
-        maxOverlayTransitions: 0);
+        maxOverlayTransitions: 0,
+        maxTransitionRulesPerMap: 1,
+        maxTransitionRules: 1);
 
     private static NavigationQueryLimits CreateQueryLimits(
         int maxConcurrentQueries,

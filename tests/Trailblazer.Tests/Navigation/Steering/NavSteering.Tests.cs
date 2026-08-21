@@ -1,13 +1,10 @@
 using System;
-using Chronicler;
 using FixedMathSharp;
 using FixedMathSharp.Assertions;
 using FluentAssertions;
-using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
-using Moq;
 using SwiftCollections;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
@@ -47,12 +44,12 @@ public class NavSteeringTests : IDisposable
         var steer = new TestableNavSteering(agent.Radius);
         steer.ForceMissingRequestState(new Vector3d(2, 0, 0));
 
-        Vector3d heading = steer.GetHeading(agent);
+        Vector3d heading = steer.GetHeading(agent, out _);
 
         heading.Should().Be(Vector3d.Zero);
         steer.ShouldMove.Should().BeFalse();
         steer.IsAtDestination.Should().BeTrue();
-        steer.CurrentRequest.Should().BeNull();
+        steer.CurrentQuery.Should().BeNull();
     }
 
     [Fact]
@@ -395,23 +392,9 @@ public class NavSteeringTests : IDisposable
 
         var agent = new MockSteerAgent();
         for (int i = 0; i < TestWorld.Context.FrameRate / 8; i++)
-            steer.GetHeading(agent);
+            steer.GetHeading(agent, out _);
 
         steer.CanAutoStop.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ApplyPathRequest_ShouldTreatNullRequestAsArrival()
-    {
-        var steer = new NavSteering(TestWorld.Context, Fixed64.One);
-
-        steer.ApplyPathRequest(null);
-
-        steer.ShouldMove.Should().BeFalse();
-        steer.IsAtDestination.Should().BeTrue();
-        steer.CurrentRequest.Should().BeNull();
-        steer.TargetDirection.Should().Be(Vector3d.Zero);
-        steer.Destination.Should().Be(Vector3d.Zero);
     }
 
     [Fact]
@@ -441,35 +424,6 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
-    public void GetHeading_ShouldRaiseInvalidPath_WhenVolumeFallbackValidationFails()
-    {
-        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 0));
-
-
-        var agent = new MockSteerAgent(Vector3d.Zero);
-        var steer = new SequencedPathValidationNavSteering(agent.Radius, true, false);
-
-        VolumePathRequest.TryCreate(TestWorld.Context, agent.Position,
-            new Vector3d(2, 0, 0),
-            Fixed64.One,
-            out VolumePathRequest? request).Should().BeTrue();
-        steer.ApplyPathRequest(TestRequire.NotNull(request));
-
-        bool invalid = false;
-        steer.Events.OnInvalidPath += () => invalid = true;
-
-        steer.GetHeading(agent).Should().Be(Vector3d.Zero);
-        invalid.Should().BeTrue();
-        steer.ShouldMove.Should().BeFalse();
-        steer.IsAtDestination.Should().BeTrue();
-    }
-
-    [Fact]
     public void GetHeading_ShouldRaiseStartTraversalEvent_WhenIdle()
     {
         var steer = new NavSteering(TestWorld.Context, Fixed64.One);
@@ -478,7 +432,7 @@ public class NavSteeringTests : IDisposable
         Vector3d startedDirection = Vector3d.Zero;
         steer.Events.OnStartTraversal += direction => startedDirection = direction;
 
-        steer.GetHeading(agent).Should().Be(Vector3d.Zero);
+        steer.GetHeading(agent, out _).Should().Be(Vector3d.Zero);
         startedDirection.Should().Be(Vector3d.Zero);
     }
 
@@ -565,7 +519,8 @@ public class NavSteeringTests : IDisposable
             _hasLineOfSightPath = true;
         }
 
-        public Vector3d InvokeFindTargetDirection(Vector3d position) => FindTargetDirection(position);
+        public Vector3d InvokeFindTargetDirection(Vector3d position) =>
+            FindTargetDirection(position, out _);
 
         public void InvokeSetDeceleration(Vector3d acceleration, Fixed64 speed) => SetDeceleration(acceleration, speed);
     }
@@ -582,7 +537,13 @@ public class NavSteeringTests : IDisposable
 
         protected override bool ValidateMovementPath(Vector3d origin) => true;
 
-        protected override Vector3d FindTargetDirection(Vector3d position) => _movementDirection;
+        protected override Vector3d FindTargetDirection(
+            Vector3d position,
+            out NavigationTransitionInstruction? pendingTransition)
+        {
+            pendingTransition = null;
+            return _movementDirection;
+        }
     }
 
     private sealed class SequencedPathValidationNavSteering : NavSteering
@@ -602,30 +563,6 @@ public class NavSteeringTests : IDisposable
                 return _results[^1];
 
             return _results[_index++];
-        }
-    }
-
-    private sealed class StubGuide : IGuide
-    {
-        private readonly Vector3d _movementDirection;
-        private readonly Vector3d _fallbackDirection;
-
-        public StubGuide(Vector3d movementDirection, Vector3d fallbackDirection)
-        {
-            _movementDirection = movementDirection;
-            _fallbackDirection = fallbackDirection;
-        }
-
-        public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
-        {
-            direction = _movementDirection;
-            return true;
-        }
-
-        public bool TryGetFallbackDirection(Vector3d from, out Vector3d fallbackDirection)
-        {
-            fallbackDirection = _fallbackDirection;
-            return true;
         }
     }
 

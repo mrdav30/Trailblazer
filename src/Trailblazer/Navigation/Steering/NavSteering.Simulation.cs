@@ -42,19 +42,12 @@ public partial class NavSteering
 
         _isAtDestination = false;
 
-        _currentRequest = null;
         _currentQuery = null;
-        _volumeGuide = null;
         _navigationGuideLease = null;
         _navigationFlowFieldLease = null;
-        _hybridRouteGuide = null;
         _requestedDestination = Vector3d.Zero;
         _movementGroupSession.Reset();
         _movementGroupMode = MovementGroupTravelMode.None;
-        _currentRouteHasResolvedTopology = false;
-        _currentRouteUsesGuideTopology = false;
-        _currentRouteRequestsClimbIntent = false;
-        _currentRouteTopologyVersion = 0;
     }
 
     internal virtual void UpdateOwnerRadius(Fixed64 radius)
@@ -74,15 +67,12 @@ public partial class NavSteering
     {
         if (_context != null)
             return _context.VoxelSize;
-        if (_currentRequest != null)
-            return _currentRequest.Context.VoxelSize;
-
         return GridWorld.DefaultRectangularCellSize;
     }
 
     private TrailblazerWorldContext ResolveContext()
     {
-        TrailblazerWorldContext? context = _context ?? _currentRequest?.Context;
+        TrailblazerWorldContext? context = _context;
         if (context != null)
         {
             PathRequestContextResolver.ThrowIfUnusable(context);
@@ -107,17 +97,17 @@ public partial class NavSteering
     {
         if (_context != null)
             return _context.FrameRate;
-        if (_currentRequest != null)
-            return _currentRequest.Context.FrameRate;
-
         return TrailblazerClock.DefaultFrameRate;
     }
 
     /// <summary>
     /// Called every simulation step to handle agent steering and movement logic.
     /// </summary>
-    public virtual Vector3d GetHeading(ISteer vessel)
+    public virtual Vector3d GetHeading(
+        ISteer vessel,
+        out NavigationTransitionInstruction? pendingTransition)
     {
+        pendingTransition = null;
         CacheOwner(vessel);
 
         if (!CanMove)
@@ -129,16 +119,18 @@ public partial class NavSteering
         if (!TryEnsureCurrentRequest(out Vector3d heading))
             return heading;
 
-        Vector3d pathPosition = _currentQuery.HasValue
-            ? vessel.Position + Vector3d.Down * vessel.BodyShape.RootToFootOffsetY
-            : vessel.Position;
-        bool usesVolumeGuidance = UsesVolumeGuidance();
+        Vector3d pathPosition = vessel.Position
+            + Vector3d.Down * vessel.BodyShape.RootToFootOffsetY;
         UpdateMovementGroupState(vessel.Position);
 
-        if (!TryPrepareMovementPathForHeading(pathPosition, usesVolumeGuidance))
+        if (!TryPrepareMovementPathForHeading(pathPosition))
             return Vector3d.Zero;
 
-        UpdateTargetDirection(vessel, pathPosition);
+        UpdateTargetDirection(
+            vessel,
+            pathPosition,
+            out pendingTransition,
+            out bool isAStarTransitionApproach);
         if (!ShouldMove || IsAtDestination)
             return Vector3d.Zero;
         if (_currentQuery.HasValue && _shouldRequestPathThisFrame)
@@ -157,7 +149,10 @@ public partial class NavSteering
             return Vector3d.Zero;
         }
 
-        if (UpdateNavigationGuidanceProgress(vessel.Acceleration, vessel.Speed))
+        if (UpdateNavigationGuidanceProgress(
+                vessel.Acceleration,
+                vessel.Speed,
+                isAStarTransitionApproach))
         {
             Arrive();
             return Vector3d.Zero;
@@ -167,78 +162,10 @@ public partial class NavSteering
 
     /// <summary>
     /// Periodically called to initiate a pathfinding query based on the current position and destination.
-    /// Note: This will run once on the next `Simulate` call after calling `ApplyPathRequest`
+    /// Note: This runs once on the next simulation after a guided trek request is applied.
     /// </summary>
     protected virtual bool ValidateMovementPath(Vector3d origin)
-    {
-        if (_currentQuery.HasValue)
-            return ValidateGraphMovementPath(origin);
-
-        // Unit-size change detection must run before the shouldRequestPath gate. Without this,
-        // external TrySetUnitSize calls between frames are silently ignored when
-        // _shouldRequestPathThisFrame is already false, and no repath ever triggers.
-        if (_currentRequest!.UnitSize != _lastUnitSize)
-        {
-            _lastUnitSize = _currentRequest.UnitSize;
-            _shouldRequestPathThisFrame = true;
-        }
-
-        if (!_shouldRequestPathThisFrame)
-            return true;
-        _shouldRequestPathThisFrame = false;
-
-        // update origin
-        bool ok = _currentRequest.TrySetOrigin(origin);
-        if (!ok || !_currentRequest.HasValidEndpoints)
-        {
-            PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false);
-            TrailblazerLogger.Channel.Warn($"Path request is using invalid endpoints.");
-            return false;
-        }
-
-        // shortcut if no path needed
-        if (_currentRequest.HasZeroDisplacement)
-        {
-            PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
-            return _repathTries == 0;
-        }
-
-        if (_currentRequest is VolumePathRequest volumeRequest)
-        {
-            _hasLineOfSightPath = IsVolumeDestinationInSight(
-                _currentRequest.Context,
-                origin,
-                Destination,
-                _currentRequest.UnitSize,
-                _currentRequest.AllowUnwalkableEndpoints,
-                volumeRequest.Medium,
-                _currentRequest.StartNode,
-                _currentRequest.EndNode);
-
-            _pathCheckCooldown = PathRecheckCooldownFrames;
-            if (_hasLineOfSightPath)
-            {
-                ReleaseNavigationGuidance();
-                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
-                return true;
-            }
-        }
-        // request guide
-        ReleaseNavigationGuidance();
-        _pathCheckCooldown = PathRecheckCooldownFrames;
-        if (!_currentRequest.IsValid || !_currentRequest.Context.Guides.RequestGuide(_currentRequest, out _volumeGuide))
-        {
-            PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false);
-            TrailblazerLogger.Channel.Warn($"Unable to retrieve a guide from {origin} to {Destination}.");
-            return false;
-        }
-
-        PublishRouteTopology(
-            hasResolvedTopology: true,
-            usesGuideTopology: true,
-            requestsClimbIntent: false);
-        return true;
-    }
+        => ValidateGraphMovementPath(origin);
 
     private bool ValidateGraphMovementPath(Vector3d origin)
     {
@@ -254,7 +181,10 @@ public partial class NavSteering
             return _navigationGuideLease?.Status == NavigationGuideStatus.Success;
 
         _shouldRequestPathThisFrame = false;
-        PathQuery query = _currentQuery!.Value.WithStartPosition(origin);
+        PathQuery currentQuery = _currentQuery!.Value;
+        PathQuery query = currentQuery.WithStartState(
+            origin,
+            currentQuery.Traversal.StartMedium);
         _currentQuery = query;
         _requestedDestination = query.End.Position;
         _destination = _requestedDestination;
@@ -269,11 +199,6 @@ public partial class NavSteering
         if (status != NavigationGuideStatus.Success || lease == null)
         {
             lease?.Dispose();
-            PublishRouteTopology(
-                hasResolvedTopology: false,
-                usesGuideTopology: false,
-                requestsClimbIntent: false);
-
             if (status is NavigationGuideStatus.Stale
                 or NavigationGuideStatus.CapacityExceeded)
             {
@@ -285,19 +210,12 @@ public partial class NavSteering
         }
 
         _navigationGuideLease = lease;
-        PublishRouteTopology(
-            hasResolvedTopology: true,
-            usesGuideTopology: true,
-            requestsClimbIntent: false);
         return true;
     }
 
     private bool ValidateGraphFlowMovementPath(Vector3d origin)
     {
         PathQuery currentQuery = _currentQuery!.Value;
-        if (currentQuery.AllowTransitions)
-            return ValidateHybridFlowMovementPath(origin, currentQuery);
-
         NavigationGuideStatus currentStatus = _navigationFlowFieldLease?.Status
             ?? NavigationGuideStatus.Stale;
         if (_navigationFlowFieldLease != null
@@ -311,7 +229,9 @@ public partial class NavSteering
             return currentStatus == NavigationGuideStatus.Success;
 
         _shouldRequestPathThisFrame = false;
-        PathQuery query = currentQuery.WithStartPosition(origin);
+        PathQuery query = currentQuery.WithStartState(
+            origin,
+            currentQuery.Traversal.StartMedium);
         _currentQuery = query;
         _requestedDestination = query.End.Position;
         _destination = _requestedDestination;
@@ -326,11 +246,6 @@ public partial class NavSteering
         if (status != NavigationGuideStatus.Success || lease == null)
         {
             lease?.Dispose();
-            PublishRouteTopology(
-                hasResolvedTopology: false,
-                usesGuideTopology: false,
-                requestsClimbIntent: false);
-
             if (status is NavigationGuideStatus.Stale
                 or NavigationGuideStatus.CapacityExceeded)
             {
@@ -342,48 +257,17 @@ public partial class NavSteering
         }
 
         _navigationFlowFieldLease = lease;
-        PublishRouteTopology(
-            hasResolvedTopology: true,
-            usesGuideTopology: true,
-            requestsClimbIntent: false);
-        return true;
-    }
-
-    private bool ValidateHybridFlowMovementPath(Vector3d origin, PathQuery currentQuery)
-    {
-        if (!_shouldRequestPathThisFrame)
-            return _hybridRouteGuide != null;
-
-        _shouldRequestPathThisFrame = false;
-        PathQuery query = currentQuery.WithStartPosition(origin);
-        _currentQuery = query;
-        _requestedDestination = query.End.Position;
-        _destination = _requestedDestination;
-        if (TryHandleInitialGraphDirectTravel(query, origin))
-            return true;
-        ReleaseNavigationGuidance();
-        _pathCheckCooldown = PathRecheckCooldownFrames;
-
-        HybridPathRequest? request = HybridPathRequest.Create(ResolveContext(), query);
-        if (request?.RoutePlan == null)
-        {
-            PublishRouteTopology(
-                hasResolvedTopology: false,
-                usesGuideTopology: false,
-                requestsClimbIntent: false);
-            return false;
-        }
-
-        _hybridRouteGuide = new HybridRouteGuide(request.RoutePlan);
-        PublishRouteTopology(
-            hasResolvedTopology: true,
-            usesGuideTopology: true,
-            requestsClimbIntent: false);
         return true;
     }
 
     private bool TryHandleInitialGraphDirectTravel(PathQuery query, Vector3d origin)
     {
+        if ((query.Traversal.TargetMedia
+                & NavigationCell.ToMedia(query.Traversal.StartMedium)) == 0)
+        {
+            _hasLineOfSightPath = false;
+            return false;
+        }
         NavigationRayStatus status = ResolveContext().Guides.TryGetDirectHeading(
             query,
             origin,
@@ -393,10 +277,6 @@ public partial class NavSteering
             _hasLineOfSightPath = true;
             ReleaseNavigationGuidance();
             _pathCheckCooldown = PathRecheckCooldownFrames;
-            PublishRouteTopology(
-                hasResolvedTopology: true,
-                usesGuideTopology: false,
-                requestsClimbIntent: false);
             return true;
         }
 
@@ -410,47 +290,21 @@ public partial class NavSteering
     /// <summary>
     /// Computes the steering direction toward the destination or along the path.
     /// </summary>
-    protected virtual Vector3d FindTargetDirection(Vector3d position)
+    protected virtual Vector3d FindTargetDirection(
+        Vector3d position,
+        out NavigationTransitionInstruction? pendingTransition)
     {
+        pendingTransition = null;
         Vector3d targetDirection = Vector3d.Zero;
         if (HasLineOfSightPath)
             targetDirection = Destination - position;
-        else if (_hybridRouteGuide != null)
-        {
-            NavigationGuideStatus status = _hybridRouteGuide.TrySample(
-                position,
-                ResolveContext().Settings.GuideSampleBudget,
-                out targetDirection);
-            if (status is NavigationGuideStatus.Stale
-                or NavigationGuideStatus.CapacityExceeded)
-            {
-                PreparePathRetry();
-                return Vector3d.Zero;
-            }
-            if (status == NavigationGuideStatus.BudgetExceeded)
-                return Vector3d.Zero;
-            if (status == NavigationGuideStatus.LocalRecoveryRequired)
-                return Vector3d.Zero;
-            else if (status != NavigationGuideStatus.Success)
-            {
-                HandleInvalidPath("Invalid hybrid path detected!");
-                return Vector3d.Zero;
-            }
-            else
-            {
-                if (targetDirection == Vector3d.Zero && _hybridRouteGuide.IsComplete)
-                {
-                    Arrive();
-                    return Vector3d.Zero;
-                }
-            }
-        }
         else if (_navigationFlowFieldLease is NavigationFlowFieldLease flowGuide)
         {
             NavigationGuideStatus status = flowGuide.TrySample(
                 position,
                 ResolveContext().Settings.GuideSampleBudget,
-                out targetDirection);
+                out NavigationFlowSample sample);
+            targetDirection = sample.Heading;
             if (status is NavigationGuideStatus.Stale
                 or NavigationGuideStatus.CapacityExceeded)
             {
@@ -468,6 +322,11 @@ public partial class NavSteering
             }
             else
             {
+                if (sample.HasTransition)
+                {
+                    pendingTransition = sample.Transition;
+                    return Vector3d.Zero;
+                }
                 if (targetDirection == Vector3d.Zero)
                 {
                     Arrive();
@@ -478,9 +337,8 @@ public partial class NavSteering
         else if (_navigationGuideLease != null)
         {
             NavigationGuideLease guide = _navigationGuideLease.Value;
-            NavigationGuideStatus status = guide.TryGetCurrentWaypoint(
-                out _,
-                out Vector3d waypoint);
+            NavigationGuideStatus status = guide.TryGetCurrentStep(
+                out NavigationGuideStep step);
             if (status == NavigationGuideStatus.Stale)
             {
                 PreparePathRetry();
@@ -489,7 +347,19 @@ public partial class NavSteering
             if (status != NavigationGuideStatus.Success)
                 return Vector3d.Zero;
 
-            targetDirection = waypoint - position;
+            if (step.HasTransition)
+            {
+                targetDirection = step.Position - position;
+                if (targetDirection == Vector3d.Zero)
+                {
+                    pendingTransition = step.Transition;
+                    return Vector3d.Zero;
+                }
+            }
+            else
+            {
+                targetDirection = step.Position - position;
+            }
             if (targetDirection == Vector3d.Zero)
             {
                 if (IsAtFinalWaypoint(guide))
@@ -498,7 +368,7 @@ public partial class NavSteering
                     return Vector3d.Zero;
                 }
 
-                status = guide.TryAdvanceWaypoint();
+                status = guide.TryAdvanceStep();
                 if (status == NavigationGuideStatus.Stale)
                 {
                     PreparePathRetry();
@@ -507,7 +377,7 @@ public partial class NavSteering
                 if (status != NavigationGuideStatus.Success)
                     return Vector3d.Zero;
 
-                status = guide.TryGetCurrentWaypoint(out _, out waypoint);
+                status = guide.TryGetCurrentStep(out step);
                 if (status == NavigationGuideStatus.Stale)
                 {
                     PreparePathRetry();
@@ -516,17 +386,21 @@ public partial class NavSteering
                 if (status != NavigationGuideStatus.Success)
                     return Vector3d.Zero;
 
-                targetDirection = waypoint - position;
+                if (step.HasTransition)
+                {
+                    targetDirection = step.Position - position;
+                    if (targetDirection == Vector3d.Zero)
+                    {
+                        pendingTransition = step.Transition;
+                        return Vector3d.Zero;
+                    }
+                }
+                else
+                {
+                    targetDirection = step.Position - position;
+                }
             }
         }
-        else if (HasNavigationGuidance)
-        {
-            if (_volumeGuide is IWaypointGuide waypointGuide)
-                targetDirection = waypointGuide.GetCurrentWaypointDirection(position);
-            else
-                _volumeGuide!.TryGetMovementDirection(position, out targetDirection);
-        }
-
         if (targetDirection == Vector3d.Zero)
         {
             TrailblazerLogger.DebugChannel.Info($"No viable movement direction found.");
@@ -583,7 +457,7 @@ public partial class NavSteering
 
     private bool TryEnsureCurrentRequest(out Vector3d heading)
     {
-        if (_currentRequest != null || _currentQuery.HasValue)
+        if (_currentQuery.HasValue)
         {
             heading = Vector3d.Zero;
             return true;
@@ -594,21 +468,15 @@ public partial class NavSteering
         return false;
     }
 
-    private bool TryPrepareMovementPathForHeading(Vector3d position, bool usesVolumeGuidance)
+    private bool TryPrepareMovementPathForHeading(Vector3d position)
     {
-        if ((CanPathfind || usesVolumeGuidance) && !ValidateMovementPath(position))
+        if (CanPathfind && !ValidateMovementPath(position))
         {
             HandleInvalidPath("Invalid path detected!");
             return false;
         }
 
         RefreshLineOfSightState(position);
-        if (usesVolumeGuidance && !HasLineOfSightPath && !HasNavigationGuidance && !ValidateMovementPath(position))
-        {
-            HandleInvalidPath("Invalid volume path detected!");
-            return false;
-        }
-
         return true;
     }
 
@@ -617,50 +485,33 @@ public partial class NavSteering
         if (_pathCheckCooldown > 0)
             return;
 
-        if (_currentQuery is PathQuery currentQuery)
+        if (_currentQuery is not PathQuery currentQuery)
+            return;
+        bool wasDirect = _hasLineOfSightPath;
+        PathQuery query = currentQuery.WithStartState(
+            position,
+            currentQuery.Traversal.StartMedium);
+        if ((query.Traversal.TargetMedia
+                & NavigationCell.ToMedia(query.Traversal.StartMedium)) == 0)
         {
-            bool wasDirect = _hasLineOfSightPath;
-            PathQuery query = currentQuery.WithStartPosition(position);
-            NavigationRayStatus status = ResolveContext().Guides.TryGetDirectHeading(
-                query,
-                position,
-                out _);
-            if (status == NavigationRayStatus.Success)
-            {
-                _currentQuery = query;
-                _hasLineOfSightPath = true;
-                ReleaseNavigationGuidance();
-                PublishRouteTopology(
-                    hasResolvedTopology: true,
-                    usesGuideTopology: false,
-                    requestsClimbIntent: false);
-            }
-            else if (status == NavigationRayStatus.Stale || wasDirect)
-            {
-                _hasLineOfSightPath = false;
-                PreparePathRetry();
-            }
+            _hasLineOfSightPath = false;
             _pathCheckCooldown = PathRecheckCooldownFrames;
             return;
         }
-
-        if (_currentRequest is VolumePathRequest volumeRequest)
+        NavigationRayStatus status = ResolveContext().Guides.TryGetDirectHeading(
+            query,
+            position,
+            out _);
+        if (status == NavigationRayStatus.Success)
         {
-            _hasLineOfSightPath = IsVolumeDestinationInSight(
-                _currentRequest.Context,
-                position,
-                Destination,
-                _currentRequest.UnitSize,
-                _currentRequest.AllowUnwalkableEndpoints,
-                volumeRequest.Medium,
-                _currentRequest.StartNode,
-                _currentRequest.EndNode);
-
-            if (_hasLineOfSightPath)
-            {
-                ReleaseNavigationGuidance();
-                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
-            }
+            _currentQuery = query;
+            _hasLineOfSightPath = true;
+            ReleaseNavigationGuidance();
+        }
+        else if (status == NavigationRayStatus.Stale || wasDirect)
+        {
+            _hasLineOfSightPath = false;
+            PreparePathRetry();
         }
         _pathCheckCooldown = PathRecheckCooldownFrames;
     }
@@ -672,10 +523,18 @@ public partial class NavSteering
         Arrive();
     }
 
-    private void UpdateTargetDirection(ISteer vessel, Vector3d pathPosition)
+    private void UpdateTargetDirection(
+        ISteer vessel,
+        Vector3d pathPosition,
+        out NavigationTransitionInstruction? pendingTransition,
+        out bool isAStarTransitionApproach)
     {
         _lastTargetDirection = _targetDirection;
-        _targetDirection = FindTargetDirection(pathPosition);
+        _targetDirection = FindTargetDirection(
+            pathPosition,
+            out pendingTransition);
+        isAStarTransitionApproach = pendingTransition == null
+            && IsCurrentAStarTransitionStep();
         if (_targetDirection == Vector3d.Zero || !ShouldMove || IsAtDestination)
             return;
         _targetDirection += ComputeCombinedSteering(
@@ -684,6 +543,16 @@ public partial class NavSteering
             vessel.Speed,
             vessel.Radius,
             vessel.GlobalId);
+    }
+
+    private bool IsCurrentAStarTransitionStep()
+    {
+        if (_navigationGuideLease is not NavigationGuideLease guide)
+            return false;
+
+        return guide.TryGetCurrentStep(out NavigationGuideStep step)
+            == NavigationGuideStatus.Success
+            && step.HasTransition;
     }
 
     private bool ShouldArriveWithoutNavigationGuidance()
@@ -697,12 +566,15 @@ public partial class NavSteering
         return reachedTarget || (!IsStuck && noInput);
     }
 
-    private bool UpdateNavigationGuidanceProgress(Vector3d acceleration, Fixed64 speed)
+    private bool UpdateNavigationGuidanceProgress(
+        Vector3d acceleration,
+        Fixed64 speed,
+        bool isAStarTransitionApproach)
     {
         if (TargetDirection == Vector3d.Zero)
             return false;
 
-        if (ShouldAdvanceToNextWaypoint())
+        if (!isAStarTransitionApproach && ShouldAdvanceToNextWaypoint())
         {
             if (_navigationGuideLease != null)
             {
@@ -718,14 +590,10 @@ public partial class NavSteering
                 }
                 else
                 {
-                    NavigationGuideStatus status = guide.TryAdvanceWaypoint();
+                    NavigationGuideStatus status = guide.TryAdvanceStep();
                     if (status == NavigationGuideStatus.Stale)
                         PreparePathRetry();
                 }
-            }
-            else if (_volumeGuide is IWaypointGuide waypointGuide)
-            {
-                waypointGuide.AdvanceWaypoint();
             }
         }
 
@@ -736,8 +604,25 @@ public partial class NavSteering
     }
 
     private static bool IsAtFinalWaypoint(NavigationGuideLease guide) =>
-        guide.WaypointCount > 0
-        && guide.CurrentWaypointIndex == guide.WaypointCount - 1;
+        guide.StepCount > 0
+        && guide.CurrentStepIndex == guide.StepCount - 1;
+
+    internal NavigationGuideStatus CompletePendingTransition(
+        in NavigationTransitionInstruction instruction)
+    {
+        NavigationGuideStatus status = _navigationGuideLease is NavigationGuideLease guide
+            ? guide.CompletePendingTransition(instruction)
+            : _navigationFlowFieldLease is NavigationFlowFieldLease flow
+                ? flow.CompletePendingTransition(instruction)
+                : NavigationGuideStatus.Stale;
+        if (status == NavigationGuideStatus.Success && _currentQuery is PathQuery query)
+        {
+            _currentQuery = query.WithStartState(
+                query.Start.Position,
+                instruction.DestinationMedium);
+        }
+        return status;
+    }
 
     private Vector3d FinalizeHeadingFrame()
     {
@@ -764,23 +649,8 @@ public partial class NavSteering
         if (IsInGroup)
             LeaveMovementGroup();
 
-        if (TryApplyFallbackDirection(position))
-            return true;
-
         PreparePathRetry();
         _repathTries++;
-        return true;
-    }
-
-    private bool TryApplyFallbackDirection(Vector3d position)
-    {
-        if (_volumeGuide == null
-            || _volumeGuide.TryGetFallbackDirection(position, out Vector3d fallback) == false)
-            return false;
-
-        _targetDirection = fallback;
-        _repathTries++;
-        _stuckFrameCount = 0;
         return true;
     }
 
@@ -801,7 +671,7 @@ public partial class NavSteering
 
     private void DisposeCurrentNavigationGuidance()
     {
-        ReleaseNavigationGuidance(dispose: true);
+        ReleaseNavigationGuidance();
     }
 
     /// <summary>
@@ -839,13 +709,8 @@ public partial class NavSteering
     {
         StopMove();
 
-        ReleaseNavigationGuidance();
-        _currentRequest = null;
-        _currentQuery = null;
-        _requestedDestination = Vector3d.Zero;
         _distanceToTarget = Fixed64.Zero;
         _isAtDestination = true;
-        _destination = Vector3d.Zero;
         _targetDirection = Vector3d.Zero;
 
         Events.OnArrive?.Invoke();
@@ -856,19 +721,22 @@ public partial class NavSteering
     /// </summary>
     public virtual void StopMove()
     {
-        if (!_shouldMove)
+        bool wasMoving = _shouldMove;
+        ReleaseNavigationGuidance();
+        _pendingTransitionOwner?.NotifySteeringSessionEnded();
+        _currentQuery = null;
+        _requestedDestination = Vector3d.Zero;
+        _destination = Vector3d.Zero;
+        _shouldMove = false;
+        _shouldRequestPathThisFrame = false;
+        _hasLineOfSightPath = false;
+        LeaveMovementGroup();
+        if (!wasMoving)
             return;
 
         _autoStopFrameCount = 0;
         _stuckFrameCount = 0;
         _stoppedFrameCount = 0;
-
-        _shouldMove = false;
-        _shouldRequestPathThisFrame = false;
-        _hasLineOfSightPath = false;
-        ReleaseNavigationGuidance();
-        PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false, force: true);
-        LeaveMovementGroup();
 
         Events.OnStopMove?.Invoke();
     }

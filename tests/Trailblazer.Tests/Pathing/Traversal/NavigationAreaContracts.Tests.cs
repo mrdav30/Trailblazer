@@ -171,7 +171,7 @@ public sealed class NavigationAreaContractsTests
             new NavigationEndpoint(Vector3d.One),
             profile,
             areaPolicy,
-            new TraversalIntent(TraversalDomain.Surface, TraversalMedium.Solid, TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
             allowTransitions: false);

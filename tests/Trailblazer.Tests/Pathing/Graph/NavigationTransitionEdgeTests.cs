@@ -38,7 +38,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Solid,
             targetAddress,
             TraversalMedium.Gas,
-            additionalCost: (Fixed64)5);
+            actionCost: (Fixed64)5);
         using TrailblazerWorldContext context = CreateContext(
             sourceIndex,
             Cell(TraversalMedia.Solid),
@@ -120,7 +120,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Solid,
             new NavigationCellAddress("map", targetIndex),
             TraversalMedium.Gas,
-            additionalCost: Fixed64.MaxValue);
+            actionCost: Fixed64.MaxValue);
         using TrailblazerWorldContext context = CreateContext(
             sourceIndex,
             Cell(TraversalMedia.Solid),
@@ -170,7 +170,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Solid,
             address,
             TraversalMedium.Gas,
-            additionalCost: Fixed64.One);
+            actionCost: Fixed64.One);
         TraversalTransitionRule[] rules =
         {
             new(
@@ -409,7 +409,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Solid,
             address,
             TraversalMedium.Gas,
-            additionalCost: Fixed64.One);
+            actionCost: Fixed64.One);
         TraversalTransitionRule[] rules =
         {
             new(
@@ -501,7 +501,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Solid,
             targetAddress,
             TraversalMedium.Solid,
-            additionalCost: Fixed64.One);
+            actionCost: Fixed64.One);
         using TrailblazerWorldContext context = CreateContext(
             sourceIndex,
             Cell(TraversalMedia.Solid),
@@ -728,7 +728,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Gas,
             address,
             TraversalMedium.Gas,
-            additionalCost: Fixed64.One);
+            actionCost: Fixed64.One);
         using TrailblazerWorldContext context = CreateContext(
             default,
             Cell(TraversalMedia.Gas),
@@ -861,7 +861,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Liquid,
             address,
             TraversalMedium.Liquid,
-            additionalCost: Fixed64.One,
+            actionCost: Fixed64.One,
             sourcePointOverride: sourceAction,
             hasSourcePointOverride: true,
             destinationPointOverride: destinationAction,
@@ -1139,7 +1139,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Solid,
             new NavigationCellAddress("b-target", default),
             TraversalMedium.Gas,
-            additionalCost: Fixed64.One);
+            actionCost: Fixed64.One);
         using TrailblazerWorldContext context = CreateCrossMapContext(
             TraversalMedia.Solid,
             TraversalMedia.Gas,
@@ -1257,7 +1257,7 @@ public sealed class NavigationTransitionEdgeTests
             TraversalMedium.Gas,
             new NavigationCellAddress("map", index),
             TraversalMedium.Solid,
-            additionalCost: Fixed64.Zero);
+            actionCost: Fixed64.Zero);
         using TrailblazerWorldContext context = CreateContext(
             index,
             Cell(TraversalMedia.Solid | TraversalMedia.Gas),
@@ -1735,7 +1735,7 @@ public sealed class NavigationTransitionEdgeTests
                 TraversalMedium.Solid,
                 address,
                 TraversalMedium.Solid,
-                additionalCost: (Fixed64)2,
+                actionCost: (Fixed64)2,
                 sourcePointOverride: sourceAction,
                 hasSourcePointOverride: true,
                 destinationPointOverride: targetAction,

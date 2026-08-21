@@ -32,7 +32,9 @@ public readonly struct NavigationOperationLimits
         int maxOverlayTransitionsPerMap,
         int maxOverlayCells,
         int maxOverlayConnections,
-        int maxOverlayTransitions)
+        int maxOverlayTransitions,
+        int maxTransitionRulesPerMap,
+        int maxTransitionRules)
     {
         SwiftThrowHelper.ThrowIfArgument(maxPendingOperations <= 0, nameof(maxPendingOperations));
         SwiftThrowHelper.ThrowIfArgument(maxPendingDescriptorBytes <= 0, nameof(maxPendingDescriptorBytes));
@@ -52,6 +54,8 @@ public readonly struct NavigationOperationLimits
         SwiftThrowHelper.ThrowIfArgument(maxOverlayCells < maxOverlayCellsPerMap, nameof(maxOverlayCells));
         SwiftThrowHelper.ThrowIfArgument(maxOverlayConnections < maxOverlayConnectionsPerMap, nameof(maxOverlayConnections));
         SwiftThrowHelper.ThrowIfArgument(maxOverlayTransitions < maxOverlayTransitionsPerMap, nameof(maxOverlayTransitions));
+        SwiftThrowHelper.ThrowIfArgument(maxTransitionRulesPerMap <= 0, nameof(maxTransitionRulesPerMap));
+        SwiftThrowHelper.ThrowIfArgument(maxTransitionRules < maxTransitionRulesPerMap, nameof(maxTransitionRules));
 
         MaxPendingOperations = maxPendingOperations;
         MaxPendingDescriptorBytes = maxPendingDescriptorBytes;
@@ -68,12 +72,8 @@ public readonly struct NavigationOperationLimits
         MaxOverlayCells = maxOverlayCells;
         MaxOverlayConnections = maxOverlayConnections;
         MaxOverlayTransitions = maxOverlayTransitions;
-        MaxTransitionRulesPerMap = maxOverlayTransitionsPerMap > 0
-            ? maxOverlayTransitionsPerMap
-            : 1;
-        MaxTransitionRules = maxOverlayTransitions > MaxTransitionRulesPerMap
-            ? maxOverlayTransitions
-            : MaxTransitionRulesPerMap;
+        MaxTransitionRulesPerMap = maxTransitionRulesPerMap;
+        MaxTransitionRules = maxTransitionRules;
     }
 
     /// <summary>Gets the maximum number of admitted operations.</summary>
@@ -124,9 +124,9 @@ public readonly struct NavigationOperationLimits
     /// <summary>Gets the maximum transition overlay entries retained across the context candidate.</summary>
     public int MaxOverlayTransitions { get; }
 
-    /// <summary>Gets the temporary internal per-map rule ceiling derived from transition limits.</summary>
-    internal int MaxTransitionRulesPerMap { get; }
+    /// <summary>Gets the maximum procedural transition rules retained for one map.</summary>
+    public int MaxTransitionRulesPerMap { get; }
 
-    /// <summary>Gets the temporary internal total rule ceiling derived from transition limits.</summary>
-    internal int MaxTransitionRules { get; }
+    /// <summary>Gets the maximum procedural transition rules retained across all maps.</summary>
+    public int MaxTransitionRules { get; }
 }

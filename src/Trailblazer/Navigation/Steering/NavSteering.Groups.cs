@@ -10,7 +10,6 @@ using System.Runtime.CompilerServices;
 using FixedMathSharp;
 using GridForge.Grids;
 using Trailblazer.Navigation.MovementGroups;
-using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
@@ -143,7 +142,7 @@ public partial class NavSteering
             travelMode: IsInGroup ? MovementGroupTravelMode.Individual : MovementGroupTravelMode.None,
             destination: _requestedDestination);
 
-        if (IsInGroup && (_currentRequest != null || _currentQuery.HasValue))
+        if (IsInGroup && _currentQuery.HasValue)
         {
             target = MovementGroups.UpdateTarget(
                 _movementGroupSession,
@@ -166,32 +165,6 @@ public partial class NavSteering
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsGroupNeighbor(Guid otherId, int currentFrame)
         => MovementGroups.IsNeighbor(_movementGroupSession, otherId, _requestedDestination, currentFrame);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool UsesVolumeGuidance() => _currentRequest is VolumePathRequest;
-
-    private void PublishRouteTopology(
-        bool hasResolvedTopology,
-        bool usesGuideTopology,
-        bool requestsClimbIntent,
-        bool force = false)
-    {
-        if (!force
-            && _currentRouteHasResolvedTopology == hasResolvedTopology
-            && _currentRouteUsesGuideTopology == usesGuideTopology
-            && _currentRouteRequestsClimbIntent == requestsClimbIntent)
-        {
-            return;
-        }
-
-        _currentRouteHasResolvedTopology = hasResolvedTopology;
-        _currentRouteUsesGuideTopology = usesGuideTopology;
-        _currentRouteRequestsClimbIntent = requestsClimbIntent;
-        unchecked
-        {
-            _currentRouteTopologyVersion++;
-        }
-    }
 
     #endregion
 }

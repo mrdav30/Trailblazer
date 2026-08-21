@@ -411,14 +411,14 @@ public class NavigationFlowFieldAgentBenchmarks
                 NavigationGuideStatus sample = guide.TrySample(
                     query.Start.Position,
                     SampleBudget,
-                    out Vector3d heading);
-                if (sample != NavigationGuideStatus.Success || heading == Vector3d.Zero)
+                    out NavigationFlowSample flowSample);
+                if (sample != NavigationGuideStatus.Success || flowSample.Heading == Vector3d.Zero)
                 {
                     throw new InvalidOperationException(
-                        $"Warm Flow agent {i} sample failed: status={sample}, heading={heading}.");
+                        $"Warm Flow agent {i} sample failed: status={sample}, heading={flowSample.Heading}.");
                 }
                 successes++;
-                signal ^= guide.OriginIntegrationCost.m_rawValue ^ heading.GetHashCode();
+                signal ^= guide.OriginIntegrationCost.m_rawValue ^ flowSample.Heading.GetHashCode();
             }
             finally
             {

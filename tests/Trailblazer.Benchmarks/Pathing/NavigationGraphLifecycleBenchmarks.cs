@@ -123,7 +123,9 @@ public class NavigationGraphLifecycleBenchmarks
             maxOverlayTransitionsPerMap: 256,
             maxOverlayCells: 32_768,
             maxOverlayConnections: 32_768,
-            maxOverlayTransitions: 32_768);
+            maxOverlayTransitions: 32_768,
+            maxTransitionRulesPerMap: 256,
+            maxTransitionRules: 32_768);
         return new TrailblazerWorldContextSettings(
             operations,
             new MaintenanceWorkBudget(

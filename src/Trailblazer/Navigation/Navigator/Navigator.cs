@@ -50,8 +50,6 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <inheritdoc cref="NavigationProfile"/>
     protected NavigationAgentProfile _navigationProfile;
 
-    private HeuristicMethod _guidedVolumeHeuristic = HeuristicMethod.Manhattan;
-
     /// <summary>
     /// Stable runtime identity used for occupancy and steering coordination.
     /// </summary>
@@ -116,13 +114,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <inheritdoc cref="TrekRequest"/>
     protected TrekRequest _frameRequest = new();
 
-    private GuidedVolumeExitHandoff? _pendingGuidedVolumeExitHandoff;
-
-    private bool _guidedClimbIntent;
-
-    private GuidedClimbIntentMode _guidedClimbIntentMode;
-
-    private int _lastSeenGuidedRouteTopologyVersion;
+    private NavigationTransitionInstruction? _pendingTransition;
 
     private TrailblazerWorldContext? _context;
 
@@ -222,10 +214,8 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     public bool IsLockedOn { get => _isLockedOn; set => _isLockedOn = value; }
 
-    /// <summary>
-    /// Default heuristic used when the object builds volume requests.
-    /// </summary>
-    internal HeuristicMethod GuidedVolumeHeuristic => _guidedVolumeHeuristic;
+    /// <summary>Gets the exact transition action currently awaiting host completion.</summary>
+    public NavigationTransitionInstruction? PendingTransition => _pendingTransition;
 
     #endregion
 
@@ -386,6 +376,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         _frameCondition = condition.Clone();
 
         _steering = NavSteering.CreateNew(context, Radius);
+        _steering.BindPendingTransitionOwner(this);
 
         _motor = NavMotor.CreateNew(context, _frameCondition, CreateLocomotionProfile());
         _motor.SetVelocity(Velocity);
@@ -423,12 +414,9 @@ public abstract partial class Navigator : INavigate, IRecordable
         _frameCondition.Reset();
         _frameRequest.Reset();
         _isGuideded = false;
-        _pendingGuidedVolumeExitHandoff = null;
-        NavigatorGuidedTraversalState.ResetClimbIntent(
-            ref _guidedClimbIntent,
-            ref _guidedClimbIntentMode,
-            ref _lastSeenGuidedRouteTopologyVersion);
+        _pendingTransition = null;
         _heightmapGrounding.Reset();
+        _steering?.UnbindPendingTransitionOwner(this);
         _steering?.Reset();
 
         if (_context != null && !_context.IsDisposed && _context.World.IsActive)
@@ -488,11 +476,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         Steering!.StopMove();
         _isGuideded = false;
-        _pendingGuidedVolumeExitHandoff = null;
-        NavigatorGuidedTraversalState.ResetClimbIntent(
-            ref _guidedClimbIntent,
-            ref _guidedClimbIntentMode,
-            ref _lastSeenGuidedRouteTopologyVersion);
+        _pendingTransition = null;
         _frameRequest.SetRequest(
                 direction: direction ?? Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
@@ -506,7 +490,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Applies complete immutable graph-backed surface A* or flow-field intent.
+    /// Applies complete immutable graph-backed A* or flow-field intent.
     /// </summary>
     /// <param name="query">The exact query intent whose start point equals the current derived foot position.</param>
     /// <param name="rate">Desired movement rate.</param>
@@ -516,7 +500,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="isRequestingJump">Whether the object intends to jump during traversal.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
     /// <param name="groupId">Optional shared movement-group identifier.</param>
-    /// <exception cref="ArgumentException">Thrown when the query does not match the Navigator's exact supported surface shape.</exception>
+    /// <exception cref="ArgumentException">Thrown when the query does not match the Navigator's exact navigation profile.</exception>
     public virtual void ApplyGuidedTrekRequest(
         PathQuery query,
         TrekRate? rate = null,
@@ -531,43 +515,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             return;
 
         ValidateGuidedSurfaceQuery(query);
-        GuidedVolumeExitHandoff? replacementHandoff = null;
-        IPathRequest? volumeRequest = null;
-        if (_frameCondition.Medium is TraversalMedium.Gas or TraversalMedium.Liquid)
-        {
-            if (!GuidedVolumeExitPlanner.TryPlan(
-                    RequireContext(),
-                    query,
-                    _frameCondition.Medium,
-                    GuidedVolumeHeuristic,
-                    out VolumePathRequest? plannedVolume,
-                    out GuidedVolumeExitHandoff? plannedHandoff,
-                    out _)
-                || plannedVolume == null
-                || plannedHandoff == null)
-            {
-                throw new ArgumentException(
-                    "The exact graph query cannot be reached from the navigator's current volume.",
-                    nameof(query));
-            }
-
-            volumeRequest = plannedVolume;
-            replacementHandoff = plannedHandoff;
-            replacementHandoff.MovementGroupId = groupId;
-            _guidedClimbIntent = NavigatorGuidedTraversalState.ResolveInitialClimbIntent(
-                RequireContext(),
-                replacementHandoff,
-                isRequestingClimb,
-                out _guidedClimbIntentMode);
-        }
-        else
-        {
-            _guidedClimbIntentMode = isRequestingClimb.HasValue
-                ? GuidedClimbIntentMode.Explicit
-                : GuidedClimbIntentMode.Auto;
-            _guidedClimbIntent = isRequestingClimb ?? false;
-        }
-        _pendingGuidedVolumeExitHandoff = replacementHandoff;
+        _pendingTransition = null;
         _isGuideded = true;
         _frameRequest.SetRequest(
             direction: Vector3d.Zero,
@@ -575,15 +523,11 @@ public abstract partial class Navigator : INavigate, IRecordable
             isRequestingJump: isRequestingJump ?? false,
             isRequestingFlight: isRequestingFlight ?? false,
             isRequestingSwim: isRequestingSwim ?? false,
-            isRequestingClimb: _guidedClimbIntent,
+            isRequestingClimb: isRequestingClimb ?? false,
             facingDirection: null,
             canAffordJump: canAffordJump);
 
-        if (volumeRequest != null)
-            Steering!.ApplyPathRequest(volumeRequest, groupId);
-        else
-            Steering!.ApplyPathQuery(query, groupId);
-        CaptureGuidedRouteTopologyVersion();
+        Steering!.ApplyPathQuery(query, groupId);
     }
 
     /// <summary>
@@ -631,13 +575,33 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ToggleGuidedClimb(bool status)
+        => _frameRequest.IsRequestingClimb = status;
+
+    /// <summary>Completes the exact pending semantic action owned by the active guide.</summary>
+    public virtual NavigationGuideStatus CompletePendingTransition(
+        in NavigationTransitionInstruction instruction)
     {
-        NavigatorGuidedTraversalState.SetClimbIntent(
-            ref _frameRequest,
-            status,
-            GuidedClimbIntentMode.Explicit,
-            ref _guidedClimbIntent,
-            ref _guidedClimbIntentMode);
+        if (_pendingTransition == null || Steering == null)
+            return NavigationGuideStatus.Stale;
+
+        NavigationGuideStatus status = Steering.CompletePendingTransition(instruction);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+
+        TraversalTransitionLocomotionHints hints = _pendingTransition.Value.LocomotionHints;
+        _pendingTransition = null;
+        ApplyTransitionLocomotionHints(hints, pending: false);
+        return NavigationGuideStatus.Success;
+    }
+
+    internal void NotifySteeringSessionEnded()
+    {
+        _isGuideded = false;
+        if (_pendingTransition == null)
+            return;
+
+        _pendingTransition = null;
+        ApplyTransitionLocomotionHints(TraversalTransitionLocomotionHints.None, pending: false);
     }
 
     /// <summary>
@@ -684,39 +648,23 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (!IsActive)
             throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
-        bool activatedGuidedHandoff = NavigatorGuidedTraversalState.TryActivatePendingVolumeExitHandoff(
-            IsGuideded,
-            FootPosition,
-            ref _frameRequest,
-            Steering,
-            ref _pendingGuidedVolumeExitHandoff,
-            ref _guidedClimbIntent,
-            _guidedClimbIntentMode,
-            ref _lastSeenGuidedRouteTopologyVersion,
-            out bool handoffRequestedClimb);
-        NavigatorGuidedTraversalState.PrepareFrame(
-            IsGuideded,
-            ref _frameRequest,
-            Steering,
-            _pendingGuidedVolumeExitHandoff,
-            ref _guidedClimbIntent,
-            ref _guidedClimbIntentMode,
-            ref _lastSeenGuidedRouteTopologyVersion);
-
         Vector3d heading = Vector3d.Zero;
         if (IsGuideded)
         {
-            heading = Steering!.GetHeading(this);
-            NavigatorGuidedTraversalState.SyncFromSteering(
-                IsGuideded,
-                ref _frameRequest,
-                Steering,
-                _pendingGuidedVolumeExitHandoff,
-                activatedGuidedHandoff,
-                handoffRequestedClimb,
-                ref _guidedClimbIntent,
-                ref _guidedClimbIntentMode,
-                ref _lastSeenGuidedRouteTopologyVersion);
+            if (_pendingTransition is NavigationTransitionInstruction pending)
+            {
+                ApplyTransitionLocomotionHints(pending.LocomotionHints, pending: true);
+            }
+            else
+            {
+                heading = Steering!.GetHeading(this, out NavigationTransitionInstruction? transition);
+                if (transition.HasValue)
+                {
+                    _pendingTransition = transition;
+                    ApplyTransitionLocomotionHints(transition.Value.LocomotionHints, pending: true);
+                    heading = Vector3d.Zero;
+                }
+            }
         }
 
         _frameRequest.SetTransientState(
@@ -1030,20 +978,22 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (query.Agent != NavigationProfile
             || query.Start.Position != FootPosition
             || query.Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
-            || (query.AllowTransitions && query.Algorithm != PathAlgorithm.FlowField)
-            || query.Traversal.StartDomain != TraversalDomain.Surface
-            || query.Traversal.TargetDomain != TraversalDomain.Surface
-            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
+            || query.Traversal.StartMedium != _frameCondition.Medium)
         {
             throw new ArgumentException(
-                "Guided surface queries must use the Navigator profile and current foot position; only graph Flow may request transitions.",
+                "Guided queries must use the Navigator profile, current foot position, and current traversal medium.",
                 nameof(query));
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void CaptureGuidedRouteTopologyVersion() =>
-        NavigatorGuidedTraversalState.CaptureRouteTopologyVersion(Steering, ref _lastSeenGuidedRouteTopologyVersion);
+    private void ApplyTransitionLocomotionHints(
+        TraversalTransitionLocomotionHints hints,
+        bool pending)
+    {
+        _frameRequest.IsRequestingClimb = pending
+            ? (hints & TraversalTransitionLocomotionHints.RequestClimb) != 0
+            : (hints & TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion) != 0;
+    }
 
     #endregion
 

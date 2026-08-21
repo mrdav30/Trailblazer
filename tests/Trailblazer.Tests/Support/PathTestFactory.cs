@@ -138,30 +138,6 @@ public static class PathTestFactory
         }
     }
 
-    public static TraversalBuildResult RegisterAuthoredClimbRoute(
-        TrailblazerWorldContext context,
-        string chartName)
-    {
-        string[,,] map = new string[2, 4, 2];
-        map[0, 0, 0] = "S";
-        map[0, 1, 0] = "SC!";
-        map[1, 1, 0] = "SC";
-        map[1, 1, 1] = "SC";
-        map[1, 2, 1] = "SC!";
-        map[0, 2, 1] = "S";
-        map[0, 3, 1] = "S";
-
-        TraversalBuildResult buildResult = new TraversalAuthoringMap(
-            chartName,
-            map,
-            Vector3d.Zero,
-            Fixed64.One).Build();
-
-        buildResult.GeneratedTransitions.Should().NotBeEmpty();
-        context.Pathing.Register(buildResult).Should().BeTrue();
-        return buildResult;
-    }
-
     public static NavigationChart RegisterTraversalLine(
         TrailblazerWorldContext context,
         string chartName,
@@ -214,21 +190,6 @@ public static class PathTestFactory
         data[1, 1, 1] = true;
 
         return NavigationChart.From3D(name, data, minBounds, Fixed64.One);
-    }
-
-    public static TraversalTransition CreateJumpTransition(
-        TrailblazerWorldContext context,
-        string id,
-        Vector3d source,
-        Vector3d destination,
-        int pathCostModifier = 1)
-    {
-        return new TraversalTransition(
-            id,
-            TraversalTransitionType.Jump,
-            TraversalTransitionAnchor.Solid(RequireVoxel(context, source).WorldIndex),
-            TraversalTransitionAnchor.Solid(RequireVoxel(context, destination).WorldIndex),
-            pathCostModifier);
     }
 
     public static Voxel RequireVoxel(TrailblazerWorldContext context, Vector3d position)

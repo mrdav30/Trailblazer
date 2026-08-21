@@ -324,10 +324,7 @@ public sealed class NavigationAStarConcurrencyTests
                 fixture.MapId),
             fixture.DefaultProfile,
             NavigationAStarExitTestHarness.Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(
                 8_192, 32, 128, 1_024, 1_024, 0, 0, 0, 128, 128, 1),
@@ -360,7 +357,7 @@ public sealed class NavigationAStarConcurrencyTests
             storageKind: GridStorageKind.Dense);
         world.TryAddGrid(mutation, out _).Should().BeTrue();
 
-        guide.TryGetCurrentWaypoint(generation, out _, out _)
+        guide.TryGetCurrentStep(generation, out _)
             .Should().Be(NavigationAStarQueryStatus.Stale);
         cache.TryCheckout(payload.Key, fixture.Graph, out _).Should().BeFalse();
         cache.Count.Should().Be(0);

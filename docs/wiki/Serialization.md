@@ -121,8 +121,6 @@ That means this runtime is not designed for:
 - `Acceleration`
 - the exact `NavigationProfile`, including authoritative body shape and
   root-to-foot offset
-- guided-request defaults configured through `ConfigureForGuidedTraversal(...)`,
-  limited to remaining flow/volume transition and request tuning values
 - heightmap grounding settings configured through
   `ConfigureHeightmapGrounding(...)`, including mode, preferred layer name,
   active layer name, ground offset, and snap tolerance
@@ -133,8 +131,7 @@ That means this runtime is not designed for:
 - `IsGuideded`
 - `_frameCondition`
 - `_frameRequest`
-- guided traversal settings that must survive frame-request resets during active
-  guided movement
+- a schema-versioned durable `PathQuery` session, when one is active
 - `Steering`
 - `Turning`
 - `Motor`
@@ -143,6 +140,14 @@ On load it also:
 
 - requires the recorded `NavigationProfile` to exactly match the already
   configured navigator shell
+- rejects missing, retired, or unsupported top-level and path-session schemas
+- validates the restored position, exact known traversal medium, profile, and
+  durable query before mutating the existing shell
+- rebuilds the query start position and `StartMedium` from the restored
+  navigator foot and frame condition while preserving destination, target
+  media, policy, algorithm, budget, and transition intent
+- clears pending transition instructions and never restores or reacquires a
+  guide cursor during load; the next fixed-step frame acquires fresh guidance
 - rebuilds `Forward` from `Rotation`
 - clears frame deltas
 - refreshes steering radius-derived tolerances from the configured body shape
@@ -169,46 +174,23 @@ construct or hydrate heightmap data from the navigator payload.
   weights, and braking power
 - cooldowns, stuck counters, repath counters, and auto-stop state
 - movement-group id and current travel mode
-- exact graph surface query intent and lease cursor through `PathQueryRecord`
-- the remaining flow/volume request shape through `PathRequestRecord`
-
-The graph query record captures:
-
-- both endpoint positions, map filters, resolution policies, and bounds
-- the exact agent profile and area-policy revision
-- traversal domain/medium, A* algorithm, finite work budget, and transition flag
-- the guide-local waypoint cursor when a lease was active
-
-The remaining request record captures:
-
-- request type (`FlowField` or `Volume`)
-- origin
-- target position
-- unit size
-- walkability override
-- max search range
-- request-type-specific settings such as max climb height, extra flood range,
-  volume heuristic, or volume traversal mode
-- whether an active guide existed
-- current waypoint index when the guide is waypoint-based
 
 On load it also:
 
-- rebuilds exact surface `PathQuery` intent or the remaining `IPathRequest`
-- reacquires a graph `NavigationGuideLease` or remaining guide from the owning
-  context when the session was actively guide-driven
-- restores a bounded graph lease cursor or remaining volume waypoint progress
-- clears any stale guide or movement-group session state already attached to the
-  existing runtime shell
+- clears any stale A* or Flow lease and movement-group session state already
+  attached to the existing runtime shell
 - preserves per-session movement-group intent while treating the context-owned
   coordinator as rebuild-only runtime state
 - allows hosts to prewarm grouped sessions explicitly through
   `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`
-- falls back to a new path request on the next steering tick if a guide could
-  not be reacquired immediately
+- requests a fresh A* or Flow lease on the next steering tick when the restored
+  durable session is active
 
-The retired surface-A* request discriminator is rejected in both JSON and
-MemoryPack. There is no scalar-profile or old-request compatibility reader.
+Standalone `PathQueryRecord` uses its own required schema marker and preserves
+both exact endpoints, the agent profile, area-policy revision,
+`StartMedium`/`TargetMedia`, algorithm, finite budget, transition flag, and Flow
+options. Old request discriminators, Volume/Hybrid modes, pending actions, and
+guide cursors are not compatibility-read in either JSON or MemoryPack.
 
 ### 3.3 NavTurning
 

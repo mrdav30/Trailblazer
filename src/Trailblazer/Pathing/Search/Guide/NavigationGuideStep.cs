@@ -10,7 +10,7 @@ using FixedMathSharp;
 namespace Trailblazer.Pathing;
 
 /// <summary>Stores one medium-specific movement target or semantic action.</summary>
-internal readonly struct NavigationGuideStep
+public readonly struct NavigationGuideStep
 {
     internal NavigationGuideStep(
         NavigationCellAddress address,
@@ -26,13 +26,18 @@ internal readonly struct NavigationGuideStep
         HasTransition = hasTransition;
     }
 
-    internal NavigationCellAddress Address { get; }
+    /// <summary>Gets the stable address selected for this movement or action step.</summary>
+    public NavigationCellAddress Address { get; }
 
-    internal Vector3d Position { get; }
+    /// <summary>Gets the exact world position selected for this step.</summary>
+    public Vector3d Position { get; }
 
-    internal TraversalMedium Medium { get; }
+    /// <summary>Gets the exact traversal medium before this step completes.</summary>
+    public TraversalMedium Medium { get; }
 
-    internal NavigationTransitionInstruction Transition { get; }
+    /// <summary>Gets the semantic action when <see cref="HasTransition"/> is true.</summary>
+    public NavigationTransitionInstruction Transition { get; }
 
-    internal bool HasTransition { get; }
+    /// <summary>Gets whether this step requires explicit semantic-action completion.</summary>
+    public bool HasTransition { get; }
 }

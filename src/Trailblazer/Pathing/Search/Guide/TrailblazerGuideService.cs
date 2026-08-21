@@ -6,23 +6,19 @@
 //=======================================================================
 
 using System;
-using System.Diagnostics.CodeAnalysis;
 using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Context-owned API for guide request, return, cache invalidation, and cache diagnostics.
+/// Context-owned API for actionable A* and flow-field guide acquisition.
 /// </summary>
 public sealed class TrailblazerGuideService
 {
     private readonly TrailblazerWorldContext _context;
-    private readonly PathingWorldState _state;
-
-    internal TrailblazerGuideService(TrailblazerWorldContext context, PathingWorldState state)
+    internal TrailblazerGuideService(TrailblazerWorldContext context)
     {
         _context = context;
-        _state = state;
     }
 
     /// <summary>Proves one cost-neutral graph-direct surface heading.</summary>
@@ -33,13 +29,6 @@ public sealed class TrailblazerGuideService
     {
         EnsureUsable();
         heading = Vector3d.Zero;
-        if (query.Traversal.StartDomain != TraversalDomain.Surface
-            || query.Traversal.TargetDomain != TraversalDomain.Surface
-            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
-        {
-            return NavigationRayStatus.Blocked;
-        }
-
         NavigationImmediateRayWorkspace immediate = _context.Pathing.ImmediateRayWorkspace;
         lock (immediate.SyncRoot)
         {
@@ -63,7 +52,7 @@ public sealed class TrailblazerGuideService
                 graph,
                 query.Agent,
                 areaPolicy,
-                TraversalMedium.Solid,
+                query.Traversal.StartMedium,
                 actualFoot,
                 query.End.Position,
                 NavigationRayEndpointAllowance.None));
@@ -97,7 +86,7 @@ public sealed class TrailblazerGuideService
     }
 
     /// <summary>
-    /// Requests one graph-backed surface A* guide for immutable query intent.
+    /// Requests one graph-backed A* guide for immutable query intent.
     /// </summary>
     public NavigationGuideStatus RequestGuide(
         PathQuery query,
@@ -106,11 +95,7 @@ public sealed class TrailblazerGuideService
         EnsureUsable();
         result = null;
 
-        if (query.Algorithm != PathAlgorithm.AStar
-            || query.AllowTransitions
-            || query.Traversal.StartDomain == TraversalDomain.Volume
-            || query.Traversal.TargetDomain == TraversalDomain.Volume
-            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        if (query.Algorithm != PathAlgorithm.AStar)
         {
             return NavigationGuideStatus.Unsupported;
         }
@@ -122,13 +107,14 @@ public sealed class TrailblazerGuideService
 
         using (work)
         {
-            work.AdvanceAdmission(
-                query.Budget.MaxLookupProbes,
-                query.Budget.MaxEndpointCandidates);
-            if (!work.IsAdmissionComplete)
-                return NavigationGuideStatus.BudgetExceeded;
+            while (!work.IsAdmissionComplete)
+            {
+                work.AdvanceAdmission(
+                    query.Budget.MaxLookupProbes,
+                    query.Budget.MaxEndpointCandidates);
+            }
 
-            if (!work.IsReadyToPublish(inputIndex: 0))
+            while (!work.IsReadyToPublish(inputIndex: 0))
             {
                 work.AdvanceSearch(
                     inputIndex: 0,
@@ -136,8 +122,6 @@ public sealed class TrailblazerGuideService
                     nodeStepLimit: int.MaxValue,
                     query.Budget.MaxEvaluatedEdges,
                     query.Budget.MaxConnectionLegs);
-                if (!work.IsReadyToPublish(inputIndex: 0))
-                    return NavigationGuideStatus.BudgetExceeded;
             }
 
             work.PublishReadyPrefix(maximumCount: 1);
@@ -168,11 +152,7 @@ public sealed class TrailblazerGuideService
         EnsureUsable();
         result = null;
 
-        if (query.Algorithm != PathAlgorithm.FlowField
-            || query.AllowTransitions
-            || query.Traversal.StartDomain != TraversalDomain.Surface
-            || query.Traversal.TargetDomain != TraversalDomain.Surface
-            || query.Traversal.CurrentMedium is TraversalMedium.Gas or TraversalMedium.Liquid)
+        if (query.Algorithm != PathAlgorithm.FlowField)
         {
             return NavigationGuideStatus.Unsupported;
         }
@@ -184,13 +164,14 @@ public sealed class TrailblazerGuideService
 
         using (work)
         {
-            work.AdvanceAdmission(
-                query.Budget.MaxLookupProbes,
-                query.Budget.MaxEndpointCandidates);
-            if (!work.IsAdmissionComplete)
-                return NavigationGuideStatus.BudgetExceeded;
+            while (!work.IsAdmissionComplete)
+            {
+                work.AdvanceAdmission(
+                    query.Budget.MaxLookupProbes,
+                    query.Budget.MaxEndpointCandidates);
+            }
 
-            if (!work.IsReadyToPublish(inputIndex: 0))
+            while (!work.IsReadyToPublish(inputIndex: 0))
             {
                 work.AdvanceSearch(
                     inputIndex: 0,
@@ -198,8 +179,6 @@ public sealed class TrailblazerGuideService
                     nodeStepLimit: int.MaxValue,
                     query.Budget.MaxEvaluatedEdges,
                     query.Budget.MaxConnectionLegs);
-                if (!work.IsReadyToPublish(inputIndex: 0))
-                    return NavigationGuideStatus.BudgetExceeded;
             }
 
             work.PublishReadyPrefix(maximumCount: 1);
@@ -223,117 +202,6 @@ public sealed class TrailblazerGuideService
         }
     }
 
-    /// <inheritdoc cref="PathGuideFactory.TotalVolumeGuideCount"/>
-    public int TotalVolumeGuideCount
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.TotalVolumeGuideCount;
-        }
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.InUseVolumeGuideCount"/>
-    public int InUseVolumeGuideCount
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.InUseVolumeGuideCount;
-        }
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.IsPooling"/>
-    public bool IsPooling
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.IsPooling;
-        }
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.AnyInUse"/>
-    public bool AnyInUse
-    {
-        get
-        {
-            using (EnterUsableState())
-                return PathGuideFactory.AnyInUse;
-        }
-    }
-
-    /// <summary>
-    /// Requests a typed guide for the supplied validated path request.
-    /// </summary>
-    public bool RequestGuide<T>(IPathRequest request, [NotNullWhen(true)] out T? result)
-        where T : class, IGuide
-    {
-        if (!IsRequestOwnedByThisContext(request))
-        {
-            result = null;
-            return false;
-        }
-
-        using (EnterUsableState())
-            return PathGuideFactory.RequestGuide(request, out result);
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.RequestGuide(IPathRequest,out IGuide?)"/>
-    public bool RequestGuide(IPathRequest request, [NotNullWhen(true)] out IGuide? result)
-    {
-        if (!IsRequestOwnedByThisContext(request))
-        {
-            result = null;
-            return false;
-        }
-
-        using (EnterUsableState())
-            return PathGuideFactory.RequestGuide(request, out result);
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.ReturnGuide(IGuide?,bool)"/>
-    public void ReturnGuide(IGuide? guide, bool dispose = false)
-    {
-        if (guide == null)
-            return;
-
-        using (EnterUsableState())
-            PathGuideFactory.ReturnGuide(guide, dispose);
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.InvalidateCacheFor(string)"/>
-    public void InvalidateCacheFor(string chartKey)
-    {
-        using (EnterUsableState())
-            PathGuideFactory.InvalidateCacheFor(chartKey);
-    }
-
-    /// <inheritdoc cref="PathGuideFactory.FlushCache(bool)"/>
-    public void FlushCache(bool force = false)
-    {
-        using (EnterUsableState())
-            PathGuideFactory.FlushCache(force);
-    }
-
-    internal void CullExpiredGuides(int currentFrame)
-    {
-        using (EnterUsableState())
-            PathGuideFactory.CullExpiredGuides(currentFrame);
-    }
-
-    internal void InvalidateVolumeCache()
-    {
-        using (EnterUsableState())
-            PathGuideFactory.InvalidateVolumeCache();
-    }
-
-    private IDisposable EnterUsableState()
-    {
-        EnsureUsable();
-        return PathManager.EnterState(_state);
-    }
-
     private void EnsureUsable()
     {
         if (_context.IsDisposed)
@@ -341,9 +209,6 @@ public sealed class TrailblazerGuideService
         if (!_context.World.IsActive)
             throw new InvalidOperationException("TrailblazerGuideService is bound to an inactive GridWorld.");
     }
-
-    private bool IsRequestOwnedByThisContext(IPathRequest request) =>
-        request != null && ReferenceEquals(request.Context, _context);
 
     private static NavigationGuideStatus ToPublic(NavigationFlowQueryStatus status) => status switch
     {

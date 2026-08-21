@@ -31,6 +31,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     private readonly ReadOnlyCollection<NavigationCellEntry> _cellView;
     private readonly ReadOnlyCollection<NavigationConnection> _connectionView;
     private readonly ReadOnlyCollection<TraversalTransitionDefinition> _transitionView;
+    private readonly ReadOnlyCollection<TraversalTransitionRule> _transitionRuleView;
 
     /// <summary>
     /// The stable host-owned map identifier.
@@ -57,6 +58,16 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     /// </summary>
     public IReadOnlyList<TraversalTransitionDefinition> Transitions => _transitionView;
 
+    /// <summary>
+    /// Bounded procedural semantic transition rules in canonical ordinal ID order.
+    /// </summary>
+    public IReadOnlyList<TraversalTransitionRule> TransitionRules => _transitionRuleView;
+
+    /// <summary>
+    /// Gets the optional complete fallback cell used when no explicit cell wins.
+    /// </summary>
+    public NavigationCell? DefaultCell => _defaultCell;
+
     internal ReadOnlySpan<NavigationCellEntry> CellSpan => _cells;
 
     internal ReadOnlySpan<NavigationConnection> ConnectionSpan => _connections;
@@ -64,8 +75,6 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     internal ReadOnlySpan<TraversalTransitionDefinition> TransitionSpan => _transitions;
 
     internal ReadOnlySpan<TraversalTransitionRule> TransitionRuleSpan => _transitionRules;
-
-    internal NavigationCell? DefaultCell => _defaultCell;
 
     internal int NativePortalTemplateCount => _nativePortalTemplates.Length;
 
@@ -92,6 +101,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         _cellView = Array.AsReadOnly(_cells);
         _connectionView = Array.AsReadOnly(_connections);
         _transitionView = Array.AsReadOnly(_transitions);
+        _transitionRuleView = Array.AsReadOnly(_transitionRules);
     }
 
     /// <inheritdoc/>

@@ -30,16 +30,16 @@ public readonly struct NavigationFlowFieldLease : IDisposable
     public Fixed64 OriginIntegrationCost =>
         _inner?.GetOriginIntegrationCost(_generation) ?? Fixed64.Zero;
 
-    /// <summary>Samples a deterministic heading from the actual current foot position.</summary>
+    /// <summary>Samples deterministic movement guidance or one pending semantic action.</summary>
     public NavigationGuideStatus TrySample(
         Vector3d actualFootPosition,
         GuideSampleWorkBudget budget,
-        out Vector3d heading)
+        out NavigationFlowSample sample)
     {
         NavigationFlowFieldGuideLease? inner = _inner;
         if (inner == null)
         {
-            heading = Vector3d.Zero;
+            sample = default;
             return NavigationGuideStatus.Stale;
         }
         var meter = new GuideSampleWorkMeter(budget);
@@ -47,8 +47,7 @@ public readonly struct NavigationFlowFieldLease : IDisposable
             _generation,
             actualFootPosition,
             ref meter,
-            out NavigationFlowSample sample);
-        heading = sample.Heading;
+            out sample);
         return status;
     }
 
@@ -69,6 +68,12 @@ public readonly struct NavigationFlowFieldLease : IDisposable
             ref meter,
             out sample);
     }
+
+    /// <summary>Completes the exact current pending semantic action.</summary>
+    public NavigationGuideStatus CompletePendingTransition(
+        in NavigationTransitionInstruction instruction) =>
+        _inner?.CompletePendingTransition(_generation, instruction)
+            ?? NavigationGuideStatus.Stale;
 
     /// <inheritdoc />
     public void Dispose() => _inner?.Dispose(_generation);

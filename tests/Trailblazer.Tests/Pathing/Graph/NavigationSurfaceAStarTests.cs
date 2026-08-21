@@ -694,10 +694,7 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationEndpoint(Vector3d.One),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
@@ -833,10 +830,7 @@ public sealed class NavigationSurfaceAStarTests
                 endPrism.Center.Z)),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(
                 maxLookupProbes: 64,
@@ -1032,19 +1026,17 @@ public sealed class NavigationSurfaceAStarTests
                 .Should().Be(NavigationAStarQueryStatus.Success);
             guide.Should().NotBeNull();
             publicGuide = new NavigationGuideLease(guide!);
-            publicGuide.TryGetCurrentWaypoint(
-                    out NavigationCellAddress waypoint,
-                    out Vector3d waypointPosition)
+            publicGuide.TryGetCurrentStep(out NavigationGuideStep step)
                 .Should().Be(NavigationGuideStatus.Success);
-            waypoint.Should().Be(new NavigationCellAddress("map", addresses[0]));
-            waypointPosition.Should().Be(new Vector3d(
+            step.Address.Should().Be(new NavigationCellAddress("map", addresses[0]));
+            step.Position.Should().Be(new Vector3d(
                 startPrism.Center.X,
                 startPrism.VerticalMin,
                 startPrism.Center.Z));
             store.ActiveLeaseCount.Should().Be(0,
                 "a guide does not retain its short graph lease between calls");
-            publicGuide.TryAdvanceWaypoint().Should().Be(NavigationGuideStatus.Success);
-            publicGuide.CurrentWaypointIndex.Should().Be(1);
+            publicGuide.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
+            publicGuide.CurrentStepIndex.Should().Be(1);
         }
         store.ActiveLeaseCount.Should().Be(0,
             "cached guide acquisition must not retain the graph snapshot lease");
@@ -1084,7 +1076,7 @@ public sealed class NavigationSurfaceAStarTests
             .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
             .WithGraphVersion(graph.GraphVersion + 1);
         store.TryPublish(topologyChanged).Should().Be(NavigationCandidatePublication.Published);
-        publicGuide.TryGetCurrentWaypoint(out _, out _)
+        publicGuide.TryGetCurrentStep(out _)
             .Should().Be(NavigationGuideStatus.Stale);
         publicGuide.Status.Should().Be(NavigationGuideStatus.Stale);
         cache.ActiveLeaseCount.Should().Be(4,
@@ -1541,10 +1533,7 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationEndpoint(targetFoot, mapId: "B"),
             profile,
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(128, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
@@ -1707,10 +1696,7 @@ public sealed class NavigationSurfaceAStarTests
                 targetPrism.Center.Z)),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(64, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
@@ -1858,10 +1844,7 @@ public sealed class NavigationSurfaceAStarTests
                 endPrism.Center.Z)),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(
                 maxLookupProbes: 256,
@@ -2094,10 +2077,7 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationEndpoint(destinationFoot, mapId: "B"),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(128, 2, 2, 2, 6, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
@@ -2443,10 +2423,7 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationEndpoint(definition.ExitAnchor),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(
                 maxLookupProbes: 64,
@@ -2576,10 +2553,7 @@ public sealed class NavigationSurfaceAStarTests
                 endPrism.Center.Z)),
             Profile(),
             Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(32, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
@@ -2761,10 +2735,7 @@ public sealed class NavigationSurfaceAStarTests
             fixture.MapId),
         fixture.DefaultProfile,
         NavigationAStarExitTestHarness.Policy.Key,
-        new TraversalIntent(
-            TraversalDomain.Surface,
-            TraversalMedium.Solid,
-            TraversalDomain.Surface),
+        new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
         PathAlgorithm.AStar,
         new NavigationWorkBudget(
             maxLookupProbes: lookupProbes,
@@ -2879,10 +2850,7 @@ public sealed class NavigationSurfaceAStarTests
                 fixture.MapId),
             profile,
             NavigationAStarExitTestHarness.Policy.Key,
-            new TraversalIntent(
-                TraversalDomain.Volume,
-                TraversalMedium.Gas,
-                TraversalDomain.Volume),
+            new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(
                 128, 16, 16, 64, 64, 0, 0, 0, 0, 32, 0),
@@ -2941,9 +2909,10 @@ public sealed class NavigationSurfaceAStarTests
             baseline.Agent,
             baseline.AreaPolicy,
             baseline.Traversal,
-            baseline.Algorithm,
+            PathAlgorithm.FlowField,
             baseline.Budget,
-            allowTransitions: true);
+            allowTransitions: false,
+            new FlowFieldQueryOptions(Fixed64.Zero));
         var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 4, 4, 4);
         var cache = new NavigationAStarPayloadCache(
             world,

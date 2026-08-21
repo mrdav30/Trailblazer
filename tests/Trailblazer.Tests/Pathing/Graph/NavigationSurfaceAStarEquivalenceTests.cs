@@ -961,10 +961,7 @@ internal static class NavigationAStarExitTestHarness
         new NavigationEndpoint(end, endMap),
         profile,
         Policy.Key,
-        new TraversalIntent(
-            TraversalDomain.Surface,
-            TraversalMedium.Solid,
-            TraversalDomain.Surface),
+        new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
         PathAlgorithm.AStar,
         new NavigationWorkBudget(
             maxLookupProbes: 8_192,

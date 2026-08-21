@@ -191,23 +191,24 @@ if (status == NavigationGuideStatus.Success && lease != null)
 ## Choosing A Request Type
 
 Use `PathQuery` with `PathAlgorithm.AStar` when one agent needs a concrete
-surface waypoint trail. A successful request returns a disposable
-`NavigationGuideLease`; every acquisition and cursor operation reports a
-`NavigationGuideStatus`. Published waypoint trails preserve the exact winning
-portal route and are compacted only where the bounded navigation ray certifies
-an equal-or-cheaper replacement.
+medium-state route. A successful request returns a disposable
+`NavigationGuideLease`; `TryGetCurrentStep(...)` yields either ordinary
+movement or an exact semantic transition instruction. A pending transition is
+advanced only by `CompletePendingTransition(...)`.
 
 Use `PathQuery` with `PathAlgorithm.FlowField` and `FlowFieldQueryOptions` when
-many agents can share a destination and sample local movement vectors from one
-cached graph field. `context.Guides.RequestFlowField(...)` returns a disposable
-`NavigationFlowFieldLease`. If an agent drifts from its current sample, local
-rejoin stays on that same lease and selected edge; it does not submit a recovery
-A* query or rebuild the field.
+many agents can share a destination and sample movement or transition actions
+from one cached graph field. `context.Guides.RequestFlowField(...)` returns a
+disposable `NavigationFlowFieldLease`. If an agent drifts from its current
+sample, local rejoin stays on that same lease and selected edge; it does not
+submit a recovery A* query or rebuild the field.
 
-Use `VolumePathRequest` when movement should route through raw 3D voxel
-connectivity for gas, liquid, aerial, or chart-optional travel.
+`TraversalIntent.StartMedium` selects the exact Solid, Gas, or Liquid start
+state, while `TargetMedia` selects the known nonempty destination-media set.
+Set `AllowTransitions` only when semantic actions may change medium or perform
+same-medium Jump/Climb movement.
 
-For guided surface travel, pass that exact query to
+For guided travel, pass that exact query to
 `Navigator.ApplyGuidedTrekRequest(PathQuery, ...)`. The query's profile must
 match the navigator's configured `NavigationProfile`, and its start must equal
 the navigator's derived foot position.

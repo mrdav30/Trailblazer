@@ -154,78 +154,6 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     }
 
     [Fact]
-    public void ManagedTransitionHelpers_ShouldHandleMissingChartsAndIgnoredRefreshRequests()
-    {
-        ReflectionUtility.InvokePrivateStatic<int>(
-            typeof(PathManager),
-            "RebuildInitializedChartsAgainstExternalGridRequests",
-            new[] { typeof(GridWorld), typeof(ExternalGridChartRebuildRequest[]) },
-            TestWorld.World,
-            Array.Empty<ExternalGridChartRebuildRequest>()).Should().Be(0);
-        ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
-            typeof(PathManager),
-            "BuildInitializedChartSelectionSnapshot",
-            new SwiftList<NavigationChartRegistration>()).Should().BeEmpty();
-        ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "UntrackInitializedChartGridTouch",
-            (ushort)77,
-            "MissingChart");
-        ReflectionUtility.InvokePrivateStatic<bool>(
-            typeof(PathManager),
-            "TryRegisterManagedGeneratedTransitions",
-            new[] { typeof(string), typeof(TraversalTransition[]) },
-            "MissingChart",
-            null!).Should().BeFalse();
-        ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "RememberManagedGeneratedTransitions",
-            "MissingChart",
-            Array.Empty<string>(),
-            0);
-        ReflectionUtility.InvokePrivateStatic<string[]>(
-            typeof(PathManager),
-            "GetObsoleteManagedGeneratedTransitionIds",
-            new[] { typeof(NavigationChartRegistration), typeof(string[]), typeof(TraversalTransition[]) },
-            CreateRegistration("MissingObsoleteChart", "missing-obsolete", priority: 1),
-            Array.Empty<string>(),
-            Array.Empty<TraversalTransition>()).Should().BeEmpty();
-
-        Action refreshMissingChart = () => ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "RefreshManagedGeneratedTransitionsForChart",
-            new[] { typeof(GridWorld), typeof(string) },
-            TestWorld.World,
-            "MissingChart");
-        Action refreshEmptySet = () => ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "RefreshManagedGeneratedTransitionsForCharts",
-            new[] { typeof(GridWorld), typeof(SwiftHashSet<string>), typeof(string) },
-            TestWorld.World,
-            new SwiftHashSet<string>(),
-            null!);
-        Action refreshUnknownVoxelChart = () => ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "RefreshManagedGeneratedTransitionsForVoxel",
-            new[] { typeof(GridWorld), typeof(Vector3d), typeof(SwiftHashSet<string>) },
-            TestWorld.World,
-            new Vector3d(99, 99, 99),
-            new SwiftHashSet<string> { "MissingChart", string.Empty });
-        Action refreshNullVoxelCharts = () => ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "RefreshManagedGeneratedTransitionsForVoxel",
-            new[] { typeof(GridWorld), typeof(Vector3d), typeof(SwiftHashSet<string>) },
-            TestWorld.World,
-            Vector3d.Zero,
-            null!);
-
-        refreshMissingChart.Should().NotThrow();
-        refreshEmptySet.Should().NotThrow();
-        refreshUnknownVoxelChart.Should().NotThrow();
-        refreshNullVoxelCharts.Should().NotThrow();
-    }
-
-    [Fact]
     public void ExternalGridBridgeTailHelpers_ShouldHandleNoSelectionResetAndDuplicateRemovedEvents()
     {
         TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
@@ -558,348 +486,12 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     }
 
     [Fact]
-    public void ManagedTransitionStateHelpers_ShouldHandleMissingAndExistingEntries()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        SwiftDictionary<string, NavigationChartRegistration> states = PathManager.ActiveState.NavigationChartMap;
-
-        ReflectionUtility.InvokePrivateStatic<string[]>(
-            typeof(PathManager),
-            "RemoveManagedGeneratedTransitions",
-            "MissingChart").Should().BeEmpty();
-
-        NavigationChartRegistration state = CreateRegistration("ManagedTailChart", "tail-prefix", priority: 3);
-        state.TransitionIds.Add("keep-id");
-        states["ManagedTailChart"] = state;
-
-        TraversalTransition transition = CreateTransition("new-id", Vector3d.Zero, new Vector3d(1, 0, 0));
-        ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "AddManagedGeneratedTransitionIds",
-            "ManagedTailChart",
-            new[] { transition });
-        state.TransitionIds.Should().Contain(new[] { "keep-id", "new-id" });
-
-        ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "RemoveManagedGeneratedTransitionIds",
-            "ManagedTailChart",
-            new[] { "keep-id" });
-        state.TransitionIds.Should().NotContain("keep-id");
-
-        string[] removed = ReflectionUtility.InvokePrivateStatic<string[]>(
-            typeof(PathManager),
-            "RemoveManagedGeneratedTransitions",
-            "ManagedTailChart");
-        removed.Should().ContainSingle(id => id == "new-id");
-        states.ContainsKey("ManagedTailChart").Should().BeTrue();
-        state.TransitionIds.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void ManagedTransitionStateHelpers_ShouldIgnoreAddAndRemoveRequests_WhenChartStateIsMissing()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        Action addMissing = () => ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "AddManagedGeneratedTransitionIds",
-            "MissingChart",
-            new[] { CreateTransition("missing-add", Vector3d.Zero, new Vector3d(1, 0, 0)) });
-        Action removeMissing = () => ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "RemoveManagedGeneratedTransitionIds",
-            "MissingChart",
-            new[] { "missing-remove" });
-
-        addMissing.Should().NotThrow();
-        removeMissing.Should().NotThrow();
-    }
-
-    [Fact]
-    public void ManagedTransitionDeltaHelpers_ShouldRegisterMissingAndRemoveObsoleteTransitions()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        SwiftDictionary<string, NavigationChartRegistration> states = PathManager.ActiveState.NavigationChartMap;
-
-        NavigationChartRegistration state = CreateRegistration("DeltaChart", "delta-prefix", priority: 5);
-        state.TransitionIds.Add("obsolete-id");
-        states["DeltaChart"] = state;
-
-        SwiftHashSet<string> desiredTransitionIds = new() { "new-id" };
-        SwiftHashSet<string> activeTransitionIds = new() { "new-id" };
-        TraversalTransition[] missingTransitions = { CreateTransition("new-id", Vector3d.Zero, new Vector3d(1, 0, 0)) };
-
-        ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "ApplyManagedGeneratedTransitionDelta",
-            "DeltaChart",
-            state,
-            desiredTransitionIds,
-            activeTransitionIds,
-            missingTransitions);
-
-        state.TransitionIds.Should().Contain("new-id");
-        state.TransitionIds.Should().NotContain("obsolete-id");
-        TraversalTransitionRegistry.IsRegistered("new-id").Should().BeTrue();
-        TraversalTransitionRegistry.IsRegistered("obsolete-id").Should().BeFalse();
-    }
-
-    [Fact]
-    public void ManagedTransitionComparisonHelpers_ShouldReturnEmptyWhenNoDeltaIsRequired()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        NavigationChartRegistration state = CreateRegistration("CompareChart", "compare-prefix", priority: 1);
-        TraversalTransition keepTransition = CreateTransition("keep-id", Vector3d.Zero, new Vector3d(1, 0, 0));
-        state.TransitionIds.Add(keepTransition.Id);
-
-        ReflectionUtility.InvokePrivateStatic<string[]>(
-            typeof(PathManager),
-            "GetObsoleteManagedGeneratedTransitionIds",
-            new[] { typeof(NavigationChartRegistration), typeof(string[]), typeof(TraversalTransition[]) },
-            state,
-            new[] { keepTransition.Id },
-            new[] { keepTransition }).Should().BeEmpty();
-
-        ReflectionUtility.InvokePrivateStatic<TraversalTransition[]>(
-            typeof(PathManager),
-            "GetMissingManagedGeneratedTransitions",
-            state,
-            new[] { keepTransition }).Should().BeEmpty();
-    }
-
-    [Fact]
-    public void ManagedTransitionCollectionHelpers_ShouldHandleEdgePairsAndOwnerResolution()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        NavigationChartCell[,,] cells = new NavigationChartCell[1, 1, 1];
-        cells[0, 0, 0] = new NavigationChartCell(
-            TraversalMedia.Solid,
-            generatedTransitionMedia: TraversalMedia.Solid);
-        NavigationChart chart = NavigationChart.From3D("ManagedEdgeChart", cells, Vector3d.Zero, Fixed64.One);
-
-        NavigationChartRegistration state = new(chart, registrationOrder: 1, "edge-prefix");
-        TraversalTransition[] transitions = ReflectionUtility.InvokePrivateStatic<TraversalTransition[]>(
-            typeof(PathManager),
-            "CollectManagedGeneratedTransitionsForChart",
-            new[]
-            {
-                typeof(GridWorld),
-                typeof(NavigationChart),
-                typeof(NavigationChartRegistration),
-                typeof(SwiftHashSet<string>),
-                typeof(SwiftHashSet<string>)
-            },
-            TestWorld.World,
-            chart,
-            state,
-            new SwiftHashSet<string>(),
-            new SwiftHashSet<string>());
-        transitions.Should().BeEmpty();
-
-        ResolvedChartVoxelState resolvedState = new();
-        resolvedState.AddOwner(chart.Name, NavigationChartCell.Solid, priority: 0, registrationOrder: 1);
-        SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> resolvedStates =
-            PathManager.ActiveState.ResolvedChartVoxelStates;
-        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
-        resolvedStates[voxel.WorldIndex] = resolvedState;
-
-        ReflectionUtility.InvokePrivateStatic<bool>(
-            typeof(PathManager),
-            "IsChartEffectiveOwnerAtPosition",
-            new[] { typeof(GridWorld), typeof(string), typeof(Vector3d) },
-            TestWorld.World,
-            chart.Name,
-            Vector3d.Zero).Should().BeTrue();
-        ReflectionUtility.InvokePrivateStatic<bool>(
-            typeof(PathManager),
-            "IsChartEffectiveOwnerAtPosition",
-            new[] { typeof(GridWorld), typeof(string), typeof(Vector3d) },
-            TestWorld.World,
-            "OtherChart",
-            Vector3d.Zero).Should().BeFalse();
-        ReflectionUtility.InvokePrivateStatic<bool>(
-            typeof(PathManager),
-            "IsChartEffectiveOwnerAtPosition",
-            new[] { typeof(GridWorld), typeof(string), typeof(Vector3d) },
-            TestWorld.World,
-            chart.Name,
-            new Vector3d(9, 0, 0)).Should().BeFalse();
-    }
-
-    [Fact]
-    public void ManagedTransitionCollectionHelpers_ShouldTrackActiveGeneratedTransitionsWithoutReportingMissingOnes()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        string[,,] map =
-        {
-            {
-                { "S!" },
-                { "L!" }
-            }
-        };
-
-        TraversalBuildResult buildResult = new TraversalAuthoringMap(
-            chartName: "ManagedPairChart",
-            sourceMap: map,
-            minBounds: Vector3d.Zero,
-            interval: Fixed64.One).Build();
-
-        buildResult.GeneratedTransitions.Should().NotBeEmpty();
-        PathManager.Register(buildResult).Should().BeTrue();
-
-        NavigationChartRegistration state = new(buildResult.Chart, registrationOrder: 1, buildResult.GeneratedTransitionIdPrefix);
-        foreach (TraversalTransition transition in buildResult.GeneratedTransitions)
-            state.TransitionIds.Add(transition.Id);
-
-        SwiftHashSet<string> desiredTransitionIds = new();
-        SwiftHashSet<string> activeTransitionIds = new();
-        TraversalTransition[] missingTransitions = ReflectionUtility.InvokePrivateStatic<TraversalTransition[]>(
-            typeof(PathManager),
-            "CollectManagedGeneratedTransitionsForChart",
-            new[]
-            {
-                typeof(GridWorld),
-                typeof(NavigationChart),
-                typeof(NavigationChartRegistration),
-                typeof(SwiftHashSet<string>),
-                typeof(SwiftHashSet<string>)
-            },
-            TestWorld.World,
-            buildResult.Chart,
-            state,
-            desiredTransitionIds,
-            activeTransitionIds);
-
-        desiredTransitionIds.Count.Should().Be(buildResult.GeneratedTransitions.Length);
-        activeTransitionIds.Count.Should().Be(buildResult.GeneratedTransitions.Length);
-        missingTransitions.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void ManagedTransitionCollectionHelpers_ShouldReportMissingGeneratedTransitions_WhenStateIsEmpty()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        string[,,] map =
-        {
-            {
-                { "S!" },
-                { "L!" }
-            }
-        };
-
-        TraversalBuildResult buildResult = new TraversalAuthoringMap(
-            chartName: "ManagedMissingChart",
-            sourceMap: map,
-            minBounds: Vector3d.Zero,
-            interval: Fixed64.One).Build();
-        PathManager.Register(buildResult).Should().BeTrue();
-
-        NavigationChartRegistration state = new(buildResult.Chart, registrationOrder: 1, buildResult.GeneratedTransitionIdPrefix);
-        SwiftHashSet<string> desiredTransitionIds = new();
-        SwiftHashSet<string> activeTransitionIds = new();
-
-        TraversalTransition[] missingTransitions = ReflectionUtility.InvokePrivateStatic<TraversalTransition[]>(
-            typeof(PathManager),
-            "CollectManagedGeneratedTransitionsForChart",
-            new[]
-            {
-                typeof(GridWorld),
-                typeof(NavigationChart),
-                typeof(NavigationChartRegistration),
-                typeof(SwiftHashSet<string>),
-                typeof(SwiftHashSet<string>)
-            },
-            TestWorld.World,
-            buildResult.Chart,
-            state,
-            desiredTransitionIds,
-            activeTransitionIds);
-
-        missingTransitions.Should().HaveCount(buildResult.GeneratedTransitions.Length);
-        desiredTransitionIds.Count.Should().Be(buildResult.GeneratedTransitions.Length);
-        activeTransitionIds.Count.Should().Be(buildResult.GeneratedTransitions.Length);
-    }
-
-    [Fact]
-    public void ManagedTransitionCollectionHelpers_ShouldTrackInactivePairsWithoutActivatingThem()
-    {
-        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-
-        string[,,] map =
-        {
-            {
-                { "S!" },
-                { "L!" }
-            }
-        };
-
-        TraversalBuildResult buildResult = new TraversalAuthoringMap(
-            chartName: "ManagedInactivePairChart",
-            sourceMap: map,
-            minBounds: Vector3d.Zero,
-            interval: Fixed64.One).Build();
-
-        TraversalTransition sampleTransition = buildResult.GeneratedTransitions[0];
-        buildResult.Chart.TryWorldToIndex(sampleTransition.Source.Position, out int firstX, out int firstY, out int firstZ)
-            .Should().BeTrue();
-        buildResult.Chart.TryWorldToIndex(sampleTransition.Destination.Position, out int secondX, out int secondY, out int secondZ)
-            .Should().BeTrue();
-
-        NavigationChartRegistration state = new(buildResult.Chart, registrationOrder: 1, buildResult.GeneratedTransitionIdPrefix);
-        SwiftHashSet<string> desiredTransitionIds = new();
-        SwiftHashSet<string> activeTransitionIds = new();
-        SwiftList<TraversalTransition> missingTransitions = new();
-
-        ReflectionUtility.InvokePrivateStatic<object>(
-            typeof(PathManager),
-            "CollectManagedGeneratedTransitionsForPair",
-            new[]
-            {
-                typeof(GridWorld),
-                typeof(NavigationChart),
-                typeof(NavigationChartRegistration),
-                typeof(int),
-                typeof(int),
-                typeof(int),
-                typeof(int),
-                typeof(int),
-                typeof(int),
-                typeof(SwiftHashSet<string>),
-                typeof(SwiftHashSet<string>),
-                typeof(SwiftList<TraversalTransition>)
-            },
-            TestWorld.World,
-            buildResult.Chart,
-            state,
-            firstX,
-            firstY,
-            firstZ,
-            secondX,
-            secondY,
-            secondZ,
-            desiredTransitionIds,
-            activeTransitionIds,
-            missingTransitions);
-
-        desiredTransitionIds.Should().NotBeEmpty();
-        activeTransitionIds.Should().BeEmpty();
-        missingTransitions.Should().NotBeEmpty();
-    }
-
-    [Fact]
     public void ResolvedVoxelStateHelpers_ShouldAddRemoveAndIgnoreNonOwners()
     {
         TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         NavigationChart chart = PathTestFactory.BuildSinglePointMap("ResolvedVoxelChart", Vector3d.Zero);
-        NavigationChartRegistration registration = new(chart, registrationOrder: 1, chart.Name);
+        NavigationChartRegistration registration = new(chart, registrationOrder: 1);
         Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> resolvedStates =
@@ -962,7 +554,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     }
 
     [Fact]
-    public void ChartUpdateHelpers_ShouldReturnEarlyForDeferredChartsWhileTrackingRefresh()
+    public void ChartUpdateHelper_ShouldReturnEarlyForDeferredChart()
     {
         TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
@@ -973,8 +565,6 @@ public sealed class PathManagerCoverageTailTests : IDisposable
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = new();
         SwiftHashSet<string> invalidatedChartKeys = new();
-        SwiftHashSet<string> managedChartsToRefresh = new();
-
         ReflectionUtility.InvokePrivateStatic<bool>(
             typeof(PathManager),
             "TryApplyChartCellUpdate",
@@ -987,7 +577,6 @@ public sealed class PathManagerCoverageTailTests : IDisposable
                 typeof(int),
                 typeof(NavigationChartCell),
                 typeof(SwiftHashSet<SolidChartPartition>),
-                typeof(SwiftHashSet<string>),
                 typeof(SwiftHashSet<string>)
             },
             TestWorld.World,
@@ -997,42 +586,10 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             1,
             NavigationChartCell.Liquid,
             partitionsToRebind,
-            invalidatedChartKeys,
-            managedChartsToRefresh).Should().BeTrue();
+            invalidatedChartKeys).Should().BeTrue();
 
-        managedChartsToRefresh.Should().Contain(chart.Name);
         invalidatedChartKeys.Should().BeEmpty();
         partitionsToRebind.Should().BeEmpty();
-    }
-
-    private static TraversalTransition CreateTransition(string id, Vector3d source, Vector3d destination)
-    {
-        return new TraversalTransition(
-            id,
-            TraversalTransitionType.Jump,
-            TraversalTransitionAnchor.Solid(source),
-            TraversalTransitionAnchor.Solid(destination));
-    }
-
-    private static NavigationChartRegistration CreateRegistration(
-        string chartName,
-        string transitionPrefix,
-        int priority)
-    {
-        bool[,,] data =
-        {
-            {
-                { true }
-            }
-        };
-
-        NavigationChart chart = NavigationChart.From3D(
-            chartName,
-            data,
-            Vector3d.Zero,
-            Fixed64.One,
-            priority: priority);
-        return new NavigationChartRegistration(chart, registrationOrder: 1, transitionPrefix);
     }
 
     private static GridEventInfo CreateGridEventInfo(

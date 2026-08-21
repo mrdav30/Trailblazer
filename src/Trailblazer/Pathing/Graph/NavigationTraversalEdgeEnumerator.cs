@@ -20,13 +20,6 @@ internal enum NavigationTraversalEdgeKind : byte
     Transition = 2
 }
 
-/// <summary>Tags transition identity so explicit and procedural IDs cannot collide.</summary>
-internal enum NavigationTransitionIdentityKind : byte
-{
-    Definition = 0,
-    Rule = 1
-}
-
 /// <summary>Reports bounded progress through canonical outgoing traversal edges.</summary>
 internal enum NavigationTraversalEdgeAdvanceStatus : byte
 {
@@ -477,7 +470,7 @@ internal struct NavigationTraversalEdgeEnumerator
         CurrentTransitionType = isRule ? rule.Type : transition.Definition.Type;
         CurrentTransitionHints = isRule
             ? rule.LocomotionHints
-            : TraversalTransitionLocomotionHints.None;
+            : transition.Definition.LocomotionHints;
         CurrentTransitionIdentityKind = isRule
             ? NavigationTransitionIdentityKind.Rule
             : NavigationTransitionIdentityKind.Definition;

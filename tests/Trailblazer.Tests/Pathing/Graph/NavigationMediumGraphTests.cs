@@ -1630,7 +1630,9 @@ public sealed class NavigationMediumGraphTests
         maxOverlayTransitionsPerMap: 1,
         maxOverlayCells: maximumOverlayCells,
         maxOverlayConnections: 1,
-        maxOverlayTransitions: 1);
+        maxOverlayTransitions: 1,
+        maxTransitionRulesPerMap: 1,
+        maxTransitionRules: 1);
 
     private static GridConfiguration RectangularConfiguration(GridStorageKind storage) => new(
         Vector3d.Zero,

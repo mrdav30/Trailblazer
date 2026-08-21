@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using Chronicler;
 using FixedMathSharp;
 using GridForge.Grids;
@@ -17,7 +18,7 @@ namespace Trailblazer.Navigation.Steering;
 /// <summary>
 /// Handles agent steering and path navigation logic by coordinating pathfinding, movement,
 /// and group behaviors within a lockstep simulation. Supports both direct line-of-sight travel
-/// and guided path traversal using IGuide implementations like AStar or FlowField.
+/// and graph-backed A* or flow-field guidance.
 /// </summary>
 public partial class NavSteering : IRecordable
 {
@@ -104,16 +105,6 @@ public partial class NavSteering : IRecordable
     protected bool _hasLineOfSightPath;
 
     /// <summary>
-    /// Whether the currently resolved guide-backed route requires climb intent to remain engaged.
-    /// </summary>
-    protected bool _currentRouteRequestsClimbIntent;
-
-    /// <summary>
-    /// Version token that changes when the resolved route state relevant to guided climb intent changes.
-    /// </summary>
-    protected int _currentRouteTopologyVersion;
-
-    /// <summary>
     /// Has this unit arrived at destination?
     /// </summary>
     protected bool _isAtDestination;
@@ -137,8 +128,6 @@ public partial class NavSteering : IRecordable
 
     private Vector3d _requestedDestination;
 
-    private Fixed64 _lastUnitSize;
-
     /// <inheritdoc cref="DefaultPathRecheckCooldown"/>
     public int PathRecheckCooldownFrames = DefaultPathRecheckCooldown;
 
@@ -149,14 +138,6 @@ public partial class NavSteering : IRecordable
     public Vector3d LastTargetDirection => _lastTargetDirection;
 
     /// <summary>
-    /// The pathfinding configuration used for the current movement request, including size, and type.
-    /// </summary>
-    private IPathRequest? _currentRequest;
-
-    /// <inheritdoc cref="_currentRequest"/>
-    public IPathRequest? CurrentRequest => _currentRequest;
-
-    /// <summary>
     /// Gets the immutable graph-backed surface query owned by the current steering session.
     /// </summary>
     private PathQuery? _currentQuery;
@@ -164,19 +145,11 @@ public partial class NavSteering : IRecordable
     /// <inheritdoc cref="_currentQuery"/>
     public PathQuery? CurrentQuery => _currentQuery;
 
-    /// <summary>
-    /// Current guide used to compute the desired path or flow.
-    /// </summary>
-    private VolumeGuide? _volumeGuide;
-
     private NavigationGuideLease? _navigationGuideLease;
 
     private NavigationFlowFieldLease? _navigationFlowFieldLease;
 
-    private HybridRouteGuide? _hybridRouteGuide;
-
-    /// <inheritdoc cref="_volumeGuide"/>
-    public VolumeGuide? VolumeGuide => _volumeGuide;
+    private Navigator? _pendingTransitionOwner;
 
     /// <inheritdoc cref="_shouldMove"/>
     public bool ShouldMove => _shouldMove;
@@ -187,12 +160,6 @@ public partial class NavSteering : IRecordable
     /// <inheritdoc cref="_hasLineOfSightPath"/>
     public bool HasLineOfSightPath => _hasLineOfSightPath;
 
-    /// <inheritdoc cref="_currentRouteRequestsClimbIntent"/>
-    public bool CurrentRouteRequestsClimbIntent => _currentRouteRequestsClimbIntent;
-
-    /// <inheritdoc cref="_currentRouteTopologyVersion"/>
-    public int CurrentRouteTopologyVersion => _currentRouteTopologyVersion;
-
     /// <summary>
     /// Current pathfinding search status.
     /// </summary>
@@ -202,10 +169,6 @@ public partial class NavSteering : IRecordable
     /// Represents the cooldown period, in milliseconds, before the next path check can be performed.
     /// </summary>
     protected int _pathCheckCooldown;
-
-    private bool _currentRouteHasResolvedTopology;
-
-    private bool _currentRouteUsesGuideTopology;
 
     /// <summary>
     /// How far we move each update
@@ -225,12 +188,28 @@ public partial class NavSteering : IRecordable
     /// </summary>
     public bool HasNavigationGuidance => !HasLineOfSightPath
         && (_navigationGuideLease != null
-            || _navigationFlowFieldLease != null
-            || _hybridRouteGuide != null
-            || _volumeGuide != null);
+            || _navigationFlowFieldLease != null);
 
     /// <inheritdoc cref="_isAtDestination"/>
     public bool IsAtDestination => _isAtDestination;
+
+    internal void BindPendingTransitionOwner(Navigator owner)
+    {
+        if (_pendingTransitionOwner != null
+            && !ReferenceEquals(_pendingTransitionOwner, owner))
+        {
+            throw new InvalidOperationException(
+                "NavSteering is already bound to a different pending-transition owner.");
+        }
+
+        _pendingTransitionOwner = owner;
+    }
+
+    internal void UnbindPendingTransitionOwner(Navigator owner)
+    {
+        if (ReferenceEquals(_pendingTransitionOwner, owner))
+            _pendingTransitionOwner = null;
+    }
 
     #endregion
 

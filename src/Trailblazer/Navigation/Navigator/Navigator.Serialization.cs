@@ -8,113 +8,135 @@
 using System;
 using Chronicler;
 using FixedMathSharp;
+using Trailblazer.Navigation.Motor;
+using Trailblazer.Navigation.Steering;
+using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
 
 public abstract partial class Navigator
 {
-    private enum SerializedGuidedPathMode
-    {
-        Invalid = -1,
-        Graph = 2
-    }
+    private const int CurrentSerializationSchemaVersion = 1;
 
     #region Serialization
 
     /// <inheritdoc />
     public virtual void RecordData(IChronicler chronicler)
     {
-        var navigationProfileRecord = chronicler.Mode == SerializationMode.Loading
+        bool isLoading = chronicler.Mode == SerializationMode.Loading;
+        int schemaVersion = isLoading ? 0 : CurrentSerializationSchemaVersion;
+        var navigationProfileRecord = isLoading
             ? new NavigationAgentProfileRecord()
             : new NavigationAgentProfileRecord(_navigationProfile);
-        SerializedGuidedPathMode serializedGuidedPathMode = chronicler.Mode == SerializationMode.Loading
-            ? SerializedGuidedPathMode.Invalid
-            : SerializedGuidedPathMode.Graph;
-        GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff =
-            chronicler.Mode == SerializationMode.Loading
-                ? new GuidedVolumeExitHandoff()
-                : _pendingGuidedVolumeExitHandoff;
+        Vector3d position = isLoading ? Vector3d.Zero : _position;
+        TrekCondition frameCondition = isLoading ? new TrekCondition() : _frameCondition.Clone();
+        var pathSession = new NavigatorPathSessionRecord();
+        if (!isLoading)
+            pathSession.Capture(_steering?.CurrentQuery);
 
+        // Validate the exact schema, shell profile, restored frame, and durable
+        // query before any state on the existing runtime shell is changed.
+        RecordValues.Look(chronicler, ref schemaVersion, "SchemaVersion", 0);
         RecordDeep.Look(chronicler, ref navigationProfileRecord, "NavigationProfile");
-        if (chronicler.Mode == SerializationMode.Loading
-            && (!navigationProfileRecord.TryCreate(out NavigationAgentProfile recordedProfile)
-                || recordedProfile != _navigationProfile))
-        {
-            throw new InvalidOperationException(
-                "Serialized navigation profile must exactly match the configured Navigator shell.");
-        }
+        RecordValues.Look(chronicler, ref position, "Position", Vector3d.Zero);
+        RecordDeepStruct.Look(chronicler, ref frameCondition, "FrameCondition");
+        RecordDeep.Look(chronicler, ref pathSession, "PathSession");
 
-        RecordValues.Look(
-            chronicler,
-            ref serializedGuidedPathMode,
-            "GuidedPathMode",
-            SerializedGuidedPathMode.Invalid);
-        if (chronicler.Mode == SerializationMode.Loading
-            && serializedGuidedPathMode != SerializedGuidedPathMode.Graph)
+        PathQuery? restoredQuery = null;
+        if (isLoading)
         {
-            throw new InvalidOperationException(
-                "Serialized guided path mode is missing, retired, or unsupported.");
-        }
-
-        RecordValues.Look(chronicler, ref _position, "Position", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _lastPosition, "LastPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _rotation, "Rotation", FixedQuaternion.Identity);
-        RecordValues.Look(chronicler, ref _velocity, "Velocity", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _speed, "Speed", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref _acceleration, "Acceleration", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _guidedVolumeHeuristic, "GuidedAStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref _globalId, "GlobalId", Guid.Empty);
-        RecordValues.Look(chronicler, ref _occupantGroupId, "OccupantGroupId", (byte)1);
-        RecordValues.Look(chronicler, ref _isLockedOn, "IsLockedOn", false);
-        RecordValues.Look(chronicler, ref _stuckThresholdSpeed, "StuckThresholdSpeed", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref _isGuideded, "IsGuideded", false);
-        RecordValues.Look(chronicler, ref _guidedClimbIntent, "GuidedClimbIntent", false);
-        RecordValues.Look(chronicler, ref _guidedClimbIntentMode, "GuidedClimbIntentMode", GuidedClimbIntentMode.Auto);
-        RecordValues.Look(chronicler, ref _lastSeenGuidedRouteTopologyVersion, "LastSeenGuidedRouteTopologyVersion", 0);
-        RecordDeepStruct.Look(chronicler, ref _frameCondition, "FrameCondition");
-        RecordDeepStruct.Look(chronicler, ref _frameRequest, "FrameRequest");
-        RecordDeep.Look(chronicler, ref _heightmapGrounding, "HeightmapGrounding");
-        RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff!, "PendingGuidedVolumeExitHandoff");
-        if (_steering != null)
-        {
-            RecordDeep.Look(chronicler, ref _steering, "Steering");
-            if (chronicler.Mode == SerializationMode.Loading
-                && _steering.CurrentQuery is PathQuery restoredQuery
-                && restoredQuery.Agent != _navigationProfile)
+            if (schemaVersion != CurrentSerializationSchemaVersion)
             {
-                _steering.Reset();
                 throw new InvalidOperationException(
-                    "Serialized graph query profile must exactly match the configured Navigator shell.");
+                    "Serialized Navigator schema is missing, retired, or unsupported.");
             }
-            if (chronicler.Mode == SerializationMode.Loading)
-                _steering.RestoreFlowQueryFromLoadedFoot(FootPosition);
+            if (!navigationProfileRecord.TryCreate(out NavigationAgentProfile recordedProfile)
+                || recordedProfile != _navigationProfile)
+            {
+                throw new InvalidOperationException(
+                    "Serialized navigation profile must exactly match the configured Navigator shell.");
+            }
+            if (!TraversalTransitionDefinition.IsKnownMedium(frameCondition.Medium))
+            {
+                throw new InvalidOperationException(
+                    "Serialized Navigator traversal medium is missing or unsupported.");
+            }
+
+            Vector3d loadedFootPosition =
+                position + Vector3d.Down * _navigationProfile.Shape.RootToFootOffsetY;
+            if (!pathSession.TryCreateQuery(
+                    loadedFootPosition,
+                    frameCondition.Medium,
+                    _navigationProfile,
+                    out restoredQuery)
+                || (restoredQuery.HasValue && _steering == null))
+            {
+                throw new InvalidOperationException(
+                    "Serialized Navigator path session is missing, invalid, or unsupported.");
+            }
+
+            ValidateNestedRecords(chronicler, frameCondition);
         }
+
+        Vector3d lastPosition = isLoading ? Vector3d.Zero : _lastPosition;
+        FixedQuaternion rotation = isLoading ? FixedQuaternion.Identity : _rotation;
+        Vector3d velocity = isLoading ? Vector3d.Zero : _velocity;
+        Fixed64 speed = isLoading ? Fixed64.Zero : _speed;
+        Vector3d acceleration = isLoading ? Vector3d.Zero : _acceleration;
+        Guid globalId = isLoading ? Guid.Empty : _globalId;
+        byte occupantGroupId = isLoading ? (byte)1 : _occupantGroupId;
+        bool isLockedOn = !isLoading && _isLockedOn;
+        Fixed64 stuckThresholdSpeed = isLoading ? Fixed64.Zero : _stuckThresholdSpeed;
+        bool isGuideded = !isLoading && _isGuideded;
+        TrekRequest frameRequest = isLoading ? new TrekRequest() : _frameRequest.Clone();
+        NavigatorHeightmapGroundingSettings heightmapGrounding = isLoading
+            ? new NavigatorHeightmapGroundingSettings()
+            : _heightmapGrounding;
+
+        RecordValues.Look(chronicler, ref lastPosition, "LastPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref rotation, "Rotation", FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref velocity, "Velocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref speed, "Speed", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref acceleration, "Acceleration", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref globalId, "GlobalId", Guid.Empty);
+        RecordValues.Look(chronicler, ref occupantGroupId, "OccupantGroupId", (byte)1);
+        RecordValues.Look(chronicler, ref isLockedOn, "IsLockedOn", false);
+        RecordValues.Look(chronicler, ref stuckThresholdSpeed, "StuckThresholdSpeed", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref isGuideded, "IsGuideded", false);
+        RecordDeepStruct.Look(chronicler, ref frameRequest, "FrameRequest");
+        RecordDeep.Look(chronicler, ref heightmapGrounding, "HeightmapGrounding");
+
+        if (isLoading)
+        {
+            _position = position;
+            _lastPosition = lastPosition;
+            _rotation = rotation;
+            _velocity = velocity;
+            _speed = speed;
+            _acceleration = acceleration;
+            _globalId = globalId;
+            _occupantGroupId = occupantGroupId;
+            _isLockedOn = isLockedOn;
+            _stuckThresholdSpeed = stuckThresholdSpeed;
+            _isGuideded = isGuideded;
+            _frameCondition = frameCondition;
+            _frameRequest = frameRequest;
+            _heightmapGrounding = heightmapGrounding;
+        }
+
+        if (_steering != null)
+            RecordDeep.Look(chronicler, ref _steering, "Steering");
         if (_turning != null)
             RecordDeep.Look(chronicler, ref _turning, "Turning");
         if (_motor != null)
             RecordDeep.Look(chronicler, ref _motor, "Motor");
 
-        if (chronicler.Mode == SerializationMode.Loading)
+        if (isLoading)
         {
             TrailblazerWorldContext context = RequireContext();
-            if (pendingGuidedVolumeExitHandoff?.RejectedOnLoad == true)
-            {
-                throw new InvalidOperationException(
-                    "Serialized volume-exit follow-up is malformed or unsupported.");
-            }
-
-            if (pendingGuidedVolumeExitHandoff?.IsValid == true
-                && pendingGuidedVolumeExitHandoff.FollowupQuery is PathQuery followupQuery
-                && followupQuery.Agent != _navigationProfile)
-            {
-                throw new InvalidOperationException(
-                    "Serialized volume-exit follow-up profile must exactly match the configured Navigator shell.");
-            }
-
-            _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true
-                ? pendingGuidedVolumeExitHandoff
-                : null;
+            _pendingTransition = null;
+            _steering?.RestoreQueryFromLoadedSession(restoredQuery);
 
             Forward = Rotation != FixedQuaternion.Identity
                 ? Rotation.Rotate(Vector3d.Forward)
@@ -128,6 +150,7 @@ public abstract partial class Navigator
             _isInitialized = Motor != null;
 
             _steering?.BindContext(context);
+            _steering?.BindPendingTransitionOwner(this);
             _steering?.UpdateOwnerRadius(Radius);
 
             _motor?.BindContext(context);
@@ -136,6 +159,55 @@ public abstract partial class Navigator
             _turning?.OnInitialize(Radius);
 
             CheckVoxelOccupancy(true);
+        }
+    }
+
+    private void ValidateNestedRecords(IChronicler chronicler, TrekCondition frameCondition)
+    {
+        TrailblazerWorldContext context = RequireContext();
+        if (_steering != null)
+        {
+            var steering = new NavSteering(context, Radius);
+            RecordDeep.Look(chronicler, ref steering, "Steering");
+            if (steering.BrakingPower < Fixed64.Zero
+                || steering.StopMultiplier < Fixed64.Zero
+                || steering.GroupFactor < Fixed64.Zero
+                || steering.AvoidFactor < Fixed64.Zero)
+            {
+                throw new InvalidOperationException(
+                    "Serialized steering limits must be non-negative.");
+            }
+        }
+
+        if (_turning != null)
+        {
+            var turning = new NavTurning(context, Radius);
+            RecordDeep.Look(chronicler, ref turning, "Turning");
+            if (turning.TurnRate < Fixed64.Zero)
+            {
+                throw new InvalidOperationException(
+                    "Serialized turn rate must be non-negative.");
+            }
+        }
+
+        if (_motor != null)
+        {
+            NavMotor motor = NavMotor.CreateNew(
+                context,
+                frameCondition,
+                CreateLocomotionProfile());
+            RecordDeep.Look(chronicler, ref motor, "Motor");
+            if (motor.Handler.Move.MaxSlowSpeed < Fixed64.Zero
+                || motor.Handler.Move.MaxModerateSpeed < Fixed64.Zero
+                || motor.Handler.Move.MaxFastSpeed < Fixed64.Zero
+                || motor.Handler.Move.MaxSidewaysSpeed < Fixed64.Zero
+                || motor.Handler.Move.MaxBackwardsSpeed < Fixed64.Zero
+                || motor.Handler.Move.MaxGroundAcceleration < Fixed64.Zero
+                || motor.Handler.Move.MaxAirAcceleration < Fixed64.Zero)
+            {
+                throw new InvalidOperationException(
+                    "Serialized movement limits must be non-negative.");
+            }
         }
     }
 

@@ -38,43 +38,45 @@ public sealed class PathQueryContractsTests
     }
 
     [Fact]
-    public void TraversalIntent_ShouldPreserveExplicitOrAutomaticSelection()
+    public void TraversalIntent_ShouldPreserveExactMediumSelection()
     {
         var explicitIntent = new TraversalIntent(
-            TraversalDomain.Volume,
             TraversalMedium.Liquid,
-            TraversalDomain.Surface);
+            TraversalMedia.Liquid | TraversalMedia.Gas);
         var same = new TraversalIntent(
-            TraversalDomain.Volume,
             TraversalMedium.Liquid,
-            TraversalDomain.Surface);
-        var automatic = new TraversalIntent(
-            TraversalDomain.Automatic,
-            TraversalMedium.Unknown,
-            TraversalDomain.Automatic);
+            TraversalMedia.Liquid | TraversalMedia.Gas);
+        var different = new TraversalIntent(
+            TraversalMedium.Gas,
+            TraversalMedia.Liquid | TraversalMedia.Gas);
 
-        explicitIntent.StartDomain.Should().Be(TraversalDomain.Volume);
-        explicitIntent.CurrentMedium.Should().Be(TraversalMedium.Liquid);
-        explicitIntent.TargetDomain.Should().Be(TraversalDomain.Surface);
+        explicitIntent.StartMedium.Should().Be(TraversalMedium.Liquid);
+        explicitIntent.TargetMedia.Should().Be(TraversalMedia.Liquid | TraversalMedia.Gas);
         explicitIntent.Should().Be(same);
         explicitIntent.GetHashCode().Should().Be(same.GetHashCode());
-        explicitIntent.Should().NotBe(automatic);
+        explicitIntent.Should().NotBe(different);
     }
 
     [Fact]
-    public void TraversalIntent_ShouldRejectUnknownAndConflictingValues()
+    public void TraversalIntent_ShouldRejectUnknownStartAndInvalidTargetMedia()
     {
-        Action unknownStart = () => _ = new TraversalIntent((TraversalDomain)99, TraversalMedium.Unknown, TraversalDomain.Surface);
-        Action unknownTarget = () => _ = new TraversalIntent(TraversalDomain.Surface, TraversalMedium.Solid, (TraversalDomain)99);
-        Action unknownMedium = () => _ = new TraversalIntent(TraversalDomain.Automatic, (TraversalMedium)99, TraversalDomain.Surface);
-        Action surfaceVolumeMedium = () => _ = new TraversalIntent(TraversalDomain.Surface, TraversalMedium.Liquid, TraversalDomain.Surface);
-        Action volumeSolidMedium = () => _ = new TraversalIntent(TraversalDomain.Volume, TraversalMedium.Solid, TraversalDomain.Volume);
+        Action unknownStart = () => _ = new TraversalIntent(
+            TraversalMedium.Unknown,
+            TraversalMedia.Solid);
+        Action outOfRangeStart = () => _ = new TraversalIntent(
+            (TraversalMedium)99,
+            TraversalMedia.Solid);
+        Action emptyTarget = () => _ = new TraversalIntent(
+            TraversalMedium.Solid,
+            TraversalMedia.None);
+        Action unknownTarget = () => _ = new TraversalIntent(
+            TraversalMedium.Solid,
+            (TraversalMedia)(1 << 20));
 
         unknownStart.Should().Throw<ArgumentOutOfRangeException>();
-        unknownTarget.Should().Throw<ArgumentOutOfRangeException>();
-        unknownMedium.Should().Throw<ArgumentOutOfRangeException>();
-        surfaceVolumeMedium.Should().Throw<ArgumentException>();
-        volumeSolidMedium.Should().Throw<ArgumentException>();
+        outOfRangeStart.Should().Throw<ArgumentOutOfRangeException>();
+        emptyTarget.Should().Throw<ArgumentException>();
+        unknownTarget.Should().Throw<ArgumentException>();
     }
 
     [Fact]
@@ -138,10 +140,37 @@ public sealed class PathQueryContractsTests
             valid.Budget,
             allowTransitions: false,
             new FlowFieldQueryOptions(Fixed64.One));
+        Action targetOutsideAgent = () => _ = new PathQuery(
+            valid.Start,
+            valid.End,
+            valid.Agent,
+            valid.AreaPolicy,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Gas),
+            PathAlgorithm.AStar,
+            valid.Budget,
+            allowTransitions: true);
 
         invalidAgent.Should().Throw<ArgumentException>();
         unknownAlgorithm.Should().Throw<ArgumentOutOfRangeException>();
         flowOptionsOnAStar.Should().Throw<ArgumentException>();
+        targetOutsideAgent.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void PathQueryRecord_ShouldRoundTripExactIntent(bool useMemoryPack)
+    {
+        PathQuery query = CreateQuery();
+        var source = new PathQueryRecord(query);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = new PathQueryRecord();
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.Query.Should().Be(query);
     }
 
     private static PathQuery CreateQuery(bool allowTransitions = true)
@@ -161,7 +190,9 @@ public sealed class PathQueryContractsTests
             new NavigationEndpoint(new Vector3d((Fixed64)4, Fixed64.Zero, (Fixed64)5), "Caves", EndpointResolutionPolicy.NearestNavigable, (Fixed64)6),
             agent,
             new NavigationAreaPolicyKey("default", 1),
-            new TraversalIntent(TraversalDomain.Surface, TraversalMedium.Solid, TraversalDomain.Volume),
+            new TraversalIntent(
+                TraversalMedium.Solid,
+                TraversalMedia.Solid | TraversalMedia.Liquid),
             PathAlgorithm.FlowField,
             budget,
             allowTransitions,

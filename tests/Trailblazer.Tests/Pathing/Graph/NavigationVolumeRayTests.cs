@@ -9,7 +9,6 @@ using System;
 using System.Reflection;
 using FixedMathSharp;
 using GridForge.Configuration;
-using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
@@ -319,7 +318,7 @@ public sealed class NavigationVolumeRayTests
     }
 
     [Fact]
-    public void Ray_ShouldRefuseVolumeGuideMeterUntilFlowIntegration()
+    public void Ray_ShouldRefuseGuideSampleMeterWithoutSelectedFlowEdge()
     {
         using TrailblazerWorldContext context = CreateVerticalContext(TraversalMedia.Gas);
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
@@ -583,7 +582,7 @@ public sealed class NavigationVolumeRayTests
             TraversalMedium.Gas,
             targetAddress,
             TraversalMedium.Gas,
-            additionalCost: Fixed64.Zero);
+            actionCost: Fixed64.Zero);
         VoxelIndex[] indices = { source, target };
         using TrailblazerWorldContext context = CreateContext(
             GridTopologyKind.RectangularPrism,

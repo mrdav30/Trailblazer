@@ -2008,5 +2008,7 @@ public sealed class NavigationOperationProcessorTests
             maxOverlayTransitionsPerMap: 1_000,
             maxOverlayCells: 10_000,
             maxOverlayConnections: 10_000,
-            maxOverlayTransitions: 10_000);
+            maxOverlayTransitions: 10_000,
+            maxTransitionRulesPerMap: 1_000,
+            maxTransitionRules: 10_000);
 }

@@ -674,17 +674,17 @@ public class NavigationRayBenchmarks
 
         internal long Run()
         {
-            LastStatus = _guide.TrySample(_actualFoot, Budget, out Vector3d heading);
+            LastStatus = _guide.TrySample(_actualFoot, Budget, out NavigationFlowSample sample);
             if (LastStatus != NavigationGuideStatus.Success
-                || heading != Vector3d.Backward
+                || sample.Heading != Vector3d.Backward
                 || _guide.Status != NavigationGuideStatus.Success
                 || ActiveLeaseCount != 1)
             {
                 throw new InvalidOperationException(
-                    $"Flow rejoin preflight failed: status={LastStatus}, heading={heading}, "
+                    $"Flow rejoin preflight failed: status={LastStatus}, heading={sample.Heading}, "
                     + $"lease={_guide.Status}, active={ActiveLeaseCount}.");
             }
-            return _guide.OriginIntegrationCost.m_rawValue ^ heading.GetHashCode() ^ 1L;
+            return _guide.OriginIntegrationCost.m_rawValue ^ sample.Heading.GetHashCode() ^ 1L;
         }
 
         public void Dispose()
@@ -932,7 +932,6 @@ public class NavigationRayBenchmarks
         TraversalCapability.None);
 
     private static TraversalIntent SurfaceIntent => new(
-        TraversalDomain.Surface,
         TraversalMedium.Solid,
-        TraversalDomain.Surface);
+        TraversalMedia.Solid);
 }

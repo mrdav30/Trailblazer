@@ -87,7 +87,7 @@ public sealed class NavigationMapBuilder
     /// <summary>
     /// Sets the optional complete fallback payload used when no explicit cell wins.
     /// </summary>
-    internal NavigationMapBuilder SetDefaultCell(NavigationCell? defaultCell)
+    public NavigationMapBuilder SetDefaultCell(NavigationCell? defaultCell)
     {
         _defaultCell = defaultCell;
         return this;
@@ -113,7 +113,7 @@ public sealed class NavigationMapBuilder
     }
 
     /// <summary>Adds one bounded procedural semantic transition rule.</summary>
-    internal NavigationMapBuilder AddTransitionRule(TraversalTransitionRule rule)
+    public NavigationMapBuilder AddTransitionRule(TraversalTransitionRule rule)
     {
         _transitionRules.Add(rule);
         return this;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using FluentAssertions;
@@ -70,9 +71,11 @@ public sealed class NavigationContractArchitectureTests
         typeof(PreparedNavigationMap),
         typeof(PreparedNavigationOverlay),
         typeof(TraversalCapability),
-        typeof(TraversalDomain),
         typeof(TraversalIntent),
         typeof(TraversalTransitionDefinition),
+        typeof(TraversalTransitionLocomotionHints),
+        typeof(TraversalTransitionRule),
+        typeof(TraversalTransitionRuleScope),
         typeof(TraversalTransitionOverlayOperation),
         typeof(TraversalTransitionOverlayOperationKind)
     };
@@ -181,6 +184,88 @@ public sealed class NavigationContractArchitectureTests
             "public map identity uses world and grid generation tokens rather than recyclable runtime slots");
     }
 
+    [Fact]
+    public void UnifiedMediumCutover_ShouldRetainOneAuthorityAndNoLegacyProviderOrWireResidue()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string sourceRoot = Path.Combine(repositoryRoot, "src", "Trailblazer");
+        string testRoot = Path.Combine(repositoryRoot, "tests", "Trailblazer.Tests");
+        string benchmarkRoot = Path.Combine(repositoryRoot, "tests", "Trailblazer.Benchmarks");
+        string[] guardFiles =
+        {
+            Path.Combine(testRoot, "Pathing", "Query", "NavigationContractArchitecture.Tests.cs"),
+            Path.Combine(testRoot, "Pathing", "Graph", "NavigationSearchArchitectureTests.cs"),
+            Path.Combine(testRoot, "Phase0", "PublicApiSnapshot.Tests.cs")
+        };
+        string[] runtimeFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.GetFiles(testRoot, "*.cs", SearchOption.AllDirectories))
+            .Concat(Directory.GetFiles(benchmarkRoot, "*.cs", SearchOption.AllDirectories))
+            .Where(path => !guardFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        string runtimeText = string.Join('\n', runtimeFiles.Select(File.ReadAllText));
+        string[] retiredTokens =
+        {
+            "TraversalDomain",
+            "VolumePathRequest",
+            "HybridPathRequest",
+            "VolumeGuide",
+            "VolumeSurveyor",
+            "HybridRoutePlanner",
+            "TraversalTransitionRegistry",
+            "TraversalTransitionQueryCache",
+            "TraversalAuthoringMap",
+            "GeneratedTraversalTransitionBuilder",
+            "PathRequestRecord",
+            "PathGuideFactory",
+            "ReusableSurveyResultCache",
+            "PathHeap",
+            "TryGetCurrentWaypoint",
+            "CurrentRouteTopologyVersion",
+            "CurrentRouteRequestsClimbIntent",
+            "PendingGuidedVolumeExitHandoff",
+            "GuidedVolumeExitPlanner"
+        };
+
+        runtimeText.Should().NotContainAny(retiredTokens);
+
+        AssertSingleFile(sourceRoot, "PathQuery.cs");
+        AssertSingleFile(sourceRoot, "TrailblazerGuideService.cs");
+        AssertSingleFile(sourceRoot, "NavigationAStarPayloadCache.cs");
+        AssertSingleFile(sourceRoot, "NavigationFlowFieldPayloadCache.cs");
+        AssertSingleFile(sourceRoot, "NavigationWorldGraphStore.cs");
+        AssertSingleFile(sourceRoot, "NavigationMapTokenImporter.cs");
+
+        string serializationText = string.Join('\n', new[]
+        {
+            Path.Combine(sourceRoot, "Navigation", "Navigator", "Navigator.Serialization.cs"),
+            Path.Combine(sourceRoot, "Navigation", "Steering", "NavSteering.Serialization.cs"),
+            Path.Combine(sourceRoot, "Navigation", "Steering", "Serialization", "PathQueryRecord.cs"),
+            Path.Combine(sourceRoot, "Navigation", "Steering", "Serialization", "NavigatorPathSessionRecord.cs")
+        }.Select(File.ReadAllText));
+        string[] retiredWireKeys =
+        {
+            "\"PathRequest\"",
+            "\"UnitSize\"",
+            "\"AllowUnwalkableEndpoints\"",
+            "\"MaxPathSearchRange\"",
+            "\"AStarHeuristic\"",
+            "\"HasGuide\"",
+            "\"WaypointIndex\"",
+            "\"LastUnitSize\"",
+            "\"CurrentRouteHasResolvedTopology\"",
+            "\"CurrentRouteUsesGuideTopology\"",
+            "\"CurrentRouteRequestsClimbIntent\"",
+            "\"CurrentRouteTopologyVersion\"",
+            "\"GuidedAStarHeuristic\"",
+            "\"GuidedClimbIntent\"",
+            "\"GuidedClimbIntentMode\"",
+            "\"LastSeenGuidedRouteTopologyVersion\"",
+            "\"PendingGuidedVolumeExitHandoff\""
+        };
+
+        serializationText.Should().NotContainAny(retiredWireKeys);
+    }
+
     private static IEnumerable<Type> GetPublicSignatureTypes(Type contractType)
     {
         const BindingFlags Flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
@@ -201,6 +286,25 @@ public sealed class NavigationContractArchitectureTests
             foreach (ParameterInfo parameter in method.GetParameters())
                 yield return parameter.ParameterType;
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory != null
+            && !File.Exists(Path.Combine(directory.FullName, "src", "Trailblazer", "Trailblazer.csproj")))
+        {
+            directory = directory.Parent;
+        }
+
+        directory.Should().NotBeNull("the architecture gate must run beneath the Trailblazer repository");
+        return directory!.FullName;
+    }
+
+    private static void AssertSingleFile(string sourceRoot, string fileName)
+    {
+        Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories)
+            .Should().ContainSingle($"{fileName} is the retained authority");
     }
 
     private static IEnumerable<Type> ExpandTypeGraph(Type type)

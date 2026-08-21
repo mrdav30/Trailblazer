@@ -143,11 +143,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         PathQuery query,
         PathAlgorithm expectedAlgorithm) =>
         query.Algorithm == expectedAlgorithm
-        && expectedAlgorithm is PathAlgorithm.AStar or PathAlgorithm.FlowField
-        && !query.AllowTransitions
-        && query.Traversal.StartDomain != TraversalDomain.Volume
-        && query.Traversal.TargetDomain != TraversalDomain.Volume
-        && query.Traversal.CurrentMedium is TraversalMedium.Unknown or TraversalMedium.Solid;
+        && expectedAlgorithm is PathAlgorithm.AStar or PathAlgorithm.FlowField;
 
     internal NavigationQueryAdmissionStatus Advance(
         int lookupStepLimit,

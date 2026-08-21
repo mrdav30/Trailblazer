@@ -112,10 +112,7 @@ internal static class NavigationGraphBenchmarkScenario
             new NavigationEndpoint(end, mapId),
             profile,
             policyKey,
-            new TraversalIntent(
-                TraversalDomain.Surface,
-                TraversalMedium.Solid,
-                TraversalDomain.Surface),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             budget,
             allowTransitions: false);
@@ -240,7 +237,9 @@ internal static class NavigationGraphBenchmarkScenario
             limits.MaxOverlayTransitionsPerMap,
             limits.MaxOverlayCells,
             limits.MaxOverlayConnections,
-            limits.MaxOverlayTransitions);
+            limits.MaxOverlayTransitions,
+            limits.MaxTransitionRulesPerMap,
+            limits.MaxTransitionRules);
         return new TrailblazerWorldContextSettings(
             largeLimits,
             settings.MaintenanceBudget,
@@ -297,7 +296,9 @@ internal static class NavigationGraphBenchmarkScenario
     {
         if (!configuration.TryNormalize(out NormalizedGridConfiguration binding))
             throw new InvalidOperationException("The graph benchmark configuration is invalid.");
-        return query.WithStartPosition(GetFoot(binding, index));
+        return query.WithStartState(
+            GetFoot(binding, index),
+            query.Traversal.StartMedium);
     }
 
     internal static NavigationFlowQueryResult ExecuteFlow(

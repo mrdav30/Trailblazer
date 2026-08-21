@@ -265,8 +265,38 @@ public static class NavigationMapTokenImporter
         if (!connect)
             return;
 
-        builder.AddTransition(CreateTransition(prefix, TraversalTransitionType.Climb, firstIndex, TraversalMedium.Solid, secondIndex, TraversalMedium.Solid, mapId, TraversalCapability.Climb, Fixed64.One));
-        builder.AddTransition(CreateTransition(prefix, TraversalTransitionType.Climb, secondIndex, TraversalMedium.Solid, firstIndex, TraversalMedium.Solid, mapId, TraversalCapability.Climb, Fixed64.One));
+        TraversalTransitionLocomotionHints firstToSecondHints =
+            TraversalTransitionLocomotionHints.RequestClimb
+            | (secondClimb
+                ? TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion
+                : TraversalTransitionLocomotionHints.None);
+        TraversalTransitionLocomotionHints secondToFirstHints =
+            TraversalTransitionLocomotionHints.RequestClimb
+            | (firstClimb
+                ? TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion
+                : TraversalTransitionLocomotionHints.None);
+        builder.AddTransition(CreateTransition(
+            prefix,
+            TraversalTransitionType.Climb,
+            firstIndex,
+            TraversalMedium.Solid,
+            secondIndex,
+            TraversalMedium.Solid,
+            mapId,
+            TraversalCapability.Climb,
+            Fixed64.One,
+            firstToSecondHints));
+        builder.AddTransition(CreateTransition(
+            prefix,
+            TraversalTransitionType.Climb,
+            secondIndex,
+            TraversalMedium.Solid,
+            firstIndex,
+            TraversalMedium.Solid,
+            mapId,
+            TraversalCapability.Climb,
+            Fixed64.One,
+            secondToFirstHints));
     }
 
     private static TraversalTransitionDefinition CreateTransition(
@@ -278,7 +308,8 @@ public static class NavigationMapTokenImporter
         TraversalMedium destinationMedium,
         string mapId,
         TraversalCapability capability,
-        Fixed64 additionalCost = default) =>
+        Fixed64 actionCost = default,
+        TraversalTransitionLocomotionHints locomotionHints = TraversalTransitionLocomotionHints.None) =>
         new(
             CreateTransitionId(prefix, type, source, sourceMedium, destination, destinationMedium),
             type,
@@ -287,7 +318,8 @@ public static class NavigationMapTokenImporter
             new NavigationCellAddress(mapId, destination),
             destinationMedium,
             capability,
-            additionalCost);
+            actionCost,
+            locomotionHints: locomotionHints);
 
     private static string CreateTransitionId(
         string prefix,

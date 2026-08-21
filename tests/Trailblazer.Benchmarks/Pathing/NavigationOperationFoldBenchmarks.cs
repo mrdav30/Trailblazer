@@ -49,7 +49,9 @@ public class NavigationOperationFoldBenchmarks
             maxOverlayTransitionsPerMap: 0,
             maxOverlayCells: 100_000,
             maxOverlayConnections: 0,
-            maxOverlayTransitions: 0));
+            maxOverlayTransitions: 0,
+            maxTransitionRulesPerMap: 1,
+            maxTransitionRules: 1));
         var install = new NavigationMapCommitOperation(
             new PreparedNavigationMap(map, 1),
             OverlayReplacementPolicy.Clear,

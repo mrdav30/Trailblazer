@@ -1,5 +1,5 @@
 //=======================================================================
-// PathQueryRecord.cs
+// NavigatorPathSessionRecord.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -8,88 +8,77 @@
 using System;
 using Chronicler;
 using FixedMathSharp;
-using Trailblazer.Navigation;
+using Trailblazer.Pathing;
 
-namespace Trailblazer.Pathing;
+namespace Trailblazer.Navigation.Steering;
 
-/// <summary>Records exact durable graph-query intent.</summary>
-public sealed class PathQueryRecord : IRecordable
+/// <summary>
+/// Records durable path intent while rebuilding the transient start from the loaded navigator frame.
+/// </summary>
+internal sealed class NavigatorPathSessionRecord : IRecordable
 {
     private const int CurrentSchemaVersion = 1;
 
-    private int SchemaVersion;
+    public int SchemaVersion;
 
-    private Vector3d StartPosition;
+    public bool HasQuery;
 
-    private string? StartMapId;
+    public string? StartMapId;
 
-    private EndpointResolutionPolicy StartResolution;
+    public EndpointResolutionPolicy StartResolution;
 
-    private Fixed64 StartMaxResolutionDistance;
+    public Fixed64 StartMaxResolutionDistance;
 
-    private Vector3d EndPosition;
+    public Vector3d EndPosition;
 
-    private string? EndMapId;
+    public string? EndMapId;
 
-    private EndpointResolutionPolicy EndResolution;
+    public EndpointResolutionPolicy EndResolution;
 
-    private Fixed64 EndMaxResolutionDistance;
+    public Fixed64 EndMaxResolutionDistance;
 
-    private NavigationAgentProfileRecord Agent = new();
+    public string? AreaPolicyId;
 
-    private string? AreaPolicyId;
+    public long AreaPolicyRevision;
 
-    private long AreaPolicyRevision;
+    public TraversalMedia TargetMedia;
 
-    private TraversalMedium StartMedium;
+    public PathAlgorithm Algorithm;
 
-    private TraversalMedia TargetMedia;
+    public int MaxLookupProbes;
 
-    private PathAlgorithm Algorithm;
+    public int MaxEndpointCandidates;
 
-    private int MaxLookupProbes;
+    public int MaxExpandedNodes;
 
-    private int MaxEndpointCandidates;
+    public int MaxEvaluatedEdges;
 
-    private int MaxExpandedNodes;
+    public int MaxConnectionLegs;
 
-    private int MaxEvaluatedEdges;
+    public int MaxTransitionCandidates;
 
-    private int MaxConnectionLegs;
+    public int MaxTransitionPairs;
 
-    private int MaxTransitionCandidates;
+    public int MaxStagedLegAttempts;
 
-    private int MaxTransitionPairs;
+    public int MaxTraceIntervals;
 
-    private int MaxStagedLegAttempts;
+    public int MaxCoveredVoxelIntervals;
 
-    private int MaxTraceIntervals;
+    public int MaxSimplificationRays;
 
-    private int MaxCoveredVoxelIntervals;
+    public bool AllowTransitions;
 
-    private int MaxSimplificationRays;
+    public Fixed64 ExtraIntegrationCost;
 
-    private bool AllowTransitions;
-
-    private Fixed64 ExtraIntegrationCost;
-
-    /// <summary>Creates an empty shell for a populate-existing-instance Chronicler load.</summary>
-    public PathQueryRecord()
-    {
-    }
-
-    /// <summary>Creates a record containing one exact immutable query.</summary>
-    public PathQueryRecord(PathQuery query) => Capture(query);
-
-    /// <summary>Gets the exact query after construction or a successful load.</summary>
-    public PathQuery? Query { get; private set; }
-
-    private void Capture(PathQuery query)
+    public void Capture(PathQuery? query)
     {
         SchemaVersion = CurrentSchemaVersion;
-        PathQuery value = query;
-        Query = value;
-        StartPosition = value.Start.Position;
+        if (!query.HasValue)
+            return;
+
+        PathQuery value = query.Value;
+        HasQuery = true;
         StartMapId = value.Start.MapId;
         StartResolution = value.Start.Resolution;
         StartMaxResolutionDistance = value.Start.MaxResolutionDistance;
@@ -97,10 +86,8 @@ public sealed class PathQueryRecord : IRecordable
         EndMapId = value.End.MapId;
         EndResolution = value.End.Resolution;
         EndMaxResolutionDistance = value.End.MaxResolutionDistance;
-        Agent.Capture(value.Agent);
         AreaPolicyId = value.AreaPolicy.PolicyId;
         AreaPolicyRevision = value.AreaPolicy.Revision;
-        StartMedium = value.Traversal.StartMedium;
         TargetMedia = value.Traversal.TargetMedia;
         Algorithm = value.Algorithm;
         MaxLookupProbes = value.Budget.MaxLookupProbes;
@@ -118,16 +105,22 @@ public sealed class PathQueryRecord : IRecordable
         ExtraIntegrationCost = value.FlowField.ExtraIntegrationCost;
     }
 
-    private bool TryCreateQuery(out PathQuery? query)
+    public bool TryCreateQuery(
+        Vector3d startPosition,
+        TraversalMedium startMedium,
+        NavigationAgentProfile agent,
+        out PathQuery? query)
     {
         query = null;
-        if (SchemaVersion != CurrentSchemaVersion
-            || Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
-            || !TraversalTransitionDefinition.IsKnownMedium(StartMedium)
+        if (SchemaVersion != CurrentSchemaVersion)
+            return false;
+        if (!HasQuery)
+            return true;
+        if (Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
+            || !TraversalTransitionDefinition.IsKnownMedium(startMedium)
             || TargetMedia == TraversalMedia.None
             || (TargetMedia & ~NavigationCell.KnownMedia) != 0
-            || string.IsNullOrWhiteSpace(AreaPolicyId)
-            || !Agent.TryCreate(out NavigationAgentProfile profile))
+            || string.IsNullOrWhiteSpace(AreaPolicyId))
         {
             return false;
         }
@@ -136,7 +129,7 @@ public sealed class PathQueryRecord : IRecordable
         {
             query = new PathQuery(
                 new NavigationEndpoint(
-                    StartPosition,
+                    startPosition,
                     StartMapId,
                     StartResolution,
                     StartMaxResolutionDistance),
@@ -145,9 +138,9 @@ public sealed class PathQueryRecord : IRecordable
                     EndMapId,
                     EndResolution,
                     EndMaxResolutionDistance),
-                profile,
+                agent,
                 new NavigationAreaPolicyKey(AreaPolicyId!, AreaPolicyRevision),
-                new TraversalIntent(StartMedium, TargetMedia),
+                new TraversalIntent(startMedium, TargetMedia),
                 Algorithm,
                 new NavigationWorkBudget(
                     MaxLookupProbes,
@@ -173,23 +166,10 @@ public sealed class PathQueryRecord : IRecordable
         }
     }
 
-    /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        bool isLoading = chronicler.Mode == SerializationMode.Loading;
-        if (!isLoading)
-        {
-            if (Query is not PathQuery query)
-            {
-                throw new InvalidOperationException(
-                    "PathQueryRecord must contain a query before it can be serialized.");
-            }
-
-            Capture(query);
-        }
-
         RecordValues.Look(chronicler, ref SchemaVersion, "SchemaVersion", 0);
-        RecordValues.Look(chronicler, ref StartPosition, "StartPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref HasQuery, "HasQuery", false);
         RecordValues.Look(chronicler, ref StartMapId, "StartMapId", null);
         RecordValues.Look(chronicler, ref StartResolution, "StartResolution", EndpointResolutionPolicy.Strict);
         RecordValues.Look(chronicler, ref StartMaxResolutionDistance, "StartMaxResolutionDistance", Fixed64.Zero);
@@ -197,10 +177,8 @@ public sealed class PathQueryRecord : IRecordable
         RecordValues.Look(chronicler, ref EndMapId, "EndMapId", null);
         RecordValues.Look(chronicler, ref EndResolution, "EndResolution", EndpointResolutionPolicy.Strict);
         RecordValues.Look(chronicler, ref EndMaxResolutionDistance, "EndMaxResolutionDistance", Fixed64.Zero);
-        RecordDeep.Look(chronicler, ref Agent, "Agent");
         RecordValues.Look(chronicler, ref AreaPolicyId, "AreaPolicyId", null);
         RecordValues.Look(chronicler, ref AreaPolicyRevision, "AreaPolicyRevision", 0L);
-        RecordValues.Look(chronicler, ref StartMedium, "StartMedium", TraversalMedium.Unknown);
         RecordValues.Look(chronicler, ref TargetMedia, "TargetMedia", TraversalMedia.None);
         RecordValues.Look(chronicler, ref Algorithm, "Algorithm", PathAlgorithm.AStar);
         RecordValues.Look(chronicler, ref MaxLookupProbes, "MaxLookupProbes", 0);
@@ -216,16 +194,5 @@ public sealed class PathQueryRecord : IRecordable
         RecordValues.Look(chronicler, ref MaxSimplificationRays, "MaxSimplificationRays", 0);
         RecordValues.Look(chronicler, ref AllowTransitions, "AllowTransitions", false);
         RecordValues.Look(chronicler, ref ExtraIntegrationCost, "ExtraIntegrationCost", Fixed64.Zero);
-
-        if (isLoading)
-        {
-            if (!TryCreateQuery(out PathQuery? query) || !query.HasValue)
-            {
-                throw new InvalidOperationException(
-                    "Serialized PathQuery is missing, invalid, or unsupported.");
-            }
-
-            Query = query.Value;
-        }
     }
 }

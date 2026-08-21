@@ -8,7 +8,7 @@
 namespace Trailblazer.Pathing;
 
 /// <summary>Identifies where one procedural transition rule may apply.</summary>
-internal enum TraversalTransitionRuleScope
+public enum TraversalTransitionRuleScope
 {
     /// <summary>The source and destination medium states share one physical cell.</summary>
     SameCell = 0,

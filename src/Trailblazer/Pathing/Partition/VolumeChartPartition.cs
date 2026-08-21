@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using System.Runtime.CompilerServices;
 using FixedMathSharp;
 using GridForge.Grids;
@@ -147,16 +146,6 @@ public sealed class VolumeChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool BelongsTo(string chartName) => ChartOwners?.Contains(chartName) == true;
 
-    /// <summary>
-    /// Returns true if the requested unit size cannot fit through this voxel.
-    /// </summary>
-    internal bool IsImpassable(Fixed64 unitSize)
-    {
-        PathingWorldState ownerState = OwnerState
-            ?? throw new InvalidOperationException("Volume chart partition requires an owning pathing context.");
-        return !VolumeVoxelFinder.HasClearance(ownerState.Context, Voxel, unitSize);
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Reset()
     {
@@ -169,23 +158,6 @@ public sealed class VolumeChartPartition : IVoxelPartition
         _volumeKinds = TraversalMedia.None;
         ChartOwners?.Clear();
         EffectiveChartOwner = null;
-    }
-
-    private Voxel Voxel
-    {
-        get
-        {
-            PathingWorldState? ownerState = OwnerState;
-            Voxel? voxel = null;
-            bool found = ownerState != null
-                && ownerState.World.TryGetGridAndVoxel(WorldIndex, out _, out voxel);
-
-            if (found
-                && voxel != null)
-                return voxel;
-
-            throw new InvalidOperationException($"Volume partition at {WorldIndex} is not attached to a valid voxel.");
-        }
     }
 
     internal void ApplyAuthoredState(

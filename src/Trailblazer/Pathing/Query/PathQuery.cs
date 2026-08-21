@@ -28,7 +28,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
     /// <summary>Gets the exact query-specific navigation-area policy identity.</summary>
     public NavigationAreaPolicyKey AreaPolicy { get; }
 
-    /// <summary>Gets the requested traversal domains and starting medium.</summary>
+    /// <summary>Gets the exact start medium and allowed target media.</summary>
     public TraversalIntent Traversal { get; }
 
     /// <summary>Gets the selected search algorithm.</summary>
@@ -75,6 +75,10 @@ public readonly struct PathQuery : IEquatable<PathQuery>
             algorithm == PathAlgorithm.AStar && flowField != default,
             nameof(flowField),
             "A* queries cannot carry flow-field-specific options.");
+        SwiftThrowHelper.ThrowIfArgument(
+            (traversal.TargetMedia & ~agent.AllowedMedia) != 0,
+            nameof(traversal),
+            "Target media must be a subset of the agent's allowed media.");
 
         Start = start;
         End = end;
@@ -87,7 +91,9 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         FlowField = flowField;
     }
 
-    internal PathQuery WithStartPosition(Vector3d position) => new(
+    internal PathQuery WithStartState(
+        Vector3d position,
+        TraversalMedium startMedium) => new(
         new NavigationEndpoint(
             position,
             Start.MapId,
@@ -96,7 +102,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         End,
         Agent,
         AreaPolicy,
-        Traversal,
+        new TraversalIntent(startMedium, Traversal.TargetMedia),
         Algorithm,
         Budget,
         AllowTransitions,

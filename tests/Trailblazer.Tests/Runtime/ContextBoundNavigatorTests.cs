@@ -18,7 +18,6 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TraversalTransitionRegistry.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
     }

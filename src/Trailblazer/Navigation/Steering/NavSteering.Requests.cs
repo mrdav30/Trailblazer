@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using System.Runtime.CompilerServices;
 using FixedMathSharp;
 using Trailblazer.Navigation.MovementGroups;
@@ -18,35 +17,7 @@ public partial class NavSteering
     #region Public Interface
 
     /// <summary>
-    /// Starts or replaces the active steering request.
-    /// </summary>
-    /// <param name="pathRequest">The movement request that defines the desired origin and destination.</param>
-    /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between nearby members.</param>
-    public virtual void ApplyPathRequest(IPathRequest? pathRequest, int groupId = -1)
-    {
-        // assume the object is being controlled
-        if (pathRequest == null || !pathRequest.HasValidEndpoints)
-        {
-            TrailblazerLogger.Channel.Warn($"Invalid path request applied: {pathRequest}");
-            Arrive();
-            return;
-        }
-
-        if (_context == null)
-            BindContext(pathRequest.Context);
-        else if (!ReferenceEquals(_context, pathRequest.Context))
-            throw new InvalidOperationException("NavSteering cannot accept a path request from a different TrailblazerWorldContext.");
-
-        BeginPathSession(
-            pathRequest.TargetPosition,
-            pathRequest.Origin,
-            groupId,
-            pathRequest,
-            query: null);
-    }
-
-    /// <summary>
-    /// Starts or replaces one graph-backed surface A* or flow-field steering request.
+    /// Starts or replaces one graph-backed A* or flow-field steering request.
     /// </summary>
     internal virtual void ApplyPathQuery(PathQuery query, int groupId = -1)
     {
@@ -54,7 +25,6 @@ public partial class NavSteering
             query.End.Position,
             query.Start.Position,
             groupId,
-            request: null,
             query);
     }
 
@@ -62,8 +32,7 @@ public partial class NavSteering
         Vector3d destination,
         Vector3d origin,
         int groupId,
-        IPathRequest? request,
-        PathQuery? query)
+        PathQuery query)
     {
         _hasLineOfSightPath = false;
         _isAtDestination = false;
@@ -75,18 +44,10 @@ public partial class NavSteering
         _destination = destination;
 
         ReleaseNavigationGuidance();
-        _currentRequest = request;
         _currentQuery = query;
-        if (request != null)
-            _lastUnitSize = request.UnitSize;
 
         _repathTries = 0;
         _shouldRequestPathThisFrame = true;
-        PublishRouteTopology(
-            hasResolvedTopology: false,
-            usesGuideTopology: false,
-            requestsClimbIntent: false,
-            force: true);
         AddToMovementGroup(groupId);
         UpdateMovementGroupState(origin, true);
         Events.OnMoveRequestApplied?.Invoke();
@@ -135,14 +96,14 @@ public partial class NavSteering
     /// <remarks>
     /// Call this after loading multiple grouped steering sessions when you want the coordinator warmed
     /// before the next simulation frame. If it is skipped, grouped steering will still recover lazily
-    /// during <see cref="GetHeading(ISteer)"/>.
+    /// during <see cref="GetHeading"/>.
     /// </remarks>
     /// <param name="vessel">The current steering owner whose position, radius, and stable id should seed the coordinator.</param>
     public void PrewarmMovementGroup(ISteer vessel)
     {
         SwiftThrowHelper.ThrowIfNull(vessel, nameof(vessel));
 
-        if (!ShouldMove || !IsInGroup || (_currentRequest == null && !_currentQuery.HasValue))
+        if (!ShouldMove || !IsInGroup || !_currentQuery.HasValue)
             return;
 
         MovementGroups.Prewarm(

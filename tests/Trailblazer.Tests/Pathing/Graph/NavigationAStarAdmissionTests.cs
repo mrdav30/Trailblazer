@@ -802,10 +802,7 @@ public sealed class NavigationAStarAdmissionTests
             allowedMedia: TraversalMedia.Solid,
             capabilities: TraversalCapability.None),
         Policy.Key,
-        new TraversalIntent(
-            TraversalDomain.Surface,
-            TraversalMedium.Solid,
-            TraversalDomain.Surface),
+        new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
         PathAlgorithm.AStar,
         new NavigationWorkBudget(
             maxLookupProbes: 64,

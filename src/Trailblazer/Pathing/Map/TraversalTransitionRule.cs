@@ -13,13 +13,14 @@ using SwiftCollections.Utility;
 namespace Trailblazer.Pathing;
 
 /// <summary>Stores one immutable bounded procedural transition authoring rule.</summary>
-internal readonly struct TraversalTransitionRule : IEquatable<TraversalTransitionRule>
+public readonly struct TraversalTransitionRule : IEquatable<TraversalTransitionRule>
 {
-    private const TraversalTransitionLocomotionHints KnownLocomotionHints =
+    internal const TraversalTransitionLocomotionHints KnownLocomotionHints =
         TraversalTransitionLocomotionHints.RequestClimb
         | TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion;
 
-    internal TraversalTransitionRule(
+    /// <summary>Creates one complete bounded procedural transition rule.</summary>
+    public TraversalTransitionRule(
         string id,
         TraversalTransitionType type,
         TraversalMedium sourceMedium,
@@ -40,22 +41,31 @@ internal readonly struct TraversalTransitionRule : IEquatable<TraversalTransitio
         Validate();
     }
 
-    internal string Id { get; }
+    /// <summary>Gets the stable globally unique rule identifier.</summary>
+    public string Id { get; }
 
-    internal TraversalTransitionType Type { get; }
+    /// <summary>Gets the semantic action type.</summary>
+    public TraversalTransitionType Type { get; }
 
-    internal TraversalMedium SourceMedium { get; }
+    /// <summary>Gets the exact source medium.</summary>
+    public TraversalMedium SourceMedium { get; }
 
-    internal TraversalMedium DestinationMedium { get; }
+    /// <summary>Gets the exact destination medium.</summary>
+    public TraversalMedium DestinationMedium { get; }
 
-    internal TraversalTransitionRuleScope Scope { get; }
+    /// <summary>Gets the bounded procedural scope.</summary>
+    public TraversalTransitionRuleScope Scope { get; }
 
-    internal TraversalCapability RequiredCapabilities { get; }
+    /// <summary>Gets the capabilities required to use the action.</summary>
+    public TraversalCapability RequiredCapabilities { get; }
 
-    internal Fixed64 ActionCost { get; }
+    /// <summary>Gets the non-negative semantic action cost.</summary>
+    public Fixed64 ActionCost { get; }
 
-    internal TraversalTransitionLocomotionHints LocomotionHints { get; }
+    /// <summary>Gets the authored built-in locomotion hints.</summary>
+    public TraversalTransitionLocomotionHints LocomotionHints { get; }
 
+    /// <inheritdoc />
     public bool Equals(TraversalTransitionRule other) =>
         string.Equals(Id, other.Id, StringComparison.Ordinal)
         && Type == other.Type
@@ -66,9 +76,11 @@ internal readonly struct TraversalTransitionRule : IEquatable<TraversalTransitio
         && ActionCost == other.ActionCost
         && LocomotionHints == other.LocomotionHints;
 
+    /// <inheritdoc />
     public override bool Equals(object? obj) =>
         obj is TraversalTransitionRule other && Equals(other);
 
+    /// <inheritdoc />
     public override int GetHashCode()
     {
         int idHash = Id == null

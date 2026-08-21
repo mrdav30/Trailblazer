@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using FixedMathSharp;
 using FluentAssertions;
@@ -29,7 +30,13 @@ public sealed class NavigationFlowFieldGuideTests
         type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Should().HaveCount(2);
         type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
-            .Should().HaveCount(4);
+            .Select(method => method.Name)
+            .Should().BeEquivalentTo(
+                "get_Status",
+                "get_OriginIntegrationCost",
+                "TrySample",
+                "CompletePendingTransition",
+                "Dispose");
     }
 
     [Fact]
@@ -39,7 +46,7 @@ public sealed class NavigationFlowFieldGuideTests
 
         lease.Status.Should().Be(NavigationGuideStatus.Stale);
         lease.OriginIntegrationCost.Should().Be(Fixed64.Zero);
-        lease.TrySample(
+        lease.TrySampleHeading(
                 Vector3d.Zero,
                 new GuideSampleWorkBudget(1, 1, 1, 1, 1, 1, 1),
                 out Vector3d heading)
@@ -91,7 +98,7 @@ public sealed class NavigationFlowFieldGuideTests
         guide.Status.Should().Be(NavigationGuideStatus.Success);
         guide.OriginIntegrationCost.Should().Be(originNode.IntegrationCost);
         staleAlias.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Stale);
-        guide.TrySample(
+        guide.TrySampleHeading(
                 source.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d heading)
@@ -125,7 +132,7 @@ public sealed class NavigationFlowFieldGuideTests
         fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destination)
             .Should().BeTrue();
 
-        guide.TrySample(
+        guide.TrySampleHeading(
                 destination.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d heading)
@@ -207,12 +214,12 @@ public sealed class NavigationFlowFieldGuideTests
             32,
             0);
 
-        guide.TrySample(actualFoot, noRecoveryBudget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, noRecoveryBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be((targetState.FootAnchor - actualFoot).Normalized,
             "target-only containment remains part of the current selected edge until its anchor is reached");
-        guide.TrySample(
+        guide.TrySampleHeading(
                 sourceState.FootAnchor,
                 noRecoveryBudget,
                 out Vector3d reentryHeading)
@@ -263,18 +270,18 @@ public sealed class NavigationFlowFieldGuideTests
         fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
             .Should().BeTrue();
 
-        retryGuide.TrySample(
+        retryGuide.TrySampleHeading(
                 source.FootAnchor,
                 default,
                 out Vector3d blockedHeading)
             .Should().Be(NavigationGuideStatus.BudgetExceeded);
         blockedHeading.Should().Be(Vector3d.Zero);
-        retryGuide.TrySample(
+        retryGuide.TrySampleHeading(
                 source.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d retryHeading)
             .Should().Be(NavigationGuideStatus.Success);
-        freshGuide.TrySample(
+        freshGuide.TrySampleHeading(
                 source.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d freshHeading)
@@ -416,7 +423,7 @@ public sealed class NavigationFlowFieldGuideTests
             Fixed64.Zero,
             -Fixed64.One / (Fixed64)4);
 
-        guide.TrySample(
+        guide.TrySampleHeading(
                 entry,
                 GenerousSampleBudget,
                 out Vector3d heading)
@@ -530,7 +537,7 @@ public sealed class NavigationFlowFieldGuideTests
             Fixed64.Zero,
             Fixed64.Zero);
 
-        guide.TrySample(entry, GenerousSampleBudget, out Vector3d heading)
+        guide.TrySampleHeading(entry, GenerousSampleBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be((sourcePortal - entry).Normalized);
@@ -613,7 +620,7 @@ public sealed class NavigationFlowFieldGuideTests
         fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destinationState)
             .Should().BeTrue();
 
-        guide.TrySample(
+        guide.TrySampleHeading(
                 explicitTargetState.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d heading)
@@ -826,7 +833,7 @@ public sealed class NavigationFlowFieldGuideTests
         Vector3d actualStart = reverse ? fixture.End : fixture.Start;
         Vector3d actualEnd = reverse ? fixture.Start : fixture.End;
 
-        guide.TrySample(
+        guide.TrySampleHeading(
                 actualStart,
                 GenerousSampleBudget,
                 out Vector3d heading)
@@ -921,7 +928,7 @@ public sealed class NavigationFlowFieldGuideTests
             targetState.FootAnchor,
             query.Agent.Shape);
 
-        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, GenerousSampleBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be(expected);
@@ -1006,7 +1013,7 @@ public sealed class NavigationFlowFieldGuideTests
         sourcePrism.Contains(actualFoot).Should().BeTrue();
         targetPrism.Contains(actualFoot).Should().BeFalse();
 
-        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, GenerousSampleBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be((sourcePortal - actualFoot).Normalized);
@@ -1099,7 +1106,7 @@ public sealed class NavigationFlowFieldGuideTests
         sourcePrism.Contains(actualFoot).Should().BeFalse();
         targetPrism.Contains(actualFoot).Should().BeFalse();
 
-        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, GenerousSampleBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be((targetPortal - actualFoot).Normalized);
@@ -1176,7 +1183,7 @@ public sealed class NavigationFlowFieldGuideTests
             (Fixed64)3 / (Fixed64)8);
         sourcePrism.Contains(actualFoot).Should().BeTrue();
 
-        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, GenerousSampleBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.LocalRecoveryRequired);
 
         heading.Should().Be(Vector3d.Zero);
@@ -1289,7 +1296,7 @@ public sealed class NavigationFlowFieldGuideTests
         }
         found.Should().BeTrue();
 
-        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, GenerousSampleBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.LocalRecoveryRequired);
 
         heading.Should().Be(Vector3d.Zero);
@@ -1504,23 +1511,23 @@ public sealed class NavigationFlowFieldGuideTests
             (Fixed64)3 / (Fixed64)8);
         firstPrism.Contains(otherWallOverlap).Should().BeTrue();
 
-        guide.TrySample(
+        guide.TrySampleHeading(
                 firstState.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d firstHeading)
             .Should().Be(NavigationGuideStatus.Success);
-        guide.TrySample(secondState.FootAnchor, GenerousSampleBudget, out _)
+        guide.TrySampleHeading(secondState.FootAnchor, GenerousSampleBudget, out _)
             .Should().Be(NavigationGuideStatus.Success);
-        guide.TrySample(
+        guide.TrySampleHeading(
                 firstState.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d retreatHeading)
             .Should().Be(NavigationGuideStatus.Success);
-        guide.TrySample(portalApproach, GenerousSampleBudget, out Vector3d portalHeading)
+        guide.TrySampleHeading(portalApproach, GenerousSampleBudget, out Vector3d portalHeading)
             .Should().Be(NavigationGuideStatus.Success);
-        guide.TrySample(incomingApproach, GenerousSampleBudget, out Vector3d incomingHeading)
+        guide.TrySampleHeading(incomingApproach, GenerousSampleBudget, out Vector3d incomingHeading)
             .Should().Be(NavigationGuideStatus.Success);
-        guide.TrySample(otherWallOverlap, GenerousSampleBudget, out Vector3d invalidHeading)
+        guide.TrySampleHeading(otherWallOverlap, GenerousSampleBudget, out Vector3d invalidHeading)
             .Should().Be(NavigationGuideStatus.LocalRecoveryRequired);
 
         firstHeading.Should().Be(expectedForward);
@@ -1566,10 +1573,10 @@ public sealed class NavigationFlowFieldGuideTests
             limits[5],
             limits[6]);
 
-        guide.TrySample(source.FootAnchor, budget, out Vector3d blockedHeading)
+        guide.TrySampleHeading(source.FootAnchor, budget, out Vector3d blockedHeading)
             .Should().Be(NavigationGuideStatus.BudgetExceeded);
         blockedHeading.Should().Be(Vector3d.Zero);
-        guide.TrySample(
+        guide.TrySampleHeading(
                 source.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d retryHeading)
@@ -1613,10 +1620,10 @@ public sealed class NavigationFlowFieldGuideTests
             limits[5],
             limits[6]);
 
-        guide.TrySample(destination.FootAnchor, budget, out Vector3d blockedHeading)
+        guide.TrySampleHeading(destination.FootAnchor, budget, out Vector3d blockedHeading)
             .Should().Be(NavigationGuideStatus.BudgetExceeded);
         blockedHeading.Should().Be(Vector3d.Zero);
-        guide.TrySample(
+        guide.TrySampleHeading(
                 destination.FootAnchor,
                 GenerousSampleBudget,
                 out Vector3d retryHeading)
@@ -1652,7 +1659,7 @@ public sealed class NavigationFlowFieldGuideTests
         sourcePrism.Contains(actualFoot).Should().BeFalse();
         NavigationFlowFieldLease sameLease = guide;
 
-        guide.TrySample(actualFoot, GenerousSampleBudget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, GenerousSampleBudget, out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be(Vector3d.Backward);
@@ -1732,7 +1739,7 @@ public sealed class NavigationFlowFieldGuideTests
             ? new GuideSampleWorkBudget(128, 128, 8, 32, 32, 32, 0)
             : GenerousSampleBudget;
 
-        guide.TrySample(actualFoot, budget, out Vector3d heading)
+        guide.TrySampleHeading(actualFoot, budget, out Vector3d heading)
             .Should().Be(expected);
 
         heading.Should().Be(Vector3d.Zero);

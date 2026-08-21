@@ -10,7 +10,7 @@ using FixedMathSharp;
 namespace Trailblazer.Pathing;
 
 /// <summary>Stores one medium-specific movement sample or semantic action.</summary>
-internal readonly struct NavigationFlowSample
+public readonly struct NavigationFlowSample
 {
     internal NavigationFlowSample(
         Vector3d heading,
@@ -26,13 +26,18 @@ internal readonly struct NavigationFlowSample
         HasTransition = hasTransition;
     }
 
-    internal Vector3d Heading { get; }
+    /// <summary>Gets the deterministic ordinary movement heading, or zero for a pending action.</summary>
+    public Vector3d Heading { get; }
 
-    internal Vector3d Target { get; }
+    /// <summary>Gets the exact movement or action-approach target.</summary>
+    public Vector3d Target { get; }
 
-    internal TraversalMedium Medium { get; }
+    /// <summary>Gets the exact traversal medium before this sample completes.</summary>
+    public TraversalMedium Medium { get; }
 
-    internal NavigationTransitionInstruction Transition { get; }
+    /// <summary>Gets the semantic action when <see cref="HasTransition"/> is true.</summary>
+    public NavigationTransitionInstruction Transition { get; }
 
-    internal bool HasTransition { get; }
+    /// <summary>Gets whether this sample requires explicit semantic-action completion.</summary>
+    public bool HasTransition { get; }
 }

@@ -56,12 +56,4 @@ internal sealed class BenchmarkPathFixture
         _world = null;
     }
 
-    /// <summary>
-    /// Flushes all guide caches without tearing down the world or chart state.
-    /// Useful between IterationSetup calls to ensure a cold-cache benchmark body.
-    /// </summary>
-    public void FlushGuideCache()
-    {
-        _context.Guides.FlushCache(force: true);
-    }
 }

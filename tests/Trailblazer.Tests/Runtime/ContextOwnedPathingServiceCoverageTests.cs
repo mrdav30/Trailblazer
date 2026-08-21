@@ -2,7 +2,6 @@ using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Grids;
-using GridForge.Spatial;
 using Trailblazer.Pathing;
 using Trailblazer.Tests.Navigation;
 using Xunit;
@@ -15,7 +14,6 @@ public sealed class ContextOwnedPathingServiceCoverageTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TraversalTransitionRegistry.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
@@ -88,85 +86,6 @@ public sealed class ContextOwnedPathingServiceCoverageTests : IDisposable
 
         context.Pathing.UnloadChart(initialized.Name);
         context.Pathing.IsChartRegistered(initialized.Name).Should().BeFalse();
-    }
-
-    [Fact]
-    public void VolumeRulesService_ShouldDelegateRulesWithinOwningContext()
-    {
-        using TrailblazerWorldContext context = PathTestFactory.CreateContextWithGrid();
-        PathTestFactory.RegisterSolidPoint(context, "ContextVolumeSolid", Vector3d.Zero);
-        PathTestFactory.RegisterGeneratedVolumePoint(
-            context,
-            new Vector3d(1, 0, 0),
-            TraversalMedium.Liquid,
-            "ContextVolumeLiquid");
-
-        Voxel solidVoxel = PathTestFactory.RequireVoxel(context, Vector3d.Zero);
-        Voxel liquidVoxel = PathTestFactory.RequireVoxel(context, new Vector3d(1, 0, 0));
-        int versionBefore = context.VolumeRules.RegistryVersion;
-
-        context.VolumeRules.HasGasVoxelRule.Should().BeFalse();
-        context.VolumeRules.HasLiquidVoxelRule.Should().BeFalse();
-        context.VolumeRules.IsConfigured(TraversalMedium.Gas).Should().BeFalse();
-
-        context.VolumeRules.SetGasVoxelPartition<SolidChartPartition>();
-        context.VolumeRules.HasGasVoxelRule.Should().BeTrue();
-        context.VolumeRules.IsConfigured(TraversalMedium.Gas).Should().BeTrue();
-        context.VolumeRules.Matches(solidVoxel, TraversalMedium.Gas).Should().BeTrue();
-        context.VolumeRules.RegistryVersion.Should().BeGreaterThan(versionBefore);
-
-        context.VolumeRules.ClearGasVoxelRule();
-        context.VolumeRules.HasGasVoxelRule.Should().BeFalse();
-        context.VolumeRules.Matches(solidVoxel, TraversalMedium.Gas).Should().BeFalse();
-
-        context.VolumeRules.SetLiquidVoxelRule(static _ => true);
-        context.VolumeRules.HasLiquidVoxelRule.Should().BeTrue();
-        context.VolumeRules.IsConfigured(TraversalMedium.Liquid).Should().BeTrue();
-        context.VolumeRules.Matches(liquidVoxel, TraversalMedium.Liquid).Should().BeTrue();
-
-        context.VolumeRules.ClearLiquidVoxelRule();
-        context.VolumeRules.HasLiquidVoxelRule.Should().BeFalse();
-
-        context.VolumeRules.SetLiquidVoxelPartition<VolumeChartPartition>();
-        context.VolumeRules.HasLiquidVoxelRule.Should().BeTrue();
-        context.VolumeRules.Matches(liquidVoxel, TraversalMedium.Liquid).Should().BeTrue();
-    }
-
-    [Fact]
-    public void TransitionService_ShouldDelegateRegistrationLookupAndDirectionalQueries()
-    {
-        using TrailblazerWorldContext context = PathTestFactory.CreateContextWithGrid();
-        PathTestFactory.RegisterSolidLine(context, "ContextTransitionLine", Vector3d.Zero, 2);
-        TraversalTransition transition = PathTestFactory.CreateJumpTransition(
-            context,
-            "context-transition",
-            Vector3d.Zero,
-            new Vector3d(1, 0, 0));
-
-        context.Transitions.Register(transition).Should().BeTrue();
-
-        context.Transitions.AllTransitions.Should().ContainSingle(stored => stored.Id == transition.Id);
-        context.Transitions.TryGet(transition.Id, out TraversalTransition resolved).Should().BeTrue();
-        resolved.Id.Should().Be(transition.Id);
-        context.Transitions.TryGetResolvedEndpoints(
-                transition.Id,
-                out WorldVoxelIndex sourceIndex,
-                out WorldVoxelIndex destinationIndex)
-            .Should()
-            .BeTrue();
-
-        Voxel sourceVoxel = PathTestFactory.RequireVoxel(context, Vector3d.Zero);
-        Voxel destinationVoxel = PathTestFactory.RequireVoxel(context, new Vector3d(1, 0, 0));
-        sourceIndex.Should().Be(sourceVoxel.WorldIndex);
-        destinationIndex.Should().Be(destinationVoxel.WorldIndex);
-
-        context.Transitions.GetOutgoingTransitions(sourceVoxel.WorldIndex).Should().ContainSingle(item => item.Id == transition.Id);
-        context.Transitions.GetOutgoingTransitions(Vector3d.Zero).Should().ContainSingle(item => item.Id == transition.Id);
-        context.Transitions.GetIncomingTransitions(destinationVoxel.WorldIndex).Should().ContainSingle(item => item.Id == transition.Id);
-        context.Transitions.GetIncomingTransitions(new Vector3d(1, 0, 0)).Should().ContainSingle(item => item.Id == transition.Id);
-
-        context.Transitions.Unregister(transition.Id).Should().BeTrue();
-        context.Transitions.AllTransitions.Should().BeEmpty();
     }
 
     [Fact]

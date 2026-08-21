@@ -23,7 +23,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         cache.Reset();
 
         guide.Status.Should().Be(NavigationGuideStatus.Stale);
-        guide.TrySample(
+        guide.TrySampleHeading(
                 Vector3d.Zero,
                 GenerousBudget,
                 out Vector3d heading)
@@ -50,7 +50,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             .Should().BeTrue();
         Vector3d actualFoot = source.FootAnchor
             + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
-        first.TrySample(actualFoot, GenerousBudget, out Vector3d rejoinHeading)
+        first.TrySampleHeading(actualFoot, GenerousBudget, out Vector3d rejoinHeading)
             .Should().Be(NavigationGuideStatus.Success);
         rejoinHeading.Should().Be(Vector3d.Backward);
         first.Dispose();
@@ -103,7 +103,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             firstStarted.Set();
             try
             {
-                firstStatus = first.TrySample(actualFoot, GenerousBudget, out firstHeading);
+                firstStatus = first.TrySampleHeading(actualFoot, GenerousBudget, out firstHeading);
             }
             catch (Exception error)
             {
@@ -118,7 +118,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             secondStarted.Set();
             try
             {
-                secondStatus = second.TrySample(actualFoot, GenerousBudget, out secondHeading);
+                secondStatus = second.TrySampleHeading(actualFoot, GenerousBudget, out secondHeading);
             }
             catch (Exception error)
             {
@@ -183,7 +183,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             sampleStarted.Set();
             try
             {
-                sampleStatus = guide.TrySample(
+                sampleStatus = guide.TrySampleHeading(
                     source.FootAnchor,
                     GenerousBudget,
                     out heading);
@@ -253,7 +253,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             sampleStarted.Set();
             try
             {
-                sampleStatus = guide.TrySample(actualFoot, GenerousBudget, out heading);
+                sampleStatus = guide.TrySampleHeading(actualFoot, GenerousBudget, out heading);
             }
             catch (Exception error)
             {
@@ -305,7 +305,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         for (int i = 0; i < 16; i++)
         {
             NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
-            warm.TrySample(source.FootAnchor, GenerousBudget, out _)
+            warm.TrySampleHeading(source.FootAnchor, GenerousBudget, out _)
                 .Should().Be(NavigationGuideStatus.Success);
             warm.Dispose();
         }
@@ -320,7 +320,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
                 ref succeeded);
             if (!succeeded)
                 break;
-            if (guide.TrySample(
+            if (guide.TrySampleHeading(
                     source.FootAnchor,
                     GenerousBudget,
                     out _) != NavigationGuideStatus.Success)
@@ -377,7 +377,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         for (int i = 0; i < 16; i++)
         {
             NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
-            warm.TrySample(destination.FootAnchor, GenerousBudget, out _)
+            warm.TrySampleHeading(destination.FootAnchor, GenerousBudget, out _)
                 .Should().Be(NavigationGuideStatus.Success);
             warm.Dispose();
         }
@@ -392,7 +392,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
                 ref succeeded);
             if (!succeeded)
                 break;
-            if (guide.TrySample(
+            if (guide.TrySampleHeading(
                     destination.FootAnchor,
                     GenerousBudget,
                     out _) != NavigationGuideStatus.Success)
@@ -425,7 +425,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         for (int i = 0; i < 16; i++)
         {
             NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
-            warm.TrySample(actualFoot, GenerousBudget, out _)
+            warm.TrySampleHeading(actualFoot, GenerousBudget, out _)
                 .Should().Be(NavigationGuideStatus.Success);
             warm.Dispose();
         }
@@ -440,7 +440,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
                 ref succeeded);
             if (!succeeded)
                 break;
-            if (guide.TrySample(
+            if (guide.TrySampleHeading(
                     actualFoot,
                     GenerousBudget,
                     out _) != NavigationGuideStatus.Success)

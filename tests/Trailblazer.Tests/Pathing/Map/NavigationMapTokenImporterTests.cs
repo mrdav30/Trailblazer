@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -67,6 +68,37 @@ public sealed class NavigationMapTokenImporterTests
 
         map.Cells.Should().ContainSingle();
         map.Cells[0].Cell.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ImportRectangular_AuthorsExactEnterStayAndExitClimbHints()
+    {
+        string[,,] source = new string[4, 1, 1];
+        source[0, 0, 0] = "S";
+        source[1, 0, 0] = "SC!";
+        source[2, 0, 0] = "SC!";
+        source[3, 0, 0] = "S";
+
+        NavigationMap map = NavigationMapTokenImporter.ImportRectangular(
+            "ladder",
+            CreateRectangularConfiguration(4, 1, 1),
+            source);
+
+        TraversalTransitionDefinition enter = map.Transitions.Single(
+            transition => transition.SourceIndex.x == 0
+                && transition.Destination.Index.x == 1);
+        TraversalTransitionDefinition stay = map.Transitions.Single(
+            transition => transition.SourceIndex.x == 1
+                && transition.Destination.Index.x == 2);
+        TraversalTransitionDefinition exit = map.Transitions.Single(
+            transition => transition.SourceIndex.x == 2
+                && transition.Destination.Index.x == 3);
+
+        enter.LocomotionHints.Should().Be(
+            TraversalTransitionLocomotionHints.RequestClimb
+            | TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion);
+        stay.LocomotionHints.Should().Be(enter.LocomotionHints);
+        exit.LocomotionHints.Should().Be(TraversalTransitionLocomotionHints.RequestClimb);
     }
 
     [Theory]

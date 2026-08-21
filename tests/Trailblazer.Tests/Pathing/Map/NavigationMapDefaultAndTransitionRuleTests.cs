@@ -378,19 +378,22 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
     }
 
     [Fact]
-    public void OperationLimits_DerivePositiveFiniteRuleCeilingsAndRejectExactOneOverTransactionally()
+    public void OperationLimits_UseExplicitPositiveFiniteRuleCeilingsAndRejectExactOneOverTransactionally()
     {
         NavigationOperationLimits limits = CreateLimits(
             maxOverlayTransitionsPerMap: 2,
-            maxOverlayTransitions: 3);
+            maxOverlayTransitions: 3,
+            maxTransitionRulesPerMap: 2,
+            maxTransitionRules: 3);
         limits.MaxTransitionRulesPerMap.Should().Be(2);
         limits.MaxTransitionRules.Should().Be(3);
-        NavigationOperationLimits zeroTransitionLimits = CreateLimits(
-            maxOverlayTransitionsPerMap: 0,
-            maxOverlayTransitions: 0);
-        zeroTransitionLimits.MaxTransitionRulesPerMap.Should().Be(1);
-        zeroTransitionLimits.MaxTransitionRules.Should().Be(1);
+        Action zeroPerMap = () => _ = CreateLimits(maxTransitionRulesPerMap: 0);
+        Action totalBelowPerMap = () => _ = CreateLimits(
+            maxTransitionRulesPerMap: 2,
+            maxTransitionRules: 1);
 
+        zeroPerMap.Should().Throw<ArgumentException>();
+        totalBelowPerMap.Should().Throw<ArgumentException>();
         var perMapProcessor = new NavigationOperationProcessor(limits);
         NavigationMap overPerMap = CreateRuleMap(
             "over",
@@ -536,7 +539,7 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
     }
 
     [Fact]
-    public void PreparatoryAuthoringTypesAndLimits_RemainInternal()
+    public void FinalAuthoringTypesAndLimits_ArePublicWithoutCompatibilityAliases()
     {
         Type ruleType = typeof(NavigationMap).Assembly.GetType(
             "Trailblazer.Pathing.TraversalTransitionRule",
@@ -548,19 +551,23 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
             "Trailblazer.Pathing.TraversalTransitionLocomotionHints",
             throwOnError: true)!;
 
-        ruleType.IsNotPublic.Should().BeTrue();
-        scopeType.IsNotPublic.Should().BeTrue();
-        hintType.IsNotPublic.Should().BeTrue();
-        typeof(NavigationMap).GetProperty("DefaultCell").Should().BeNull();
-        typeof(NavigationMapBuilder).GetMethod("SetDefaultCell").Should().BeNull();
+        ruleType.IsPublic.Should().BeTrue();
+        scopeType.IsPublic.Should().BeTrue();
+        hintType.IsPublic.Should().BeTrue();
+        typeof(NavigationMap).GetProperty("DefaultCell").Should().NotBeNull();
+        typeof(NavigationMap).GetProperty("TransitionRules").Should().NotBeNull();
+        typeof(NavigationMapBuilder).GetMethod("SetDefaultCell").Should().NotBeNull();
+        typeof(NavigationMapBuilder).GetMethod("AddTransitionRule").Should().NotBeNull();
         typeof(NavigationOperationLimits).GetProperty("MaxTransitionRulesPerMap")
-            .Should().BeNull();
-        typeof(NavigationOperationLimits).GetProperty("MaxTransitionRules")
-            .Should().BeNull();
-        typeof(TraversalTransitionDefinition).GetProperty("AdditionalCost")
             .Should().NotBeNull();
-        typeof(TraversalTransitionDefinition).GetProperty("ActionCost")
+        typeof(NavigationOperationLimits).GetProperty("MaxTransitionRules")
+            .Should().NotBeNull();
+        typeof(TraversalTransitionDefinition).GetProperty("AdditionalCost")
             .Should().BeNull();
+        typeof(TraversalTransitionDefinition).GetProperty("ActionCost")
+            .Should().NotBeNull();
+        typeof(TraversalTransitionDefinition).GetProperty("LocomotionHints")
+            .Should().NotBeNull();
     }
 
     private static GridConfiguration CreateConfiguration(
@@ -619,7 +626,9 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
     private static NavigationOperationLimits CreateLimits(
         long maxPreparedMapBytes = 1_000_000,
         int maxOverlayTransitionsPerMap = 16,
-        int maxOverlayTransitions = 64) => new(
+        int maxOverlayTransitions = 64,
+        int maxTransitionRulesPerMap = 16,
+        int maxTransitionRules = 64) => new(
         maxPendingOperations: 16,
         maxPendingDescriptorBytes: 1_000_000,
         maxPreparedMapBytes,
@@ -634,7 +643,9 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
         maxOverlayTransitionsPerMap,
         maxOverlayCells: 64,
         maxOverlayConnections: 64,
-        maxOverlayTransitions);
+        maxOverlayTransitions,
+        maxTransitionRulesPerMap,
+        maxTransitionRules);
 
     private static NavigationMap CreateRuleMap(
         string mapId,

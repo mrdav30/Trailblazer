@@ -147,7 +147,7 @@ internal readonly struct NavigationTransitionEdgeEvaluator
                 sourceAnchor,
                 sourceAction,
                 out Fixed64 total)
-            || !Fixed64.TryAdd(total, definition.AdditionalCost, out total)
+            || !Fixed64.TryAdd(total, definition.ActionCost, out total)
             || !NavigationDistanceMath.TryCeiling(
                 targetAction,
                 targetAnchor,

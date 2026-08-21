@@ -11,62 +11,48 @@ using SwiftCollections.Utility;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Defines the requested starting and target traversal domains for a path query.
+/// Defines the exact starting medium and allowed target media for a path query.
 /// </summary>
 public readonly struct TraversalIntent : IEquatable<TraversalIntent>
 {
     /// <summary>
-    /// Gets the requested starting graph domain.
+    /// Gets the exact traversal medium at the query start.
     /// </summary>
-    public TraversalDomain StartDomain { get; }
+    public TraversalMedium StartMedium { get; }
 
     /// <summary>
-    /// Gets the current medium, or <see cref="TraversalMedium.Unknown"/> for automatic selection.
+    /// Gets the nonempty set of known traversal media allowed at the target.
     /// </summary>
-    public TraversalMedium CurrentMedium { get; }
-
-    /// <summary>
-    /// Gets the requested target graph domain.
-    /// </summary>
-    public TraversalDomain TargetDomain { get; }
+    public TraversalMedia TargetMedia { get; }
 
     /// <summary>
     /// Creates immutable traversal intent.
     /// </summary>
-    /// <exception cref="ArgumentException">Thrown when the starting domain conflicts with the current medium.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when a domain or medium is unknown.</exception>
+    /// <exception cref="ArgumentException">Thrown when target media are empty or contain an unknown bit.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the start medium is unknown.</exception>
     public TraversalIntent(
-        TraversalDomain startDomain,
-        TraversalMedium currentMedium,
-        TraversalDomain targetDomain)
+        TraversalMedium startMedium,
+        TraversalMedia targetMedia)
     {
-        ValidateDomain(startDomain, nameof(startDomain));
-        ValidateDomain(targetDomain, nameof(targetDomain));
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            currentMedium is < TraversalMedium.Unknown or > TraversalMedium.Liquid,
-            (int)currentMedium,
-            nameof(currentMedium),
-            "Traversal medium is unknown.");
+            !TraversalTransitionDefinition.IsKnownMedium(startMedium),
+            (int)startMedium,
+            nameof(startMedium),
+            "Start medium must identify one known traversal medium.");
         SwiftThrowHelper.ThrowIfArgument(
-            startDomain == TraversalDomain.Surface
-                && currentMedium is TraversalMedium.Gas or TraversalMedium.Liquid,
-            nameof(currentMedium),
-            "A surface starting domain cannot use a volume current medium.");
-        SwiftThrowHelper.ThrowIfArgument(
-            startDomain == TraversalDomain.Volume && currentMedium == TraversalMedium.Solid,
-            nameof(currentMedium),
-            "A volume starting domain cannot use a solid current medium.");
+            targetMedia == TraversalMedia.None
+                || (targetMedia & ~NavigationCell.KnownMedia) != 0,
+            nameof(targetMedia),
+            "Target media must contain at least one known traversal-medium bit.");
 
-        StartDomain = startDomain;
-        CurrentMedium = currentMedium;
-        TargetDomain = targetDomain;
+        StartMedium = startMedium;
+        TargetMedia = targetMedia;
     }
 
     /// <inheritdoc/>
     public bool Equals(TraversalIntent other) =>
-        StartDomain == other.StartDomain
-        && CurrentMedium == other.CurrentMedium
-        && TargetDomain == other.TargetDomain;
+        StartMedium == other.StartMedium
+        && TargetMedia == other.TargetMedia;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is TraversalIntent other && Equals(other);
@@ -74,8 +60,7 @@ public readonly struct TraversalIntent : IEquatable<TraversalIntent>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        int hash = SwiftHashTools.CombineHashCodes((int)StartDomain, (int)CurrentMedium);
-        return SwiftHashTools.CombineHashCodes(hash, (int)TargetDomain);
+        return SwiftHashTools.CombineHashCodes((int)StartMedium, (int)TargetMedia);
     }
 
     /// <summary>
@@ -90,25 +75,11 @@ public readonly struct TraversalIntent : IEquatable<TraversalIntent>
 
     internal void Validate(string parameterName)
     {
-        bool domainIsValid = StartDomain is >= TraversalDomain.Automatic and <= TraversalDomain.Volume
-            && TargetDomain is >= TraversalDomain.Automatic and <= TraversalDomain.Volume;
-        bool mediumIsValid = CurrentMedium is >= TraversalMedium.Unknown and <= TraversalMedium.Liquid;
-        bool combinationIsValid = StartDomain != TraversalDomain.Surface
-            || CurrentMedium is not (TraversalMedium.Gas or TraversalMedium.Liquid);
-        combinationIsValid &= StartDomain != TraversalDomain.Volume || CurrentMedium != TraversalMedium.Solid;
-
         SwiftThrowHelper.ThrowIfArgument(
-            !domainIsValid || !mediumIsValid || !combinationIsValid,
+            !TraversalTransitionDefinition.IsKnownMedium(StartMedium)
+                || TargetMedia == TraversalMedia.None
+                || (TargetMedia & ~NavigationCell.KnownMedia) != 0,
             parameterName,
-            "Traversal intent contains an unknown or conflicting value.");
-    }
-
-    private static void ValidateDomain(TraversalDomain domain, string parameterName)
-    {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            domain is < TraversalDomain.Automatic or > TraversalDomain.Volume,
-            (int)domain,
-            parameterName,
-            "Traversal domain is unknown.");
+            "Traversal intent must contain an exact known start medium and nonempty known target media.");
     }
 }

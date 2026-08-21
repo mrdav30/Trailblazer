@@ -187,6 +187,7 @@ public sealed class NavigationWorldGraphLifecycleTests
         {
             lease.Graph.TryGetSurfaceComponent(
                     new NavigationCellAddress("A", default),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponentKey component,
                     out _)
                 .Should().BeTrue();
@@ -818,7 +819,7 @@ public sealed class NavigationWorldGraphLifecycleTests
     }
 
     [Fact]
-    public void CellSemanticChange_ShouldAdvanceComponentVersionWithoutChangingKey()
+    public void CellMediumChange_ShouldReplaceExactComponentMembership()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
         GridConfiguration configuration = CreateConfiguration(
@@ -827,9 +828,16 @@ public sealed class NavigationWorldGraphLifecycleTests
         AddGrid(context.World, configuration, GridStorageKind.Dense, default);
         AdmitMap(context, CreateMap("map", configuration, default), 1, 1);
         context.Simulate();
-        NavigationGraphMapDiagnostic before = context.Pathing
-            .GetNavigationGraphDiagnostics()
-            .Maps[0];
+        var address = new NavigationCellAddress("map", default);
+        using (NavigationWorldGraphLease before = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            before.Graph.TryGetSurfaceComponent(
+                    address,
+                    TraversalMedium.Solid,
+                    out _,
+                    out _)
+                .Should().BeTrue();
+        }
 
         AdmitCellOverlay(
             context,
@@ -837,12 +845,19 @@ public sealed class NavigationWorldGraphLifecycleTests
             2);
         context.Simulate();
 
-        NavigationGraphMapDiagnostic after = context.Pathing
-            .GetNavigationGraphDiagnostics()
-            .Maps[0];
-        after.ComponentId.Should().Be(before.ComponentId);
-        after.ComponentVersion.Should().BeGreaterThan(before.ComponentVersion,
-            "component generations invalidate alternative cached routes without changing membership");
+        using NavigationWorldGraphLease after = context.Pathing.TryAcquireNavigationGraph()!;
+        after.Graph.TryGetSurfaceComponent(
+                address,
+                TraversalMedium.Solid,
+                out _,
+                out _)
+            .Should().BeFalse();
+        after.Graph.TryGetSurfaceComponent(
+                address,
+                TraversalMedium.Liquid,
+                out _,
+                out _)
+            .Should().BeTrue();
     }
 
     [Fact]
@@ -871,6 +886,7 @@ public sealed class NavigationWorldGraphLifecycleTests
             NavigationCellAddress address = new("map", default);
             first.Graph.TryGetSurfaceComponent(
                     address,
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponentKey key,
                     out long version)
                 .Should().BeTrue();
@@ -879,8 +895,8 @@ public sealed class NavigationWorldGraphLifecycleTests
                     new GraphPageDependencyAddress("map", 0),
                     out firstPage)
                 .Should().BeTrue();
-            version.Should().BeGreaterThan(baked.ComponentVersion,
-                "equal payload still changes ownership from bake to overlay");
+            version.Should().Be(baked.ComponentVersion,
+                "ownership-only semantic changes do not alter structural medium membership");
         }
         context.Pathing.GetNavigationGraphDiagnostics().Maps[0].Cells[0].SemanticSource
             .Should().Be(NavigationCellSemanticSource.OverlaySet);
@@ -895,6 +911,7 @@ public sealed class NavigationWorldGraphLifecycleTests
             NavigationCellAddress address = new("map", default);
             repeated.Graph.TryGetSurfaceComponent(
                     address,
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponentKey key,
                     out _)
                 .Should().BeTrue();
@@ -1098,7 +1115,11 @@ public sealed class NavigationWorldGraphLifecycleTests
         NavigationWorldGraph graph,
         NavigationCellAddress address)
     {
-        graph.TryGetSurfaceComponent(address, out NavigationSurfaceComponentKey key, out _)
+        graph.TryGetSurfaceComponent(
+                address,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey key,
+                out _)
             .Should().BeTrue();
         return key;
     }

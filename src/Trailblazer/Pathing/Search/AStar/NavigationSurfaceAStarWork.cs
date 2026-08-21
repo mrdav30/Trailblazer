@@ -110,6 +110,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         _resultStatus = NavigationSurfaceAStarStatus.Success;
         _useEuclideanHeuristic = _graph.SurfaceComponents.TryGet(
             query.Start.Address,
+            query.Medium,
             out NavigationSurfaceComponent startComponent)
             && startComponent.AllSurfaceEdgesEuclideanCertified;
         bool targetResolved = _graph.TryGetNodeState(
@@ -123,7 +124,9 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         }
         if (!_graph.AreInSameSurfaceComponent(
                 query.Start.Address,
-                query.End.Address))
+                query.Medium,
+                query.End.Address,
+                query.Medium))
         {
             _resultStatus = NavigationSurfaceAStarStatus.NoPath;
             _workspace.PathNodeCount = 0;
@@ -846,6 +849,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             || (recordComponent
                 && (!_graph.TryGetSurfaceComponent(
                         address,
+                        _query!.Medium,
                         out NavigationSurfaceComponentKey componentKey,
                         out _)
                     || !_workspace.TryRecordEndpointComponent(componentKey))))

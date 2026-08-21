@@ -193,10 +193,11 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool TryGetSurfaceComponent(
         NavigationCellAddress address,
+        TraversalMedium medium,
         out NavigationSurfaceComponentKey key,
         out long version)
     {
-        if (SurfaceComponents.TryGet(address, out NavigationSurfaceComponent component))
+        if (SurfaceComponents.TryGet(address, medium, out NavigationSurfaceComponent component))
         {
             key = component.Key;
             version = component.Version;
@@ -209,9 +210,11 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool AreInSameSurfaceComponent(
         NavigationCellAddress left,
-        NavigationCellAddress right) =>
-        SurfaceComponents.TryGet(left, out NavigationSurfaceComponent leftComponent)
-        && SurfaceComponents.TryGet(right, out NavigationSurfaceComponent rightComponent)
+        TraversalMedium leftMedium,
+        NavigationCellAddress right,
+        TraversalMedium rightMedium) =>
+        SurfaceComponents.TryGet(left, leftMedium, out NavigationSurfaceComponent leftComponent)
+        && SurfaceComponents.TryGet(right, rightMedium, out NavigationSurfaceComponent rightComponent)
         && leftComponent.Key == rightComponent.Key;
 
     internal long RetainedBytes { get; }
@@ -257,9 +260,14 @@ internal sealed partial class NavigationWorldGraph
         return found;
     }
 
-    internal bool IsSurfaceAddressClosed(NavigationCellAddress address) =>
+    internal bool IsSurfaceAddressClosed(
+        NavigationCellAddress address,
+        TraversalMedium medium) =>
         _allStructuralComponentsClosed
-        || (SurfaceComponents.TryGet(address, out NavigationSurfaceComponent component)
+        || (SurfaceComponents.TryGet(
+                address,
+                medium,
+                out NavigationSurfaceComponent component)
             && (_closedStructuralComponents.Contains(component.Key)
                 || _additionalClosedStructuralComponents.Contains(component.Key)));
 
@@ -485,6 +493,7 @@ internal sealed partial class NavigationWorldGraph
         NavigationGridBaselineCapture[] baselineCaptures,
         ref PersistentStringMap<NavigationBaselineRebuild> baselineRebuilds,
         Span<VoxelIndex> baselineAddressScratch,
+        Span<GridCoveredAddress> baselineCoveredAddressScratch,
         Span<NavigationGridChangeScope> deferredScopes,
         out int deferredScopeCount,
         out bool deferAll,
@@ -530,7 +539,10 @@ internal sealed partial class NavigationWorldGraph
             bool isBlocked = blockAll || ContainsScope(blockedScopes, configurationKey);
             bool requiresRecoveryBaseline = resnapshotAll
                 || ContainsScope(resnapshotScopes, configurationKey)
-                || EventsRequireBaseline(events, configurationKey);
+                || EventsRequireBaseline(
+                    events,
+                    configurationKey,
+                    current.Map.DefaultCell.HasValue);
             bool operationChanged = !current.IsMaterialized
                 && IsOperationChanged(changes, changeCount, current.MapId);
             bool requiresBaseline = requiresRecoveryBaseline || operationChanged;
@@ -555,7 +567,15 @@ internal sealed partial class NavigationWorldGraph
                     ref rebuildPersistentPages);
                 rebuild = null;
             }
+            if (rebuild != null
+                && rebuild.TryGetCompletedCapture(
+                    out NavigationGridBaselineCapture readyCapture))
+            {
+                baselineCaptures[mapIndex] = readyCapture;
+                continue;
+            }
             int addressCount;
+            bool requiresDefaultDiscovery = !isDelta && current.Map.DefaultCell.HasValue;
             if (isDelta)
             {
                 if (rebuild != null)
@@ -572,7 +592,7 @@ internal sealed partial class NavigationWorldGraph
                     prior!,
                     baselineAddressScratch);
             }
-            else if (rebuild == null)
+            else if (rebuild == null && !requiresDefaultDiscovery)
             {
                 addressCount = current.AddressCount <= remainingBaselineAddresses
                     ? current.CopyCanonicalAddresses(baselineAddressScratch)
@@ -584,7 +604,9 @@ internal sealed partial class NavigationWorldGraph
             }
 
             bool requiresChunkedBaseline = !isDelta
-                && (rebuild != null || current.AddressCount > remainingBaselineAddresses);
+                && (requiresDefaultDiscovery
+                    || rebuild != null
+                    || current.AddressCount > remainingBaselineAddresses);
             if (!requiresChunkedBaseline && addressCount <= remainingBaselineAddresses)
             {
                 if (!maintenanceMeter.TryConsumeBaselineAddresses(addressCount))
@@ -623,7 +645,7 @@ internal sealed partial class NavigationWorldGraph
                             rebuild = proposed;
                         }
                     }
-                    if (rebuild != null)
+                    if (rebuild != null && !rebuild.RequiresCoveredDiscovery)
                     {
                         long beforeBytes = rebuild.RetainedBytes;
                         int beforePages = rebuild.PersistentPageCount;
@@ -642,6 +664,7 @@ internal sealed partial class NavigationWorldGraph
                             maximumRebuildBytes,
                             maximumRebuildPages,
                             baselineAddressScratch,
+                            baselineCoveredAddressScratch,
                             out NavigationGridBaselineCapture completedCapture,
                             out bool completed);
                         rebuildRetainedBytes = checked(
@@ -775,7 +798,10 @@ internal sealed partial class NavigationWorldGraph
             bool isBlocked = blockAll || ContainsScope(blockedScopes, configurationKey);
             bool requiresRecoveryBaseline = resnapshotAll
                 || ContainsScope(resnapshotScopes, configurationKey)
-                || EventsRequireBaseline(events, configurationKey);
+                || EventsRequireBaseline(
+                    events,
+                    configurationKey,
+                    current.Map.DefaultCell.HasValue);
             bool requiresBaseline = requiresRecoveryBaseline
                 || (!current.IsMaterialized && IsOperationChanged(changes, changeCount, current.MapId));
             NavigationMapInstance next;
@@ -1135,12 +1161,16 @@ internal sealed partial class NavigationWorldGraph
 
     private static bool EventsRequireBaseline(
         ReadOnlySpan<GridEventInfo> events,
-        GridConfigurationKey key)
+        GridConfigurationKey key,
+        bool discoverDefaultPresence)
     {
         for (int i = 0; i < events.Length; i++)
         {
             if ((events[i].ChangeKind == GridEventKind.GridAdded
-                    || events[i].ChangeKind == GridEventKind.GridChanged)
+                    || events[i].ChangeKind == GridEventKind.GridChanged
+                    || discoverDefaultPresence
+                        && (events[i].ChangeKind == GridEventKind.SparseVoxelAdded
+                            || events[i].ChangeKind == GridEventKind.SparseVoxelRemoved))
                 && events[i].Configuration.ToGridKey().Equals(key))
             {
                 return true;

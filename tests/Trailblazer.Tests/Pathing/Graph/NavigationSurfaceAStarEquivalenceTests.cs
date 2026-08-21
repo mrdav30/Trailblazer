@@ -1187,6 +1187,7 @@ internal static class NavigationAStarExitTestHarness
         graph.TryGetNodeAddress(source, out NavigationCellAddress sourceAddress);
         if (!graph.SurfaceComponents.TryGet(
                 sourceAddress,
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent component)
             || !component.AllSurfaceEdgesEuclideanCertified)
         {

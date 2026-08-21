@@ -15,7 +15,7 @@ namespace Trailblazer.Pathing;
 /// <summary>Applies bounded incident automatic-seam changes to one unpublished graph candidate.</summary>
 internal sealed class NavigationAutomaticSeamRefreshWork
 {
-    internal const long FixedRetainedBytes = 3_464L;
+    internal const long FixedRetainedBytes = 3_480L;
 
     private const int CursorHeight = 64;
     private const int PairDeltaNodeBytes = 104;
@@ -39,6 +39,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     private readonly int _changeCount;
     private readonly GridEventInfo[] _gridEvents;
     private readonly int _gridEventCount;
+    private readonly PersistentStringMap<bool> _discoveryMapIds;
     private readonly bool _fullRebuild;
     private NavigationSeamEditToken _ownershipToken;
     private GridBoundaryContactCursor _cursor = new();
@@ -121,6 +122,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     private int _overlayMapIndex;
     private int _overlayCellIndex;
     private int _gridEventIndex;
+    private int _discoveryMapIndex;
     private int _worldResetMapIndex;
     private int _fullRebuildRemoveMapIndex;
     private int _fullRebuildDiscoverMapIndex;
@@ -148,6 +150,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         _changeCount = changeCount;
         _gridEvents = Array.Empty<GridEventInfo>();
         _gridEventCount = 0;
+        _discoveryMapIds = PersistentStringMap<bool>.Empty;
         _fullRebuild = false;
         _working = sourceGraph.AutomaticSeams;
         _ownershipToken = NavigationSeamEditToken.Create();
@@ -168,7 +171,27 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         _changeCount = 0;
         _gridEvents = gridEvents;
         _gridEventCount = gridEventCount;
+        _discoveryMapIds = PersistentStringMap<bool>.Empty;
         _fullRebuild = fullRebuild;
+        _working = sourceGraph.AutomaticSeams;
+        _ownershipToken = NavigationSeamEditToken.Create();
+    }
+
+    internal NavigationAutomaticSeamRefreshWork(
+        GridWorld world,
+        NavigationWorldGraph sourceGraph,
+        NavigationWorldGraph preparedGraph,
+        PersistentStringMap<bool> discoveryMapIds)
+    {
+        _world = world;
+        _sourceGraph = sourceGraph;
+        _preparedGraph = preparedGraph;
+        _changes = Array.Empty<NavigationOperationFrameChange>();
+        _changeCount = 0;
+        _gridEvents = Array.Empty<GridEventInfo>();
+        _gridEventCount = 0;
+        _discoveryMapIds = discoveryMapIds;
+        _fullRebuild = false;
         _working = sourceGraph.AutomaticSeams;
         _ownershipToken = NavigationSeamEditToken.Create();
     }
@@ -201,6 +224,9 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         + (ReferenceEquals(_changedMapIds, PersistentStringMap<bool>.Empty)
             ? 0L
             : _changedMapIds.RetainedBytes)
+        + (ReferenceEquals(_discoveryMapIds, PersistentStringMap<bool>.Empty)
+            ? 0L
+            : _discoveryMapIds.RetainedBytes)
         + (ReferenceEquals(_changedStructuralEndpoints, NavigationCellAddressSet.Empty)
             ? 0L
             : _changedStructuralEndpoints.RetainedBytes)
@@ -218,6 +244,9 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         + (ReferenceEquals(_changedMapIds, PersistentStringMap<bool>.Empty)
             ? 0
             : 1 + _changedMapIds.PersistentNodeCount)
+        + (ReferenceEquals(_discoveryMapIds, PersistentStringMap<bool>.Empty)
+            ? 0
+            : 1 + _discoveryMapIds.PersistentNodeCount)
         + (ReferenceEquals(_changedStructuralEndpoints, NavigationCellAddressSet.Empty)
             ? 0
             : _changedStructuralEndpoints.PersistentPageCount)
@@ -275,6 +304,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
                 && (_fullRebuildRemoveMapIndex < _sourceGraph.MapCount
                     || _fullRebuildDiscoverMapIndex < _preparedGraph.MapCount))
             || (!_fullRebuild && _gridEventIndex < _gridEventCount)
+            || _discoveryMapIndex < _discoveryMapIds.Count
             || _changeIndex < _changeCount)
             return false;
         if (!RevalidateCompletedCursor())
@@ -298,6 +328,19 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         else if (TrySetupNextGridEventMode(meter))
         {
             return true;
+        }
+        while (_discoveryMapIndex < _discoveryMapIds.Count)
+        {
+            if (!meter.TryConsumeComponentNodes(1))
+                return false;
+            string mapId = _discoveryMapIds.GetKeyAt(_discoveryMapIndex++);
+            if (_preparedGraph.TryGetMap(mapId, out NavigationMapInstance? instance)
+                && instance != null)
+            {
+                _pendingDiscoveryKey = instance.Map.GridBinding.Key;
+                BeginMapMode(mapId, WorkMode.RevalidateMap);
+                return true;
+            }
         }
         while (_changeIndex < _changeCount)
         {
@@ -496,7 +539,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     {
         WorkMode completedMode = _mode;
         FinishMode();
-        if (completedMode == WorkMode.RemoveMap
+        if (completedMode is WorkMode.RemoveMap or WorkMode.RevalidateMap
             && !_pendingDiscoveryKey.Equals(default(GridConfigurationKey)))
         {
             GridConfigurationKey key = _pendingDiscoveryKey;
@@ -1468,6 +1511,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         _overlayCellIndex = 0;
         _overlayMapInspected = false;
         _gridEventIndex = 0;
+        _discoveryMapIndex = 0;
         _worldResetMapIndex = 0;
         _fullRebuildRemoveMapIndex = 0;
         _fullRebuildDiscoverMapIndex = 0;

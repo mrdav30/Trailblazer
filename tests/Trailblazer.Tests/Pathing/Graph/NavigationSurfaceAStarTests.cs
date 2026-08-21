@@ -553,13 +553,19 @@ public sealed class NavigationSurfaceAStarTests
         var source = new NavigationDependencyWorkspace(2, 2);
         var existingAddress = new NavigationCellAddress("map", default);
         var extraAddress = new NavigationCellAddress("map", new VoxelIndex(64, 0, 0));
-        target.TryRecordComponent(new NavigationSurfaceComponentKey(existingAddress))
+        target.TryRecordComponent(new NavigationSurfaceComponentKey(
+                existingAddress,
+                TraversalMedium.Solid))
             .Should().BeTrue();
         target.TryRecordPage("map", 0).Should().BeTrue();
-        source.TryRecordComponent(new NavigationSurfaceComponentKey(existingAddress))
+        source.TryRecordComponent(new NavigationSurfaceComponentKey(
+                existingAddress,
+                TraversalMedium.Solid))
             .Should().BeTrue();
         source.TryRecordPage("map", 0).Should().BeTrue();
-        source.TryRecordComponent(new NavigationSurfaceComponentKey(extraAddress))
+        source.TryRecordComponent(new NavigationSurfaceComponentKey(
+                extraAddress,
+                TraversalMedium.Solid))
             .Should().BeTrue();
         source.TryRecordPage("map", 1).Should().BeTrue();
         var meter = new NavigationWorkMeter(new NavigationWorkBudget(
@@ -583,7 +589,9 @@ public sealed class NavigationSurfaceAStarTests
         var target = new NavigationDependencyWorkspace(1, 1);
         var source = new NavigationDependencyWorkspace(1, 1);
         var address = new NavigationCellAddress("map", default);
-        var component = new NavigationSurfaceComponentKey(address);
+        var component = new NavigationSurfaceComponentKey(
+            address,
+            TraversalMedium.Solid);
         target.TryRecordComponent(component).Should().BeTrue();
         target.TryRecordPage("map", 0).Should().BeTrue();
         source.TryRecordComponent(component).Should().BeTrue();
@@ -640,11 +648,13 @@ public sealed class NavigationSurfaceAStarTests
         {
             new GraphComponentDependency(
                 new NavigationSurfaceComponentKey(
-                    new NavigationCellAddress("map-a", default)),
+                    new NavigationCellAddress("map-a", default),
+                    TraversalMedium.Solid),
                 1),
             new GraphComponentDependency(
                 new NavigationSurfaceComponentKey(
-                    new NavigationCellAddress("map-b", default)),
+                    new NavigationCellAddress("map-b", default),
+                    TraversalMedium.Solid),
                 2)
         };
         var pages = new[]
@@ -756,6 +766,7 @@ public sealed class NavigationSurfaceAStarTests
         NavigationWorldGraph graph = CreateGraph(instance);
         graph.SurfaceComponents.TryGet(
                 new NavigationCellAddress("map", addresses[0]),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent component)
             .Should().BeTrue();
         component.AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
@@ -1984,11 +1995,13 @@ public sealed class NavigationSurfaceAStarTests
         var witnessComponents = new NavigationSurfaceComponentKey[1];
         graph.TryGetSurfaceComponent(
                 new NavigationCellAddress("C", default),
+                TraversalMedium.Solid,
                 out witnessComponents[0],
                 out _)
             .Should().BeTrue();
         graph.TryGetSurfaceComponent(
                 new NavigationCellAddress("A", default),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponentKey sourceComponent,
                 out _)
             .Should().BeTrue();
@@ -2249,6 +2262,7 @@ public sealed class NavigationSurfaceAStarTests
         NavigationWorldGraph graph = CreateGraph(instance, connections);
         graph.SurfaceComponents.TryGet(
                 new NavigationCellAddress("map", sourceIndex),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent component)
             .Should().BeTrue();
         component.AllSurfaceEdgesEuclideanCertified.Should().BeFalse(

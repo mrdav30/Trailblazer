@@ -31,6 +31,19 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
         | NavigationCellFlags.TransitionDestinationHint
         | NavigationCellFlags.ClimbSurfaceHint;
 
+    internal static bool IsKnownMedium(TraversalMedium medium) =>
+        medium == TraversalMedium.Solid
+        || medium == TraversalMedium.Gas
+        || medium == TraversalMedium.Liquid;
+
+    internal bool SupportsMedium(TraversalMedium medium) => medium switch
+    {
+        TraversalMedium.Solid => (Media & TraversalMedia.Solid) != 0,
+        TraversalMedium.Gas => (Media & TraversalMedia.Gas) != 0,
+        TraversalMedium.Liquid => (Media & TraversalMedia.Liquid) != 0,
+        _ => false
+    };
+
     /// <summary>
     /// The traversal media supported by this cell.
     /// </summary>

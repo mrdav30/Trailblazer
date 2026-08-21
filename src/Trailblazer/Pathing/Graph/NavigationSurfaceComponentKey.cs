@@ -14,21 +14,37 @@ internal readonly struct NavigationSurfaceComponentKey :
     IEquatable<NavigationSurfaceComponentKey>,
     IComparable<NavigationSurfaceComponentKey>
 {
-    internal NavigationSurfaceComponentKey(NavigationCellAddress representative) =>
+    internal NavigationSurfaceComponentKey(
+        NavigationCellAddress representative,
+        TraversalMedium medium)
+    {
         Representative = representative;
+        Medium = medium;
+    }
 
     internal NavigationCellAddress Representative { get; }
 
-    public int CompareTo(NavigationSurfaceComponentKey other) =>
-        Representative.CompareTo(other.Representative);
+    internal TraversalMedium Medium { get; }
+
+    public int CompareTo(NavigationSurfaceComponentKey other)
+    {
+        int value = Representative.CompareTo(other.Representative);
+        if (value != 0)
+            return value;
+        int medium = (int)Medium;
+        int otherMedium = (int)other.Medium;
+        return medium < otherMedium ? -1 : medium > otherMedium ? 1 : 0;
+    }
 
     public bool Equals(NavigationSurfaceComponentKey other) =>
-        Representative.Equals(other.Representative);
+        Representative.Equals(other.Representative) && Medium == other.Medium;
 
     public override bool Equals(object? obj) =>
         obj is NavigationSurfaceComponentKey other && Equals(other);
 
-    public override int GetHashCode() => Representative.GetHashCode();
+    public override int GetHashCode() => SwiftCollections.Utility.SwiftHashTools.CombineHashCodes(
+        Representative.GetHashCode(),
+        (int)Medium);
 
     public static bool operator ==(
         NavigationSurfaceComponentKey left,

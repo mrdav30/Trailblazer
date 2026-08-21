@@ -106,8 +106,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 2)
         };
 
-        const long exactPeak = 11_112L;
-        const long oneBelowPeak = 11_111L;
+        const long exactPeak = 22_244L;
+        const long oneBelowPeak = 22_243L;
 
         RunSeamWork(world, candidate, changes, exactPeak, out bool exactExceeded)
             .Should().BeTrue();
@@ -115,8 +115,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         RunSeamWork(world, candidate, changes, oneBelowPeak, out bool belowExceeded)
             .Should().BeFalse();
         belowExceeded.Should().BeTrue(
-            "the exact peak is the prior 11,048-byte boundary plus two shared seam portals "
-            + "times the approved 32-byte certificate expansion; "
+            "the exact peak includes the direct-discovery root, strongly held graph roots, "
+            + "and two shared seam portals times the approved 32-byte certificate expansion; "
             + "one byte below cannot retain that boundary");
     }
 
@@ -227,6 +227,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         var removedAddress = new NavigationCellAddress("Z", default);
         lease.Graph.TryGetSurfaceComponent(
                 removedAddress,
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponentKey removedComponent,
                 out _)
             .Should().BeTrue();
@@ -285,7 +286,9 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
 
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
-        var prepared = new PreparedNavigationMap(map, 2);
+        NavigationMap replacement = new NavigationMapBuilder(map.MapId, map.GridBinding)
+            .Build();
+        var prepared = new PreparedNavigationMap(replacement, 2);
         NavigationOperationCandidate candidate = FoldMap(
             new NavigationOperationCandidate(navigationAreaCount: 1),
             prepared,
@@ -388,12 +391,11 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         preparationOnly.IsComplete.Should().BeTrue();
         withUpdate.IsComplete.Should().BeTrue();
         (withUpdate.RetainedBytes - preparationOnly.RetainedBytes).Should().Be(
-            12_240,
-            "the exact affected-component workspace coexists with the source root without the "
-            + "deleted duplicate composition payload or test-only full-graph scan state");
+            41_826,
+            "the exact affected-component workspace counts its unpublished candidate once");
         (withUpdate.PersistentPageCount - preparationOnly.PersistentPageCount)
-            .Should().Be(12,
-                "the update owns the adjacency path copies and exact affected-component payload pages");
+            .Should().Be(204,
+                "the update accounts the one candidate root and exact component payload pages");
     }
 
     [Fact]
@@ -408,10 +410,15 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         {
             lease.Graph.TryGetSurfaceComponent(
                     bridgeSource,
+                    TraversalMedium.Solid,
                     out priorComponent,
                     out priorComponentVersion)
                 .Should().BeTrue();
-            lease.Graph.AreInSameSurfaceComponent(bridgeSource, bridgeDestination)
+            lease.Graph.AreInSameSurfaceComponent(
+                    bridgeSource,
+                    TraversalMedium.Solid,
+                    bridgeDestination,
+                    TraversalMedium.Solid)
                 .Should().BeTrue();
         }
         var removal = SuppressConnection(context, ++sequence, "B", "bc");
@@ -447,6 +454,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         {
             lease.Graph.TryGetSurfaceComponent(
                     bridgeSource,
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponentKey blockedComponent,
                     out long blockedVersion)
                 .Should().BeTrue();
@@ -468,7 +476,11 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         GetCell(context, "A").IsMaterialized.Should().BeTrue();
         GetCell(context, "C").IsMaterialized.Should().BeTrue();
         using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
-        published.Graph.AreInSameSurfaceComponent(bridgeSource, bridgeDestination)
+        published.Graph.AreInSameSurfaceComponent(
+                bridgeSource,
+                TraversalMedium.Solid,
+                bridgeDestination,
+                TraversalMedium.Solid)
             .Should().BeFalse();
     }
 
@@ -562,12 +574,15 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             "the active A-B explicit edge must be visible to structural component traversal");
         lease.Graph.SurfaceComponents.TryGet(
                 aAddress,
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent component)
             .Should().BeTrue();
         component.Members.Count.Should().Be(2);
         lease.Graph.AreInSameSurfaceComponent(
                 aAddress,
-                bAddress)
+                TraversalMedium.Solid,
+                bAddress,
+                TraversalMedium.Solid)
             .Should().BeTrue();
     }
 
@@ -650,8 +665,9 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         NavigationGraphDiagnosticsSnapshot afterSafety = context.Pathing
             .GetNavigationGraphDiagnostics();
         afterSafety.GraphVersion
-            .Should().Be(versionBeforeSafetyMaintenance + 1,
-                "one maintenance boundary may publish at most one immutable root");
+            .Should().Be(versionBeforeSafetyMaintenance + 2,
+                "the bounded state inspection first broadens the safety closure, then publishes "
+                + "the reconciled immutable root on a later maintenance boundary");
         afterSafety.Maps[3].ComponentVersion.Should().Be(
             componentVersionBeforeSafetyMaintenance,
             "physical obstacles are page-level traversal state and do not rebuild structural components");
@@ -744,6 +760,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             {
                 lease.Graph.SurfaceComponents.TryGet(
                         new NavigationCellAddress(mapId, default),
+                        TraversalMedium.Solid,
                         out _)
                     .Should().BeTrue($"{mapId} must have structural membership");
             }

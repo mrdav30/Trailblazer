@@ -329,7 +329,10 @@ internal sealed partial class NavigationMapInstance
             {
                 slot = dynamicSlot.Slot;
             }
-            if (slot < 0 && operation.Kind == NavigationCellOverlayOperationKind.Set)
+            if (slot < 0
+                && (operation.Kind == NavigationCellOverlayOperationKind.Set
+                    || _state.Map.DefaultCell.HasValue
+                        && operation.Kind == NavigationCellOverlayOperationKind.Suppress))
             {
                 slot = _nextDynamicSlot++;
                 var addedDynamicSlot = new NavigationDynamicCellSlot(operation.Index, slot);
@@ -401,9 +404,11 @@ internal sealed partial class NavigationMapInstance
             }
             else if (dynamic)
             {
-                currentSource = NavigationCellSemanticSource.DynamicInactive;
-                currentHasCell = false;
-                currentCell = default;
+                currentSource = _state.Map.DefaultCell.HasValue
+                    ? NavigationCellSemanticSource.Baked
+                    : NavigationCellSemanticSource.DynamicInactive;
+                currentHasCell = _state.Map.DefaultCell.HasValue;
+                currentCell = _state.Map.DefaultCell.GetValueOrDefault();
             }
             else
             {
@@ -431,9 +436,11 @@ internal sealed partial class NavigationMapInstance
             }
             else if (dynamic)
             {
-                nextSource = NavigationCellSemanticSource.DynamicInactive;
-                nextHasCell = false;
-                nextCell = default;
+                nextSource = _state.Map.DefaultCell.HasValue
+                    ? NavigationCellSemanticSource.Baked
+                    : NavigationCellSemanticSource.DynamicInactive;
+                nextHasCell = _state.Map.DefaultCell.HasValue;
+                nextCell = _state.Map.DefaultCell.GetValueOrDefault();
             }
             else
             {

@@ -202,6 +202,7 @@ public sealed class TraversalEvaluatorTests
             NavigationNodeRef target = Resolve(lease.Graph, new VoxelIndex(1, 0, 0));
             lease.Graph.TryGetSurfaceComponent(
                     new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponentKey componentKey,
                     out _)
                 .Should().BeTrue();

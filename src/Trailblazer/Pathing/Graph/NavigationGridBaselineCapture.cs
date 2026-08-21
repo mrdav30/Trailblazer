@@ -85,6 +85,35 @@ internal readonly struct NavigationGridBaselineCapture
         IsRequested = true;
     }
 
+    internal NavigationGridBaselineCapture(
+        NavigationMapInstance preparedInstance,
+        NavigationSurfaceComponentKeySet structuralChangedStates,
+        bool defaultPhysicalAddressSetChanged,
+        int addressCount,
+        ulong highWaterSequence,
+        long worldSpawnToken,
+        ushort gridIndex,
+        long gridSpawnToken,
+        ulong gridHighWaterSequence,
+        GridConfigurationKey configurationKey)
+    {
+        Addresses = null;
+        AddressCount = addressCount;
+        Baseline = null;
+        PreparedPages = null;
+        PreparedInstance = preparedInstance;
+        StructuralChangedStates = structuralChangedStates;
+        DefaultPhysicalAddressSetChanged = defaultPhysicalAddressSetChanged;
+        HighWaterSequence = highWaterSequence;
+        WorldSpawnToken = worldSpawnToken;
+        GridIndex = gridIndex;
+        GridSpawnToken = gridSpawnToken;
+        GridHighWaterSequence = gridHighWaterSequence;
+        ConfigurationKey = configurationKey;
+        IsDelta = false;
+        IsRequested = true;
+    }
+
     internal VoxelIndex[]? Addresses { get; }
 
     internal int AddressCount { get; }
@@ -92,6 +121,12 @@ internal readonly struct NavigationGridBaselineCapture
     internal GridNavigationBaseline? Baseline { get; }
 
     internal PersistentIntMap<NavigationPhysicalPage>? PreparedPages { get; }
+
+    internal NavigationMapInstance? PreparedInstance { get; }
+
+    internal NavigationSurfaceComponentKeySet? StructuralChangedStates { get; }
+
+    internal bool DefaultPhysicalAddressSetChanged { get; }
 
     internal ulong HighWaterSequence { get; }
 
@@ -109,5 +144,7 @@ internal readonly struct NavigationGridBaselineCapture
 
     internal bool IsRequested { get; }
 
-    internal bool HasBaseline => Baseline != null || PreparedPages != null;
+    internal bool HasBaseline => Baseline != null
+        || PreparedPages != null
+        || PreparedInstance != null;
 }

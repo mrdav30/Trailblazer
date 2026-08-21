@@ -73,6 +73,10 @@ internal sealed class NavigationEndpointResolutionWork
     private bool _cursorComplete;
     private bool _hasResult;
 
+    private TraversalMedium Medium => _intent.CurrentMedium == TraversalMedium.Unknown
+        ? TraversalMedium.Solid
+        : _intent.CurrentMedium;
+
     internal NavigationEndpointResolutionWork(
         GridWorld world,
         NavigationWorldGraphStore store,
@@ -343,7 +347,7 @@ internal sealed class NavigationEndpointResolutionWork
         }
 
         var address = new NavigationCellAddress(mapId, candidate.VoxelIndex);
-        if (!_graph.TryGetSurfaceComponent(address, out _, out _))
+        if (!_graph.TryGetSurfaceComponent(address, Medium, out _, out _))
         {
             Finish(NavigationEndpointResolutionStatus.Stale);
             return false;
@@ -473,6 +477,7 @@ internal sealed class NavigationEndpointResolutionWork
         {
             if (!_graph.TryGetSurfaceComponent(
                     Result.Address,
+                    Medium,
                     out NavigationSurfaceComponentKey componentKey,
                     out _))
             {

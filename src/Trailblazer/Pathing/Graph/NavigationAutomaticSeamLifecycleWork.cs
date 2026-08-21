@@ -23,6 +23,7 @@ internal sealed class NavigationAutomaticSeamLifecycleWork
     private NavigationSurfaceComponentBuildWork? _componentUpdate;
     private int _affectedMemberCount;
     private int _endpointOrdinal;
+    private TraversalMedium _endpointMedium = TraversalMedium.Solid;
     private bool _affectedCaptureComplete;
 
     internal NavigationAutomaticSeamLifecycleWork(
@@ -108,10 +109,12 @@ internal sealed class NavigationAutomaticSeamLifecycleWork
             if (!meter.TryConsumeDependencyEntries(1))
                 return AdvanceStatus.Blocked;
             NavigationCellAddress address =
-                _refresh.GetChangedStructuralEndpointAt(_endpointOrdinal++);
-            _affectedAddresses = _affectedAddresses.Add(address);
+                _refresh.GetChangedStructuralEndpointAt(_endpointOrdinal);
+            if (_endpointMedium == TraversalMedium.Solid)
+                _affectedAddresses = _affectedAddresses.Add(address);
             if (_source.TryGetSurfaceComponent(
                     address,
+                    _endpointMedium,
                     out NavigationSurfaceComponentKey key,
                     out _)
                 && !_affectedComponents.Contains(key))
@@ -120,6 +123,15 @@ internal sealed class NavigationAutomaticSeamLifecycleWork
                 _source.SurfaceComponents.TryGet(key, out NavigationSurfaceComponent component);
                 _affectedMemberCount = checked(
                     _affectedMemberCount + component.Members.Count);
+            }
+            if (_endpointMedium == TraversalMedium.Liquid)
+            {
+                _endpointMedium = TraversalMedium.Solid;
+                _endpointOrdinal++;
+            }
+            else
+            {
+                _endpointMedium++;
             }
             if (ExceedsCapacity(maximumRetainedBytes, maximumPersistentPages))
                 return AdvanceStatus.CapacityExceeded;

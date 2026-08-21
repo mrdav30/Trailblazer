@@ -180,6 +180,7 @@ public sealed class NavigationExplicitConnectionTests
             priorLeft = FindInstance(installed.Graph, "left");
             installed.Graph.SurfaceComponents.TryGet(
                     new NavigationCellAddress("left", sourceIndex),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent component)
                 .Should().BeTrue();
             priorComponentVersion = component.Version;
@@ -204,6 +205,7 @@ public sealed class NavigationExplicitConnectionTests
             dormantLeft.InstanceVersion.Should().Be(priorLeft.InstanceVersion);
             dormantLease.Graph.SurfaceComponents.TryGet(
                     new NavigationCellAddress("left", sourceIndex),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent component)
                 .Should().BeTrue();
             component.Version
@@ -1339,6 +1341,7 @@ public sealed class NavigationExplicitConnectionTests
             record.Definition.Should().BeSameAs(baked);
             reverted.Graph.SurfaceComponents.TryGet(
                     new NavigationCellAddress("left", sourceIndex),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent component)
                 .Should().BeTrue();
             revertedComponentVersion = component.Version;
@@ -1366,6 +1369,7 @@ public sealed class NavigationExplicitConnectionTests
         updated.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count.Should().Be(1);
         updated.Graph.SurfaceComponents.TryGet(
                 new NavigationCellAddress("left", sourceIndex),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent updatedComponent)
             .Should().BeTrue();
         updatedComponent.Version.Should().BeGreaterThan(revertedComponentVersion,

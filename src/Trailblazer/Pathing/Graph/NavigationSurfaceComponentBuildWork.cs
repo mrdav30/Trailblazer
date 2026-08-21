@@ -29,6 +29,7 @@ internal sealed class NavigationSurfaceComponentBuildWork
     private NavigationSurfaceComponentIndex _result = NavigationSurfaceComponentIndex.Empty;
     private NavigationSurfaceEdgeEnumerator _outgoing;
     private NavigationIncomingSurfaceEdgeEnumerator _incoming;
+    private NavigationAutomaticSeamIndex.EndpointEnumerator _volumeSeams;
     private int _queueRead;
     private int _queueWrite;
     private int _memberCount;
@@ -36,8 +37,12 @@ internal sealed class NavigationSurfaceComponentBuildWork
     private bool _componentActive;
     private bool _nodeActive;
     private bool _outgoingComplete;
+    private int _primaryDirectionOrdinal;
+    private int _primaryDirectionCount;
+    private TraversalMedium _medium = TraversalMedium.Solid;
     private bool _certified = true;
     private int _affectedKeyOrdinal;
+    private NavigationSurfaceComponentKeySet.Enumerator _affectedKeyEnumerator;
     private int _seedOrdinal;
     private int _rootCount;
     private int _rootOrdinal;
@@ -69,6 +74,7 @@ internal sealed class NavigationSurfaceComponentBuildWork
         _graph = graph;
         _previousGraph = previousGraph;
         _affectedKeys = affectedKeys;
+        _affectedKeyEnumerator = affectedKeys.GetEnumerator();
         _seedAddresses = seedAddresses;
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             affectedAddressCapacity < seedAddresses.Count,
@@ -154,10 +160,26 @@ internal sealed class NavigationSurfaceComponentBuildWork
                     _representative = currentAddress;
                 if (!_graph.TryGetNodeRef(currentAddress, out NavigationNodeRef current))
                     continue;
+                if (_medium != TraversalMedium.Solid)
+                {
+                    _primaryDirectionOrdinal = 0;
+                    _primaryDirectionCount = _graph.GetPrimaryDirectionCount(current);
+                    _volumeSeams = _graph.AutomaticSeams.GetActiveEndpointEnumerator(
+                        currentAddress);
+                    _nodeActive = true;
+                    continue;
+                }
                 _outgoing = _graph.EnumerateStructuralSurfaceEdges(current);
                 _incoming = _graph.EnumerateIncomingStructuralSurfaceEdges(current);
                 _outgoingComplete = false;
                 _nodeActive = true;
+            }
+
+            if (_medium != TraversalMedium.Solid)
+            {
+                if (!AdvanceVolumeNode(meter))
+                    return false;
+                continue;
             }
 
             int remainingEdges = meter.RemainingSurfaceComponentEdges;
@@ -217,34 +239,52 @@ internal sealed class NavigationSurfaceComponentBuildWork
 
     private bool TryBeginNextComponent(ref int unmeteredRootProbes)
     {
-        while (_rootOrdinal < _rootCount)
+        while (true)
         {
-            if (unmeteredRootProbes++ == MaximumUnmeteredRootProbes)
-                return false;
-            NavigationCellAddress address = _rootScratch[_rootOrdinal++];
-            if (!_graph.TryGetNodeRef(address, out _)
-                || !_graph.HasEffectiveCell(address)
-                || !_visited.Add(address))
+            while (_rootOrdinal < _rootCount)
             {
-                continue;
+                if (unmeteredRootProbes++ == MaximumUnmeteredRootProbes)
+                    return false;
+                NavigationCellAddress address = _rootScratch[_rootOrdinal++];
+                bool exists = _graph.TryGetStructuralMediumStateRef(
+                    address,
+                    _medium,
+                    out _);
+                if (!exists
+                    || _result.TryGet(address, _medium, out _)
+                    || !_visited.Add(address))
+                {
+                    continue;
+                }
+                _queueRead = 0;
+                _queueWrite = 1;
+                _memberCount = 0;
+                _memberBuilder = new NavigationPagedSequence<NavigationCellAddress>.Builder(
+                    NavigationCellAddressBytes);
+                _certified = true;
+                _queue[0] = address;
+                _componentActive = true;
+                return true;
             }
-            _queueRead = 0;
-            _queueWrite = 1;
-            _memberCount = 0;
-            _memberBuilder = new NavigationPagedSequence<NavigationCellAddress>.Builder(
-                NavigationCellAddressBytes);
-            _certified = true;
-            _queue[0] = address;
-            _componentActive = true;
-            return true;
+            if (_medium == TraversalMedium.Liquid)
+            {
+                IsComplete = true;
+                return false;
+            }
+            _medium++;
+            _visited.Reset();
+            _rootOrdinal = 0;
+            unmeteredRootProbes = 0;
         }
-        IsComplete = true;
-        return false;
     }
 
     private void AddNeighbor(NavigationNodeRef neighbor)
     {
         if (!_graph.TryGetNodeAddress(neighbor, out NavigationCellAddress address)
+            || !_graph.TryGetStructuralMediumStateRef(
+                address,
+                TraversalMedium.Solid,
+                out _)
             || !_visited.Add(address))
         {
             return;
@@ -257,14 +297,66 @@ internal sealed class NavigationSurfaceComponentBuildWork
         _queue[_queueWrite++] = address;
     }
 
+    private bool AdvanceVolumeNode(MaintenanceWorkMeter meter)
+    {
+        while (_primaryDirectionOrdinal < _primaryDirectionCount)
+        {
+            if (!meter.TryConsumeSurfaceComponentEdges(1))
+                return false;
+            int ordinal = _primaryDirectionOrdinal++;
+            NavigationCellAddress current = _queue[_queueRead - 1];
+            if (_graph.TryGetStructuralMediumStateRef(
+                    current,
+                    _medium,
+                    out NavigationMediumStateRef source)
+                && _graph.TryGetStructuralPrimaryMediumNeighbor(
+                    source,
+                    ordinal,
+                    out NavigationMediumStateRef neighbor)
+                && _graph.TryGetNodeAddress(neighbor.Node, out NavigationCellAddress address))
+            {
+                AddVolumeNeighbor(address);
+            }
+        }
+
+        while (meter.RemainingSurfaceComponentEdges > 0)
+        {
+            if (!_volumeSeams.MoveNext())
+            {
+                _volumeSeams = default;
+                _nodeActive = false;
+                return true;
+            }
+            meter.TryConsumeSurfaceComponentEdges(1);
+            NavigationCellAddress destination = _volumeSeams.Current.Destination;
+            if (_graph.TryGetStructuralMediumStateRef(destination, _medium, out _))
+                AddVolumeNeighbor(destination);
+        }
+        return false;
+    }
+
+    private void AddVolumeNeighbor(NavigationCellAddress address)
+    {
+        if (!_visited.Add(address))
+            return;
+        if (!_domain.Contains(address))
+        {
+            throw new InvalidOperationException(
+                "Medium-component closure omitted a positive-face neighbor.");
+        }
+        _queue[_queueWrite++] = address;
+    }
+
     private bool AdvanceIncrementalPreparation(MaintenanceWorkMeter meter)
     {
         while (_affectedKeyOrdinal < _affectedKeys.Count || _removedComponent != null)
         {
             if (_removedComponent == null)
             {
-                NavigationSurfaceComponentKey key =
-                    _affectedKeys.GetAt(_affectedKeyOrdinal++);
+                if (!_affectedKeyEnumerator.MoveNext())
+                    break;
+                _affectedKeyOrdinal++;
+                NavigationSurfaceComponentKey key = _affectedKeyEnumerator.Current;
                 if (!_previousGraph.SurfaceComponents.TryGet(key, out _removedComponent))
                     continue;
                 _removedMembers = _removedComponent.Members.GetEnumerator();
@@ -324,7 +416,7 @@ internal sealed class NavigationSurfaceComponentBuildWork
     {
         NavigationPagedSequence<NavigationCellAddress> sequence = _memberBuilder!.Seal();
         _memberBuilder = null;
-        var key = new NavigationSurfaceComponentKey(_representative);
+        var key = new NavigationSurfaceComponentKey(_representative, _medium);
         _sealingComponent = new NavigationSurfaceComponent(
             key,
             _graph.GraphVersion,

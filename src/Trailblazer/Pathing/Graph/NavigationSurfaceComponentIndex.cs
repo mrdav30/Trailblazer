@@ -10,11 +10,13 @@ namespace Trailblazer.Pathing;
 /// <summary>Maps exact stable surface addresses to immutable weak components.</summary>
 internal sealed class NavigationSurfaceComponentIndex
 {
-    private const long BaseRetainedBytes = 64L;
+    private const long BaseRetainedBytes = 112L;
 
-    private readonly PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponentKey>>
+    private readonly NavigationMediumSlots<
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponentKey>>>
         _membership;
-    private readonly PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponent>>
+    private readonly NavigationMediumSlots<
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponent>>>
         _components;
     private readonly long _membershipMapBytes;
     private readonly long _componentMapBytes;
@@ -24,8 +26,12 @@ internal sealed class NavigationSurfaceComponentIndex
     private readonly int _componentValuePages;
 
     private NavigationSurfaceComponentIndex(
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponentKey>> membership,
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponent>> components,
+        NavigationMediumSlots<
+            PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponentKey>>>
+            membership,
+        NavigationMediumSlots<
+            PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponent>>>
+            components,
         long membershipMapBytes,
         long componentMapBytes,
         long componentValueBytes,
@@ -44,8 +50,8 @@ internal sealed class NavigationSurfaceComponentIndex
     }
 
     internal static NavigationSurfaceComponentIndex Empty { get; } = new(
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponentKey>>.Empty,
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponent>>.Empty,
+        CreateEmptyRoots<NavigationSurfaceComponentKey>(),
+        CreateEmptyRoots<NavigationSurfaceComponent>(),
         0,
         0,
         0,
@@ -55,34 +61,42 @@ internal sealed class NavigationSurfaceComponentIndex
 
     internal long RetainedBytes => checked(
         BaseRetainedBytes
-        + _membership.RetainedBytes
-        + _components.RetainedBytes
+        + GetRootBytes(_membership)
+        + GetRootBytes(_components)
         + _membershipMapBytes
         + _componentMapBytes
         + _componentValueBytes);
 
     internal int PersistentPageCount => checked(
-        2
-        + _membership.PersistentNodeCount
-        + _components.PersistentNodeCount
+        GetRootObjectCount(_membership)
+        + GetRootObjectCount(_components)
+        + GetRootNodeCount(_membership)
+        + GetRootNodeCount(_components)
         + _membershipMapPages
         + _componentMapPages
         + _componentValuePages);
 
     internal int PersistentMapNodeCount => checked(
-        _membership.PersistentNodeCount
-        + _components.PersistentNodeCount
+        GetRootNodeCount(_membership)
+        + GetRootNodeCount(_components)
         + _membershipMapPages
         + _componentMapPages);
 
     internal bool TryGet(
         NavigationCellAddress address,
+        TraversalMedium medium,
         out NavigationSurfaceComponent component)
     {
-        if (_membership.TryGetValue(
+        if (!NavigationCell.IsKnownMedium(medium))
+        {
+            component = null!;
+            return false;
+        }
+        _membership.TryGet(medium, out var membership);
+        if (membership.TryGetValue(
                 address.MapId,
-                out PersistentVoxelIndexMap<NavigationSurfaceComponentKey> membership)
-            && membership.TryGetValue(address.Index, out NavigationSurfaceComponentKey key)
+                out PersistentVoxelIndexMap<NavigationSurfaceComponentKey> membershipMap)
+            && membershipMap.TryGetValue(address.Index, out NavigationSurfaceComponentKey key)
             && TryGet(key, out component))
         {
             return true;
@@ -95,10 +109,16 @@ internal sealed class NavigationSurfaceComponentIndex
         NavigationSurfaceComponentKey key,
         out NavigationSurfaceComponent component)
     {
-        if (_components.TryGetValue(
+        if (!NavigationCell.IsKnownMedium(key.Medium))
+        {
+            component = null!;
+            return false;
+        }
+        _components.TryGet(key.Medium, out var components);
+        if (components.TryGetValue(
                 key.Representative.MapId,
-                out PersistentVoxelIndexMap<NavigationSurfaceComponent> components)
-            && components.TryGetValue(key.Representative.Index, out component!))
+                out PersistentVoxelIndexMap<NavigationSurfaceComponent> componentMap)
+            && componentMap.TryGetValue(key.Representative.Index, out component!))
         {
             return true;
         }
@@ -112,7 +132,8 @@ internal sealed class NavigationSurfaceComponentIndex
     {
         copiedPersistentNodes = 0;
         NavigationSurfaceComponentKey key = component.Key;
-        bool hadComponentMap = _components.TryGetValue(
+        _components.TryGet(key.Medium, out var components);
+        bool hadComponentMap = components.TryGetValue(
             key.Representative.MapId,
             out PersistentVoxelIndexMap<NavigationSurfaceComponent> componentMap);
         componentMap ??= PersistentVoxelIndexMap<NavigationSurfaceComponent>.Empty;
@@ -120,6 +141,9 @@ internal sealed class NavigationSurfaceComponentIndex
             - (hadComponentMap ? componentMap.RetainedBytes : 0L);
         int componentMapPages = _componentMapPages
             - (hadComponentMap ? componentMap.PersistentNodeCount : 0);
+        bool replaced = componentMap.TryGetValue(
+            key.Representative.Index,
+            out NavigationSurfaceComponent prior);
         componentMap = componentMap.Set(
             key.Representative.Index,
             component,
@@ -127,19 +151,22 @@ internal sealed class NavigationSurfaceComponentIndex
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
         componentMapBytes = checked(componentMapBytes + componentMap.RetainedBytes);
         componentMapPages = checked(componentMapPages + componentMap.PersistentNodeCount);
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponent>> components =
-            _components.Set(key.Representative.MapId, componentMap, out copied);
+        components = components.Set(key.Representative.MapId, componentMap, out copied);
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
 
         return new NavigationSurfaceComponentIndex(
             _membership,
-            components,
+            _components.Set(key.Medium, components),
             _membershipMapBytes,
             componentMapBytes,
-            checked(_componentValueBytes + component.RetainedBytes),
+            checked(_componentValueBytes
+                - (replaced ? prior.RetainedBytes : 0L)
+                + component.RetainedBytes),
             _membershipMapPages,
             componentMapPages,
-            checked(_componentValuePages + component.PersistentPageCount));
+            checked(_componentValuePages
+                - (replaced ? prior.PersistentPageCount : 0)
+                + component.PersistentPageCount));
     }
 
     internal NavigationSurfaceComponentIndex AddMembership(
@@ -148,7 +175,8 @@ internal sealed class NavigationSurfaceComponentIndex
         out int copiedPersistentNodes)
     {
         copiedPersistentNodes = 0;
-        bool hadMembershipMap = _membership.TryGetValue(
+        _membership.TryGet(key.Medium, out var membership);
+        bool hadMembershipMap = membership.TryGetValue(
             address.MapId,
             out PersistentVoxelIndexMap<NavigationSurfaceComponentKey> membershipMap);
         membershipMap ??= PersistentVoxelIndexMap<NavigationSurfaceComponentKey>.Empty;
@@ -159,13 +187,11 @@ internal sealed class NavigationSurfaceComponentIndex
         membershipMap = membershipMap.Set(address.Index, key, out int copied);
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
         membershipMapBytes = checked(membershipMapBytes + membershipMap.RetainedBytes);
-        membershipMapPages = checked(
-            membershipMapPages + membershipMap.PersistentNodeCount);
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponentKey>> membership =
-            _membership.Set(address.MapId, membershipMap, out copied);
+        membershipMapPages = checked(membershipMapPages + membershipMap.PersistentNodeCount);
+        membership = membership.Set(address.MapId, membershipMap, out copied);
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
         return new NavigationSurfaceComponentIndex(
-            membership,
+            _membership.Set(key.Medium, membership),
             _components,
             membershipMapBytes,
             _componentMapBytes,
@@ -181,49 +207,42 @@ internal sealed class NavigationSurfaceComponentIndex
     {
         copiedPersistentNodes = 0;
         NavigationSurfaceComponentKey key = component.Key;
-        if (!_components.TryGetValue(
+        _components.TryGet(key.Medium, out var components);
+        if (!components.TryGetValue(
                 key.Representative.MapId,
-                out PersistentVoxelIndexMap<NavigationSurfaceComponent> componentMap))
+                out PersistentVoxelIndexMap<NavigationSurfaceComponent> componentMap)
+            || !componentMap.TryGetValue(
+                key.Representative.Index,
+                out NavigationSurfaceComponent existing))
         {
             return this;
         }
         long componentMapBytes = _componentMapBytes - componentMap.RetainedBytes;
         int componentMapPages = _componentMapPages - componentMap.PersistentNodeCount;
-        componentMap = componentMap.Remove(
-            key.Representative.Index,
-            out bool removed,
-            out int copied);
+        componentMap = componentMap.Remove(key.Representative.Index, out bool removed, out int copied);
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
         if (!removed)
             return this;
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponent>> components;
         if (componentMap.Count == 0)
         {
-            components = _components.Remove(
-                key.Representative.MapId,
-                out _,
-                out copied);
+            components = components.Remove(key.Representative.MapId, out _, out copied);
         }
         else
         {
-            components = _components.Set(
-                key.Representative.MapId,
-                componentMap,
-                out copied);
+            components = components.Set(key.Representative.MapId, componentMap, out copied);
             componentMapBytes = checked(componentMapBytes + componentMap.RetainedBytes);
-            componentMapPages = checked(
-                componentMapPages + componentMap.PersistentNodeCount);
+            componentMapPages = checked(componentMapPages + componentMap.PersistentNodeCount);
         }
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
         return new NavigationSurfaceComponentIndex(
             _membership,
-            components,
+            _components.Set(key.Medium, components),
             _membershipMapBytes,
             componentMapBytes,
-            checked(_componentValueBytes - component.RetainedBytes),
+            checked(_componentValueBytes - existing.RetainedBytes),
             _membershipMapPages,
             componentMapPages,
-            checked(_componentValuePages - component.PersistentPageCount));
+            checked(_componentValuePages - existing.PersistentPageCount));
     }
 
     internal NavigationSurfaceComponentIndex RemoveMembership(
@@ -232,7 +251,8 @@ internal sealed class NavigationSurfaceComponentIndex
         out int copiedPersistentNodes)
     {
         copiedPersistentNodes = 0;
-        if (!_membership.TryGetValue(
+        _membership.TryGet(expectedKey.Medium, out var membership);
+        if (!membership.TryGetValue(
                 address.MapId,
                 out PersistentVoxelIndexMap<NavigationSurfaceComponentKey> membershipMap)
             || !membershipMap.TryGetValue(address.Index, out NavigationSurfaceComponentKey key)
@@ -244,21 +264,19 @@ internal sealed class NavigationSurfaceComponentIndex
         int membershipMapPages = _membershipMapPages - membershipMap.PersistentNodeCount;
         membershipMap = membershipMap.Remove(address.Index, out _, out int copied);
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationSurfaceComponentKey>> membership;
         if (membershipMap.Count == 0)
         {
-            membership = _membership.Remove(address.MapId, out _, out copied);
+            membership = membership.Remove(address.MapId, out _, out copied);
         }
         else
         {
-            membership = _membership.Set(address.MapId, membershipMap, out copied);
+            membership = membership.Set(address.MapId, membershipMap, out copied);
             membershipMapBytes = checked(membershipMapBytes + membershipMap.RetainedBytes);
-            membershipMapPages = checked(
-                membershipMapPages + membershipMap.PersistentNodeCount);
+            membershipMapPages = checked(membershipMapPages + membershipMap.PersistentNodeCount);
         }
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
         return new NavigationSurfaceComponentIndex(
-            membership,
+            _membership.Set(expectedKey.Medium, membership),
             _components,
             membershipMapBytes,
             _componentMapBytes,
@@ -266,5 +284,67 @@ internal sealed class NavigationSurfaceComponentIndex
             membershipMapPages,
             _componentMapPages,
             _componentValuePages);
+    }
+
+    private static NavigationMediumSlots<PersistentStringMap<PersistentVoxelIndexMap<T>>>
+        CreateEmptyRoots<T>()
+    {
+        var roots = default(
+            NavigationMediumSlots<PersistentStringMap<PersistentVoxelIndexMap<T>>>);
+        for (TraversalMedium medium = TraversalMedium.Solid;
+             medium <= TraversalMedium.Liquid;
+             medium++)
+        {
+            roots = roots.Set(
+                medium,
+                PersistentStringMap<PersistentVoxelIndexMap<T>>.Empty);
+        }
+        return roots;
+    }
+
+    private static long GetRootBytes<T>(
+        NavigationMediumSlots<PersistentStringMap<PersistentVoxelIndexMap<T>>> roots)
+    {
+        GetRoots(roots, out var solid, out var gas, out var liquid);
+        return checked(
+            solid.RetainedBytes
+            + (ReferenceEquals(gas, solid) ? 0L : gas.RetainedBytes)
+            + (ReferenceEquals(liquid, solid) || ReferenceEquals(liquid, gas)
+                ? 0L
+                : liquid.RetainedBytes));
+    }
+
+    private static int GetRootNodeCount<T>(
+        NavigationMediumSlots<PersistentStringMap<PersistentVoxelIndexMap<T>>> roots)
+    {
+        int total = 0;
+        for (TraversalMedium medium = TraversalMedium.Solid;
+             medium <= TraversalMedium.Liquid;
+             medium++)
+        {
+            roots.TryGet(medium, out var root);
+            total = checked(total + root.PersistentNodeCount);
+        }
+        return total;
+    }
+
+    private static int GetRootObjectCount<T>(
+        NavigationMediumSlots<PersistentStringMap<PersistentVoxelIndexMap<T>>> roots)
+    {
+        GetRoots(roots, out var solid, out var gas, out var liquid);
+        return 1
+            + (ReferenceEquals(gas, solid) ? 0 : 1)
+            + (ReferenceEquals(liquid, solid) || ReferenceEquals(liquid, gas) ? 0 : 1);
+    }
+
+    private static void GetRoots<T>(
+        NavigationMediumSlots<PersistentStringMap<PersistentVoxelIndexMap<T>>> roots,
+        out PersistentStringMap<PersistentVoxelIndexMap<T>> solid,
+        out PersistentStringMap<PersistentVoxelIndexMap<T>> gas,
+        out PersistentStringMap<PersistentVoxelIndexMap<T>> liquid)
+    {
+        roots.TryGet(TraversalMedium.Solid, out solid!);
+        roots.TryGet(TraversalMedium.Gas, out gas!);
+        roots.TryGet(TraversalMedium.Liquid, out liquid!);
     }
 }

@@ -7,7 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Stores a persistent canonical set of exact surface-component keys.</summary>
+/// <summary>Stores a persistent canonical set of exact address-medium keys.</summary>
 internal sealed class NavigationSurfaceComponentKeySet
 {
     private readonly PersistentStringMap<PersistentVoxelIndexMap<byte>> _maps;
@@ -43,7 +43,8 @@ internal sealed class NavigationSurfaceComponentKeySet
         _maps.TryGetValue(
             key.Representative.MapId,
             out PersistentVoxelIndexMap<byte> values)
-        && values.TryGetValue(key.Representative.Index, out _);
+        && values.TryGetValue(key.Representative.Index, out byte mask)
+        && (mask & NavigationMediumSlots<byte>.GetBit(key.Medium)) != 0;
 
     internal NavigationSurfaceComponentKeySet Add(NavigationSurfaceComponentKey key)
     {
@@ -52,11 +53,13 @@ internal sealed class NavigationSurfaceComponentKeySet
             mapId,
             out PersistentVoxelIndexMap<byte> values);
         values ??= PersistentVoxelIndexMap<byte>.Empty;
-        if (values.TryGetValue(key.Representative.Index, out _))
+        byte bit = NavigationMediumSlots<byte>.GetBit(key.Medium);
+        values.TryGetValue(key.Representative.Index, out byte mask);
+        if ((mask & bit) != 0)
             return this;
         long innerBytes = _innerBytes - (hadMap ? values.RetainedBytes : 0L);
         int innerPages = _innerPages - (hadMap ? values.PersistentNodeCount : 0);
-        values = values.Set(key.Representative.Index, 1);
+        values = values.Set(key.Representative.Index, (byte)(mask | bit));
         return new NavigationSurfaceComponentKeySet(
             _maps.Set(mapId, values),
             checked(Count + 1),
@@ -64,25 +67,88 @@ internal sealed class NavigationSurfaceComponentKeySet
             checked(innerPages + values.PersistentNodeCount));
     }
 
-    internal NavigationSurfaceComponentKey GetAt(int ordinal)
+    internal NavigationSurfaceComponentKeySet Remove(NavigationSurfaceComponentKey key)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            (uint)ordinal >= (uint)Count,
-            ordinal,
-            nameof(ordinal));
-        int remaining = ordinal;
-        for (int map = 0; map < _maps.Count; map++)
+        string mapId = key.Representative.MapId;
+        if (!_maps.TryGetValue(mapId, out PersistentVoxelIndexMap<byte> values)
+            || !values.TryGetValue(key.Representative.Index, out byte mask))
         {
-            PersistentVoxelIndexMap<byte> values = _maps.GetValueAt(map);
-            if (remaining < values.Count)
+            return this;
+        }
+        byte bit = NavigationMediumSlots<byte>.GetBit(key.Medium);
+        if ((mask & bit) == 0)
+            return this;
+        long innerBytes = _innerBytes - values.RetainedBytes;
+        int innerPages = _innerPages - values.PersistentNodeCount;
+        byte nextMask = (byte)(mask & ~bit);
+        values = nextMask == 0
+            ? values.Remove(key.Representative.Index, out _)
+            : values.Set(key.Representative.Index, nextMask);
+        PersistentStringMap<PersistentVoxelIndexMap<byte>> maps = values.Count == 0
+            ? _maps.Remove(mapId, out _)
+            : _maps.Set(mapId, values);
+        return new NavigationSurfaceComponentKeySet(
+            maps,
+            Count - 1,
+            checked(innerBytes + (values.Count == 0 ? 0L : values.RetainedBytes)),
+            checked(innerPages + (values.Count == 0 ? 0 : values.PersistentNodeCount)));
+    }
+
+    internal Enumerator GetEnumerator() => new(this);
+
+    internal struct Enumerator
+    {
+        private readonly NavigationSurfaceComponentKeySet _set;
+        private int _map;
+        private int _address;
+        private TraversalMedium _medium;
+        private TraversalMedium _currentMedium;
+
+        internal Enumerator(NavigationSurfaceComponentKeySet set)
+        {
+            _set = set;
+            _map = 0;
+            _address = 0;
+            _medium = TraversalMedium.Solid;
+            _currentMedium = TraversalMedium.Unknown;
+        }
+
+        internal NavigationSurfaceComponentKey Current
+        {
+            get
             {
+                PersistentVoxelIndexMap<byte> values = _set._maps.GetValueAt(_map);
                 return new NavigationSurfaceComponentKey(
                     new NavigationCellAddress(
-                        _maps.GetKeyAt(map),
-                        values.GetKeyAt(remaining)));
+                        _set._maps.GetKeyAt(_map),
+                        values.GetKeyAt(_address)),
+                    _currentMedium);
             }
-            remaining -= values.Count;
         }
-        return default;
+
+        internal bool MoveNext()
+        {
+            while (_map < _set._maps.Count)
+            {
+                PersistentVoxelIndexMap<byte> values = _set._maps.GetValueAt(_map);
+                while (_address < values.Count)
+                {
+                    byte mask = values.GetValueAt(_address);
+                    while (_medium <= TraversalMedium.Liquid)
+                    {
+                        TraversalMedium medium = _medium++;
+                        if ((mask & NavigationMediumSlots<byte>.GetBit(medium)) == 0)
+                            continue;
+                        _currentMedium = medium;
+                        return true;
+                    }
+                    _address++;
+                    _medium = TraversalMedium.Solid;
+                }
+                _map++;
+                _address = 0;
+            }
+            return false;
+        }
     }
 }

@@ -189,7 +189,9 @@ public sealed class NavigationAutomaticSeamTests
                 scenario.SecondTarget);
             lease.Graph.AreInSameSurfaceComponent(
                     scenario.Source,
-                    scenario.FirstTarget)
+                    TraversalMedium.Solid,
+                    scenario.FirstTarget,
+                    TraversalMedium.Solid)
                 .Should().BeTrue(
                     "an active automatic seam joins its endpoint nodes in weak membership");
         }
@@ -285,10 +287,12 @@ public sealed class NavigationAutomaticSeamTests
         {
             dormant.Graph.SurfaceComponents.TryGet(
                     sourceAddress,
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent sourceComponent)
                 .Should().BeTrue();
             dormant.Graph.SurfaceComponents.TryGet(
                     new NavigationCellAddress("target", default),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent targetComponent)
                 .Should().BeTrue();
             sourceComponent.Key.Should().Be(targetComponent.Key,
@@ -304,6 +308,7 @@ public sealed class NavigationAutomaticSeamTests
         {
             active.Graph.SurfaceComponents.TryGet(
                     sourceAddress,
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent activeComponent)
                 .Should().BeTrue();
             activeComponentVersion = activeComponent.Version;
@@ -318,6 +323,7 @@ public sealed class NavigationAutomaticSeamTests
         {
             dormantAgain.Graph.SurfaceComponents.TryGet(
                     sourceAddress,
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent dormantAgainComponent)
                 .Should().BeTrue();
             dormantAgainComponent.Version.Should().Be(activeComponentVersion);
@@ -1020,6 +1026,7 @@ public sealed class NavigationAutomaticSeamTests
         var sourceAddress = new NavigationCellAddress("source", default);
         lease.Graph.SurfaceComponents.TryGet(
                 sourceAddress,
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent sourceComponent)
             .Should().BeTrue();
         sourceComponent.AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
@@ -1086,6 +1093,7 @@ public sealed class NavigationAutomaticSeamTests
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
         lease.Graph.SurfaceComponents.TryGet(
                 new NavigationCellAddress("lower", default),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent lowerComponent)
             .Should().BeTrue();
         lowerComponent.AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
@@ -1157,6 +1165,7 @@ public sealed class NavigationAutomaticSeamTests
             vertical.Graph.AutomaticSeams.PairCount.Should().Be(1);
             vertical.Graph.SurfaceComponents.TryGet(
                     new NavigationCellAddress("source", default),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent component)
                 .Should().BeTrue();
             component.AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
@@ -1192,6 +1201,7 @@ public sealed class NavigationAutomaticSeamTests
         links.Current.UncertifiedCount.Should().Be(1);
         horizontal.Graph.SurfaceComponents.TryGet(
                 new NavigationCellAddress("source", default),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponent horizontalComponent)
             .Should().BeTrue();
         horizontalComponent.AllSurfaceEdgesEuclideanCertified.Should().BeFalse();

@@ -837,6 +837,7 @@ public sealed class TrailblazerGuideServiceTests
         {
             graphLease.Graph.SurfaceComponents.TryGet(
                     new NavigationCellAddress(mapId, default),
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponent component)
                 .Should().BeTrue();
             component.AllSurfaceEdgesEuclideanCertified.Should().BeFalse(

@@ -154,13 +154,13 @@
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/NavigationMediumGraphTests.cs`
 - Modify: `tests/Trailblazer.Tests/Pathing/Graph/NavigationMapInstanceTestFactory.cs`
 
-- [ ] RED effective default composition, multi-media cell states, no-cell absence, overlay media replacement, and affected/unaffected dependency pages.
-- [ ] RED medium structural components for rectangular 6 and hex 8 positive faces; prove different components reject but same component does not bypass profile/policy/passability.
-- [ ] RED free-flight volume foot anchors centered in cell volume for several body heights, including multi-cell and cross-grid placement, too-tall/too-wide rejection, pointy/flat hex, and anisotropic rectangular metrics.
-- [ ] Implement compact `(NavigationNodeRef, TraversalMedium)` identity without eagerly materializing three graph nodes.
-- [ ] Keep structural components keyed only by medium presence and positive-face contact; do not include profile, policy, clearance, shortcuts, or semantic transitions.
-- [ ] Record default/media/component changes through existing page/component dependency stamps; no second version clock.
-- [ ] Run focused composition/component/publication Release + ReleaseLean gates, review, and commit: `feat(pathing): compose medium graph states`.
+- [x] RED effective default composition, multi-media cell states, no-cell absence, overlay media replacement, and affected/unaffected dependency pages.
+- [x] RED medium structural components for rectangular 6 and hex 8 positive faces; prove different components reject but same component does not bypass profile/policy/passability.
+- [x] RED free-flight volume foot-anchor derivation centered in the GridForge-issued cell volume for several valid body heights, pointy/flat hex, anisotropic rectangular metrics, and invalid or unrepresentable arithmetic. Task 5 exclusively owns multi-cell/cross-grid placement, swept-union fit, semantic witness, and too-wide/too-tall unavailability proofs.
+- [x] Implement compact `(NavigationNodeRef, TraversalMedium)` identity without eagerly materializing three graph nodes.
+- [x] Keep structural components keyed only by medium presence and positive-face contact; do not include profile, policy, clearance, shortcuts, or semantic transitions.
+- [x] Record default/media/component changes through existing page/component dependency stamps; no second version clock.
+- [x] Run focused composition/component/publication Release + ReleaseLean gates, review, and commit: `feat(pathing): compose medium graph states`.
 
 ## Task 4: Publish Transition Pages And The Canonical Rule Table
 

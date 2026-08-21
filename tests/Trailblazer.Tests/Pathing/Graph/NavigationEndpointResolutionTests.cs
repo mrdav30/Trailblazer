@@ -34,13 +34,16 @@ public sealed class NavigationEndpointResolutionTests
             guidePointCapacity: 1);
 
         workspace.TryRecordEndpointComponent(new NavigationSurfaceComponentKey(
-                new NavigationCellAddress("map", new VoxelIndex(0, 0, 0))))
+                new NavigationCellAddress("map", new VoxelIndex(0, 0, 0)),
+                TraversalMedium.Solid))
             .Should().BeTrue();
         workspace.TryRecordEndpointComponent(new NavigationSurfaceComponentKey(
-                new NavigationCellAddress("map", new VoxelIndex(1, 0, 0))))
+                new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                TraversalMedium.Solid))
             .Should().BeTrue();
         workspace.TryRecordEndpointComponent(new NavigationSurfaceComponentKey(
-                new NavigationCellAddress("map", new VoxelIndex(2, 0, 0))))
+                new NavigationCellAddress("map", new VoxelIndex(2, 0, 0)),
+                TraversalMedium.Solid))
             .Should().BeTrue();
         workspace.EndpointComponentCount.Should().Be(3,
             "same-page explicit witnesses may belong to independent weak components");
@@ -449,6 +452,7 @@ public sealed class NavigationEndpointResolutionTests
             Profile());
         graph.TryGetSurfaceComponent(
                 new NavigationCellAddress("a-closer", default),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponentKey closerComponent,
                 out _)
             .Should().BeTrue();
@@ -1059,6 +1063,7 @@ public sealed class NavigationEndpointResolutionTests
             surfaceComponents: componentIndex);
         graph.TryGetSurfaceComponent(
                 new NavigationCellAddress("map", default),
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponentKey component,
                 out _)
             .Should().BeTrue();

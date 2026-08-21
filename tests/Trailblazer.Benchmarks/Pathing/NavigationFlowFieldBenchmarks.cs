@@ -710,13 +710,24 @@ public class NavigationFlowFieldArticulationBenchmarks
             var left = new NavigationCellAddress(MapId, default);
             var right = new NavigationCellAddress(MapId, new VoxelIndex(NodeCount - 1, 0, 0));
             NavigationSurfaceComponent component = null;
-            if (!graph.Graph.AreInSameSurfaceComponent(left, right)
-                || !graph.Graph.SurfaceComponents.TryGet(left, out component)
+            if (!graph.Graph.AreInSameSurfaceComponent(
+                    left,
+                    TraversalMedium.Solid,
+                    right,
+                    TraversalMedium.Solid)
+                || !graph.Graph.SurfaceComponents.TryGet(
+                    left,
+                    TraversalMedium.Solid,
+                    out component)
                 || component.Members.Count != NodeCount)
             {
                 throw new InvalidOperationException(
                     $"Million-node articulation baseline: same_component="
-                    + $"{graph.Graph.AreInSameSurfaceComponent(left, right)}/True, "
+                    + $"{graph.Graph.AreInSameSurfaceComponent(
+                        left,
+                        TraversalMedium.Solid,
+                        right,
+                        TraversalMedium.Solid)}/True, "
                     + $"component_nodes={component?.Members.Count ?? 0}/{NodeCount}.");
             }
             _beforeComponentCount = 1;
@@ -795,8 +806,14 @@ public class NavigationFlowFieldArticulationBenchmarks
             using NavigationWorldGraphLease graph =
                 _fixture.Context.Pathing.TryAcquireNavigationGraph()
                     ?? throw new InvalidOperationException("The split articulation graph was unavailable.");
-            if (!graph.Graph.SurfaceComponents.TryGet(left, out NavigationSurfaceComponent leftComponent)
-                || !graph.Graph.SurfaceComponents.TryGet(right, out NavigationSurfaceComponent rightComponent))
+            if (!graph.Graph.SurfaceComponents.TryGet(
+                    left,
+                    TraversalMedium.Solid,
+                    out NavigationSurfaceComponent leftComponent)
+                || !graph.Graph.SurfaceComponents.TryGet(
+                    right,
+                    TraversalMedium.Solid,
+                    out NavigationSurfaceComponent rightComponent))
             {
                 throw new InvalidOperationException("The split articulation components were unavailable.");
             }

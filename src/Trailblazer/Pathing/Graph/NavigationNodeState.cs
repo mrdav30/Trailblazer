@@ -37,4 +37,23 @@ internal readonly struct NavigationNodeState
     internal Vector3d Center { get; }
 
     internal Vector3d FootAnchor { get; }
+
+    internal bool TryGetCenteredVolumeFootAnchor(
+        Fixed64 bodyHeight,
+        out Vector3d footAnchor)
+    {
+        if (bodyHeight <= Fixed64.Zero
+            || !Fixed64.TryMultiplyAdd(
+                bodyHeight,
+                -Fixed64.Half,
+                Center.Y,
+                out Fixed64 footY))
+        {
+            footAnchor = default;
+            return false;
+        }
+
+        footAnchor = new Vector3d(Center.X, footY, Center.Z);
+        return true;
+    }
 }

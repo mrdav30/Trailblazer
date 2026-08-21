@@ -84,13 +84,16 @@ internal sealed class NavigationFlowFieldWork : IDisposable
 
         if (!_graph.AreInSameSurfaceComponent(
                 query.Start.Address,
-                query.End.Address))
+                query.Medium,
+                query.End.Address,
+                query.Medium))
         {
             Finish(NavigationFlowFieldStatus.NoPath);
             return;
         }
         if (!_graph.TryGetSurfaceComponent(
                 query.End.Address,
+                query.Medium,
                 out NavigationSurfaceComponentKey component,
                 out _)
             || !_workspace.TryRecordComponent(component)
@@ -520,6 +523,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         }
         return _graph.TryGetSurfaceComponent(
                 address,
+                _query!.Medium,
                 out NavigationSurfaceComponentKey component,
                 out _)
             && _workspace.TryRecordComponent(component);

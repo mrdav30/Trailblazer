@@ -7,6 +7,7 @@
 
 using System;
 using GridForge.Grids;
+using GridForge.Grids.Topology;
 using GridForge.Spatial;
 using Trailblazer.Pathing;
 
@@ -38,19 +39,25 @@ internal static class NavigationMapInstanceTestFactory
         long instanceVersion)
     {
         NavigationMapInstance composed = ComposeDetached(state, previous, instanceVersion);
-        var addresses = new VoxelIndex[composed.AddressCount];
-        int count = composed.CopyCanonicalAddresses(addresses);
-        if (count != addresses.Length
-            || !world.TryCaptureNavigationBaseline(
-                composed.Map.GridBinding.Key,
-                addresses,
-                out GridNavigationBaseline? baseline)
-            || baseline == null)
+        int capacity = Math.Max(composed.AddressCount, composed.Map.GridBinding.AddressCount);
+        var addresses = new VoxelIndex[capacity];
+        var coveredAddresses = new GridCoveredAddress[capacity];
+        var rebuild = new NavigationBaselineRebuild(composed);
+        for (int frame = 0; frame < 4_096; frame++)
         {
-            return composed;
+            rebuild.Advance(
+                world,
+                composed,
+                capacity,
+                long.MaxValue,
+                int.MaxValue,
+                addresses,
+                coveredAddresses,
+                out NavigationGridBaselineCapture capture,
+                out bool completed);
+            if (completed)
+                return composed.Materialize(capture, instanceVersion);
         }
-        return composed.Materialize(
-            new NavigationGridBaselineCapture(addresses, baseline),
-            instanceVersion);
+        throw new InvalidOperationException("Baseline composition did not complete.");
     }
 }

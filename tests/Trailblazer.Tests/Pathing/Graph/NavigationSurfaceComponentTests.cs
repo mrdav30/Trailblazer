@@ -37,13 +37,13 @@ public sealed class NavigationSurfaceComponentTests
             1,
             new[] { Compose(world, map) });
 
-        NavigationSurfaceComponentIndex.Empty.RetainedBytes.Should().Be(128L);
+        NavigationSurfaceComponentIndex.Empty.RetainedBytes.Should().Be(176L);
         NavigationSurfaceComponentIndex.Empty.PersistentPageCount.Should().Be(2);
 
         NavigationSurfaceComponentIndex singleton =
             NavigationSurfaceComponentTestFactory.Build(graph);
-        singleton.RetainedBytes.Should().Be(776L);
-        singleton.PersistentPageCount.Should().Be(10);
+        singleton.RetainedBytes.Should().Be(888L);
+        singleton.PersistentPageCount.Should().Be(12);
     }
 
     [Fact]
@@ -72,13 +72,26 @@ public sealed class NavigationSurfaceComponentTests
         var left = new NavigationCellAddress("islands", new VoxelIndex(0, 0, 0));
         var right = new NavigationCellAddress("islands", new VoxelIndex(2, 0, 0));
 
-        lease.Graph.TryGetSurfaceComponent(left, out NavigationSurfaceComponentKey leftKey, out _)
+        lease.Graph.TryGetSurfaceComponent(
+                left,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey leftKey,
+                out _)
             .Should().BeTrue();
-        lease.Graph.TryGetSurfaceComponent(right, out NavigationSurfaceComponentKey rightKey, out _)
+        lease.Graph.TryGetSurfaceComponent(
+                right,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey rightKey,
+                out _)
             .Should().BeTrue();
         leftKey.Should().NotBe(rightKey,
             "missing native cells split weak structural connectivity inside one map");
-        lease.Graph.AreInSameSurfaceComponent(left, right).Should().BeFalse();
+        lease.Graph.AreInSameSurfaceComponent(
+                left,
+                TraversalMedium.Solid,
+                right,
+                TraversalMedium.Solid)
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -100,9 +113,17 @@ public sealed class NavigationSurfaceComponentTests
         var right = new NavigationCellAddress("islands", new VoxelIndex(2, 0, 0));
 
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
-        lease.Graph.TryGetSurfaceComponent(left, out NavigationSurfaceComponentKey leftKey, out _)
+        lease.Graph.TryGetSurfaceComponent(
+                left,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey leftKey,
+                out _)
             .Should().BeTrue();
-        lease.Graph.TryGetSurfaceComponent(right, out NavigationSurfaceComponentKey rightKey, out _)
+        lease.Graph.TryGetSurfaceComponent(
+                right,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey rightKey,
+                out _)
             .Should().BeTrue();
         NavigationWorldGraph closed = lease.Graph.WithClosedStructuralComponents(
             NavigationSurfaceComponentKeySet.Empty.Add(leftKey),
@@ -111,7 +132,7 @@ public sealed class NavigationSurfaceComponentTests
 
         closed.TryGetComponentDependency(leftKey, out _).Should().BeFalse();
         closed.TryGetComponentDependency(rightKey, out _).Should().BeTrue();
-        closed.IsSurfaceAddressClosed(right).Should().BeFalse(
+        closed.IsSurfaceAddressClosed(right, TraversalMedium.Solid).Should().BeFalse(
             "an exact closure must not degrade to its representative MapId");
     }
 
@@ -186,7 +207,12 @@ public sealed class NavigationSurfaceComponentTests
             explicitConnections: connections,
             surfaceComponents: components);
 
-        graph.AreInSameSurfaceComponent(source, destination).Should().BeTrue(
+        graph.AreInSameSurfaceComponent(
+                source,
+                TraversalMedium.Solid,
+                destination,
+                TraversalMedium.Solid)
+            .Should().BeTrue(
             "component membership treats the directed connection as an undirected structural link");
         graph.EnumerateSurfaceEdges(Resolve(graph, destination))
             .MoveNext().Should().BeFalse(
@@ -218,8 +244,17 @@ public sealed class NavigationSurfaceComponentTests
         NavigationSurfaceComponent priorUnrelated;
         using (NavigationWorldGraphLease before = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            before.Graph.AreInSameSurfaceComponent(left, right).Should().BeTrue();
-            before.Graph.SurfaceComponents.TryGet(unrelated, out priorUnrelated!).Should().BeTrue();
+            before.Graph.AreInSameSurfaceComponent(
+                    left,
+                    TraversalMedium.Solid,
+                    right,
+                    TraversalMedium.Solid)
+                .Should().BeTrue();
+            before.Graph.SurfaceComponents.TryGet(
+                    unrelated,
+                    TraversalMedium.Solid,
+                    out priorUnrelated!)
+                .Should().BeTrue();
         }
 
         var suppress = new NavigationOverlayCommitOperation(
@@ -236,9 +271,18 @@ public sealed class NavigationSurfaceComponentTests
         SimulateUntilTerminal(context, suppress.Receipt);
 
         using NavigationWorldGraphLease after = context.Pathing.TryAcquireNavigationGraph()!;
-        after.Graph.AreInSameSurfaceComponent(left, right).Should().BeFalse();
-        after.Graph.TryGetSurfaceComponent(middle, out _, out _).Should().BeFalse();
-        after.Graph.SurfaceComponents.TryGet(unrelated, out NavigationSurfaceComponent nextUnrelated)
+        after.Graph.AreInSameSurfaceComponent(
+                left,
+                TraversalMedium.Solid,
+                right,
+                TraversalMedium.Solid)
+            .Should().BeFalse();
+        after.Graph.TryGetSurfaceComponent(middle, TraversalMedium.Solid, out _, out _)
+            .Should().BeFalse();
+        after.Graph.SurfaceComponents.TryGet(
+                unrelated,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponent nextUnrelated)
             .Should().BeTrue();
         nextUnrelated.Should().BeSameAs(priorUnrelated,
             "a structural mutation must path-copy only the affected old component");
@@ -291,10 +335,16 @@ public sealed class NavigationSurfaceComponentTests
         using (NavigationWorldGraphLease pending = context.Pathing.TryAcquireNavigationGraph()!)
         {
             closureVersion = pending.Graph.GraphVersion;
-            pending.Graph.IsSurfaceAddressClosed(left).Should().BeTrue();
-            pending.Graph.IsSurfaceAddressClosed(right).Should().BeTrue();
-            pending.Graph.IsSurfaceAddressClosed(unrelated).Should().BeFalse();
-            pending.Graph.AreInSameSurfaceComponent(left, right).Should().BeTrue(
+            pending.Graph.IsSurfaceAddressClosed(left, TraversalMedium.Solid).Should().BeTrue();
+            pending.Graph.IsSurfaceAddressClosed(right, TraversalMedium.Solid).Should().BeTrue();
+            pending.Graph.IsSurfaceAddressClosed(unrelated, TraversalMedium.Solid)
+                .Should().BeFalse();
+            pending.Graph.AreInSameSurfaceComponent(
+                    left,
+                    TraversalMedium.Solid,
+                    right,
+                    TraversalMedium.Solid)
+                .Should().BeTrue(
                 "the old exact index remains atomic while its component is closed");
         }
 
@@ -310,8 +360,14 @@ public sealed class NavigationSurfaceComponentTests
         published.Graph.HasClosedStructuralScope.Should().BeFalse();
         published.Graph.GraphVersion.Should().BeGreaterThan(closureVersion,
             "the atomic result must publish after every intermediate closure generation");
-        published.Graph.AreInSameSurfaceComponent(left, right).Should().BeFalse();
-        published.Graph.IsSurfaceAddressClosed(unrelated).Should().BeFalse();
+        published.Graph.AreInSameSurfaceComponent(
+                left,
+                TraversalMedium.Solid,
+                right,
+                TraversalMedium.Solid)
+            .Should().BeFalse();
+        published.Graph.IsSurfaceAddressClosed(unrelated, TraversalMedium.Solid)
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -340,6 +396,7 @@ public sealed class NavigationSurfaceComponentTests
         {
             prior.Graph.TryGetSurfaceComponent(
                     preclosed,
+                    TraversalMedium.Solid,
                     out NavigationSurfaceComponentKey preclosedKey,
                     out _)
                 .Should().BeTrue();
@@ -369,23 +426,27 @@ public sealed class NavigationSurfaceComponentTests
             context.Simulate();
             using NavigationWorldGraphLease pending = context.Pathing.TryAcquireNavigationGraph()!;
             if (pending.Graph.AreAllStructuralComponentsClosed
-                || !pending.Graph.IsSurfaceAddressClosed(affected))
+                || !pending.Graph.IsSurfaceAddressClosed(
+                    affected,
+                    TraversalMedium.Solid))
             {
                 continue;
             }
             observedExactClosure = true;
             pending.Graph.ClosedStructuralComponents.Should().BeSameAs(baseline,
                 "the preexisting owner root must not be copied into this operation's closure");
-            pending.Graph.IsSurfaceAddressClosed(preclosed).Should().BeTrue();
+            pending.Graph.IsSurfaceAddressClosed(preclosed, TraversalMedium.Solid)
+                .Should().BeTrue();
             break;
         }
 
         observedExactClosure.Should().BeTrue();
         SimulateUntilTerminal(context, operation.Receipt);
         using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
-        published.Graph.IsSurfaceAddressClosed(preclosed).Should().BeTrue(
+        published.Graph.IsSurfaceAddressClosed(preclosed, TraversalMedium.Solid).Should().BeTrue(
             "publication must restore the preexisting closure owner");
-        published.Graph.IsSurfaceAddressClosed(affected).Should().BeFalse();
+        published.Graph.IsSurfaceAddressClosed(affected, TraversalMedium.Solid)
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -426,9 +487,15 @@ public sealed class NavigationSurfaceComponentTests
         var affectedAddress = new NavigationCellAddress("map", new VoxelIndex(0, 0, 0));
         var removedAddress = new NavigationCellAddress("map", new VoxelIndex(1, 0, 0));
         var unrelatedAddress = new NavigationCellAddress("map", new VoxelIndex(10, 0, 0));
-        source.SurfaceComponents.TryGet(affectedAddress, out NavigationSurfaceComponent affected)
+        source.SurfaceComponents.TryGet(
+                affectedAddress,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponent affected)
             .Should().BeTrue();
-        source.SurfaceComponents.TryGet(unrelatedAddress, out NavigationSurfaceComponent unrelated)
+        source.SurfaceComponents.TryGet(
+                unrelatedAddress,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponent unrelated)
             .Should().BeTrue();
         NavigationSurfaceComponentKeySet affectedKeys =
             NavigationSurfaceComponentKeySet.Empty.Add(affected.Key);
@@ -454,11 +521,17 @@ public sealed class NavigationSurfaceComponentTests
 
         meter.ComponentNodes.Should().Be(2,
             "the unrelated two-node island is outside the affected domain");
-        work.Result.TryGet(unrelatedAddress, out NavigationSurfaceComponent reused)
+        work.Result.TryGet(
+                unrelatedAddress,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponent reused)
             .Should().BeTrue();
         reused.Should().BeSameAs(unrelated);
-        work.Result.TryGet(removedAddress, out _).Should().BeFalse();
-        work.Result.TryGet(affectedAddress, out NavigationSurfaceComponent split)
+        work.Result.TryGet(removedAddress, TraversalMedium.Solid, out _).Should().BeFalse();
+        work.Result.TryGet(
+                affectedAddress,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponent split)
             .Should().BeTrue();
         split.Should().NotBeSameAs(affected);
     }
@@ -506,7 +579,10 @@ public sealed class NavigationSurfaceComponentTests
 
         work.IsComplete.Should().BeTrue();
         frames.Should().BeGreaterThanOrEqualTo(4);
-        work.Result.TryGet(new NavigationCellAddress("map", default), out _)
+        work.Result.TryGet(
+                new NavigationCellAddress("map", default),
+                TraversalMedium.Solid,
+                out _)
             .Should().BeTrue();
     }
 
@@ -530,7 +606,12 @@ public sealed class NavigationSurfaceComponentTests
         var middle = new NavigationCellAddress("map", new VoxelIndex(1, 0, 0));
         var right = new NavigationCellAddress("map", new VoxelIndex(2, 0, 0));
         using (NavigationWorldGraphLease before = context.Pathing.TryAcquireNavigationGraph()!)
-            before.Graph.AreInSameSurfaceComponent(left, right).Should().BeFalse();
+            before.Graph.AreInSameSurfaceComponent(
+                    left,
+                    TraversalMedium.Solid,
+                    right,
+                    TraversalMedium.Solid)
+                .Should().BeFalse();
         var merge = new NavigationOverlayCommitOperation(
             new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
             {
@@ -544,8 +625,18 @@ public sealed class NavigationSurfaceComponentTests
         SimulateUntilTerminal(context, merge.Receipt);
 
         using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
-        published.Graph.AreInSameSurfaceComponent(left, right).Should().BeTrue();
-        published.Graph.TryGetSurfaceComponent(middle, out _, out _).Should().BeTrue();
+        published.Graph.AreInSameSurfaceComponent(
+                left,
+                TraversalMedium.Solid,
+                right,
+                TraversalMedium.Solid)
+            .Should().BeTrue();
+        published.Graph.TryGetSurfaceComponent(
+                middle,
+                TraversalMedium.Solid,
+                out _,
+                out _)
+            .Should().BeTrue();
     }
 
     private static NavigationNodeRef Resolve(

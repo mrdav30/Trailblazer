@@ -711,6 +711,7 @@ public sealed class NavigationFlowFieldTests
             .Should().BeTrue();
         fixture.Graph.TryGetSurfaceComponent(
                 originAddress,
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponentKey component,
                 out _)
             .Should().BeTrue();
@@ -783,6 +784,7 @@ public sealed class NavigationFlowFieldTests
             endpointCandidate);
         fixture.Graph.TryGetSurfaceComponent(
                 endpointAddress,
+                TraversalMedium.Solid,
                 out NavigationSurfaceComponentKey endpointComponent,
                 out _)
             .Should().BeTrue();

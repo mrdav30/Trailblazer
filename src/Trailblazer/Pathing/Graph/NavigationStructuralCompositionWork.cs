@@ -31,14 +31,17 @@ internal sealed class NavigationStructuralCompositionWork
     private NavigationSurfaceComponentKeySet _publishedAffectedComponents =
         NavigationSurfaceComponentKeySet.Empty;
     private NavigationCellAddressSet _affectedAddresses = NavigationCellAddressSet.Empty;
+    private NavigationSurfaceComponentKeySet _affectedMediumStates =
+        NavigationSurfaceComponentKeySet.Empty;
     private int _affectedMemberCount;
     private PersistentStringMap<bool> _wholeMapIds = PersistentStringMap<bool>.Empty;
     private NavigationWorldGraph.StructuralPreparationWork? _preparation;
     private NavigationAutomaticSeamRefreshWork? _seamRefresh;
     private NavigationWorldGraph? _preparedGraph;
-    private NavigationSurfaceComponentBuildWork? _componentUpdate;
+    private NavigationMaterializedComponentWork? _componentUpdate;
     private string? _pendingMapId;
     private NavigationSurfaceComponentKey? _pendingComponentKey;
+    private TraversalMedium _pendingMedium = TraversalMedium.Solid;
     private NavigationCellAddress? _pendingExactAddress;
     private int _pendingMapComponentOrdinal;
     private int _explicitSourceIndex;
@@ -62,6 +65,7 @@ internal sealed class NavigationStructuralCompositionWork
     private int _addressDynamicCursor;
     private readonly VoxelIndex[] _addressScratch = new VoxelIndex[1];
     private int _incidentAddressIndex;
+    private TraversalMedium _incidentMedium = TraversalMedium.Gas;
     private bool _incidentNodeActive;
     private bool _incidentOutgoingComplete;
     private NavigationSurfaceEdgeEnumerator _incidentOutgoing;
@@ -114,10 +118,12 @@ internal sealed class NavigationStructuralCompositionWork
         BaseRetainedBytes
         + _changedMapIds.RetainedBytes
         + _wholeMapIds.RetainedBytes
-        + _affectedAddresses.RetainedBytes
-        + (ReferenceEquals(_publishedAffectedComponents, _affectedComponents)
-            ? 0L
-            : _affectedComponents.RetainedBytes)
+        + (_componentUpdate == null ? _affectedAddresses.RetainedBytes : 0L)
+        + (_componentUpdate == null ? _affectedMediumStates.RetainedBytes : 0L)
+        + (_componentUpdate == null
+            && !ReferenceEquals(_publishedAffectedComponents, _affectedComponents)
+                ? _affectedComponents.RetainedBytes
+                : 0L)
         + (_preparation?.RetainedBytes ?? 0)
         + (_seamRefresh?.RetainedBytes ?? 0)
         + (_componentUpdate?.RetainedBytes ?? 0)
@@ -127,10 +133,12 @@ internal sealed class NavigationStructuralCompositionWork
         1
         + _changedMapIds.PersistentNodeCount
         + _wholeMapIds.PersistentNodeCount
-        + _affectedAddresses.PersistentPageCount
-        + (ReferenceEquals(_publishedAffectedComponents, _affectedComponents)
-            ? 0
-            : _affectedComponents.PersistentPageCount)
+        + (_componentUpdate == null ? _affectedAddresses.PersistentPageCount : 0)
+        + (_componentUpdate == null ? _affectedMediumStates.PersistentPageCount : 0)
+        + (_componentUpdate == null
+            && !ReferenceEquals(_publishedAffectedComponents, _affectedComponents)
+                ? _affectedComponents.PersistentPageCount
+                : 0)
         + (_preparation?.PersistentPageCount ?? 0)
         + (_seamRefresh?.PersistentPageCount ?? 0)
         + (_componentUpdate?.PersistentPageCount ?? 0));
@@ -143,8 +151,8 @@ internal sealed class NavigationStructuralCompositionWork
                 || (_componentUpdate?.IsComplete ?? false)));
 
     internal NavigationWorldGraph Result => _updateComposition
-        ? PreparedGraph.WithSurfaceComponents(
-            _componentUpdate?.Result ?? _sourceGraph.SurfaceComponents)
+        ? _componentUpdate?.Result
+            ?? PreparedGraph.WithSurfaceComponents(_sourceGraph.SurfaceComponents)
         : PreparedGraph;
 
     internal bool Matches(NavigationOperationFrameChange[] changes, int changeCount)
@@ -223,12 +231,18 @@ internal sealed class NavigationStructuralCompositionWork
             return true;
         if (_affectedComponents.Count == 0 && _affectedAddresses.Count == 0)
             return true;
-        _componentUpdate ??= new NavigationSurfaceComponentBuildWork(
+        _componentUpdate ??= new NavigationMaterializedComponentWork(
             PreparedGraph,
-            _sourceGraph,
+            _affectedMediumStates,
             _affectedComponents,
             _affectedAddresses,
-            checked(_affectedMemberCount + _affectedAddresses.Count));
+            checked(_affectedMemberCount + _affectedAddresses.Count),
+            world: null,
+            baselineCaptures: null,
+            affectedMapOrdinals: null,
+            affectedMapCount: 0,
+            events: null,
+            eventCount: 0);
         bool complete = _componentUpdate.Advance(meter);
         if (ExceedsCapacity(maximumRetainedBytes, maximumPersistentPages))
         {
@@ -292,13 +306,10 @@ internal sealed class NavigationStructuralCompositionWork
                     out _pendingExactAddress,
                     out _pendingWholeMap);
                 string pendingMapId = _pendingMapId!;
-                _pendingComponentKey = _pendingExactAddress.HasValue
-                    && _sourceGraph.TryGetSurfaceComponent(
-                        _pendingExactAddress.Value,
-                        out NavigationSurfaceComponentKey componentKey,
-                        out _)
-                    ? componentKey
-                    : null;
+                _pendingComponentKey = null;
+                _pendingMedium = _pendingWholeMap
+                    ? (TraversalMedium)((int)TraversalMedium.Liquid + 1)
+                    : TraversalMedium.Solid;
                 _pendingMapComponentOrdinal = 0;
                 _addressBakedCursor = 0;
                 _addressDynamicCursor = 0;
@@ -316,14 +327,26 @@ internal sealed class NavigationStructuralCompositionWork
             }
             if (_capturePhase == 2)
             {
-                if (_pendingExactAddress.HasValue && _pendingComponentKey.HasValue)
+                while (_pendingExactAddress.HasValue
+                    && _pendingMedium <= TraversalMedium.Liquid)
                 {
-                    if (!_affectedComponents.Contains(_pendingComponentKey.Value))
+                    TraversalMedium medium = _pendingMedium++;
+                    if (!HasMediumStateChanged(_pendingExactAddress.Value, medium)
+                        || !_sourceGraph.TryGetSurfaceComponent(
+                            _pendingExactAddress.Value,
+                            medium,
+                            out NavigationSurfaceComponentKey componentKey,
+                            out _)
+                        || _affectedComponents.Contains(componentKey))
                     {
-                        if (!meter.TryConsumeDependencyEntries(1))
-                            return false;
-                        AddAffectedComponent(_pendingComponentKey.Value);
+                        continue;
                     }
+                    if (!meter.TryConsumeDependencyEntries(1))
+                    {
+                        _pendingMedium--;
+                        return false;
+                    }
+                    AddAffectedComponent(componentKey);
                 }
                 if (_pendingExactAddress.HasValue)
                 {
@@ -343,6 +366,7 @@ internal sealed class NavigationStructuralCompositionWork
                     {
                         NavigationMapInstance instance = sourceInstance!;
                         while (_pendingComponentKey.HasValue
+                            || _pendingMedium <= TraversalMedium.Liquid
                             || _pendingMapComponentOrdinal < instance.AddressCount)
                         {
                             if (_pendingComponentKey.HasValue)
@@ -358,6 +382,23 @@ internal sealed class NavigationStructuralCompositionWork
                                 _pendingComponentKey = null;
                                 continue;
                             }
+                            if (_pendingMedium <= TraversalMedium.Liquid)
+                            {
+                                TraversalMedium medium = _pendingMedium++;
+                                var currentAddress = new NavigationCellAddress(
+                                    _pendingMapId!,
+                                    _addressScratch[0]);
+                                if (HasMediumStateChanged(currentAddress, medium)
+                                    && _sourceGraph.TryGetSurfaceComponent(
+                                        currentAddress,
+                                        medium,
+                                        out NavigationSurfaceComponentKey membershipKey,
+                                        out _))
+                                {
+                                    _pendingComponentKey = membershipKey;
+                                }
+                                continue;
+                            }
                             if (!meter.TryConsumeComponentNodes(1))
                                 return false;
                             instance.CopyCanonicalAddressChunk(
@@ -365,16 +406,7 @@ internal sealed class NavigationStructuralCompositionWork
                                 ref _addressDynamicCursor,
                                 _addressScratch);
                             _pendingMapComponentOrdinal++;
-                            var address = new NavigationCellAddress(
-                                _pendingMapId!,
-                                _addressScratch[0]);
-                            if (_sourceGraph.TryGetSurfaceComponent(
-                                    address,
-                                    out NavigationSurfaceComponentKey membershipKey,
-                                    out _))
-                            {
-                                _pendingComponentKey = membershipKey;
-                            }
+                            _pendingMedium = TraversalMedium.Solid;
                         }
                     }
                     if (!_wholeMapIds.ContainsKey(_pendingMapId!))
@@ -386,6 +418,7 @@ internal sealed class NavigationStructuralCompositionWork
                 }
                 _pendingMapId = null;
                 _pendingComponentKey = null;
+                _pendingMedium = TraversalMedium.Solid;
                 _pendingExactAddress = null;
                 _pendingMapComponentOrdinal = 0;
                 _addressBakedCursor = 0;
@@ -459,7 +492,8 @@ internal sealed class NavigationStructuralCompositionWork
                 CaptureAffectedAddress(
                     (_explicitEndpointStage & 1) == 0
                         ? record.Source
-                        : record.Destination);
+                        : record.Destination,
+                    includeVolume: false);
             }
             _explicitEndpointStage++;
             if (_explicitEndpointStage == 4)
@@ -474,7 +508,8 @@ internal sealed class NavigationStructuralCompositionWork
             if (!meter.TryConsumeDependencyEntries(1))
                 return false;
             CaptureAffectedAddress(
-                _seamRefresh.GetChangedStructuralEndpointAt(_seamEndpointIndex++));
+                _seamRefresh.GetChangedStructuralEndpointAt(_seamEndpointIndex++),
+                includeVolume: true);
         }
 
         while (_preparedMapOrdinal < PreparedGraph.MapCount)
@@ -497,8 +532,9 @@ internal sealed class NavigationStructuralCompositionWork
                 var address = new NavigationCellAddress(
                     instance.MapId,
                     _addressScratch[0]);
-                if (PreparedGraph.HasEffectiveCell(address))
-                    CaptureAffectedAddress(address);
+                if (PreparedGraph.HasEffectiveCell(address)
+                    && !HasSameStructuralMedia(address))
+                    _affectedAddresses = _affectedAddresses.Add(address);
             }
             _preparedMapOrdinal++;
             _preparedMapAddressOrdinal = 0;
@@ -514,6 +550,7 @@ internal sealed class NavigationStructuralCompositionWork
                 NavigationCellAddress address = _pendingIncidentAddress.Value;
                 if (_sourceGraph.TryGetSurfaceComponent(
                         address,
+                        TraversalMedium.Solid,
                         out NavigationSurfaceComponentKey component,
                         out _)
                     && !_affectedComponents.Contains(component))
@@ -529,12 +566,33 @@ internal sealed class NavigationStructuralCompositionWork
             {
                 NavigationCellAddress address =
                     _affectedAddresses.GetAt(_incidentAddressIndex);
-                if (!PreparedGraph.TryGetNodeRef(address, out NavigationNodeRef node)
-                    || !PreparedGraph.HasEffectiveCell(address))
+                while (_incidentMedium <= TraversalMedium.Liquid)
                 {
+                    TraversalMedium medium = _incidentMedium++;
+                    if (!HasMediumStateChanged(address, medium)
+                        || _affectedMediumStates.Contains(
+                            new NavigationSurfaceComponentKey(address, medium)))
+                    {
+                        continue;
+                    }
+                    if (!meter.TryConsumeDependencyEntries(1))
+                    {
+                        _incidentMedium--;
+                        return false;
+                    }
+                    _affectedMediumStates = _affectedMediumStates.Add(
+                        new NavigationSurfaceComponentKey(address, medium));
+                }
+                if (!PreparedGraph.TryGetStructuralMediumStateRef(
+                        address,
+                        TraversalMedium.Solid,
+                        out NavigationMediumStateRef solidState))
+                {
+                    _incidentMedium = TraversalMedium.Gas;
                     _incidentAddressIndex++;
                     continue;
                 }
+                NavigationNodeRef node = solidState.Node;
                 _incidentOutgoing = PreparedGraph.EnumerateStructuralSurfaceEdges(node);
                 _incidentIncoming =
                     PreparedGraph.EnumerateIncomingStructuralSurfaceEdges(node);
@@ -581,21 +639,33 @@ internal sealed class NavigationStructuralCompositionWork
             _incidentOutgoing = default;
             _incidentIncoming = default;
             _incidentNodeActive = false;
+            _incidentMedium = TraversalMedium.Gas;
             _incidentAddressIndex++;
         }
         _exactCaptureComplete = true;
         return true;
     }
 
-    private void CaptureAffectedAddress(NavigationCellAddress address)
+    private void CaptureAffectedAddress(
+        NavigationCellAddress address,
+        bool includeVolume)
     {
         _affectedAddresses = _affectedAddresses.Add(address);
-        if (_sourceGraph.TryGetSurfaceComponent(
-                address,
-                out NavigationSurfaceComponentKey component,
-                out _))
+        TraversalMedium maximum = includeVolume
+            ? TraversalMedium.Liquid
+            : TraversalMedium.Solid;
+        for (TraversalMedium medium = TraversalMedium.Solid;
+             medium <= maximum;
+             medium++)
         {
-            AddAffectedComponent(component);
+            if (_sourceGraph.TryGetSurfaceComponent(
+                    address,
+                    medium,
+                    out NavigationSurfaceComponentKey component,
+                    out _))
+            {
+                AddAffectedComponent(component);
+            }
         }
     }
 
@@ -627,10 +697,12 @@ internal sealed class NavigationStructuralCompositionWork
         _changedMapIds = PersistentStringMap<bool>.Empty;
         _affectedComponents = NavigationSurfaceComponentKeySet.Empty;
         _affectedAddresses = NavigationCellAddressSet.Empty;
+        _affectedMediumStates = NavigationSurfaceComponentKeySet.Empty;
         _affectedMemberCount = 0;
         _wholeMapIds = PersistentStringMap<bool>.Empty;
         _pendingMapId = null;
         _pendingComponentKey = null;
+        _pendingMedium = TraversalMedium.Solid;
         _pendingExactAddress = null;
         _pendingMapComponentOrdinal = 0;
         _pendingWholeMap = false;
@@ -653,6 +725,7 @@ internal sealed class NavigationStructuralCompositionWork
         _addressBakedCursor = 0;
         _addressDynamicCursor = 0;
         _incidentAddressIndex = 0;
+        _incidentMedium = TraversalMedium.Gas;
         _incidentNodeActive = false;
         _incidentOutgoingComplete = false;
         _incidentOutgoing = default;
@@ -704,7 +777,7 @@ internal sealed class NavigationStructuralCompositionWork
                 var address = new NavigationCellAddress(
                     map.MapId,
                     map.CellSpan[_overlayCellIndex++].Index);
-                exactAddress = HasSameSemanticState(address) ? null : address;
+                exactAddress = HasSameStructuralMedia(address) ? null : address;
                 wholeMap = false;
                 return;
             }
@@ -728,7 +801,7 @@ internal sealed class NavigationStructuralCompositionWork
         }
     }
 
-    private bool HasSameSemanticState(NavigationCellAddress address)
+    private bool HasSameStructuralMedia(NavigationCellAddress address)
     {
         bool priorAddressed = _sourceGraph.TryGetSemanticState(
             address,
@@ -740,11 +813,32 @@ internal sealed class NavigationStructuralCompositionWork
             out NavigationCellSemanticSource nextSource,
             out bool nextHasCell,
             out NavigationCell nextCell);
-        return priorAddressed == nextAddressed
-            && (!priorAddressed
-                || priorSource == nextSource
-                    && priorHasCell == nextHasCell
-                    && (!priorHasCell || priorCell.Equals(nextCell)));
+        TraversalMedia priorMedia = priorAddressed && priorHasCell
+            ? priorCell.Media
+            : TraversalMedia.None;
+        TraversalMedia nextMedia = nextAddressed && nextHasCell
+            ? nextCell.Media
+            : TraversalMedia.None;
+        return priorMedia == nextMedia;
+    }
+
+    private bool HasMediumStateChanged(
+        NavigationCellAddress address,
+        TraversalMedium medium)
+    {
+        _sourceGraph.TryGetSemanticState(
+            address,
+            out _,
+            out bool priorHasCell,
+            out NavigationCell priorCell);
+        _candidate.TryGetSemanticState(
+            address,
+            out _,
+            out bool nextHasCell,
+            out NavigationCell nextCell);
+        bool prior = priorHasCell && priorCell.SupportsMedium(medium);
+        bool next = nextHasCell && nextCell.SupportsMedium(medium);
+        return prior != next;
     }
 
     internal static long GetMinimumScratchBytes(

@@ -35,6 +35,11 @@ internal sealed class NavigationRayWork
 
     internal NavigationRayResult Result { get; private set; }
 
+    private TraversalMedium Medium => _request.Intent.CurrentMedium
+        == TraversalMedium.Unknown
+            ? TraversalMedium.Solid
+            : _request.Intent.CurrentMedium;
+
     internal void Begin(in NavigationRayRequest request)
     {
         Reset();
@@ -219,6 +224,7 @@ internal sealed class NavigationRayWork
             }
             if (!graph.TryGetSurfaceComponent(
                     address,
+                    Medium,
                     out NavigationSurfaceComponentKey component,
                     out _))
             {
@@ -248,6 +254,7 @@ internal sealed class NavigationRayWork
                 == NavigationRayChainConstraintKind.FinishAddress
             && !_request.ExpectedGraph.TryGetSurfaceComponent(
                 _request.ChainConstraint.TargetAddress,
+                Medium,
                 out finishComponent,
                 out _))
         {
@@ -881,6 +888,7 @@ internal sealed class NavigationRayWork
                     out NavigationCellAddress seedAddress)
                 && _request.ExpectedGraph.TryGetSurfaceComponent(
                     seedAddress,
+                    Medium,
                     out NavigationSurfaceComponentKey actual,
                     out _)
                 && actual == finishComponent;
@@ -1045,6 +1053,7 @@ internal sealed class NavigationRayWork
         }
         return graph.TryGetSurfaceComponent(
                 address,
+                Medium,
                 out NavigationSurfaceComponentKey component,
                 out _)
             && _workspace.Dependencies.TryRecordComponent(component);

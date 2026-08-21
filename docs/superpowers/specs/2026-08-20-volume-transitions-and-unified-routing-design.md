@@ -56,8 +56,10 @@ overloads.
 
 1. **FixedMathSharp.Geometry owns deterministic fixed-point geometry.** Exact
    segment, capsule, convex, intersection, distance, and rounding predicates
-   live upstream. Trailblazer never adds local cross/dot/multiword/epsilon
-   geometry.
+   live upstream. Its strict swept-upright-cylinder/convex-prism boolean keeps
+   planar and vertical overlap on one exact parameter domain, so boundary-only
+   contact cannot be promoted by composing separately rounded intervals.
+   Trailblazer never adds local cross/dot/multiword/epsilon geometry.
 2. **GridForge owns physical topology and issued geometry.** Cell prisms,
    topology direction sets, cell centers, contact geometry, sparse presence,
    swept-body coverage, local prism-union predicates, and translation remain
@@ -253,12 +255,26 @@ GridForge therefore gains one allocation-free, caller-bounded operation that
 enumerates every prism with positive interior overlap against the swept upright
 body and validates the direct segment through their union. Inputs are the
 physical world, exact source/target cells, direct foot segment, horizontal
-radius, body height, and caller-owned result/scratch spans. Coverage includes
-adjacent matching grids/maps rather than stopping at one binding. The report distinguishes invalid
-geometry, result capacity, and work-budget exhaustion. Trailblazer evaluates
-the returned canonical cell set for media, policy, clearance, and dependencies;
-the topology closure must be present in that set. GridForge composes
-FixedMathSharp.Geometry; Trailblazer does not implement a fallback union solver.
+radius, body height, and caller-owned result/scratch spans. Coverage may cross
+adjacent grids/maps when they issue exact congruent prisms in one aligned
+topology lattice rather than stopping at one binding. Heterogeneous or
+misaligned partial-prism CSG is deliberately unavailable and fails closed. The
+report distinguishes invalid geometry, result capacity, and work-budget
+exhaustion. Result roles separate cells selected for required physical coverage
+from missing exact-prism OR alternatives retained only for affected dependency
+invalidation. Trailblazer applies media, policy, and clearance only to required
+coverage cells, but records dependencies for both roles; the topology closure
+must be present in the required set. GridForge composes FixedMathSharp.Geometry;
+Trailblazer does not implement a fallback union solver.
+
+Per-prism positive overlap delegates to the single public
+`FixedConvexPrismRelations.IntersectsSweptUprightCylinderStrict` relation. It
+answers whether strict planar footprint overlap and strict vertical overlap
+exist at the same continuous path parameter. Its public result is boolean; the
+exact rational parameter bounds, open half-plane clipping, and wide quadratic
+comparisons stay internal to FixedMathSharp. Neither GridForge nor Trailblazer
+combines rounded planar and vertical intervals, and no public rational interval,
+compiled certificate, or general CSG API is introduced.
 
 The union operation is authoritative for volume anchor placement (a degenerate
 sweep), non-face shortcuts, and positive-face movement when a profile does not

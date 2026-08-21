@@ -2269,6 +2269,13 @@ Tasks:
   Do not retain a compiled certificate/maxima/cache without benchmark evidence,
   retain 20/26 edges per node, or duplicate corner geometry in Trailblazer.
   Keep face edges as the fail-closed fallback.
+- Add one FixedMathSharp-owned strict swept-upright-cylinder/convex-prism
+  boolean before completing that GridForge operation. It must keep planar and
+  vertical overlap on one exact parameter domain, reject individual or joint
+  tangency, preserve odd-raw full body height, and expose no rounded interval,
+  exact-rational type, cache, forwarding overload, or general CSG framework.
+  GridForge adapts issued prisms to that predicate and deletes its local rounded
+  planar/vertical interval composition.
 - Reuse each A*/Flow slot's existing `NavigationRayWorkspace` limits and extend
   it only with GridForge's typed swept-coverage result buffer. Do not add a
   volume-shortcut workspace, public capacity family, or pool.
@@ -2281,7 +2288,12 @@ Tasks:
   remain motor/host concerns.
 - Use the covered-prism union operation for volume anchor placement (degenerate
   sweep), non-face shortcuts, and positive-face movement for profiles that span
-  more than one prism/map/grid. Reuse GridForge's existing directed portal/
+  more than one prism/map/grid. Cross-grid composition requires exact congruent
+  prisms in one aligned topology lattice; heterogeneous/misaligned partial CSG
+  remains fail-closed. GridForge tags required coverage separately from missing
+  exact-prism OR-alternative dependency evidence; Trailblazer applies medium/
+  policy/clearance only to required cells and records both dependency roles.
+  Reuse GridForge's existing directed portal/
   traversal/body-segment predicates as the fast path for one-prism-fitting
   positive-face movement; Phase 6 volume ray chains delegate to that same face
   authority. Never recreate topology offsets, portal/corner tests, or clearance

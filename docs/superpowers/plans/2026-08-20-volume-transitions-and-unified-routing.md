@@ -34,6 +34,8 @@
 
 **Repository:** `F:\gamedevrepos\FixedMathSharp`
 
+**Complete:** `7d2ac675d6193f4cd4a2408ebdfb09a96a05d74c`
+
 - Add exactly one public boolean
   `FixedConvexPrismRelations.IntersectsSweptUprightCylinderStrict(...)` taking
   bottom-start/bottom-end, radius, full height, prism origin/rotation, ordered
@@ -65,16 +67,16 @@
 - Modify: `tests/GridForge.Benchmarks/Program.cs`
 - Modify: `docs/wiki/GridTracer-and-Coverage.md`
 
-- [ ] Add RED rectangular 2-axis and 3-axis tests proving the fixed 4/8-cell corner closure is required and a missing closure cell rejects the union.
-- [ ] Add RED pointy/flat hex vertical-planar tests proving the four-cell closure and canonical output order.
-- [ ] Add RED large-body tests where radius/height positively overlaps cells outside the corner closure; assert canonical cross-grid coverage, exact tangency ownership, and physical sparse gaps without adding navigation-medium semantics to GridForge.
-- [ ] Adapt each issued prism to the Task 1A boolean relation and delete GridForge's independently rounded planar/vertical overlap-interval composition. GridForge owns topology and union selection, not exact wide intersection math.
-- [ ] Add RED dense/sparse, just-fit/equality, one-raw-fail, endpoint reversal, invalid geometry, exact capacity, one-below capacity, exact work budget, one-below budget, world mutation, and warmed zero-allocation cases.
-- [ ] Run the exact RED:
+- [x] Add RED rectangular 2-axis and 3-axis tests proving the fixed 4/8-cell corner closure is required and a missing closure cell rejects the union.
+- [x] Add RED pointy/flat hex vertical-planar tests proving the four-cell closure and canonical output order.
+- [x] Add RED large-body tests where radius/height positively overlaps cells outside the corner closure; assert canonical cross-grid coverage, exact tangency ownership, and physical sparse gaps without adding navigation-medium semantics to GridForge.
+- [x] Adapt each issued prism to the Task 1A boolean relation and delete GridForge's independently rounded planar/vertical overlap-interval composition. GridForge owns topology and union selection, not exact wide intersection math.
+- [x] Add RED dense/sparse, just-fit/equality, one-raw-fail, endpoint reversal, invalid geometry, exact capacity, one-below capacity, exact work budget, one-below budget, world mutation, and warmed zero-allocation cases.
+- [x] Run the exact RED:
 
   `dotnet test tests/GridForge.Tests/GridForge.Tests.csproj -c Release -m:1 -p:UseLocalLsfStack=true --filter "FullyQualifiedName~GridNavigationBodyTraceTests|FullyQualifiedName~GridCellGeometryTests"`
 
-- [ ] Implement one required, allocation-free caller-bounded API on `GridTracer`; do not add an allocating convenience overload:
+- [x] Implement one required, allocation-free caller-bounded API on `GridTracer`; do not add an allocating convenience overload:
 
   ```csharp
   public static GridNavigationBodyTraceReport TraceNavigationBodyInto(
@@ -92,15 +94,15 @@
       long candidateWorkLimit);
   ```
 
-- [ ] Have GridForge derive broad-phase coverage from the swept capsule/body bounds across adjacent grids, create exact topology prisms, retain only positive interior overlap under deterministic half-open boundary ownership, and validate the direct body segment through the complete returned prism union. Compose only exact congruent prisms in one aligned topology lattice; heterogeneous or misaligned partial-prism CSG fails closed.
-- [ ] Return distinct Complete, IncompletePhysicalCoverage, Invalid/UnrepresentableGeometry, AddressLimitExceeded, OutputLimitExceeded, and CandidateWorkLimitExceeded statuses with exact completed counters. Preserve canonical present/missing cell identity and world/grid high-water evidence for `IncompletePhysicalCoverage`; distinguish required coverage from missing exact-prism OR-alternative dependency evidence, and apply `outputLimit` atomically to both roles. Clear results only for invalid, budget, or capacity failures that cannot publish a reusable negative proof.
-- [ ] RED a missing closure/swept cell followed by physical insertion: the retained missing-cell evidence must stale the negative proof without staling an unrelated trace.
-- [ ] Keep topology direction/closure derivation in `RectangularDirectionUtility`/`HexDirectionUtility` or their topology implementations; do not recreate offsets in Trailblazer.
-- [ ] Add the benchmark alias/case with semantic counters for 4/8-cell and large-body coverage; no timing claim until canonical evidence.
-- [ ] Run focused Release + ReleaseLean tests, both source TFMs/configurations, benchmark Dry semantic preflight, and warmed allocation assertion.
-- [ ] Pack GridForge and GridForge.Lean into this plan's isolated Phase 7 feed and record the exact package versions/content; all later Trailblazer implementation gates use `-p:UseLocalLsfStack=true`, while Task 13 restores normal package mode only from those exact isolated artifacts.
-- [ ] Run correctness and ponytail reviews; remove any speculative descriptor/cache/template/maxima state.
-- [ ] Commit GridForge: `feat(geometry): validate swept body prism unions`.
+- [x] Have GridForge derive broad-phase coverage from the swept capsule/body bounds across adjacent grids, create exact topology prisms, retain only positive interior overlap under deterministic half-open boundary ownership, and validate the direct body segment through the complete returned prism union. Compose only exact congruent prisms in one aligned topology lattice; heterogeneous or misaligned partial-prism CSG fails closed.
+- [x] Return distinct Complete, IncompletePhysicalCoverage, Invalid/UnrepresentableGeometry, AddressLimitExceeded, OutputLimitExceeded, and CandidateWorkLimitExceeded statuses with exact completed counters. Preserve canonical present/missing cell identity and world/grid high-water evidence for `IncompletePhysicalCoverage`; distinguish required coverage from missing exact-prism OR-alternative dependency evidence, and apply `outputLimit` atomically to both roles. Clear results only for invalid, budget, or capacity failures that cannot publish a reusable negative proof.
+- [x] RED a missing closure/swept cell followed by physical insertion: the retained missing-cell evidence must stale the negative proof without staling an unrelated trace.
+- [x] Keep topology direction/closure derivation in `RectangularDirectionUtility`/`HexDirectionUtility` or their topology implementations; do not recreate offsets in Trailblazer.
+- [x] Add the benchmark alias/case with semantic counters for 4/8-cell and large-body coverage; no timing claim until canonical evidence.
+- [x] Run focused Release + ReleaseLean tests, both source TFMs/configurations, benchmark Dry semantic preflight, and warmed allocation assertion.
+- [x] Pack GridForge and GridForge.Lean into this plan's isolated Phase 7 feed and record the exact package versions/content; all later Trailblazer implementation gates use `-p:UseLocalLsfStack=true`, while Task 13 restores normal package mode only from those exact isolated artifacts.
+- [x] Run correctness and ponytail reviews; remove any speculative descriptor/cache/template/maxima state.
+- [x] Commit GridForge: `ece1aece4d83fea16c25e0a0e0181da2ea22b6a4` (`feat(geometry): validate swept body prism unions`).
 
 ## Task 2: Make Map Defaults And Transition Rules Immutable Authoring Truth
 

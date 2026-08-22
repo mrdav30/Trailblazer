@@ -22,7 +22,8 @@ and does not serialize context bindings.
 ## 2. Standalone PathQuery
 
 `PathQueryRecord` is the public standalone record for one complete immutable
-query:
+query. This C# fragment assumes a validated query and a chosen Chronicler
+transport:
 
 ~~~csharp
 var record = new PathQueryRecord(query);
@@ -57,11 +58,11 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 2. The nested path-session and
-standalone `PathQueryRecord` schemas remain version 1. Version 2 replaces the
-retired scale-based steering stop value with the explicit world-unit
-`WaypointTolerance`; an outer version-1 Navigator record rejects
-transactionally rather than being interpreted through a compatibility alias.
+The outer Navigator record is schema version 3. The nested path-session and
+standalone `PathQueryRecord` schemas remain version 1. Version 3 uses the final
+guided-state names and the explicit world-unit `WaypointTolerance`; outer
+version-1 and version-2 Navigator records reject transactionally rather than
+being interpreted through compatibility aliases.
 
 Navigator does not serialize or restore:
 
@@ -165,6 +166,6 @@ boundary.
 ## 10. Related References
 
 - [Overview](Overview.md)
-- [Runtime publication](PathManager.md)
+- [Map publication](MapPublication.md)
 - [Pathing](Pathing.md)
 - [Navigator](Navigator.md)

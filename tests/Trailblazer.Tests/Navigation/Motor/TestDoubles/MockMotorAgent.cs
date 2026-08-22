@@ -43,7 +43,7 @@ public class MockMotorAgent
         Rotation = rotation ?? FixedQuaternion.Identity;
         Velocity = velocity ?? Vector3d.Zero;
 
-        Motor = NavMotor.CreateNew(TestWorld.Context, FrameCondition, profile);
+        Motor = new NavMotor(TestWorld.Context, FrameCondition, profile);
         Motor.SetVelocity(Velocity);
 
         CheckTrekCondition();

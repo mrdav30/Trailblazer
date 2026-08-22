@@ -6,7 +6,6 @@ using SwiftCollections;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.MovementGroups;
-using Trailblazer.Pathing;
 using Trailblazer.Tests.Navigation;
 using Xunit;
 
@@ -17,7 +16,6 @@ public sealed class ContextBoundNavigatorTests : IDisposable
 {
     public void Dispose()
     {
-        PathManager.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
     }

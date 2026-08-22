@@ -13,7 +13,7 @@ namespace Trailblazer.Navigation.Motor;
 
 public partial class NavMotor
 {
-    #region Phase 1 - Request Traversal
+    #region Request Traversal
 
     /// <summary>
     /// Processes a movement request and applies necessary forces.

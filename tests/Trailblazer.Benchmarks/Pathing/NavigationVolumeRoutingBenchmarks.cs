@@ -21,8 +21,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures unified Gas/Liquid routing, semantic actions, and warm guide reuse.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase7", "Graph", "Volume", "Transition")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Volume", "Transition")]
 public class NavigationVolumeRoutingBenchmarks
 {
     private VolumeRoutingScenario _scenario;
@@ -32,7 +32,7 @@ public class NavigationVolumeRoutingBenchmarks
     [ParamsSource(nameof(Cases))]
     public string Scenario { get; set; }
 
-    /// <summary>Phase 7 volume, action, direction-set, and cache workloads.</summary>
+    /// <summary>Volume, action, direction-set, and cache workloads.</summary>
     public IEnumerable<string> Cases => new[]
     {
         "RectOpen2DAStar",
@@ -60,7 +60,7 @@ public class NavigationVolumeRoutingBenchmarks
             _scenario.WarmCache();
         _signal = Execute();
         if (_signal == 0)
-            throw new InvalidOperationException($"Phase 7 preflight produced no signal for {Scenario}.");
+            throw new InvalidOperationException($"Navigation preflight produced no signal for {Scenario}.");
         _scenario.ValidatePreflight();
         long before = GC.GetAllocatedBytesForCurrentThread();
         _signal = Execute();
@@ -85,7 +85,7 @@ public class NavigationVolumeRoutingBenchmarks
             ? "n/a"
             : _scenario.DependencyPages.ToString(CultureInfo.InvariantCulture);
         Console.WriteLine(
-            $"PHASE7_VOLUME_ROUTING scenario={Scenario} signal={_signal} "
+            $"NAVIGATION_VOLUME_ROUTING scenario={Scenario} signal={_signal} "
             + $"status={_scenario.Status} settled_medium_states={_scenario.SettledStates} "
             + $"evaluated_edges={_scenario.EvaluatedEdges} "
             + $"primary_volume_candidates={_scenario.PrimaryCandidates} "
@@ -760,17 +760,31 @@ public class NavigationVolumeRoutingBenchmarks
                 ?? throw new InvalidOperationException("The A* cache proof could not acquire its graph.");
             NavigationAStarPayloadCache cache = _fixture.Context.Pathing
                 .NavigationAStarAdmissionGate.PayloadCache;
-            if (!cache.TryCheckout(
-                    _aStarPayloadKey,
-                    graph.Graph,
-                    out NavigationAStarPayloadLease lease))
+            if (!cache.TryReservePayload(
+                    PayloadBytes,
+                    out NavigationAStarPayloadReservation reservation))
             {
-                throw new InvalidOperationException("The exact A* payload was not cached.");
+                throw new InvalidOperationException("The exact A* payload could not be reserved.");
             }
-            using (lease)
+            try
             {
-                if (lease.Payload.Cost != _traversalCost)
-                    throw new InvalidOperationException("The cached A* cost changed.");
+                if (!cache.TryCheckoutReserved(
+                        _aStarPayloadKey,
+                        graph.Graph,
+                        ref reservation,
+                        out NavigationAStarPayloadLease lease))
+                {
+                    throw new InvalidOperationException("The exact A* payload was not cached.");
+                }
+                using (lease)
+                {
+                    if (lease.Payload.Cost != _traversalCost)
+                        throw new InvalidOperationException("The cached A* cost changed.");
+                }
+            }
+            finally
+            {
+                cache.ReleasePayloadReservation(ref reservation);
             }
         }
 
@@ -963,7 +977,7 @@ public class NavigationVolumeRoutingBenchmarks
             "FullDirectionsAStar" => CreateRect(scenario, 3, 3, 3, false, PathAlgorithm.AStar),
             "WarmAStarCacheHit" => CreateRect(scenario, 8, 1, 8, false, PathAlgorithm.AStar, true),
             "WarmFlowCacheHit" => CreateRect(scenario, 4, 4, 4, false, PathAlgorithm.FlowField, true),
-            _ => throw new InvalidOperationException($"Unknown Phase 7 benchmark scenario '{scenario}'.")
+            _ => throw new InvalidOperationException($"Unknown navigation benchmark scenario '{scenario}'.")
         };
 
         private static ScenarioDefinition CreateRect(

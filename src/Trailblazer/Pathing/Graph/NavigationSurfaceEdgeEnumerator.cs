@@ -5,8 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
-
 namespace Trailblazer.Pathing;
 
 internal enum NavigationSurfaceEdgeAdvanceStatus : byte
@@ -407,35 +405,6 @@ internal struct NavigationSurfaceEdgeEnumerator
         if (comparison != 0)
             return comparison;
         comparison = (int)left.Kind - (int)right.Kind;
-        if (comparison != 0)
-            return comparison;
-        if (left.Kind == NavigationGraphEdgeKind.Native)
-            return left.NativeDirectionOrdinal.CompareTo(right.NativeDirectionOrdinal);
-        if (left.Kind == NavigationGraphEdgeKind.Seam)
-            return 0;
-        comparison = string.CompareOrdinal(
-            left.ExplicitConnection.Owner.ConnectionId,
-            right.ExplicitConnection.Owner.ConnectionId);
-        if (comparison != 0)
-            return comparison;
-        comparison = CompareAnchor(
-            left.ExplicitConnection.Definition.EntryAnchor,
-            right.ExplicitConnection.Definition.EntryAnchor);
-        return comparison != 0
-            ? comparison
-            : CompareAnchor(
-                left.ExplicitConnection.Definition.ExitAnchor,
-                right.ExplicitConnection.Definition.ExitAnchor);
-    }
-
-    private static int CompareAnchor(
-        FixedMathSharp.Vector3d left,
-        FixedMathSharp.Vector3d right)
-    {
-        int comparison = left.X.CompareTo(right.X);
-        if (comparison != 0)
-            return comparison;
-        comparison = left.Y.CompareTo(right.Y);
-        return comparison != 0 ? comparison : left.Z.CompareTo(right.Z);
+        return comparison;
     }
 }

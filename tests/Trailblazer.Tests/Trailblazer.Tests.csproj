@@ -16,19 +16,10 @@
 		<DisableMemoryPack>true</DisableMemoryPack>
 		<DefineConstants>$(DefineConstants);TRAILBLAZER_DISABLE_MEMORYPACK</DefineConstants>
 	</PropertyGroup>
-	<PropertyGroup>
-		<TrailblazerPackageVersion Condition="'$(GitVersion_FullSemVer)' != ''">$(GitVersion_FullSemVer)</TrailblazerPackageVersion>
-		<TrailblazerPackageVersion Condition="'$(TrailblazerPackageVersion)' == '' And '$(SemVer)' != ''">$(SemVer)</TrailblazerPackageVersion>
-		<TrailblazerPackageVersion Condition="'$(TrailblazerPackageVersion)' == ''">0.0.0</TrailblazerPackageVersion>
-	</PropertyGroup>
-	<ItemGroup>
-		<AssemblyMetadata Include="TrailblazerPackageVersion" Value="$(TrailblazerPackageVersion)" />
-	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />
 		<PackageReference Include="FluentAssertions" Version="8.10.0" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
-		<PackageReference Include="Moq" Version="4.20.72" />
 		<PackageReference Include="xunit.v3" Version="3.2.2" />
 		<PackageReference Include="xunit.v3.runner.console" Version="3.2.2">
 			<PrivateAssets>all</PrivateAssets>
@@ -59,6 +50,5 @@
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove=".gitignore" />
-		<None Update="Phase0\PublicApiSnapshot.txt" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 </Project>

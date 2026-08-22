@@ -203,9 +203,10 @@ public sealed class NavigationTransitionGuideTests
             .Should().BeTrue();
         cache.TryCreateGuide(store, payloadLease, out NavigationAStarGuideLease? guide)
             .Should().Be(NavigationAStarQueryStatus.Success);
-        cache.TryCheckout(
+        cache.TryCheckoutReserved(
                 search.Result.Key,
                 graph,
+                search.Result.RetainedBytes,
                 out NavigationAStarPayloadLease secondPayloadLease)
             .Should().BeTrue();
         cache.TryCreateGuide(
@@ -304,9 +305,10 @@ public sealed class NavigationTransitionGuideTests
         guide.TryGetCurrentStep(generation, out _)
             .Should().Be(NavigationAStarQueryStatus.Stale);
         cache.ActiveLeaseCount.Should().Be(0);
-        cache.TryCheckout(
+        cache.TryCheckoutReserved(
                 search.Result.Key,
                 graph,
+                search.Result.RetainedBytes,
                 out NavigationAStarPayloadLease recycledPayloadLease)
             .Should().BeTrue();
         cache.TryCreateGuide(

@@ -12,7 +12,7 @@ namespace Trailblazer.Support;
 /// <summary>
 /// Represents a lifecycle hook with an associated owner, execution order, and callback action.
 /// </summary>
-public sealed class OrderedLifecycleHook
+internal sealed class OrderedLifecycleHook
 {
     /// <summary>
     /// Initializes a new instance of the OrderedLifecycleHook class with the specified owner, order, and callback.

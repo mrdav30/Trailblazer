@@ -52,6 +52,7 @@ public partial class NavSteering
             ResetMovementGroupSession();
 
             _currentQuery = null;
+            _pendingCommittedAreaPolicy = null;
             _shouldRequestPathThisFrame = false;
             MovementGroupID = movementGroupId;
             GroupIndex = -1;
@@ -62,6 +63,7 @@ public partial class NavSteering
 
     internal void RestoreQueryFromLoadedSession(PathQuery? query)
     {
+        _pendingCommittedAreaPolicy = null;
         _currentQuery = query;
         ReleaseNavigationGuidance();
         if (!query.HasValue)

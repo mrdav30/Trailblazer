@@ -65,7 +65,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     }
 
     [Fact]
-    public void SyncTraversalState_ShouldPreserveLegacyTraversalUpdateBehavior()
+    public void SyncTraversalState_ShouldUpdateCurrentAndPreviousMediumState()
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
 

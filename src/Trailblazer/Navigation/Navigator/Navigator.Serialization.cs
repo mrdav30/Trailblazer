@@ -18,7 +18,7 @@ namespace Trailblazer.Navigation;
 
 public abstract partial class Navigator
 {
-    private const int CurrentSerializationSchemaVersion = 2;
+    private const int CurrentSerializationSchemaVersion = 3;
 
     #region Serialization
 
@@ -89,7 +89,7 @@ public abstract partial class Navigator
         byte occupantGroupId = isLoading ? (byte)1 : _occupantGroupId;
         bool isLockedOn = !isLoading && _isLockedOn;
         Fixed64 stuckThresholdSpeed = isLoading ? Fixed64.Zero : _stuckThresholdSpeed;
-        bool isGuideded = !isLoading && _isGuideded;
+        bool isGuided = !isLoading && _isGuided;
         TrekRequest frameRequest = isLoading ? new TrekRequest() : _frameRequest.Clone();
         NavigatorHeightmapGroundingSettings heightmapGrounding = isLoading
             ? new NavigatorHeightmapGroundingSettings()
@@ -104,7 +104,7 @@ public abstract partial class Navigator
         RecordValues.Look(chronicler, ref occupantGroupId, "OccupantGroupId", (byte)1);
         RecordValues.Look(chronicler, ref isLockedOn, "IsLockedOn", false);
         RecordValues.Look(chronicler, ref stuckThresholdSpeed, "StuckThresholdSpeed", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref isGuideded, "IsGuideded", false);
+        RecordValues.Look(chronicler, ref isGuided, "IsGuided", false);
         RecordDeepStruct.Look(chronicler, ref frameRequest, "FrameRequest");
         RecordDeep.Look(chronicler, ref heightmapGrounding, "HeightmapGrounding");
 
@@ -121,7 +121,7 @@ public abstract partial class Navigator
             _occupantGroupId = occupantGroupId;
             _isLockedOn = isLockedOn;
             _stuckThresholdSpeed = stuckThresholdSpeed;
-            _isGuideded = isGuideded;
+            _isGuided = isGuided;
             _frameCondition = frameCondition;
             _frameRequest = frameRequest;
             _heightmapGrounding = heightmapGrounding;
@@ -195,7 +195,7 @@ public abstract partial class Navigator
 
         if (_motor != null)
         {
-            NavMotor motor = NavMotor.CreateNew(
+            var motor = new NavMotor(
                 context,
                 frameCondition,
                 CreateLocomotionProfile());

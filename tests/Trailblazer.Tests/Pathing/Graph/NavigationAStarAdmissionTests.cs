@@ -716,17 +716,24 @@ public sealed class NavigationAStarAdmissionTests
 
         NavigationAStarPayload payloadC = RunSingle(gate, queryC);
 
-        gate.PayloadCache.TryCheckout(payloadA.Key, graph, out _).Should().BeFalse(
-            "ordinal A was touched before B and is the one forced LRU eviction");
-        gate.PayloadCache.TryCheckout(
+        gate.PayloadCache.TryCheckoutReserved(
+                payloadA.Key,
+                graph,
+                payloadA.RetainedBytes,
+                out _)
+            .Should().BeFalse(
+                "ordinal A was touched before B and is the one forced LRU eviction");
+        gate.PayloadCache.TryCheckoutReserved(
                 payloadB.Key,
                 graph,
+                payloadB.RetainedBytes,
                 out NavigationAStarPayloadLease retainedB)
             .Should().BeTrue();
         retainedB.Dispose();
-        gate.PayloadCache.TryCheckout(
+        gate.PayloadCache.TryCheckoutReserved(
                 payloadC.Key,
                 graph,
+                payloadC.RetainedBytes,
                 out NavigationAStarPayloadLease retainedC)
             .Should().BeTrue();
         retainedC.Dispose();

@@ -57,7 +57,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
     [Fact]
     public void CreateBuilder_ShouldSeedDefaultOptionalModules()
     {
-        var builder = LocomotionProfile.CreateBuilder();
+        var builder = new LocomotionProfileBuilder();
         var profile = builder.Build();
 
         profile.InstalledKinds.Should().Be(LocomotionKind.All);
@@ -130,7 +130,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         handler.Remove<SlideLocomotion>().Should().BeTrue();
         handler.Remove<WaterLocomotion>().Should().BeTrue();
 
-        var builder = LocomotionProfile.CreateBuilder(handler);
+        var builder = LocomotionProfileBuilder.FromHandler(handler);
         var profile = builder.Build();
 
         profile.Move.Should().BeSameAs(handler.Move);

@@ -300,7 +300,12 @@ public sealed class NavigationAStarConcurrencyTests
         guide.Should().BeNull();
         guideCache.ActiveLeaseCount.Should().Be(0);
         guideStore.ActiveLeaseCount.Should().Be(0);
-        guideCache.TryCheckout(payload.Key, changed, out _).Should().BeFalse();
+        guideCache.TryCheckoutReserved(
+                payload.Key,
+                changed,
+                payload.RetainedBytes,
+                out _)
+            .Should().BeFalse();
         guideCache.Count.Should().Be(0);
     }
 
@@ -359,9 +364,14 @@ public sealed class NavigationAStarConcurrencyTests
 
         guide.TryGetCurrentStep(generation, out _)
             .Should().Be(NavigationAStarQueryStatus.Stale);
-        cache.TryCheckout(payload.Key, fixture.Graph, out _).Should().BeFalse();
-        cache.Count.Should().Be(0);
         guide.Dispose(generation);
+        cache.TryCheckoutReserved(
+                payload.Key,
+                fixture.Graph,
+                payload.RetainedBytes,
+                out _)
+            .Should().BeFalse();
+        cache.Count.Should().Be(0);
         cache.ActiveLeaseCount.Should().Be(0);
     }
 

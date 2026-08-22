@@ -22,7 +22,6 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
 
     public void Dispose()
     {
-        PathManager.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
     }

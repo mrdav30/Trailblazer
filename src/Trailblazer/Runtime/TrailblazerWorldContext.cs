@@ -68,10 +68,7 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// </summary>
     public TrailblazerGuideService Guides { get; }
 
-    /// <summary>
-    /// Gets this context's world-local navigation coordination service.
-    /// </summary>
-    public TrailblazerNavigationService Navigation { get; }
+    internal TrailblazerNavigationService Navigation { get; }
 
     /// <summary>
     /// Gets this context's world-local heightmap registry and sampling service.
@@ -82,18 +79,6 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// Gets whether this context has been disposed.
     /// </summary>
     public bool IsDisposed => _disposed;
-
-    /// <summary>
-    /// Gets the representative cubic cell edge of this context's supported GridForge world.
-    /// </summary>
-    public Fixed64 VoxelSize
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return TrailblazerGridCompatibility.GetRepresentativeCellEdge(World);
-        }
-    }
 
     /// <summary>
     /// Gets this context's fixed simulation frame rate.
@@ -235,7 +220,6 @@ public sealed class TrailblazerWorldContext : IDisposable
     {
         ThrowIfDisposed();
         _clock.Simulate();
-        Pathing.FlushPendingGridChanges();
         Pathing.MaintainNavigationGraph(_clock.FrameCount);
         _hooks.InvokeSimulate();
     }
@@ -269,7 +253,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         _clock.Reset();
         Navigation.Reset();
         Heightmaps.Reset();
-        Pathing.ResetNavigationGraph();
+        Pathing.Reset();
         _hooks.InvokeReset();
     }
 
@@ -382,6 +366,16 @@ public sealed class TrailblazerWorldContext : IDisposable
         {
             _worldOwners.Remove(context.World);
         }
+    }
+
+    internal static void ThrowIfUnusable(TrailblazerWorldContext? context)
+    {
+        if (context == null)
+            throw new ArgumentNullException(nameof(context), "An explicit TrailblazerWorldContext is required.");
+        if (context.IsDisposed)
+            throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
+        if (!context.World.IsActive)
+            throw new InvalidOperationException("An active TrailblazerWorldContext is required.");
     }
 
     private void ThrowIfDisposed()

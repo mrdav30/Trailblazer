@@ -21,12 +21,6 @@ instead of burying it in notes.
 
 ## Active Coordination
 
-- [`Grid Topology Navigation Map Refactor`](gridTopologyNavigationMapRefactorPlan.md)
-  - Replace the dense cubic chart/partition pathing lattice with independently
-    baked per-grid navigation maps plus deterministic runtime semantic overlays,
-    composed into a topology-native graph supporting dense/sparse rectangular
-    and hex-prism GridForge grids. This is an intentional breaking-change track
-    with no compatibility surface.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
@@ -38,20 +32,19 @@ instead of burying it in notes.
 
 ## Recently Completed
 
-No recently completed work is currently documented here. Add new items when they
-are verified and released.
+- [`Grid Topology Navigation Map Refactor`](done/gridTopologyNavigationMapRefactorPlan.md)
+  - Replaced the dense chart/partition lattice with immutable per-grid maps,
+    deterministic overlays, and one topology-native navigation graph. The final
+    hard cut removed the compatibility surface and archived the release evidence.
+- [`Closest-transition lookup research`](done/closestTransitionLookupPlan.md)
+  - Superseded by the unified map/graph transition query and cache model.
+- [`Managed-transition lifecycle research`](done/managedTransitionLifecyclePlan.md)
+  - Superseded by explicit transition definitions, rules, and overlay publication.
 
 ## Deferred / Evidence-Gated
 
-1. If profiling shows the current closest-transition lookup is still hot inside
-   large single-grid transition sets, add a more granular spatial index instead
-   of relying only on filtered caches and grid-bounds pruning. Tracked here:
-   [closestTransitionLookupPlan.md](./closestTransitionLookupPlan.md)
-2. If hosts need richer automatic lifecycle behavior for manually registered
-   transitions, revisit managed manual regeneration and whether
-   `NavigationChartRegistration` should share a broader general managed
-   transition dependency model. Tracked here:
-   [managedTransitionLifecyclePlan.md](./managedTransitionLifecyclePlan.md)
+No deferred feature plan is currently active. Add one only after measured runtime
+evidence or a concrete host requirement justifies new work.
 
 ## Recommended Execution Order
 

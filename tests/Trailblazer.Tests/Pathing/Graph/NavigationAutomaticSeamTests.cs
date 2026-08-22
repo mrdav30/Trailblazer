@@ -1427,6 +1427,150 @@ public sealed class NavigationAutomaticSeamTests
             "stale completed output must be discarded and restarted at candidate ordinal zero");
     }
 
+    [Fact]
+    public void StaleSeamAfterAffectedClosure_ShouldRepublishAllClosedBeforeRestart()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
+            settings: CreateSeamBudgetSettings(
+                maxSeamCandidateProbes: 64,
+                maxExplicitEdges: 64,
+                maxDependencyEntries: 64));
+        GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
+        GridConfiguration sourceConfiguration = CreateConfiguration(
+            Vector3d.Zero,
+            new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+            metrics,
+            GridStorageKind.Dense);
+        var targetCenter = new Vector3d((Fixed64)2, Fixed64.Zero, Fixed64.Zero);
+        GridConfiguration targetConfiguration = CreateConfiguration(
+            targetCenter,
+            targetCenter,
+            metrics,
+            GridStorageKind.Sparse);
+        NormalizedGridConfiguration source = AddDenseGrid(context, sourceConfiguration);
+        NormalizedGridConfiguration target = AddSparseGrid(
+            context,
+            targetConfiguration,
+            new[] { default(VoxelIndex) },
+            out VoxelGrid targetGrid);
+        NavigationMapCommitOperation sourceOperation = AdmitMap(
+            context,
+            "source",
+            source,
+            new[] { default(VoxelIndex), new VoxelIndex(1, 0, 0) },
+            1);
+        SimulateUntilTerminal(context, sourceOperation.Receipt);
+        NavigationMapCommitOperation targetOperation =
+            AdmitMap(context, "target", target, new[] { default(VoxelIndex) }, 2);
+        bool observedAffectedClosure = false;
+        for (int frame = 0;
+             frame < 512 && targetOperation.Receipt.Status == NavigationOperationStatus.Pending;
+             frame++)
+        {
+            context.Simulate();
+            using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
+            if (!published.Graph.HasClosedStructuralScope
+                || published.Graph.AreAllStructuralComponentsClosed)
+            {
+                continue;
+            }
+            observedAffectedClosure = true;
+            targetGrid.TryRemoveVoxel(default).Should().BeTrue();
+            break;
+        }
+
+        observedAffectedClosure.Should().BeTrue(
+            "the exact affected scope must publish before bounded component rebuilding finishes");
+        bool observedAllCloseRepublish = false;
+        for (int frame = 0; frame < 1024; frame++)
+        {
+            context.Simulate();
+            using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
+            observedAllCloseRepublish |= published.Graph.AreAllStructuralComponentsClosed
+                && targetOperation.Receipt.Status == NavigationOperationStatus.Pending
+                && context.Pathing.RetainedCompositionWorkCount == 1;
+            if (targetOperation.Receipt.Status != NavigationOperationStatus.Pending
+                && context.Pathing.RetainedCompositionWorkCount == 0
+                && !published.Graph.HasClosedStructuralScope)
+            {
+                break;
+            }
+        }
+
+        observedAllCloseRepublish.Should().BeTrue(
+            "a stale seam after exact closure must widen safety before restarting composition");
+        targetOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        CountCrossMapTargets(
+            context,
+            new NavigationCellAddress("source", new VoxelIndex(1, 0, 0)),
+            "target").Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("a-existing", "z-new", "a-existing", "z-new")]
+    [InlineData("z-existing", "a-new", "a-new", "z-existing")]
+    public void ExistingAndAddedSeamRows_ShouldMergeInCanonicalOrder(
+        string existingMapId,
+        string newMapId,
+        string firstExpectedMapId,
+        string secondExpectedMapId)
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
+        NormalizedGridConfiguration source = AddDenseGrid(
+            context,
+            CreateConfiguration(
+                Vector3d.Zero,
+                Vector3d.Zero,
+                metrics,
+                GridStorageKind.Dense));
+        NormalizedGridConfiguration existing = AddDenseGrid(
+            context,
+            CreateConfiguration(
+                new Vector3d(-Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+                new Vector3d(-Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+                metrics,
+                GridStorageKind.Dense));
+        NormalizedGridConfiguration added = AddDenseGrid(
+            context,
+            CreateConfiguration(
+                new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+                new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+                metrics,
+                GridStorageKind.Dense));
+        NavigationMapCommitOperation sourceOperation =
+            AdmitMap(context, "m-source", source, new[] { default(VoxelIndex) }, 1);
+        NavigationMapCommitOperation existingOperation =
+            AdmitMap(context, existingMapId, existing, new[] { default(VoxelIndex) }, 2);
+        SimulateUntilTerminal(context, existingOperation.Receipt);
+        sourceOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        existingOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        NavigationMapCommitOperation addedOperation =
+            AdmitMap(context, newMapId, added, new[] { default(VoxelIndex) }, 3);
+        SimulateUntilTerminal(context, addedOperation.Receipt);
+
+        addedOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var sourceAddress = new NavigationCellAddress("m-source", default);
+        lease.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef sourceNode).Should().BeTrue();
+        var targets = new List<NavigationCellAddress>();
+        NavigationSurfaceEdgeEnumerator edges = lease.Graph.EnumerateSurfaceEdges(sourceNode);
+        while (edges.MoveNext())
+        {
+            if (edges.Current.Kind != NavigationGraphEdgeKind.Seam)
+                continue;
+            lease.Graph.TryGetNodeAddress(
+                    edges.Current.Target,
+                    out NavigationCellAddress target)
+                .Should().BeTrue();
+            targets.Add(target);
+        }
+        targets.Should().Equal(
+            new NavigationCellAddress(firstExpectedMapId, default),
+            new NavigationCellAddress(secondExpectedMapId, default));
+    }
+
     private static SeamScenario CreateOneToManyScenario(TrailblazerWorldContext context)
     {
         GridTopologyMetrics sourceMetrics = GridTopologyMetrics.Rectangular((Fixed64)2);

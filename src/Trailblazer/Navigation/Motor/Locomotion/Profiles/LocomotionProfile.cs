@@ -121,19 +121,4 @@ public sealed class LocomotionProfile
         return new LocomotionProfileBuilder(includeOptionalLocomotions: false).Build();
     }
 
-    /// <summary>
-    /// Creates a new builder seeded with the default full locomotion profile.
-    /// </summary>
-    public static LocomotionProfileBuilder CreateBuilder()
-    {
-        return new LocomotionProfileBuilder();
-    }
-
-    /// <summary>
-    /// Creates a new builder seeded from the currently installed handler locomotions.
-    /// </summary>
-    internal static LocomotionProfileBuilder CreateBuilder(LocomotionHandler handler)
-    {
-        return LocomotionProfileBuilder.FromHandler(handler);
-    }
 }

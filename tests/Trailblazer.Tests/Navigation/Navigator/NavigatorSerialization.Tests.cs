@@ -29,7 +29,6 @@ public class NavigatorSerializationTests : IDisposable
 
     public void Dispose()
     {
-        PathManager.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
@@ -50,15 +49,17 @@ public class NavigatorSerializationTests : IDisposable
     }
 
     [Fact]
-    public void JsonWire_ShouldPublishRequiredNavigatorAndPathSessionSchemas()
+    public void JsonWire_ShouldPublishCurrentNavigatorSchemaAndGuidedStateKey()
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        ApplyGuidedRequest(source);
 
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(2);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(3);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
+        document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
     }
 
     [Theory]
@@ -115,7 +116,7 @@ public class NavigatorSerializationTests : IDisposable
                 99,
                 "FrameCondition",
                 "Medium"),
-            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 1, "SchemaVersion"),
+            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 2, "SchemaVersion"),
             _ => throw new InvalidOperationException()
         };
 
@@ -155,6 +156,24 @@ public class NavigatorSerializationTests : IDisposable
         TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
         target.PendingTransition.Should().NotBeNull();
         target.PendingTransition!.Value.Id.Should().Be("shell-transition");
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldReadCurrentGuidedStateWireKey(bool useMemoryPack)
+    {
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        ApplyGuidedRequest(source);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        target.IsGuided.Should().BeFalse();
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.IsGuided.Should().BeTrue();
     }
 
     [Theory]
@@ -491,6 +510,20 @@ public class NavigatorSerializationTests : IDisposable
             GroundState = new GroundCondition()
         });
         return navigator;
+    }
+
+    private static void ApplyGuidedRequest(TestNavigator navigator)
+    {
+        PathQuery query = new(
+            new NavigationEndpoint(navigator.FootPosition),
+            new NavigationEndpoint(new Vector3d(2, 0, 0)),
+            navigator.NavigationProfile,
+            new NavigationAreaPolicyKey("guided-wire", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1),
+            allowTransitions: true);
+        navigator.ApplyGuidedTrekRequest(query);
     }
 
     private static MockMotorAgent CreateConfiguredMotorAgent()

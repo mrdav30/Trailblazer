@@ -148,42 +148,11 @@ internal sealed class NavigationAStarPayloadCache
         }
     }
 
-    internal long MaximumSinglePayloadBytes => _maximumSinglePayloadBytes;
-
     internal GridWorld World => _world;
 
     internal bool IsWorldCurrent(NavigationAStarPayload payload) =>
         payload.WorldChangeSequence is not ulong sequence
         || _world.ChangeSequence == sequence;
-
-    internal bool TryCheckout(
-        NavigationAStarPayloadKey key,
-        NavigationWorldGraph graph,
-        out NavigationAStarPayloadLease lease)
-    {
-        SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
-        lock (_sync)
-        {
-            FindSlot(key, out int slot, out bool found);
-            if (!found)
-            {
-                lease = null!;
-                return false;
-            }
-            CacheEntry current = _entries[slot]!;
-            if (graph.IsDependencyCurrent(current.Payload.Dependencies)
-                && IsWorldCurrent(current.Payload))
-            {
-                if (!TryCheckout(current, out lease))
-                    return false;
-                Touch(slot);
-                return true;
-            }
-            RemoveAt(slot);
-            lease = null!;
-            return false;
-        }
-    }
 
     internal NavigationAStarQueryStatus TryCreateGuide(
         NavigationWorldGraphStore store,

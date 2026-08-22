@@ -81,7 +81,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     private Fixed64 _stuckThresholdSpeed;
 
-    private bool _isGuideded;
+    private bool _isGuided;
 
     /// <summary>
     /// The change in position to apply during the current simulation frame.
@@ -184,7 +184,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <summary>
     /// Indicates whether the current traversal session owns navigation guidance.
     /// </summary>
-    public bool IsGuideded => _isGuideded;
+    public bool IsGuided => _isGuided;
 
     #endregion
 
@@ -257,7 +257,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     public virtual void BindContext(TrailblazerWorldContext context)
     {
-        PathRequestContextResolver.ThrowIfUnusable(context);
+        TrailblazerWorldContext.ThrowIfUnusable(context);
 
         if (ReferenceEquals(_context, context))
             return;
@@ -316,7 +316,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Sets the initial configuration of the object, including position, rotation, velocity, size, and optional stable identity.
+    /// Sets the initial position, exact navigation profile, rotation, velocity, and optional stable identity.
     /// </summary>
     /// <param name="context">The world context that owns this navigator.</param>
     /// <param name="position">Initial world-space position.</param>
@@ -337,7 +337,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Sets the initial configuration of the object, including position, rotation, velocity, size, and optional stable identity.
+    /// Sets the initial position, exact navigation profile, rotation, velocity, and optional stable identity.
     /// </summary>
     /// <param name="position">Initial world-space position.</param>
     /// <param name="rotation">Optional starting rotation.</param>
@@ -383,13 +383,13 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         _frameCondition = condition.Clone();
 
-        _steering = NavSteering.CreateNew(context);
+        _steering = new NavSteering(context);
         _steering.BindPendingTransitionOwner(this);
 
-        _motor = NavMotor.CreateNew(context, _frameCondition, CreateLocomotionProfile());
+        _motor = new NavMotor(context, _frameCondition, CreateLocomotionProfile());
         _motor.SetVelocity(Velocity);
 
-        _turning = NavTurning.CreateNew(context, Radius);
+        _turning = new NavTurning(context, Radius);
 
         CheckVoxelOccupancy(true);
 
@@ -421,7 +421,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     {
         _frameCondition.Reset();
         _frameRequest.Reset();
-        _isGuideded = false;
+        _isGuided = false;
         _pendingTransition = null;
         _lastCommittedCell = null;
         _heightmapGrounding.Reset();
@@ -484,7 +484,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (!IsActive) return;
 
         Steering!.StopMove();
-        _isGuideded = false;
+        _isGuided = false;
         _pendingTransition = null;
         _frameRequest.SetRequest(
                 direction: direction ?? Vector3d.Zero,
@@ -525,7 +525,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         ValidateGuidedSurfaceQuery(query);
         _pendingTransition = null;
-        _isGuideded = true;
+        _isGuided = true;
         _frameRequest.SetRequest(
             direction: Vector3d.Zero,
             rate: rate ?? TrekRate.Stationary,
@@ -605,7 +605,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     internal void NotifySteeringSessionEnded()
     {
-        _isGuideded = false;
+        _isGuided = false;
         if (_pendingTransition == null)
             return;
 
@@ -637,7 +637,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         // Lock-on strafing/backpedaling keeps the current facing unless the host
         // explicitly supplies a facing override or the request is treated as sprinting.
-        if (!IsGuideded
+        if (!IsGuided
             && IsLockedOn
             && request.Rate != TrekRate.Fast)
         {
@@ -658,7 +658,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
         Vector3d heading = Vector3d.Zero;
-        if (IsGuideded)
+        if (IsGuided)
         {
             if (_pendingTransition is NavigationTransitionInstruction pending)
             {
@@ -683,7 +683,7 @@ public abstract partial class Navigator : INavigate, IRecordable
              origin: Position,
              footPosition: FootPosition,
              rotation: Rotation,
-             direction: IsGuideded ? heading : null
+             direction: IsGuided ? heading : null
         );
 
         if (TryGetTurnDirection(_frameRequest, out Vector3d turnDirection))
@@ -749,7 +749,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         // If the object is currently following a guided path,
         // reset only the transient request state to preserve path-following values.
-        if (IsGuideded)
+        if (IsGuided)
             _frameRequest.ResetTransient();
         else
             _frameRequest.Reset();
@@ -983,7 +983,7 @@ public abstract partial class Navigator : INavigate, IRecordable
                 "Navigator requires a TrailblazerWorldContext before simulation.");
         }
 
-        PathRequestContextResolver.ThrowIfUnusable(_context);
+        TrailblazerWorldContext.ThrowIfUnusable(_context);
         return _context;
     }
 
@@ -999,6 +999,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             ? resolved
             : null;
         _lastCommittedCell = current;
+        _steering?.ConsumePendingCommittedAreaPolicy();
 
         if (emitChange && !RepresentsSameCellEntry(previous, current))
             CommittedCellChanged?.Invoke(current);
@@ -1035,7 +1036,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             area,
             _frameCondition.Medium,
             graphVersion,
-            _steering?.CurrentQuery?.AreaPolicy,
+            _steering?.AreaPolicyForCommit,
             context.FrameCount);
         return NavigationCommittedCellResolveStatus.Resolved;
     }

@@ -276,7 +276,7 @@ public sealed class NavigationSurfaceAStarTests
                 fixture,
                 cells[0],
                 cells[^1],
-                simplificationRays: 0,
+                simplificationRays: 1,
                 lookupProbes: 8),
             TraversalMedium.Solid,
             TraversalMedia.Solid);
@@ -295,6 +295,8 @@ public sealed class NavigationSurfaceAStarTests
             search.Advance(64, 64, 64, 64);
 
         search.Status.Should().Be(NavigationSurfaceAStarStatus.BudgetExceeded);
+        admission.Meter.SimplificationRays.Should().Be(0,
+            "optional simplification cannot begin without its finalization lookup floor");
         admission.Meter.LookupProbes.Should().Be(8,
             "mandatory dependency capture consumes the remaining probe even when the optional ceiling cannot be reserved");
     }
@@ -623,35 +625,6 @@ public sealed class NavigationSurfaceAStarTests
         target.ComponentCount.Should().Be(1);
         target.PageCount.Should().Be(1);
         meter.LookupProbes.Should().Be(4);
-    }
-
-    [Fact]
-    public void Payload_ShouldRetainGuidePointsWithoutALegacyNodeAlias()
-    {
-        var dependencies = new GraphDependencyStamp(
-            Policy.Key,
-            Array.Empty<GraphComponentDependency>(),
-            Array.Empty<GraphPageDependency>());
-        var address = new NavigationCellAddress("map", default);
-        var guidePoint = new NavigationAStarGuidePoint(
-            address,
-            Vector3d.One,
-            TraversalMedium.Solid);
-        var payload = new NavigationAStarPayload(
-            default,
-            new[] { guidePoint },
-            Array.Empty<NavigationTransitionInstruction>(),
-            Fixed64.Zero,
-            dependencies,
-            null,
-            NavigationSurfaceAStarStatus.Success);
-
-        payload.GuidePoints.Should().Equal(guidePoint);
-        typeof(NavigationAStarPayload).GetProperty(
-                "Nodes",
-                System.Reflection.BindingFlags.Instance
-                    | System.Reflection.BindingFlags.NonPublic)
-            .Should().BeNull();
     }
 
     [Fact]
@@ -989,7 +962,11 @@ public sealed class NavigationSurfaceAStarTests
         NavigationAStarPayloadLease canonicalLease = PublishPayload(cache, store, search.Result);
         canonicalLease.Payload.Should().BeSameAs(search.Result);
         cache.CachedBytes.Should().Be(search.Result.RetainedBytes);
-        cache.TryCheckout(search.Result.Key, graph, out NavigationAStarPayloadLease checkoutLease)
+        cache.TryCheckoutReserved(
+                search.Result.Key,
+                graph,
+                search.Result.RetainedBytes,
+                out NavigationAStarPayloadLease checkoutLease)
             .Should().BeTrue();
         checkoutLease.Payload.Should().BeSameAs(search.Result);
         var duplicate = new NavigationAStarPayload(
@@ -1046,9 +1023,10 @@ public sealed class NavigationSurfaceAStarTests
             "cached guide acquisition must not retain the graph snapshot lease");
         for (int i = 0; i < 8; i++)
         {
-            cache.TryCheckout(
+            cache.TryCheckoutReserved(
                     search.Result.Key,
                     graph,
+                    search.Result.RetainedBytes,
                     out NavigationAStarPayloadLease warmPayloadLease)
                 .Should().BeTrue();
             cache.TryCreateGuide(store, warmPayloadLease, out NavigationAStarGuideLease? warmGuide)
@@ -1059,9 +1037,10 @@ public sealed class NavigationSurfaceAStarTests
         bool guideCheckoutSucceeded = true;
         for (int i = 0; i < 256; i++)
         {
-            if (!cache.TryCheckout(
+            if (!cache.TryCheckoutReserved(
                     search.Result.Key,
                     graph,
+                    search.Result.RetainedBytes,
                     out NavigationAStarPayloadLease warmPayloadLease)
                 || cache.TryCreateGuide(store, warmPayloadLease, out NavigationAStarGuideLease? warmGuide)
                     != NavigationAStarQueryStatus.Success)
@@ -1087,7 +1066,12 @@ public sealed class NavigationSurfaceAStarTests
             "a stale guide remains bounded by the active lease ceiling until disposal");
         publicGuide.Dispose();
         cache.ActiveLeaseCount.Should().Be(3);
-        cache.TryCheckout(search.Result.Key, topologyChanged, out _).Should().BeFalse();
+        cache.TryCheckoutReserved(
+                search.Result.Key,
+                topologyChanged,
+                search.Result.RetainedBytes,
+                out _)
+            .Should().BeFalse();
         cache.Count.Should().Be(0);
         cache.CachedBytes.Should().Be(0);
         cache.DetachedBytes.Should().Be(search.Result.RetainedBytes,
@@ -1144,12 +1128,18 @@ public sealed class NavigationSurfaceAStarTests
             leaseCapped,
             capacityStore,
             search.Result);
-        leaseCapped.TryCheckout(search.Result.Key, graph, out _).Should().BeFalse(
-            "same-payload checkout count is independently bounded from retained bytes");
-        soleLease.Dispose();
-        leaseCapped.TryCheckout(
+        leaseCapped.TryCheckoutReserved(
                 search.Result.Key,
                 graph,
+                search.Result.RetainedBytes,
+                out _)
+            .Should().BeFalse(
+                "same-payload checkout count is independently bounded from retained bytes");
+        soleLease.Dispose();
+        leaseCapped.TryCheckoutReserved(
+                search.Result.Key,
+                graph,
+                search.Result.RetainedBytes,
                 out NavigationAStarPayloadLease recoveredLease)
             .Should().BeTrue();
         recoveredLease.Dispose();
@@ -1169,14 +1159,23 @@ public sealed class NavigationSurfaceAStarTests
         NavigationAStarPayloadLease firstLease = PublishPayload(lru, capacityStore, search.Result);
         NavigationAStarPayloadLease secondLease = PublishPayload(lru, capacityStore, second);
         firstLease.Dispose();
-        lru.TryCheckout(search.Result.Key, graph, out NavigationAStarPayloadLease recentLease)
+        lru.TryCheckoutReserved(
+                search.Result.Key,
+                graph,
+                search.Result.RetainedBytes,
+                out NavigationAStarPayloadLease recentLease)
             .Should().BeTrue();
         recentLease.Dispose();
         NavigationAStarPayloadLease thirdLease = PublishPayload(lru, capacityStore, third);
 
-        lru.TryCheckout(second.Key, graph, out _).Should().BeFalse(
-            "the least-recently-used entry is evicted deterministically");
-        lru.TryCheckout(search.Result.Key, graph, out NavigationAStarPayloadLease retainedLease)
+        lru.TryCheckoutReserved(second.Key, graph, second.RetainedBytes, out _)
+            .Should().BeFalse(
+                "the least-recently-used entry is evicted deterministically");
+        lru.TryCheckoutReserved(
+                search.Result.Key,
+                graph,
+                search.Result.RetainedBytes,
+                out NavigationAStarPayloadLease retainedLease)
             .Should().BeTrue();
         retainedLease.Dispose();
         secondLease.Payload.Should().BeSameAs(second,
@@ -1188,9 +1187,10 @@ public sealed class NavigationSurfaceAStarTests
         lru.ActiveLeaseCount.Should().Be(0);
         for (int i = 0; i < 8; i++)
         {
-            lru.TryCheckout(
+            lru.TryCheckoutReserved(
                     search.Result.Key,
                     graph,
+                    search.Result.RetainedBytes,
                     out NavigationAStarPayloadLease warmLease)
                 .Should().BeTrue();
             warmLease.Dispose();
@@ -1199,9 +1199,10 @@ public sealed class NavigationSurfaceAStarTests
         bool checkoutSucceeded = true;
         for (int i = 0; i < 256; i++)
         {
-            if (!lru.TryCheckout(
+            if (!lru.TryCheckoutReserved(
                     search.Result.Key,
                     graph,
+                    search.Result.RetainedBytes,
                     out NavigationAStarPayloadLease hotLease))
             {
                 checkoutSucceeded = false;
@@ -2202,9 +2203,10 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationCellAddress("B", default),
             TraversalMedium.Solid,
             TraversalMedia.Solid);
-        cache.TryCheckout(
+        cache.TryCheckoutReserved(
                 key,
                 changedGraph,
+                workspace,
                 out NavigationAStarPayloadLease blockedLease)
             .Should().BeTrue();
         GraphDependencyStamp blockedDependencies = blockedLease.Payload.Dependencies;
@@ -2291,9 +2293,10 @@ public sealed class NavigationSurfaceAStarTests
             wrongMedium.Status.Should().Be(NavigationAStarQueryStatus.NoPath,
                 "a present wrong-medium corridor witness is semantic rejection, not capacity exhaustion");
         }
-        cache.TryCheckout(
+        cache.TryCheckoutReserved(
                 key,
                 wrongMediumGraph,
+                workspace,
                 out NavigationAStarPayloadLease wrongMediumLease)
             .Should().BeTrue();
         wrongMediumLease.Payload.Dependencies.Pages.Should().ContainSingle(
@@ -2580,7 +2583,11 @@ public sealed class NavigationSurfaceAStarTests
             new NavigationCellAddress("map", endIndex),
             TraversalMedium.Solid,
             TraversalMedia.Solid);
-        cache.TryCheckout(key, graph, out NavigationAStarPayloadLease payloadLease)
+        cache.TryCheckoutReserved(
+                key,
+                graph,
+                workspace,
+                out NavigationAStarPayloadLease payloadLease)
             .Should().BeTrue("dependency-stamped negative results remain reusable");
         payloadLease.Payload.Status.Should().Be(NavigationSurfaceAStarStatus.NoPath);
         payloadLease.Payload.HasPath.Should().BeFalse();

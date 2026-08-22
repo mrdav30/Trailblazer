@@ -10,6 +10,8 @@ belong to one lease acquisition and are never shared between consumers.
 
 ## 1. Acquisition
 
+This C# fragment assumes algorithm-matching A* and Flow queries:
+
 ~~~csharp
 NavigationGuideStatus aStarStatus = context.Guides.RequestGuide(
     aStarQuery,
@@ -43,27 +45,64 @@ calling `TryAdvanceStep()` in a loop.
 An action step has `HasTransition == true`. Its position is the source action
 position. `TryAdvanceStep()` cannot cross it; call
 `CompletePendingTransition(step.Transition)` only after the host performs that
-action.
+action. If completion returns transient `CapacityExceeded`, retry completion on
+a later frame without performing the action again.
+
+The following complete helper demonstrates the cursor boundary. The caller
+keeps `actionExecuted` with its host action state between fixed frames:
 
 ~~~csharp
-using NavigationGuideLease guide = acquired!.Value;
+using System;
+using Trailblazer.Pathing;
 
-NavigationGuideStatus status =
-    guide.TryGetCurrentStep(out NavigationGuideStep step);
-
-if (status == NavigationGuideStatus.Success)
+public static class GuideConsumer
 {
-    if (step.HasTransition)
-        status = guide.CompletePendingTransition(step.Transition);
-    else
-        status = guide.TryAdvanceStep();
+    public static NavigationGuideStatus ConsumeCurrentAStarStep(
+        NavigationGuideLease guide,
+        ref bool actionExecuted,
+        Action<NavigationGuideStep> moveToward,
+        Action<NavigationTransitionInstruction> executeAction,
+        Action arrive)
+    {
+        NavigationGuideStatus status =
+            guide.TryGetCurrentStep(out NavigationGuideStep step);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+
+        if (step.HasTransition)
+        {
+            if (!actionExecuted)
+            {
+                executeAction(step.Transition);
+                actionExecuted = true;
+            }
+
+            status = guide.CompletePendingTransition(step.Transition);
+            if (status == NavigationGuideStatus.Success)
+                actionExecuted = false;
+            return status;
+        }
+
+        moveToward(step);
+        if (guide.CurrentStepIndex == guide.StepCount - 1)
+        {
+            arrive();
+            return NavigationGuideStatus.Success;
+        }
+
+        return guide.TryAdvanceStep();
+    }
 }
 ~~~
+
+Treat `Stale` as a reacquisition boundary. Treat `CapacityExceeded` as a retry
+boundary. Other non-success statuses follow the host's failure policy.
 
 ## 3. Flow Samples
 
 `NavigationFlowFieldLease.TrySample(...)` takes the agent's actual foot
-position plus a finite `GuideSampleWorkBudget`:
+position plus a finite `GuideSampleWorkBudget`. This C# fragment assumes an
+active Flow lease:
 
 ~~~csharp
 NavigationGuideStatus status = field.TrySample(

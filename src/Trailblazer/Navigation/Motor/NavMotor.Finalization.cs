@@ -13,7 +13,7 @@ namespace Trailblazer.Navigation.Motor;
 
 public partial class NavMotor
 {
-    #region Phase 2 - Finalize
+    #region Finalize
 
     /// <summary>
     /// Finalizes traversal state updates and prepares the object for the next simulation frame.
@@ -188,7 +188,7 @@ public partial class NavMotor
             return;
         }
 
-        if (!platformModule.InteriaApplied) return;
+        if (!platformModule.InertiaApplied) return;
 
         if (WasOnSolid && IsInGas)
         {

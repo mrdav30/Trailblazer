@@ -1400,6 +1400,55 @@ public sealed class NavigationOperationProcessorTests
     }
 
     [Fact]
+    public void CompletedOverlayFoldCapacityFailure_ShouldRejectOnlyOversizedOperation()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        processor.Admit(Commit(CreateMap("first", CreateBinding(Vector3d.Zero), default), 1, 0))
+            .Should().BeTrue();
+        processor.Admit(Commit(
+                CreateMap("second", CreateBinding(new Vector3d(10, 0, 0)), default),
+                2,
+                0))
+            .Should().BeTrue();
+        processor.ProcessFrame(0);
+        VoxelIndex firstOverlayIndex = new(1, 0, 0);
+        VoxelIndex secondOverlayIndex = new(2, 0, 0);
+        NavigationOverlayCommitOperation oversized = Overlay(
+            "first",
+            NavigationCellOverlayOperation.Set(firstOverlayIndex, SolidCell),
+            3,
+            1);
+        NavigationOverlayCommitOperation fitting = Overlay(
+            "second",
+            NavigationCellOverlayOperation.Set(secondOverlayIndex, SolidCell),
+            4,
+            1);
+        processor.Admit(oversized).Should().BeTrue();
+        processor.Admit(fitting).Should().BeTrue();
+        int guardCallCount = 0;
+
+        bool RetainedGuard(long _, int __) => ++guardCallCount != 2;
+
+        processor.ProcessFrame(
+            1,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            RetainedGuard);
+
+        oversized.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        oversized.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        fitting.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.TryGetOverlay("first", out NavigationMapOverlayState firstOverlay)
+            .Should().BeTrue();
+        firstOverlay.TryGetCell(firstOverlayIndex, out _).Should().BeFalse();
+        processor.Candidate.TryGetOverlay("second", out NavigationMapOverlayState secondOverlay)
+            .Should().BeTrue();
+        secondOverlay.TryGetCell(secondOverlayIndex, out NavigationCellOverlayOperation applied)
+            .Should().BeTrue();
+        applied.Kind.Should().Be(NavigationCellOverlayOperationKind.Set);
+    }
+
+    [Fact]
     public void ReAdmittingSamePendingOperation_DoesNotCompleteOrDoubleApplyItsReceipt()
     {
         var processor = new NavigationOperationProcessor(CreateLimits());

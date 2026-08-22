@@ -15,8 +15,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures zero-allocation warm public Flow acquire, sample, and return.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase5", "Graph", "Flow", "Warm")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Flow", "Warm")]
 public class NavigationGuideServiceBenchmarks
 {
     private BenchmarkPathFixture _fixture;
@@ -97,7 +97,7 @@ public class NavigationGuideServiceBenchmarks
     public void Cleanup()
     {
         Console.WriteLine(
-            $"PHASE5_FLOW_SERVICE scenario={Scenario} warm_allocated_bytes={_warmAllocatedBytes} "
+            $"NAVIGATION_FLOW_SERVICE scenario={Scenario} warm_allocated_bytes={_warmAllocatedBytes} "
             + $"cached_payload_bytes={_cachedPayloadBytes} active_leases=0 leased_bytes=0 "
             + "detached_bytes=0 reserved_leases=0 reserved_bytes=0");
         _fixture?.Teardown();

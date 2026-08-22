@@ -14,7 +14,7 @@ using SwiftCollections.Utility;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Phase 1 pure candidate executor. Phase 2 replaces its mutable candidate with persistent graph roots.
+/// Executes map and overlay candidates against persistent graph roots.
 /// </summary>
 internal sealed class NavigationOperationProcessor
 {

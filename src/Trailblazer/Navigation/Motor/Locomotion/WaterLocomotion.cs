@@ -58,7 +58,7 @@ public class WaterLocomotion : ILocomotion
     /// <summary>
     /// The default buoyancy factor, controlling how strongly the scout floats in water.
     /// </summary>
-    public static readonly Fixed64 DefaultBouyancyFactor = Fixed64.One;
+    public static readonly Fixed64 DefaultBuoyancyFactor = Fixed64.One;
 
     /// <summary>
     /// Default multiplier applied to jump force when breaching from water into air.
@@ -112,7 +112,7 @@ public class WaterLocomotion : ILocomotion
     /// <summary>
     /// The buoyancy factor determining how strongly the scout floats or sinks in water.
     /// </summary>
-    public Fixed64 BuoyancyFactor = DefaultBouyancyFactor;
+    public Fixed64 BuoyancyFactor = DefaultBuoyancyFactor;
 
     /// <summary>
     /// Multiplier applied to the jump velocity when the scout breaches water.
@@ -221,7 +221,7 @@ public class WaterLocomotion : ILocomotion
 
     internal void BindContext(TrailblazerWorldContext context)
     {
-        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        TrailblazerWorldContext.ThrowIfUnusable(context);
         _context = context;
     }
 
@@ -236,7 +236,7 @@ public class WaterLocomotion : ILocomotion
         RecordValues.Look(chronicler, ref MaxSwimSidewaysSpeed, "MaxSwimSidewaysSpeed", DefaultMaxSwimSidewaysSpeed);
         RecordValues.Look(chronicler, ref MaxWaterAcceleration, "MaxWaterAcceleration", DefaultMaxSwimAcceleration);
         RecordValues.Look(chronicler, ref SwimAccelerationModifier, "SwimAccelerationModifier", DefaultSwimAccelerationModifier);
-        RecordValues.Look(chronicler, ref BuoyancyFactor, "BuoyancyFactor", DefaultBouyancyFactor);
+        RecordValues.Look(chronicler, ref BuoyancyFactor, "BuoyancyFactor", DefaultBuoyancyFactor);
         RecordValues.Look(chronicler, ref BreachJumpMultiplier, "BreachJumpMultiplier", DefaultBreachJumpMultiplier);
         RecordValues.Look(chronicler, ref HoldBreathTime, "HoldBreathTime", DefaultHoldBreathTime);
         RecordValues.Look(chronicler, ref BreathRegenerateIncrement, "BreathRegenerateIncrement", DefaultBreathRegenerateIncrement);

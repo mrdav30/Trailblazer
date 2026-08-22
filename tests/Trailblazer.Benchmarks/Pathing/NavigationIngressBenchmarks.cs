@@ -12,7 +12,7 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures bounded exact-address ingress coalescing and deterministic backlog drain.</summary>
 [MemoryDiagnoser]
 [Config(typeof(InProcessShortRunConfig))]
-[BenchmarkCategory("Phase2", "Graph", "Ingress")]
+[BenchmarkCategory("Graph", "Ingress")]
 public class NavigationIngressBenchmarks
 {
     private NavigationGridChangeIngress _ingress;

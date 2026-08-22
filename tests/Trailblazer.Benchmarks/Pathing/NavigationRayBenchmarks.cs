@@ -21,8 +21,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures the production graph ray and its guide consumers with semantic preflights.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase6", "Graph", "Ray")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Ray")]
 public class NavigationRayBenchmarks
 {
     private const int ShortLength = 8;
@@ -40,7 +40,7 @@ public class NavigationRayBenchmarks
     [ParamsSource(nameof(Cases))]
     public string Scenario { get; set; }
 
-    /// <summary>Phase 6 ray, guide, Flow, and immediate-workspace workloads.</summary>
+    /// <summary>Ray, guide, Flow, and immediate-workspace workloads.</summary>
     public IEnumerable<string> Cases => new[]
     {
         "Short",
@@ -129,7 +129,7 @@ public class NavigationRayBenchmarks
         _secondRay?.Dispose();
         _ray?.Dispose();
         Console.WriteLine(
-            $"PHASE6_NAVIGATION_RAY scenario={Scenario} signal={_signal} "
+            $"NAVIGATION_RAY scenario={Scenario} signal={_signal} "
             + $"warm_allocated_bytes={_warmAllocatedBytes} "
             + $"status={status} secondary_status={secondaryStatus} "
             + $"{queryMeterCounters} guide_points={guidePoints} "
@@ -137,7 +137,7 @@ public class NavigationRayBenchmarks
             + $"contention_worker_allocated_bytes={contentionWorkerAllocatedBytes}");
     }
 
-    /// <summary>Executes one semantically preflighted Phase 6 navigation-ray workload.</summary>
+    /// <summary>Executes one semantically preflighted navigation-ray workload.</summary>
     [Benchmark]
     public long Execute() => Scenario switch
     {

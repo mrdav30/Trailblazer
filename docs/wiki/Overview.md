@@ -1,174 +1,133 @@
 # Trailblazer Overview
 
 Trailblazer turns GridForge world geometry plus host-authored navigation
-semantics into deterministic A* and flow-field guidance. It remains independent
-of rendering, physics, animation, and game-engine APIs.
+semantics into deterministic A* and flow-field guidance. Rendering, physics,
+animation, terrain classification, and action execution remain host owned.
 
-## 1. Runtime Model
+## Runtime Ownership
 
-Each `TrailblazerWorldContext` owns:
+Each `TrailblazerWorldContext` owns one active `GridWorld` binding, three public
+context-local services, and its deterministic clock/lifecycle state:
 
-- an active `GridWorld`;
-- a pathing service that publishes maps, overlays, and area policies;
-- an immutable medium-state graph runtime;
-- bounded A* and Flow admission/caches;
-- a guide service;
-- navigation, heightmap, and serialization-facing runtime state.
+- `Pathing` admits maps, removals, overlays, and area policies and maintains the
+  immutable navigation graph;
+- `Guides` acquires A* and Flow leases;
+- `Heightmaps` stores deterministic optional ground-height layers;
+- Navigators bind directly to the context while their registration coordination
+  remains internal.
 
-The host advances the context once per fixed simulation frame. Accepted
-operations publish at deterministic frame boundaries and expose terminal
-receipts.
+There is no ambient pathing manager. Hosts create or attach a context, publish
+world navigation truth into that context, simulate it once per fixed frame, and
+dispose it when every lease and controller is released.
 
-## 2. Navigation Truth
+## Navigation Truth
 
-One `NavigationMap` describes one normalized GridForge grid under a stable map
-ID. Its immutable bake may contain:
+One immutable `NavigationMap` binds a stable map ID to one normalized GridForge
+configuration. Its bake may contain a complete default cell, explicit cells,
+physical connections, explicit transition definitions, and bounded procedural
+transition rules.
 
-- an optional complete default cell;
-- explicit cell entries;
-- physical connections;
-- explicit transition definitions;
-- bounded procedural transition rules.
-
-The effective cell at a physically present in-bounds address is selected by:
+For a physically present address, the effective cell is selected in this order:
 
 1. overlay cell;
 2. explicit baked cell;
-3. map default cell;
+3. map default;
 4. no navigation cell.
 
-The winner is a complete `NavigationCell`. Its media, capability requirement,
-area, enter cost, clearance, and flags do not merge with lower layers.
-`Suppress` is a tombstone; `RevertToBake` falls back through the bake and then
-the default.
+The winner is one complete `NavigationCell`; media, capabilities, area, cost,
+clearance, and flags do not merge field by field. GridForge independently owns
+physical presence, blockage, prisms, and contacts.
 
-GridForge physical presence remains independent. A semantic cell for an absent
-sparse address is dormant until that address physically exists.
+## Medium-State Graph
 
-## 3. Medium-State Search
-
-The graph retains one physical node per effective addressed cell. Search state
-adds one exact medium:
+Search keys are:
 
 ```text
 (NavigationCellAddress, TraversalMedium)
 ```
 
-`NavigationCell.Media` is a flag set, so one physical cell can support multiple
-states. Native movement and certified shortcuts retain medium. Semantic
-transitions may retain medium (for example, Jump or Climb) or change it (for
-example, Liquid to Gas takeoff).
+One physical cell may admit Solid, Gas, Liquid, or more than one of them.
+Ordinary movement retains medium. An authored semantic action may retain it
+(such as a Jump) or change it (such as Liquid-to-Gas Takeoff).
 
-Solid movement uses surface anchors, step/drop limits, portals, and explicit
-physical connections. Gas and Liquid movement is free-form three-dimensional
-translation using centered body anchors, GridForge topology directions, portals,
-and exact swept-prism-union coverage. Volume is state of matter, not terrain.
+Solid movement uses foot/surface anchors, portal proof, and step/drop limits.
+Gas and Liquid movement uses centered body anchors and exact GridForge swept
+coverage. Rectangular and hex-prism topology both use GridForge-issued direction
+sets and geometry rather than local neighbor formulas.
 
-## 4. One Query
+## Query And Cost Model
 
-`PathQuery` is the only public A*/Flow request. It contains:
+`PathQuery` is the only public A*/Flow request. It contains start/end endpoints,
+agent profile, area-policy key, exact start medium, target-media mask, algorithm,
+finite work budget, transition permission, and optional Flow settings.
 
-- start and destination `NavigationEndpoint` values;
-- one `NavigationAgentProfile`;
-- one `NavigationAreaPolicyKey`;
-- `TraversalIntent` with exact `StartMedium` and nonempty `TargetMedia`;
-- `PathAlgorithm.AStar` or `PathAlgorithm.FlowField`;
-- a finite `NavigationWorkBudget`;
-- `AllowTransitions`;
-- optional Flow-specific integration cost.
+Both algorithms evaluate the same canonical edges and fixed-point costs. A
+transition contributes certified source approach, authored `ActionCost`,
+certified destination exit, and destination enter costs. The semantic gap
+between its two action positions has no movement-distance charge.
 
-The start medium must be exactly Solid, Gas, or Liquid. It is never inferred.
-Target media must be a subset of the agent's allowed media.
+## Guides And Actions
 
-When transitions are disabled, every semantic action is excluded, including a
-same-medium Jump or Climb. A target mask that excludes the start medium then
-produces `NoPath`.
+A* returns `NavigationGuideLease` with `NavigationGuideStep` values. Flow returns
+`NavigationFlowFieldLease` with `NavigationFlowSample` values. Each value reports
+its exact medium. A transition value also carries a lease-specific
+`NavigationTransitionInstruction`.
 
-## 5. Search And Costs
+The host approaches the source position, performs the action, and calls
+`CompletePendingTransition(...)` with that exact instruction. Transient capacity
+pressure preserves the held action; affected publication makes it stale. No
+guide performs gameplay or physics implicitly.
 
-A* stores one immutable route payload and exposes `NavigationGuideLease`. Flow
-stores a destination-centric field and exposes `NavigationFlowFieldLease`.
-Both algorithms consume the same graph edges, exact fixed-point costs,
-dependencies, transition identities, and publication stamps.
+## Publication Lifecycle
 
-Movement costs use exact world-space fixed-point geometry with conservative
-rounding. A transition adds:
+Hosts admit four operation families through `context.Pathing`:
 
-- movement from the source anchor to its source action position;
-- authored `ActionCost`;
-- movement from its destination action position to the destination anchor;
-- destination cell and area enter costs once.
+- `NavigationMapCommitOperation`;
+- `NavigationMapRemoveOperation`;
+- `NavigationOverlayCommitOperation`;
+- `NavigationAreaPolicyCommitOperation`.
 
-There is no distance charge between action positions. This lets a teleporter
-span a large gap without pretending the host walked that gap.
+Admission only enters bounded storage. `context.Simulate()` advances graph
+maintenance and publishes eligible work atomically at a fixed-step boundary.
+Receipts expose the terminal result and actual publication frame.
 
-## 6. Guides And Actions
+Overlay transactions change addressed cells, connections, and explicit
+transitions. Map replacement changes immutable bake/default/rule truth.
+GridForge committed changes enter the same graph maintenance authority.
 
-An A* guide reports `NavigationGuideStep`; a Flow guide reports
-`NavigationFlowSample`. Each reports its exact medium. If `HasTransition` is
-false, it is ordinary movement. If true, the result includes a
-`NavigationTransitionInstruction` with stable identity, source/destination
-addresses, media, resolved positions, type, and locomotion hints.
+## Navigator Lifecycle
 
-The instruction is lease-specific. The host must execute the action and pass
-that exact value to `CompletePendingTransition(...)`. A copied instruction from
-another acquisition, a stale publication, or a second completion does not
-advance the lease.
+`Navigator` owns one exact `NavigationAgentProfile`, current host-reported
+`TrekCondition`, one guided session, and at most one surfaced pending action.
+The normal frame is:
 
-## 7. Dynamic World Changes
+1. update host contacts and traversal state;
+2. call `Navigator.Simulate()`;
+3. let steering, turning, motor, and locomotion accumulate deterministic deltas;
+4. call `Navigator.CommitFrameMotion()`;
+5. consume `LastCommittedCell` or `CommittedCellChanged` after motion commits.
 
-Maps and overlays publish through `TrailblazerWorldContext.Pathing`:
+The committed-cell event is not a query callback. It reports the effective cell
+entered after motion. A version-only graph refresh updates metadata without
+repeating a stable entry event.
 
-- `NavigationMapCommitOperation` installs or replaces a prepared bake;
-- `NavigationOverlayCommitOperation` applies one atomic transaction;
-- `NavigationAreaPolicyCommitOperation` publishes a policy revision;
-- `NavigationMapRemoveOperation` removes a map.
-
-Overlay deltas can set/suppress/revert cells, physical connections, and explicit
-transitions. Publication rebuilds only affected graph facts and stales cached
-proofs through ordinary dependencies.
-
-Host-owned terrain or matter predicates are not called during search. The host
-materializes their current results into `NavigationCell` defaults, explicit
-entries, or addressed overlay operations before publication. Terrain remains an
-optional authoring input, not the definition of Gas or Liquid.
-
-## 8. Navigator
-
-`Navigator` owns an exact `NavigationAgentProfile`, current `TrekCondition`,
-and one surfaced pending transition. `ApplyGuidedTrekRequest(...)` requires the
-query's start medium to match the current host-restored frame medium.
-
-During simulation, ordinary guidance becomes a movement request. A transition
-produces zero movement guidance, applies authored locomotion hints, and remains
-in `PendingTransition` until the host calls
-`CompletePendingTransition(...)`. The host then updates its physical state and
-continues the same session.
-
-## 9. Serialization
+## Serialization Lifecycle
 
 Trailblazer uses explicit Chronicler records and populate-existing-instance
-loads. `PathQueryRecord` round-trips complete query intent. Navigator sessions
-store durable destination/query intent but not guide payloads, cursors, or a
-pending action. Load validates the complete staged record before mutating the
-existing shell, rebuilds start position/medium from the restored host state, and
-requests fresh guidance on a later frame.
+loads. Hosts restore GridForge grids, maps, area policies, and overlays before
+populating guided Navigators. Navigator records keep durable intent but not
+graph payloads, guide cursors, dependencies, pending instructions, or committed
+cell metadata. Fresh guidance is acquired only on a later simulation frame.
 
-## 10. Ownership Boundaries
+## Continue Reading
 
-- FixedMathSharp owns deterministic fixed-point mathematics.
-- GridForge owns grid topology and issued geometry.
-- Trailblazer owns navigation semantics, search, budgets, dependencies, and
-  guide orchestration.
-- The host owns terrain classification and transition execution.
-
-## 11. Next Reading
-
-- [Navigation maps](NavigationCharts.md)
-- [Map authoring](ChartAuthoring.md)
+- [Navigation maps](NavigationMaps.md)
+- [Map authoring](MapAuthoring.md)
+- [Map publication](MapPublication.md)
 - [Pathing](Pathing.md)
 - [Volume traversal](VolumeTraversal.md)
 - [Transitions](Transitions.md)
 - [Path guides](PathGuides.md)
 - [Navigator](Navigator.md)
 - [Serialization](Serialization.md)
+- [Migration](Migration.md)

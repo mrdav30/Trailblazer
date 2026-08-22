@@ -12,7 +12,7 @@ namespace Trailblazer.Support;
 /// <summary>
 /// Represents a registration for a lifecycle hook, allowing it to be unregistered when disposed.
 /// </summary>
-public sealed class LifecycleHookRegistration : IDisposable
+internal sealed class LifecycleHookRegistration : IDisposable
 {
     private Action? _dispose;
 

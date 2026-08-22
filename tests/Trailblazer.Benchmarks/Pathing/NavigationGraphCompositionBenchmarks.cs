@@ -19,8 +19,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures one-map replacement and one bridge dependency mutation as context map count grows.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase2", "Graph", "Composition")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Composition")]
 public class NavigationGraphCompositionBenchmarks
 {
     private GridWorld _world;
@@ -107,7 +107,7 @@ public class NavigationGraphCompositionBenchmarks
     public void Cleanup()
     {
         Console.WriteLine(
-            $"PHASE2_STRUCTURAL maps={MapCount} max_frames={_maximumConvergenceFrames} "
+            $"NAVIGATION_GRAPH_COMPOSITION maps={MapCount} max_frames={_maximumConvergenceFrames} "
             + $"component_nodes={_maximumComponentNodes} explicit_edges={_maximumExplicitEdges} "
             + $"dependency_entries={_maximumDependencyEntries} "
             + $"active_snapshot_bytes={_maximumActiveSnapshotBytes} "

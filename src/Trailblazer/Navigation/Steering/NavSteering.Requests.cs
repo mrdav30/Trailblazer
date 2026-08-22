@@ -34,6 +34,7 @@ public partial class NavSteering
         int groupId,
         PathQuery query)
     {
+        _pendingCommittedAreaPolicy = null;
         _hasLineOfSightPath = false;
         _isAtDestination = false;
         _stoppedFrameCount = 0;

@@ -100,7 +100,7 @@ internal static class Program
     private static IConfig CreateGlobalConfig(bool singleShot) =>
         ManualConfig.Union(
                 DefaultConfig.Instance,
-                new Phase2GateConfig(ConfigUnionRule.Union, singleShot))
+                new PerformanceGateConfig(ConfigUnionRule.Union, singleShot))
             .WithUnionRule(ConfigUnionRule.AlwaysUseGlobal);
 
     private static void WriteUsage()

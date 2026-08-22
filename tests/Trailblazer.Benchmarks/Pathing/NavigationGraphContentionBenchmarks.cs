@@ -22,8 +22,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures immutable snapshot acquisition and publication at the 1/2/4/8-reader gate.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase2", "Graph", "Contention")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Contention")]
 public class NavigationGraphContentionBenchmarks
 {
     private GridWorld _world;
@@ -130,7 +130,7 @@ public class NavigationGraphContentionBenchmarks
             _readerSignals[i].Dispose();
         }
         Console.WriteLine(
-            $"PHASE2_SNAPSHOT_CONTENTION reader_threads={ReaderThreads} "
+            $"NAVIGATION_GRAPH_CONTENTION reader_threads={ReaderThreads} "
             + $"active_snapshots={_maximumActiveSnapshotCount} "
             + $"active_leases={_maximumActiveLeaseCount} "
             + $"retired_generations={_maximumRetiredGenerationCount} "

@@ -13,7 +13,7 @@ namespace Trailblazer.Navigation;
 /// <summary>
 /// Context-owned navigation coordination state for navigators, steering, movement groups, and ids.
 /// </summary>
-public sealed class TrailblazerNavigationService
+internal sealed class TrailblazerNavigationService
 {
     private readonly TrailblazerWorldContext _context;
 
@@ -24,23 +24,9 @@ public sealed class TrailblazerNavigationService
         NavigatorIds = new NavigatorGlobalIdAllocatorState();
     }
 
-    /// <summary>
-    /// Gets the world context that owns this navigation service.
-    /// </summary>
-    public TrailblazerWorldContext Context => _context;
-
     internal MovementGroupCoordinatorState MovementGroups { get; }
 
     internal NavigatorGlobalIdAllocatorState NavigatorIds { get; }
-
-    /// <summary>
-    /// Binds an uninitialized navigator to this context.
-    /// </summary>
-    public void Bind(Navigator navigator)
-    {
-        SwiftThrowHelper.ThrowIfNull(navigator, nameof(navigator));
-        navigator.BindContext(_context);
-    }
 
     internal Guid CreateNavigatorId()
     {

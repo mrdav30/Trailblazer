@@ -13,6 +13,10 @@ The source of truth for the behavior described here is the code in:
 - `src/Trailblazer/Navigation/Motor/Locomotion/Forces/LocomotionForces.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/Forces/GlobalEnvironmentForces.cs`
 
+C# blocks below are source excerpts or host-tuning fragments, not complete
+standalone programs. They illustrate the current deterministic formulas and
+public tuning members.
+
 ## 1. Where Gravity Lives
 
 Gravity is configured through a two-level system in `LocomotionHandler.Forces`:
@@ -23,59 +27,53 @@ Each `Navigator` owns a `NavMotor`, and each `NavMotor` owns its own
 
 ### 1.1 Global Gravity
 
-`LocomotionHandler.Forces` exposes a single static settings instance:
+`LocomotionForces` exposes a single static settings instance:
 
 ```csharp
-LocomotionHandler.Forces.GlobalForces  // GlobalSettings
+LocomotionForces.GlobalForces
 ```
 
 It holds two fields:
 
-- `GlobalForces.GravityForce` — the gravity magnitude applied to all navigators
+- `LocomotionForces.GlobalForces.GravityForce` — the gravity magnitude applied to all navigators
   that do not carry a per-instance override.
-- `GlobalForces.TerminalVelocity` — the terminal fall speed cap applied to all
+- `LocomotionForces.GlobalForces.TerminalVelocity` — the terminal fall speed cap applied to all
   such navigators.
 
-Both are initialized to the `GlobalForces` defaults. Call `GlobalForces.Reset()`
-to restore them.
+Both are initialized to the `GlobalEnvironmentForces` defaults. Call
+`LocomotionForces.GlobalForces.Reset()` to restore them.
 
 Changing either field takes effect for every unoverridden navigator on the very
 next frame:
 
 ```csharp
 // Shift the entire simulation to moon gravity
-LocomotionHandler.Forces.GlobalForces.GravityForce = (Fixed64)1.6d;
+LocomotionForces.GlobalForces.GravityForce = (Fixed64)1.6d;
 
 // Restore both to defaults
-LocomotionHandler.Forces.GlobalForces.Reset();
+LocomotionForces.GlobalForces.Reset();
 ```
 
 ### 1.2 Per-Instance Override
 
-`LocomotionHandler.Forces.GravityForce` and
-`LocomotionHandler.Forces.TerminalVelocity` are properties that store a
+`LocomotionForces.GravityForce` and `LocomotionForces.TerminalVelocity` are
+properties that store a
 per-instance override. Reading them returns that override when one is present,
 or the current global value otherwise.
 
 ```csharp
-// Pin one navigator to heavy gravity (e.g. a gravity-well zone)
-scout.Motor.Handler.Forces.GravityForce = (Fixed64)20.0d;
+NavMotor motor = scout.Motor
+    ?? throw new InvalidOperationException("Navigator must be initialized first.");
 
-// Remove the override — the navigator now tracks the global again
-scout.Motor.Handler.Forces.ClearGravityForceOverride();
-```
+// Pin one navigator to heavy gravity (for example, inside a gravity well).
+motor.Handler.Forces.GravityForce = (Fixed64)20.0d;
+motor.Handler.Forces.TerminalVelocity = (Fixed64)10.0d;
 
-The same pattern applies to terminal velocity:
+bool pinned = motor.Handler.Forces.HasGravityForceOverride;
 
-```csharp
-scout.Motor.Handler.Forces.TerminalVelocity = (Fixed64)10.0d;
-scout.Motor.Handler.Forces.ClearTerminalVelocityOverride();
-```
-
-You can inspect whether an override is currently active:
-
-```csharp
-bool pinned = scout.Motor.Handler.Forces.HasGravityForceOverride;
+// Remove both overrides so this navigator tracks the global settings again.
+motor.Handler.Forces.ClearGravityForceOverride();
+motor.Handler.Forces.ClearTerminalVelocityOverride();
 ```
 
 ### 1.3 Priority and Serialization
@@ -91,11 +89,11 @@ value is not baked into the snapshot.
 
 ### 1.4 Defaults
 
-- `MoveLocomotion.DefaultGravityForce = 9.8`
-- `MoveLocomotion.DefaultTerminalVelocity = 53`
+- `GlobalEnvironmentForces.DefaultGravityForce = 9.8`
+- `GlobalEnvironmentForces.DefaultTerminalVelocity = 53`
 - `JumpLocomotion.DefaultBaseJumpHeight = 1`
 - `JumpLocomotion.DefaultExtraJumpHeight = 2`
-- `WaterLocomotion.DefaultBouyancyFactor = 1`
+- `WaterLocomotion.DefaultBuoyancyFactor = 1`
 - `MoveLocomotion.DefaultWaterDragFactor = 0.0625`
 
 The owning `TrailblazerWorldContext` provides the fixed simulation timing:
@@ -134,7 +132,7 @@ When the navigator is grounded, Trailblazer does not simply "turn gravity off."
 The current code does this:
 
 ```csharp
-_forceOutput.y = FixedMath.Min(Fixed64.Zero, _forceOutput.y) - gravityStep;
+_forceOutput.Y = FixedMath.Min(Fixed64.Zero, _forceOutput.Y) - gravityStep;
 ```
 
 Implications:
@@ -166,23 +164,23 @@ directly to the vertical component.
 Current flow:
 
 ```csharp
-_forceOutput.y = Handler.Move.FrameVelocity.y - gravityStep;
+_forceOutput.Y = Handler.Move.FrameVelocity.Y - gravityStep;
 ```
 
 Then the motor clamps against terminal fall speed:
 
 ```csharp
-Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.y
-    + (_forceOutput.y * DeltaTime);
+Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.Y
+    + (_forceOutput.Y * DeltaTime);
 
-if (terminalFallSpeed < -Handler.Move.TerminalVelocity)
-    _forceOutput.y = -Handler.Move.TerminalVelocity - Handler.Move.FrameVelocity.y;
+if (terminalFallSpeed < -Handler.Forces.TerminalVelocity)
+    _forceOutput.Y = -Handler.Forces.TerminalVelocity - Handler.Move.FrameVelocity.Y;
 ```
 
 What this means in practice:
 
 - air state is where full gravity application happens
-- fall speed is bounded by `MoveLocomotion.TerminalVelocity`
+- fall speed is bounded by `scout.Motor.Handler.Forces.TerminalVelocity`
 - once falling fast enough, further downward acceleration is capped
 
 This is also where jump-hold behavior can partially offset gravity for a short
@@ -196,7 +194,7 @@ When `CurrentState.Medium == TraversalMedium.Liquid`, Trailblazer applies
 buoyancy relative to gravity:
 
 ```csharp
-_forceOutput.y += gravityStep * (Handler.Water.BuoyancyFactor - Fixed64.One);
+_forceOutput.Y += gravityStep * (Handler.Water!.BuoyancyFactor - Fixed64.One);
 ```
 
 Interpretation of `BuoyancyFactor`:
@@ -227,7 +225,8 @@ Jumping is not just "set velocity upward once."
 The current jump-speed formula is:
 
 ```csharp
-GetVerticalJumpSpeed() = sqrt(2 * BaseJumpHeight * GravityForce)
+Fixed64 jumpSpeed = FixedMath.Sqrt(
+    2 * Handler.Jump!.BaseJumpHeight * Handler.Forces.GravityForce);
 ```
 
 That is the base vertical speed used for:
@@ -260,7 +259,7 @@ counteracts gravity for a limited window:
 
 ```csharp
 if (TotalTime <= extraJumpLimit)
-    _forceOutput += Handler.Jump.FrameJumpDirection * gravityStep;
+    _forceOutput += jumpModule.FrameJumpDirection * gravityStep;
 ```
 
 This is the system that produces variable jump height.
@@ -276,7 +275,7 @@ Current behavior:
 Before jump force is added, the motor clears existing downward vertical output:
 
 ```csharp
-_forceOutput.y = FixedMath.Max(Fixed64.Zero, _forceOutput.y);
+_forceOutput.Y = FixedMath.Max(Fixed64.Zero, _forceOutput.Y);
 _forceOutput += jumpForce;
 ```
 
@@ -290,7 +289,7 @@ Ceiling handling is finalized after traversal.
 If the motor detects upward velocity and the navigator has crossed
 `CurrentState.CeilingLevel`, it:
 
-- zeroes the upward `FrameVelocity.y`
+- zeroes the upward `FrameVelocity.Y`
 - clears `Jump.IsJumping`
 - clears `Jump.IsHoldingJump`
 
@@ -351,7 +350,7 @@ If you want to change how gravity feels, these are the main fields to tune:
 
 ### Heavier or lighter gravity
 
-- `MoveLocomotion.GravityForce`
+- `scout.Motor.Handler.Forces.GravityForce`
 
 Higher values:
 
@@ -361,7 +360,7 @@ Higher values:
 
 ### Faster or slower maximum falling
 
-- `MoveLocomotion.TerminalVelocity`
+- `scout.Motor.Handler.Forces.TerminalVelocity`
 
 ### Shorter or taller jumps
 
@@ -384,9 +383,9 @@ Higher values:
 ### "Gravity is configured on TrailblazerWorldContext"
 
 It is not. `TrailblazerWorldContext` owns the fixed timestep. Gravity lives on
-`LocomotionHandler.Forces`.
+each handler's `LocomotionForces` instance.
 
-The simulation-wide defaults are on `LocomotionHandler.Forces.GlobalForces`.
+The simulation-wide defaults are on `LocomotionForces.GlobalForces`.
 Per-instance overrides are stored directly on each locomotion instance. When an
 override is set it wins; when it is not, the instance reads from `GlobalForces`.
 This keeps per-navigator tuning intact while letting one assignment propagate to

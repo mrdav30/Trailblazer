@@ -13,7 +13,7 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures context graph lookup and local physical copy-on-write publication scaling.</summary>
 [MemoryDiagnoser]
 [Config(typeof(InProcessShortRunConfig))]
-[BenchmarkCategory("Phase2", "Graph", "Lifecycle")]
+[BenchmarkCategory("Graph", "Lifecycle")]
 public class NavigationGraphLifecycleBenchmarks
 {
     private GridWorld _world;

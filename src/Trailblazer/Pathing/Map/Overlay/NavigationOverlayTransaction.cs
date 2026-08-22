@@ -34,7 +34,6 @@ public sealed class NavigationOverlayTransaction
 
         Array.Sort(_maps, MapComparer);
         long descriptorBytes = 32L;
-        bool mayChangeExplicitConnections = false;
         for (int i = 0; i < _maps.Length; i++)
         {
             SwiftThrowHelper.ThrowIfArgument(
@@ -44,8 +43,6 @@ public sealed class NavigationOverlayTransaction
             try
             {
                 descriptorBytes = checked(descriptorBytes + _maps[i].EstimatedDescriptorBytes);
-                mayChangeExplicitConnections |= !_maps[i].CellSpan.IsEmpty
-                    || !_maps[i].ConnectionSpan.IsEmpty;
             }
             catch (OverflowException)
             {
@@ -58,7 +55,6 @@ public sealed class NavigationOverlayTransaction
 
         _mapView = Array.AsReadOnly(_maps);
         EstimatedDescriptorBytes = descriptorBytes;
-        MayChangeExplicitConnections = mayChangeExplicitConnections;
     }
 
     /// <summary>Gets canonically ordered, unique per-map deltas.</summary>
@@ -68,8 +64,6 @@ public sealed class NavigationOverlayTransaction
 
     /// <summary>Gets a deterministic conservative byte count for submission admission.</summary>
     public long EstimatedDescriptorBytes { get; }
-
-    internal bool MayChangeExplicitConnections { get; }
 
     private sealed class MapDeltaComparer : IComparer<NavigationMapOverlayDelta>
     {

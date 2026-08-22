@@ -241,7 +241,7 @@ public class JumpLocomotion : ILocomotion
 
     internal void BindContext(TrailblazerWorldContext context)
     {
-        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        TrailblazerWorldContext.ThrowIfUnusable(context);
         _context = context;
     }
 

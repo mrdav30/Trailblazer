@@ -19,8 +19,6 @@ internal sealed class BenchmarkCatalog
         "Mutation",
         "Promotion"
     };
-    private static readonly Dictionary<string, string[]> _aliasSynonyms = new(StringComparer.OrdinalIgnoreCase) { };
-
     private readonly Dictionary<string, Type[]> _aliasLookup;
     private readonly KeyValuePair<string, Type[]>[] _displayAliases;
 
@@ -55,17 +53,6 @@ internal sealed class BenchmarkCatalog
             if (!string.Equals(selectionAlias, specificAlias, StringComparison.OrdinalIgnoreCase))
                 AddDisplayAlias(aliasLookup, displayAliases, selectionAlias, benchmarkType);
 
-            if (_aliasSynonyms.TryGetValue(selectionAlias, out string[] selectionSynonyms))
-            {
-                foreach (string synonym in selectionSynonyms)
-                    AddDisplayAlias(aliasLookup, displayAliases, synonym, benchmarkType);
-            }
-
-            if (_aliasSynonyms.TryGetValue(specificAlias, out string[] specificSynonyms))
-            {
-                foreach (string synonym in specificSynonyms)
-                    AddDisplayAlias(aliasLookup, displayAliases, synonym, benchmarkType);
-            }
         }
 
         return new BenchmarkCatalog(

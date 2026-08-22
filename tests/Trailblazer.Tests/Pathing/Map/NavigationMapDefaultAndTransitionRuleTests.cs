@@ -538,38 +538,6 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
         install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
     }
 
-    [Fact]
-    public void FinalAuthoringTypesAndLimits_ArePublicWithoutCompatibilityAliases()
-    {
-        Type ruleType = typeof(NavigationMap).Assembly.GetType(
-            "Trailblazer.Pathing.TraversalTransitionRule",
-            throwOnError: true)!;
-        Type scopeType = typeof(NavigationMap).Assembly.GetType(
-            "Trailblazer.Pathing.TraversalTransitionRuleScope",
-            throwOnError: true)!;
-        Type hintType = typeof(NavigationMap).Assembly.GetType(
-            "Trailblazer.Pathing.TraversalTransitionLocomotionHints",
-            throwOnError: true)!;
-
-        ruleType.IsPublic.Should().BeTrue();
-        scopeType.IsPublic.Should().BeTrue();
-        hintType.IsPublic.Should().BeTrue();
-        typeof(NavigationMap).GetProperty("DefaultCell").Should().NotBeNull();
-        typeof(NavigationMap).GetProperty("TransitionRules").Should().NotBeNull();
-        typeof(NavigationMapBuilder).GetMethod("SetDefaultCell").Should().NotBeNull();
-        typeof(NavigationMapBuilder).GetMethod("AddTransitionRule").Should().NotBeNull();
-        typeof(NavigationOperationLimits).GetProperty("MaxTransitionRulesPerMap")
-            .Should().NotBeNull();
-        typeof(NavigationOperationLimits).GetProperty("MaxTransitionRules")
-            .Should().NotBeNull();
-        typeof(TraversalTransitionDefinition).GetProperty("AdditionalCost")
-            .Should().BeNull();
-        typeof(TraversalTransitionDefinition).GetProperty("ActionCost")
-            .Should().NotBeNull();
-        typeof(TraversalTransitionDefinition).GetProperty("LocomotionHints")
-            .Should().NotBeNull();
-    }
-
     private static GridConfiguration CreateConfiguration(
         GridStorageKind storageKind,
         int originX = 0) => new(

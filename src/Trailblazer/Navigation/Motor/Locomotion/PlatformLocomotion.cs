@@ -160,7 +160,7 @@ public class PlatformLocomotion : ILocomotion
     /// <summary>
     /// Indicates whether platform inertia (initial velocity transfer) has been applied.
     /// </summary>
-    public bool InteriaApplied => IsEnabled
+    public bool InertiaApplied => IsEnabled
         && (MovementTransfer == MotionTransfer.InitTransfer || MovementTransfer == MotionTransfer.PermaTransfer);
 
     #endregion
@@ -197,7 +197,7 @@ public class PlatformLocomotion : ILocomotion
 
     internal void BindContext(TrailblazerWorldContext context)
     {
-        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        TrailblazerWorldContext.ThrowIfUnusable(context);
         _context = context;
     }
 

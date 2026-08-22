@@ -7,7 +7,8 @@ abstract so hosts can supply their own traversal-state checks and integrations.
 ## 1. Setup
 
 A Navigator binds to one `TrailblazerWorldContext` and requires one exact
-`NavigationAgentProfile`.
+`NavigationAgentProfile`. This C# fragment assumes a concrete Navigator shell,
+context, position, and profile:
 
 ~~~csharp
 navigator.Setup(context, startRootPosition, profile);
@@ -26,6 +27,9 @@ Navigator-owned turning cannot be independently mutated.
 occupancy before the object can be rebound/reinitialized.
 
 ## 2. Guided Travel
+
+This C# fragment assumes a query whose start/profile/medium match the current
+host-restored Navigator state:
 
 ~~~csharp
 navigator.ApplyGuidedTrekRequest(
@@ -87,6 +91,9 @@ has a value:
 - authored locomotion hints are applied to the frame request;
 - ordinary guide sampling is blocked;
 - the producing lease remains at the source action.
+
+The following controller-loop fragment names host-owned action/state functions
+as placeholders:
 
 ~~~csharp
 NavigationTransitionInstruction? pending = navigator.PendingTransition;

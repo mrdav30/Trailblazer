@@ -11,7 +11,7 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures immutable overlay preparation and bounded candidate folding.</summary>
 [MemoryDiagnoser]
 [Config(typeof(InProcessShortRunConfig))]
-[BenchmarkCategory("Phase1", "Map", "Overlay")]
+[BenchmarkCategory("Map", "Overlay")]
 public class NavigationOperationFoldBenchmarks
 {
     private NavigationCellOverlayOperation[] _changes;

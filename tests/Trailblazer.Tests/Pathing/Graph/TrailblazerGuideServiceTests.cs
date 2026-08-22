@@ -369,9 +369,10 @@ public sealed class TrailblazerGuideServiceTests
             try
             {
                 first.Dispose();
-                checkoutSucceeded = cache.TryCheckout(
+                checkoutSucceeded = cache.TryCheckoutReserved(
                     key,
                     firstStore.Current,
+                    context.Settings.QueryLimits.MaxAStarSinglePayloadBytes,
                     out NavigationAStarPayloadLease payloadLease);
                 if (checkoutSucceeded)
                 {
@@ -600,6 +601,64 @@ public sealed class TrailblazerGuideServiceTests
             .Should().Be(0);
     }
 
+    [Fact]
+    public void RequestFlowField_WithoutAMap_ShouldReportNoMap()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        PublishPolicy(context);
+        PathQuery query = WithAlgorithm(CreateSurfaceAStarQuery(), PathAlgorithm.FlowField);
+
+        NavigationGuideStatus status = context.Guides.RequestFlowField(
+            query,
+            out NavigationFlowFieldLease? lease);
+
+        status.Should().Be(NavigationGuideStatus.NoMap);
+        lease.Should().BeNull();
+    }
+
+    [Fact]
+    public void RequestFlowField_WithAnInvalidProfile_ShouldReportInvalidProfile()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+
+        NavigationGuideStatus status = context.Guides.RequestFlowField(
+            default,
+            out NavigationFlowFieldLease? lease);
+
+        status.Should().Be(NavigationGuideStatus.InvalidProfile);
+        lease.Should().BeNull();
+        context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void PublicGuideRequest_ShouldReportCostOverflowWithoutLeakingALease(
+        PathAlgorithm algorithm)
+    {
+        using TrailblazerWorldContext context = CreateOverflowContext(out PathQuery query);
+        query = WithAlgorithm(query, algorithm);
+
+        NavigationGuideStatus status;
+        if (algorithm == PathAlgorithm.AStar)
+        {
+            status = context.Guides.RequestGuide(query, out NavigationGuideLease? lease);
+            lease.Should().BeNull();
+        }
+        else
+        {
+            status = context.Guides.RequestFlowField(query, out NavigationFlowFieldLease? lease);
+            lease.Should().BeNull();
+        }
+
+        status.Should().Be(NavigationGuideStatus.CostOverflow);
+        context.Pathing.NavigationAStarAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(0);
+        context.Pathing.NavigationFlowAdmissionGate.PayloadCache.ActiveLeaseCount
+            .Should().Be(0);
+    }
+
     private static PathQuery CreateSurfaceAStarQuery(NavigationWorkBudget? budget = null) => new(
         new NavigationEndpoint(Vector3d.Zero),
         new NavigationEndpoint(Vector3d.Right),
@@ -616,6 +675,17 @@ public sealed class TrailblazerGuideServiceTests
         budget ?? new NavigationWorkBudget(
             1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0),
         allowTransitions: false);
+
+    private static PathQuery WithAlgorithm(PathQuery query, PathAlgorithm algorithm) => new(
+        query.Start,
+        query.End,
+        query.Agent,
+        query.AreaPolicy,
+        query.Traversal,
+        algorithm,
+        query.Budget,
+        query.AllowTransitions,
+        query.FlowField);
 
     private static PathQuery WithRayBudget(
         PathQuery query,
@@ -737,6 +807,87 @@ public sealed class TrailblazerGuideServiceTests
             world,
             takeOwnership: true);
         query = PublishThreeCellRoute(context, configuration);
+        return context;
+    }
+
+    private static TrailblazerWorldContext CreateOverflowContext(out PathQuery query)
+    {
+        const string mapId = "guide-overflow";
+        var configuration = new GridConfiguration(
+            new Vector3d(-4, -4, -4),
+            new Vector3d(8, 8, 8));
+        var world = new GridWorld();
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        TrailblazerWorldContext context = TrailblazerWorldContext.Attach(
+            world,
+            takeOwnership: true);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+
+        var ordinary = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        var overflowing = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.MaxValue,
+            (Fixed64)4,
+            (Fixed64)4);
+        var startIndex = new VoxelIndex(4, 4, 4);
+        var endIndex = new VoxelIndex(5, 4, 4);
+        NavigationMap map = new NavigationMapBuilder(mapId, binding)
+            .AddCell(startIndex, ordinary)
+            .AddCell(endIndex, overflowing)
+            .Build();
+        var mapOperation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(map, bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 1,
+            effectiveFrame: 1);
+        var policyKey = new NavigationAreaPolicyKey(mapId, 1);
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            new NavigationAreaPolicy(
+                policyKey,
+                new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
+            publicationSequence: 2,
+            effectiveFrame: 1);
+        context.Pathing.Admit(mapOperation).Should().BeTrue();
+        context.Pathing.Admit(policyOperation).Should().BeTrue();
+        while (mapOperation.Receipt.Status == NavigationOperationStatus.Pending
+            || policyOperation.Receipt.Status == NavigationOperationStatus.Pending)
+        {
+            context.Simulate();
+        }
+        mapOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        policyOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        binding.TryGetCellPrism(startIndex, out GridCellPrism startPrism).Should().BeTrue();
+        binding.TryGetCellPrism(endIndex, out GridCellPrism endPrism).Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        query = new PathQuery(
+            new NavigationEndpoint(
+                new Vector3d(startPrism.Center.X, startPrism.VerticalMin, startPrism.Center.Z),
+                mapId),
+            new NavigationEndpoint(
+                new Vector3d(endPrism.Center.X, endPrism.VerticalMin, endPrism.Center.Z),
+                mapId),
+            profile,
+            policyKey,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(4096, 4, 4, 16, 0, 0, 0, 0, 0, 0, 0),
+            allowTransitions: false);
         return context;
     }
 

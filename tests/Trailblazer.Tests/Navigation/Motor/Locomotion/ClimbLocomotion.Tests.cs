@@ -131,13 +131,13 @@ public sealed class ClimbLocomotionTests : IDisposable
         bool mantled = false;
         bool slipped = false;
 
-        motor.ClimbModule!.ClimbResolver = resolver;
+        motor.Handler.Climb!.ClimbResolver = resolver;
         motor.Events.OnStartClimb = _ => started = true;
         motor.Events.OnStopClimb = () => stopped = true;
         motor.Events.OnStartMantle = () => mantled = true;
         motor.Events.OnClimbSlip = () => slipped = true;
 
-        bool resolved = motor.ClimbModule!.ClimbResolver!.TryResolveClimbAffordance(
+        bool resolved = motor.Handler.Climb!.ClimbResolver!.TryResolveClimbAffordance(
             new TrekRequest { IsRequestingClimb = true },
             motor.CurrentState,
             out ClimbAffordanceSnapshot snapshot);
@@ -165,7 +165,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         };
         int startedCount = 0;
 
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnStartClimb = _ => startedCount++;
         agent.Motor.Handler.Climb!.MaxClimbSpeed = (Fixed64)3;
 
@@ -191,7 +191,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         };
         int startedCount = 0;
 
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnStartClimb = _ => startedCount++;
         agent.Motor.Handler.Climb!.MaxClimbSpeed = (Fixed64)3;
 
@@ -209,7 +209,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_SurfaceAffordance_When_LateralTraverseAllowed_Then_MovesAcrossSurface()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
         };
@@ -226,7 +226,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_SurfaceAffordance_When_LateralTraverseDisallowed_Then_DoesNotMoveSideways()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: false)
         };
@@ -247,7 +247,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
         };
         int startedCount = 0;
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnStartClimb = _ => startedCount++;
         agent.Motor.Handler.Climb!.MaxClimbSpeed = (Fixed64)3;
 
@@ -281,7 +281,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_LadderAffordance_When_DescentDisallowed_Then_DoesNotMoveDown()
     {
         var agent = CreateClimbingAgent(startPosition: new Vector3d(0, 2, 0));
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLadderSnapshot(allowDescent: false)
         };
@@ -302,7 +302,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true, affordanceId: null)
         };
         int slipCount = 0;
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnClimbSlip = () => slipCount++;
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
@@ -324,7 +324,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_SnapshotDisallowsStart_When_ClimbRequested_Then_DoesNotAttach()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLadderSnapshot(canStartClimb: false)
         };
@@ -344,7 +344,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
         };
         int slipCount = 0;
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnClimbSlip = () => slipCount++;
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
@@ -362,7 +362,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_FallingAgent_When_ClimbAttaches_Then_GravityAndFallAreSuppressed()
     {
         var agent = MockMotorAgentTestFactory.CreateFallingAgent(startVelocity: new Vector3d(0, -4, 0));
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLadderSnapshot()
         };
@@ -381,7 +381,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_ActiveClimb_When_RequestStopsInGas_Then_DetachesIntoFall()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
         };
@@ -402,7 +402,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_ActiveClimb_When_RequestStops_Then_DetachesAndRaisesStopEvent()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLadderSnapshot()
         };
@@ -434,7 +434,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         };
         int stoppedCount = 0;
         int slippedCount = 0;
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnStopClimb = () => stoppedCount++;
         agent.Motor.Events.OnClimbSlip = () => slippedCount++;
 
@@ -452,7 +452,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_LedgeAffordance_When_MovingUp_Then_StartsMantle()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLedgeSnapshot()
         };
@@ -471,7 +471,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_ActiveMantle_When_HostTransitionsToSolid_Then_CompletesMantleAndStopsClimbing()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLedgeSnapshot()
         };
@@ -498,7 +498,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_ActiveMantle_When_TraversalBecomesUnknown_Then_SlipsAndStops()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLedgeSnapshot()
         };
@@ -531,7 +531,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             ValidationSnapshot = MantleValidationSnapshot.Cancel
         };
         int slipCount = 0;
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnClimbSlip = () => slipCount++;
         agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = false;
 
@@ -560,7 +560,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             ValidationSnapshot = MantleValidationSnapshot.Cancel
         };
         int slipCount = 0;
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnClimbSlip = () => slipCount++;
         agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = true;
 
@@ -587,7 +587,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             Snapshot = CreateLedgeSnapshot(),
             ValidationSnapshot = MantleValidationSnapshot.Continue
         };
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = true;
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
@@ -620,7 +620,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             ValidationSnapshot = MantleValidationSnapshot.Continue
         };
         int slipCount = 0;
-        agent.Motor.ClimbModule!.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
         agent.Motor.Events.OnClimbSlip = () => slipCount++;
         agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = true;
 
@@ -648,7 +648,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     public void Given_LedgeAffordance_When_JumpRequested_Then_DetachesWithJumpImpulse()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbModule!.ClimbResolver = new MutableClimbResolver
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
             Snapshot = CreateLedgeSnapshot(allowDetachJump: true)
         };

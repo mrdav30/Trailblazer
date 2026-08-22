@@ -56,28 +56,23 @@ public partial class NavMotor : IRecordable
     /// </summary>
     public bool IsInitialized => _isInitialized;
 
-    /// <summary>
-    /// Gets the world context this motor is bound to, when explicitly bound.
-    /// </summary>
-    public TrailblazerWorldContext? Context => _context;
-
     /// <inheritdoc cref="PlatformLocomotion"/>
-    public PlatformLocomotion PlatformModule => Handler.Platform;
+    internal PlatformLocomotion PlatformModule => Handler.Platform;
 
     /// <inheritdoc cref="JumpLocomotion"/>
-    public JumpLocomotion? JumpModule => Handler.Jump;
+    internal JumpLocomotion? JumpModule => Handler.Jump;
 
     /// <inheritdoc cref="SlideLocomotion"/>
-    public SlideLocomotion? SlideModule => Handler.Slide;
+    internal SlideLocomotion? SlideModule => Handler.Slide;
 
     /// <inheritdoc cref="WaterLocomotion"/>
-    public WaterLocomotion? WaterModule => Handler.Water;
+    internal WaterLocomotion? WaterModule => Handler.Water;
 
     /// <inheritdoc cref="FlyLocomotion"/>
-    public FlyLocomotion? FlyModule => Handler.Fly;
+    internal FlyLocomotion? FlyModule => Handler.Fly;
 
     /// <inheritdoc cref="ClimbLocomotion"/>
-    public ClimbLocomotion? ClimbModule => Handler.Climb;
+    internal ClimbLocomotion? ClimbModule => Handler.Climb;
 
     #region Cache
 
@@ -170,18 +165,9 @@ public partial class NavMotor : IRecordable
     #region Construct
 
     /// <summary>
-    /// Creates a new context-bound <see cref="NavMotor"/> instance.
-    /// </summary>
-    public static NavMotor CreateNew(
-        TrailblazerWorldContext context,
-        TrekCondition initialCondition,
-        LocomotionProfile? profile = null) =>
-        new(context, initialCondition, profile);
-
-    /// <summary>
     /// Creates a new context-bound <see cref="NavMotor"/> instance without initializing it.
     /// </summary>
-    public static NavMotor CreateUninitialized(TrailblazerWorldContext context, LocomotionHandler? handler = null)
+    internal static NavMotor CreateUninitialized(TrailblazerWorldContext context, LocomotionHandler? handler = null)
     {
         var motor = new NavMotor();
         if (handler != null)
@@ -207,7 +193,7 @@ public partial class NavMotor : IRecordable
     /// </summary>
     public void BindContext(TrailblazerWorldContext context)
     {
-        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        TrailblazerWorldContext.ThrowIfUnusable(context);
         _context = context;
         _handler.BindContext(context);
     }
@@ -263,7 +249,7 @@ public partial class NavMotor : IRecordable
     {
         SwiftThrowHelper.ThrowIfNull(configure, nameof(configure));
 
-        var builder = LocomotionProfile.CreateBuilder(Handler);
+        var builder = LocomotionProfileBuilder.FromHandler(Handler);
         configure(builder);
         SetLocomotionProfile(builder.Build());
     }

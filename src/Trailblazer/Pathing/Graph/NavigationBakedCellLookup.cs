@@ -22,8 +22,7 @@ public enum NavigationCellLookupKind
 /// <summary>Selects lookup representation from authored density, independent of GridForge storage kind.</summary>
 internal sealed class NavigationBakedCellLookup
 {
-    // Phase 0 measured the direct table at 4 MiB for a 1M-address map. Keep that
-    // per-map ceiling and require at least 50% authored density.
+    // Keep the direct table below 4 MiB per map and require at least 50% authored density.
     internal const long MaximumDirectTableBytes = 4_194_304;
     internal const int MinimumDirectDensityDivisor = 2;
     private readonly NavigationMap _map;

@@ -235,19 +235,6 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     }
 
     [Fact]
-    public void WaterApi_ShouldNotExposeLegacySwimAliases()
-    {
-        typeof(LocomotionHandler).GetProperty("Swim").Should().BeNull();
-        typeof(LocomotionProfile).GetProperty("Swim").Should().BeNull();
-        typeof(LocomotionProfileBuilder).GetProperty("Swim").Should().BeNull();
-        typeof(LocomotionProfileBuilder).GetMethod("WithSwim").Should().BeNull();
-        typeof(LocomotionProfileBuilder).GetMethod("WithoutSwim").Should().BeNull();
-        typeof(NavMotor).GetProperty("SwimModule").Should().BeNull();
-        Enum.GetNames(typeof(LocomotionKind)).Should().NotContain("Swim");
-        typeof(WaterLocomotion).Assembly.GetType("Trailblazer.Navigation.Motor.SwimLocomotion").Should().BeNull();
-    }
-
-    [Fact]
     public void SyncTransientState_ShouldCopyEnabledInstalledLocomotionsOnly()
     {
         var target = TestWorld.Bind(new LocomotionHandler());

@@ -23,15 +23,15 @@ public sealed class PlatformLocomotionTailTests : IDisposable
 
         locomotion.IsActive.Should().BeFalse();
         locomotion.IsHoldingPlatform.Should().BeFalse();
-        locomotion.InteriaApplied.Should().BeFalse();
+        locomotion.InertiaApplied.Should().BeFalse();
 
         locomotion.ActivePlatform = activePlatform;
         locomotion.MovementTransfer = MotionTransfer.InitTransfer;
         locomotion.IsActive.Should().BeTrue();
-        locomotion.InteriaApplied.Should().BeTrue();
+        locomotion.InertiaApplied.Should().BeTrue();
 
         locomotion.MovementTransfer = MotionTransfer.PermaTransfer;
-        locomotion.InteriaApplied.Should().BeTrue();
+        locomotion.InertiaApplied.Should().BeTrue();
 
         locomotion.SetHoldPlatform(activePlatform);
         locomotion.IsHoldingPlatform.Should().BeTrue();
@@ -42,7 +42,7 @@ public sealed class PlatformLocomotionTailTests : IDisposable
         locomotion.IsEnabled = false;
         locomotion.IsActive.Should().BeFalse();
         locomotion.IsHoldingPlatform.Should().BeFalse();
-        locomotion.InteriaApplied.Should().BeFalse();
+        locomotion.InertiaApplied.Should().BeFalse();
     }
 
     [Fact]

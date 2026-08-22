@@ -114,7 +114,7 @@ public partial class NavSteering : IRecordable
     #region Runtime State - Pathfinding
 
     /// <summary>
-    /// Disable if a unit never needs voxel-guide validation or repathing.
+    /// Disable if a unit never needs graph-guide validation or repathing.
     /// </summary>
     public bool CanPathfind = true;
 
@@ -133,12 +133,19 @@ public partial class NavSteering : IRecordable
     public Vector3d LastTargetDirection => _lastTargetDirection;
 
     /// <summary>
-    /// Gets the immutable graph-backed surface query owned by the current steering session.
+    /// Gets the immutable graph-backed medium-state query owned by the current steering session.
     /// </summary>
     private PathQuery? _currentQuery;
 
+    private NavigationAreaPolicyKey? _pendingCommittedAreaPolicy;
+
     /// <inheritdoc cref="_currentQuery"/>
     public PathQuery? CurrentQuery => _currentQuery;
+
+    internal NavigationAreaPolicyKey? AreaPolicyForCommit =>
+        _currentQuery?.AreaPolicy ?? _pendingCommittedAreaPolicy;
+
+    internal void ConsumePendingCommittedAreaPolicy() => _pendingCommittedAreaPolicy = null;
 
     private NavigationGuideLease? _navigationGuideLease;
 
@@ -174,7 +181,7 @@ public partial class NavSteering : IRecordable
     public Fixed64 DistanceToTarget => _distanceToTarget;
 
     /// <summary>
-    /// Indicates whether the agent is actively following a guide path with queued waypoints.
+    /// Indicates whether the agent is actively following an A* or Flow guide.
     /// </summary>
     public bool HasNavigationGuidance => !HasLineOfSightPath
         && (_navigationGuideLease != null
@@ -296,19 +303,9 @@ public partial class NavSteering : IRecordable
     /// </summary>
     public NavSteeringEvents Events { get; protected set; } = new();
 
-    /// <summary>
-    /// Gets the world context this steering controller is bound to, when explicitly bound.
-    /// </summary>
-    public TrailblazerWorldContext? Context => _context;
-
     #endregion
 
     #region Constructors
-
-    /// <summary>
-    /// Creates a new <see cref="NavSteering"/> instance bound to a world context.
-    /// </summary>
-    public static NavSteering CreateNew(TrailblazerWorldContext context) => new(context);
 
     private NavSteering() { }
 
@@ -326,7 +323,7 @@ public partial class NavSteering : IRecordable
     /// </summary>
     public void BindContext(TrailblazerWorldContext context)
     {
-        PathRequestContextResolver.ThrowIfUnusable(context);
+        TrailblazerWorldContext.ThrowIfUnusable(context);
 
         if (ReferenceEquals(_context, context))
             return;

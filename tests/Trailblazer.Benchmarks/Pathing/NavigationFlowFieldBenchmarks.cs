@@ -13,8 +13,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures cold deterministic reverse integration through the graph Flow provider.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase5", "Graph", "Flow", "Cold")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Flow", "Cold")]
 public class NavigationFlowFieldBenchmarks
 {
     private BenchmarkPathFixture _fixture;
@@ -94,7 +94,7 @@ public class NavigationFlowFieldBenchmarks
     public void Cleanup()
     {
         Console.WriteLine(
-            $"PHASE5_FLOW_COLD settled_target={SettledNodeCount} endpoint_candidates={_endpointCandidates} "
+            $"NAVIGATION_FLOW_COLD settled_target={SettledNodeCount} endpoint_candidates={_endpointCandidates} "
             + $"settled_nodes={_settledNodes} evaluated_edges={_evaluatedEdges} "
             + $"selected_edges={_selectedEdges} heap_push_pop={_heapWork} "
             + $"workspace_bytes={_workspaceAllocatedBytes} "
@@ -172,8 +172,8 @@ public class NavigationFlowFieldBenchmarks
 /// <summary>Measures deterministic near-to-far publication and prefix promotion.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase5", "Graph", "Flow", "Promotion")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Flow", "Promotion")]
 public class NavigationFlowFieldPromotionBenchmarks
 {
     private const int CorridorLength = 64;
@@ -219,7 +219,7 @@ public class NavigationFlowFieldPromotionBenchmarks
     {
         NavigationFlowFieldPayloadCache cache = _gate.PayloadCache;
         Console.WriteLine(
-            $"PHASE5_FLOW_PROMOTION near_nodes={_nearNodes} far_nodes={_farNodes} "
+            $"NAVIGATION_FLOW_PROMOTION near_nodes={_nearNodes} far_nodes={_farNodes} "
             + "evaluated_edges=n/a heap_push_pop=n/a workspace_bytes=n/a "
             + $"payload_bytes={_payloadBytes} detached_peak_bytes={_detachedPeakBytes} "
             + "component_nodes=n/a component_edges=n/a "
@@ -297,8 +297,8 @@ public class NavigationFlowFieldPromotionBenchmarks
 /// <summary>Measures warm public Flow acquire, sample, and return across agent batches.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase5", "Graph", "Flow", "Agents")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Flow", "Agents")]
 public class NavigationFlowFieldAgentBenchmarks
 {
     private const int CorridorLength = 64;
@@ -380,7 +380,7 @@ public class NavigationFlowFieldAgentBenchmarks
         NavigationFlowFieldPayloadCache cache =
             _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
         Console.WriteLine(
-            $"PHASE5_FLOW_AGENTS agents={AgentCount} successes={_successes} "
+            $"NAVIGATION_FLOW_AGENTS agents={AgentCount} successes={_successes} "
             + $"warm_allocated_bytes={_warmAllocatedBytes} settled_nodes=n/a "
             + "evaluated_edges=n/a heap_push_pop=n/a workspace_bytes=n/a "
             + $"payload_bytes={_cachedPayloadBytes} detached_bytes={cache.DetachedBytes} "
@@ -433,8 +433,8 @@ public class NavigationFlowFieldAgentBenchmarks
 /// <summary>Measures dependency-scoped Flow invalidation and unaffected reuse.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase5", "Graph", "Flow", "Mutation")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Flow", "Mutation")]
 public class NavigationFlowFieldMutationBenchmarks
 {
     private const int CorridorLength = 64;
@@ -506,7 +506,7 @@ public class NavigationFlowFieldMutationBenchmarks
     {
         NavigationFlowFieldPayloadCache cache = _gate.PayloadCache;
         Console.WriteLine(
-            $"PHASE5_FLOW_MUTATION affected_stale={_affectedStaleResults} "
+            $"NAVIGATION_FLOW_MUTATION affected_stale={_affectedStaleResults} "
             + $"unaffected_reuses={_unaffectedReuses} original_cost={_affectedOriginalCost} "
             + $"rebuilt_cost={_affectedRebuiltCost} unaffected_cost={_unaffectedCost} "
             + "settled_nodes=n/a evaluated_edges=n/a heap_push_pop=n/a workspace_bytes=n/a "
@@ -631,8 +631,8 @@ public class NavigationFlowFieldMutationBenchmarks
 /// <summary>Measures a single cold million-node articulation split and cross-cut rejection.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase5", "Graph", "Flow", "Articulation")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Flow", "Articulation")]
 public class NavigationFlowFieldArticulationBenchmarks
 {
     private const int NodeCount = 1_000_000;
@@ -767,7 +767,7 @@ public class NavigationFlowFieldArticulationBenchmarks
     {
         NavigationFlowFieldPayloadCache cache = _gate.PayloadCache;
         Console.WriteLine(
-            $"PHASE5_FLOW_ARTICULATION nodes={NodeCount} before_components={_beforeComponentCount} "
+            $"NAVIGATION_FLOW_ARTICULATION nodes={NodeCount} before_components={_beforeComponentCount} "
             + $"after_components={_afterComponentCount} before_component_nodes={_beforeComponentNodes} "
             + $"after_component_nodes={_afterComponentNodes} split_component_nodes={_splitComponentNodes} "
             + $"split_component_edges={_splitComponentEdges} construction_ms={_constructionElapsedMilliseconds} "

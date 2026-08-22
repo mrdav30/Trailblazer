@@ -20,6 +20,9 @@ The code referenced here lives primarily in:
 - `src/Trailblazer/Navigation/Motor/Surface/*`
 - `src/Trailblazer/Navigation/Motor/Trek/*`
 
+C# blocks below are source excerpts or host-integration fragments, not complete
+standalone programs. Each uses the current signature discussed in its section.
+
 ## 1. What NavMotor Is
 
 `NavMotor` is the movement-execution layer for a `Navigator`.
@@ -81,7 +84,7 @@ according to locomotion rules, then converts it into per-frame deltas.
 
 The main entry points are:
 
-- `CreateNew(TrailblazerWorldContext context, TrekCondition initialCondition, LocomotionProfile? profile = null)`
+- `NavMotor(TrailblazerWorldContext context, TrekCondition condition, LocomotionProfile? profile = null)`
 - `OnInitialize(TrekCondition condition, LocomotionProfile? profile = null)`
 - `TryTraversal(TrekRequest request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)`
 - `FinalizeTraversal(Vector3d newPosition, Vector3d lastPosition, FixedQuaternion newRotation, TrekCondition conditionRefresh, Vector3d? newFootPosition = null)`
@@ -109,7 +112,7 @@ Important public state includes:
 - `WasInLiquid`
 - `IsClimbing`
 - `InLimbo`
-- `Handler.Platform.InteriaApplied`
+- `Handler.Platform.InertiaApplied`
 - `Handler.Platform.IsActive`
 - `Handler.Platform.IsLockedToPlatform`
 

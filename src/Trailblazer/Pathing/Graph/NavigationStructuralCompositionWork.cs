@@ -187,8 +187,8 @@ internal sealed class NavigationStructuralCompositionWork
             _batchChangeCount,
             _changedMapIds,
             _sourceGraph.GraphVersion + 1);
-        // Topology-native edges, seams, and cache invalidations enter the same meter in Phases 3
-        // and 4; Phase 2 owns only explicit edges, reverse dependencies, and weak components.
+        // Topology-native edges, seams, cache invalidations, explicit edges, reverse dependencies,
+        // and weak components all consume the same maintenance meter.
         if (!_preparation.IsComplete && !_preparation.Advance(meter))
             return false;
         _seamRefresh ??= new NavigationAutomaticSeamRefreshWork(

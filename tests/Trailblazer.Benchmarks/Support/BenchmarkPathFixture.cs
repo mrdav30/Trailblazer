@@ -1,7 +1,5 @@
-using System;
 using GridForge.Configuration;
 using GridForge.Grids;
-using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks;
 
@@ -13,7 +11,6 @@ internal sealed class BenchmarkPathFixture
 {
     private GridWorld _world;
     private TrailblazerWorldContext _context;
-    private IDisposable _pathingScope;
 
     /// <summary>
     /// The active GridWorld for this fixture session.
@@ -37,7 +34,6 @@ internal sealed class BenchmarkPathFixture
     {
         _world = BenchmarkEnvironment.PrepareWorld();
         _context = TrailblazerWorldContext.Attach(_world, settings: settings);
-        _pathingScope = PathManager.EnterState(_context.Pathing.State);
 
         if (config.HasValue)
             _world.TryAddGrid(config.Value, out _);
@@ -48,10 +44,8 @@ internal sealed class BenchmarkPathFixture
     /// </summary>
     public void Teardown()
     {
-        _pathingScope?.Dispose();
         _context?.Dispose();
         BenchmarkEnvironment.ResetWorld();
-        _pathingScope = null;
         _context = null;
         _world = null;
     }

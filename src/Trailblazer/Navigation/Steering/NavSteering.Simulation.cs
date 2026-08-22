@@ -38,6 +38,7 @@ public partial class NavSteering
         _isAtDestination = false;
 
         _currentQuery = null;
+        _pendingCommittedAreaPolicy = null;
         _navigationGuideLease = null;
         _navigationFlowFieldLease = null;
         _requestedDestination = Vector3d.Zero;
@@ -56,7 +57,7 @@ public partial class NavSteering
         TrailblazerWorldContext? context = _context;
         if (context != null)
         {
-            PathRequestContextResolver.ThrowIfUnusable(context);
+            TrailblazerWorldContext.ThrowIfUnusable(context);
             return context;
         }
 
@@ -684,7 +685,9 @@ public partial class NavSteering
     /// </summary>
     public void Arrive()
     {
+        NavigationAreaPolicyKey? areaPolicy = _currentQuery?.AreaPolicy;
         StopMove();
+        _pendingCommittedAreaPolicy = areaPolicy;
 
         _distanceToTarget = Fixed64.Zero;
         _isAtDestination = true;
@@ -699,6 +702,7 @@ public partial class NavSteering
     public virtual void StopMove()
     {
         bool wasMoving = _shouldMove;
+        _pendingCommittedAreaPolicy = null;
         ReleaseNavigationGuidance();
         _pendingTransitionOwner?.NotifySteeringSessionEnded();
         _currentQuery = null;

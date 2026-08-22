@@ -11,6 +11,10 @@ The code referenced here lives primarily in:
 - `src/Trailblazer/Navigation/Turning/NavTurning.cs`
 - `src/Trailblazer/Navigation/Turning/NavTurning.Serialization.cs`
 
+C# blocks below are source excerpts or host-integration fragments, not complete
+standalone programs. Each uses the current public signature shown in its
+section.
+
 `NavTurning` is implemented as a partial class: `NavTurning.cs` contains the
 runtime turning state and simulation behavior, while
 `NavTurning.Serialization.cs` contains the Chronicler `RecordData(...)`
@@ -66,7 +70,7 @@ Two details matter here:
 
 The main entry points are:
 
-- `CreateNew(TrailblazerWorldContext context, Fixed64 radius)`
+- `NavTurning(TrailblazerWorldContext context, Fixed64 radius)`
 - `TrySimulateTurn(Vector3d position, Vector3d lastPosition, Vector3d forward, FixedQuaternion rotation, out FixedQuaternion appliedRotation)`
 - `RequestTurnDirection(Vector3d curDirection, Vector3d targetDirection, Fixed64? interpolation = null)`
 - `NeedsTurn(Vector3d currentForward, Vector3d targetDirection, Fixed64? minAngle = null)`
@@ -113,8 +117,9 @@ If you use `NavTurning` directly, the essential rule is:
 
 ### 5.1 Construction
 
-The public constructor and `CreateNew(...)` initialize the controller from the
-supplied radius before returning it.
+The public constructor initializes the controller from the supplied radius
+before returning it. The initialization threshold cannot be independently
+reconfigured afterward.
 
 Construction:
 
@@ -319,29 +324,12 @@ It does not necessarily mean:
 
 ## 10. Common Integration Pattern
 
-With a `Navigator`, the usual flow is:
+With a `Navigator`, do not call steering or turning separately. The normal
+public contract is `navigator.Simulate()` followed by
+`navigator.CommitFrameMotion()`; Navigator owns the ordering shown in section 4.
 
-```csharp
-context.Simulate();
-
-if (navigator.IsGuideded)
-{
-    Vector3d heading = navigator.Steering.GetHeading(navigator);
-    navigator.Turning.RequestTurnDirection(navigator.Forward, heading);
-}
-
-if (navigator.Turning.TrySimulateTurn(
-    navigator.Position,
-    navigator.LastPosition,
-    navigator.Forward,
-    navigator.Rotation,
-    out FixedQuaternion appliedRotation))
-{
-    // Apply the returned rotation to your host state.
-}
-```
-
-With lower-level usage, the minimum pattern is:
+For lower-level use without Navigator, this C# fragment assumes a context,
+radius, direction, and rotation snapshots supplied by the host:
 
 ```csharp
 var turning = new NavTurning(context, radius);
@@ -353,7 +341,8 @@ if (turning.TrySimulateTurn(position, lastPosition, currentForward, currentRotat
 }
 ```
 
-If you want a collision-driven auto-turn:
+For collision-driven auto-turning, this fragment continues the same lower-level
+example:
 
 ```csharp
 turning.NotifyCollision();
@@ -361,7 +350,7 @@ turning.TrySimulateTurn(position, lastPosition, forward, rotation, out _); // ma
 turning.TrySimulateTurn(position, lastPosition, forward, rotation, out _); // may begin actual rotation
 ```
 
-Or, with a `Navigator`:
+With a `Navigator`, the equivalent public calls are:
 
 ```csharp
 navigator.NotifyCollision();

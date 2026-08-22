@@ -136,8 +136,6 @@ internal sealed partial class NavigationOperationCandidate
 
         internal NavigationOperationCandidate Candidate => _working;
 
-        internal bool ExplicitGatherComplete => _explicitRefresh?.IsGatherComplete == true;
-
         internal long DisplacedExplicitPayloadBytes =>
             _explicitRefresh?.DisplacedSourcePayloadBytes ?? 0L;
 

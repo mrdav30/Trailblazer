@@ -6,6 +6,9 @@ geometry, policy, or unbounded work limit later.
 
 ## 1. Query Contract
 
+This C# fragment assumes the endpoints, profile, policy key, and finite budget
+have already been created:
+
 ```csharp
 var query = new PathQuery(
     new NavigationEndpoint(startFoot, mapId),
@@ -81,7 +84,8 @@ an unbounded algorithm.
 
 ## 5. A* Versus Flow
 
-Choose A* when one agent needs an ordered route. Request it with:
+Choose A* when one agent needs an ordered route. This C# fragment assumes a
+valid A* query:
 
 ```csharp
 NavigationGuideStatus status = context.Guides.RequestGuide(
@@ -90,7 +94,8 @@ NavigationGuideStatus status = context.Guides.RequestGuide(
 ```
 
 Choose Flow when many agents share one destination and should sample selected
-edges from their own current positions:
+edges from their own current positions. This fragment assumes a valid Flow
+query:
 
 ```csharp
 NavigationGuideStatus status = context.Guides.RequestFlowField(
@@ -141,8 +146,8 @@ instead of continuing a stale result.
 
 ## 9. Related References
 
-- [Navigation maps](NavigationCharts.md)
+- [Navigation maps](NavigationMaps.md)
 - [Volume traversal](VolumeTraversal.md)
 - [Transitions](Transitions.md)
 - [Path guides](PathGuides.md)
-- [Runtime publication](PathManager.md)
+- [Map publication](MapPublication.md)

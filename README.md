@@ -8,38 +8,15 @@
 [![License](https://img.shields.io/github/license/mrdav30/Trailblazer.svg)](https://github.com/mrdav30/Trailblazer/blob/main/LICENSE)
 
 Trailblazer is deterministic, engine-agnostic navigation for lockstep games and
-simulations. It combines immutable GridForge-backed navigation maps, fixed-point
-geometry, bounded A* and flow-field search, and actionable traversal guides.
+simulations. One immutable map and query model covers grounded movement,
+free-form Gas/Liquid movement, rectangular and hex-prism grids, dynamic
+overlays, A*, flow fields, and explicit actions such as ladders or takeoff.
 
-The same query model handles:
-
-- grounded Solid travel;
-- free-form Gas and Liquid travel;
-- rectangular and pointy/flat hex grids;
-- runtime map and overlay publication;
-- explicit actions such as ladders, jumps, elevators, and teleporters;
-- bounded procedural actions such as a duck taking off anywhere along a water
-  surface.
-
-Trailblazer uses
-[FixedMathSharp](https://github.com/mrdav30/FixedMathSharp) for deterministic
+It uses [FixedMathSharp](https://github.com/mrdav30/FixedMathSharp) for fixed-point
 math, [GridForge](https://github.com/mrdav30/GridForge) for world topology and
 geometry, [SwiftCollections](https://github.com/mrdav30/SwiftCollections) for
-low-allocation collections, and
-[Chronicler](https://github.com/mrdav30/Chronicler) for explicit serialization.
-
-## Why Trailblazer?
-
-- **Deterministic:** fixed-point costs, stable ordering, explicit budgets, and
-  immutable published snapshots.
-- **Medium aware:** one search can move through Solid, Gas, and Liquid states.
-- **Topology aware:** rectangular and hex-prism grids share GridForge's geometry
-  authority rather than local neighbor formulas.
-- **Dynamic:** addressed overlays can mine a cell, flood a map, or add/remove a
-  ladder without rebuilding unrelated maps.
-- **Actionable:** guides stop at semantic actions and advance only after the host
-  explicitly completes the exact instruction.
-- **Framework agnostic:** no Unity, Godot, Unreal, or other engine dependency.
+low-allocation storage, and [Chronicler](https://github.com/mrdav30/Chronicler)
+for explicit serialization.
 
 ## Install
 
@@ -49,53 +26,53 @@ Trailblazer targets `netstandard2.1` and `net8.0`.
 dotnet add package Trailblazer
 ```
 
-Use `Trailblazer.Lean` when the rest of your LSF stack uses its Lean package
-variants. The standard package includes the MemoryPack transport; Lean omits
-that transport and follows the Lean dependency chain. Keep the package family
-consistent within one application.
+Use `Trailblazer.Lean` when the rest of the LSF dependency stack also uses Lean
+packages. Lean omits the MemoryPack transport.
 
 ```bash
 dotnet add package Trailblazer.Lean
 ```
 
-## Mental Model
+## Model
 
 ```text
 GridForge world
-    + immutable NavigationMap bakes
-    + addressed overlay transactions
-    + NavigationAreaPolicy revisions
-             |
-             v
-immutable medium-state graph snapshot
-             |
-       one PathQuery
-       /           \
- A* step lease   Flow sample lease
-       \           /
- ordinary movement or held transition instruction
+  + immutable NavigationMap bakes
+  + addressed overlay transactions
+  + NavigationAreaPolicy revisions
+                 |
+                 v
+       immutable medium-state graph
+                 |
+            one PathQuery
+            /           \
+       A* step lease   Flow sample lease
+            \           /
+       movement or held action instruction
 ```
 
-A physical cell can support multiple media. Search state is the cell plus one
-exact `TraversalMedium`; movement keeps that medium, while an authored semantic
-transition may keep or change it.
+A search state is one addressed cell plus one exact `TraversalMedium`.
+Ordinary movement retains that medium. An authored transition may retain it or
+change it, and a guide advances across the action only after the host completes
+the exact instruction.
 
 ## Quick Start
 
-The world, maps, and area policy must already be published. Construct one exact
-query for the agent's current foot position and current medium:
+First publish the referenced GridForge-backed map and area policy. The following
+C# fragment assumes the shown positions, profile, policy key, and finite budget
+have already been created:
 
 ```csharp
-var query = new PathQuery(
+PathQuery query = new(
     new NavigationEndpoint(startFoot, "overworld"),
     new NavigationEndpoint(destinationFoot, "overworld"),
-    agentProfile,
-    areaPolicy.Key,
+    profile,
+    areaPolicyKey,
     new TraversalIntent(
         TraversalMedium.Solid,
         TraversalMedia.Solid | TraversalMedia.Liquid),
     PathAlgorithm.AStar,
-    workBudget,
+    budget,
     allowTransitions: true);
 
 NavigationGuideStatus status = context.Guides.RequestGuide(
@@ -105,116 +82,49 @@ NavigationGuideStatus status = context.Guides.RequestGuide(
 if (status == NavigationGuideStatus.Success)
 {
     using NavigationGuideLease guide = acquired!.Value;
-    while (guide.TryGetCurrentStep(out NavigationGuideStep step)
-        == NavigationGuideStatus.Success)
-    {
-        if (step.HasTransition)
-        {
-            ExecuteAction(step.Transition);
-
-            NavigationGuideStatus completion;
-            do
-            {
-                completion = guide.CompletePendingTransition(step.Transition);
-                if (completion == NavigationGuideStatus.CapacityExceeded)
-                    WaitUntilNextFixedStep();
-            }
-            while (completion == NavigationGuideStatus.CapacityExceeded);
-
-            if (completion == NavigationGuideStatus.Stale)
-            {
-                RequestFreshGuide();
-                break;
-            }
-
-            if (completion != NavigationGuideStatus.Success)
-            {
-                HandleGuideFailure(completion);
-                break;
-            }
-        }
-        else
-        {
-            MoveToward(step.Position, step.Medium);
-            if (guide.CurrentStepIndex == guide.StepCount - 1)
-                break;
-
-            NavigationGuideStatus advance = guide.TryAdvanceStep();
-            if (advance != NavigationGuideStatus.Success)
-            {
-                HandleGuideFailure(advance);
-                break;
-            }
-        }
-    }
+    // Consume steps using the completion-safe loop in PathGuides.md.
 }
 ```
 
-Use `PathAlgorithm.FlowField` and `RequestFlowField(...)` for many agents
-sharing a destination. Flow sampling returns `NavigationFlowSample`; it uses
-the same transition completion contract.
+Use `PathAlgorithm.FlowField` with `RequestFlowField(...)` when many agents
+share a destination. Both algorithms consume the same graph, costs,
+dependencies, and action-completion contract.
 
-## Map Authoring
+## Core Rules
 
-`NavigationMapBuilder` binds one stable map ID to one normalized GridForge
-configuration. A map may have:
+- Maps bind stable IDs to normalized GridForge configurations.
+- Effective cell precedence is overlay, explicit bake, map default, then no
+  cell; each winning `NavigationCell` is complete.
+- Queries explicitly provide agent geometry, start medium, target media, area
+  policy, algorithm, work budget, and transition permission.
+- Runtime changes publish at deterministic fixed-step boundaries through
+  `TrailblazerWorldContext.Pathing`.
+- Hosts own terrain/material classification, physics, animation, and action
+  execution.
 
-- one optional complete default `NavigationCell`;
-- explicit cell entries overriding that default;
-- explicit physical connections;
-- explicit semantic transition definitions;
-- bounded procedural transition rules.
-
-The effective cell precedence is overlay, explicit bake, map default, then no
-cell. Each winning cell is complete; media, capability, area, cost, clearance,
-and flags never merge field by field.
-
-Runtime changes are admitted as deterministic `NavigationMapCommitOperation`,
-`NavigationOverlayCommitOperation`, or
-`NavigationAreaPolicyCommitOperation` values. Their receipts become terminal
-after fixed-step publication.
-
-## Actions And Completion
-
-`TraversalTransitionDefinition` authors one exact source-owned action.
-`TraversalTransitionRule` authors one bounded reusable action over either the
-same cell or a positive-face contact. Both carry explicit source/destination
-media, required capabilities, `ActionCost`, type, and locomotion hints.
-
-An A* step or Flow sample with `HasTransition == true` is a barrier:
-
-1. move to the reported source action position;
-2. let the host perform the action;
-3. call `CompletePendingTransition(...)` with that exact instruction;
-4. update the host's physical medium/state and continue the same lease.
-
-Moving or removing the authored object stales held instructions through normal
-graph publication. Completion never silently performs gameplay or physics.
-
-## Main References
+## Documentation
 
 - [Overview](docs/wiki/Overview.md)
-- [Map authoring](docs/wiki/ChartAuthoring.md)
-- [Map publication and overlays](docs/wiki/PathManager.md)
+- [Navigation maps](docs/wiki/NavigationMaps.md)
+- [Map authoring](docs/wiki/MapAuthoring.md)
+- [Map publication and overlays](docs/wiki/MapPublication.md)
 - [Queries and algorithms](docs/wiki/Pathing.md)
-- [Gas and Liquid travel](docs/wiki/VolumeTraversal.md)
+- [Path guides](docs/wiki/PathGuides.md)
 - [Transitions](docs/wiki/Transitions.md)
-- [Guides](docs/wiki/PathGuides.md)
+- [Gas and Liquid travel](docs/wiki/VolumeTraversal.md)
 - [Navigator](docs/wiki/Navigator.md)
 - [Serialization](docs/wiki/Serialization.md)
+- [Major-version migration](docs/wiki/Migration.md)
 
 ## Build And Test
 
 ```bash
-dotnet restore Trailblazer.slnx
-dotnet build Trailblazer.slnx --configuration Release
-dotnet test Trailblazer.slnx --configuration Release
+dotnet restore Trailblazer.slnx --property:Configuration=Release
+dotnet build Trailblazer.slnx --configuration Release --no-restore
+dotnet test Trailblazer.slnx --configuration Release --no-build
 ```
 
-## Compatibility
-
-Trailblazer is under active development. Breaking changes are accepted when
-they materially improve determinism, correctness, or the long-term public API.
+Repeat with `ReleaseLean` to validate the Lean package family.
 
 ## License
 

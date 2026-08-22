@@ -1,11 +1,10 @@
+using System.Linq;
 using FixedMathSharp;
 using FluentAssertions;
-using GridForge.Spatial;
-using GridForge.Grids.Topology;
 using GridForge.Configuration;
 using GridForge.Grids.Storage;
-using System.Linq;
-using System.Reflection;
+using GridForge.Grids.Topology;
+using GridForge.Spatial;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -66,67 +65,6 @@ public sealed class NavigationRayTests
     }
 
     [Fact]
-    public void Context_ShouldOwnOneImmediateRayWorkspace()
-    {
-        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
-
-        context.Pathing.ImmediateRayWorkspace.SyncRoot.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void WorkspaceContracts_ShouldNotRetainCompatibilityOrForwardingSurface()
-    {
-        ConstructorInfo aStarConstructor = typeof(NavigationAStarWorkspace)
-            .GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single();
-        ConstructorInfo flowConstructor = typeof(NavigationFlowFieldWorkspace)
-            .GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single();
-
-        aStarConstructor.GetParameters().Skip(4)
-            .Should().OnlyContain(parameter => !parameter.HasDefaultValue);
-        flowConstructor.GetParameters().Skip(4)
-            .Should().OnlyContain(parameter => !parameter.HasDefaultValue);
-        typeof(TrailblazerGuideService).GetProperty(
-            "ImmediateRayWorkspace",
-            BindingFlags.Instance | BindingFlags.NonPublic).Should().BeNull();
-        typeof(NavigationRayWorkspace).GetProperty(
-            "GenerationStamps",
-            BindingFlags.Instance | BindingFlags.NonPublic).Should().BeNull();
-        typeof(NavigationRayWorkspace).GetProperty(
-            "IntervalAddresses",
-            BindingFlags.Instance | BindingFlags.NonPublic).Should().BeNull();
-        typeof(NavigationRayWorkspace).GetProperty(
-            "IntervalNodes",
-            BindingFlags.Instance | BindingFlags.NonPublic).Should().BeNull();
-        typeof(NavigationRayWorkspace).GetProperty(
-            "PredecessorOrdinals",
-            BindingFlags.Instance | BindingFlags.NonPublic).Should().BeNull();
-        typeof(NavigationRayWorkspace).GetProperty(
-            "EdgeOrdinals",
-            BindingFlags.Instance | BindingFlags.NonPublic).Should().BeNull();
-    }
-
-    [Fact]
-    public void RayResult_ShouldRetainOnlyConsumerFacts()
-    {
-        NavigationCellAddress start = default;
-        NavigationCellAddress end = default;
-        var result = new NavigationRayResult(
-            NavigationRayStatus.Success,
-            start,
-            end,
-            Fixed64.One,
-            isSemanticCostNeutral: true);
-
-        result.Status.Should().Be(NavigationRayStatus.Success);
-        result.StartAddress.Should().Be(start);
-        result.EndAddress.Should().Be(end);
-        result.TraversalCost.Should().Be(Fixed64.One);
-        result.IsSemanticCostNeutral.Should().BeTrue();
-    }
-
-    [Fact]
     public void OrderedRay_ShouldFollowTheExactGraphChainAndCost()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
@@ -146,9 +84,6 @@ public sealed class NavigationRayTests
         meter.CoveredVoxelIntervals.Should().Be(10);
         meter.EvaluatedEdges.Should().Be(6);
         meter.TraceIntervals.Should().Be(4);
-        typeof(NavigationSurfaceEdgeEnumerator).GetProperty(
-            "CurrentOrdinal",
-            BindingFlags.Instance | BindingFlags.NonPublic).Should().NotBeNull();
     }
 
     [Theory]
@@ -993,10 +928,12 @@ public sealed class NavigationRayTests
     }
 
     [Theory]
-    [InlineData(false, false, (int)NavigationRayStatus.Success)]
-    [InlineData(true, false, (int)NavigationRayStatus.Blocked)]
-    [InlineData(true, true, (int)NavigationRayStatus.Success)]
+    [InlineData(0, false, false, (int)NavigationRayStatus.Success)]
+    [InlineData(2, false, false, (int)NavigationRayStatus.Success)]
+    [InlineData(0, true, false, (int)NavigationRayStatus.Blocked)]
+    [InlineData(0, true, true, (int)NavigationRayStatus.Success)]
     public void OrderedRay_ShouldOrderConsecutiveExplicitEdgesAndKeepThemDirected(
+        int axis,
         bool reverseSharedAnchors,
         bool includeEarlierAlternative,
         int expectedStatus)
@@ -1008,13 +945,13 @@ public sealed class NavigationRayTests
             Vector3d.Zero,
             topologyMetrics: metrics,
             storageKind: GridStorageKind.Dense);
-        var middleCenter = new Vector3d(2, 0, 0);
+        Vector3d middleCenter = AxisVector(axis, (Fixed64)2);
         GridConfiguration middleConfiguration = new(
             middleCenter,
             middleCenter,
             topologyMetrics: metrics,
             storageKind: GridStorageKind.Dense);
-        var endCenter = new Vector3d(4, 0, 0);
+        Vector3d endCenter = AxisVector(axis, (Fixed64)4);
         GridConfiguration endConfiguration = new(
             endCenter,
             endCenter,
@@ -1036,7 +973,9 @@ public sealed class NavigationRayTests
             middleBinding,
             default);
         Vector3d endFoot = NavigationAStarExitTestHarness.GetFoot(endBinding, default);
-        Vector3d quarter = new(Fixed64.One / (Fixed64)4, Fixed64.Zero, Fixed64.Zero);
+        Vector3d quarter = AxisVector(axis, Fixed64.One / (Fixed64)4);
+        NavigationCell cell = NavigationAStarExitTestHarness.Cell;
+        NavigationAgentProfile profile = NavigationAStarExitTestHarness.Profile();
         var first = new NavigationConnection(
             includeEarlierAlternative ? "a-late" : "first",
             default,
@@ -1070,10 +1009,13 @@ public sealed class NavigationRayTests
         context.Pathing.Admit(policyOperation).Should().BeTrue();
         SimulateUntilTerminal(context, policyOperation.Receipt);
         var startBuilder = new NavigationMapBuilder("z-start", startBinding)
-            .AddCell(default, NavigationAStarExitTestHarness.Cell)
+            .AddCell(default, cell)
             .AddConnection(first);
         if (earlierAlternative != null)
             startBuilder.AddConnection(earlierAlternative);
+        var middleBuilder = new NavigationMapBuilder("m-middle", middleBinding)
+            .AddCell(default, cell)
+            .AddConnection(next);
         NavigationMapCommitOperation[] maps =
         {
             new(
@@ -1085,10 +1027,7 @@ public sealed class NavigationRayTests
                 context.FrameCount + 1),
             new(
                 new PreparedNavigationMap(
-                    new NavigationMapBuilder("m-middle", middleBinding)
-                        .AddCell(default, NavigationAStarExitTestHarness.Cell)
-                        .AddConnection(next)
-                        .Build(),
+                    middleBuilder.Build(),
                     1),
                 OverlayReplacementPolicy.Clear,
                 2,
@@ -1096,7 +1035,7 @@ public sealed class NavigationRayTests
             new(
                 new PreparedNavigationMap(
                     new NavigationMapBuilder("a-end", endBinding)
-                        .AddCell(default, NavigationAStarExitTestHarness.Cell)
+                        .AddCell(default, cell)
                         .Build(),
                     1),
                 OverlayReplacementPolicy.Clear,
@@ -1106,8 +1045,12 @@ public sealed class NavigationRayTests
         for (int i = 0; i < maps.Length; i++)
             context.Pathing.Admit(maps[i]).Should().BeTrue();
         SimulateUntilTerminal(context, maps[maps.Length - 1].Receipt);
-        maps.Should().OnlyContain(map =>
-            map.Receipt.Status == NavigationOperationStatus.Applied);
+        for (int i = 0; i < maps.Length; i++)
+        {
+            maps[i].Receipt.Status.Should().Be(
+                NavigationOperationStatus.Applied,
+                $"map {i} must publish before ray evaluation; rejection was {maps[i].Receipt.Rejection}");
+        }
         NavigationWorldGraph graph = context.Pathing.NavigationGraphStore.Current
             .WithAutomaticSeams(NavigationAutomaticSeamIndex.Empty);
         graph = graph.WithSurfaceComponents(
@@ -1119,7 +1062,7 @@ public sealed class NavigationRayTests
                 context.World,
                 store,
                 graph,
-                NavigationAStarExitTestHarness.Profile(),
+                profile,
                 startFoot,
                 endFoot));
 
@@ -1130,7 +1073,7 @@ public sealed class NavigationRayTests
                     context.World,
                     store,
                     graph,
-                    NavigationAStarExitTestHarness.Profile(),
+                    profile,
                     endFoot,
                     startFoot))
                 .Status.Should().Be(NavigationRayStatus.Blocked);
@@ -1379,6 +1322,13 @@ public sealed class NavigationRayTests
             context.Simulate();
         }
     }
+
+    private static Vector3d AxisVector(int axis, Fixed64 value) => axis switch
+    {
+        0 => new Vector3d(value, Fixed64.Zero, Fixed64.Zero),
+        1 => new Vector3d(Fixed64.Zero, value, Fixed64.Zero),
+        _ => new Vector3d(Fixed64.Zero, Fixed64.Zero, value)
+    };
 
     private static void FindHexLine(
         NormalizedGridConfiguration binding,

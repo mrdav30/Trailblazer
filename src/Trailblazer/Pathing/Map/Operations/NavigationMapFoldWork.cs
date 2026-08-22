@@ -53,8 +53,6 @@ internal sealed class NavigationMapFoldWork
 
     internal NavigationOperationCandidate Candidate => _cursor.Candidate;
 
-    internal bool ExplicitGatherComplete => _cursor.ExplicitGatherComplete;
-
     internal long DisplacedExplicitPayloadBytes => _cursor.DisplacedExplicitPayloadBytes;
 
     internal int DisplacedExplicitPayloadPages => _cursor.DisplacedExplicitPayloadPages;

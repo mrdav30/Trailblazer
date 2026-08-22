@@ -403,6 +403,82 @@ public sealed class NavigationMediumGraphTests
     }
 
     [Fact]
+    public void DefaultBaselineCursorStaleMidSlice_ShouldRestartWithoutPartialPublication()
+    {
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(3, 0, 0),
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        var firstIndex = default(VoxelIndex);
+        var addedIndex = new VoxelIndex(3, 0, 0);
+        using var world = new GridWorld();
+        world.TryAddGrid(configuration, new[] { firstIndex }, out ushort gridIndex)
+            .Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMapInstance source = Compose(
+            world,
+            new NavigationMapBuilder("map", binding)
+                .SetDefaultCell(GasCell)
+                .Build());
+        VoxelGrid grid = world.ActiveGrids[gridIndex];
+        grid.TryAddVoxel(addedIndex, out _).Should().BeTrue();
+        var rebuild = new NavigationBaselineRebuild(source);
+        var addresses = new VoxelIndex[1];
+        var covered = new GridCoveredAddress[1];
+        NavigationGridBaselineCapture capture = default;
+        bool completed = false;
+
+        for (int slice = 0; slice <= source.DynamicSlotCount; slice++)
+        {
+            rebuild.Advance(
+                world,
+                source,
+                maximumAddresses: 1,
+                long.MaxValue,
+                int.MaxValue,
+                addresses,
+                covered,
+                out capture,
+                out completed);
+            completed.Should().BeFalse();
+        }
+
+        grid.TryRemoveVoxel(firstIndex).Should().BeTrue();
+        rebuild.Advance(
+            world,
+            source,
+            maximumAddresses: 1,
+            long.MaxValue,
+            int.MaxValue,
+            addresses,
+            covered,
+            out capture,
+            out completed);
+        completed.Should().BeFalse(
+            "a stale generation cannot publish its partially accumulated baseline");
+
+        for (int slice = 0; slice < 64 && !completed; slice++)
+        {
+            rebuild.Advance(
+                world,
+                source,
+                maximumAddresses: 1,
+                long.MaxValue,
+                int.MaxValue,
+                addresses,
+                covered,
+                out capture,
+                out completed);
+        }
+
+        completed.Should().BeTrue();
+        NavigationMapInstance result = source.Materialize(capture, instanceVersion: 2);
+        result.IsPhysicallyPresent(firstIndex).Should().BeFalse();
+        result.IsPhysicallyPresent(addedIndex).Should().BeTrue();
+    }
+
+    [Fact]
     public void DefaultReplacement_ShouldInvalidateOnlyChangedPageAndMediumComponent()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();

@@ -72,10 +72,6 @@ internal sealed class NavigationOverlayFoldWork
 
     internal NavigationOperationCandidate Candidate => _working;
 
-    internal bool ExplicitGatherComplete => _explicitRefresh?.IsGatherComplete == true;
-
-    internal bool MayChangeExplicitConnections => _transaction.MayChangeExplicitConnections;
-
     internal long DisplacedExplicitPayloadBytes =>
         _explicitRefresh?.DisplacedSourcePayloadBytes ?? 0L;
 

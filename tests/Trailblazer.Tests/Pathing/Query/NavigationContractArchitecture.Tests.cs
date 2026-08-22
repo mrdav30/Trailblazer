@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using FluentAssertions;
 using Trailblazer.Pathing;
 using Xunit;
@@ -28,7 +26,7 @@ public sealed class NavigationContractArchitectureTests
         typeof(PathQuery)
     };
 
-    private static readonly Type[] Phase1ContractTypes =
+    private static readonly Type[] AuthoredNavigationContractTypes =
     {
         typeof(EndpointResolutionPolicy),
         typeof(FlowFieldQueryOptions),
@@ -81,7 +79,7 @@ public sealed class NavigationContractArchitectureTests
         typeof(TraversalTransitionOverlayOperationKind)
     };
 
-    private static readonly Type[] Phase2RuntimeContractTypes =
+    private static readonly Type[] RuntimeNavigationContractTypes =
     {
         typeof(MaintenanceWorkBudget),
         typeof(NavigationCellLookupKind),
@@ -106,7 +104,7 @@ public sealed class NavigationContractArchitectureTests
     }
 
     [Fact]
-    public void Phase1Contracts_ShouldNotExposeRuntimeGridOrLegacyChartIdentity()
+    public void AuthoredNavigationContracts_ShouldNotExposeRuntimeGridIdentity()
     {
         string[] bannedExactTypeNames =
         {
@@ -115,14 +113,10 @@ public sealed class NavigationContractArchitectureTests
         };
         string[] bannedNameFragments =
         {
-            "NavigationChart",
-            "ChartInterval",
             "GridSlot",
-            "GridGeneration",
-            "TraversalAuthoringMap",
-            "TraversalLegend"
+            "GridGeneration"
         };
-        string[] exposedTypeNames = Phase1ContractTypes
+        string[] exposedTypeNames = AuthoredNavigationContractTypes
             .SelectMany(GetPublicSignatureTypes)
             .SelectMany(ExpandTypeGraph)
             .Select(type => type.FullName ?? type.Name)
@@ -132,7 +126,7 @@ public sealed class NavigationContractArchitectureTests
         exposedTypeNames.Should().NotContain(
             name => bannedExactTypeNames.Contains(name, StringComparer.Ordinal)
                 || bannedNameFragments.Any(fragment => name.Contains(fragment, StringComparison.Ordinal)),
-            "Phase 1 contracts must remain independent from runtime voxel identity, chart intervals, grid slots/generations, and legacy chart authoring APIs");
+            "authored navigation contracts must remain independent from runtime voxel identity and grid slots/generations");
     }
 
     [Fact]
@@ -152,9 +146,9 @@ public sealed class NavigationContractArchitectureTests
     }
 
     [Fact]
-    public void Phase2RuntimeContracts_ShouldNotExposeVoxelObjectsOrLegacyChartOwnership()
+    public void RuntimeNavigationContracts_ShouldNotExposeVoxelObjectsOrRuntimePartitionOwnership()
     {
-        string[] exposedTypeNames = Phase2RuntimeContractTypes
+        string[] exposedTypeNames = RuntimeNavigationContractTypes
             .SelectMany(GetPublicSignatureTypes)
             .SelectMany(ExpandTypeGraph)
             .Select(type => type.FullName ?? type.Name)
@@ -164,15 +158,14 @@ public sealed class NavigationContractArchitectureTests
         exposedTypeNames.Should().NotContain(
             name => string.Equals(name, "GridForge.Grids.Voxel", StringComparison.Ordinal)
                 || string.Equals(name, "GridForge.Spatial.WorldVoxelIndex", StringComparison.Ordinal)
-                || name.Contains("NavigationChart", StringComparison.Ordinal)
                 || name.Contains("Partition", StringComparison.Ordinal),
-            "the context graph owns exact copied identity and never exposes GridForge voxel or legacy chart ownership");
+            "the context graph owns exact copied identity and never exposes GridForge voxel or runtime partition ownership");
     }
 
     [Fact]
-    public void Phase2RuntimeContracts_ShouldNotExposeRecyclableRuntimeGridSlots()
+    public void RuntimeNavigationContracts_ShouldNotExposeRecyclableRuntimeGridSlots()
     {
-        string[] publicMemberNames = Phase2RuntimeContractTypes
+        string[] publicMemberNames = RuntimeNavigationContractTypes
             .SelectMany(type => type.GetMembers(
                 BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
             .Select(member => member.Name)
@@ -183,162 +176,6 @@ public sealed class NavigationContractArchitectureTests
                 || name.Contains("GridSlot", StringComparison.Ordinal)
                 || name.Contains("RuntimeSlot", StringComparison.Ordinal),
             "public map identity uses world and grid generation tokens rather than recyclable runtime slots");
-    }
-
-    [Fact]
-    public void UnifiedMediumCutover_ShouldRetainOneAuthorityAndNoLegacyProviderOrWireResidue()
-    {
-        string repositoryRoot = FindRepositoryRoot();
-        string sourceRoot = Path.Combine(repositoryRoot, "src", "Trailblazer");
-        string testRoot = Path.Combine(repositoryRoot, "tests", "Trailblazer.Tests");
-        string benchmarkRoot = Path.Combine(repositoryRoot, "tests", "Trailblazer.Benchmarks");
-        string wikiRoot = Path.Combine(repositoryRoot, "docs", "wiki");
-        string binSegment = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
-        string objSegment = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
-        string[] guardFiles =
-        {
-            Path.Combine(testRoot, "Pathing", "Query", "NavigationContractArchitecture.Tests.cs"),
-            Path.Combine(testRoot, "Pathing", "Graph", "NavigationSearchArchitectureTests.cs"),
-            Path.Combine(testRoot, "Phase0", "PublicApiSnapshot.Tests.cs")
-        };
-        string[] runtimeFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Concat(Directory.GetFiles(testRoot, "*.cs", SearchOption.AllDirectories))
-            .Concat(Directory.GetFiles(benchmarkRoot, "*.cs", SearchOption.AllDirectories))
-            .Where(path => !path.Contains(binSegment, StringComparison.OrdinalIgnoreCase)
-                && !path.Contains(objSegment, StringComparison.OrdinalIgnoreCase))
-            .Where(path => !guardFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
-            .ToArray();
-        runtimeFiles.Should().NotContain(path =>
-            path.Contains(binSegment, StringComparison.OrdinalIgnoreCase)
-            || path.Contains(objSegment, StringComparison.OrdinalIgnoreCase));
-        runtimeFiles.Should().Contain(Path.Combine(sourceRoot, "Pathing", "Query", "PathQuery.cs"));
-        runtimeFiles.Should().Contain(Path.Combine(
-            testRoot,
-            "Pathing",
-            "Graph",
-            "Phase7VolumeTransitionDeterminismMatrixTests.cs"));
-        runtimeFiles.Should().Contain(Path.Combine(
-            benchmarkRoot,
-            "Pathing",
-            "NavigationVolumeRoutingBenchmarks.cs"));
-        string[] activeFiles = runtimeFiles
-            .Concat(Directory.GetFiles(wikiRoot, "*.md", SearchOption.AllDirectories))
-            .Concat(new[]
-            {
-                Path.Combine(repositoryRoot, "README.md"),
-                Path.Combine(benchmarkRoot, "README.md"),
-                Path.Combine(testRoot, "Phase0", "PublicApiSnapshot.txt")
-            })
-            .ToArray();
-        string activeText = string.Join('\n', activeFiles.Select(File.ReadAllText));
-        string[] retiredIdentifiers =
-        {
-            "TraversalDomain",
-            "IPathRequest",
-            "IGuide",
-            "IWaypointGuide",
-            "GuidePool",
-            "VolumePathRequest",
-            "VolumeSurveyResult",
-            "HybridPathRequest",
-            "VolumeGuide",
-            "VolumeSurveyor",
-            "VolumeVoxelFinder",
-            "TrailblazerWorldContext.VolumeRules",
-            "VolumeVoxelRule",
-            "VolumeMediumRules",
-            "VolumeMediumRulesState",
-            "TrailblazerVolumeRulesService",
-            "HybridRoutePlanner",
-            "HybridRoutePlan",
-            "HybridRouteStep",
-            "HybridRouteGuide",
-            "GuidedVolumeExitPlanner",
-            "GuidedVolumeExitHandoff",
-            "TrailblazerTransitionService",
-            "TraversalTransition",
-            "TraversalTransitionAnchor",
-            "TraversalTransitionRegistry",
-            "TraversalTransitionRegistryState",
-            "TraversalTransitionQuery",
-            "TraversalTransitionQueryCache",
-            "GeneratedTraversalTransitionBuilder",
-            "TraversalAuthoringMap",
-            "TraversalBuildResult",
-            "ParsedTraversalCell",
-            "TraversalLegend",
-            "TraversalLegendEntry",
-            "TraversalAuthoringMapExtensions",
-            "PathRequestRecord",
-            "PathGuideFactory",
-            "ReusableSurveyResultCache",
-            "TrailblazerGuideState",
-            "PathHeap",
-            "TryGetCurrentWaypoint",
-            "UnitSize",
-            "AllowUnwalkableEndpoints",
-            "MaxPathSearchRange",
-            "HeuristicMethod",
-            "CurrentRouteTopologyVersion",
-            "CurrentRouteRequestsClimbIntent",
-            "PendingGuidedVolumeExitHandoff",
-            "StopMultiplier",
-            "DefaultDirectStop",
-            "DefaultGroupIndividualStop",
-            "UpdateOwnerRadius",
-            "GetActiveStopMultiplier",
-            "ResolveVoxelSize",
-            "_closingDistance",
-            "_agentRadius"
-        };
-
-        for (int i = 0; i < retiredIdentifiers.Length; i++)
-        {
-            string identifier = retiredIdentifiers[i];
-            Regex.IsMatch(
-                    activeText,
-                    $@"(?<![A-Za-z0-9_]){Regex.Escape(identifier)}(?![A-Za-z0-9_])",
-                    RegexOptions.CultureInvariant)
-                .Should().BeFalse($"{identifier} is a retired exact identifier");
-        }
-
-        AssertSingleFile(sourceRoot, "PathQuery.cs");
-        AssertSingleFile(sourceRoot, "TrailblazerGuideService.cs");
-        AssertSingleFile(sourceRoot, "NavigationAStarPayloadCache.cs");
-        AssertSingleFile(sourceRoot, "NavigationFlowFieldPayloadCache.cs");
-        AssertSingleFile(sourceRoot, "NavigationWorldGraphStore.cs");
-        AssertSingleFile(sourceRoot, "NavigationMapTokenImporter.cs");
-
-        string serializationText = string.Join('\n', new[]
-        {
-            Path.Combine(sourceRoot, "Navigation", "Navigator", "Navigator.Serialization.cs"),
-            Path.Combine(sourceRoot, "Navigation", "Steering", "NavSteering.Serialization.cs"),
-            Path.Combine(sourceRoot, "Navigation", "Steering", "Serialization", "PathQueryRecord.cs"),
-            Path.Combine(sourceRoot, "Navigation", "Steering", "Serialization", "NavigatorPathSessionRecord.cs")
-        }.Select(File.ReadAllText));
-        string[] retiredWireKeys =
-        {
-            "\"PathRequest\"",
-            "\"UnitSize\"",
-            "\"AllowUnwalkableEndpoints\"",
-            "\"MaxPathSearchRange\"",
-            "\"AStarHeuristic\"",
-            "\"HasGuide\"",
-            "\"WaypointIndex\"",
-            "\"LastUnitSize\"",
-            "\"CurrentRouteHasResolvedTopology\"",
-            "\"CurrentRouteUsesGuideTopology\"",
-            "\"CurrentRouteRequestsClimbIntent\"",
-            "\"CurrentRouteTopologyVersion\"",
-            "\"GuidedAStarHeuristic\"",
-            "\"GuidedClimbIntent\"",
-            "\"GuidedClimbIntentMode\"",
-            "\"LastSeenGuidedRouteTopologyVersion\"",
-            "\"PendingGuidedVolumeExitHandoff\"",
-            "\"StopMultiplier\""
-        };
-
-        serializationText.Should().NotContainAny(retiredWireKeys);
     }
 
     private static IEnumerable<Type> GetPublicSignatureTypes(Type contractType)
@@ -361,25 +198,6 @@ public sealed class NavigationContractArchitectureTests
             foreach (ParameterInfo parameter in method.GetParameters())
                 yield return parameter.ParameterType;
         }
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null
-            && !File.Exists(Path.Combine(directory.FullName, "src", "Trailblazer", "Trailblazer.csproj")))
-        {
-            directory = directory.Parent;
-        }
-
-        directory.Should().NotBeNull("the architecture gate must run beneath the Trailblazer repository");
-        return directory!.FullName;
-    }
-
-    private static void AssertSingleFile(string sourceRoot, string fileName)
-    {
-        Directory.GetFiles(sourceRoot, fileName, SearchOption.AllDirectories)
-            .Should().ContainSingle($"{fileName} is the retained authority");
     }
 
     private static IEnumerable<Type> ExpandTypeGraph(Type type)

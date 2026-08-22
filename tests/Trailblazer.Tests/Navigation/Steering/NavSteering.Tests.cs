@@ -30,8 +30,6 @@ public class NavSteeringTests : IDisposable
 
     public void Dispose()
     {
-        PathManager.Reset();
-
         TestWorld.Reset();
 
         GC.SuppressFinalize(this);
@@ -161,17 +159,11 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void ComputeCombinedSteering_ShouldAvoidSteadyStateAllocation()
     {
-        var data = new bool[1, 10, 5];
-        for (int x = 0; x < 10; x++)
-        {
-            for (int z = 0; z < 5; z++)
-                data[0, x, z] = true;
-        }
-
         var world = new GridWorld();
         TestWorld.Attach(world, takeOwnership: true);
-        NavigationChart chart = NavigationChart.From3D("CombinedSteeringAllocation", data, Vector3d.Zero, Fixed64.One);
-        PathManager.Register(chart);
+        world.TryAddGrid(
+            new GridConfiguration(Vector3d.Zero, new Vector3d(10, 1, 5)),
+            out _).Should().BeTrue();
 
         var agent = new MockSteerAgent(new Vector3d(4, 0, 2))
         {
@@ -237,25 +229,17 @@ public class NavSteeringTests : IDisposable
                 if (neighbor != null && TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid))
                     grid!.TryRemoveVoxelOccupant(neighbor);
             }
-
-            PathManager.UnloadChart("CombinedSteeringAllocation");
         }
     }
 
     [Fact]
     public void ScanRadiusInto_ShouldAvoidRepeatedAllocation_ForSteeringOccupants()
     {
-        var data = new bool[1, 10, 5];
-        for (int x = 0; x < 10; x++)
-        {
-            for (int z = 0; z < 5; z++)
-                data[0, x, z] = true;
-        }
-
         var world = new GridWorld();
         TestWorld.Attach(world, takeOwnership: true);
-        NavigationChart chart = NavigationChart.From3D("ScanRadiusIntoSteerAllocation", data, Vector3d.Zero, Fixed64.One);
-        PathManager.Register(chart);
+        world.TryAddGrid(
+            new GridConfiguration(Vector3d.Zero, new Vector3d(10, 1, 5)),
+            out _).Should().BeTrue();
 
         var neighbors = new MockSteerAgent?[32];
         var results = new SwiftList<ISteer>();
@@ -303,25 +287,17 @@ public class NavSteeringTests : IDisposable
                 if (neighbor != null && TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid))
                     grid!.TryRemoveVoxelOccupant(neighbor);
             }
-
-            PathManager.UnloadChart("ScanRadiusIntoSteerAllocation");
         }
     }
 
     [Fact]
     public void ComputeCombinedSteering_ShouldAvoidSteadyStateAllocation_WhenNearbyOccupantsDoNotSteer()
     {
-        var data = new bool[1, 10, 5];
-        for (int x = 0; x < 10; x++)
-        {
-            for (int z = 0; z < 5; z++)
-                data[0, x, z] = true;
-        }
-
         var world = new GridWorld();
         TestWorld.Attach(world, takeOwnership: true);
-        NavigationChart chart = NavigationChart.From3D("CombinedSteeringNonSteerAllocation", data, Vector3d.Zero, Fixed64.One);
-        PathManager.Register(chart);
+        world.TryAddGrid(
+            new GridConfiguration(Vector3d.Zero, new Vector3d(10, 1, 5)),
+            out _).Should().BeTrue();
 
         var agent = new MockSteerAgent(new Vector3d(4, 0, 2))
         {
@@ -378,8 +354,6 @@ public class NavSteeringTests : IDisposable
                 if (occupant != null && TestWorld.World.TryGetGrid(occupant.Position, out VoxelGrid? grid))
                     grid!.TryRemoveVoxelOccupant(occupant);
             }
-
-            PathManager.UnloadChart("CombinedSteeringNonSteerAllocation");
         }
     }
 

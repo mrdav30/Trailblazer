@@ -16,8 +16,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures production endpoint admission plus one uncached graph A* corridor search.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase34", "Graph", "AStar", "Cold")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "AStar", "Cold")]
 public class NavigationSurfaceAStarBenchmarks
 {
     private BenchmarkPathFixture _fixture;
@@ -89,7 +89,7 @@ public class NavigationSurfaceAStarBenchmarks
     public void Cleanup()
     {
         Console.WriteLine(
-            $"PHASE34_GRAPH_ASTAR expansion_target={ExpansionCount} "
+            $"NAVIGATION_GRAPH_ASTAR expansion_target={ExpansionCount} "
             + $"lookup_probes={_lookupProbes} endpoint_candidates={_endpointCandidates} "
             + $"expanded_nodes={_expandedNodes} evaluated_edges={_evaluatedEdges} "
             + $"heap_push_pop={_heapWork} workspace_allocated_bytes={_workspaceAllocatedBytes} "

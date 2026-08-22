@@ -280,8 +280,6 @@ internal sealed partial class NavigationOperationCandidate
 
         internal bool IsValid { get; private set; } = true;
 
-        internal bool IsGatherComplete => _stage == 4;
-
         internal long DisplacedSourcePayloadBytes => _displacedSourcePayloadBytes;
 
         internal int DisplacedSourcePayloadPages => _displacedSourcePayloadPages;

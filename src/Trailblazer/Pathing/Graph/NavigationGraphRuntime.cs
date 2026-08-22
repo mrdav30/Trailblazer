@@ -1180,6 +1180,18 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 }
                 return NavigationCandidatePublication.Deferred;
             }
+            if (!_compositionWork.RevalidateAutomaticSeamsForPublication())
+            {
+                if (_compositionWork.RequiresAllClosePublication)
+                {
+                    NavigationCandidatePublication allClosePublication =
+                        PublishAllCompositionClosure(_compositionWork);
+                    return allClosePublication == NavigationCandidatePublication.Published
+                        ? NavigationCandidatePublication.Deferred
+                        : allClosePublication;
+                }
+                return NavigationCandidatePublication.Deferred;
+            }
             if (!IsWithinRetainedWorkCapacity(
                     GetCombinedCompositionWorkBytes(_compositionWork),
                     GetCombinedCompositionWorkPages(_compositionWork)))

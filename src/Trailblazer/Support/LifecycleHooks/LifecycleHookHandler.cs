@@ -14,7 +14,7 @@ namespace Trailblazer.Support;
 /// <summary>
 /// Provides functionality to register, unregister, and invoke lifecycle hooks in a thread-safe manner.
 /// </summary>
-public class LifecycleHookHandler
+internal sealed class LifecycleHookHandler
 {
     private readonly object _lifecycleHookLock = new();
 

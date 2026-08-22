@@ -92,11 +92,6 @@ public partial class NavTurning : IRecordable
     /// </summary>
     public FixedQuaternion TargetRotation { get; private set; }
 
-    /// <summary>
-    /// Gets the world context this turning controller is bound to, when explicitly bound.
-    /// </summary>
-    public TrailblazerWorldContext? Context => _context;
-
     #endregion
 
     #region Actions and Functions
@@ -107,11 +102,6 @@ public partial class NavTurning : IRecordable
     public Func<bool>? CanTurnOnCollision { get; set; } = null;
 
     #endregion
-
-    /// <summary>
-    /// Creates and initializes a context-bound <see cref="NavTurning"/> instance.
-    /// </summary>
-    public static NavTurning CreateNew(TrailblazerWorldContext context, Fixed64 radius) => new(context, radius);
 
     private NavTurning() { }
 
@@ -129,7 +119,7 @@ public partial class NavTurning : IRecordable
     /// </summary>
     public void BindContext(TrailblazerWorldContext context)
     {
-        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        TrailblazerWorldContext.ThrowIfUnusable(context);
         _context = context;
     }
 

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using BenchmarkDotNet.Attributes;
-using FixedMathSharp;
 using GridForge.Configuration;
 using Trailblazer.Pathing;
 
@@ -11,8 +10,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures stable-ordinal same-key Flow publication on persistent workers.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase5", "Graph", "Flow", "Contention")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "Flow", "Contention")]
 public class NavigationFlowFieldContentionBenchmarks
 {
     private const int CorridorLength = 32;
@@ -128,7 +127,7 @@ public class NavigationFlowFieldContentionBenchmarks
         }
         NavigationFlowFieldPayloadCache cache = _gate.PayloadCache;
         Console.WriteLine(
-            $"PHASE5_FLOW_CONTENTION case={Case} workers={WorkerCount} "
+            $"NAVIGATION_FLOW_CONTENTION case={Case} workers={WorkerCount} "
             + $"reverse_completions={_reverseCompletions} "
             + $"duplicate_discards={_duplicateDiscards} worker_allocated_bytes={_workerAllocatedBytes} "
             + $"near_payloads={_nearPayloads} far_payloads={_farPayloads} "

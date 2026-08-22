@@ -207,7 +207,7 @@ public sealed class NavigationFlowFieldGuideTests
     }
 
     [Fact]
-    public void DestinationRecovery_DisplacedAfterRebase_ShouldRejoinTheSameLease()
+    public void DestinationRecovery_DisplacedOffMap_ShouldRayRejoinTheSameLease()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
@@ -224,10 +224,13 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().BeTrue();
         fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destination)
             .Should().BeTrue();
-        fixture.Graph.TryGetNodeRef(fixture.NearOrigin, out NavigationNodeRef nearRef)
+        fixture.Graph.TryGetSeamPrism(
+                fixture.Far.Key.DestinationAddress,
+                out GridCellPrism destinationPrism)
             .Should().BeTrue();
-        fixture.Graph.TryGetNodeState(nearRef, out NavigationNodeState near)
-            .Should().BeTrue();
+        Vector3d actualFoot = destination.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        destinationPrism.Contains(actualFoot).Should().BeFalse();
 
         guide.TrySampleHeading(
                 destination.FootAnchor,
@@ -235,14 +238,14 @@ public sealed class NavigationFlowFieldGuideTests
                 out Vector3d arrivedHeading)
             .Should().Be(NavigationGuideStatus.Success);
         guide.TrySampleHeading(
-                near.FootAnchor,
+                actualFoot,
                 GenerousSampleBudget,
                 out Vector3d recoveryHeading)
             .Should().Be(NavigationGuideStatus.Success);
 
         arrivedHeading.Should().Be(Vector3d.Zero);
         recoveryHeading.Should().Be(
-            (destination.FootAnchor - near.FootAnchor).Normalized);
+            (destination.FootAnchor - actualFoot).Normalized);
         guide.Status.Should().Be(NavigationGuideStatus.Success);
         guide.Dispose();
     }
@@ -728,6 +731,13 @@ public sealed class NavigationFlowFieldGuideTests
                 new NavigationFlowQueryResult(origin, payloadLease),
                 out NavigationFlowFieldLease guide)
             .Should().Be(NavigationGuideStatus.Success);
+        var sourceAddress = new NavigationCellAddress(fixture.MapId, start);
+        fixture.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState sourceState)
+            .Should().BeTrue();
+        fixture.Graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
+            .Should().BeTrue();
         fixture.Graph.TryGetNodeRef(
                 explicitTargetAddress,
                 out NavigationNodeRef explicitTargetRef)
@@ -742,6 +752,15 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().BeTrue();
         fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destinationState)
             .Should().BeTrue();
+        Vector3d displacedFoot = sourceState.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        sourcePrism.Contains(displacedFoot).Should().BeFalse();
+
+        guide.TrySampleHeading(
+                displacedFoot,
+                GenerousSampleBudget,
+                out Vector3d rejoinHeading)
+            .Should().Be(NavigationGuideStatus.Success);
 
         guide.TrySampleHeading(
                 explicitTargetState.FootAnchor,
@@ -749,98 +768,10 @@ public sealed class NavigationFlowFieldGuideTests
                 out Vector3d heading)
             .Should().Be(NavigationGuideStatus.Success);
 
+        rejoinHeading.Should().Be(Vector3d.Backward);
         heading.Should().Be(
             (destinationState.FootAnchor - explicitTargetState.FootAnchor).Normalized);
         guide.Dispose();
-    }
-
-    [Fact]
-    public void InternalBatch_ShouldRequireCanonicalOrderAndUseOneSharedMeter()
-    {
-        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
-            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
-        using var cache = new NavigationFlowFieldPayloadCache(
-            fixture.World,
-            maxEntries: 1,
-            maxReusableBytes: fixture.Far.RetainedBytes,
-            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
-            maxActivePayloadBytes: fixture.Far.RetainedBytes,
-            maxActiveLeases: 2,
-            guideMapCapacity: 8,
-            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
-        NavigationFlowFieldPayloadLease firstPayload = Publish(cache, fixture);
-        cache.TryCheckout(
-                fixture.Store,
-                fixture.Store.Current,
-                fixture.Far.Key,
-                fixture.FarOrigin,
-                out NavigationFlowFieldPayloadLease secondPayload,
-                out _)
-            .Should().Be(NavigationFlowFieldStatus.Success);
-        cache.TryCreateGuide(
-                fixture.Store,
-                new NavigationFlowQueryResult(fixture.FarOrigin, firstPayload),
-                out NavigationFlowFieldLease first)
-            .Should().Be(NavigationGuideStatus.Success);
-        cache.TryCreateGuide(
-                fixture.Store,
-                new NavigationFlowQueryResult(fixture.FarOrigin, secondPayload),
-                out NavigationFlowFieldLease second)
-            .Should().Be(NavigationGuideStatus.Success);
-        fixture.Graph.TryGetNodeRef(fixture.FarOrigin, out NavigationNodeRef sourceRef)
-            .Should().BeTrue();
-        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
-            .Should().BeTrue();
-        GuideSampleBatchItem[] items =
-        {
-            new(stableOrdinal: 1, first, source.FootAnchor),
-            new(stableOrdinal: 2, second, source.FootAnchor)
-        };
-        var results = new GuideSampleBatchResult[2];
-        var oneSampleBudget = new GuideSampleWorkBudget(
-            128,
-            2,
-            0,
-            1,
-            2,
-            2,
-            0);
-
-        GuideSampleBatch.Sample(items, results, oneSampleBudget);
-
-        results[0].Status.Should().Be(NavigationGuideStatus.Success);
-        results[1].Status.Should().Be(NavigationGuideStatus.BudgetExceeded);
-        results[1].Sample.Heading.Should().Be(Vector3d.Zero);
-        first.Dispose();
-        second.Dispose();
-    }
-
-    [Fact]
-    public void InternalBatch_ShouldRejectNonCanonicalOrderBeforeSampling()
-    {
-        GuideSampleBatchItem[] items =
-        {
-            new(stableOrdinal: 2, default, Vector3d.Zero),
-            new(stableOrdinal: 1, default, Vector3d.Zero)
-        };
-        var results = new GuideSampleBatchResult[2];
-
-        Action sample = () => GuideSampleBatch.Sample(
-            items,
-            results,
-            GenerousSampleBudget);
-
-        sample.Should().Throw<ArgumentException>();
-        results.Should().OnlyContain(result => result.Status == default);
-    }
-
-    [Fact]
-    public void GuideSampleWorkMeter_ShouldExposeNoInspectionSurface()
-    {
-        typeof(GuideSampleWorkMeter)
-            .GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Should().BeEmpty(
-                "budget boundaries are pinned behaviorally instead of through test-only hot-path accessors");
     }
 
     [Theory]

@@ -28,6 +28,8 @@ remain guide-free while the exact same-medium route is certified.
 
 ## 2. Per-Frame Heading
 
+This C# fragment assumes a configured steering instance and `ISteer` host:
+
 ~~~csharp
 Vector3d heading = steering.GetHeading(
     vessel,

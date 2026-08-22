@@ -45,6 +45,8 @@ constants and no floating-point distance path.
 Trailblazer does not ask whether an address is cave, ocean, sky, room, or biome.
 The host may use those facts while authoring, but it publishes a complete cell:
 
+The following C# fragment assumes a stable area ID:
+
 ~~~csharp
 NavigationCell liquid = new(
     TraversalMedia.Liquid,
@@ -64,6 +66,8 @@ medium when that is physically meaningful.
 Map defaults make large uniform volumes cheap. A Gas-default map needs entries
 only for exceptions. A flooded replacement can use a Liquid default without
 rewriting every physical address.
+
+This C# fragment assumes a normalized binding and complete Gas/Liquid cells:
 
 ~~~csharp
 NavigationMap gasMap = new NavigationMapBuilder(mapId, binding)
@@ -92,7 +96,8 @@ Important details:
 
 ## 5. Queries
 
-A free-flight query is ordinary `PathQuery` intent:
+A free-flight query is ordinary `PathQuery` intent. This C# fragment assumes
+published map/policy truth, endpoints, profile, and budget:
 
 ~~~csharp
 var query = new PathQuery(
@@ -149,7 +154,7 @@ Media contact alone never generates these actions. See
 
 ## 9. Related References
 
-- [Navigation maps](NavigationCharts.md)
-- [Map authoring](ChartAuthoring.md)
+- [Navigation maps](NavigationMaps.md)
+- [Map authoring](MapAuthoring.md)
 - [Pathing](Pathing.md)
 - [Path guides](PathGuides.md)

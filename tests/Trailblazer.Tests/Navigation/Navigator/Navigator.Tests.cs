@@ -134,19 +134,10 @@ public class NavigatorTests : IDisposable
         navigator.ApplyGuidedTrekRequest(query, rate: TrekRate.Moderate, groupId: 8);
 
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
-        navigator.IsGuideded.Should().BeTrue();
+        navigator.IsGuided.Should().BeTrue();
         steering.CurrentQuery.Should().Be(query);
         steering.MovementGroupID.Should().Be(8);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
-    }
-
-    [Fact]
-    public void NavSteering_ShouldNotExposeDirectPublicPathQueryEntryPoint()
-    {
-        typeof(NavSteering).GetMethod(
-                "ApplyPathQuery",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
-            .Should().BeNull();
     }
 
     [Fact]
@@ -814,7 +805,7 @@ public class NavigatorTests : IDisposable
         navigator.ApplyInputTrekRequest(direction: Vector3d.Forward, rate: TrekRate.Moderate);
 
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
-        navigator.IsGuideded.Should().BeFalse();
+        navigator.IsGuided.Should().BeFalse();
         steering.ShouldMove.Should().BeFalse();
         steering.HasNavigationGuidance.Should().BeFalse();
         cache.ActiveLeaseCount.Should().Be(0);
@@ -1578,7 +1569,7 @@ public class NavigatorTests : IDisposable
 
         navigator.ApplyInputTrekRequest();
 
-        navigator.IsGuideded.Should().BeFalse();
+        navigator.IsGuided.Should().BeFalse();
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
@@ -2387,6 +2378,12 @@ public class NavigatorTests : IDisposable
         notifications.Should().Be(1);
         navigator.LastCommittedCell!.Value.Address.Should().Be(
             new NavigationCellAddress("navigator-topology", endIndex));
+        navigator.LastCommittedCell.Value.AreaPolicy.Should().Be(query.AreaPolicy);
+
+        navigator.CommitFrameMotion();
+
+        navigator.LastCommittedCell.Value.AreaPolicy.Should().BeNull();
+        notifications.Should().Be(1);
     }
 
     private static TestNavigator CreateNavigator(

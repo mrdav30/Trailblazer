@@ -83,7 +83,8 @@ and ordinal.
 ## 5. Ladder: Dynamic Explicit Actions
 
 A bidirectional ladder is two directed definitions. Dropping it into the world
-publishes both in one overlay transaction:
+publishes both in one overlay transaction. This C# fragment assumes the stable
+map ID and endpoint indices are available:
 
 ~~~csharp
 var down = new TraversalTransitionDefinition(
@@ -122,7 +123,8 @@ publication becomes `Stale`; it never retargets to the moved ladder.
 ## 6. Duck: One Rule, Many Water Surfaces
 
 One rule can allow a swimming/flying duck to take off at any qualifying
-Liquid-to-Gas face:
+Liquid-to-Gas face. This C# fragment assumes the map binding and cells are
+available:
 
 ~~~csharp
 var takeoff = new TraversalTransitionRule(
@@ -152,7 +154,8 @@ staleness clock.
 
 An A* `NavigationGuideStep` or Flow `NavigationFlowSample` with
 `HasTransition == true` includes the exact instruction. The lease remains at
-the source action until:
+the source action until completion. This fragment assumes `guide` and `step`
+come from the same active lease and that the host action has already executed:
 
 ~~~csharp
 NavigationGuideStatus status =
@@ -180,7 +183,7 @@ shore entry/exit remains unhinted.
 
 ## 9. Related References
 
-- [Map authoring](ChartAuthoring.md)
-- [Runtime publication](PathManager.md)
+- [Map authoring](MapAuthoring.md)
+- [Map publication](MapPublication.md)
 - [Path guides](PathGuides.md)
 - [Navigator](Navigator.md)

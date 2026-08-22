@@ -16,8 +16,8 @@ namespace Trailblazer.Benchmarks.Pathing;
 /// <summary>Measures same-key A* search and cache publication with persistent manual workers.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
-[Config(typeof(Phase2GateConfig))]
-[BenchmarkCategory("Phase34", "Graph", "AStar", "Contention")]
+[Config(typeof(PerformanceGateConfig))]
+[BenchmarkCategory("Graph", "AStar", "Contention")]
 public class NavigationAStarContentionBenchmarks
 {
     private const int CorridorLength = 32;
@@ -145,7 +145,7 @@ public class NavigationAStarContentionBenchmarks
             }
         }
         Console.WriteLine(
-            $"PHASE34_ASTAR_CONTENTION workers={WorkerCount} "
+            $"NAVIGATION_ASTAR_CONTENTION workers={WorkerCount} "
             + $"reverse_completions={_reverseCompletions} duplicate_discards={_duplicateDiscards} "
             + $"reserved_leases={_maximumReservedLeaseCount} "
             + $"reserved_payload_bytes={_maximumReservedPayloadBytes} "

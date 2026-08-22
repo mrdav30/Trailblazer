@@ -152,6 +152,8 @@ public sealed class TrailblazerGuideService
         EnsureUsable();
         result = null;
 
+        if (!query.Agent.IsValid)
+            return NavigationGuideStatus.InvalidProfile;
         if (query.Algorithm != PathAlgorithm.FlowField)
         {
             return NavigationGuideStatus.Unsupported;

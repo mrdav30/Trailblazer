@@ -20,12 +20,13 @@ A `HeightmapSurface` stores environment ground/contact Y over an X/Z lattice:
   neighboring samples.
 
 The Y value is contact ground Y, not a navigator root/body Y. Navigator root
-projection adds `Navigator.FootPositionAdjust` and any configured heightmap
+projection adds `BodyShape.RootToFootOffsetY` and any configured heightmap
 `groundOffset` after sampling.
 
 ## 2. Storage And Compression
 
-`HeightmapCompression` defines how compact `short` samples convert to `Fixed64`:
+`HeightmapCompression` defines how compact `short` samples convert to `Fixed64`.
+Formula fragment:
 
 ```csharp
 groundY = compression.ReferenceHeight + compressedSample * compression.HeightStep;
@@ -51,7 +52,8 @@ sampled through the same deterministic path.
 
 ## 3. Registration
 
-Heightmaps are registered on `TrailblazerWorldContext.Heightmaps`.
+Heightmaps are registered on `TrailblazerWorldContext.Heightmaps`. This complete
+C# setup example owns its context and sample storage:
 
 ```csharp
 using FixedMathSharp;
@@ -92,7 +94,8 @@ heightmap registry. Disposing the context also clears its heightmaps.
 
 ## 4. Sampling
 
-Use `TrySampleGround(...)` with a world X/Z position and contact-selection Y:
+Use `TrySampleGround(...)` with a world X/Z position and contact-selection Y.
+C# fragment using the context created above:
 
 ```csharp
 Vector3d contactQuery = new(0, 0, 0);
@@ -107,7 +110,7 @@ if (context.Heightmaps.TrySampleGround(contactQuery, out HeightmapSample sample)
 The no-preference overload considers every registered layer that contains the
 query X/Z and whose vertical selection band contains the query Y. The
 preferred-layer overload first tries the supplied layer name, then falls back to
-deterministic candidate selection:
+deterministic candidate selection. C# fragment:
 
 ```csharp
 context.Heightmaps.TrySampleGround(
@@ -127,7 +130,7 @@ When several layers are valid, Trailblazer chooses:
 
 Multi-level worlds use one heightmap layer per selectable level. A platform
 above a floor can share the same X/Z area with the floor because each
-registration has a vertical selection band:
+registration has a vertical selection band. C# fragment:
 
 ```csharp
 context.Heightmaps.Register(groundSurface, minSelectionY: (Fixed64)(-1), maxSelectionY: (Fixed64)2);
@@ -160,7 +163,8 @@ A Unity-style editor baker should follow this shape:
 6. Save or emit the compact sample data for runtime registration.
 
 In current Trailblazer terms, that workflow maps to `HeightmapCompression` and
-`HeightmapSurface.FromCompressed(...)`:
+`HeightmapSurface.FromCompressed(...)`. The next block is Unity editor-adapter
+pseudocode; Unity types are intentionally not part of Trailblazer:
 
 ```csharp
 using FixedMathSharp;
@@ -224,7 +228,8 @@ root sits above that contact.
 host adapters opt in by calling the protected `TryApplyHeightmapGrounding(...)`
 helper from their own traversal probing code, usually inside
 `CheckTrekCondition()` after deciding the navigator is grounded on solid
-terrain.
+terrain. This C# fragment shows the host-owned subclass and later configuration;
+the host still performs normal Navigator setup/initialization:
 
 ```csharp
 using FixedMathSharp;
@@ -264,7 +269,8 @@ Modes:
 - `HeightmapGroundingMode.SurfaceLevelOnly` updates `SurfaceLevel`/ground
   contact but does not move the navigator root.
 - `HeightmapGroundingMode.SurfaceLevelAndPosition` updates ground contact and
-  projects root Y to `sample.GroundY + FootPositionAdjust + groundOffset`.
+  projects root Y to
+  `sample.GroundY + BodyShape.RootToFootOffsetY + groundOffset`.
 
 Projection only runs while the current medium is `TraversalMedium.Solid`. This
 keeps airborne, swimming, and other host-owned traversal phases from being

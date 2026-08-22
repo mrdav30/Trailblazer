@@ -62,9 +62,11 @@ internal sealed class NavigationAStarGuideLease
     {
         lock (_sync)
         {
-            return IsGenerationActiveUnderLock(generation)
-                ? _status
-                : NavigationAStarQueryStatus.Stale;
+            if (!IsGenerationActiveUnderLock(generation))
+                return NavigationAStarQueryStatus.Stale;
+            return _status == NavigationAStarQueryStatus.Success
+                ? ValidateCurrentPayloadUnderLock(out _)
+                : _status;
         }
     }
 

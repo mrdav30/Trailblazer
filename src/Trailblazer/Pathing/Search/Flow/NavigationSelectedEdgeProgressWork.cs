@@ -566,6 +566,7 @@ internal static class NavigationSelectedEdgeProgressWork
         out Vector3d heading)
     {
         heading = Vector3d.Zero;
+        bool alreadyAtAction = actualFootPosition == actionPosition;
         if (!graph.AreaCatalog.TryGet(
                 payload.Key.AreaPolicy,
                 out NavigationAreaPolicy? areaPolicy)
@@ -585,6 +586,8 @@ internal static class NavigationSelectedEdgeProgressWork
             NavigationRayChainConstraint.SourceOnly(source),
             ref meter,
             immediateRayWorkspace);
+        if (alreadyAtAction && status == NavigationGuideStatus.LocalRecoveryRequired)
+            return NavigationGuideStatus.Success;
         return status == NavigationGuideStatus.Success
             ? TrySetHeadingUnchecked(actualFootPosition, actionPosition, out heading)
             : status;

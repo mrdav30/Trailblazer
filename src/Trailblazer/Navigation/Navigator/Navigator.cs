@@ -653,7 +653,10 @@ public abstract partial class Navigator : INavigate, IRecordable
         {
             if (_pendingTransition is NavigationTransitionInstruction pending)
             {
-                ApplyTransitionLocomotionHints(pending.LocomotionHints, pending: true);
+                if (Steering!.PendingTransitionGuideStatus == NavigationGuideStatus.Stale)
+                    Steering.StopMove();
+                else
+                    ApplyTransitionLocomotionHints(pending.LocomotionHints, pending: true);
             }
             else
             {

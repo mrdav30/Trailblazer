@@ -230,6 +230,55 @@ public class NavigatorTests : IDisposable
         TestRequire.NotNull(navigator.Steering).CurrentQuery.Should().BeNull();
     }
 
+    [Fact]
+    public void Simulate_ShouldKeepAHeldTransitionWhileGraphLeaseCapacityIsTemporarilyExhausted()
+    {
+        (Vector3d start, Vector3d end, _) = PublishTransitionGraph();
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        var query = new PathQuery(
+            new NavigationEndpoint(start, "navigator-transition"),
+            new NavigationEndpoint(end, "navigator-transition"),
+            profile,
+            new NavigationAreaPolicyKey("navigator-test", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Gas),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(8192, 32, 128, 1024, 1024, 1024, 1024, 0, 0, 1024, 32),
+            allowTransitions: true);
+        navigator.ApplyGuidedTrekRequest(query);
+        navigator.Simulate();
+        NavigationTransitionInstruction pending = navigator.PendingTransition!.Value;
+        int leaseLimit = TrailblazerWorldContextSettings.Default.MaxConcurrentSnapshotLeases;
+        var pressure = new NavigationWorldGraphLease[leaseLimit];
+        try
+        {
+            for (int i = 0; i < pressure.Length; i++)
+            {
+                pressure[i] = TestWorld.Context.Pathing.TryAcquireNavigationGraph()!;
+                pressure[i].Should().NotBeNull();
+            }
+
+            navigator.Simulate();
+
+            navigator.PendingTransition.Should().Be(pending);
+            navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
+            navigator.CompletePendingTransition(pending)
+                .Should().Be(NavigationGuideStatus.CapacityExceeded);
+            navigator.PendingTransition.Should().Be(pending);
+        }
+        finally
+        {
+            for (int i = 0; i < pressure.Length; i++)
+                pressure[i]?.Dispose();
+        }
+
+        navigator.CompletePendingTransition(pending)
+            .Should().Be(NavigationGuideStatus.Success);
+        navigator.PendingTransition.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -439,12 +488,7 @@ public class NavigatorTests : IDisposable
         Vector3d middleRoot = middle + Vector3d.Up * profile.Shape.RootToFootOffsetY;
         navigator.SetTestPosition(middleRoot);
         PublishGraphLine(bakeVersion: 2, publicationSequence: 3);
-
-        steering.GetHeading(navigator, out _).Should().Be(Vector3d.Zero);
         steering.CurrentQuery.Should().Be(query);
-
-        Vector3d secondHeading = steering.GetHeading(navigator, out _);
-        secondHeading.Should().NotBe(Vector3d.Zero);
 
         PathQuery expected = new(
             new NavigationEndpoint(
@@ -460,6 +504,7 @@ public class NavigatorTests : IDisposable
             query.Budget,
             query.AllowTransitions,
             query.FlowField);
+        steering.GetHeading(navigator, out _).Should().NotBe(Vector3d.Zero);
         steering.CurrentQuery.Should().Be(expected);
     }
 

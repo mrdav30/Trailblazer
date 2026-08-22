@@ -218,8 +218,10 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         {
             return Finish(_readyStatus);
         }
+        if (_search == null)
+            return Finish(_readyStatus);
 
-        NavigationAStarPayload payload = _search!.Result;
+        NavigationAStarPayload payload = _search.Result;
         if (!_store.Current.IsDependencyCurrent(payload.Dependencies)
             || !_cache.IsWorldCurrent(payload))
             return Finish(NavigationAStarQueryStatus.Stale);

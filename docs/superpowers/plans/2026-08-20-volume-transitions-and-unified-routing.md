@@ -407,14 +407,21 @@
 
 - Add: `tests/Trailblazer.Tests/Navigation/Phase7TransitionSimulationTests.cs`
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/NavigationTransitionRuleTests.cs`
+- Modify: `src/Trailblazer/Pathing/Map/NavigationMapTokenImporter.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarGuideLease.cs`
+- Modify: `src/Trailblazer/Pathing/Search/AStar/NavigationAStarQueryWork.cs`
+- Modify: `src/Trailblazer/Pathing/Search/Flow/NavigationSelectedEdgeProgressWork.cs`
+- Modify: `src/Trailblazer/Navigation/Steering/NavSteering.cs`
+- Modify: `src/Trailblazer/Navigation/Navigator/Navigator.cs`
 - Modify: `tests/Trailblazer.Tests/Support/GuidedPathTestScene.cs`
+- Modify: matching focused regression tests under `tests/Trailblazer.Tests`
 
-- [ ] RED ladder: no route, overlay-drop a bidirectional ladder from Solid cliff into Liquid, acquire held Climb instruction, complete exactly, continue same guide, move/remove ladder, stale old instruction/lease, reacquire NoPath, drain resources.
-- [ ] RED ladder locomotion hints for ordinary Climb and shoreline SwimExit request/preserve behavior.
-- [ ] RED duck: one public Liquid->Gas PositiveFaceContact Takeoff rule serves multiple water-surface cells; Swim|Fly succeeds from each, otherwise-equivalent non-Fly agent fails, completion continues same A*/Flow guide.
-- [ ] RED SameCell takeoff, same-medium Jump/Climb, distant cheap teleporter, rule mutation, cell flood/drain, affected/unaffected cache reuse, and exact dependency invalidation.
-- [ ] Use only public map/overlay/query/guide/Navigator APIs in the showcase tests; no internal fixture shortcut for the behavior under demonstration.
-- [ ] Run focused scenarios in Release + ReleaseLean, reviews, and commit: `test(navigation): prove dynamic transition simulations`.
+- [x] RED ladder: no route, overlay-drop a bidirectional ladder from Solid cliff into Liquid, acquire held Climb instruction, complete exactly, continue same guide, move/remove ladder, stale old instruction/lease, reacquire NoPath, drain resources.
+- [x] RED ladder locomotion hints for ordinary Climb and shoreline SwimExit request/preserve behavior.
+- [x] RED duck: one public Liquid->Gas PositiveFaceContact Takeoff rule serves multiple water-surface cells; Swim|Fly succeeds from each, otherwise-equivalent non-Fly agent fails, completion continues same A*/Flow guide.
+- [x] RED SameCell takeoff, same-medium Jump/Climb, distant cheap teleporter, rule mutation, cell flood/drain, affected/unaffected cache reuse, and exact dependency invalidation.
+- [x] Use only public map/overlay/query/guide/Navigator APIs in the showcase tests; no internal fixture shortcut for the behavior under demonstration.
+- [x] Run focused scenarios in Release + ReleaseLean, reviews, and commit: `test(navigation): prove dynamic transition simulations`.
 
 ## Task 12: Refresh Public Documentation And Decide Navigation-Ray Visibility
 

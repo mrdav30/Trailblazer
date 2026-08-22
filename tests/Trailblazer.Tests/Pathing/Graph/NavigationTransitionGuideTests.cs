@@ -903,14 +903,18 @@ public sealed class NavigationTransitionGuideTests
                 displaced,
                 oneBelowLookupBudget,
                 out NavigationFlowSample _)
-            .Should().Be(NavigationGuideStatus.BudgetExceeded);
+            .Should().Be(
+                NavigationGuideStatus.BudgetExceeded,
+                "the displaced transition approach must preserve its exact lookup envelope");
         Sample(
                 inner,
                 flowGeneration,
                 start,
                 noLookupBudget,
                 out NavigationFlowSample blocked)
-            .Should().Be(NavigationGuideStatus.BudgetExceeded);
+            .Should().Be(
+                NavigationGuideStatus.BudgetExceeded,
+                "the exact action position still requires metered certification");
         blocked.Should().Be(default(NavigationFlowSample));
         Sample(
                 inner,
@@ -928,7 +932,9 @@ public sealed class NavigationTransitionGuideTests
                 start,
                 oneBelowLookupBudget,
                 out NavigationFlowSample _)
-            .Should().Be(NavigationGuideStatus.BudgetExceeded);
+            .Should().Be(
+                NavigationGuideStatus.BudgetExceeded,
+                "the exact action position must match the displaced lookup envelope");
 
         var exactTransitionLookupBudget = new GuideSampleWorkBudget(
             maxCurrentNodeLookupProbes: currentNodeLookups,

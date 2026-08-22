@@ -190,6 +190,11 @@ public partial class NavSteering : IRecordable
         && (_navigationGuideLease != null
             || _navigationFlowFieldLease != null);
 
+    internal NavigationGuideStatus PendingTransitionGuideStatus =>
+        _navigationGuideLease?.Status
+        ?? _navigationFlowFieldLease?.Status
+        ?? NavigationGuideStatus.Stale;
+
     /// <inheritdoc cref="_isAtDestination"/>
     public bool IsAtDestination => _isAtDestination;
 

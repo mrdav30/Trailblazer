@@ -71,7 +71,7 @@ public sealed class NavigationMapTokenImporterTests
     }
 
     [Fact]
-    public void ImportRectangular_AuthorsExactEnterStayAndExitClimbHints()
+    public void ImportRectangular_AuthorsExactClimbAndShoreHints()
     {
         string[,,] source = new string[4, 1, 1];
         source[0, 0, 0] = "S";
@@ -99,6 +99,54 @@ public sealed class NavigationMapTokenImporterTests
             | TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion);
         stay.LocomotionHints.Should().Be(enter.LocomotionHints);
         exit.LocomotionHints.Should().Be(TraversalTransitionLocomotionHints.RequestClimb);
+
+        NavigationMap climbShore = NavigationMapTokenImporter.ImportRectangular(
+            "climb-shore",
+            CreateRectangularConfiguration(2, 1, 1),
+            new string[,,] { { { "L!" } }, { { "LC!" } } });
+        TraversalTransitionDefinition swimEntry = climbShore.Transitions.Single(
+            transition => transition.Type == TraversalTransitionType.SwimEntry);
+        TraversalTransitionDefinition climbSwimExit = climbShore.Transitions.Single(
+            transition => transition.Type == TraversalTransitionType.SwimExit);
+        swimEntry.LocomotionHints.Should().Be(
+            TraversalTransitionLocomotionHints.None);
+        climbSwimExit.LocomotionHints.Should().Be(
+            TraversalTransitionLocomotionHints.RequestClimb
+            | TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion);
+
+        NavigationMap normalShore = NavigationMapTokenImporter.ImportRectangular(
+            "normal-shore",
+            CreateRectangularConfiguration(2, 1, 1),
+            new string[,,] { { { "L!" } }, { { "S!" } } });
+        normalShore.Transitions.Single(
+                transition => transition.Type == TraversalTransitionType.SwimExit)
+            .LocomotionHints.Should().Be(
+                TraversalTransitionLocomotionHints.None);
+
+        var solidOnlyClimbLegend = NavigationTokenLegend.CreateBuiltIn();
+        solidOnlyClimbLegend.Register(
+                "CUSTOMCLIMB",
+                new NavigationTokenLegendEntry(
+                    new NavigationCell(
+                        TraversalMedia.Solid,
+                        TraversalCapability.None,
+                        default,
+                        Fixed64.Zero,
+                        Fixed64.Zero,
+                        Fixed64.Zero,
+                        NavigationCellFlags.ClimbSurfaceHint),
+                    TraversalMedia.Solid))
+            .Should().BeTrue();
+        NavigationMap solidOnlyClimbShore =
+            NavigationMapTokenImporter.ImportRectangular(
+                "solid-only-climb-shore",
+                CreateRectangularConfiguration(2, 1, 1),
+                new string[,,] { { { "L!" } }, { { "CUSTOMCLIMB!" } } },
+                solidOnlyClimbLegend);
+        solidOnlyClimbShore.Transitions.Single(
+                transition => transition.Type == TraversalTransitionType.SwimExit)
+            .LocomotionHints.Should().Be(
+                TraversalTransitionLocomotionHints.None);
     }
 
     [Theory]

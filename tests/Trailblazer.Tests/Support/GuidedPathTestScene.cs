@@ -1,50 +1,85 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
-using GridForge;
-using GridForge.Grids;
+using GridForge.Configuration;
+using GridForge.Grids.Topology;
+using GridForge.Spatial;
+using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests;
 
 internal static class GuidedPathTestScene
 {
-    public static void AddWater(
-        TrailblazerWorldContext context,
-        Vector3d position,
-        string chartNamePrefix = "GuidedPathTestWater")
+    internal static NavigationCell Cell(TraversalMedia media) => new(
+        media,
+        TraversalCapability.None,
+        default,
+        Fixed64.Zero,
+        Fixed64.One,
+        Fixed64.One);
+
+    internal static Vector3d Anchor(
+        NormalizedGridConfiguration binding,
+        VoxelIndex index)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(context, position, TraversalMedium.Liquid, chartNamePrefix);
+        binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
+        return new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z);
     }
 
-    public static void AddOpen(
-        TrailblazerWorldContext context,
-        Vector3d position,
-        string chartNamePrefix = "GuidedPathTestOpen")
+    internal static NavigationGuideStep AdvanceToTransition(
+        NavigationGuideLease lease)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(context, position, TraversalMedium.Gas, chartNamePrefix);
-    }
-
-    public static void AddObstacle(TrailblazerWorldContext context, Vector3d position)
-    {
-        AddObstacle(context, position, context.World.AllocateObstacleToken());
-    }
-
-    private static void AddObstacle(
-        TrailblazerWorldContext context,
-        Vector3d position,
-        ObstacleToken obstacleToken)
-    {
-        context.World.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
-        grid!.TryAddObstacle(voxel!, obstacleToken).Should().BeTrue();
-    }
-
-    public static void AddObstaclePlaneAtX(TrailblazerWorldContext context, int x)
-    {
-        ObstacleToken obstacleToken = context.World.AllocateObstacleToken();
-        for (int y = -4; y <= 4; y++)
+        for (int ordinal = 0; ordinal < lease.StepCount; ordinal++)
         {
-            for (int z = -4; z <= 4; z++)
-                AddObstacle(context, new Vector3d(x, y, z), obstacleToken);
+            lease.TryGetCurrentStep(out NavigationGuideStep step)
+                .Should().Be(NavigationGuideStatus.Success);
+            if (step.HasTransition)
+                return step;
+            lease.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
         }
+
+        throw new InvalidOperationException(
+            "The guide did not expose its authored transition.");
     }
 
+    internal static void AdvanceUntilApplied(
+        TrailblazerWorldContext context,
+        params NavigationOperationReceipt[] receipts)
+    {
+        for (int frame = 0; frame < 1_024; frame++)
+        {
+            bool pending = false;
+            for (int i = 0; i < receipts.Length; i++)
+                pending |= receipts[i].Status == NavigationOperationStatus.Pending;
+            if (!pending)
+                break;
+            context.Simulate();
+        }
+
+        for (int i = 0; i < receipts.Length; i++)
+            receipts[i].Status.Should().Be(NavigationOperationStatus.Applied);
+    }
+
+    internal static void PublishMapAndPolicy(
+        TrailblazerWorldContext context,
+        NavigationMap map,
+        int bakeVersion,
+        OverlayReplacementPolicy replacementPolicy,
+        long mapSequence,
+        NavigationAreaPolicy policy,
+        long policySequence)
+    {
+        var mapOperation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(map, bakeVersion),
+            replacementPolicy,
+            mapSequence,
+            effectiveFrame: context.FrameCount + 1);
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            policy,
+            policySequence,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(mapOperation).Should().BeTrue();
+        context.Pathing.Admit(policyOperation).Should().BeTrue();
+        AdvanceUntilApplied(context, mapOperation.Receipt, policyOperation.Receipt);
+    }
 }

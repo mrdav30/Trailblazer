@@ -215,8 +215,25 @@ public static class NavigationMapTokenImporter
         TraversalCapability capability = volumeMedium == TraversalMedium.Gas
             ? TraversalCapability.Fly
             : TraversalCapability.Swim;
+        ParsedTokenCell solid = solidIndex == firstIndex ? first : second;
+        TraversalTransitionLocomotionHints exitHints =
+            volumeMedium == TraversalMedium.Liquid
+            && (solid.Cell.Media & TraversalMedia.Liquid) != 0
+            && (solid.Cell.Flags & NavigationCellFlags.ClimbSurfaceHint) != 0
+                ? TraversalTransitionLocomotionHints.RequestClimb
+                    | TraversalTransitionLocomotionHints.PreserveClimbAfterCompletion
+                : TraversalTransitionLocomotionHints.None;
         builder.AddTransition(CreateTransition(prefix, entryType, solidIndex, TraversalMedium.Solid, volumeIndex, volumeMedium, mapId, capability));
-        builder.AddTransition(CreateTransition(prefix, exitType, volumeIndex, volumeMedium, solidIndex, TraversalMedium.Solid, mapId, capability));
+        builder.AddTransition(CreateTransition(
+            prefix,
+            exitType,
+            volumeIndex,
+            volumeMedium,
+            solidIndex,
+            TraversalMedium.Solid,
+            mapId,
+            capability,
+            locomotionHints: exitHints));
     }
 
     private static void TrySelectBoundary(

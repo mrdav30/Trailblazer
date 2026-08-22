@@ -1,401 +1,156 @@
 # Serialization Reference
 
-This document is the Trailblazer-specific reference for how the runtime
-currently uses the Chronicler serialization layer.
-
-If you only need the high-level architecture, read `Overview.md`. If you need
-the reusable Chronicler API details, check out that library's
-[`README.md`](https://github.com/mrdav30/Chronicler/blob/main/README.md). If you
-need the runtime systems currently covered by this Trailblazer implementation,
-read:
-
-- `Navigator.md`
-- `NavSteering.md`
-- `NavTurning.md`
-- `NavMotor.md`
-
-The code referenced here lives primarily in:
-
-- `src/Trailblazer/Navigation/Navigator/Navigator.Serialization.cs`
-- `src/Trailblazer/Navigation/Steering/NavSteering.Serialization.cs`
-- `src/Trailblazer/Navigation/Steering/Serialization/*`
-- `src/Trailblazer/Navigation/Turning/NavTurning.Serialization.cs`
-- `src/Trailblazer/Navigation/Motor/NavMotor.Serialization.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/*`
-
-## 1. Trailblazer Coverage
-
-The current Trailblazer serialization coverage is intentionally limited to:
-
-- `Navigator`
-- `NavigatorHeightmapGroundingSettings`
-- `NavSteering`
-- `NavTurning`
-- `NavMotor`
-- `LocomotionHandler`
-- `MoveLocomotion`
-- `PlatformLocomotion`
-- `JumpLocomotion`
-- `FallLocomotion`
-- `SlideLocomotion`
-- `WaterLocomotion`
-- `FlyLocomotion`
-- `ClimbLocomotion`
-
-In practice that means the current covered branch handles:
-
-- navigator transform and motion state
-- navigator steering session state
-- navigator turning configuration
-- navigator motor-owned traversal state
-- navigator-owned heightmap grounding opt-in settings
-- locomotion configuration
-- locomotion resumable runtime state
-- moving-platform attachment state inside the motor branch and guided steering
-  branch
-
-## 2. Trailblazer Load Model
-
-The current implementation loads into existing initialized instances.
-
-This is a deliberate constraint.
-
-The current load path assumes:
-
-1. the host has already created the runtime object
-2. the runtime object has already been bound to the correct
-   `TrailblazerWorldContext`
-3. the runtime object has already been initialized enough to own its nested
-   controllers
-4. a Chronicler transport such as `JsonRecordSerializer.Populate(...)` or
-   `MemoryPackRecordSerializer.Populate(...)` then overwrites supported state
-
-This means the current system is designed for:
-
-- restoring state into a known runtime shell
-- deterministic snapshot/restore experiments
-- proving the shape of the API before broadening scope
-
-Trailblazer intentionally does not treat Chronicler as a construct-from-data
-runtime factory.
-
-Context is host binding, not serialized state. Hosts must recreate or look up
-the correct `TrailblazerWorldContext`, bind each navigator shell to it, and then
-populate state. This keeps save payloads engine-agnostic and prevents one
-snapshot from silently attaching to the wrong world.
-
-Another important rule applies across the Trailblazer `RecordData(...)`
-implementations:
-
-- `RecordValues.Look(...)` defaults must be canonical defaults for that field,
-  not the instance's current runtime value
-- value entries equal to their declared default are omitted during save
-- missing value entries restore to the declared default during load
-- deep record paths are split intentionally: reference-owned nested objects use
-  `RecordDeep`, non-nullable structs use `RecordDeepStruct`, and optional
-  structs use `RecordNullableDeep`
-
-This keeps payloads smaller and makes partial payloads deterministic.
-
-It also means omitted entries do not preserve whatever value happened to already
-be present in the target runtime shell. If a field is absent from the payload,
-load assigns that field's declared default.
-
-That means this runtime is not designed for:
-
-- constructing arbitrary controller graphs from serialized data alone
-- polymorphic navigator creation
-- full save-game bootstrap of the entire framework
-
-## 3. What Is Serialized Today
-
-### 3.1 Navigator
-
-`Navigator.RecordData(...)` currently persists:
-
-- `Position`
-- `LastPosition`
-- `Rotation`
-- `Velocity`
-- `Speed`
-- `Acceleration`
-- the exact `NavigationProfile`, including authoritative body shape and
-  root-to-foot offset
-- heightmap grounding settings configured through
-  `ConfigureHeightmapGrounding(...)`, including mode, preferred layer name,
-  active layer name, ground offset, and snap tolerance
-- `GlobalId`
-- `OccupantGroupId`
-- `IsLockedOn`
-- `StuckThresholdSpeed`
-- `IsGuideded`
-- `_frameCondition`
-- `_frameRequest`
-- a schema-versioned durable `PathQuery` session, when one is active
-- `Steering`
-- `Turning`
-- `Motor`
-
-On load it also:
-
-- requires the recorded `NavigationProfile` to exactly match the already
-  configured navigator shell
-- rejects missing, retired, or unsupported top-level and path-session schemas
-- validates the restored position, exact known traversal medium, profile, and
-  durable query before mutating the existing shell
-- rebuilds the query start position and `StartMedium` from the restored
-  navigator foot and frame condition while preserving destination, target
-  media, policy, algorithm, budget, and transition intent
-- clears pending transition instructions and never restores or reacquires a
-  guide cursor during load; the next fixed-step frame acquires fresh guidance
-- rebuilds `Forward` from `Rotation`
-- clears frame deltas
-- refreshes steering radius-derived tolerances from the configured body shape
-- clears and recomputes occupancy
-- reinitializes `Turning` if present
-
-Heightmap samples, compressed heightmap data, and context registrations are not
-serialized through `Navigator`. Those are host/context-owned world resources.
-After loading a navigator with heightmap grounding enabled, hosts must register
-the required heightmap layers on the already-bound `TrailblazerWorldContext`
-before calling the navigator's concrete heightmap grounding hook. If a restored
-navigator references a missing layer, grounding fails cleanly and does not
-construct or hydrate heightmap data from the navigator payload.
-
-### 3.2 NavSteering
-
-`NavSteering.RecordData(...)` currently persists:
-
-- movement-session flags such as `ShouldMove`, `IsStuck`, `IsAtDestination`, and
-  `HasLineOfSightPath`
-- destination, requested destination, target direction, and distance-to-target
-  state
-- steering tuning such as stop multiplier, group/avoid factors, behavior
-  weights, and braking power
-- cooldowns, stuck counters, repath counters, and auto-stop state
-- movement-group id and current travel mode
-
-On load it also:
-
-- clears any stale A* or Flow lease and movement-group session state already
-  attached to the existing runtime shell
-- preserves per-session movement-group intent while treating the context-owned
-  coordinator as rebuild-only runtime state
-- allows hosts to prewarm grouped sessions explicitly through
-  `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`
-- requests a fresh A* or Flow lease on the next steering tick when the restored
-  durable session is active
-
-Standalone `PathQueryRecord` uses its own required schema marker and preserves
-both exact endpoints, the agent profile, area-policy revision,
-`StartMedium`/`TargetMedia`, algorithm, finite budget, transition flag, and Flow
-options. Old request discriminators, Volume/Hybrid modes, pending actions, and
-guide cursors are not compatibility-read in either JSON or MemoryPack.
-
-### 3.3 NavTurning
-
-`NavTurning.RecordData(...)` currently persists:
-
-- `CanTurn`
-- `TurnRate`
-
-On load it intentionally rebuilds buffered runtime state instead of restoring it
-directly.
-
-That means load resets:
-
-- the current turn target
-- any pending buffered turn request
-- one-shot interpolation overrides
-- collision-triggered auto-turn buffering
-
-This keeps turn configuration durable while treating active turn execution as
-frame-local runtime state that is safer to rebuild.
-
-### 3.4 NavMotor
-
-`NavMotor.RecordData(...)` currently persists:
-
-- `Handler`
-- current `TrekCondition`
-- previous `TrekCondition`
-- `IsInitialized`
-
-On load it also:
-
-- rebuilds `CurrentState`
-- clears pending traversal-finalization state
-- clears frame-local cached output such as `_forceOutput`
-- resets `FrameSlopeAngle`
-
-### 3.5 LocomotionHandler
-
-`LocomotionHandler.RecordData(...)` currently persists:
-
-- `IsInControl`
-- `installedKinds` for the currently installed built-in locomotion set
-- the required `Move` and `Fall` locomotions through `RecordDeep`
-- optional built-in locomotions through named `RecordDeep` slots when installed
-
-### 3.6 Individual Locomotions
-
-Each locomotion persists its configuration plus its resumable runtime state.
-
-Examples:
-
-- `MoveLocomotion`: speed/acceleration/gravity configuration, core slope limit,
-  passive water drag, plus `FrameVelocity`
-- `JumpLocomotion`: jump configuration plus jump/cooldown state
-- `FallLocomotion`: fall configuration plus fall start/end state
-- `SlideLocomotion`: slide-specific configuration plus `IsSliding`
-- `WaterLocomotion`: liquid-medium configuration plus swim/dive/underwater
-  timers
-- `FlyLocomotion`: flight speed/acceleration/gravity-compensation configuration
-  plus `IsFlying`
-- `ClimbLocomotion`: climb speed/acceleration/gravity-compensation configuration
-  plus active climb/mantle state
-- `PlatformLocomotion`: platform configuration plus active/previous/hold
-  platform state, movement-transfer state, local attachment state, and tracked
-  platform velocities
-
-## 4. What Is Not Serialized Yet
-
-The current Trailblazer serialization branch intentionally does not serialize
-the full live navigation stack.
-
-Out of scope today:
-
-- inline serialization of live `IGuide` instances
-- inline serialization of `NavigationGuideLease`, graph snapshots, payloads, or
-  dependency stamps
-- movement-group coordinator caches and memberships
-- chart registrations, path caches, or context-owned pathing state
-- full voxel occupancy maps
-
-Some state is also intentionally rebuilt instead of persisted directly:
-
-- `Navigator.Forward`
-- `NavTurning` buffered turn state
-- `NavMotor.CurrentState`
-- frame-local delta accumulators
-- temporary traversal caches such as `FrameSlopeAngle`
-
-The core now also supports immediate and deferred stable external links through
-`ChronicleContext` and `RecordLinks`, but the current Trailblazer runtime does
-not need direct `RecordLinks` usage in its core navigation branch at this time.
-
-## 5. Current Boundary and Tradeoffs
-
-Trailblazer's current serialization boundary is:
-
-- JSON and MemoryPack Chronicler backends
-- explicit type-owned `RecordData(...)` behavior
-- load-into-existing-instance semantics
-- navigator, steering, turning, and motor branches
-
-This gives Trailblazer a workable starting point without overcommitting to a
-full save-game architecture too early.
-
-Current tradeoffs of this boundary:
-
-- it is safe and explicit, but not yet turnkey for whole-world persistence
-- it rebuilds graph leases and remaining live guides from recorded intent
-  instead of serializing runtime handles directly
-- it keeps deterministic state local to the types that understand it
-- it still needs broader coverage before it becomes a complete framework-level
-  persistence solution
-
-## 6. Trailblazer Semantics to Preserve
-
-When extending this system, keep these rules in mind:
-
-- prefer explicit record code over implicit serializer behavior for runtime
-  systems
-- serialize authoritative state, not convenience caches
-- rebuild derived values on load where practical
-- avoid serializing live references when a stable identifier or reconstructed
-  state is safer
-- use canonical declared defaults in `RecordValues.Look(...)`, never the current
-  live field value
-- treat omitted payload entries as "load the declared default," not "keep the
-  current in-memory value"
-- keep deterministic ordering and fixed-point state intact
-- keep load behavior obvious and testable
-
-This is especially important in Trailblazer because pathing and navigation are
-sensitive to:
-
-- simulation order
-- traversal-state transitions
-- platform attachment state
-- cache invalidation
-- frame-local intermediate values
-
-## 7. Verification Added So Far
-
-Focused round-trip coverage was added for:
-
-- `NavTurning`
-- `NavMotor`
-- `Navigator` plus its steering, turning, and motor branches
-
-The current Trailblazer-focused tests verify that:
-
-- supported navigator state round-trips through the JSON and MemoryPack
-  chroniclers
-- graph surface and remaining flow-field steering sessions survive round-trip
-- exact surface query configuration and bounded waypoint progress survive
-  round-trip
-- graph leases and remaining guides are reacquired after load instead of being
-  serialized inline
-- partial payload loads preserve omitted branches on existing initialized
-  runtime shells
-- payloads missing current fields fall back to declared defaults
-- invalid request payloads fail closed and clear active steering sessions
-  instead of leaving broken live state
-- disabled locomotions clear transient runtime state on load even when
-  serialized payloads still carry stale transient values
-- unresolved deferred links throw explicit load errors for both transports
-- turning configuration survives round-trip while active turn runtime state is
-  rebuilt on load
-- navigator heightmap grounding settings survive round-trip without serializing
-  context-owned heightmap data
-- moving-platform state survives round-trip
-- locomotion runtime state survives round-trip
-- grouped steering can be explicitly prewarmed after load, and the runtime can
-  lazily rejoin groups when needed
-- rebuild-oriented load behavior matches across the JSON and MemoryPack
-  transports
-- a restored navigator remains usable for later simulation
-
-## 8. Next Best Steps
-
-The Trailblazer-specific branch is in solid shape now, but a few non-blocking
-follow-ups are still valuable:
-
-1. Add an end-to-end host workflow guide or sample that shows batch save/load
-   for multiple navigators, including navigation-map/policy and remaining chart
-   prerequisites, restore ordering, and optional `PrewarmMovementGroup()` calls.
-2. Decide whether any additional Trailblazer-owned context state should ever
-   expose optional snapshot surfaces, or whether pathing and navigation services
-   remain rebuild-only by design.
-3. Expand `RecordData(...)` coverage into other Trailblazer branches only as
-   those runtime surfaces stabilize and prove they contain authoritative state
-   worth persisting.
-
-## 9. Trailblazer Extension Guidance
-
-When adding `RecordData(...)` to more types:
-
-1. Start with the authoritative state.
-2. Skip or rebuild frame-local caches unless they are truly required for restore
-   correctness.
-3. Prefer `RecordDeep` for nested runtime-owned objects.
-4. Use `RecordLinks` for stable references to external or runtime-owned objects.
-5. Use value fields for small deterministic structs and enums.
-6. Add a focused round-trip test in the same change.
-7. Verify the type still behaves correctly after load, not just that the raw
-   values match.
-
-That approach is what the current
-`Navigator -> NavMotor -> LocomotionHandler -> Locomotions` branch follows.
+Trailblazer serializes explicit runtime records through Chronicler. The active
+transports are JSON and MemoryPack, and the load model is
+populate-existing-instance only.
+
+## 1. Load Model
+
+The host must:
+
+1. create or attach the correct `TrailblazerWorldContext`;
+2. restore GridForge grids;
+3. publish every referenced `NavigationMap` and `NavigationAreaPolicy`;
+4. replay persisted overlay transactions in deterministic order;
+5. create/setup the Navigator shell with the exact recorded profile;
+6. populate the existing shell through Chronicler;
+7. resume fixed-step simulation so fresh guidance can be acquired.
+
+Trailblazer does not construct arbitrary runtime/controller graphs from save data
+and does not serialize context bindings.
+
+## 2. Standalone PathQuery
+
+`PathQueryRecord` is the public standalone record for one complete immutable
+query:
+
+~~~csharp
+var record = new PathQueryRecord(query);
+// Serialize record with JsonRecordSerializer or MemoryPackRecordSerializer.
+~~~
+
+It round-trips:
+
+- exact start and end endpoints;
+- exact agent profile/body shape;
+- area-policy key/revision;
+- exact start medium and target-media mask;
+- A* or Flow algorithm and Flow options;
+- every work-budget counter;
+- transition permission.
+
+A standalone query retains its exact recorded start position and start medium.
+The record has a required schema and required query; a missing, malformed, or
+unsupported record rejects rather than producing a default query.
+
+## 3. Navigator Path Session
+
+Navigator stores a different durable session shape. It preserves destination,
+map filters, endpoint policies, target media, area policy, algorithm, budget,
+Flow options, and transition permission. On load it rebuilds:
+
+- start position from the restored Navigator foot position;
+- start medium from the restored `TrekCondition.Medium`;
+- agent profile from the already configured shell.
+
+This distinction is intentional. A resumed moving controller must start from its
+restored physical state, while a standalone `PathQueryRecord` is an exact value
+round trip.
+
+Navigator does not serialize or restore:
+
+- an A* or Flow payload lease;
+- a guide cursor/sample source;
+- a pending transition instruction;
+- private completion stamps;
+- dependency snapshots or cache slots.
+
+The next simulation frame requests fresh guidance from durable intent.
+
+## 4. Transactional Load
+
+Navigator loading stages and validates the top-level schema, exact profile,
+position/frame condition, path session, steering, turning, motor, and locomotion
+records before changing the existing live shell.
+
+Malformed early or late nested data in either JSON or MemoryPack must preserve
+the previous shell, active query, guide lease, and pending instruction. A failed
+load does not partially stop the current session, replace controller tuning, or
+release guidance.
+
+Missing or retired schema shapes reject explicitly. Chronicler's missing-field
+defaults are not used as a compatibility path for old navigation request/action
+formats.
+
+## 5. Current Navigator Coverage
+
+The recorded Navigator branch includes:
+
+- transform, velocity, speed, acceleration, and stable identity;
+- exact `NavigationAgentProfile`;
+- current frame condition/request;
+- durable path-session intent;
+- steering settings/session state;
+- turning settings/state;
+- motor and built-in locomotion state;
+- heightmap-grounding settings;
+- occupancy group identity.
+
+Context-owned world data is separate.
+
+## 6. Maps And Overlays
+
+`NavigationMap` bakes and runtime overlay events are host/world assets, not
+embedded inside Navigator records. Persist them in the host's deterministic world
+snapshot/event log:
+
+- stable map ID and bake version;
+- GridForge configuration/storage state;
+- map replacement policy;
+- area-policy revisions;
+- overlay operation sequence/effective frame and content.
+
+Replay these before guided controller restoration. Otherwise a durable query may
+correctly reject with `NoMap`, invalid policy, or stale dependencies.
+
+## 7. Pending Actions
+
+Pending transition instructions are deliberately transient and lease-specific.
+Saving during a held action records durable query/controller state but not the
+action token. On load:
+
+- pending is cleared;
+- no completion is replayed;
+- no guide is reacquired during population;
+- the next fixed-step request resolves against current published world state.
+
+The host should separately persist its own gameplay/animation state if an action
+must resume at an application level.
+
+## 8. Canonical Defaults
+
+`RecordValues.Look(...)` defaults are canonical field defaults, not whatever
+value happens to be in the target shell. Omitted values load as those defaults.
+Reference records use `RecordDeep`; non-nullable structs use
+`RecordDeepStruct`; optional structs use `RecordNullableDeep`.
+
+This behavior is one reason schema validation is mandatory at the navigation
+boundary.
+
+## 9. What Is Not Serialized
+
+- `TrailblazerWorldContext` and `GridWorld` ownership;
+- navigation map/overlay/policy publication;
+- immutable graph snapshots and caches;
+- active guide leases, cursors, pending actions, or completion stamps;
+- movement-group coordinator state (group intent is recorded and can be
+  prewarmed);
+- heightmap sample data/layer registration;
+- engine objects, physics state, animation state, or host callbacks.
+
+## 10. Related References
+
+- [Overview](Overview.md)
+- [Runtime publication](PathManager.md)
+- [Pathing](Pathing.md)
+- [Navigator](Navigator.md)

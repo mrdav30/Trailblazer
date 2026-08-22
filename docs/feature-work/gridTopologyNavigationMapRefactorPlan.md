@@ -2161,11 +2161,19 @@ Tasks:
   handoff is needed. If it is, extend FixedMathSharp/GridForge with exact inner
   plus outer interval comparison and a fixed A-only/overlap/B-only sweep; until
   then retain an intermediate anchor and the Phase 6 fail-closed behavior.
-- Public-API decision ledger: after surface and volume ray semantics are both
-  proven, either promote one clean navigation-ray query/result API or record an
-  explicit pre-release decision to keep it internal. Retain the reusable
-  upstream vertical-portal primitive tests and add the real runtime consumer
-  without a test-only production hook.
+- **Navigation-ray public-API decision (2026-08-21): keep it internal.** The
+  proven surface/volume work path is shared by endpoint admission, A* string
+  pulling, Flow rejoin, transition/volume evaluation, and controller direct
+  heading, but none is a context-free line query. Correct use requires an exact
+  graph/store lease, GridWorld generation, agent profile, area policy, traversal
+  medium, endpoint allowance, finite work meter/workspace capacities,
+  dependency ownership, and consumer-specific chain/cost-neutral constraints.
+  A public wrapper that hid those facts would create a second query/budget/
+  lifetime contract beside `PathQuery` and the guide APIs; one that exposed them
+  would merely publish graph internals. Retain the single tested internal work
+  path and do not add a facade. Re-evaluate only if a real external consumer can
+  state one generally useful contract that hides every internal lifetime and
+  capacity concern.
 - Map defaults are immutable authoring truth, not query behavior. A map carries
   one optional complete default `NavigationCell`; `None` remains fail-closed.
   Effective precedence is overlay cell, explicit baked cell, map default, then

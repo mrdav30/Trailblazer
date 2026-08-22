@@ -442,11 +442,11 @@
 - Modify: `docs/wiki/Serialization.md`
 - Modify: `docs/feature-work/gridTopologyNavigationMapRefactorPlan.md`
 
-- [ ] Replace all chart/partition/predicate/VolumePathRequest/HybridRoute/registry/handoff documentation with map defaults, unified medium-state query, explicit/rule actions, and completion.
-- [ ] Document host materialization of prior predicate/terrain results into defaults/entries/overlays; terrain remains optional and is not Volume truth.
-- [ ] Include concise ladder and duck public-API examples and the Gas-default -> Liquid-default flooding replacement.
-- [ ] Evaluate the now-proven ray against surface and volume consumers. Promote only one clean public query/result API if it can hide meters/workspaces/constraints and is genuinely useful; otherwise record the explicit internal-specialization decision in the tracker. Do not add a facade merely to close the ledger.
-- [ ] Run docs/API exact-token scans and link checks; review and commit: `docs(pathing): document unified medium routing`.
+- [x] Replace all chart/partition/predicate/VolumePathRequest/HybridRoute/registry/handoff documentation with map defaults, unified medium-state query, explicit/rule actions, and completion.
+- [x] Document host materialization of prior predicate/terrain results into defaults/entries/overlays; terrain remains optional and is not Volume truth.
+- [x] Include concise ladder and duck public-API examples and the Gas-default -> Liquid-default flooding replacement.
+- [x] Evaluate the now-proven ray against surface and volume consumers. Promote only one clean public query/result API if it can hide meters/workspaces/constraints and is genuinely useful; otherwise record the explicit internal-specialization decision in the tracker. Do not add a facade merely to close the ledger.
+- [x] Run docs/API exact-token scans and link checks; review and commit: `docs(pathing): document unified medium routing`.
 
 ## Task 13: Determinism, Benchmarks, Coverage, Packaging, And Exit Reviews
 

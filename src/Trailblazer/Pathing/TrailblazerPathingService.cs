@@ -14,7 +14,7 @@ using GridForge.Spatial;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Context-owned pathing API for chart registration, live chart state, and local pathing queries.
+/// Context-owned admission API for unified navigation-map publication plus temporary legacy chart compatibility.
 /// </summary>
 public sealed class TrailblazerPathingService
 {
@@ -337,7 +337,7 @@ public sealed class TrailblazerPathingService
     }
 
     /// <summary>
-    /// Clears this context's registered charts, live partitions, transition registry, volume rules, and guide caches.
+    /// Cancels active graph queries and clears this context's unified graph plus legacy chart/partition state.
     /// </summary>
     public void Reset()
     {

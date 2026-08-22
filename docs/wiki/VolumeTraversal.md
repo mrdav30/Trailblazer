@@ -1,417 +1,155 @@
 # Volume Traversal Reference
 
-This document explains Trailblazer's raw-volume traversal model, authored
-`VolumeChartPartition` state, and the role of `VolumeMediumRules` as a
-supplemental volume-membership layer.
+In Trailblazer, Volume means free-form deterministic travel through Gas or
+Liquid matter. It is a medium-state property, not a terrain category, special
+request type, or separate search system.
+
+## 1. Core Model
+
+A Gas or Liquid search state exists when all of these agree:
+
+- the GridForge address physically exists and is not blocked;
+- the effective `NavigationCell.Media` contains the exact medium;
+- the agent's `AllowedMedia` contains it;
+- required capabilities are satisfied;
+- the area policy admits the cell;
+- the body profile fits the required coverage.
+
+The same `PathQuery`, A*, Flow, dependency, cache, and guide machinery used for
+Solid traversal is used for Gas and Liquid.
+
+## 2. Free-Form Geometry
+
+Gas/Liquid movement uses a profile-resolved body anchor centered vertically in
+the cell prism. It does not reuse Solid foot-anchor step/drop semantics.
+
+GridForge owns:
+
+- rectangular and pointy/flat hex direction sets;
+- cell prisms and face contacts;
+- directed portal traversal;
+- all prisms positively overlapped by the swept upright body;
+- exact validation through the selected prism union.
+
+Rectangular grids can evaluate all 26 directions. Hex prisms can evaluate their
+complete 20-direction set. Non-face candidates require closure and swept-union
+proof, so shortcuts improve route quality without creating connectivity or
+cutting corners.
+
+Movement cost is the conservative ceiling of exact world-space centered-anchor
+distance plus destination enter costs. There are no unit-grid straight/diagonal
+constants and no floating-point distance path.
+
+## 3. State Of Matter, Not Terrain
+
+Trailblazer does not ask whether an address is cave, ocean, sky, room, or biome.
+The host may use those facts while authoring, but it publishes a complete cell:
+
+~~~csharp
+NavigationCell liquid = new(
+    TraversalMedia.Liquid,
+    TraversalCapability.Swim,
+    waterArea,
+    enterCost: Fixed64.Zero,
+    radiusClearance: Fixed64.One,
+    heightClearance: Fixed64.One);
+~~~
+
+Terrain remains optional. A flight simulation can publish Gas without terrain;
+a submarine map can publish Liquid; a mixed cell can support more than one
+medium when that is physically meaningful.
+
+## 4. Map Defaults
+
+Map defaults make large uniform volumes cheap. A Gas-default map needs entries
+only for exceptions. A flooded replacement can use a Liquid default without
+rewriting every physical address.
+
+~~~csharp
+NavigationMap gasMap = new NavigationMapBuilder(mapId, binding)
+    .SetDefaultCell(gasCell)
+    .Build();
+
+NavigationMap liquidMap = new NavigationMapBuilder(mapId, binding)
+    .SetDefaultCell(liquidCell)
+    .Build();
+~~~
+
+To flood the already published map, prepare `liquidMap` with a higher bake
+version and admit it with
+`OverlayReplacementPolicy.PreserveAndRevalidate`. The map ID and binding stay
+the same; affected Gas proofs become stale and new Liquid queries can resolve.
+The policy preserves the exact overlay/dynamic-address set; if that set is
+incompatible with the Liquid bake, the whole replacement rejects rather than
+pruning entries. Use `Clear` when flooding should discard every old overlay.
+
+Important details:
+
+- explicit baked cells still override the new default;
+- a default does not create absent GridForge cells;
+- a default replacement is immutable map publication, not a query toggle;
+- drain/flood overlays remain appropriate when only addressed cells change.
+
+## 5. Queries
+
+A free-flight query is ordinary `PathQuery` intent:
+
+~~~csharp
+var query = new PathQuery(
+    new NavigationEndpoint(startFoot, mapId),
+    new NavigationEndpoint(endFoot, mapId),
+    flyingProfile,
+    policy.Key,
+    new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas),
+    PathAlgorithm.AStar,
+    budget,
+    allowTransitions: false);
+~~~
 
-Use this file when you need to understand:
+Use Liquid as the exact start medium for swimming. To permit a Liquid-to-Gas
+takeoff, include Gas in `TargetMedia`, give the agent the required capabilities,
+set `AllowTransitions` to true, and author a transition definition or rule.
 
-- why `VolumePathRequest` can work without surface partitions
-- how authored volume cells and host rules work together
-- how raw-volume endpoint resolution differs from chart-backed endpoint
-  resolution
-- how volume traversal interacts with authored transitions
+## 6. Large Bodies And Cross-Grid Travel
 
-If you need the broader request model first, read `Pathing.md`. If you need
-authored handoff registration, pair this with `Transitions.md`.
+When a body fits one directed portal, Trailblazer uses GridForge's fast path. A
+larger body falls back to bounded swept-union coverage. Missing output capacity,
+arithmetic overflow, stale grid identity, blocked required coverage, and a real
+geometric rejection remain distinct failure paths.
 
-Relevant code:
+Automatic seams can connect compatible map/grid faces. Heterogeneous or
+misaligned geometry fails closed when GridForge cannot issue an exact directed
+proof. Semantic actions do not substitute for missing physical movement unless
+the host explicitly authors that action.
 
-- `src/Trailblazer/Pathing/Partition/VolumeChartPartition.cs`
-- `src/Trailblazer/Pathing/VolumeRules/VolumeMediumRules.cs`
-- `src/Trailblazer/Traversal/TraversalMedium.cs`
-- `src/Trailblazer/Pathing/Search/VoxelResolution/VolumeVoxelFinder.cs`
-- `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
-- `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
-- `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
+## 7. Dynamic Fluids
 
-## 1. Why Volume Traversal Matters
+For an addressed flood or drain, publish complete cell overlay operations:
 
-Surface pathing is great at answering:
+- Set Liquid/Gas/Solid payloads for the changed addresses;
+- Suppress when no semantic navigation cell should exist;
+- Revert when the bake/default should become visible again.
 
-- where stable ground or other intentional structure exists
-- how chart-backed units should move across that structure
-
-Raw volume traversal covers the other side of the world model:
-
-- free-flight through authored or host-defined gas volume
-- swimming through authored or host-defined liquid volume
-- detours through authored or explicitly configured 3D volume around blocked
-  voxels
-- spaces where the important rule is "stay inside this medium" instead of "stay
-  on this surface"
-
-That is the job of Trailblazer's volume traversal flow.
-
-## 2. Core Model
-
-Volume traversal is built from four pieces:
-
-- authored `VolumeChartPartition` state
-- `TraversalMedium`
-- `VolumeMediumRules`
-- raw-volume resolution through `VolumeVoxelFinder` and `VolumeSurveyor`
-
-Current supported volume media are:
-
-- `Gas`
-- `Liquid`
-
-The key mental model is:
-
-- charts author which voxels contribute solid traversal, volume traversal, or
-  both
-- `VolumeChartPartition` says which winning authored voxels belong to a
-  supported traversal medium
-- `VolumeMediumRules` can supplement authored membership with host-specific
-  logic on voxels that already belong to Trailblazer's runtime traversal world
-- raw-volume pathing still respects blocked space and unit clearance
-
-Important overlap rule:
-
-- chart overlap does not implicitly create `Solid | Gas` or `Solid | Liquid`
-- if one voxel should intentionally support both surface and volume traversal,
-  author that mixed cell explicitly
-
-## 3. `VolumeMediumRules`
-
-`TrailblazerWorldContext.VolumeRules` is the context-owned supplemental
-configuration point for constrained raw-volume traversal.
-
-Its public surface is:
-
-- `HasGasVoxelRule`
-- `SetGasVoxelPartition<TPartition>()`
-- `SetGasVoxelRule(VoxelRule rule)`
-- `ClearGasVoxelRule()`
-- `HasLiquidVoxelRule`
-- `SetLiquidVoxelPartition<TPartition>()`
-- `SetLiquidVoxelRule(VoxelRule rule)`
-- `ClearLiquidVoxelRule()`
-
-### 3.1 What The Rules Actually Mean
-
-The rules do not replace normal traversability checks, and they are not the only
-source of volume membership.
-
-They are an additional layer on top of:
-
-- voxel existence
-- blocked state
-- partition-backed clearance for the requested `UnitSize`
-- any authored `VolumeChartPartition` state already attached to the voxel
-
-The current rule APIs are extend-only:
-
-- they can add gas or liquid membership
-- they can opt `SolidChartPartition`-only voxels into a volume medium
-- they do not suppress authored `VolumeChartPartition` membership
-- removing a host rule returns a voxel to its authored/base state
-
-Host rules do not make fully unpartitioned voxels valid.
-
-In raw-volume code, a voxel must be both:
-
-- traversable
-- compatible with the requested `TraversalMedium`
-
-Trailblazer can answer "is this voxel authored gas volume or authored liquid
-volume?" directly from chart initialization, while still letting hosts layer on
-engine-specific gas or liquid logic when needed.
-
-### 3.2 Gas Versus Liquid
-
-`TraversalMedium.Gas`:
-
-- is configured when authored gas volume exists or a host gas rule exists
-- matches authored gas-volume voxels directly
-- may also match host-defined gas-volume voxels through `VolumeMediumRules`
-- remains valid on authored gas-volume voxels even if the host gas rule is later
-  removed
-- never falls back to generic unauthored space
-- still respects blockers and clearance
-
-`TraversalMedium.Liquid`:
-
-- is configured when authored liquid volume exists or a host liquid rule exists
-- matches authored liquid voxels directly
-- may also match additional host-defined liquid voxels through
-  `VolumeMediumRules`
-- remains valid on authored liquid voxels even if the host liquid rule is later
-  removed
-- still requires the voxel to belong to Trailblazer's runtime traversal world
-
-### 3.3 Host Rule Configuration
-
-Use `SetGasVoxelPartition<TPartition>()` or
-`SetLiquidVoxelPartition<TPartition>()` when:
-
-- your host already marks medium membership with a partition type
-
-Use `SetGasVoxelRule(...)` or `SetLiquidVoxelRule(...)` when:
-
-- medium membership depends on custom logic beyond authored chart data
-- you want to supplement authored media instead of replacing it
-
-Examples:
-
-```csharp
-context.VolumeRules.SetGasVoxelPartition<MyGasVolumePartition>();
-context.VolumeRules.SetLiquidVoxelPartition<MyLiquidVolumePartition>();
-```
-
-```csharp
-context.VolumeRules.SetGasVoxelRule(voxel =>
-    voxel != null
-    && voxel.HasPartition<MyGasVolumePartition>());
-
-context.VolumeRules.SetLiquidVoxelRule(voxel =>
-    voxel != null
-    && voxel.HasPartition<MyLiquidVolumePartition>());
-```
-
-### 3.4 Context Lifetime
-
-Volume rule storage is context-local through `VolumeMediumRulesState`.
-
-Important lifecycle rules:
-
-- `context.Pathing.Reset()` clears that context's installed gas and liquid rules
-- `GridWorld.Reset()` is world-event teardown and clears only the volume rules
-  and authored `VolumeChartPartition` state owned by that world context
-- changing a host rule invalidates only the owning context's cached volume
-  guides
-- unloading a chart invalidates only cached volume guides whose `ChartsUtilized`
-  includes that chart
-- overlapping chart initialization invalidates cached volume guides for the
-  already-active chart owners touched by the change
-
-That means tests, world reloads, and runtime bootstrap code must reapply host
-rules to each context that needs them.
-
-## 4. Raw-Volume Endpoint Resolution
-
-Chart-backed requests use `SolidVoxelFinder`. Volume requests use
-`VolumeVoxelFinder`.
-
-That is a very important difference.
-
-`VolumeVoxelFinder` does not require a surface chart route, but it does require
-compatible Trailblazer partitioned space.
-
-Instead it resolves endpoints against raw voxels and checks:
-
-- blocked state
-- unit clearance
-- traversal-medium match
-- authored `VolumeChartPartition` state when present
-- `SolidChartPartition` or `VolumeChartPartition` presence before raw-volume
-  traversal is even considered
-
-### 4.1 Endpoint Resolution Order
-
-For a volume request, endpoint resolution is:
-
-1. try the direct voxel
-2. if endpoint relaxation is active, try a nearby traversable raw-volume
-   neighbor
-3. if endpoint relaxation is active, trace toward the other endpoint and take
-   the first compatible voxel found
-
-Important nuance:
-
-- if the requested medium is not configured, endpoint resolution fails
-  immediately
-- snapped fallback voxels still have to match the requested `TraversalMedium`
-  through `VolumeMediumRules`
-- cached volume results record the chart owners used along the resolved raw path
-  so local chart changes can invalidate only affected results
-
-### 4.2 `allowUnwalkableEndpoints` In Volume Requests
-
-`allowUnwalkableEndpoints` in volume requests is still only an endpoint policy.
-
-It can relax start or end acceptance, and it can enable endpoint snapping after
-direct-voxel failure, but it does not make the entire corridor ignore blockers.
-
-Volume requests also keep a size-based endpoint fallback path:
-
-- if the exact voxel matches the requested medium but fails only because
-  required clearance is too large for that cell, endpoint snapping may still run
-  even when `allowUnwalkableEndpoints` is false
-
-For direct-path validation, relaxed endpoints still have to:
-
-- match the requested `TraversalMedium`
-
-Interior voxels still have to be truly traversable.
-
-## 5. Raw-Volume Traversability
-
-`VolumeVoxelFinder.IsTraversable(...)` combines:
-
-- base raw-voxel traversability
-- volume-medium filtering
-
-Base traversability means:
-
-- the voxel exists
-- it is not blocked
-- it has enough clearance for the requested `UnitSize`
-
-If a `VolumeChartPartition` is present, volume traversal honors its authored
-membership and its clearance logic. If only a `SolidChartPartition` is present,
-volume traversal still honors that partition's clearance logic. If neither
-partition is present, the voxel is rejected immediately.
-
-This is important in mixed worlds:
-
-- volume traversal does not ignore the rest of the voxel world
-- it simply stops requiring a chart-backed route across the entire segment
-
-## 6. `VolumePathRequest` In Practice
-
-Use `VolumePathRequest` when:
-
-- there is no meaningful surface route for the space
-- movement should stay inside a constrained or authored volume such as liquid
-- gas-volume travel should detour around blockers using raw voxels
-
-Examples:
-
-```csharp
-var request = VolumePathRequest.Create(
-    context,
-    origin,
-    destination,
-    Fixed64.One,
-    medium: TraversalMedium.Gas);
-```
-
-```csharp
-var request = VolumePathRequest.Create(
-    context,
-    origin,
-    destination,
-    Fixed64.One,
-    medium: TraversalMedium.Liquid);
-```
-
-Important nuance:
-
-- liquid request creation succeeds when authored liquid volume exists or a host
-  liquid rule exists
-- gas request creation succeeds only when authored gas volume exists or a host
-  gas rule exists
-
-## 7. Why Complex Worlds Depend On This
-
-Volume traversal is what keeps Trailblazer from forcing every traversal problem
-into surface routes.
-
-It matters in worlds with:
-
-- aircraft or free-flight spaces
-- lakes, rivers, or flooded interiors
-- blocked straight-line corridors that still have authored or host-configured 3D
-  detours
-- shoreline or docking areas where surface and medium traversal meet
-
-Without authored or host-defined volume membership, you usually end up with one
-of two bad outcomes:
-
-- volume travel is impossible because nothing tells the library what space
-  counts as valid medium
-- callers accidentally assume generic empty space is traversable when it is not
-  part of Trailblazer's authored/runtime model
+Materialize any fluid simulation result before publication and preserve stable
+operation order. Search never calls the fluid simulation as a predicate.
 
 ## 8. Relationship To Transitions
 
-`VolumeMediumRules` and `TraversalTransitionRegistry` solve different problems,
-but they work together.
+Volume movement keeps the current medium. A transition is a semantic action that
+may change it. Examples:
 
-`TraversalTransitionRegistry` answers:
+- Liquid to Gas Takeoff;
+- Gas to Liquid Landing;
+- Solid to Liquid SwimEntry;
+- Liquid to Solid SwimExit;
+- same-medium Gas teleport.
 
-- where a route may hand off into or out of raw volume
+Media contact alone never generates these actions. See
+[Transitions](Transitions.md).
 
-Volume traversal answers:
+## 9. Related References
 
-- which voxels are actually valid for that volume segment
-
-For example:
-
-- `SwimEntry` and `SwimExit` transitions depend on `TraversalMedium.Liquid`
-- those transitions are only useful when the intended volume voxels resolve as
-  valid liquid traversal
-- `Takeoff` and `Landing` can use `TraversalMedium.Gas`
-
-Important nuance:
-
-- a valid transition does not make the middle volume segment valid
-- the volume segment still has to resolve through `VolumeVoxelFinder` and
-  `VolumeSurveyor`
-
-## 9. Usage Patterns
-
-### 9.1 Authored Liquid Volume
-
-If your chart authoring already produces `L` or `L!` cells, raw liquid traversal
-can work without any host rule.
-
-### 9.2 Supplemental Host Volume Logic
-
-Use `VolumeMediumRules` when your world has additional gas or liquid membership
-that is not authored through `NavigationChart`.
-
-### 9.3 Gas-Volume Detour
-
-Use `TraversalMedium.Gas` when movement should stay chart-optional and 3D, but
-still avoid blocked voxels inside authored or explicitly configured gas volume.
-
-## 10. Common Gotchas
-
-- Charts can author liquid or gas volume for you.
-- `TraversalMedium.Gas` and `TraversalMedium.Liquid` still respect blockers and
-  clearance.
-- `TraversalMedium.Gas` and `TraversalMedium.Liquid` fail until valid authored
-  or host-configured gas or liquid membership exists.
-- Use `context.VolumeRules` for host-defined gas and liquid membership.
-- `context.Pathing.Reset()` clears host volume rules and authored volume
-  partitions for that world.
-- Volume traversal does not require charts, but it still depends on real voxels
-  existing.
-- `allowUnwalkableEndpoints` only relaxes endpoints; it does not make the whole
-  route ignore blocked voxels.
-
-## 11. AI And Contributor Notes
-
-If you are changing volume traversal behavior, inspect these files together:
-
-- `src/Trailblazer/Pathing/Partition/VolumeChartPartition.cs`
-- `src/Trailblazer/Pathing/VolumeRules/VolumeMediumRules.cs`
-- `src/Trailblazer/Pathing/Search/VoxelResolution/VolumeVoxelFinder.cs`
-- `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
-- `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
-- `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`
-
-Useful tests:
-
-- `tests/Trailblazer.Tests/Pathing/Authoring/TraversalAuthoringMap.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/Manager/PathingNavigationMap.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/Search/Volume/AerialSurveyor.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs`
-
-High-risk changes include:
-
-- endpoint relaxation rules
-- direct-path validation in raw volume
-- medium matching versus base traversability
-- cache invalidation for authored volume topology
-- reset behavior for context-owned rules
-
-## 12. Where To Read Next
-
-- `Pathing.md` for the request-level pathing model
-- `Transitions.md` for authored handoffs into and out of raw volume
-- `NavigationCharts.md` for the authored chart model
-- `PathGuides.md` for `VolumeGuide` and guide-factory behavior
+- [Navigation maps](NavigationCharts.md)
+- [Map authoring](ChartAuthoring.md)
+- [Pathing](Pathing.md)
+- [Path guides](PathGuides.md)

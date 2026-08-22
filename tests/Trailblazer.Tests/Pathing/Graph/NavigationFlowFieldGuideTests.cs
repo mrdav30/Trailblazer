@@ -143,6 +143,47 @@ public sealed class NavigationFlowFieldGuideTests
         guide.Dispose();
     }
 
+    [Fact]
+    public void DestinationRecovery_DisplacedAfterRebase_ShouldRejoinTheSameLease()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+        fixture.Graph.TryGetNodeRef(
+                fixture.Far.Key.DestinationAddress,
+                out NavigationNodeRef destinationRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destination)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(fixture.NearOrigin, out NavigationNodeRef nearRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(nearRef, out NavigationNodeState near)
+            .Should().BeTrue();
+
+        guide.TrySampleHeading(
+                destination.FootAnchor,
+                GenerousSampleBudget,
+                out Vector3d arrivedHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        guide.TrySampleHeading(
+                near.FootAnchor,
+                GenerousSampleBudget,
+                out Vector3d recoveryHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+
+        arrivedHeading.Should().Be(Vector3d.Zero);
+        recoveryHeading.Should().Be(
+            (destination.FootAnchor - near.FootAnchor).Normalized);
+        guide.Status.Should().Be(NavigationGuideStatus.Success);
+        guide.Dispose();
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

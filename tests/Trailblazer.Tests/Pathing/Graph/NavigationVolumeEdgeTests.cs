@@ -895,7 +895,15 @@ public sealed class NavigationVolumeEdgeTests
 
         faces.Should().Be(expectedFaces);
         shortcuts.Should().Be(expectedShortcuts);
+        meter.PrimaryVolumeCandidates.Should().Be(expectedFaces);
+        meter.ShortcutVolumeCandidates.Should().Be(expectedShortcuts);
+        meter.VolumeUnionChecks.Should().BeGreaterThan(0);
         meter.CoveredVoxelIntervals.Should().BeGreaterThan(0);
+
+        meter.Reset(LargeBudget());
+        meter.PrimaryVolumeCandidates.Should().Be(0);
+        meter.ShortcutVolumeCandidates.Should().Be(0);
+        meter.VolumeUnionChecks.Should().Be(0);
     }
 
     private static TrailblazerWorldContext CreateContext(

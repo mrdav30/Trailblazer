@@ -35,6 +35,14 @@ internal sealed class NavigationWorkMeter
 
     internal int TransitionPairs { get; private set; }
 
+    internal int PrimaryVolumeCandidates { get; private set; }
+
+    internal int ShortcutVolumeCandidates { get; private set; }
+
+    internal long VolumeUnionChecks { get; private set; }
+
+    internal int SuccessfulDependencyMerges { get; private set; }
+
     internal int TraceIntervals { get; private set; }
 
     internal int CoveredVoxelIntervals { get; private set; }
@@ -156,6 +164,19 @@ internal sealed class NavigationWorkMeter
         return true;
     }
 
+    internal void RecordVolumeCandidate(bool isPrimary)
+    {
+        if (isPrimary)
+            PrimaryVolumeCandidates++;
+        else
+            ShortcutVolumeCandidates++;
+    }
+
+    internal void RecordVolumeUnionCheck() => VolumeUnionChecks++;
+
+    internal void RecordSuccessfulDependencyMerge() =>
+        SuccessfulDependencyMerges++;
+
     internal bool TryConsumeTraceIntervals(int count)
     {
         if (count < 0 || count > RemainingTraceIntervals)
@@ -240,6 +261,10 @@ internal sealed class NavigationWorkMeter
         ConnectionLegs = 0;
         TransitionCandidates = 0;
         TransitionPairs = 0;
+        PrimaryVolumeCandidates = 0;
+        ShortcutVolumeCandidates = 0;
+        VolumeUnionChecks = 0;
+        SuccessfulDependencyMerges = 0;
         TraceIntervals = 0;
         CoveredVoxelIntervals = 0;
         SimplificationRays = 0;

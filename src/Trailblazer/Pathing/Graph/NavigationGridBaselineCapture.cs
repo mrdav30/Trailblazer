@@ -7,7 +7,6 @@
 
 using GridForge.Configuration;
 using GridForge.Grids;
-using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
@@ -15,39 +14,10 @@ namespace Trailblazer.Pathing;
 internal readonly struct NavigationGridBaselineCapture
 {
     internal NavigationGridBaselineCapture(
-        VoxelIndex[] addresses,
-        GridNavigationBaseline? baseline,
-        bool isDelta = false)
-        : this(addresses, addresses.Length, baseline, isDelta)
-    {
-    }
-
-    internal NavigationGridBaselineCapture(
-        VoxelIndex[] addresses,
-        int addressCount,
-        GridNavigationBaseline? baseline,
-        bool isDelta = false)
-    {
-        Addresses = addresses;
-        AddressCount = addressCount;
-        Baseline = baseline;
-        PreparedPages = null;
-        HighWaterSequence = baseline?.HighWaterSequence ?? 0;
-        WorldSpawnToken = baseline?.WorldSpawnToken ?? 0;
-        GridIndex = baseline?.GridIndex ?? ushort.MaxValue;
-        GridSpawnToken = baseline?.GridSpawnToken ?? 0;
-        GridHighWaterSequence = baseline?.GridHighWaterSequence ?? 0;
-        ConfigurationKey = baseline?.ConfigurationKey ?? default;
-        IsDelta = isDelta;
-        IsRequested = true;
-    }
-
-    internal NavigationGridBaselineCapture(
         int addressCount,
         GridNavigationBaseline? baseline,
         bool isDelta)
     {
-        Addresses = null;
         AddressCount = addressCount;
         Baseline = baseline;
         PreparedPages = null;
@@ -71,7 +41,6 @@ internal readonly struct NavigationGridBaselineCapture
         ulong gridHighWaterSequence,
         GridConfigurationKey configurationKey)
     {
-        Addresses = null;
         AddressCount = addressCount;
         Baseline = null;
         PreparedPages = preparedPages;
@@ -97,7 +66,6 @@ internal readonly struct NavigationGridBaselineCapture
         ulong gridHighWaterSequence,
         GridConfigurationKey configurationKey)
     {
-        Addresses = null;
         AddressCount = addressCount;
         Baseline = null;
         PreparedPages = null;
@@ -113,8 +81,6 @@ internal readonly struct NavigationGridBaselineCapture
         IsDelta = false;
         IsRequested = true;
     }
-
-    internal VoxelIndex[]? Addresses { get; }
 
     internal int AddressCount { get; }
 

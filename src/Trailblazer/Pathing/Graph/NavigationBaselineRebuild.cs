@@ -178,7 +178,7 @@ internal sealed class NavigationBaselineRebuild
         {
             completed = true;
             _completed = true;
-            capture = new NavigationGridBaselineCapture(Array.Empty<VoxelIndex>(), baseline: null);
+            capture = new NavigationGridBaselineCapture(0, baseline: null, isDelta: false);
             _completedCapture = capture;
             return count;
         }
@@ -301,8 +301,9 @@ internal sealed class NavigationBaselineRebuild
                 completed = true;
                 _completed = true;
                 capture = new NavigationGridBaselineCapture(
-                    Array.Empty<VoxelIndex>(),
-                    baseline: null);
+                    0,
+                    baseline: null,
+                    isDelta: false);
                 _completedCapture = capture;
                 return 0;
             }

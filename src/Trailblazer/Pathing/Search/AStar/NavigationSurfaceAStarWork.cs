@@ -815,6 +815,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             return false;
         }
         target.CommitMerge(source);
+        _meter.RecordSuccessfulDependencyMerge();
         _finalizationLookupReservation = enlargedReservation;
         return _world.ChangeSequence == _simplificationWorldChangeSequence;
     }

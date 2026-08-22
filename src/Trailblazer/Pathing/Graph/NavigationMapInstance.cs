@@ -220,18 +220,6 @@ internal sealed partial class NavigationMapInstance
         return true;
     }
 
-    internal TraversalMedia GetPresentMedia(VoxelIndex index)
-    {
-        if (!TryGetSlot(index, out int slot)
-            || !TryGetEffectiveCell(slot, out NavigationCell cell)
-            || !TryGetPhysicalState(slot, out bool isPresent, out _)
-            || !isPresent)
-        {
-            return TraversalMedia.None;
-        }
-        return cell.Media;
-    }
-
     internal TraversalMedia GetEffectiveMedia(VoxelIndex index) =>
         TryGetSlot(index, out int slot)
         && TryGetEffectiveCell(slot, out NavigationCell cell)
@@ -327,7 +315,6 @@ internal sealed partial class NavigationMapInstance
         long instanceVersion)
     {
         GridNavigationBaseline? baseline = capture.Baseline;
-        VoxelIndex[]? addresses = capture.Addresses;
         if (!capture.IsRequested
             || !capture.HasBaseline
             || !capture.ConfigurationKey.Equals(Map.GridBinding.Key)

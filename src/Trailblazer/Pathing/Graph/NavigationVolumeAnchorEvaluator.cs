@@ -142,6 +142,7 @@ internal readonly struct NavigationVolumeAnchorEvaluator
             _workspace.CoveredAddressCapacity,
             meter.RemainingCoveredVoxelIntervals);
         long candidateWorkLimit = meter.RemainingGridCandidateWork;
+        meter.RecordVolumeUnionCheck();
         GridNavigationBodyTraceReport report = GridTracer.TraceNavigationBodyInto(
             _world,
             sourceCell,

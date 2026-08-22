@@ -1526,6 +1526,8 @@ public sealed class NavigationEndpointResolutionTests
             out _);
 
         status.Should().Be((NavigationVolumeAnchorStatus)expectedStatusValue);
+        meter.VolumeUnionChecks.Should().Be(1,
+            "the one canonical GridForge body trace is the union-check authority");
         meter.LookupProbes.Should().BeLessThanOrEqualTo(lookupBudget);
         meter.CoveredVoxelIntervals.Should().BeLessThanOrEqualTo(coveredBudget);
     }

@@ -319,6 +319,7 @@ internal struct NavigationTraversalEdgeEnumerator
             {
                 return NavigationTraversalEdgeAdvanceStatus.BudgetExceeded;
             }
+            meter.RecordVolumeCandidate(isPrimary);
             edgeStepRemaining--;
             if (hasSeam)
             {

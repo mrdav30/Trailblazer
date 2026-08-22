@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Trailblazer.Pathing;
 using Xunit;
@@ -191,6 +192,9 @@ public sealed class NavigationContractArchitectureTests
         string sourceRoot = Path.Combine(repositoryRoot, "src", "Trailblazer");
         string testRoot = Path.Combine(repositoryRoot, "tests", "Trailblazer.Tests");
         string benchmarkRoot = Path.Combine(repositoryRoot, "tests", "Trailblazer.Benchmarks");
+        string wikiRoot = Path.Combine(repositoryRoot, "docs", "wiki");
+        string binSegment = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
+        string objSegment = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
         string[] guardFiles =
         {
             Path.Combine(testRoot, "Pathing", "Query", "NavigationContractArchitecture.Tests.cs"),
@@ -200,33 +204,95 @@ public sealed class NavigationContractArchitectureTests
         string[] runtimeFiles = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Concat(Directory.GetFiles(testRoot, "*.cs", SearchOption.AllDirectories))
             .Concat(Directory.GetFiles(benchmarkRoot, "*.cs", SearchOption.AllDirectories))
+            .Where(path => !path.Contains(binSegment, StringComparison.OrdinalIgnoreCase)
+                && !path.Contains(objSegment, StringComparison.OrdinalIgnoreCase))
             .Where(path => !guardFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
             .ToArray();
-        string runtimeText = string.Join('\n', runtimeFiles.Select(File.ReadAllText));
-        string[] retiredTokens =
+        runtimeFiles.Should().NotContain(path =>
+            path.Contains(binSegment, StringComparison.OrdinalIgnoreCase)
+            || path.Contains(objSegment, StringComparison.OrdinalIgnoreCase));
+        runtimeFiles.Should().Contain(Path.Combine(sourceRoot, "Pathing", "Query", "PathQuery.cs"));
+        runtimeFiles.Should().Contain(Path.Combine(
+            testRoot,
+            "Pathing",
+            "Graph",
+            "Phase7VolumeTransitionDeterminismMatrixTests.cs"));
+        runtimeFiles.Should().Contain(Path.Combine(
+            benchmarkRoot,
+            "Pathing",
+            "NavigationVolumeRoutingBenchmarks.cs"));
+        string[] activeFiles = runtimeFiles
+            .Concat(Directory.GetFiles(wikiRoot, "*.md", SearchOption.AllDirectories))
+            .Concat(new[]
+            {
+                Path.Combine(repositoryRoot, "README.md"),
+                Path.Combine(benchmarkRoot, "README.md"),
+                Path.Combine(testRoot, "Phase0", "PublicApiSnapshot.txt")
+            })
+            .ToArray();
+        string activeText = string.Join('\n', activeFiles.Select(File.ReadAllText));
+        string[] retiredIdentifiers =
         {
             "TraversalDomain",
+            "IPathRequest",
+            "IGuide",
+            "IWaypointGuide",
+            "GuidePool",
             "VolumePathRequest",
+            "VolumeSurveyResult",
             "HybridPathRequest",
             "VolumeGuide",
             "VolumeSurveyor",
+            "VolumeVoxelFinder",
+            "TrailblazerWorldContext.VolumeRules",
+            "VolumeVoxelRule",
+            "VolumeMediumRules",
+            "VolumeMediumRulesState",
+            "TrailblazerVolumeRulesService",
             "HybridRoutePlanner",
+            "HybridRoutePlan",
+            "HybridRouteStep",
+            "HybridRouteGuide",
+            "GuidedVolumeExitPlanner",
+            "GuidedVolumeExitHandoff",
+            "TrailblazerTransitionService",
+            "TraversalTransition",
+            "TraversalTransitionAnchor",
             "TraversalTransitionRegistry",
+            "TraversalTransitionRegistryState",
+            "TraversalTransitionQuery",
             "TraversalTransitionQueryCache",
-            "TraversalAuthoringMap",
             "GeneratedTraversalTransitionBuilder",
+            "TraversalAuthoringMap",
+            "TraversalBuildResult",
+            "ParsedTraversalCell",
+            "TraversalLegend",
+            "TraversalLegendEntry",
+            "TraversalAuthoringMapExtensions",
             "PathRequestRecord",
             "PathGuideFactory",
             "ReusableSurveyResultCache",
+            "TrailblazerGuideState",
             "PathHeap",
             "TryGetCurrentWaypoint",
+            "UnitSize",
+            "AllowUnwalkableEndpoints",
+            "MaxPathSearchRange",
+            "HeuristicMethod",
             "CurrentRouteTopologyVersion",
             "CurrentRouteRequestsClimbIntent",
-            "PendingGuidedVolumeExitHandoff",
-            "GuidedVolumeExitPlanner"
+            "PendingGuidedVolumeExitHandoff"
         };
 
-        runtimeText.Should().NotContainAny(retiredTokens);
+        for (int i = 0; i < retiredIdentifiers.Length; i++)
+        {
+            string identifier = retiredIdentifiers[i];
+            Regex.IsMatch(
+                    activeText,
+                    $@"(?<![A-Za-z0-9_]){Regex.Escape(identifier)}(?![A-Za-z0-9_])",
+                    RegexOptions.CultureInvariant)
+                .Should().BeFalse($"{identifier} is a retired exact identifier");
+        }
 
         AssertSingleFile(sourceRoot, "PathQuery.cs");
         AssertSingleFile(sourceRoot, "TrailblazerGuideService.cs");

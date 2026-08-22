@@ -610,50 +610,6 @@ internal sealed class NavigationOperationProcessor
         _supersedenceCovered = true;
     }
 
-    private bool IsOverlayCovered(NavigationOverlayTransaction transaction)
-    {
-        ReadOnlySpan<NavigationMapOverlayDelta> maps = transaction.MapSpan;
-        for (int mapIndex = 0; mapIndex < maps.Length; mapIndex++)
-        {
-            NavigationMapOverlayDelta map = maps[mapIndex];
-            if (_mapOverwriters.Contains(map.MapId))
-                continue;
-
-            for (int i = 0; i < map.Cells.Count; i++)
-            {
-                if (!_coveredCells.Contains(new NavigationCellAddress(map.MapId, map.Cells[i].Index)))
-                    return false;
-            }
-            for (int i = 0; i < map.Connections.Count; i++)
-            {
-                if (!_coveredConnections.Contains(new OverlayIdKey(map.MapId, map.Connections[i].Id)))
-                    return false;
-            }
-            for (int i = 0; i < map.Transitions.Count; i++)
-            {
-                if (!_coveredTransitions.Contains(new OverlayIdKey(map.MapId, map.Transitions[i].Id)))
-                    return false;
-            }
-        }
-
-        return true;
-    }
-
-    private void AddOverlayCoverage(NavigationOverlayTransaction transaction)
-    {
-        ReadOnlySpan<NavigationMapOverlayDelta> maps = transaction.MapSpan;
-        for (int mapIndex = 0; mapIndex < maps.Length; mapIndex++)
-        {
-            NavigationMapOverlayDelta map = maps[mapIndex];
-            for (int i = 0; i < map.Cells.Count; i++)
-                _coveredCells.Add(new NavigationCellAddress(map.MapId, map.Cells[i].Index));
-            for (int i = 0; i < map.Connections.Count; i++)
-                _coveredConnections.Add(new OverlayIdKey(map.MapId, map.Connections[i].Id));
-            for (int i = 0; i < map.Transitions.Count; i++)
-                _coveredTransitions.Add(new OverlayIdKey(map.MapId, map.Transitions[i].Id));
-        }
-    }
-
     private static bool WouldExceed(long current, long increment, long maximum) =>
         increment > maximum - current;
 

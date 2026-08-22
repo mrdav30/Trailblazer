@@ -891,11 +891,16 @@ public sealed class NavigationTransitionEdgeTests
         var meter = new NavigationWorkMeter(LargeBudget());
         int remaining = 4_096;
         int connectionRemaining = int.MaxValue;
+        long transitionUnionChecks = -1;
 
         NavigationTraversalEdgeAdvanceStatus status;
         do
         {
+            int priorPairs = meter.TransitionPairs;
+            long priorUnionChecks = meter.VolumeUnionChecks;
             status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref remaining, ref connectionRemaining);
+            if (meter.TransitionPairs != priorPairs)
+                transitionUnionChecks = meter.VolumeUnionChecks - priorUnionChecks;
         }
         while (status != NavigationTraversalEdgeAdvanceStatus.Complete
             && (status != NavigationTraversalEdgeAdvanceStatus.Edge
@@ -905,6 +910,8 @@ public sealed class NavigationTransitionEdgeTests
         dispatcher.CurrentTarget.Should().Be(source);
         dispatcher.CurrentTransitionSourceAction.Should().Be(sourceAction);
         dispatcher.CurrentTransitionDestinationAction.Should().Be(destinationAction);
+        transitionUnionChecks.Should().Be(2,
+            "each large-body action leg owns one canonical union trace");
         meter.CoveredVoxelIntervals.Should().BeGreaterThan(0);
     }
 

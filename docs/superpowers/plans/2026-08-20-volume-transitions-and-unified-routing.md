@@ -454,19 +454,29 @@
 
 - Add: `tests/Trailblazer.Tests/Pathing/Graph/Phase7VolumeTransitionDeterminismMatrixTests.cs`
 - Add: `tests/Trailblazer.Benchmarks/Pathing/NavigationVolumeRoutingBenchmarks.cs`
-- Modify: `tests/Trailblazer.Benchmarks/Program.cs`
 - Modify: `tests/Trailblazer.Benchmarks/README.md`
+- Modify: `src/Trailblazer/Pathing/Query/NavigationWorkMeter.cs`, canonical
+  volume-candidate/union/dependency-merge call sites, and their matching graph
+  tests for the four internal observation scalars required by this gate
+- Modify: `NavigationFlowFieldGuideTests.cs` for the one coverage-justified
+  destination-recovery fact; delete the zero-caller overlay/media/baseline
+  helper shapes from `NavigationOperationProcessor.cs`,
+  `NavigationMapInstance.cs`, `NavigationGridBaselineCapture.cs`, and
+  `NavigationBaselineRebuild.cs`
+- Modify: `NavigationContractArchitecture.Tests.cs` to enforce the complete
+  exact retired-identifier and wire-key residue set across active source,
+  tests, benchmarks, README/wiki documentation, and the public API snapshot
 - Modify: `docs/feature-work/gridTopologyNavigationMapRefactorPlan.md`
 
-- [ ] RED a canonical digest matrix covering rectangular 2-axis/3-axis, anisotropic, pointy/flat hex vertical diagonals, Gas/Liquid, A*/Flow, same/change-medium actions, ladder, duck, teleporter, flood mutation, serialization, and NoPath dependencies.
-- [ ] Check in exact culture-invariant hashes, then run Debug, Release, ten additional Release processes, and direct ReleaseLean serially; require byte-identical sorted digests.
-- [ ] Add benchmark scenarios for open/obstructed rect 2D/3D, large-body coverage, hex vertical diagonal, A*/Flow, rule scan, ladder action, duck takeoff, mixed route, and cache hits.
-- [ ] Report settled medium states, base edges, shortcut candidates, swept cells, union checks, rule/transition candidates, dependency merges, guide steps, p50/p95/p99/max, and allocation. Warm guide sampling must be 0 B; immutable payload allocation is reported, not hidden.
-- [ ] Compare full 26/20 routing with face-only control; open diagonal cases must settle no more states. Add an internal compiled GridForge optimization only if measured stateless coverage dominates and the same reviewers approve it.
-- [ ] Run project-wide coverage/CRAP analysis once; add focused tests only for new high-risk Phase 7 gaps, not unrelated historical debt.
-- [ ] Run serial final gates: restore; four direct source TFM/config builds; full Release; full direct ReleaseLean; benchmark build/list/smoke/canonical; JSON/MemoryPack serialization; public API snapshot; package and package-content checks; `git diff --check`; exact forbidden-residue and allocation scans. Pack GridForge + GridForge.Lean into the plan's isolated feed, restore Trailblazer in normal package mode from that feed without sibling project references/global-feed mutation, and prove the same source/tests compile against the exact packed API.
-- [ ] Freeze the complete range and request independent full correctness and ponytail reviews. Fix every P0-P2 RED-first, rerun affected focused/full gates, and obtain scoped approval.
-- [ ] Mark the Phase 7 tracker rows complete with exact commits/evidence and commit: `test(pathing): close phase 7 unified routing`.
+- [x] RED a canonical digest matrix covering rectangular 2-axis/3-axis, anisotropic, pointy/flat hex vertical diagonals, Gas/Liquid, A*/Flow, same/change-medium actions, ladder, duck, teleporter, flood mutation, serialization, and NoPath dependencies.
+- [x] Check in exact culture-invariant hashes, then run Debug, Release, ten additional Release processes, and direct ReleaseLean serially; require byte-identical sorted digests.
+- [x] Add benchmark scenarios for open/obstructed rect 2D/3D, large-body coverage, hex vertical diagonal, A*/Flow, rule scan, ladder action, duck takeoff, mixed route, and cache hits.
+- [x] Report settled medium states, evaluated edges, primary and shortcut volume candidates, covered voxel intervals, union checks, rule/transition candidates, successful dependency merges separately from emitted dependency facts, guide steps, p50/p95/p99/max, and allocation. Warm guide sampling must be 0 B; immutable payload allocation is reported, not hidden.
+- [x] Compare full 26/20 routing with face-only control; open diagonal cases must settle no more states. Add an internal compiled GridForge optimization only if measured stateless coverage dominates and the same reviewers approve it.
+- [x] Run project-wide coverage/CRAP analysis once; add focused tests only for new high-risk Phase 7 gaps, not unrelated historical debt.
+- [x] Run serial final gates: restore; four direct source TFM/config builds; full Release; full direct ReleaseLean; benchmark build/list/smoke/canonical; JSON/MemoryPack serialization; public API snapshot; package and package-content checks; `git diff --check`; exact forbidden-residue and allocation scans. Pack GridForge + GridForge.Lean into the plan's isolated feed, restore Trailblazer in normal package mode from that feed without sibling project references/global-feed mutation, and prove the same source/tests compile against the exact packed API.
+- [x] Freeze the complete range and request independent full correctness and ponytail reviews. Fix every P0-P2 RED-first, rerun affected focused/full gates, and obtain scoped approval.
+- [x] Mark the Phase 7 tracker rows complete with exact commits/evidence and commit: `test(pathing): close phase 7 unified routing`.
 
 ## Required Final Residue Gate
 

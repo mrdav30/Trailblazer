@@ -34,6 +34,7 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
 | `navigation-flow-field-contention` | `NavigationFlowFieldContentionBenchmarks` |
 | `navigation-ray` | `NavigationRayBenchmarks` |
+| `navigation-volume-routing` | `NavigationVolumeRoutingBenchmarks` |
 | `navigation-map-bake` | `NavigationMapBakeBenchmarks` |
 | `navigation-graph-lifecycle` | `NavigationGraphLifecycleBenchmarks` |
 | `navigation-graph-composition` | `NavigationGraphCompositionBenchmarks` |
@@ -85,6 +86,17 @@ contention-worker allocation. A* cases intentionally record their result-
 payload allocation instead of requiring zero. Treat reported latency and
 allocation as environment-specific BenchmarkDotNet evidence, not product
 guarantees.
+
+`NavigationVolumeRoutingBenchmarks` covers open and obstructed rectangular
+Gas routes in 2D, open and obstructed 3D Flow, a large body, a hex vertical
+diagonal, rule scanning, ladder and duck actions, a mixed medium/action route,
+warm A*/Flow cache hits, and full-direction versus face-only controls. Cleanup
+reports exact settled states, evaluated/primary/shortcut candidates, union and
+covered-voxel interval work, transition candidates/pairs, successful dependency
+merges, emitted dependency facts, A* guide steps, Flow payload nodes, immutable
+payload bytes, and the warm
+sample allocation preflight. BenchmarkDotNet supplies median, P95, P99, max,
+and managed-allocation columns through the shared gate configuration.
 
 The default Flow benchmark run uses the canonical three-launch, ten-warmup,
 100-iteration Monitoring job. The exact 1M articulation case uses a separately

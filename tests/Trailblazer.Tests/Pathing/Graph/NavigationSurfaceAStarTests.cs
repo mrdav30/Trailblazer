@@ -358,12 +358,16 @@ public sealed class NavigationSurfaceAStarTests
         admission.Meter.TraceIntervals.Should().Be(traceBeforeAtomicUnit + 3);
         admission.Meter.CoveredVoxelIntervals.Should().Be(coverageBeforeAtomicUnit + 8);
         admission.Meter.SimplificationRays.Should().Be(1);
+        admission.Meter.SuccessfulDependencyMerges.Should().Be(1);
         int lookupAfterAtomicUnit = admission.Meter.LookupProbes;
 
         search.Advance(lookupStepLimit: 1, 64, 64, 64)
             .Should().Be(NavigationSurfaceAStarStatus.Pending);
         admission.Meter.LookupProbes.Should().Be(lookupAfterAtomicUnit + 1,
             "the next call starts the separately step-limited final dependency work");
+
+        admission.Meter.Reset(default);
+        admission.Meter.SuccessfulDependencyMerges.Should().Be(0);
     }
 
     [Fact]

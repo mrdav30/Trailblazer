@@ -143,7 +143,7 @@ public partial class NavTurning : IRecordable
     /// <summary>
     /// Configures internal thresholds based on the object’s radius and resets turn state.
     /// </summary>
-    public void OnInitialize(Fixed64 radius)
+    internal void OnInitialize(Fixed64 radius)
     {
         _radius = radius;
         _isInitialized = true;
@@ -170,7 +170,7 @@ public partial class NavTurning : IRecordable
         // 1) Preconditions
         if (!_isInitialized)
             throw new InvalidOperationException(
-              "NavTurning.OnInitialize must be called before SimulateTurn()");
+              "NavTurning must be initialized before TrySimulateTurn().");
         if (!CanTurn) return false;
 
         // 2) If we’re idle (finished last turn):

@@ -527,15 +527,33 @@ public sealed class NavigationTransitionGuideTests
         var targetAddress = new NavigationCellAddress("map", new VoxelIndex(1, 0, 1));
         Vector3d start = GetVolumeAnchor(graph, source, Fixed64.One);
         Vector3d end = GetVolumeAnchor(graph, target, Fixed64.One);
+        Vector3d arrivalBoundary = start + (end - start) / (Fixed64)4;
+        NavigationDistanceMath.TryCeiling(
+                arrivalBoundary,
+                end,
+                out Fixed64 arrivalRadius)
+            .Should().BeTrue();
+        Vector3d outsideArrival = arrivalBoundary - new Vector3d(
+            Fixed64.MinIncrement,
+            Fixed64.Zero,
+            Fixed64.MinIncrement);
         PathQuery astar = Query(
             start,
             end,
             TraversalMedia.Gas,
             allowTransitions: false);
+        NavigationAgentProfile baseline = astar.Agent;
+        var profile = new NavigationAgentProfile(
+            baseline.Shape,
+            baseline.MaxStepUp,
+            baseline.MaxDropDown,
+            arrivalRadius,
+            baseline.AllowedMedia,
+            baseline.Capabilities);
         var query = new PathQuery(
             astar.Start,
             astar.End,
-            astar.Agent,
+            profile,
             astar.AreaPolicy,
             astar.Traversal,
             PathAlgorithm.FlowField,
@@ -710,6 +728,37 @@ public sealed class NavigationTransitionGuideTests
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         sampled.Should().BeTrue();
         allocated.Should().Be(0);
+        Vector3d radiusVector = new(profile.ArrivalRadius, Fixed64.Zero, Fixed64.Zero);
+        Vector3d.CompareDistanceSquared(
+                arrivalBoundary,
+                end,
+                Vector3d.Zero,
+                radiusVector)
+            .Should().BeLessThanOrEqualTo(0);
+        Vector3d.CompareDistanceSquared(
+                outsideArrival,
+                end,
+                Vector3d.Zero,
+                radiusVector)
+            .Should().BeGreaterThan(0);
+        Sample(
+                inner,
+                inner.Generation,
+                outsideArrival,
+                GenerousSampleBudget,
+                out NavigationFlowSample outsideSample)
+            .Should().Be(NavigationGuideStatus.Success);
+        Sample(
+                inner,
+                inner.Generation,
+                arrivalBoundary,
+                GenerousSampleBudget,
+                out NavigationFlowSample boundarySample)
+            .Should().Be(NavigationGuideStatus.Success);
+        outsideSample.Medium.Should().Be(TraversalMedium.Gas);
+        outsideSample.Heading.Should().Be((end - outsideArrival).Normalized);
+        boundarySample.Medium.Should().Be(TraversalMedium.Gas);
+        boundarySample.Heading.Should().Be(Vector3d.Zero);
         guide.Dispose();
     }
 

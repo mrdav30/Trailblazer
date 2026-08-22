@@ -49,7 +49,7 @@ public partial class NavSteering
         _repathTries = 0;
         _shouldRequestPathThisFrame = true;
         AddToMovementGroup(groupId);
-        UpdateMovementGroupState(origin, true);
+        UpdateMovementGroupState(origin, query.Agent.Shape.Radius, true);
         Events.OnMoveRequestApplied?.Invoke();
     }
 
@@ -111,7 +111,7 @@ public partial class NavSteering
             vessel.GlobalId,
             _requestedDestination,
             vessel.Position,
-            _agentRadius);
+            vessel.Radius);
     }
 
     #endregion

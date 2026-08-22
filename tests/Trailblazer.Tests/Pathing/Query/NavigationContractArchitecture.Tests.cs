@@ -281,7 +281,15 @@ public sealed class NavigationContractArchitectureTests
             "HeuristicMethod",
             "CurrentRouteTopologyVersion",
             "CurrentRouteRequestsClimbIntent",
-            "PendingGuidedVolumeExitHandoff"
+            "PendingGuidedVolumeExitHandoff",
+            "StopMultiplier",
+            "DefaultDirectStop",
+            "DefaultGroupIndividualStop",
+            "UpdateOwnerRadius",
+            "GetActiveStopMultiplier",
+            "ResolveVoxelSize",
+            "_closingDistance",
+            "_agentRadius"
         };
 
         for (int i = 0; i < retiredIdentifiers.Length; i++)
@@ -326,7 +334,8 @@ public sealed class NavigationContractArchitectureTests
             "\"GuidedClimbIntent\"",
             "\"GuidedClimbIntentMode\"",
             "\"LastSeenGuidedRouteTopologyVersion\"",
-            "\"PendingGuidedVolumeExitHandoff\""
+            "\"PendingGuidedVolumeExitHandoff\"",
+            "\"StopMultiplier\""
         };
 
         serializationText.Should().NotContainAny(retiredWireKeys);

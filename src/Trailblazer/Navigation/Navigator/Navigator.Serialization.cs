@@ -8,6 +8,7 @@
 using System;
 using Chronicler;
 using FixedMathSharp;
+using GridForge.Grids;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
@@ -17,7 +18,7 @@ namespace Trailblazer.Navigation;
 
 public abstract partial class Navigator
 {
-    private const int CurrentSerializationSchemaVersion = 1;
+    private const int CurrentSerializationSchemaVersion = 2;
 
     #region Serialization
 
@@ -109,6 +110,7 @@ public abstract partial class Navigator
 
         if (isLoading)
         {
+            GridOccupantManager.TryDeregister(RequireContext().World, this);
             _position = position;
             _lastPosition = lastPosition;
             _rotation = rotation;
@@ -151,14 +153,15 @@ public abstract partial class Navigator
 
             _steering?.BindContext(context);
             _steering?.BindPendingTransitionOwner(this);
-            _steering?.UpdateOwnerRadius(Radius);
 
             _motor?.BindContext(context);
 
             _turning?.BindContext(context);
             _turning?.OnInitialize(Radius);
 
-            CheckVoxelOccupancy(true);
+            CheckVoxelOccupancy(init: true);
+            _lastCommittedCell = null;
+            RebuildCommittedCellState(emitChange: false);
         }
     }
 
@@ -167,10 +170,10 @@ public abstract partial class Navigator
         TrailblazerWorldContext context = RequireContext();
         if (_steering != null)
         {
-            var steering = new NavSteering(context, Radius);
+            var steering = new NavSteering(context);
             RecordDeep.Look(chronicler, ref steering, "Steering");
             if (steering.BrakingPower < Fixed64.Zero
-                || steering.StopMultiplier < Fixed64.Zero
+                || steering.WaypointTolerance < Fixed64.Zero
                 || steering.GroupFactor < Fixed64.Zero
                 || steering.AvoidFactor < Fixed64.Zero)
             {

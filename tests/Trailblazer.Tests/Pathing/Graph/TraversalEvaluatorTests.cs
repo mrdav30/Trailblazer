@@ -6,7 +6,6 @@
 //=======================================================================
 
 using System;
-using System.Collections.Generic;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -555,6 +554,7 @@ public sealed class TraversalEvaluatorTests
             defaults.OperationLimits,
             defaults.MaintenanceBudget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

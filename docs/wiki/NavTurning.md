@@ -67,7 +67,6 @@ Two details matter here:
 The main entry points are:
 
 - `CreateNew(TrailblazerWorldContext context, Fixed64 radius)`
-- `OnInitialize(Fixed64 radius)`
 - `TrySimulateTurn(Vector3d position, Vector3d lastPosition, Vector3d forward, FixedQuaternion rotation, out FixedQuaternion appliedRotation)`
 - `RequestTurnDirection(Vector3d curDirection, Vector3d targetDirection, Fixed64? interpolation = null)`
 - `NeedsTurn(Vector3d currentForward, Vector3d targetDirection, Fixed64? minAngle = null)`
@@ -110,19 +109,18 @@ If you use `NavTurning` directly, the essential rule is:
 - then call `TrySimulateTurn(...)` once per fixed step
 - only apply the returned rotation when the method reports success
 
-## 5. Initialization and Thresholds
+## 5. Construction and Thresholds
 
-### 5.1 OnInitialize(...)
+### 5.1 Construction
 
-`OnInitialize(Fixed64 radius)` must be called before `TrySimulateTurn(...)`.
+The public constructor and `CreateNew(...)` initialize the controller from the
+supplied radius before returning it.
 
-It does three important things:
+Construction:
 
 - caches the navigator radius used for collision auto-turn thresholds
 - marks the controller as arrived
 - resets `TargetRotation` to identity
-
-If `TrySimulateTurn(...)` is called before initialization, it throws.
 
 ### 5.2 Minimum Turn Threshold
 
@@ -188,10 +186,7 @@ near-identical directions.
 
 ### 7.1 Preconditions
 
-The method:
-
-- throws if `OnInitialize(...)` has not been called
-- returns `false` if `CanTurn` is false
+The method returns `false` if `CanTurn` is false.
 
 If `CanTurn` is false, any already-buffered turn remains buffered until turning
 is enabled again.
@@ -375,11 +370,6 @@ navigator.Simulate(); // may begin actual rotation
 ```
 
 ## 11. Common Gotchas
-
-### Calling TrySimulateTurn(...) before OnInitialize(...)
-
-This throws by design because the collision threshold has not been configured
-yet.
 
 ### Assuming RequestTurnDirection(...) rotates immediately
 

@@ -1721,6 +1721,7 @@ public sealed class NavigationGraphCapacityTests
             operationLimits ?? CreateOperationLimits(),
             maintenanceBudget ?? defaults.MaintenanceBudget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             maxIngressEntries,
             maxIngressBytes: Math.Max(32, operationLimits?.MaxMaps ?? 16) * 256L,
             maxActiveSnapshots: 3,

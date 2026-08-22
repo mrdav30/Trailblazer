@@ -19,6 +19,8 @@ navigator.Initialize(new TrekCondition
 
 The profile's `KinematicBodyShape` is authoritative. `FootPosition` is derived
 from root position and `RootToFootOffsetY`; guided endpoints use foot space.
+The configured profile cannot be replaced after setup, and the radius used by
+Navigator-owned turning cannot be independently mutated.
 
 `Reset()` releases guidance, pending actions, movement-group ownership, and
 occupancy before the object can be rebound/reinitialized.
@@ -41,6 +43,13 @@ The query must:
 Navigator does not infer or prioritize another start medium. Construct the query
 for the physical state the host has actually committed.
 
+`NavigationAgentProfile.ArrivalRadius` is the inclusive final-destination
+radius. `NavSteering.WaypointTolerance` is a separate non-negative world-unit
+tolerance for ordinary intermediate guide steps. Intermediate steps advance
+when they enter that tolerance, or when a heading reversal proves the body
+passed the step within the arrival radius. Neither rule can cross a pending
+transition action.
+
 ## 3. Fixed-Step Lifecycle
 
 The normal order is:
@@ -54,6 +63,20 @@ The normal order is:
 `Simulate()` asks `NavSteering` for ordinary heading or one transition
 instruction. `CommitFrameMotion()` applies accumulated position, velocity, and
 rotation deltas; it does not execute semantic actions.
+
+After the frame request and motor state are fully finalized,
+`CommitFrameMotion()` resolves the root position against the current published
+navigation graph. `LastCommittedCell` then exposes the cell address, area,
+physical medium, graph version, optional active policy key, and simulation
+frame. `CommittedCellChanged` fires only when the stable cell entry
+(address/area/medium) changes or becomes absent; graph-version, frame, or policy
+refreshes update the property without repeating the entry callback. Setup,
+querying, guide sampling, and `Simulate()` never publish this notification.
+
+An unavailable graph generation preserves the previous value for retry. A
+definitive position with no physical/effective navigation cell clears it once.
+This notification reports committed navigation metadata only; hosts own any
+gameplay effects.
 
 ## 4. Pending Transition
 
@@ -142,14 +165,20 @@ Heightmap grounding is opt-in and affects kinematic Y projection, not graph
 connectivity. Occupancy is registered against the bound GridWorld and rebuilt on
 load/reset as documented by the host lifecycle.
 
+Movement-group formation padding is the single world-unit
+`TrailblazerWorldContextSettings.MovementGroupPadding` value. It is independent
+of rectangular or hex grid metrics.
+
 ## 10. Serialization
 
 Navigator serialization uses populate-existing-instance semantics. It records
 durable query destination/profile/policy/algorithm/budget/target-media intent,
 but not a guide payload, cursor, or pending instruction. Load stages and validates
 the complete record before mutating the shell, rebuilds the query start from the
-restored foot position/current medium, clears transient action state, and
-reacquires guidance only on a later simulation frame.
+restored foot position/current medium, clears transient action state, silently
+rebuilds `LastCommittedCell` from the already restored world, and reacquires
+guidance only on a later simulation frame. `LastCommittedCell` and its callback
+are runtime-only and have no wire field.
 
 Restore GridForge grids, maps, area policies, and overlays before loading or
 resuming a guided Navigator. See [Serialization](Serialization.md).

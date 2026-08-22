@@ -173,6 +173,31 @@ public sealed class PathQueryContractsTests
         target.Query.Should().Be(query);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+#endif
+    public void PathQueryRecord_ShouldRejectOldOrMissingSchemaWithoutChangingQuery(
+        bool useMemoryPack,
+        bool removeSchema)
+    {
+        var source = new PathQueryRecord(CreateQuery());
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = removeSchema
+            ? SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "SchemaVersion")
+            : SerializationUtility.SetPayloadValue(payload, useMemoryPack, 0, "SchemaVersion");
+        PathQuery shellQuery = CreateQuery(allowTransitions: false);
+        var target = new PathQueryRecord(shellQuery);
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.Query.Should().Be(shellQuery);
+    }
+
     private static PathQuery CreateQuery(bool allowTransitions = true)
     {
         KinematicBodyShape shape = new(Fixed64.Half, (Fixed64)2, Fixed64.One);

@@ -288,6 +288,49 @@ public sealed class TrailblazerPathingService
         return _navigationGraph.TryGetCellState(mapId, index, out state);
     }
 
+    internal NavigationCommittedCellResolveStatus TryResolveCommittedCell(
+        GridForge.Configuration.GridConfigurationKey gridKey,
+        WorldVoxelIndex worldIndex,
+        out NavigationCellAddress address,
+        out NavigationAreaId area,
+        out long graphVersion)
+    {
+        EnsureUsable();
+        NavigationWorldGraph graph = _navigationGraph.Current;
+        graphVersion = graph.GraphVersion;
+        if (!graph.TryGetMapId(gridKey, out string mapId)
+            || !graph.TryGetMap(mapId, out NavigationMapInstance? instance)
+            || instance == null)
+        {
+            address = default;
+            area = default;
+            return NavigationCommittedCellResolveStatus.NoCell;
+        }
+        if (!instance.GridIdentity.Matches(
+                worldIndex.WorldSpawnToken,
+                worldIndex.GridIndex,
+                worldIndex.GridSpawnToken))
+        {
+            address = default;
+            area = default;
+            return NavigationCommittedCellResolveStatus.Unavailable;
+        }
+        NavigationCell cell;
+        if (!instance.TryGetSlot(worldIndex.VoxelIndex, out int slot)
+            || !instance.TryGetPhysicalState(slot, out bool isPresent, out _)
+            || !isPresent
+            || !instance.TryGetEffectiveCell(slot, out cell))
+        {
+            address = default;
+            area = default;
+            return NavigationCommittedCellResolveStatus.NoCell;
+        }
+
+        address = new NavigationCellAddress(mapId, worldIndex.VoxelIndex);
+        area = cell.Area;
+        return NavigationCommittedCellResolveStatus.Resolved;
+    }
+
     internal bool TryResolveNavigationAreaPolicy(
         NavigationAreaPolicyKey key,
         out NavigationAreaPolicy? policy)
@@ -395,4 +438,11 @@ public sealed class TrailblazerPathingService
             nameof(TrailblazerPathingService),
             "TrailblazerPathingService is bound to an inactive GridWorld.");
     }
+}
+
+internal enum NavigationCommittedCellResolveStatus : byte
+{
+    NoCell,
+    Resolved,
+    Unavailable
 }

@@ -144,6 +144,69 @@ public sealed class NavigationFlowFieldGuideTests
     }
 
     [Fact]
+    public void DestinationArrivalRadius_ShouldBeInclusiveForSurfaceSampling()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        NavigationAgentProfile baseline = fixture.FarQuery.Agent;
+        var profile = new NavigationAgentProfile(
+            baseline.Shape,
+            baseline.MaxStepUp,
+            baseline.MaxDropDown,
+            Fixed64.Quarter,
+            baseline.AllowedMedia,
+            baseline.Capabilities);
+        PathQuery source = fixture.FarQuery;
+        var query = new PathQuery(
+            source.Start,
+            source.End,
+            profile,
+            source.AreaPolicy,
+            source.Traversal,
+            source.Algorithm,
+            source.Budget,
+            source.AllowTransitions,
+            source.FlowField);
+        NavigationFlowFieldPayload payload = NavigationFlowFieldCacheTestHarness.Clone(
+            fixture.Far,
+            new NavigationFlowFieldPayloadKey(
+                query,
+                fixture.Far.Key.DestinationAddress,
+                fixture.Far.Key.StartMedium,
+                fixture.Far.Key.TargetMedia));
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        NavigationFlowFieldPayloadLease payloadLease = Publish(
+            cache,
+            fixture.Store,
+            payload,
+            fixture.FarOrigin);
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+        fixture.Graph.TryGetNodeRef(
+                payload.Key.DestinationAddress,
+                out NavigationNodeRef destinationRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destination)
+            .Should().BeTrue();
+        Vector3d outside = destination.FootAnchor
+            + Vector3d.Right * (profile.ArrivalRadius + Fixed64.FromRaw(1));
+        Vector3d boundary = destination.FootAnchor
+            + Vector3d.Right * profile.ArrivalRadius;
+
+        guide.TrySampleHeading(outside, GenerousSampleBudget, out Vector3d outsideHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        guide.TrySampleHeading(boundary, GenerousSampleBudget, out Vector3d boundaryHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+
+        outsideHeading.Should().Be((destination.FootAnchor - outside).Normalized);
+        boundaryHeading.Should().Be(Vector3d.Zero);
+        guide.Dispose();
+    }
+
+    [Fact]
     public void DestinationRecovery_DisplacedAfterRebase_ShouldRejoinTheSameLease()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
@@ -364,8 +427,16 @@ public sealed class NavigationFlowFieldGuideTests
                 });
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 8);
+        NavigationAgentProfile baseline = fixture.DefaultProfile;
+        var profile = new NavigationAgentProfile(
+            baseline.Shape,
+            baseline.MaxStepUp,
+            baseline.MaxDropDown,
+            Fixed64.Quarter,
+            baseline.AllowedMedia,
+            baseline.Capabilities);
         PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(
-            fixture.CreateQuery(start, destination, fixture.DefaultProfile),
+            fixture.CreateQuery(start, destination, profile),
             Fixed64.Zero);
         var origin = new NavigationCellAddress(fixture.MapId, start);
         var target = new NavigationCellAddress(fixture.MapId, destination);
@@ -471,6 +542,17 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().Be(NavigationGuideStatus.Success);
 
         heading.Should().Be((sourcePortal - entry).Normalized);
+
+        Vector3d withinArrival = targetState.FootAnchor
+            - Vector3d.Right * profile.ArrivalRadius;
+        Vector3d outsideArrival = targetState.FootAnchor
+            - Vector3d.Right * (profile.ArrivalRadius + Fixed64.FromRaw(1));
+        guide.TrySampleHeading(outsideArrival, GenerousSampleBudget, out heading)
+            .Should().Be(NavigationGuideStatus.Success);
+        heading.Should().NotBe(Vector3d.Zero);
+        guide.TrySampleHeading(withinArrival, GenerousSampleBudget, out heading)
+            .Should().Be(NavigationGuideStatus.Success);
+        heading.Should().Be(Vector3d.Zero);
         guide.Dispose();
     }
 

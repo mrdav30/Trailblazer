@@ -1596,6 +1596,7 @@ public sealed class NavigationMediumGraphTests
             operationLimits ?? defaults.OperationLimits,
             maintenanceBudget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

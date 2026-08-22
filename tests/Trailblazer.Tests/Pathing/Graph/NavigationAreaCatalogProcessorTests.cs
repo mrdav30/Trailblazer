@@ -407,6 +407,7 @@ public sealed class NavigationAreaCatalogProcessorTests
             operationLimits,
             maintenanceBudget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

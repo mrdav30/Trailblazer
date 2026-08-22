@@ -46,9 +46,9 @@ public partial class NavSteering : IRecordable
     };
 
     /// <summary>
-    /// Default multiplier used to determine proximity tolerance when stopping at a destination.
+    /// Default world-space tolerance used when advancing between ordinary guide steps.
     /// </summary>
-    public static readonly Fixed64 DefaultDirectStop = Fixed64.FromRaw(0x40000000L); // 0.25f;
+    public static readonly Fixed64 DefaultWaypointTolerance = Fixed64.Half;
 
     /// <summary>
     /// Number of frames between pathfinding LOS rechecks.
@@ -64,11 +64,6 @@ public partial class NavSteering : IRecordable
     /// Default braking factor applied when decelerating or stopping motion.
     /// </summary>
     public static readonly Fixed64 DefaultBrakingPower = Fixed64.FromFraction(3, 20);
-
-    /// <summary>
-    /// Group fallback stop tolerance used when a formation breaks apart near the goal.
-    /// </summary>
-    protected static readonly Fixed64 DefaultGroupIndividualStop = Fixed64.One;
 
     #endregion
 
@@ -179,11 +174,6 @@ public partial class NavSteering : IRecordable
     public Fixed64 DistanceToTarget => _distanceToTarget;
 
     /// <summary>
-    /// How far away the agent stops from the target
-    /// </summary>
-    private Fixed64 _closingDistance;
-
-    /// <summary>
     /// Indicates whether the agent is actively following a guide path with queued waypoints.
     /// </summary>
     public bool HasNavigationGuidance => !HasLineOfSightPath
@@ -248,10 +238,23 @@ public partial class NavSteering : IRecordable
     /// </summary>
     protected int _stuckFrameCount;
 
+    private Fixed64 _waypointTolerance = DefaultWaypointTolerance;
+
     /// <summary>
-    /// Multiplier used to determine how close the agent must be to its target before stopping.
+    /// Gets or sets the non-negative world-space tolerance used for ordinary guide steps.
     /// </summary>
-    public Fixed64 StopMultiplier = DefaultDirectStop;
+    public Fixed64 WaypointTolerance
+    {
+        get => _waypointTolerance;
+        set
+        {
+            SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+                value < Fixed64.Zero,
+                null,
+                nameof(value));
+            _waypointTolerance = value;
+        }
+    }
 
     /// <summary>
     /// How far to look for group neighbors (separation/alignment/cohesion).
@@ -273,8 +276,6 @@ public partial class NavSteering : IRecordable
     /// Friction-based deceleration rate used when slowing down on ground surfaces.
     /// </summary>
     public Fixed64 BrakingPower = DefaultBrakingPower;
-
-    private Fixed64 _agentRadius;
 
     private readonly MovementGroupSession _movementGroupSession = new();
 
@@ -307,17 +308,17 @@ public partial class NavSteering : IRecordable
     /// <summary>
     /// Creates a new <see cref="NavSteering"/> instance bound to a world context.
     /// </summary>
-    public static NavSteering CreateNew(TrailblazerWorldContext context, Fixed64 radius) => new(context, radius);
+    public static NavSteering CreateNew(TrailblazerWorldContext context) => new(context);
 
     private NavSteering() { }
 
     /// <summary>
     /// Initializes a new context-bound <see cref="NavSteering"/> instance.
     /// </summary>
-    public NavSteering(TrailblazerWorldContext context, Fixed64 radius)
+    public NavSteering(TrailblazerWorldContext context)
     {
         BindContext(context);
-        OnInitialize(radius);
+        OnInitialize();
     }
 
     /// <summary>

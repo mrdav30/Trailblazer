@@ -2469,6 +2469,14 @@ Exit criteria:
 - Navigator and steering use only the new query/guide surface, and their
   superseded runtime paths are deleted.
 
+Phase 8 completion tracker:
+
+| Phase 8 slice | Status | Verification evidence |
+| --- | --- | --- |
+| Topology-neutral kinematic and guide boundary | Complete - closure commit `feat(navigation): align kinematic commit boundary` | One world-unit waypoint tolerance, profile-owned inclusive arrival, topology-neutral movement-group padding, exact A*/Flow final arrival across native/explicit/volume routes, and no controller-wide voxel-size dependency |
+| Committed metadata and serialization | Complete - same atomic closure commit | Post-commit cell/area/medium metadata, generation-safe retry, JSON/MemoryPack schema-2 transactional populate, old-occupancy replacement, preregistered-map/overlay replay, and runtime-only lease/action/cell state |
+| Exit gates and review | Complete - same atomic closure commit | Isolated package mode; Release `1444/1444`, ReleaseLean `1413/1413`; both library TFMs and benchmarks built with 0 warnings/errors; API/package/architecture/serialization gates passed; final correctness and ponytail reviews clean |
+
 ### Phase 9 - Hard Cutover, Documentation, And Release Gates
 
 **Goal:** finish the breaking refactor rather than shipping two systems.

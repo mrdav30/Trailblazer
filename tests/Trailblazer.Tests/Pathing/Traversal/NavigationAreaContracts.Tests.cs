@@ -16,6 +16,7 @@ public sealed class NavigationAreaContractsTests
             defaults.OperationLimits,
             defaults.MaintenanceBudget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

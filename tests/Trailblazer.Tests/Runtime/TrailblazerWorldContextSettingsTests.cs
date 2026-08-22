@@ -1,4 +1,5 @@
 using System;
+using FixedMathSharp;
 using FluentAssertions;
 using Trailblazer.Pathing;
 using Xunit;
@@ -45,6 +46,7 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxPrismChecks: 32,
             maxTraceIntervals: 32,
             maxLocalRecoveryAttempts: 1));
+        settings.MovementGroupPadding.Should().Be(Fixed64.Half);
 
         settings.MaxIngressEntries.Should().Be(16_384);
         settings.MaxIngressBytes.Should().Be(4_194_304);
@@ -106,6 +108,7 @@ public sealed class TrailblazerWorldContextSettingsTests
             operationLimits,
             maintenanceBudget,
             guideSampleBudget,
+            movementGroupPadding: (Fixed64)24,
             maxIngressEntries: 10,
             maxIngressBytes: 256,
             maxActiveSnapshots: 12,
@@ -120,11 +123,12 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxAreaRulesPerPolicy: 21,
             maxAreaRules: 22,
             maxConcurrentSnapshotLeases: 23,
-            queryLimits);
+            queryLimits: queryLimits);
 
         settings.OperationLimits.Should().Be(operationLimits);
         settings.MaintenanceBudget.Should().Be(maintenanceBudget);
         settings.GuideSampleBudget.Should().Be(guideSampleBudget);
+        settings.MovementGroupPadding.Should().Be((Fixed64)24);
         settings.MaxIngressEntries.Should().Be(10);
         settings.MaxIngressBytes.Should().Be(256);
         settings.MaxActiveSnapshots.Should().Be(12);
@@ -171,6 +175,8 @@ public sealed class TrailblazerWorldContextSettingsTests
     {
         Action defaultOperations = () => _ = CreateSettings(operationLimits: new NavigationOperationLimits());
         Action defaultMaintenance = () => _ = CreateSettings(maintenanceBudget: new MaintenanceWorkBudget());
+        Action negativeMovementGroupPadding = () => _ = CreateSettings(
+            movementGroupPadding: -Fixed64.One);
         Action ingressEntries = () => _ = CreateSettings(maxIngressEntries: 0);
         Action ingressBytes = () => _ = CreateSettings(maxIngressBytes: 0);
         Action undersizedIngressBytes = () => _ = CreateSettings(
@@ -203,6 +209,7 @@ public sealed class TrailblazerWorldContextSettingsTests
 
         defaultOperations.Should().Throw<ArgumentException>();
         defaultMaintenance.Should().Throw<ArgumentException>();
+        negativeMovementGroupPadding.Should().Throw<ArgumentOutOfRangeException>();
         ingressEntries.Should().Throw<ArgumentOutOfRangeException>();
         ingressBytes.Should().Throw<ArgumentOutOfRangeException>();
         undersizedIngressBytes.Should().Throw<ArgumentOutOfRangeException>();
@@ -300,6 +307,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         NavigationOperationLimits? operationLimits = null,
         MaintenanceWorkBudget? maintenanceBudget = null,
         GuideSampleWorkBudget? guideSampleBudget = null,
+        Fixed64 movementGroupPadding = default,
         int maxIngressEntries = 1,
         long maxIngressBytes = 256,
         int maxActiveSnapshots = 3,
@@ -318,6 +326,7 @@ public sealed class TrailblazerWorldContextSettingsTests
             operationLimits ?? CreateOperationLimits(),
             maintenanceBudget ?? new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 3),
             guideSampleBudget ?? new GuideSampleWorkBudget(1, 1, 1, 1, 1, 1, 1),
+            movementGroupPadding,
             maxIngressEntries,
             maxIngressBytes,
             maxActiveSnapshots,

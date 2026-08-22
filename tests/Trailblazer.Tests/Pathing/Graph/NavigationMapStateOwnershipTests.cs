@@ -533,6 +533,7 @@ public sealed class NavigationMapStateOwnershipTests
             defaults.OperationLimits,
             maintenanceBudget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

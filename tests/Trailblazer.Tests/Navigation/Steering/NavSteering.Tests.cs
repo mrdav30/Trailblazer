@@ -41,7 +41,7 @@ public class NavSteeringTests : IDisposable
     public void GetHeading_ShouldArrive_WhenMovementIsRequestedWithoutAValidCurrentRequest()
     {
         var agent = new MockSteerAgent(Vector3d.Zero);
-        var steer = new TestableNavSteering(agent.Radius);
+        var steer = new TestableNavSteering();
         steer.ForceMissingRequestState(new Vector3d(2, 0, 0));
 
         Vector3d heading = steer.GetHeading(agent, out _);
@@ -55,7 +55,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void FindTargetDirection_ShouldKeepZeroHeadingUnchanged()
     {
-        var steer = new TestableNavSteering(Fixed64.One);
+        var steer = new TestableNavSteering();
         Vector3d position = new(3, 0, 4);
         steer.ForceDirectDestination(position);
 
@@ -65,7 +65,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void FindTargetDirection_ShouldNormalizeNonZeroHeadingAndPreserveDistance()
     {
-        var steer = new TestableNavSteering(Fixed64.One);
+        var steer = new TestableNavSteering();
         steer.ForceDirectDestination(new Vector3d(3, 0, 4));
 
         Vector3d heading = steer.InvokeFindTargetDirection(Vector3d.Zero);
@@ -85,7 +85,7 @@ public class NavSteeringTests : IDisposable
         TestWorld.World.TryGetGrid(new Vector3d(1, 0, 0), out VoxelGrid? grid);
         grid!.TryAddVoxelOccupant(neighbor);
 
-        var steer = new NavSteering(TestWorld.Context, agent.Radius);
+        var steer = new NavSteering(TestWorld.Context);
 
         var force = steer.ComputeCombinedSteering(
             agent.Position,
@@ -108,7 +108,7 @@ public class NavSteeringTests : IDisposable
             Velocity = Vector3d.Zero,      // irrelevant here
             Size = Fixed64.One
         };
-        var steer = new NavSteering(TestWorld.Context, agent.Radius);
+        var steer = new NavSteering(TestWorld.Context);
 
         // Act
         var result = steer.ComputeCombinedSteering(
@@ -132,7 +132,7 @@ public class NavSteeringTests : IDisposable
             Velocity = new Vector3d(1, 0, 0),
             Size = Fixed64.One
         };
-        var steer = new NavSteering(TestWorld.Context, agent.Radius);
+        var steer = new NavSteering(TestWorld.Context);
 
         // even if there’s a neighbor in range…
         var neighbor = new MockSteerAgent(new Vector3d(1, 0, 0))
@@ -180,7 +180,7 @@ public class NavSteeringTests : IDisposable
             Size = Fixed64.One
         };
 
-        var steer = new NavSteering(TestWorld.Context, agent.Radius);
+        var steer = new NavSteering(TestWorld.Context);
         var neighbors = new MockSteerAgent?[32];
 
         for (int i = 0; i < neighbors.Length; i++)
@@ -330,7 +330,7 @@ public class NavSteeringTests : IDisposable
             Size = Fixed64.One
         };
 
-        var steer = new NavSteering(TestWorld.Context, agent.Radius);
+        var steer = new NavSteering(TestWorld.Context);
         var occupants = new NonSteeringOccupant?[32];
 
         for (int i = 0; i < occupants.Length; i++)
@@ -386,7 +386,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_PauseAutoStop_BasedOnCooldown()
     {
-        var steer = new NavSteering(TestWorld.Context, Fixed64.Half);
+        var steer = new NavSteering(TestWorld.Context);
         steer.PauseAutoStop();
         steer.CanAutoStop.Should().BeFalse();
 
@@ -398,9 +398,73 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void WaypointTolerance_ShouldBeAnExplicitNonNegativeWorldDistance()
+    {
+        var steer = new NavSteering(TestWorld.Context);
+
+        steer.WaypointTolerance.Should().Be(Fixed64.Half);
+
+        Action setNegative = () => steer.WaypointTolerance = -Fixed64.One;
+
+        setNegative.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void WaypointTolerance_ShouldControlOrdinaryStepAdvanceInWorldUnits()
+    {
+        var steer = new TestableNavSteering()
+        {
+            WaypointTolerance = Fixed64.Quarter
+        };
+        steer.ForceHeadingState(Vector3d.Right, distanceToTarget: Fixed64.Half);
+
+        steer.ShouldAdvanceToNextWaypoint().Should().BeFalse();
+
+        steer.WaypointTolerance = Fixed64.Half;
+        steer.ShouldAdvanceToNextWaypoint().Should().BeTrue();
+    }
+
+    [Fact]
+    public void ArrivalRadius_ShouldAdvanceIntermediateStepsOnlyAfterAHeadingReversal()
+    {
+        var steer = new TestableNavSteering
+        {
+            WaypointTolerance = Fixed64.Quarter
+        };
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        steer.ApplyPathQuery(new PathQuery(
+            new NavigationEndpoint(Vector3d.Zero),
+            new NavigationEndpoint(Vector3d.Right),
+            profile,
+            new NavigationAreaPolicyKey("steering-test", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+            allowTransitions: false));
+
+        steer.ForceHeadingState(
+            Vector3d.Right,
+            profile.ArrivalRadius,
+            lastTargetDirection: Vector3d.Zero);
+        steer.ShouldAdvanceToNextWaypoint().Should().BeFalse();
+
+        steer.ForceHeadingState(
+            Vector3d.Right,
+            profile.ArrivalRadius,
+            lastTargetDirection: Vector3d.Forward);
+        steer.ShouldAdvanceToNextWaypoint().Should().BeFalse();
+
+        steer.ForceHeadingState(
+            Vector3d.Right,
+            profile.ArrivalRadius,
+            lastTargetDirection: Vector3d.Left);
+        steer.ShouldAdvanceToNextWaypoint().Should().BeTrue();
+    }
+
+    [Fact]
     public void PrewarmMovementGroup_ShouldThrowForNullOwner()
     {
-        var steer = new NavSteering(TestWorld.Context, Fixed64.One);
+        var steer = new NavSteering(TestWorld.Context);
 
         steer.Invoking(s => s.PrewarmMovementGroup(null!))
             .Should().Throw<ArgumentNullException>()
@@ -411,7 +475,7 @@ public class NavSteeringTests : IDisposable
     public void PrewarmMovementGroup_ShouldNoOp_WhenSessionIsNotActive()
     {
         var owner = new MockSteerAgent(Vector3d.Zero);
-        var steer = new TestableNavSteering(owner.Radius);
+        var steer = new TestableNavSteering();
 
         steer.PrewarmMovementGroup(owner);
 
@@ -426,7 +490,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void GetHeading_ShouldRaiseStartTraversalEvent_WhenIdle()
     {
-        var steer = new NavSteering(TestWorld.Context, Fixed64.One);
+        var steer = new NavSteering(TestWorld.Context);
         var agent = new MockSteerAgent(Vector3d.Zero);
 
         Vector3d startedDirection = Vector3d.Zero;
@@ -439,7 +503,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void SetDeceleration_ShouldUseBrakingPower_WhenAccelerationIsZero()
     {
-        var steer = new TestableNavSteering(Fixed64.Half);
+        var steer = new TestableNavSteering();
         steer.ForceHeadingState(new Vector3d(1, 0, 0), distanceToTarget: (Fixed64)0.1f);
 
         steer.InvokeSetDeceleration(Vector3d.Zero, Fixed64.One);
@@ -450,7 +514,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void Arrive_ShouldRaiseEvent_EvenWhenAlreadyIdle()
     {
-        var steer = new NavSteering(TestWorld.Context, Fixed64.One);
+        var steer = new NavSteering(TestWorld.Context);
         bool arrived = false;
         steer.Events.OnArrive += () => arrived = true;
 
@@ -463,7 +527,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void ComputeCombinedSteering_ShouldUseRightSideDodge_WhenNeighborIsBehind()
     {
-        var steer = new NavSteering(TestWorld.Context, Fixed64.Half);
+        var steer = new NavSteering(TestWorld.Context);
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0))
         {
             Velocity = new Vector3d(1, 0, 0),
@@ -491,7 +555,7 @@ public class NavSteeringTests : IDisposable
 
     private sealed class TestableNavSteering : NavSteering
     {
-        public TestableNavSteering(Fixed64 radius = default) : base(TestWorld.Context, radius) { }
+        public TestableNavSteering() : base(TestWorld.Context) { }
 
         public void ForceMissingRequestState(Vector3d destination)
         {
@@ -503,10 +567,13 @@ public class NavSteeringTests : IDisposable
 
         public int GetGroupIndex() => GroupIndex;
 
-        public void ForceHeadingState(Vector3d targetDirection, Fixed64 distanceToTarget)
+        public void ForceHeadingState(
+            Vector3d targetDirection,
+            Fixed64 distanceToTarget,
+            Vector3d? lastTargetDirection = null)
         {
             _targetDirection = targetDirection;
-            _lastTargetDirection = targetDirection;
+            _lastTargetDirection = lastTargetDirection ?? targetDirection;
             _shouldMove = true;
             _isAtDestination = false;
             _hasLineOfSightPath = false;
@@ -529,8 +596,8 @@ public class NavSteeringTests : IDisposable
     {
         private readonly Vector3d _movementDirection;
 
-        public FallbackNavSteering(Vector3d movementDirection, Fixed64 radius)
-            : base(TestWorld.Context, radius)
+        public FallbackNavSteering(Vector3d movementDirection)
+            : base(TestWorld.Context)
         {
             _movementDirection = movementDirection;
         }
@@ -551,8 +618,8 @@ public class NavSteeringTests : IDisposable
         private readonly bool[] _results;
         private int _index;
 
-        public SequencedPathValidationNavSteering(Fixed64 radius, params bool[] results)
-            : base(TestWorld.Context, radius)
+        public SequencedPathValidationNavSteering(params bool[] results)
+            : base(TestWorld.Context)
         {
             _results = results;
         }

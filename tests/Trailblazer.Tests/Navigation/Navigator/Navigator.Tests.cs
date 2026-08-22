@@ -7,6 +7,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
 using Trailblazer.Navigation;
@@ -308,6 +309,7 @@ public class NavigatorTests : IDisposable
             allowTransitions: true);
         navigator.ApplyGuidedTrekRequest(query);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        steering.WaypointTolerance = Fixed64.One;
 
         Vector3d firstHeading = steering.GetHeading(
             navigator,
@@ -420,6 +422,10 @@ public class NavigatorTests : IDisposable
         var target = CreateNavigator(
             start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
             profile: profile);
+        target.CommitFrameMotion();
+        NavigationCommittedCellState shellCommittedCell = target.LastCommittedCell!.Value;
+        int committedCellChanges = 0;
+        target.CommittedCellChanged += _ => committedCellChanges++;
         var query = new PathQuery(
             new NavigationEndpoint(start, "navigator-transition"),
             new NavigationEndpoint(end, "navigator-transition"),
@@ -444,7 +450,7 @@ public class NavigatorTests : IDisposable
                 useMemoryPack,
                 -Fixed64.One,
                 "Steering",
-                "BrakingPower")
+                "WaypointTolerance")
             : SerializationUtility.SetPayloadValue(
                 payload,
                 useMemoryPack,
@@ -454,7 +460,7 @@ public class NavigatorTests : IDisposable
                 "Move",
                 "MaxFastSpeed");
         Vector3d shellPosition = target.Position;
-        Fixed64 shellStopMultiplier = steering.StopMultiplier;
+        Fixed64 shellWaypointTolerance = steering.WaypointTolerance;
         Fixed64 shellMaxFastSpeed = motor.Handler.Move.MaxFastSpeed;
 
         Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
@@ -465,9 +471,11 @@ public class NavigatorTests : IDisposable
         target.Motor.Should().BeSameAs(motor);
         steering.CurrentQuery.Should().Be(query);
         steering.HasNavigationGuidance.Should().BeTrue();
-        steering.StopMultiplier.Should().Be(shellStopMultiplier);
+        steering.WaypointTolerance.Should().Be(shellWaypointTolerance);
         motor.Handler.Move.MaxFastSpeed.Should().Be(shellMaxFastSpeed);
         target.PendingTransition.Should().Be(pending);
+        target.LastCommittedCell.Should().Be(shellCommittedCell);
+        committedCellChanges.Should().Be(0);
     }
 
     [Fact]
@@ -677,11 +685,11 @@ public class NavigatorTests : IDisposable
         (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
-            Fixed64.Zero,
-            Fixed64.Zero,
-            TraversalMedia.Solid,
-            TraversalCapability.None);
+            maxStepUp: Fixed64.Zero,
+            maxDropDown: Fixed64.Zero,
+            arrivalRadius: Fixed64.Quarter,
+            allowedMedia: TraversalMedia.Solid,
+            capabilities: TraversalCapability.None);
         var navigator = CreateNavigator(start, profile: profile);
         PathQuery query = CreateSurfaceQuery(
             start,
@@ -701,7 +709,13 @@ public class NavigatorTests : IDisposable
         steering.HasNavigationGuidance.Should().BeTrue();
         cache.ActiveLeaseCount.Should().Be(1);
 
-        navigator.SetTestPosition(end);
+        navigator.SetTestPosition(
+            end - Vector3d.Right * (Fixed64.Quarter + Fixed64.FromRaw(1)));
+        steering.GetHeading(navigator, out _).Should().NotBe(Vector3d.Zero);
+        steering.IsAtDestination.Should().BeFalse();
+        steering.HasNavigationGuidance.Should().BeTrue();
+
+        navigator.SetTestPosition(end - Vector3d.Right * Fixed64.Quarter);
         steering.GetHeading(navigator, out _).Should().Be(Vector3d.Zero);
 
         steering.ShouldMove.Should().BeFalse();
@@ -1305,6 +1319,63 @@ public class NavigatorTests : IDisposable
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
 #endif
+    public void RoundTrip_ShouldRestoreGuidanceFromPreregisteredMapAndReplayedOverlay(
+        bool useMemoryPack)
+    {
+        TestWorld.Setup(CreateSettings(
+            TrailblazerWorldContextSettings.Default.GuideSampleBudget,
+            navigationAreaCount: 2));
+        TrailblazerWorldContext sourceContext = TestWorld.Context;
+        (Vector3d start, Vector3d end, NavigationAreaId overlayArea) =
+            PublishOverlayBackedGraph(sourceContext);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        Vector3d rootOffset = Vector3d.Up * profile.Shape.RootToFootOffsetY;
+        var source = CreateNavigator(start + rootOffset, profile: profile, context: sourceContext);
+        PathQuery query = CreateSurfaceQuery(
+            start,
+            end,
+            profile,
+            mapId: "navigator-overlay-restore");
+        source.ApplyGuidedTrekRequest(query);
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.GetHeading(source, out _).Should().NotBe(Vector3d.Zero);
+        sourceSteering.HasNavigationGuidance.Should().BeTrue();
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        source.Reset();
+
+        TestWorld.Setup(CreateSettings(
+            TrailblazerWorldContextSettings.Default.GuideSampleBudget,
+            navigationAreaCount: 2));
+        TrailblazerWorldContext restoredContext = TestWorld.Context;
+        PublishOverlayBackedGraph(restoredContext);
+        var target = CreateNavigator(start + rootOffset, profile: profile, context: restoredContext);
+        int committedCellChanges = 0;
+        target.CommittedCellChanged += _ => committedCellChanges++;
+        NavigationAStarPayloadCache cache =
+            restoredContext.Pathing.NavigationAStarAdmissionGate.PayloadCache;
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
+        targetSteering.HasNavigationGuidance.Should().BeFalse();
+        cache.ActiveLeaseCount.Should().Be(0);
+        committedCellChanges.Should().Be(0);
+        target.LastCommittedCell.Should().NotBeNull();
+        target.LastCommittedCell!.Value.Area.Should().Be(overlayArea);
+
+        restoredContext.Simulate();
+        target.Simulate();
+
+        targetSteering.HasNavigationGuidance.Should().BeTrue();
+        targetSteering.TargetDirection.Should().NotBe(Vector3d.Zero);
+        cache.ActiveLeaseCount.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreExactFlowQueryAndRebaseFromLoadedFoot(bool useMemoryPack)
     {
         (Vector3d start, Vector3d middle, Vector3d end) = PublishGraphLine(bakeVersion: 1);
@@ -1583,6 +1654,8 @@ public class NavigatorTests : IDisposable
     public void Simulate_ShouldAllowBackpedalWithoutChangingFacing_WhenFacingDirectionMatchesForward()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
+        int committedCellChanges = 0;
+        navigator.CommittedCellChanged += _ => committedCellChanges++;
 
         navigator.ApplyInputTrekRequest(
             Vector3d.Backward,
@@ -1597,6 +1670,8 @@ public class NavigatorTests : IDisposable
         navigator.Forward.Should().Be(Vector3d.Forward);
         navigator.Position.Z.Should().BeLessThan(Fixed64.Zero);
         navigator.Velocity.Z.Should().BeLessThan(Fixed64.Zero);
+        navigator.LastCommittedCell.Should().BeNull();
+        committedCellChanges.Should().Be(0);
     }
 
     [Fact]
@@ -1880,6 +1955,440 @@ public class NavigatorTests : IDisposable
         navigator.Acceleration.Should().Be(Vector3d.Zero);
     }
 
+    [Fact]
+    public void CommitFrameMotion_ShouldPublishOnlyCommittedCellChanges()
+    {
+        (Vector3d start, Vector3d middle, _) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        int notifications = 0;
+        NavigationCommittedCellState? observed = null;
+        navigator.CommittedCellChanged += state =>
+        {
+            notifications++;
+            observed = state;
+        };
+
+        navigator.ApplyGuidedTrekRequest(CreateSurfaceQuery(
+            start,
+            middle,
+            profile,
+            mapId: "navigator-graph"));
+        navigator.Simulate();
+
+        navigator.LastCommittedCell.Should().BeNull();
+        notifications.Should().Be(0);
+
+        navigator.CommitFrameMotion();
+
+        notifications.Should().Be(1);
+        observed.Should().NotBeNull();
+        observed!.Value.Address.Should().Be(
+            new NavigationCellAddress("navigator-graph", new VoxelIndex(4, 4, 4)));
+        observed.Value.Area.Should().Be(default(NavigationAreaId));
+        observed.Value.Medium.Should().Be(TraversalMedium.Solid);
+        observed.Value.GraphVersion.Should().BeGreaterThan(0);
+        observed.Value.AreaPolicy.Should().Be(new NavigationAreaPolicyKey("navigator-test", 1));
+        observed.Value.SimulationFrame.Should().Be(TestWorld.Context.FrameCount);
+
+        navigator.CommitFrameMotion();
+        notifications.Should().Be(1);
+
+        navigator.AddPositionDelta(middle - start);
+        navigator.CommitFrameMotion();
+
+        notifications.Should().Be(2);
+        navigator.LastCommittedCell!.Value.Address.Should().Be(
+            new NavigationCellAddress("navigator-graph", new VoxelIndex(5, 4, 4)));
+
+        navigator.SetTestPosition(new Vector3d(100, 100, 100));
+        navigator.CommitFrameMotion();
+
+        notifications.Should().Be(3);
+        observed.Should().BeNull();
+        navigator.LastCommittedCell.Should().BeNull();
+    }
+
+    [Fact]
+    public void CommitFrameMotion_ShouldPublishAreaChangesAndSilentlyRefreshGraphVersion()
+    {
+        TestWorld.Setup(CreateSettings(
+            TrailblazerWorldContextSettings.Default.GuideSampleBudget,
+            navigationAreaCount: 2));
+        (Vector3d start, Vector3d end, NavigationAreaId initialArea) =
+            PublishOverlayBackedGraph(TestWorld.Context);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        navigator.ApplyGuidedTrekRequest(CreateSurfaceQuery(
+            start,
+            end,
+            profile,
+            mapId: "navigator-overlay-restore"));
+        int notifications = 0;
+        navigator.CommittedCellChanged += _ => notifications++;
+
+        notifications.Should().Be(0);
+        navigator.CommitFrameMotion();
+        NavigationCommittedCellState initial = navigator.LastCommittedCell!.Value;
+        initial.Area.Should().Be(initialArea);
+        notifications.Should().Be(1);
+
+        var changedArea = default(NavigationAreaId);
+        var changedCell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            changedArea,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        var overlay = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(
+                new NavigationOverlayTransaction(
+                    new[]
+                    {
+                        new NavigationMapOverlayDelta(
+                            "navigator-overlay-restore",
+                            new[]
+                            {
+                                NavigationCellOverlayOperation.Set(
+                                    new VoxelIndex(4, 4, 4),
+                                    changedCell)
+                            })
+                    })),
+            operationSequence: 4,
+            effectiveFrame: TestWorld.Context.FrameCount + 1);
+        TestWorld.Context.Pathing.Admit(overlay).Should().BeTrue();
+        GuidedPathTestScene.AdvanceUntilApplied(TestWorld.Context, overlay.Receipt);
+
+        notifications.Should().Be(1);
+        navigator.LastCommittedCell.Should().Be(initial);
+
+        navigator.CommitFrameMotion();
+
+        NavigationCommittedCellState changed = navigator.LastCommittedCell!.Value;
+        changed.Address.Should().Be(initial.Address);
+        changed.Area.Should().Be(changedArea);
+        changed.GraphVersion.Should().BeGreaterThan(initial.GraphVersion);
+        notifications.Should().Be(2);
+
+        var policyRefresh = new NavigationAreaPolicyCommitOperation(
+            new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey("navigator-refresh", 1),
+                new[]
+                {
+                    new NavigationAreaRule(true, Fixed64.Zero),
+                    new NavigationAreaRule(true, Fixed64.Zero)
+                }),
+            publicationSequence: 5,
+            effectiveFrame: TestWorld.Context.FrameCount + 1);
+        TestWorld.Context.Pathing.Admit(policyRefresh).Should().BeTrue();
+        GuidedPathTestScene.AdvanceUntilApplied(TestWorld.Context, policyRefresh.Receipt);
+
+        notifications.Should().Be(2);
+        navigator.LastCommittedCell.Should().Be(changed);
+
+        navigator.CommitFrameMotion();
+
+        navigator.LastCommittedCell!.Value.GraphVersion.Should().BeGreaterThan(changed.GraphVersion);
+        navigator.LastCommittedCell.Value.Area.Should().Be(changedArea);
+        notifications.Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldRebuildCommittedCellSilentlyFromRestoredRoot(
+        bool useMemoryPack)
+    {
+        (Vector3d start, Vector3d middle, _) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var source = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        source.CommitFrameMotion();
+        source.LastCommittedCell!.Value.Address.Should().Be(
+            new NavigationCellAddress("navigator-graph", new VoxelIndex(4, 4, 4)));
+        source.SetTestPosition(
+            middle + Vector3d.Up * profile.Shape.RootToFootOffsetY);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        int notifications = 0;
+        target.CommittedCellChanged += _ => notifications++;
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        notifications.Should().Be(0);
+        target.LastCommittedCell.Should().NotBeNull();
+        target.LastCommittedCell!.Value.Address.Should().Be(
+            new NavigationCellAddress("navigator-graph", new VoxelIndex(5, 4, 4)));
+        target.LastCommittedCell.Value.SimulationFrame.Should().Be(TestWorld.Context.FrameCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldClearPreLoadCommittedCellWhenSilentRebuildIsUnavailable(
+        bool useMemoryPack)
+    {
+        (Vector3d start, Vector3d middle, _) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        Vector3d rootOffset = Vector3d.Up * profile.Shape.RootToFootOffsetY;
+        var source = CreateNavigator(middle + rootOffset, profile: profile);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        source.Reset();
+        var target = CreateNavigator(start + rootOffset, profile: profile);
+        target.CommitFrameMotion();
+        target.LastCommittedCell.Should().NotBeNull();
+        int notifications = 0;
+        target.CommittedCellChanged += _ => notifications++;
+        TestWorld.World.TryGetGrid(target.Position, out VoxelGrid? grid).Should().BeTrue();
+        GridConfiguration configuration = grid!.Configuration;
+        TestWorld.World.TryRemoveGrid(grid.GridIndex).Should().BeTrue();
+        TestWorld.World.TryAddGrid(configuration, out _).Should().BeTrue();
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.LastCommittedCell.Should().BeNull();
+        notifications.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(GridTopologyKind.RectangularPrism)]
+    [InlineData(GridTopologyKind.HexPrism)]
+    public void ControllerVoxelResolution_ShouldIncludeTheOuterHalfOfPhysicalCells(
+        GridTopologyKind topology)
+    {
+        using var world = new GridWorld();
+        GridTopologyMetrics metrics = topology == GridTopologyKind.RectangularPrism
+            ? GridTopologyMetrics.Rectangular(Fixed64.One)
+            : GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One, HexOrientation.PointyTop);
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            Vector3d.One,
+            topologyKind: topology,
+            topologyMetrics: metrics);
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        Vector3d position = new(-Fixed64.Quarter, Fixed64.Zero, Fixed64.Zero);
+
+        NavigatorOccupancyTracker.TryResolveVoxel(
+                world,
+                position,
+                out _,
+                out Voxel? voxel)
+            .Should().BeTrue();
+
+        voxel!.Index.Should().Be(default(VoxelIndex));
+    }
+
+    [Fact]
+    public void ControllerVoxelResolution_ShouldRejectSparseHolesWithinTheSelectedGrid()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(3, 1, 1),
+            storageKind: GridStorageKind.Sparse);
+        world.TryAddGrid(configuration, new[] { default(VoxelIndex) }, out _)
+            .Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(new VoxelIndex(1, 0, 0), out GridCellPrism hole)
+            .Should().BeTrue();
+
+        NavigatorOccupancyTracker.TryResolveVoxel(world, hole.Center, out _, out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void CommitFrameMotion_ShouldPreserveCommittedCellUntilGridGenerationPublishes()
+    {
+        (Vector3d start, _, _) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        var navigator = CreateNavigator(
+            start + Vector3d.Up * profile.Shape.RootToFootOffsetY,
+            profile: profile);
+        int notifications = 0;
+        navigator.CommittedCellChanged += _ => notifications++;
+        navigator.CommitFrameMotion();
+        NavigationCommittedCellState committed = navigator.LastCommittedCell!.Value;
+        TestWorld.World.TryGetGrid(navigator.Position, out VoxelGrid? initialGrid).Should().BeTrue();
+        GridConfiguration configuration = initialGrid!.Configuration;
+
+        TestWorld.World.TryRemoveGrid(initialGrid.GridIndex).Should().BeTrue();
+        TestWorld.World.TryAddGrid(configuration, out _).Should().BeTrue();
+
+        navigator.CommitFrameMotion();
+
+        navigator.LastCommittedCell.Should().Be(committed);
+        notifications.Should().Be(1);
+    }
+
+    [Fact]
+    public void ArrivalRadius_ShouldOwnFinalCompletionWhileWaypointToleranceDoesNot()
+    {
+        (_, Vector3d middle, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile defaults = PathTestFactory.DefaultNavigationProfile;
+        var exactArrivalProfile = new NavigationAgentProfile(
+            defaults.Shape,
+            defaults.MaxStepUp,
+            defaults.MaxDropDown,
+            arrivalRadius: Fixed64.One,
+            defaults.AllowedMedia,
+            defaults.Capabilities);
+        var exactArrival = CreateNavigator(
+            middle + Vector3d.Up * defaults.Shape.RootToFootOffsetY,
+            profile: exactArrivalProfile);
+        exactArrival.ApplyGuidedTrekRequest(CreateSurfaceQuery(
+            middle,
+            end,
+            exactArrivalProfile,
+            mapId: "navigator-graph"));
+
+        NavSteering exactSteering = TestRequire.NotNull(exactArrival.Steering);
+        exactSteering.GetHeading(exactArrival, out _).Should().Be(Vector3d.Right);
+        exactSteering.HasNavigationGuidance.Should().BeTrue();
+        exactSteering.GetHeading(exactArrival, out _).Should().Be(Vector3d.Zero);
+
+        exactSteering.IsAtDestination.Should().BeTrue();
+
+        var narrowArrivalProfile = new NavigationAgentProfile(
+            defaults.Shape,
+            defaults.MaxStepUp,
+            defaults.MaxDropDown,
+            arrivalRadius: Fixed64.Quarter,
+            defaults.AllowedMedia,
+            defaults.Capabilities);
+        var outsideArrival = CreateNavigator(
+            middle + Vector3d.Up * defaults.Shape.RootToFootOffsetY,
+            profile: narrowArrivalProfile);
+        NavSteering outsideSteering = TestRequire.NotNull(outsideArrival.Steering);
+        outsideSteering.WaypointTolerance = (Fixed64)2;
+        outsideArrival.ApplyGuidedTrekRequest(CreateSurfaceQuery(
+            middle,
+            end,
+            narrowArrivalProfile,
+            mapId: "navigator-graph"));
+
+        outsideSteering.GetHeading(outsideArrival, out _).Should().Be(Vector3d.Right);
+        outsideSteering.GetHeading(outsideArrival, out _).Should().Be(Vector3d.Right);
+
+        outsideSteering.IsAtDestination.Should().BeFalse();
+        outsideSteering.ShouldMove.Should().BeTrue();
+        outsideSteering.HasNavigationGuidance.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(GridTopologyKind.RectangularPrism, PathAlgorithm.AStar)]
+    [InlineData(GridTopologyKind.HexPrism, PathAlgorithm.FlowField)]
+    public void GuidedController_ShouldUseWorldAnchorsAcrossRectAndHexWithoutEarlyCommit(
+        GridTopologyKind topology,
+        PathAlgorithm algorithm)
+    {
+        using var world = new GridWorld();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+        GridTopologyMetrics metrics = topology == GridTopologyKind.RectangularPrism
+            ? GridTopologyMetrics.Rectangular(Fixed64.One)
+            : GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One, HexOrientation.PointyTop);
+        var configuration = new GridConfiguration(
+            new Vector3d(-4, 0, -4),
+            new Vector3d(8, 2, 8),
+            topologyKind: topology,
+            topologyMetrics: metrics,
+            storageKind: GridStorageKind.Sparse);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        VoxelIndex startIndex = topology == GridTopologyKind.RectangularPrism
+            ? new VoxelIndex(2, 0, 2)
+            : FindHexCellWithNeighbor(binding, HexDirection.QPositive);
+        VoxelIndex firstOffset = topology == GridTopologyKind.RectangularPrism
+            ? new VoxelIndex(1, 0, 0)
+            : HexDirectionUtility.GetOffset(HexDirection.QPositive);
+        VoxelIndex secondOffset = topology == GridTopologyKind.RectangularPrism
+            ? new VoxelIndex(0, 0, 1)
+            : HexDirectionUtility.GetOffset(HexDirection.RPositive);
+        var middleIndex = new VoxelIndex(
+            startIndex.x + firstOffset.x,
+            startIndex.y + firstOffset.y,
+            startIndex.z + firstOffset.z);
+        var endIndex = new VoxelIndex(
+            middleIndex.x + secondOffset.x,
+            middleIndex.y + secondOffset.y,
+            middleIndex.z + secondOffset.z);
+        binding.IsValidIndex(endIndex).Should().BeTrue();
+        world.TryAddGrid(configuration, new[] { startIndex, middleIndex, endIndex }, out _)
+            .Should().BeTrue();
+        NavigationCell cell = GuidedPathTestScene.Cell(TraversalMedia.Solid);
+        NavigationMap map = new NavigationMapBuilder("navigator-topology", binding)
+            .AddCell(startIndex, cell)
+            .AddCell(middleIndex, cell)
+            .AddCell(endIndex, cell)
+            .Build();
+        var policy = new NavigationAreaPolicy(
+            new NavigationAreaPolicyKey("navigator-test", 1),
+            new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+        GuidedPathTestScene.PublishMapAndPolicy(
+            context,
+            map,
+            bakeVersion: 1,
+            OverlayReplacementPolicy.Clear,
+            mapSequence: 1,
+            policy,
+            policySequence: 2);
+        Vector3d start = GuidedPathTestScene.Anchor(binding, startIndex);
+        Vector3d middle = GuidedPathTestScene.Anchor(binding, middleIndex);
+        Vector3d end = GuidedPathTestScene.Anchor(binding, endIndex);
+        NavigationAgentProfile defaults = PathTestFactory.DefaultNavigationProfile;
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            defaults.MaxStepUp,
+            defaults.MaxDropDown,
+            arrivalRadius: Fixed64.Zero,
+            TraversalMedia.Solid,
+            defaults.Capabilities);
+        var navigator = CreateNavigator(start, profile: profile, context: context);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        steering.WaypointTolerance = Fixed64.Half;
+        int notifications = 0;
+        navigator.CommittedCellChanged += _ => notifications++;
+        PathQuery query = CreateSurfaceQuery(
+            start,
+            end,
+            profile,
+            algorithm,
+            mapId: "navigator-topology");
+        navigator.ApplyGuidedTrekRequest(query);
+
+        steering.GetHeading(navigator, out _).Should().NotBe(Vector3d.Zero);
+        steering.HasNavigationGuidance.Should().BeTrue();
+        notifications.Should().Be(0);
+        navigator.LastCommittedCell.Should().BeNull();
+
+        navigator.SetTestPosition(middle);
+        steering.GetHeading(navigator, out _).Should().NotBe(Vector3d.Zero);
+        steering.HasNavigationGuidance.Should().BeTrue();
+        notifications.Should().Be(0);
+
+        navigator.SetTestPosition(end);
+        steering.GetHeading(navigator, out _).Should().Be(Vector3d.Zero);
+        navigator.CommitFrameMotion();
+
+        steering.IsAtDestination.Should().BeTrue();
+        navigator.LastCommittedCell.Should().NotBeNull();
+        notifications.Should().Be(1);
+        navigator.LastCommittedCell!.Value.Address.Should().Be(
+            new NavigationCellAddress("navigator-topology", endIndex));
+    }
+
     private static TestNavigator CreateNavigator(
         Vector3d position,
         FixedQuaternion? rotation = null,
@@ -1996,6 +2505,76 @@ public class NavigatorTests : IDisposable
             GetGraphFoot(binding, endIndex));
     }
 
+    private static (Vector3d Start, Vector3d End, NavigationAreaId OverlayArea)
+        PublishOverlayBackedGraph(TrailblazerWorldContext context)
+    {
+        var configuration = new GridConfiguration(
+            new Vector3d(-4, -4, -4),
+            new Vector3d(8, 8, 8));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        context.World.TryAddGrid(configuration, out _).Should().BeTrue();
+        var startIndex = new VoxelIndex(4, 4, 4);
+        var firstTurnIndex = new VoxelIndex(4, 4, 5);
+        var secondTurnIndex = new VoxelIndex(5, 4, 5);
+        var endIndex = new VoxelIndex(6, 4, 5);
+        var baseCell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        var overlayArea = new NavigationAreaId(1);
+        var overlayCell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            overlayArea,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationMap map = new NavigationMapBuilder("navigator-overlay-restore", binding)
+            .AddCell(firstTurnIndex, baseCell)
+            .AddCell(secondTurnIndex, baseCell)
+            .AddCell(endIndex, baseCell)
+            .Build();
+        var policy = new NavigationAreaPolicy(
+            new NavigationAreaPolicyKey("navigator-test", 1),
+            new[]
+            {
+                new NavigationAreaRule(true, Fixed64.Zero),
+                new NavigationAreaRule(true, Fixed64.Zero)
+            });
+        GuidedPathTestScene.PublishMapAndPolicy(
+            context,
+            map,
+            bakeVersion: 1,
+            OverlayReplacementPolicy.Clear,
+            mapSequence: 1,
+            policy,
+            policySequence: 2);
+        var overlay = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(
+                new NavigationOverlayTransaction(
+                    new[]
+                    {
+                        new NavigationMapOverlayDelta(
+                            "navigator-overlay-restore",
+                            new[]
+                            {
+                                NavigationCellOverlayOperation.Set(startIndex, overlayCell)
+                            })
+                    })),
+            operationSequence: 3,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(overlay).Should().BeTrue();
+        GuidedPathTestScene.AdvanceUntilApplied(context, overlay.Receipt);
+
+        return (
+            GetGraphFoot(binding, startIndex),
+            GetGraphFoot(binding, endIndex),
+            overlayArea);
+    }
+
     private static (Vector3d Start, Vector3d End, Vector3d SourceAction) PublishTransitionGraph(
         bool includeOrdinaryApproachEdge = false,
         Fixed64 sourceActionOffset = default)
@@ -2066,13 +2645,15 @@ public class NavigatorTests : IDisposable
     }
 
     private static TrailblazerWorldContextSettings CreateSettings(
-        GuideSampleWorkBudget guideSampleBudget)
+        GuideSampleWorkBudget guideSampleBudget,
+        int? navigationAreaCount = null)
     {
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             defaults.MaintenanceBudget,
             guideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,
@@ -2082,7 +2663,7 @@ public class NavigatorTests : IDisposable
             defaults.MaxPersistentGraphPages,
             defaults.MaxDynamicCellSlotsPerMap,
             defaults.MaxDynamicCellSlots,
-            defaults.NavigationAreaCount,
+            navigationAreaCount ?? defaults.NavigationAreaCount,
             defaults.MaxAreaPolicies,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
@@ -2096,6 +2677,28 @@ public class NavigatorTests : IDisposable
     {
         binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
         return new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+    }
+
+    private static VoxelIndex FindHexCellWithNeighbor(
+        NormalizedGridConfiguration binding,
+        HexDirection direction)
+    {
+        VoxelIndex offset = HexDirectionUtility.GetOffset(direction);
+        for (int q = 1; q < binding.Width - 1; q++)
+        {
+            for (int r = 1; r < binding.Length - 1; r++)
+            {
+                var source = new VoxelIndex(q, 0, r);
+                var target = new VoxelIndex(
+                    source.x + offset.x,
+                    source.y + offset.y,
+                    source.z + offset.z);
+                if (binding.IsValidIndex(source) && binding.IsValidIndex(target))
+                    return source;
+            }
+        }
+
+        throw new InvalidOperationException("The test configuration has no hex pair.");
     }
 
 }

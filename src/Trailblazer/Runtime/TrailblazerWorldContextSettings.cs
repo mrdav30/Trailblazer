@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using FixedMathSharp;
 using Trailblazer.Pathing;
 
 namespace Trailblazer;
@@ -28,6 +29,7 @@ public sealed class TrailblazerWorldContextSettings
         NavigationOperationLimits operationLimits,
         MaintenanceWorkBudget maintenanceBudget,
         GuideSampleWorkBudget guideSampleBudget,
+        Fixed64 movementGroupPadding,
         int maxIngressEntries,
         long maxIngressBytes,
         int maxActiveSnapshots,
@@ -108,6 +110,10 @@ public sealed class TrailblazerWorldContextSettings
             maintenanceBudget.MaxDependencyEntries < minimumAreaPolicyWork,
             nameof(maintenanceBudget),
             "Dependency work must fit one exact area-policy publication.");
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            movementGroupPadding < Fixed64.Zero,
+            null,
+            nameof(movementGroupPadding));
         ThrowIfNonPositive(maxConcurrentSnapshotLeases, nameof(maxConcurrentSnapshotLeases));
         SwiftThrowHelper.ThrowIfArgument(
             queryLimits.MaxConcurrentNavigationQueries <= 0,
@@ -121,6 +127,7 @@ public sealed class TrailblazerWorldContextSettings
         OperationLimits = operationLimits;
         MaintenanceBudget = maintenanceBudget;
         GuideSampleBudget = guideSampleBudget;
+        MovementGroupPadding = movementGroupPadding;
         MaxIngressEntries = maxIngressEntries;
         MaxIngressBytes = maxIngressBytes;
         MaxActiveSnapshots = maxActiveSnapshots;
@@ -146,6 +153,9 @@ public sealed class TrailblazerWorldContextSettings
 
     /// <summary>Gets the deterministic work budget consumed by one graph flow guide sample.</summary>
     public GuideSampleWorkBudget GuideSampleBudget { get; }
+
+    /// <summary>Gets the world-space padding added to the mean radius of one movement group.</summary>
+    public Fixed64 MovementGroupPadding { get; }
 
     /// <summary>Gets the maximum coalesced GridForge ingress entries.</summary>
     public int MaxIngressEntries { get; }
@@ -228,6 +238,7 @@ public sealed class TrailblazerWorldContextSettings
             maxPrismChecks: 32,
             maxTraceIntervals: 32,
             maxLocalRecoveryAttempts: 1),
+        movementGroupPadding: Fixed64.Half,
         maxIngressEntries: 16_384,
         maxIngressBytes: 4_194_304,
         maxActiveSnapshots: 3,

@@ -20,6 +20,5 @@ internal static class PathRequestContextResolver
         if (!context.World.IsActive)
             throw new InvalidOperationException("Path requests require an active TrailblazerWorldContext.");
 
-        TrailblazerGridCompatibility.ValidateWorld(context.World);
     }
 }

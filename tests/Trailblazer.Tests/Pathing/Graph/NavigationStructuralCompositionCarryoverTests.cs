@@ -1,5 +1,4 @@
 using FixedMathSharp;
-using System;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
@@ -713,6 +712,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             defaults.OperationLimits,
             budget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

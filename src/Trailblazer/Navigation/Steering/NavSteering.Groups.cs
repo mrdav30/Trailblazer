@@ -136,7 +136,10 @@ public partial class NavSteering
             MovementGroups.CacheOwner(_movementGroupSession, vessel.GlobalId);
     }
 
-    private void UpdateMovementGroupState(Vector3d position, bool resetFormationOffset = false)
+    private void UpdateMovementGroupState(
+        Vector3d position,
+        Fixed64 radius,
+        bool resetFormationOffset = false)
     {
         var target = new MovementGroupTarget(
             travelMode: IsInGroup ? MovementGroupTravelMode.Individual : MovementGroupTravelMode.None,
@@ -148,19 +151,13 @@ public partial class NavSteering
                 _movementGroupSession,
                 _requestedDestination,
                 position,
-                _agentRadius,
+                radius,
                 resetFormationOffset);
         }
 
         _destination = target.Destination;
         _movementGroupMode = target.TravelMode;
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private Fixed64 GetActiveStopMultiplier() =>
-        _movementGroupMode == MovementGroupTravelMode.GroupIndividual
-            ? DefaultGroupIndividualStop
-            : StopMultiplier;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsGroupNeighbor(Guid otherId, int currentFrame)

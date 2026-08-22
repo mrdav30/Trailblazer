@@ -2167,11 +2167,11 @@ public sealed class NavigationExplicitConnectionTests
             overflowLease.Graph,
             overflowSource,
             "shortcut");
-            new TraversalEvaluator(
-                overflowLease.Graph,
-                CreateExplicitEvaluationProfile(),
-                CreateExplicitEvaluationPolicy(),
-                TraversalMedium.Solid)
+        new TraversalEvaluator(
+            overflowLease.Graph,
+            CreateExplicitEvaluationProfile(),
+            CreateExplicitEvaluationPolicy(),
+            TraversalMedium.Solid)
             .EvaluateEdge(overflowSource, overflowEdge, out TraversalEdgeEvidence overflow)
             .Should().Be(TraversalEvaluationStatus.CostOverflow);
         overflow.Cost.Should().Be(Fixed64.Zero);
@@ -2798,6 +2798,7 @@ public sealed class NavigationExplicitConnectionTests
             defaults.OperationLimits,
             budget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

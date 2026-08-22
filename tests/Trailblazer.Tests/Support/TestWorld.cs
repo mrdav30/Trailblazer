@@ -31,10 +31,10 @@ internal static class TestWorld
 
     public static bool IsActive => _context != null && !_context.IsDisposed && _context.World.IsActive;
 
-    public static void Setup()
+    public static void Setup(TrailblazerWorldContextSettings? settings = null)
     {
         Reset();
-        _context = TrailblazerWorldContext.CreateOwned();
+        _context = TrailblazerWorldContext.CreateOwned(settings: settings);
         EnsurePathingState();
     }
 

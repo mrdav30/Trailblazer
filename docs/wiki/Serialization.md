@@ -57,6 +57,12 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
+The outer Navigator record is schema version 2. The nested path-session and
+standalone `PathQueryRecord` schemas remain version 1. Version 2 replaces the
+retired scale-based steering stop value with the explicit world-unit
+`WaypointTolerance`; an outer version-1 Navigator record rejects
+transactionally rather than being interpreted through a compatibility alias.
+
 Navigator does not serialize or restore:
 
 - an A* or Flow payload lease;
@@ -64,6 +70,7 @@ Navigator does not serialize or restore:
 - a pending transition instruction;
 - private completion stamps;
 - dependency snapshots or cache slots.
+- `LastCommittedCell` or committed-cell notifications.
 
 The next simulation frame requests fresh guidance from durable intent.
 
@@ -76,7 +83,13 @@ records before changing the existing live shell.
 Malformed early or late nested data in either JSON or MemoryPack must preserve
 the previous shell, active query, guide lease, and pending instruction. A failed
 load does not partially stop the current session, replace controller tuning, or
-release guidance.
+release guidance. It also preserves the shell's existing GridForge occupancy
+registration and committed-cell state.
+
+After all staged data validates, population removes the shell's old occupancy
+registration before applying the restored identity/position, registers the new
+position exactly once, and silently rebuilds `LastCommittedCell` against the
+already published graph. No committed-cell callback is replayed during load.
 
 Missing or retired schema shapes reject explicitly. Chronicler's missing-field
 defaults are not used as a compatibility path for old navigation request/action
@@ -143,6 +156,7 @@ boundary.
 - navigation map/overlay/policy publication;
 - immutable graph snapshots and caches;
 - active guide leases, cursors, pending actions, or completion stamps;
+- last committed cell metadata and host callbacks;
 - movement-group coordinator state (group intent is recorded and can be
   prewarmed);
 - heightmap sample data/layer registration;

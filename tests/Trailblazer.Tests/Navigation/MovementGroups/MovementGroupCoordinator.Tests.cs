@@ -105,6 +105,57 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public void UpdateTarget_ShouldUseExplicitWorldPaddingInsteadOfVoxelSize()
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        TestWorld.Setup(new TrailblazerWorldContextSettings(
+            defaults.OperationLimits,
+            defaults.MaintenanceBudget,
+            defaults.GuideSampleBudget,
+            movementGroupPadding: Fixed64.Zero,
+            defaults.MaxIngressEntries,
+            defaults.MaxIngressBytes,
+            defaults.MaxActiveSnapshots,
+            defaults.MaxActiveSnapshotBytes,
+            defaults.MaxRetiredSnapshots,
+            defaults.MaxRetiredSnapshotBytes,
+            defaults.MaxPersistentGraphPages,
+            defaults.MaxDynamicCellSlotsPerMap,
+            defaults.MaxDynamicCellSlots,
+            defaults.NavigationAreaCount,
+            defaults.MaxAreaPolicies,
+            defaults.MaxAreaRulesPerPolicy,
+            defaults.MaxAreaRules,
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits));
+
+        var first = new MovementGroupSession { GroupId = 5 };
+        var second = new MovementGroupSession { GroupId = 5 };
+        Vector3d destination = new(25, 0, 0);
+
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(
+            first,
+            Guid.NewGuid(),
+            destination,
+            Vector3d.Zero,
+            Fixed64.One);
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(
+            second,
+            Guid.NewGuid(),
+            destination,
+            new Vector3d(Fixed64.FromFraction(9, 2), Fixed64.Zero, Fixed64.Zero),
+            Fixed64.One);
+
+        MovementGroupTarget target = TestWorld.Context.Navigation.MovementGroups.UpdateTarget(
+            first,
+            destination,
+            Vector3d.Zero,
+            Fixed64.One);
+
+        target.TravelMode.Should().Be(MovementGroupTravelMode.GroupIndividual);
+    }
+
+    [Fact]
     public void Remove_ShouldDropMembershipWhenSessionPointsAtMissingGroup()
     {
         TestWorld.Context.Simulate();

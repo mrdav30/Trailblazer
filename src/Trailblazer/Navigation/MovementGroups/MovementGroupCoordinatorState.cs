@@ -34,8 +34,6 @@ internal sealed class MovementGroupCoordinatorState
 
     private int FrameCount => _context.FrameCount;
 
-    private Fixed64 VoxelSize => _context.VoxelSize;
-
     internal void CacheOwner(MovementGroupSession session, Guid ownerId)
     {
         if (session.HasOwnerId && session.OwnerId == ownerId)
@@ -226,7 +224,7 @@ internal sealed class MovementGroupCoordinatorState
             return false;
 
         groupCenter /= groupCount;
-        averageRadius = (averageRadius / groupCount) + (VoxelSize * Fixed64.Half);
+        averageRadius = (averageRadius / groupCount) + _context.Settings.MovementGroupPadding;
         return true;
     }
 

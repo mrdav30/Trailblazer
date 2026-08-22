@@ -8,7 +8,6 @@
 using System;
 using System.Runtime.CompilerServices;
 using FixedMathSharp;
-using GridForge.Grids;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 
@@ -21,16 +20,12 @@ public partial class NavSteering
     /// <summary>
     /// Initializes the object by setting up its defaults, events, traversal state, and movement controller.
     /// </summary>
-    protected virtual void OnInitialize(Fixed64 radius)
+    protected virtual void OnInitialize()
     {
-        UpdateOwnerRadius(radius);
-
         LeaveMovementGroup();
 
         _stoppedFrameCount = 0;
         _autoStopFrameCount = 0;
-
-        StopMultiplier = DefaultDirectStop;
 
         _shouldRequestPathThisFrame = false;
         _hasLineOfSightPath = false;
@@ -50,24 +45,10 @@ public partial class NavSteering
         _movementGroupMode = MovementGroupTravelMode.None;
     }
 
-    internal virtual void UpdateOwnerRadius(Fixed64 radius)
-    {
-        // Fatter objects can afford to land imprecisely
-        _agentRadius = radius;
-        _closingDistance = FixedMath.Round(_agentRadius + ResolveVoxelSize());
-    }
-
     internal void Reset()
     {
         ReleaseNavigationGuidance();
-        OnInitialize(_agentRadius);
-    }
-
-    private Fixed64 ResolveVoxelSize()
-    {
-        if (_context != null)
-            return _context.VoxelSize;
-        return GridWorld.DefaultRectangularCellSize;
+        OnInitialize();
     }
 
     private TrailblazerWorldContext ResolveContext()
@@ -121,7 +102,7 @@ public partial class NavSteering
 
         Vector3d pathPosition = vessel.Position
             + Vector3d.Down * vessel.BodyShape.RootToFootOffsetY;
-        UpdateMovementGroupState(vessel.Position);
+        UpdateMovementGroupState(vessel.Position, vessel.Radius);
 
         if (!TryPrepareMovementPathForHeading(pathPosition))
             return Vector3d.Zero;
@@ -412,15 +393,16 @@ public partial class NavSteering
     }
 
     /// <summary>
-    /// Returns true if we’re within closing distance _and_ our heading has flipped,
-    /// or if we’re very close relative to voxel size.
+    /// Returns true if the agent passed a step within its arrival radius,
+    /// or entered the explicit ordinary-step tolerance.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ShouldAdvanceToNextWaypoint()
     {
-        return (_distanceToTarget < _closingDistance
-                    && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Epsilon)
-            || _distanceToTarget < _closingDistance * ResolveVoxelSize();
+        Fixed64 arrivalRadius = _currentQuery?.Agent.ArrivalRadius ?? Fixed64.Zero;
+        return (_distanceToTarget <= arrivalRadius
+                    && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Zero)
+            || _distanceToTarget <= WaypointTolerance;
     }
 
     /// <summary>
@@ -561,7 +543,7 @@ public partial class NavSteering
             return false;
 
         Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.Magnitude);
-        bool reachedTarget = _distanceToTarget < _closingDistance * GetActiveStopMultiplier();
+        bool reachedTarget = _distanceToTarget <= _currentQuery!.Value.Agent.ArrivalRadius;
         bool noInput = moveAmount == Fixed64.Zero;
         return reachedTarget || (!IsStuck && noInput);
     }
@@ -574,26 +556,21 @@ public partial class NavSteering
         if (TargetDirection == Vector3d.Zero)
             return false;
 
-        if (!isAStarTransitionApproach && ShouldAdvanceToNextWaypoint())
+        if (!isAStarTransitionApproach && _navigationGuideLease is NavigationGuideLease currentGuide)
         {
-            if (_navigationGuideLease != null)
+            if (IsAtFinalWaypoint(currentGuide))
             {
-                NavigationGuideLease guide = _navigationGuideLease.Value;
-                if (IsAtFinalWaypoint(guide))
+                if (_distanceToTarget <= _currentQuery!.Value.Agent.ArrivalRadius)
                 {
-                    if (_distanceToTarget
-                        < _closingDistance * GetActiveStopMultiplier())
-                    {
-                        ReleaseNavigationGuidance();
-                        return true;
-                    }
+                    ReleaseNavigationGuidance();
+                    return true;
                 }
-                else
-                {
-                    NavigationGuideStatus status = guide.TryAdvanceStep();
-                    if (status == NavigationGuideStatus.Stale)
-                        PreparePathRetry();
-                }
+            }
+            else if (ShouldAdvanceToNextWaypoint())
+            {
+                NavigationGuideStatus status = currentGuide.TryAdvanceStep();
+                if (status == NavigationGuideStatus.Stale)
+                    PreparePathRetry();
             }
         }
 

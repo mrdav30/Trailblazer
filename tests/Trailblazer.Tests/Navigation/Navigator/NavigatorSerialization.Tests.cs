@@ -5,6 +5,7 @@ using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
+using GridForge.Grids;
 using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
@@ -56,7 +57,7 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(1);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(2);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
     }
 
@@ -85,11 +86,13 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(false, 1)]
     [InlineData(false, 2)]
     [InlineData(false, 3)]
+    [InlineData(false, 4)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true, 0)]
     [InlineData(true, 1)]
     [InlineData(true, 2)]
     [InlineData(true, 3)]
+    [InlineData(true, 4)]
 #endif
     public void RoundTrip_ShouldRejectMissingOrInvalidFinalSchemaTransactionally(
         bool useMemoryPack,
@@ -112,6 +115,7 @@ public class NavigatorSerializationTests : IDisposable
                 99,
                 "FrameCondition",
                 "Medium"),
+            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 1, "SchemaVersion"),
             _ => throw new InvalidOperationException()
         };
 
@@ -151,6 +155,67 @@ public class NavigatorSerializationTests : IDisposable
         TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
         target.PendingTransition.Should().NotBeNull();
         target.PendingTransition!.Value.Id.Should().Be("shell-transition");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+#endif
+    public void Populate_ShouldChangeOccupancyTransactionally(
+        bool useMemoryPack,
+        bool malformed)
+    {
+        Vector3d loadedPosition = new(4, 0, 4);
+        Vector3d shellPosition = new(-4, 0, -4);
+        var source = CreateNavigator(loadedPosition);
+        Guid loadedId = source.GlobalId;
+        NavigationAgentProfile profile = source.NavigationProfile;
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        if (malformed)
+        {
+            payload = SerializationUtility.SetPayloadValue(
+                payload,
+                useMemoryPack,
+                -Fixed64.One,
+                "Motor",
+                "Handler",
+                "Move",
+                "MaxFastSpeed");
+        }
+        source.Reset();
+
+        var target = CreateNavigator(shellPosition, profile: profile);
+        Guid shellId = target.GlobalId;
+        (_, Voxel oldVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, shellPosition);
+        (_, Voxel loadedVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, loadedPosition);
+        shellId.Should().NotBe(loadedId);
+        oldVoxel.OccupantCount.Should().Be(1);
+        loadedVoxel.OccupantCount.Should().Be(0);
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        if (malformed)
+        {
+            populate.Should().Throw<InvalidOperationException>();
+            target.GlobalId.Should().Be(shellId);
+            target.Position.Should().Be(shellPosition);
+            oldVoxel.OccupantCount.Should().Be(1);
+            loadedVoxel.OccupantCount.Should().Be(0);
+            GridOccupantManager.GetOccupiedIndices(TestWorld.World, target)
+                .Should().Equal(oldVoxel.WorldIndex);
+            return;
+        }
+
+        populate.Should().NotThrow();
+        target.GlobalId.Should().Be(loadedId);
+        target.Position.Should().Be(loadedPosition);
+        oldVoxel.OccupantCount.Should().Be(0);
+        loadedVoxel.OccupantCount.Should().Be(1);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, target)
+            .Should().Equal(loadedVoxel.WorldIndex);
     }
 
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
@@ -280,7 +345,7 @@ public class NavigatorSerializationTests : IDisposable
         NavSteering targetSteering = TestRequire.NotNull(target.Steering);
         NavTurning targetTurning = TestRequire.NotNull(target.Turning);
         NavMotor targetMotor = TestRequire.NotNull(target.Motor);
-        targetSteering.StopMultiplier = (Fixed64)0.33f;
+        targetSteering.WaypointTolerance = (Fixed64)0.33f;
         targetTurning.TurnRate = (Fixed64)0.72f;
         targetMotor.Handler.Move.MaxFastSpeed = (Fixed64)8;
 
@@ -290,7 +355,7 @@ public class NavigatorSerializationTests : IDisposable
         // since we removed the occupantGroupId entry, it should fall back to the default value of 1
         // regardless of the source and target values before population
         target.OccupantGroupId.Should().Be(1);
-        targetSteering.StopMultiplier.Should().Be((Fixed64)0.33f);
+        targetSteering.WaypointTolerance.Should().Be((Fixed64)0.33f);
         targetTurning.TurnRate.Should().Be((Fixed64)0.72f);
         targetMotor.Handler.Move.MaxFastSpeed.Should().Be((Fixed64)8);
     }

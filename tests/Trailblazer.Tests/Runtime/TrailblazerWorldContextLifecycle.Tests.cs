@@ -78,7 +78,7 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
     public void SetFrameRate_ShouldRefreshNavSteeringAutoStopThresholdAfterTypeInitialization()
     {
         TestWorld.Setup();
-        var steering = new NavSteering(TestWorld.Context, Fixed64.One);
+        var steering = new NavSteering(TestWorld.Context);
         var agent = new MockSteerAgent();
 
         TestWorld.Context.SetFrameRate(64);

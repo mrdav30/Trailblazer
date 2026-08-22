@@ -243,6 +243,7 @@ public class NavigationGraphCompositionBenchmarks
             defaults.OperationLimits,
             budget,
             defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
             defaults.MaxIngressEntries,
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,

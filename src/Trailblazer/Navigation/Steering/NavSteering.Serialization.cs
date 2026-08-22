@@ -39,7 +39,7 @@ public partial class NavSteering
         RecordValues.Look(chronicler, ref _autoStopFrameCount, "AutoStopFrameCount", 0);
         RecordValues.Look(chronicler, ref _repathTries, "RepathTries", 0);
         RecordValues.Look(chronicler, ref _stuckFrameCount, "StuckFrameCount", 0);
-        RecordValues.Look(chronicler, ref StopMultiplier, "StopMultiplier", DefaultDirectStop);
+        RecordValues.Look(chronicler, ref _waypointTolerance, "WaypointTolerance", DefaultWaypointTolerance);
         RecordValues.Look(chronicler, ref GroupFactor, "GroupFactor", DefaultGroupFactor);
         RecordValues.Look(chronicler, ref AvoidFactor, "AvoidFactor", DefaultAvoidFactor);
         RecordValues.Look(chronicler, ref BehaviorWeights, "BehaviorWeights", DefaultBehaviorWeights);

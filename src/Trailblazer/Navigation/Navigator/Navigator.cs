@@ -48,7 +48,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     protected Vector3d _acceleration;
 
     /// <inheritdoc cref="NavigationProfile"/>
-    protected NavigationAgentProfile _navigationProfile;
+    private NavigationAgentProfile _navigationProfile;
 
     /// <summary>
     /// Stable runtime identity used for occupancy and steering coordination.
@@ -115,6 +115,8 @@ public abstract partial class Navigator : INavigate, IRecordable
     protected TrekRequest _frameRequest = new();
 
     private NavigationTransitionInstruction? _pendingTransition;
+
+    private NavigationCommittedCellState? _lastCommittedCell;
 
     private TrailblazerWorldContext? _context;
 
@@ -216,6 +218,12 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     /// <summary>Gets the exact transition action currently awaiting host completion.</summary>
     public NavigationTransitionInstruction? PendingTransition => _pendingTransition;
+
+    /// <summary>Gets the effective navigation cell resolved after the latest motion commit.</summary>
+    public NavigationCommittedCellState? LastCommittedCell => _lastCommittedCell;
+
+    /// <summary>Occurs after committed motion enters a different effective cell or leaves navigation data.</summary>
+    public event Action<NavigationCommittedCellState?>? CommittedCellChanged;
 
     #endregion
 
@@ -375,7 +383,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         _frameCondition = condition.Clone();
 
-        _steering = NavSteering.CreateNew(context, Radius);
+        _steering = NavSteering.CreateNew(context);
         _steering.BindPendingTransitionOwner(this);
 
         _motor = NavMotor.CreateNew(context, _frameCondition, CreateLocomotionProfile());
@@ -415,6 +423,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         _frameRequest.Reset();
         _isGuideded = false;
         _pendingTransition = null;
+        _lastCommittedCell = null;
         _heightmapGrounding.Reset();
         _steering?.UnbindPendingTransitionOwner(this);
         _steering?.Reset();
@@ -744,6 +753,8 @@ public abstract partial class Navigator : INavigate, IRecordable
             _frameRequest.ResetTransient();
         else
             _frameRequest.Reset();
+
+        RebuildCommittedCellState(emitChange: true);
     }
 
     /// <summary>
@@ -976,6 +987,73 @@ public abstract partial class Navigator : INavigate, IRecordable
         return _context;
     }
 
+    private void RebuildCommittedCellState(bool emitChange)
+    {
+        NavigationCommittedCellResolveStatus status = TryResolveCommittedCellState(
+            out NavigationCommittedCellState resolved);
+        if (status == NavigationCommittedCellResolveStatus.Unavailable)
+            return;
+
+        NavigationCommittedCellState? previous = _lastCommittedCell;
+        NavigationCommittedCellState? current = status == NavigationCommittedCellResolveStatus.Resolved
+            ? resolved
+            : null;
+        _lastCommittedCell = current;
+
+        if (emitChange && !RepresentsSameCellEntry(previous, current))
+            CommittedCellChanged?.Invoke(current);
+    }
+
+    private NavigationCommittedCellResolveStatus TryResolveCommittedCellState(
+        out NavigationCommittedCellState state)
+    {
+        TrailblazerWorldContext context = RequireContext();
+        if (!NavigatorOccupancyTracker.TryResolveVoxel(
+                context.World,
+                Position,
+                out VoxelGrid? grid,
+                out Voxel? voxel))
+        {
+            state = default;
+            return NavigationCommittedCellResolveStatus.NoCell;
+        }
+
+        NavigationCommittedCellResolveStatus status = context.Pathing.TryResolveCommittedCell(
+            grid!.Configuration.ToGridKey(),
+            voxel!.WorldIndex,
+            out NavigationCellAddress address,
+            out NavigationAreaId area,
+            out long graphVersion);
+        if (status != NavigationCommittedCellResolveStatus.Resolved)
+        {
+            state = default;
+            return status;
+        }
+
+        state = new NavigationCommittedCellState(
+            address,
+            area,
+            _frameCondition.Medium,
+            graphVersion,
+            _steering?.CurrentQuery?.AreaPolicy,
+            context.FrameCount);
+        return NavigationCommittedCellResolveStatus.Resolved;
+    }
+
+    private static bool RepresentsSameCellEntry(
+        NavigationCommittedCellState? first,
+        NavigationCommittedCellState? second)
+    {
+        if (!first.HasValue || !second.HasValue)
+            return first.HasValue == second.HasValue;
+
+        NavigationCommittedCellState left = first.Value;
+        NavigationCommittedCellState right = second.Value;
+        return left.Address == right.Address
+            && left.Area == right.Area
+            && left.Medium == right.Medium;
+    }
+
     private void ValidateGuidedSurfaceQuery(PathQuery query)
     {
         if (query.Agent != NavigationProfile
@@ -1016,7 +1094,11 @@ public abstract partial class Navigator : INavigate, IRecordable
     protected virtual void CheckVoxelOccupancy(bool init = false)
     {
         NavigatorOccupancyTracker.Update(
-            RequireContext().World, this, Position, LastPosition, init);
+            RequireContext().World,
+            this,
+            Position,
+            init ? Position : LastPosition,
+            init);
     }
 
     #endregion

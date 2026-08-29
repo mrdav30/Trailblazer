@@ -35,18 +35,18 @@
 		</PackageReference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' != 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="7.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="7.1.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' == 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="7.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="7.1.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
 		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.FluentAssertions\FixedMathSharp.FluentAssertions.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
 		<ProjectReference Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0;AssemblySemVer=7.0.0.0" />
 		<ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=9.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);SemVer=9.1.0;AssemblySemVer=9.1.0.0" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove=".gitignore" />

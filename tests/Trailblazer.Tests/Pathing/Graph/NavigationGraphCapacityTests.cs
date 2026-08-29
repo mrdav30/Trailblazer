@@ -524,7 +524,7 @@ public sealed class NavigationGraphCapacityTests
             + "262,528 bytes for four 1,025-address inner maps, and 885,600 bytes for "
             + "4,100 one-page owner rows; the automatic seam index adds its 224-byte "
             + "empty immutable root; four published map instances each retain one new "
-            + "8-byte grid high-water sequence (32 bytes total); explicit edges retain one "
+            + "8-byte grid last-change sequence (32 bytes total); explicit edges retain one "
             + "compiled 104-byte portal-certificate sequence per adjacent leg without retaining "
             + "a second waypoint sequence; the exact surface-component "
             + "membership, record, and member-sequence ownership remains after deleting the "
@@ -667,11 +667,11 @@ public sealed class NavigationGraphCapacityTests
             new NavigationGridBaselineCapture(
                 addressCount: 1,
                 physicalPages,
-                highWaterSequence: 1,
+                capturedChangeSequence: 1,
                 worldSpawnToken: 1,
                 gridIndex: 0,
                 gridSpawnToken: 1,
-                gridHighWaterSequence: 1,
+                gridLastChangeSequence: 1,
                 configurationKey: map.GridBinding.Key),
             instanceVersion: 2);
         NavigationCell changedCell = new(
@@ -990,7 +990,7 @@ public sealed class NavigationGraphCapacityTests
 
         context.Simulate();
         GetCellState(context, "map").IsMaterialized.Should().BeFalse(
-            "the old first chunk must be discarded after the high-water changes");
+            "the old first chunk must be discarded after the captured change sequence advances");
         context.Simulate();
         GetCellState(context, "map").IsMaterialized.Should().BeFalse();
         context.Simulate();

@@ -29,6 +29,8 @@ execution order.
 - Use package references for normal development and release validation.
 - Use `UseLocalLsfStack=true` only when an unreleased lower-stack change must be
   validated across sibling repositories.
+- Pair `UsePrebuiltLocalLsfStack=true` with `UseLocalLsfStack=true` only for
+  benchmark child builds that consume an already-verified local stack.
 - Resolve defects in the repository that owns the behavior, then release and
   validate packages in dependency order.
 - Before release, run Gravitas `Release`, `ReleaseLean`, coverage, replay,

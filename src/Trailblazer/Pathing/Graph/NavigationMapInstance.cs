@@ -21,7 +21,7 @@ internal sealed partial class NavigationMapInstance
     private readonly int _nextDynamicSlot;
     private readonly PersistentIntMap<NavigationSemanticPage> _semanticPages;
     private readonly PersistentIntMap<NavigationPhysicalPage> _physicalPages;
-    private readonly PersistentIntMap<ulong> _dynamicBaselineHighWater;
+    private readonly PersistentIntMap<ulong> _dynamicBaselineCapturedChangeSequences;
     private readonly NavigationBakedCellLookup _bakedLookup;
     private readonly long _preparedMapRetainedBytes;
 
@@ -35,12 +35,12 @@ internal sealed partial class NavigationMapInstance
         int nextDynamicSlot,
         PersistentIntMap<NavigationSemanticPage> semanticPages,
         PersistentIntMap<NavigationPhysicalPage> physicalPages,
-        PersistentIntMap<ulong> dynamicBaselineHighWater,
+        PersistentIntMap<ulong> dynamicBaselineCapturedChangeSequences,
         NavigationBakedCellLookup bakedLookup,
         long preparedMapRetainedBytes,
         NavigationGridGenerationIdentity gridIdentity,
-        ulong baselineHighWater,
-        ulong gridHighWaterSequence,
+        ulong baselineCapturedChangeSequence,
+        ulong gridLastChangeSequence,
         long instanceVersion,
         long semanticVersion,
         long physicalVersion,
@@ -59,12 +59,12 @@ internal sealed partial class NavigationMapInstance
         _nextDynamicSlot = nextDynamicSlot;
         _semanticPages = semanticPages;
         _physicalPages = physicalPages;
-        _dynamicBaselineHighWater = dynamicBaselineHighWater;
+        _dynamicBaselineCapturedChangeSequences = dynamicBaselineCapturedChangeSequences;
         _bakedLookup = bakedLookup;
         _preparedMapRetainedBytes = preparedMapRetainedBytes;
         GridIdentity = gridIdentity;
-        BaselineHighWater = baselineHighWater;
-        GridHighWaterSequence = gridHighWaterSequence;
+        BaselineCapturedChangeSequence = baselineCapturedChangeSequence;
+        GridLastChangeSequence = gridLastChangeSequence;
         InstanceVersion = instanceVersion;
         SemanticVersion = semanticVersion;
         PhysicalVersion = physicalVersion;
@@ -86,9 +86,9 @@ internal sealed partial class NavigationMapInstance
 
     internal NavigationGridGenerationIdentity GridIdentity { get; }
 
-    internal ulong BaselineHighWater { get; }
+    internal ulong BaselineCapturedChangeSequence { get; }
 
-    internal ulong GridHighWaterSequence { get; }
+    internal ulong GridLastChangeSequence { get; }
 
     internal long InstanceVersion { get; }
 
@@ -127,7 +127,7 @@ internal sealed partial class NavigationMapInstance
         + _dynamicSlotIndexes.PersistentNodeCount
         + (_semanticPages.PersistentNodeCount * 2)
         + (_physicalPages.PersistentNodeCount * 2)
-        + _dynamicBaselineHighWater.PersistentNodeCount;
+        + _dynamicBaselineCapturedChangeSequences.PersistentNodeCount;
 
     internal bool TryGetSlot(VoxelIndex index, out int slot)
     {
@@ -278,9 +278,9 @@ internal sealed partial class NavigationMapInstance
             return this;
         if (!eventInfo.HasVoxelState
             || !TryGetSlot(eventInfo.VoxelIndex, out int slot)
-            || eventInfo.ChangeSequence <= GetBaselineHighWater(slot))
+            || eventInfo.ChangeSequence <= GetBaselineCapturedChangeSequence(slot))
         {
-            return WithGridHighWater(eventInfo.ChangeSequence, instanceVersion);
+            return WithGridLastChangeSequence(eventInfo.ChangeSequence, instanceVersion);
         }
 
         return WithPhysicalState(
@@ -365,12 +365,12 @@ internal sealed partial class NavigationMapInstance
                 _nextDynamicSlot,
                 _semanticPages,
                 previous._physicalPages,
-                _dynamicBaselineHighWater,
+                _dynamicBaselineCapturedChangeSequences,
                 _bakedLookup,
                 _preparedMapRetainedBytes,
                 previous.GridIdentity,
-                previous.BaselineHighWater,
-                capture.GridHighWaterSequence,
+                previous.BaselineCapturedChangeSequence,
+                capture.GridLastChangeSequence,
                 instanceVersion,
                 SemanticVersion,
                 previous.PhysicalVersion,
@@ -387,7 +387,8 @@ internal sealed partial class NavigationMapInstance
         }
 
         PersistentIntMap<NavigationPhysicalPage> pages = previous._physicalPages;
-        PersistentIntMap<ulong> dynamicHighWater = _dynamicBaselineHighWater;
+        PersistentIntMap<ulong> dynamicCapturedChangeSequences =
+            _dynamicBaselineCapturedChangeSequences;
         var capturedAddresses = new VoxelIndex[capture.AddressCount];
         int capturedCount = 0;
         for (int i = 0; i < capture.AddressCount; i++)
@@ -405,7 +406,9 @@ internal sealed partial class NavigationMapInstance
                 physical.ObstacleCount,
                 instanceVersion);
             if (slot >= DynamicSlotBase)
-                dynamicHighWater = dynamicHighWater.Set(slot, baseline.HighWaterSequence);
+                dynamicCapturedChangeSequences = dynamicCapturedChangeSequences.Set(
+                    slot,
+                    baseline.CapturedChangeSequence);
             capturedAddresses[capturedCount] = address;
             capturedCount++;
         }
@@ -420,7 +423,7 @@ internal sealed partial class NavigationMapInstance
             _nextDynamicSlot,
             _semanticPages,
             pages,
-            dynamicHighWater,
+            dynamicCapturedChangeSequences,
             _bakedLookup,
             _preparedMapRetainedBytes,
             new NavigationGridGenerationIdentity(
@@ -428,8 +431,8 @@ internal sealed partial class NavigationMapInstance
                 baseline.GridIndex,
                 baseline.GridSpawnToken,
                 baseline.ConfigurationKey),
-            previous.BaselineHighWater,
-            baseline.GridHighWaterSequence,
+            previous.BaselineCapturedChangeSequence,
+            baseline.GridLastChangeSequence,
             instanceVersion,
             SemanticVersion,
             physicalVersion: capturedCount > 0 ? instanceVersion : PhysicalVersion,
@@ -512,7 +515,7 @@ internal sealed partial class NavigationMapInstance
             _nextDynamicSlot,
             _semanticPages,
             pages,
-            FillDynamicBaselineHighWater(capture.HighWaterSequence),
+            FillDynamicBaselineCapturedChangeSequences(capture.CapturedChangeSequence),
             _bakedLookup,
             _preparedMapRetainedBytes,
             new NavigationGridGenerationIdentity(
@@ -520,8 +523,8 @@ internal sealed partial class NavigationMapInstance
                 capture.GridIndex,
                 capture.GridSpawnToken,
                 capture.ConfigurationKey),
-            capture.HighWaterSequence,
-            capture.GridHighWaterSequence,
+            capture.CapturedChangeSequence,
+            capture.GridLastChangeSequence,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -625,12 +628,12 @@ internal sealed partial class NavigationMapInstance
             _nextDynamicSlot,
             _semanticPages,
             PersistentIntMap<NavigationPhysicalPage>.Empty,
-            _dynamicBaselineHighWater,
+            _dynamicBaselineCapturedChangeSequences,
             _bakedLookup,
             _preparedMapRetainedBytes,
             default,
-            baselineHighWater: 0,
-            gridHighWaterSequence: 0,
+            baselineCapturedChangeSequence: 0,
+            gridLastChangeSequence: 0,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -685,8 +688,8 @@ internal sealed partial class NavigationMapInstance
             _bakedLookup,
             _preparedMapRetainedBytes,
             default,
-            baselineHighWater: 0,
-            gridHighWaterSequence: 0,
+            baselineCapturedChangeSequence: 0,
+            gridLastChangeSequence: 0,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -699,13 +702,14 @@ internal sealed partial class NavigationMapInstance
     internal NavigationMapInstance AppendDefaultBaselineStates(
         NavigationMapInstance source,
         ReadOnlySpan<NavigationBaselineVoxelState> states,
-        ulong highWaterSequence,
+        ulong capturedChangeSequence,
         long instanceVersion)
     {
         PersistentVoxelIndexMap<NavigationDynamicCellSlot> dynamicSlots = _dynamicSlots;
         PersistentIntMap<VoxelIndex> dynamicSlotIndexes = _dynamicSlotIndexes;
         PersistentIntMap<NavigationPhysicalPage> physicalPages = _physicalPages;
-        PersistentIntMap<ulong> dynamicHighWater = _dynamicBaselineHighWater;
+        PersistentIntMap<ulong> dynamicCapturedChangeSequences =
+            _dynamicBaselineCapturedChangeSequences;
         int nextDynamicSlot = _nextDynamicSlot;
         for (int i = 0; i < states.Length; i++)
         {
@@ -743,7 +747,9 @@ internal sealed partial class NavigationMapInstance
                 state.ObstacleCount,
                 instanceVersion);
             if (slot >= DynamicSlotBase)
-                dynamicHighWater = dynamicHighWater.Set(slot, highWaterSequence);
+                dynamicCapturedChangeSequences = dynamicCapturedChangeSequences.Set(
+                    slot,
+                    capturedChangeSequence);
         }
 
         return new NavigationMapInstance(
@@ -756,12 +762,12 @@ internal sealed partial class NavigationMapInstance
             nextDynamicSlot,
             _semanticPages,
             physicalPages,
-            dynamicHighWater,
+            dynamicCapturedChangeSequences,
             _bakedLookup,
             _preparedMapRetainedBytes,
             default,
-            baselineHighWater: 0,
-            gridHighWaterSequence: 0,
+            baselineCapturedChangeSequence: 0,
+            gridLastChangeSequence: 0,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -788,12 +794,12 @@ internal sealed partial class NavigationMapInstance
             _nextDynamicSlot,
             _semanticPages,
             _physicalPages,
-            _dynamicBaselineHighWater,
+            _dynamicBaselineCapturedChangeSequences,
             _bakedLookup,
             _preparedMapRetainedBytes,
             default,
-            baselineHighWater: 0,
-            gridHighWaterSequence: 0,
+            baselineCapturedChangeSequence: 0,
+            gridLastChangeSequence: 0,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -809,14 +815,14 @@ internal sealed partial class NavigationMapInstance
         + _dynamicSlotIndexes.RetainedBytes
         + _physicalPages.RetainedBytes
         + ((long)_physicalPages.Count * 320L)
-        + _dynamicBaselineHighWater.RetainedBytes);
+        + _dynamicBaselineCapturedChangeSequences.RetainedBytes);
 
     internal int DefaultBaselinePersistentPages => checked(
         4
         + _dynamicSlots.PersistentNodeCount
         + _dynamicSlotIndexes.PersistentNodeCount
         + (_physicalPages.PersistentNodeCount * 2)
-        + _dynamicBaselineHighWater.PersistentNodeCount);
+        + _dynamicBaselineCapturedChangeSequences.PersistentNodeCount);
 
     private bool HasAuthoredDynamicSemantic(int slot)
     {
@@ -832,7 +838,7 @@ internal sealed partial class NavigationMapInstance
         bool isPresent,
         byte obstacleCount,
         long instanceVersion,
-        ulong gridHighWaterSequence)
+        ulong gridLastChangeSequence)
     {
         PersistentIntMap<NavigationPhysicalPage> pages = ApplyPhysicalState(
             _physicalPages,
@@ -841,7 +847,7 @@ internal sealed partial class NavigationMapInstance
             obstacleCount,
             instanceVersion);
         if (ReferenceEquals(pages, _physicalPages))
-            return WithGridHighWater(gridHighWaterSequence, instanceVersion);
+            return WithGridLastChangeSequence(gridLastChangeSequence, instanceVersion);
 
         return new NavigationMapInstance(
             Map,
@@ -853,12 +859,12 @@ internal sealed partial class NavigationMapInstance
             _nextDynamicSlot,
             _semanticPages,
             pages,
-            _dynamicBaselineHighWater,
+            _dynamicBaselineCapturedChangeSequences,
             _bakedLookup,
             _preparedMapRetainedBytes,
             GridIdentity,
-            BaselineHighWater,
-            gridHighWaterSequence,
+            BaselineCapturedChangeSequence,
+            gridLastChangeSequence,
             instanceVersion,
             SemanticVersion,
             physicalVersion: instanceVersion,
@@ -900,7 +906,7 @@ internal sealed partial class NavigationMapInstance
             return this;
 
         PersistentIntMap<NavigationPhysicalPage>? pages = null;
-        ulong gridHighWaterSequence = GridHighWaterSequence;
+        ulong gridLastChangeSequence = GridLastChangeSequence;
         int copiedPhysicalPages = 0;
         for (int i = 0; i < events.Length; i++)
         {
@@ -912,11 +918,11 @@ internal sealed partial class NavigationMapInstance
             {
                 continue;
             }
-            if (eventInfo.ChangeSequence > gridHighWaterSequence)
-                gridHighWaterSequence = eventInfo.ChangeSequence;
+            if (eventInfo.ChangeSequence > gridLastChangeSequence)
+                gridLastChangeSequence = eventInfo.ChangeSequence;
             if (!eventInfo.HasVoxelState
                 || !TryGetSlot(eventInfo.VoxelIndex, out int slot)
-                || eventInfo.ChangeSequence <= GetBaselineHighWater(slot))
+                || eventInfo.ChangeSequence <= GetBaselineCapturedChangeSequence(slot))
             {
                 continue;
             }
@@ -945,7 +951,7 @@ internal sealed partial class NavigationMapInstance
                 : (byte)0;
         }
 
-        return pages == null && gridHighWaterSequence == GridHighWaterSequence
+        return pages == null && gridLastChangeSequence == GridLastChangeSequence
             ? this
             : new NavigationMapInstance(
                 Map,
@@ -957,12 +963,12 @@ internal sealed partial class NavigationMapInstance
                 _nextDynamicSlot,
                 _semanticPages,
                 pages ?? _physicalPages,
-                _dynamicBaselineHighWater,
+                _dynamicBaselineCapturedChangeSequences,
                 _bakedLookup,
                 _preparedMapRetainedBytes,
                 GridIdentity,
-                BaselineHighWater,
-                gridHighWaterSequence,
+                BaselineCapturedChangeSequence,
+                gridLastChangeSequence,
                 instanceVersion,
                 SemanticVersion,
                 physicalVersion: pages == null ? PhysicalVersion : instanceVersion,
@@ -993,21 +999,26 @@ internal sealed partial class NavigationMapInstance
         return pages;
     }
 
-    private PersistentIntMap<ulong> FillDynamicBaselineHighWater(ulong highWater)
+    private PersistentIntMap<ulong> FillDynamicBaselineCapturedChangeSequences(
+        ulong capturedChangeSequence)
     {
         PersistentIntMap<ulong> result = PersistentIntMap<ulong>.Empty;
         for (int i = 0; i < _dynamicSlots.Count; i++)
-            result = result.Set(_dynamicSlots.GetValueAt(i).Slot, highWater);
+            result = result.Set(
+                _dynamicSlots.GetValueAt(i).Slot,
+                capturedChangeSequence);
         return result;
     }
 
-    private ulong GetBaselineHighWater(int slot)
+    private ulong GetBaselineCapturedChangeSequence(int slot)
     {
         if (slot < BakedSlotCount)
-            return BaselineHighWater;
-        return _dynamicBaselineHighWater.TryGetValue(slot, out ulong highWater)
-            ? highWater
-            : BaselineHighWater;
+            return BaselineCapturedChangeSequence;
+        return _dynamicBaselineCapturedChangeSequences.TryGetValue(
+                slot,
+                out ulong capturedChangeSequence)
+            ? capturedChangeSequence
+            : BaselineCapturedChangeSequence;
     }
 
     private static PersistentIntMap<NavigationSemanticPage> ApplySemanticOperation(
@@ -1096,14 +1107,14 @@ internal sealed partial class NavigationMapInstance
         + ((long)_semanticPages.Count * 4_400L)
         + _physicalPages.RetainedBytes
         + ((long)_physicalPages.Count * 320L)
-        + _dynamicBaselineHighWater.RetainedBytes
+        + _dynamicBaselineCapturedChangeSequences.RetainedBytes
         + _preparedMapRetainedBytes);
 
-    private NavigationMapInstance WithGridHighWater(
-        ulong gridHighWaterSequence,
+    private NavigationMapInstance WithGridLastChangeSequence(
+        ulong gridLastChangeSequence,
         long instanceVersion)
     {
-        if (gridHighWaterSequence <= GridHighWaterSequence)
+        if (gridLastChangeSequence <= GridLastChangeSequence)
             return this;
         return new NavigationMapInstance(
             Map,
@@ -1115,12 +1126,12 @@ internal sealed partial class NavigationMapInstance
             _nextDynamicSlot,
             _semanticPages,
             _physicalPages,
-            _dynamicBaselineHighWater,
+            _dynamicBaselineCapturedChangeSequences,
             _bakedLookup,
             _preparedMapRetainedBytes,
             GridIdentity,
-            BaselineHighWater,
-            gridHighWaterSequence,
+            BaselineCapturedChangeSequence,
+            gridLastChangeSequence,
             instanceVersion,
             SemanticVersion,
             PhysicalVersion,

@@ -332,7 +332,7 @@ public sealed class NavigationAutomaticSeamTests
         targetGrid.TryAddVoxel(default, out _).Should().BeTrue();
         SimulateUntilCrossMapCount(context, sourceAddress, "target", 1);
         CountCrossMapTargets(context, sourceAddress, "target").Should().Be(1,
-            "a high-water change must restart from a fresh cursor generation");
+            "a grid last-change sequence advance must restart from a fresh cursor generation");
     }
 
     [Fact]

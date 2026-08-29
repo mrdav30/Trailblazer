@@ -250,10 +250,17 @@ public sealed class NavigationTransitionGuideTests
         publicGuide.TryGetCurrentStep(out NavigationGuideStep publicTransitionStep)
             .Should().Be(NavigationGuideStatus.Success);
         publicTransitionStep.Transition.Should().Be(instruction);
-        guide.TryGetCurrentStep(generation, out _)
-            .Should().Be(NavigationAStarQueryStatus.Success);
+        const int hotPathIterationCount = 1_000;
+        for (int i = 0; i < hotPathIterationCount; i++)
+        {
+            if (guide.TryGetCurrentStep(generation, out _)
+                != NavigationAStarQueryStatus.Success)
+            {
+                throw new InvalidOperationException("The active transition step became unavailable during warmup.");
+            }
+        }
         long allocationBefore = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1_000; i++)
+        for (int i = 0; i < hotPathIterationCount; i++)
         {
             if (guide.TryGetCurrentStep(generation, out _)
                 != NavigationAStarQueryStatus.Success)

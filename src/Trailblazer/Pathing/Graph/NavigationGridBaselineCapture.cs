@@ -21,11 +21,11 @@ internal readonly struct NavigationGridBaselineCapture
         AddressCount = addressCount;
         Baseline = baseline;
         PreparedPages = null;
-        HighWaterSequence = baseline?.HighWaterSequence ?? 0;
+        CapturedChangeSequence = baseline?.CapturedChangeSequence ?? 0;
         WorldSpawnToken = baseline?.WorldSpawnToken ?? 0;
         GridIndex = baseline?.GridIndex ?? ushort.MaxValue;
         GridSpawnToken = baseline?.GridSpawnToken ?? 0;
-        GridHighWaterSequence = baseline?.GridHighWaterSequence ?? 0;
+        GridLastChangeSequence = baseline?.GridLastChangeSequence ?? 0;
         ConfigurationKey = baseline?.ConfigurationKey ?? default;
         IsDelta = isDelta;
         IsRequested = true;
@@ -34,21 +34,21 @@ internal readonly struct NavigationGridBaselineCapture
     internal NavigationGridBaselineCapture(
         int addressCount,
         PersistentIntMap<NavigationPhysicalPage> preparedPages,
-        ulong highWaterSequence,
+        ulong capturedChangeSequence,
         long worldSpawnToken,
         ushort gridIndex,
         long gridSpawnToken,
-        ulong gridHighWaterSequence,
+        ulong gridLastChangeSequence,
         GridConfigurationKey configurationKey)
     {
         AddressCount = addressCount;
         Baseline = null;
         PreparedPages = preparedPages;
-        HighWaterSequence = highWaterSequence;
+        CapturedChangeSequence = capturedChangeSequence;
         WorldSpawnToken = worldSpawnToken;
         GridIndex = gridIndex;
         GridSpawnToken = gridSpawnToken;
-        GridHighWaterSequence = gridHighWaterSequence;
+        GridLastChangeSequence = gridLastChangeSequence;
         ConfigurationKey = configurationKey;
         IsDelta = false;
         IsRequested = true;
@@ -59,11 +59,11 @@ internal readonly struct NavigationGridBaselineCapture
         NavigationSurfaceComponentKeySet structuralChangedStates,
         bool defaultPhysicalAddressSetChanged,
         int addressCount,
-        ulong highWaterSequence,
+        ulong capturedChangeSequence,
         long worldSpawnToken,
         ushort gridIndex,
         long gridSpawnToken,
-        ulong gridHighWaterSequence,
+        ulong gridLastChangeSequence,
         GridConfigurationKey configurationKey)
     {
         AddressCount = addressCount;
@@ -72,11 +72,11 @@ internal readonly struct NavigationGridBaselineCapture
         PreparedInstance = preparedInstance;
         StructuralChangedStates = structuralChangedStates;
         DefaultPhysicalAddressSetChanged = defaultPhysicalAddressSetChanged;
-        HighWaterSequence = highWaterSequence;
+        CapturedChangeSequence = capturedChangeSequence;
         WorldSpawnToken = worldSpawnToken;
         GridIndex = gridIndex;
         GridSpawnToken = gridSpawnToken;
-        GridHighWaterSequence = gridHighWaterSequence;
+        GridLastChangeSequence = gridLastChangeSequence;
         ConfigurationKey = configurationKey;
         IsDelta = false;
         IsRequested = true;
@@ -94,7 +94,7 @@ internal readonly struct NavigationGridBaselineCapture
 
     internal bool DefaultPhysicalAddressSetChanged { get; }
 
-    internal ulong HighWaterSequence { get; }
+    internal ulong CapturedChangeSequence { get; }
 
     internal long WorldSpawnToken { get; }
 
@@ -102,7 +102,7 @@ internal readonly struct NavigationGridBaselineCapture
 
     internal long GridSpawnToken { get; }
 
-    internal ulong GridHighWaterSequence { get; }
+    internal ulong GridLastChangeSequence { get; }
 
     internal GridConfigurationKey ConfigurationKey { get; }
 

@@ -613,11 +613,11 @@ public sealed class NavigationTransitionPublicationTests
             NavigationSurfaceComponentKeySet.Empty,
             defaultPhysicalAddressSetChanged: false,
             addressCount: 2,
-            highWaterSequence: 1,
+            capturedChangeSequence: 1,
             worldSpawnToken: 1,
             gridIndex: 0,
             gridSpawnToken: 1,
-            gridHighWaterSequence: 1,
+            gridLastChangeSequence: 1,
             instance.Map.GridBinding.Key);
         var work = new NavigationMaterializedComponentWork(
             candidate,

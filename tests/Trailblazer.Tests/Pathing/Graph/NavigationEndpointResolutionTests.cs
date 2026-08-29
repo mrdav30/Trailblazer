@@ -535,7 +535,7 @@ public sealed class NavigationEndpointResolutionTests
         work.Status.Should().Be(NavigationEndpointResolutionStatus.Pending);
 
         NavigationGridGenerationIdentity identity = closer.GridIdentity;
-        ulong nextHighWater = closer.GridHighWaterSequence + 1;
+        ulong nextGridLastChangeSequence = closer.GridLastChangeSequence + 1;
         var removed = new GridEventInfo(
             identity.WorldSpawnToken,
             identity.GridIndex,
@@ -544,7 +544,9 @@ public sealed class NavigationEndpointResolutionTests
             gridVersion: 2,
             changeKind: GridEventKind.SparseVoxelRemoved,
             voxelIndex: default,
-            changeStamp: new GridChangeStamp(nextHighWater, nextHighWater),
+            changeStamp: new GridChangeStamp(
+                nextGridLastChangeSequence,
+                nextGridLastChangeSequence),
             hasVoxelState: true,
             isVoxelPresent: false);
         NavigationMapInstance revisedCloser = closer.Apply(
@@ -855,7 +857,7 @@ public sealed class NavigationEndpointResolutionTests
     }
 
     [Fact]
-    public void PhysicalEnvelopeOutsideAuthoredCells_ShouldAdvanceExactGridHighWaterOnly()
+    public void PhysicalEnvelopeOutsideAuthoredCells_ShouldAdvanceExactGridLastChangeSequenceOnly()
     {
         using var world = new GridWorld();
         GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
@@ -865,7 +867,7 @@ public sealed class NavigationEndpointResolutionTests
             configuration,
             physicallyPresent: true);
         NavigationGridGenerationIdentity identity = instance.GridIdentity;
-        ulong nextHighWater = instance.GridHighWaterSequence + 1;
+        ulong nextGridLastChangeSequence = instance.GridLastChangeSequence + 1;
         var envelope = new GridEventInfo(
             identity.WorldSpawnToken,
             identity.GridIndex,
@@ -874,7 +876,9 @@ public sealed class NavigationEndpointResolutionTests
             gridVersion: 2,
             changeKind: GridEventKind.SparseVoxelAdded,
             voxelIndex: new VoxelIndex(1, 0, 0),
-            changeStamp: new GridChangeStamp(nextHighWater, nextHighWater),
+            changeStamp: new GridChangeStamp(
+                nextGridLastChangeSequence,
+                nextGridLastChangeSequence),
             hasVoxelState: true,
             isVoxelPresent: true);
 
@@ -884,7 +888,7 @@ public sealed class NavigationEndpointResolutionTests
             instanceVersion: 2);
 
         next.Should().NotBeSameAs(instance);
-        next.GridHighWaterSequence.Should().Be(nextHighWater);
+        next.GridLastChangeSequence.Should().Be(nextGridLastChangeSequence);
         next.PhysicalVersion.Should().Be(instance.PhysicalVersion,
             "an unauthored physical address does not change an effective page");
     }
@@ -1759,7 +1763,10 @@ public sealed class NavigationEndpointResolutionTests
             world,
             "map",
             CreateDenseCellConfiguration(
-                new Vector3d(Fixed64.Zero, Fixed64.MinValue, Fixed64.Zero)),
+                new Vector3d(
+                    Fixed64.Zero,
+                    Fixed64.MinValue + (Fixed64)2,
+                    Fixed64.Zero)),
             physicallyPresent: true,
             gasCell);
         NavigationWorldGraph graph = CreateAdmissionGraph(instance);

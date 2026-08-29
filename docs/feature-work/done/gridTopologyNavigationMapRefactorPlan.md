@@ -890,20 +890,20 @@ Phase 0 adds a GridForge change envelope with a monotonic world-owned sequence,
 immutable before/after or final-state payload, and a cause ID shared by a
 specific event and any generic `GridChanged` notification it induces. Map and
 overlay transactions use the equivalent context-owned envelope. At maintenance start,
-Trailblazer atomically captures each source's high-water mark and detaches only
-the queue prefixes through those marks. Later events are deferred to the next
+Trailblazer atomically captures each source's change sequence and detaches only
+the queue prefixes through those sequences. Later events are deferred to the next
 batch, and reconciliation never queries live state newer than the detached
 payloads. The batch reconciles final state instead of replaying incidental
 callback order:
 
 GridForge also exposes an atomic navigation baseline captured under the same
 state barrier and requested with `(GridConfigurationKey, sorted requested
-VoxelIndex span)`. It returns its high-water sequence, the matching exact active
+VoxelIndex span)`. It returns its captured change sequence, the matching exact active
 generation if any, and presence/obstacle count only for those requested
 addresses; dense presence is implicit. It does not enumerate/copy every physical
 voxel in the grid. Context initialization first subscribes to the immutable
 change feed, then captures this baseline. It discards an envelope at or below
-the baseline high-water mark only when that envelope's configuration, exact
+the baseline captured change sequence only when that envelope's configuration, exact
 generation, and address are within the represented baseline scope. Unrelated
 map/grid/address envelopes remain queued and are processed normally regardless
 of sequence. Only a bulk startup baseline that completely represents a scope may
@@ -922,8 +922,8 @@ event overflow the owning map scope is marked `ResnapshotRequired`, its instance
 is made fail-closed at the next maintenance boundary, detailed envelopes for
 that scope are dropped, and an address-filtered baseline rebuild advances in
 stable effective-address chunks from one immutable baseline/cursor. Later events
-only update the scope's observed high-water marker. The candidate may reopen the
-scope only if the observed high-water still equals its baseline cursor after the
+only update the scope's observed grid last-change sequence. The candidate may reopen the
+scope only if the observed grid last-change sequence still equals its baseline cursor after the
 full pass. Otherwise it discards the unpublished candidate, captures a newer
 baseline/cursor, and restarts; repeated overflow/churn remains fail-closed rather
 than publishing a mixed-time overlay. This bounds retained deltas without losing
@@ -1023,7 +1023,7 @@ bounded world-space search box and the leased graph's eligible exact grid
 generations. The cursor bounds overlapping-grid discovery and topology-address
 probes separately, charges candidates before yield, and emits configuration/
 generation identity plus `VoxelIndex`, never live `Voxel` objects. It returns
-`More`, `Complete`, or `Stale`; any expected generation/high-water mismatch
+`More`, `Complete`, or `Stale`; any expected generation/grid-last-change mismatch
 invalidates the partial resolution. The leased graph alone decides authored
 membership, physical presence/blockage, and semantic state, then ranks exact
 mapped nodes by the rules above. Phase 0 benchmarks direct covered-address
@@ -1378,7 +1378,7 @@ Tasks:
   events with their generic notifications.
 - Add an atomic GridForge navigation baseline snapshot requested with a
   configuration key and sorted requested `VoxelIndex` span. It contains the same
-  high-water sequence, the exact active generation, and presence/obstacle state
+  captured change sequence, the exact active generation, and presence/obstacle state
   only for those addresses; one-map installation must not enumerate newer live
   state, unrelated grids, or the physical grid outside the requested span. The
   same contract initializes overlay addresses absent from the bake.
@@ -1574,7 +1574,7 @@ Tasks:
   subscriptions, or partitions.
 - Initialize one map instance from its address-filtered atomic GridForge
   baseline and discard only matching scope/address envelopes represented through
-  its high-water mark; unrelated envelopes are never pruned by sequence alone.
+  its captured change sequence; unrelated envelopes are never pruned by sequence alone.
 - Implement exact-generation grid removal/respawn and sparse add/remove.
 - Implement inert off-tick bake preparation, deterministic effective-frame
   map/overlay commits, budgeted/fail-closed runtime composition, short atomic
@@ -1599,10 +1599,10 @@ Tasks:
   Phase 3/4 milestone so
   their contracts and performance evidence exercise real work rather than a
   synthetic future seam.
-- Implement high-water queue detachment from the single committed final-state
+- Implement captured-sequence queue detachment from the single committed final-state
   feed; do not read past the frozen event prefix. Reconcile each map baseline
   only with matching exact-generation/address events after that baseline's
-  high-water sequence.
+  captured change sequence.
 - Mirror blocked state without retaining `Voxel` references.
 - Add graph diagnostics that enumerate map address, runtime identity, topology,
   baked/default versus effective cell state, overlay source, media/capabilities,
@@ -1702,12 +1702,12 @@ Tasks:
 - Implement implicit same-grid native edge enumeration in both directions.
 - Add one concrete caller-owned GridForge `GridBoundaryContactCursor`, begun and
   advanced through `GridWorld`, that binds both exact world/grid spawn tokens,
-  both per-grid committed high-water sequences, and a canonical candidate
+  both per-grid last-change sequences, and a canonical candidate
   ordinal. The cursor spans spatial overlapping-grid-pair discovery, canonical
   source/target address discovery, and every exact narrow-phase probe. Each
   chunk runs under GridForge's short navigation-maintenance gate, accepts
   separate candidate-probe and output ceilings, and returns `More`, `Complete`,
-  or `Stale`. Any bound identity/high-water mismatch discards the unpublished
+  or `Stale`. Any bound identity/grid-last-change mismatch discards the unpublished
   partial seam candidate and restarts from ordinal zero; the cursor retains no
   `Voxel` reference, no chunk mixes generations, and the first chunk may not
   hide an unbounded pair or potential-source-voxel collection pass.
@@ -1965,7 +1965,7 @@ parameter enclosures for capsule and unique-intersection queries. GridForge
 `1ed5479` owns the reviewed swept-body/portal authority. Bounded deterministic
 ordered trace discovery is complete in GridForge `bc60dd7`; exact endpoint
 cropping plus combined candidate-work authority landed in `1170bd9`, and traced
-grid high-water identity landed in `e29b6df`. Trailblazer's
+grid last-change identity landed in `e29b6df`. Trailblazer's
 finite ray settings, work-meter categories, exclusive query workspaces, focused
 dependency accumulation, and single context-owned blocking immediate workspace
 are complete. The ordered ray kernel now evaluates native, automatic-seam, and
@@ -2005,7 +2005,7 @@ without package drift.
 
 | Phase 6 slice | Status | Required closure |
 | --- | --- | --- |
-| FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479`, `1170bd9`, `e29b6df` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 713/713, 0 B, exact endpoint cropping/combined trace budget/high-water identity; independent correctness and lean reviews approved |
+| FixedMathSharp/GridForge swept-body authority | Complete — FixedMathSharp `fdc1484`, `80e019a`, `e400999`; GridForge `1ed5479`, `1170bd9`, `e29b6df` | FixedMathSharp Release 2,687/2,687, Lean 2,666/2,666; GridForge Release/Lean 713/713, 0 B, exact endpoint cropping/combined trace budget/grid-last-change identity; independent correctness and lean reviews approved |
 | Ordered navigation-ray core | Complete — GridForge ordered trace discovery `bc60dd7`; Trailblazer kernel `f54dcb5` | Focused 53/53, relevant aggregate 128/128, Release 1,386/1,386, ReleaseLean 1,355/1,355, both TFMs 0 warnings/errors, warmed query/guide 0 B, independent correctness/lean approval |
 | Role-aware nearest-endpoint ray proof | Complete — exact overlapping-candidate identity, directed start/destination seams, blocked-negative dependencies, and A*/Flow parity | Focused 53/53, graph/pathing aggregate 479/479, Release 1,404/1,404, ReleaseLean 1,373/1,373, both TFMs/configurations 0 warnings/errors, independent correctness/lean approval |
 | Portal-aware A* guide points | Complete — raw guide and structural-certificate closure independently approved | Focused 83/83; Release 1,419/1,419; ReleaseLean 1,388/1,388; both TFMs/configurations and benchmark build 0 warnings/errors. Exact parent ordinal, zero/multi-witness portal replay, isolated positive-radius source/exit leg rejection, equal-cost parallel-edge geometry, canonical duplicate ownership, exact payload bytes, dependency-bearing negative proofs, and sticky structural `Stale` are pinned; explicit rays use one evidence pass and no per-interval portal storage |
@@ -2071,7 +2071,7 @@ Frozen Phase 6 decisions:
   ceilings plus one `long` combined grid-and-address work ceiling. Guide rays
   map their single current-node allowance to that combined ceiling without
   pre-spending hidden address work. Every returned interval carries the source
-  grid high-water sequence captured under the trace read lock; the ray compares
+  grid last-change sequence captured under the trace read lock; the ray compares
   it before physical-presence filtering and rechecks the world sequence at its
   final linearization point.
 - Destination-suffix rays establish the farthest reachable canonical terminal
@@ -2639,12 +2639,12 @@ Critical focused regressions:
   connection until exact positive-area contact geometry certifies them.
 - Grid slot reuse never aliases graph, cache, guide, or transition state.
 - Installing a map over an existing sparse grid observes one atomic baseline;
-  a voxel/obstacle mutation after its high-water mark is applied exactly once in
+  a voxel/obstacle mutation after its captured change sequence is applied exactly once in
   the next detached event prefix.
 - A mutation concurrent with context startup is represented either by the
   baseline or by the subscribed event prefix, never missed or applied twice.
 - Installing map B cannot discard a pre-baseline map A mutation merely because
-  A's unrelated event sequence is below B's baseline high-water mark.
+  A's unrelated event sequence is below B's baseline captured change sequence.
 - A tiny authored map installed over a very large dense or sparse physical grid
   requests and processes only its sorted authored addresses; a later overlay
   adding one address queries only that requested address.
@@ -2708,7 +2708,7 @@ Critical focused regressions:
   query/workspace/result-payload byte pressure, even with reversed worker
   completion, reject oversize item/descriptor/sort-scratch input before sorting,
   and trim retained workspaces in stable order.
-- Maintenance detaches a fixed high-water prefix: later events wait for the next
+- Maintenance detaches a fixed captured-sequence prefix: later events wait for the next
   batch, and only a generic event with the same immutable cause ID is suppressed.
 - A pinned bounded search plus repeated obstacle publications closes admission,
   drains the old generation, and publishes mandatory safety state without
@@ -3008,7 +3008,7 @@ exceptions, and tests/docs do not count as runtime compatibility):
 | Mixed metrics break cost/heuristic admissibility. | Use actual fixed-point anchors, non-negative costs, and certified Euclidean or zero heuristic. |
 | Dependency tracking grows too complex. | Start with composition plus conservative structural-component versions; refine only with a correctness proof and failed streaming gate. |
 | A guide races snapshot publication. | Resolve/search under a bounded immutable snapshot lease, release it before returning the guide, and validate exact dependencies at cache promotion and every guide use. |
-| Event inclusion depends on callback timing. | Detach immutable prefixes at source high-water marks and pair exact/generic events only by cause ID. |
+| Event inclusion depends on callback timing. | Detach immutable prefixes at source captured change sequences and pair exact/generic events only by cause ID. |
 | Per-grid streaming causes rebuild, cache, or repath waves. | Localize bake/overlay/seam ownership, publish immutable snapshots, dependency-index caches/guides, and enforce p95/p99/repath-byte gates. |
 | Mining, media changes, or temporary ladders require a whole-map rebake. | Keep the map as an immutable default and publish sparse addressed cell/connection/transition overlay transactions into persistent snapshot pages. |
 | Long-running unique overlay churn exhausts non-reused dynamic slots. | Enforce explicit per-map/context caps and expose whole-map checkpoint rebaking with atomic overlay Clear; never compact handles behind active snapshots. |

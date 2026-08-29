@@ -206,7 +206,7 @@ internal sealed class NavigationRayWork
                     interval.Cell.GridIndex,
                     interval.Cell.GridSpawnToken)
                 || instance.GridIdentity.ConfigurationKey != interval.ConfigurationKey
-                || instance.GridHighWaterSequence != interval.GridHighWaterSequence)
+                || instance.GridLastChangeSequence != interval.GridLastChangeSequence)
             {
                 return NavigationRayStatus.Stale;
             }

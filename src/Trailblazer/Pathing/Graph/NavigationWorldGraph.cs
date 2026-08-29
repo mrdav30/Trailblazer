@@ -303,7 +303,7 @@ internal sealed partial class NavigationWorldGraph
                 identity.ConfigurationKey,
                 identity.GridIndex,
                 identity.GridSpawnToken,
-                instance.GridHighWaterSequence);
+                instance.GridLastChangeSequence);
             return true;
         }
         generation = default;

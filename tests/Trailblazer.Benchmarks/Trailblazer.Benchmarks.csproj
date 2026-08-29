@@ -19,14 +19,14 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj"
-                      Condition="'$(UsePrebuiltLocalLsfStack)' != 'true'" />
+                      Condition="'$(UseLocalLsfStack)' != 'true' Or '$(UsePrebuiltLocalLsfStack)' != 'true'" />
     <ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
                       Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"
                       Targets="GetTargetPath"
-                      AdditionalProperties="Configuration=$(Configuration);SemVer=9.0.0" />
+                      AdditionalProperties="Configuration=$(Configuration);SemVer=9.1.0;AssemblySemVer=9.1.0.0" />
     <ProjectReference Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
                       Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"
-                      AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0" />
+                      AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0;AssemblySemVer=7.0.0.0" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- The Test SDK is required only for the VSTest Adapter to work -->
   </ItemGroup>

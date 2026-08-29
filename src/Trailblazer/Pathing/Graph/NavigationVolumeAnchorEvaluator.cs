@@ -205,7 +205,7 @@ internal readonly struct NavigationVolumeAnchorEvaluator
                     traceCell.Cell.WorldSpawnToken,
                     traceCell.Cell.GridIndex,
                     traceCell.Cell.GridSpawnToken)
-                || traceInstance.GridHighWaterSequence != traceCell.GridHighWaterSequence)
+                || traceInstance.GridLastChangeSequence != traceCell.GridLastChangeSequence)
             {
                 return NavigationVolumeAnchorStatus.Stale;
             }

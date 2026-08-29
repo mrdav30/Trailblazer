@@ -43,11 +43,11 @@ internal sealed class NavigationBaselineRebuild
     private int _defaultSeedCursor;
     private int _omittedDefaultSeedSlotCount;
     private int _omittedPhysicalDefaultSlotCount;
-    private ulong _highWaterSequence;
+    private ulong _capturedChangeSequence;
     private long _worldSpawnToken;
     private ushort _gridIndex = ushort.MaxValue;
     private long _gridSpawnToken;
-    private ulong _gridHighWaterSequence;
+    private ulong _gridLastChangeSequence;
     private bool _hasIdentity;
     private bool _completed;
     private bool _capacityBlocked;
@@ -187,7 +187,7 @@ internal sealed class NavigationBaselineRebuild
             && (baseline.WorldSpawnToken != _worldSpawnToken
                 || baseline.GridIndex != _gridIndex
                 || baseline.GridSpawnToken != _gridSpawnToken
-                || baseline.GridHighWaterSequence != _gridHighWaterSequence
+                || baseline.GridLastChangeSequence != _gridLastChangeSequence
                 || !baseline.ConfigurationKey.Equals(_map.GridBinding.Key)))
         {
             ResetProgress();
@@ -196,14 +196,14 @@ internal sealed class NavigationBaselineRebuild
 
         if (!_hasIdentity)
         {
-            _highWaterSequence = baseline.HighWaterSequence;
+            _capturedChangeSequence = baseline.CapturedChangeSequence;
             _worldSpawnToken = baseline.WorldSpawnToken;
             _gridIndex = baseline.GridIndex;
             _gridSpawnToken = baseline.GridSpawnToken;
-            _gridHighWaterSequence = baseline.GridHighWaterSequence;
+            _gridLastChangeSequence = baseline.GridLastChangeSequence;
             _hasIdentity = true;
         }
-        _highWaterSequence = baseline.HighWaterSequence;
+        _capturedChangeSequence = baseline.CapturedChangeSequence;
 
         PersistentIntMap<NavigationPhysicalPage> pages = instance.AppendPhysicalBaselinePages(
             _pages,
@@ -230,11 +230,11 @@ internal sealed class NavigationBaselineRebuild
         capture = new NavigationGridBaselineCapture(
             _addressCount,
             _pages,
-            _highWaterSequence,
+            _capturedChangeSequence,
             _worldSpawnToken,
             _gridIndex,
             _gridSpawnToken,
-            _gridHighWaterSequence,
+            _gridLastChangeSequence,
             _map.GridBinding.Key);
         _completedCapture = capture;
         return count;
@@ -246,11 +246,11 @@ internal sealed class NavigationBaselineRebuild
         _cursor = 0;
         _bakedCursor = 0;
         _dynamicCursor = 0;
-        _highWaterSequence = 0;
+        _capturedChangeSequence = 0;
         _worldSpawnToken = 0;
         _gridIndex = ushort.MaxValue;
         _gridSpawnToken = 0;
-        _gridHighWaterSequence = 0;
+        _gridLastChangeSequence = 0;
         _hasIdentity = false;
         _completed = false;
         _capacityBlocked = false;
@@ -308,17 +308,17 @@ internal sealed class NavigationBaselineRebuild
                 return 0;
             }
 
-            _highWaterSequence = identity.HighWaterSequence;
+            _capturedChangeSequence = identity.CapturedChangeSequence;
             _worldSpawnToken = identity.WorldSpawnToken;
             _gridIndex = identity.GridIndex;
             _gridSpawnToken = identity.GridSpawnToken;
-            _gridHighWaterSequence = identity.GridHighWaterSequence;
+            _gridLastChangeSequence = identity.GridLastChangeSequence;
             _hasIdentity = true;
             _coveredGeneration = new GridCoveredAddressGeneration(
                 identity.ConfigurationKey,
                 identity.GridIndex,
                 identity.GridSpawnToken,
-                identity.GridHighWaterSequence);
+                identity.GridLastChangeSequence);
             if (!world.TryBeginCoveredAddresses(
                     cursor,
                     identity.ConfigurationKey.BoundsMin,
@@ -364,11 +364,11 @@ internal sealed class NavigationBaselineRebuild
                     addressScratch.Slice(0, outputCount),
                     out GridNavigationBaseline? baseline)
                 || baseline == null
-                || baseline.HighWaterSequence != cursor.RunStamp.ChangeSequence
+                || baseline.CapturedChangeSequence != cursor.RunStamp.ChangeSequence
                 || baseline.WorldSpawnToken != cursor.RunStamp.WorldSpawnToken
                 || baseline.GridIndex != _gridIndex
                 || baseline.GridSpawnToken != _gridSpawnToken
-                || baseline.GridHighWaterSequence != _gridHighWaterSequence)
+                || baseline.GridLastChangeSequence != _gridLastChangeSequence)
             {
                 ResetProgress();
                 return addressProbes;
@@ -377,7 +377,7 @@ internal sealed class NavigationBaselineRebuild
             NavigationMapInstance next = _defaultCandidate!.AppendDefaultBaselineStates(
                 _source,
                 baseline.VoxelStates,
-                baseline.HighWaterSequence,
+                baseline.CapturedChangeSequence,
                 _pageVersion);
             for (int i = 0; i < baseline.VoxelStates.Length; i++)
             {
@@ -424,7 +424,7 @@ internal sealed class NavigationBaselineRebuild
             }
             _defaultCandidate = next;
             _cursor = checked(_cursor + outputCount);
-            _highWaterSequence = baseline.HighWaterSequence;
+            _capturedChangeSequence = baseline.CapturedChangeSequence;
         }
 
         if (status != GridCoveredAddressCursorStatus.Complete)
@@ -440,11 +440,11 @@ internal sealed class NavigationBaselineRebuild
             _structuralChangedStates,
             _defaultPhysicalAddressSetChanged || _omittedPhysicalDefaultSlotCount != 0,
             prepared.AddressCount,
-            _highWaterSequence,
+            _capturedChangeSequence,
             _worldSpawnToken,
             _gridIndex,
             _gridSpawnToken,
-            _gridHighWaterSequence,
+            _gridLastChangeSequence,
             _map.GridBinding.Key);
         _completedCapture = capture;
         return addressProbes;

@@ -374,7 +374,8 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             .Should().BeTrue();
         fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destination)
             .Should().BeTrue();
-        for (int i = 0; i < 16; i++)
+        const int hotPathIterationCount = 256;
+        for (int i = 0; i < hotPathIterationCount; i++)
         {
             NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
             warm.TrySampleHeading(destination.FootAnchor, GenerousBudget, out _)
@@ -384,7 +385,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
 
         bool succeeded = true;
         long before = System.GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 256; i++)
+        for (int i = 0; i < hotPathIterationCount; i++)
         {
             NavigationFlowFieldLease guide = CreateGuideUnchecked(
                 cache,

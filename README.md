@@ -3,18 +3,21 @@
 ![Trailblazer Icon](https://raw.githubusercontent.com/mrdav30/trailblazer/main/icon.png)
 
 [![Build](https://github.com/mrdav30/Trailblazer/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/mrdav30/Trailblazer/actions/workflows/build-and-test.yml)
+[![Branch Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmrdav30.github.io%2FTrailblazer%2FSummary.json&query=%24.summary.branchcoverage&suffix=%25&label=branch%20coverage&color=brightgreen)](https://mrdav30.github.io/Trailblazer/)
 [![NuGet](https://img.shields.io/nuget/v/Trailblazer.svg)](https://www.nuget.org/packages/Trailblazer)
 [![NuGet Lean](https://img.shields.io/nuget/v/Trailblazer.Lean.svg?label=nuget%20lean)](https://www.nuget.org/packages/Trailblazer.Lean)
 [![License](https://img.shields.io/github/license/mrdav30/Trailblazer.svg)](https://github.com/mrdav30/Trailblazer/blob/main/LICENSE)
+[![Discord](https://img.shields.io/badge/discord-join%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/mhwK2QFNBA)
 
 Trailblazer is deterministic, engine-agnostic navigation for lockstep games and
 simulations. One immutable map and query model covers grounded movement,
 free-form Gas/Liquid movement, rectangular and hex-prism grids, dynamic
-overlays, A*, flow fields, and explicit actions such as ladders or takeoff.
+overlays, A\*, flow fields, and explicit actions such as ladders or takeoff.
 
-It uses [FixedMathSharp](https://github.com/mrdav30/FixedMathSharp) for fixed-point
-math, [GridForge](https://github.com/mrdav30/GridForge) for world topology and
-geometry, [SwiftCollections](https://github.com/mrdav30/SwiftCollections) for
+It uses [FixedMathSharp](https://github.com/mrdav30/FixedMathSharp) for
+fixed-point math, [GridForge](https://github.com/mrdav30/GridForge) for world
+topology and geometry,
+[SwiftCollections](https://github.com/mrdav30/SwiftCollections) for
 low-allocation storage, and [Chronicler](https://github.com/mrdav30/Chronicler)
 for explicit serialization.
 
@@ -51,10 +54,10 @@ GridForge world
        movement or held action instruction
 ```
 
-A search state is one addressed cell plus one exact `TraversalMedium`.
-Ordinary movement retains that medium. An authored transition may retain it or
-change it, and a guide advances across the action only after the host completes
-the exact instruction.
+A search state is one addressed cell plus one exact `TraversalMedium`. Ordinary
+movement retains that medium. An authored transition may retain it or change it,
+and a guide advances across the action only after the host completes the exact
+instruction.
 
 ## Quick Start
 

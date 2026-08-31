@@ -46,7 +46,7 @@ jobs:
         run: dotnet build tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --no-restore
 
       - name: Run tests with coverage
-        run: dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory artifacts/coverage
+        run: dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --no-build --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage
 
       - name: Install ReportGenerator
         run: dotnet tool install --global dotnet-reportgenerator-globaltool

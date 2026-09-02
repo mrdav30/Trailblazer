@@ -401,23 +401,21 @@ internal sealed unsafe class NavigationGridChangeIngress
         if (_scopeTrackingAll || eventInfo.ChangeKind == GridEventKind.WorldReset)
             return;
         var scope = new NavigationGridChangeScope(eventInfo);
-        int i = 0;
-        while (true)
+        int matchingScopeIndex = _scopes.Length;
+        for (int i = 0;
+            i < _scopeCount && matchingScopeIndex == _scopes.Length;
+            i++)
         {
-            System.Diagnostics.Debug.Assert(
-                i < _scopeCount,
-                "Every retained non-global event owns one matching tracked scope.");
-            if (!_scopes[i].Scope.Equals(scope))
-            {
-                i++;
-                continue;
-            }
-            if (--_scopes[i].Count > 0)
-                return;
-            _scopes[i] = _scopes[--_scopeCount];
-            _scopes[_scopeCount] = default;
-            return;
+            if (_scopes[i].Scope.Equals(scope))
+                matchingScopeIndex = i;
         }
+        System.Diagnostics.Debug.Assert(
+            matchingScopeIndex < _scopeCount,
+            "Every retained non-global event owns one matching tracked scope.");
+        if (--_scopes[matchingScopeIndex].Count > 0)
+            return;
+        _scopes[matchingScopeIndex] = _scopes[--_scopeCount];
+        _scopes[_scopeCount] = default;
     }
 
     private int CopyBlockedScopes(

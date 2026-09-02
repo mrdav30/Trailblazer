@@ -18,15 +18,13 @@ internal static class NavigationGenerationCounter
 
     internal static long Advance(long generation, string exhaustionMessage)
     {
-        if (!CanAdvance(generation))
-            throw new InvalidOperationException(exhaustionMessage);
+        SwiftThrowHelper.ThrowIfTrue(!CanAdvance(generation), message: exhaustionMessage);
         return generation + 1;
     }
 
     internal static ulong Advance(ulong generation, string exhaustionMessage)
     {
-        if (!CanAdvance(generation))
-            throw new InvalidOperationException(exhaustionMessage);
+        SwiftThrowHelper.ThrowIfTrue(!CanAdvance(generation), message: exhaustionMessage);
         return generation + 1;
     }
 }

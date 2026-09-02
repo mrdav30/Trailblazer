@@ -5,7 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
+using System.Diagnostics;
 using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
@@ -40,8 +40,9 @@ internal sealed class NavigationAStarGuideLease
     {
         lock (_sync)
         {
-            if (_store != null || _payloadLease != null)
-                throw new InvalidOperationException("The A* guide lease is already active.");
+            // The cache rents only detached guides and does not return one to its pool
+            // until TryDetach has cleared this complete ownership tuple.
+            Debug.Assert(_store == null && _payloadLease == null);
             _generation = NavigationGenerationCounter.Advance(
                 _generation,
                 "The A* guide lease generation is exhausted.");

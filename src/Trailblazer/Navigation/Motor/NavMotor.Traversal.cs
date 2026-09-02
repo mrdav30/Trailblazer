@@ -63,11 +63,9 @@ public partial class NavMotor
 
         if (TraversalInProgress)
         {
-            if (FrameCount != _pendingTraversalFrame)
-            {
-                throw new InvalidOperationException(
-                    $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                FrameCount != _pendingTraversalFrame,
+                message: $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
 
             return false;
         }
@@ -549,8 +547,9 @@ public partial class NavMotor
     /// <returns>The acceleration limit depending on whether the object is grounded, airborne, or swimming.</returns>
     public Fixed64 GetMaxAcceleration()
     {
-        if (CurrentState == null)
-            throw new InvalidOperationException("NavMotor must be initialized before querying max acceleration.");
+        SwiftThrowHelper.ThrowIfTrue(
+            CurrentState == null,
+            message: "NavMotor must be initialized before querying max acceleration.");
 
         if (IsInLiquid)
             return WaterModule?.IsEnabled == true

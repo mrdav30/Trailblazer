@@ -277,11 +277,9 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         lock (_sync)
         {
             EnsureActive(work);
-            if (_nextAdmission < _activeAdmittedCount)
-            {
-                throw new InvalidOperationException(
-                    "The flow batch has not completed its sequential preparation barrier.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                _nextAdmission < _activeAdmittedCount,
+                message: "The flow batch has not completed its sequential preparation barrier.");
             descriptor = GetDescriptor(inputIndex);
             if (descriptor.SlotIndex < 0)
                 return NavigationFlowQueryStatus.CapacityExceeded;
@@ -310,11 +308,9 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         lock (_sync)
         {
             EnsureActive(work);
-            if (_nextAdmission < _activeAdmittedCount)
-            {
-                throw new InvalidOperationException(
-                    "The flow batch has not completed its sequential preparation barrier.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                _nextAdmission < _activeAdmittedCount,
+                message: "The flow batch has not completed its sequential preparation barrier.");
             int published = 0;
             while (published < maximumCount
                 && _nextPublication < _activeAdmittedCount)
@@ -341,8 +337,9 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         {
             EnsureActive(work);
             BatchDescriptor descriptor = GetDescriptor(inputIndex);
-            if (descriptor.SlotIndex < 0)
-                throw new InvalidOperationException("The flow query was not admitted.");
+            SwiftThrowHelper.ThrowIfTrue(
+                descriptor.SlotIndex < 0,
+                message: "The flow query was not admitted.");
             return _queries[descriptor.SlotIndex].TakeResult();
         }
     }

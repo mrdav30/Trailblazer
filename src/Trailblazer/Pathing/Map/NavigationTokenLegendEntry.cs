@@ -37,10 +37,10 @@ public readonly struct NavigationTokenLegendEntry
         NavigationCell cell,
         TraversalMedia transitionMedia = TraversalMedia.None)
     {
-        if (cell.Media == TraversalMedia.None)
-            throw new ArgumentException(
-                "The emitted cell must contain at least one known traversal-medium bit.",
-                nameof(cell));
+        SwiftThrowHelper.ThrowIfArgument(
+            cell.Media == TraversalMedia.None,
+            nameof(cell),
+            "The emitted cell must contain at least one known traversal-medium bit.");
 
         System.Diagnostics.Debug.Assert((cell.Media & ~NavigationCell.KnownMedia) == 0);
         System.Diagnostics.Debug.Assert((cell.RequiredCapabilities & ~NavigationCell.KnownCapabilities) == 0);
@@ -49,13 +49,11 @@ public readonly struct NavigationTokenLegendEntry
         System.Diagnostics.Debug.Assert(cell.RadiusClearance >= Fixed64.Zero);
         System.Diagnostics.Debug.Assert(cell.HeightClearance >= Fixed64.Zero);
 
-        if ((transitionMedia & ~NavigationCell.KnownMedia) != 0
-            || (transitionMedia & ~cell.Media) != 0)
-        {
-            throw new ArgumentException(
-                "Transition media must be a known subset of the emitted cell media.",
-                nameof(transitionMedia));
-        }
+        SwiftThrowHelper.ThrowIfArgument(
+            (transitionMedia & ~NavigationCell.KnownMedia) != 0
+            || (transitionMedia & ~cell.Media) != 0,
+            nameof(transitionMedia),
+            "Transition media must be a known subset of the emitted cell media.");
 
         EmitsCell = true;
         Cell = cell;

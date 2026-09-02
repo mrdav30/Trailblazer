@@ -837,11 +837,9 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     left,
                     candidate,
                     right);
-            if (!nodesEqual)
-            {
-                throw new InvalidOperationException(
-                    "Same-key flow payloads do not share one canonical node prefix.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                !nodesEqual,
+                message: "Same-key flow payloads do not share one canonical node prefix.");
         }
 
         if (existing.Nodes.Length == candidate.Nodes.Length)
@@ -851,11 +849,9 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 && existing.TransitionInstructions.Length
                     == candidate.TransitionInstructions.Length
                 && DependenciesAreEqual(existing.Dependencies, candidate.Dependencies);
-            if (!completionEqual)
-            {
-                throw new InvalidOperationException(
-                    "Equal flow prefixes do not share exact completion dependencies.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                !completionEqual,
+                message: "Equal flow prefixes do not share exact completion dependencies.");
             return PrefixRelation.Equal;
         }
 
@@ -865,15 +861,13 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowFieldPayload longer = ReferenceEquals(shorter, existing)
             ? candidate
             : existing;
-        if (shorter.IsComplete
+        SwiftThrowHelper.ThrowIfTrue(
+            shorter.IsComplete
             || !WorldDependencyIsSubset(shorter, longer)
             || longer.Nodes[shorter.Nodes.Length].IntegrationCost
                 <= shorter.LastSettledCost
-            || !DependenciesAreSubset(shorter.Dependencies, longer.Dependencies))
-        {
-            throw new InvalidOperationException(
-                "A complete or dependency-incompatible flow payload cannot be a strict prefix.");
-        }
+            || !DependenciesAreSubset(shorter.Dependencies, longer.Dependencies),
+            message: "A complete or dependency-incompatible flow payload cannot be a strict prefix.");
         return ReferenceEquals(longer, candidate)
             ? PrefixRelation.CandidateLonger
             : PrefixRelation.ExistingLonger;

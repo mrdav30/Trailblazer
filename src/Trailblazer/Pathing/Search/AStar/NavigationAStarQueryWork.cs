@@ -85,10 +85,13 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         ref NavigationAStarPayloadReservation reservation)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        if (!reservation.HasLeaseSlot)
-            throw new ArgumentException("A batch query requires one payload reservation.", nameof(reservation));
-        if (_started)
-            throw new InvalidOperationException("The A* query work is already active.");
+        SwiftThrowHelper.ThrowIfArgument(
+            !reservation.HasLeaseSlot,
+            paramName: nameof(reservation),
+            message: "A batch query requires one payload reservation.");
+        SwiftThrowHelper.ThrowIfTrue(
+            _started,
+            message: "The A* query work is already active.");
         _started = true;
         Volatile.Write(ref _readyToPublish, false);
         _readyStatus = NavigationAStarQueryStatus.Pending;
@@ -220,8 +223,9 @@ internal sealed class NavigationAStarQueryWork : IDisposable
 
     internal NavigationAStarPayloadLease TakeResult()
     {
-        if (Status != NavigationAStarQueryStatus.Success || _result == null)
-            throw new InvalidOperationException("The A* query has no successful payload lease.");
+        SwiftThrowHelper.ThrowIfTrue(
+            Status != NavigationAStarQueryStatus.Success || _result == null,
+            message: "The A* query has no successful payload lease.");
         NavigationAStarPayloadLease result = _result;
         _result = null;
         return result;

@@ -303,8 +303,9 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             if (descriptor.SlotIndex < 0)
                 return NavigationAStarQueryStatus.CapacityExceeded;
             query = _queries[descriptor.SlotIndex];
-            if (!query.IsPrepared)
-                throw new InvalidOperationException("The query has not completed sequential admission.");
+            SwiftThrowHelper.ThrowIfTrue(
+                !query.IsPrepared,
+                message: "The query has not completed sequential admission.");
             Monitor.Enter(query);
         }
         try
@@ -355,8 +356,9 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         {
             EnsureActive(work);
             BatchDescriptor descriptor = GetDescriptor(inputIndex);
-            if (descriptor.SlotIndex < 0)
-                throw new InvalidOperationException("The query was not admitted.");
+            SwiftThrowHelper.ThrowIfTrue(
+                descriptor.SlotIndex < 0,
+                message: "The query was not admitted.");
             return _queries[descriptor.SlotIndex].TakeResult();
         }
     }

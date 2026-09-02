@@ -359,8 +359,9 @@ internal sealed class NavigationAutomaticSeamIndex
 
         internal NavigationAutomaticSeamIndex Seal()
         {
-            if (_sealed)
-                throw new System.InvalidOperationException("The seam index edit is already sealed.");
+            SwiftThrowHelper.ThrowIfTrue(
+                _sealed,
+                message: "The seam index edit is already sealed.");
             _sealed = true;
             if (!IsChanged)
                 return _source;

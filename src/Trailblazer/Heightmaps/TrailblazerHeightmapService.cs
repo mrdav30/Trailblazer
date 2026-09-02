@@ -35,10 +35,12 @@ public sealed class TrailblazerHeightmapService
         int priority = 0)
     {
         EnsureUsable();
-        if (surface == null)
-            throw new ArgumentNullException(nameof(surface));
-        if (maxSelectionY <= minSelectionY)
-            throw new ArgumentOutOfRangeException(nameof(maxSelectionY), "Maximum selection Y must be greater than minimum selection Y.");
+        SwiftThrowHelper.ThrowIfNull(surface, nameof(surface));
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            maxSelectionY <= minSelectionY,
+            actualValue: null,
+            paramName: nameof(maxSelectionY),
+            message: "Maximum selection Y must be greater than minimum selection Y.");
         if (State.LayersByName.ContainsKey(surface.Name))
             return false;
 
@@ -204,7 +206,8 @@ public sealed class TrailblazerHeightmapService
     private void EnsureUsable()
     {
         SwiftThrowHelper.ThrowIfDisposed(_context.IsDisposed, nameof(TrailblazerWorldContext));
-        if (!_context.World.IsActive)
-            throw new InvalidOperationException("TrailblazerHeightmapService is bound to an inactive GridWorld.");
+        SwiftThrowHelper.ThrowIfTrue(
+            !_context.World.IsActive,
+            message: "TrailblazerHeightmapService is bound to an inactive GridWorld.");
     }
 }

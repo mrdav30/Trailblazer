@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-100`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-101`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -21,12 +21,36 @@
 
 ## Active Issues
 
-No active issues remain after the 2026-09-01 coverage hardening pass.
+No active issues remain after the 2026-09-01 coverage hardening and code-quality
+follow-up passes.
 
 ## Resolved Issues
 
 The issues below were resolved and verified as part of the 2026-09-01 coverage
-hardening pass.
+hardening and code-quality follow-up passes.
+
+### TRB-Issue-100 - Coverage cleanup mixes runtime guards with internal invariants
+
+- **Discovered:** 2026-09-01
+- **Area:** Exception guards, pooled-guide ownership, and bounded ingress work
+- **Status:** Resolved; verified by the 2026-09-01 release gates.
+- **Evidence:** Coverage hardening added direct exception construction at 24
+  ordinary guard sites, retained the same pattern at older guards, expressed one
+  bounded scope lookup as `while (true)`, and preserved an A* double-bind test
+  that bypassed the guide cache's detach-before-rent protocol.
+- **Impact:** Mixed guard conventions obscured which checks remain required in
+  Release, the unconditional loop hid its deterministic scope bound, and the
+  internal-abuse test made an impossible pool state look like supported behavior.
+- **Expected:** Route exact public, lifecycle, serialization, and corruption
+  guards through `SwiftThrowHelper`; retain direct throws only where the helper
+  cannot preserve the exception contract or terminal control flow; keep proven
+  internal ownership as diagnostic assertions; express ingress work with an
+  explicit bound; and remove the hollow double-bind test.
+- **Verification:** Ninety-three exact guard sites now use `SwiftThrowHelper`,
+  the 37 remaining direct throws have documented semantic reasons, scope removal
+  performs one allocation-free bounded scan, and supported A* pooling remains
+  covered. Full `Release` passes 2,287 tests, full `ReleaseLean` passes 2,238,
+  and both aggregates cover all 30,067 lines, 11,761 branches, and 2,952 methods.
 
 ### TRB-Issue-099 - Transition enumeration assertion checks validity, not ownership
 

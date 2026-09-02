@@ -100,10 +100,9 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     internal void Begin(PathQuery query, NavigationWorldGraphLease lease)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        if (_started)
-        {
-            throw new InvalidOperationException("The flow query work is already active.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            _started,
+            message: "The flow query work is already active.");
         _started = true;
         ReservationRejected = false;
         _resolvedOrigin = default;
@@ -266,8 +265,9 @@ internal sealed class NavigationFlowQueryWork : IDisposable
 
     internal NavigationFlowQueryResult TakeResult()
     {
-        if (Status != NavigationFlowQueryStatus.Success || !_hasResult)
-            throw new InvalidOperationException("The flow query has no successful payload lease.");
+        SwiftThrowHelper.ThrowIfTrue(
+            Status != NavigationFlowQueryStatus.Success || !_hasResult,
+            message: "The flow query has no successful payload lease.");
         NavigationFlowQueryResult result = _result;
         _result = default;
         _hasResult = false;

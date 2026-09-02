@@ -47,35 +47,27 @@ public abstract partial class Navigator
         PathQuery? restoredQuery = null;
         if (isLoading)
         {
-            if (schemaVersion != CurrentSerializationSchemaVersion)
-            {
-                throw new InvalidOperationException(
-                    "Serialized Navigator schema is missing, retired, or unsupported.");
-            }
-            if (!navigationProfileRecord.TryCreate(out NavigationAgentProfile recordedProfile)
-                || recordedProfile != _navigationProfile)
-            {
-                throw new InvalidOperationException(
-                    "Serialized navigation profile must exactly match the configured Navigator shell.");
-            }
-            if (!TraversalTransitionDefinition.IsKnownMedium(frameCondition.Medium))
-            {
-                throw new InvalidOperationException(
-                    "Serialized Navigator traversal medium is missing or unsupported.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                schemaVersion != CurrentSerializationSchemaVersion,
+                message: "Serialized Navigator schema is missing, retired, or unsupported.");
+            SwiftThrowHelper.ThrowIfTrue(
+                !navigationProfileRecord.TryCreate(out NavigationAgentProfile recordedProfile)
+                || recordedProfile != _navigationProfile,
+                message: "Serialized navigation profile must exactly match the configured Navigator shell.");
+            SwiftThrowHelper.ThrowIfTrue(
+                !TraversalTransitionDefinition.IsKnownMedium(frameCondition.Medium),
+                message: "Serialized Navigator traversal medium is missing or unsupported.");
 
             Vector3d loadedFootPosition =
                 position + Vector3d.Down * _navigationProfile.Shape.RootToFootOffsetY;
-            if (!pathSession.TryCreateQuery(
+            SwiftThrowHelper.ThrowIfTrue(
+                !pathSession.TryCreateQuery(
                     loadedFootPosition,
                     frameCondition.Medium,
                     _navigationProfile,
                     out restoredQuery)
-                || (restoredQuery.HasValue && _steering == null))
-            {
-                throw new InvalidOperationException(
-                    "Serialized Navigator path session is missing, invalid, or unsupported.");
-            }
+                || (restoredQuery.HasValue && _steering == null),
+                message: "Serialized Navigator path session is missing, invalid, or unsupported.");
 
             ValidateNestedRecords(chronicler, frameCondition);
         }
@@ -171,25 +163,21 @@ public abstract partial class Navigator
         {
             var steering = new NavSteering(context);
             RecordDeep.Look(chronicler, ref steering, "Steering");
-            if (steering.BrakingPower < Fixed64.Zero
+            SwiftThrowHelper.ThrowIfTrue(
+                steering.BrakingPower < Fixed64.Zero
                 || steering.WaypointTolerance < Fixed64.Zero
                 || steering.GroupFactor < Fixed64.Zero
-                || steering.AvoidFactor < Fixed64.Zero)
-            {
-                throw new InvalidOperationException(
-                    "Serialized steering limits must be non-negative.");
-            }
+                || steering.AvoidFactor < Fixed64.Zero,
+                message: "Serialized steering limits must be non-negative.");
         }
 
         if (_turning != null)
         {
             var turning = new NavTurning(context, Radius);
             RecordDeep.Look(chronicler, ref turning, "Turning");
-            if (turning.TurnRate < Fixed64.Zero)
-            {
-                throw new InvalidOperationException(
-                    "Serialized turn rate must be non-negative.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                turning.TurnRate < Fixed64.Zero,
+                message: "Serialized turn rate must be non-negative.");
         }
 
         if (_motor != null)
@@ -199,17 +187,15 @@ public abstract partial class Navigator
                 frameCondition,
                 CreateLocomotionProfile());
             RecordDeep.Look(chronicler, ref motor, "Motor");
-            if (motor.Handler.Move.MaxSlowSpeed < Fixed64.Zero
+            SwiftThrowHelper.ThrowIfTrue(
+                motor.Handler.Move.MaxSlowSpeed < Fixed64.Zero
                 || motor.Handler.Move.MaxModerateSpeed < Fixed64.Zero
                 || motor.Handler.Move.MaxFastSpeed < Fixed64.Zero
                 || motor.Handler.Move.MaxSidewaysSpeed < Fixed64.Zero
                 || motor.Handler.Move.MaxBackwardsSpeed < Fixed64.Zero
                 || motor.Handler.Move.MaxGroundAcceleration < Fixed64.Zero
-                || motor.Handler.Move.MaxAirAcceleration < Fixed64.Zero)
-            {
-                throw new InvalidOperationException(
-                    "Serialized movement limits must be non-negative.");
-            }
+                || motor.Handler.Move.MaxAirAcceleration < Fixed64.Zero,
+                message: "Serialized movement limits must be non-negative.");
         }
     }
 

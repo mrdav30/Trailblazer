@@ -195,8 +195,9 @@ public sealed class TrailblazerGuideService
     {
         if (_context.IsDisposed)
             throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
-        if (!_context.World.IsActive)
-            throw new InvalidOperationException("TrailblazerGuideService is bound to an inactive GridWorld.");
+        SwiftThrowHelper.ThrowIfTrue(
+            !_context.World.IsActive,
+            message: "TrailblazerGuideService is bound to an inactive GridWorld.");
     }
 
     internal static NavigationRayStatus ResolveDirectHeading(

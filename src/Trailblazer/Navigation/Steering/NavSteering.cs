@@ -197,12 +197,10 @@ public partial class NavSteering : IRecordable
 
     internal void BindPendingTransitionOwner(Navigator owner)
     {
-        if (_pendingTransitionOwner != null
-            && !ReferenceEquals(_pendingTransitionOwner, owner))
-        {
-            throw new InvalidOperationException(
-                "NavSteering is already bound to a different pending-transition owner.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            _pendingTransitionOwner != null
+            && !ReferenceEquals(_pendingTransitionOwner, owner),
+            message: "NavSteering is already bound to a different pending-transition owner.");
 
         _pendingTransitionOwner = owner;
     }

@@ -48,8 +48,11 @@ public sealed class NavigatorHeightmapGroundingSettings : IRecordable
         Fixed64? snapTolerance)
     {
         ValidateMode(mode);
-        if (snapTolerance.HasValue && snapTolerance.Value < Fixed64.Zero)
-            throw new ArgumentOutOfRangeException(nameof(snapTolerance), "Heightmap snap tolerance cannot be negative.");
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            snapTolerance.HasValue && snapTolerance.Value < Fixed64.Zero,
+            actualValue: null,
+            paramName: nameof(snapTolerance),
+            message: "Heightmap snap tolerance cannot be negative.");
 
         Mode = mode;
         LayerName = string.IsNullOrWhiteSpace(layerName) ? null : layerName;
@@ -87,8 +90,11 @@ public sealed class NavigatorHeightmapGroundingSettings : IRecordable
         if (chronicler.Mode == SerializationMode.Loading)
         {
             ValidateMode(mode);
-            if (hasSnapTolerance && snapTolerance < Fixed64.Zero)
-                throw new ArgumentOutOfRangeException(nameof(SnapTolerance), "Heightmap snap tolerance cannot be negative.");
+            SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+                hasSnapTolerance && snapTolerance < Fixed64.Zero,
+                actualValue: null,
+                paramName: nameof(SnapTolerance),
+                message: "Heightmap snap tolerance cannot be negative.");
 
             Mode = mode;
             LayerName = string.IsNullOrWhiteSpace(layerName) ? null : layerName;

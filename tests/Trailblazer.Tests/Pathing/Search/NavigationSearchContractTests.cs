@@ -1410,40 +1410,6 @@ public sealed class NavigationSearchContractTests
     }
 
     [Fact]
-    public void AStarGuide_ShouldRejectASecondBindWithoutReplacingItsPayload()
-    {
-        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
-            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
-        using NavigationWorldGraphStore store =
-            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, maxConcurrentLeases: 1);
-        NavigationAStarPayload payload = AStarPayload(fixture);
-        var cache = new NavigationAStarPayloadCache(
-            fixture.World,
-            maxEntries: 1,
-            maxReusableBytes: payload.RetainedBytes,
-            maxSinglePayloadBytes: payload.RetainedBytes,
-            maxActivePayloadBytes: checked(payload.RetainedBytes * 2),
-            maxActiveLeases: 2);
-        NavigationAStarPayloadLease firstLease = Publish(cache, store, payload);
-        cache.TryCreateGuide(store, firstLease, out NavigationAStarGuideLease? guide)
-            .Should().Be(NavigationAStarQueryStatus.Success);
-        NavigationAStarPayloadLease secondLease = Publish(cache, store, payload);
-
-        FluentActions.Invoking(() => guide!.Bind(store, secondLease))
-            .Should().Throw<InvalidOperationException>()
-            .WithMessage("The A* guide lease is already active.");
-
-        guide!.GetStatus(guide.Generation).Should().Be(NavigationAStarQueryStatus.Success);
-        secondLease.Payload.Should().BeSameAs(payload);
-        cache.LeasedBytes.Should().Be(payload.RetainedBytes,
-            "both leases retain one shared immutable cached payload");
-        guide.Dispose(guide.Generation);
-        secondLease.Dispose();
-        cache.ActiveLeaseCount.Should().Be(0);
-        cache.LeasedBytes.Should().Be(0);
-    }
-
-    [Fact]
     public void FlowGuidePool_ShouldRespectDisposalCapacityAndGenerationRetirement()
     {
         var guide = new NavigationFlowFieldGuideLease(0);

@@ -231,8 +231,9 @@ public partial class NavMotor : IRecordable
     {
         SwiftThrowHelper.ThrowIfNull(profile, nameof(profile));
 
-        if (TraversalInProgress)
-            throw new InvalidOperationException("Cannot change locomotion composition while a traversal frame is in progress.");
+        SwiftThrowHelper.ThrowIfTrue(
+            TraversalInProgress,
+            message: "Cannot change locomotion composition while a traversal frame is in progress.");
 
         Handler.ApplyProfile(profile);
 

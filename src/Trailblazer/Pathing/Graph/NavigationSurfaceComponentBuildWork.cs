@@ -288,11 +288,9 @@ internal sealed class NavigationSurfaceComponentBuildWork
         {
             return;
         }
-        if (!_domain.Contains(address))
-        {
-            throw new InvalidOperationException(
-                "Surface-component closure omitted a structurally adjacent prior component.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            !_domain.Contains(address),
+            message: "Surface-component closure omitted a structurally adjacent prior component.");
         _queue[_queueWrite++] = address;
     }
 
@@ -342,11 +340,9 @@ internal sealed class NavigationSurfaceComponentBuildWork
     {
         if (!_visited.Add(address))
             return;
-        if (!_domain.Contains(address))
-        {
-            throw new InvalidOperationException(
-                "Medium-component closure omitted a positive-face neighbor.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            !_domain.Contains(address),
+            message: "Medium-component closure omitted a positive-face neighbor.");
         _queue[_queueWrite++] = address;
     }
 

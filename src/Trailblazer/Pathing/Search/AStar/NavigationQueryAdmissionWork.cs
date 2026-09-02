@@ -90,8 +90,9 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         TraversalMedia targetMedia)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        if (_active)
-            throw new InvalidOperationException("The query admission work is already active.");
+        SwiftThrowHelper.ThrowIfTrue(
+            _active,
+            message: "The query admission work is already active.");
         _active = true;
         _lease = lease;
         _query = query;

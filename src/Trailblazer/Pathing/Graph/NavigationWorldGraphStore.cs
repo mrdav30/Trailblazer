@@ -146,11 +146,9 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
             CollectReleased();
             if (_disposed)
                 return NavigationCandidatePublication.Deferred;
-            if (next.GraphVersion <= _current.GraphVersion)
-            {
-                throw new InvalidOperationException(
-                    "Published navigation graph versions must increase monotonically.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                next.GraphVersion <= _current.GraphVersion,
+                message: "Published navigation graph versions must increase monotonically.");
             if (next.RetainedBytes > _maxActiveBytes
                 || next.PersistentPageCount > _maxPersistentPages)
                 return NavigationCandidatePublication.PermanentCapacity;

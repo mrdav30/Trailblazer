@@ -112,13 +112,11 @@ internal sealed class TrailblazerClock
     /// <param name="frameRate">The new frame rate. Must be greater than zero.</param>
     public void SetFrameRate(int frameRate)
     {
-        if (frameRate <= 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(frameRate),
-                frameRate,
-                "Frame rate must be greater than zero.");
-        }
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            frameRate <= 0,
+            actualValue: frameRate,
+            paramName: nameof(frameRate),
+            message: "Frame rate must be greater than zero.");
 
         _frameRate = frameRate;
         _deltaTime = Fixed64.One / (Fixed64)_frameRate;

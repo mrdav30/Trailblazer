@@ -51,6 +51,55 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void GetHeading_ShouldHoldRequestedStateWhileMovementIsDisabled()
+    {
+        var agent = new MockSteerAgent(Vector3d.Zero) { Speed = Fixed64.One };
+        var steer = new TestableNavSteering { CanMove = false };
+        steer.ForceMissingRequestState(new Vector3d(2, 0, 0));
+        bool arrived = false;
+        steer.Events.OnArrive += () => arrived = true;
+
+        Vector3d heading = steer.GetHeading(agent, out NavigationTransitionInstruction? pending);
+
+        heading.Should().Be(Vector3d.Zero);
+        pending.Should().BeNull();
+        steer.ShouldMove.Should().BeTrue();
+        steer.IsAtDestination.Should().BeFalse();
+        arrived.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetHeading_ShouldArriveWhenCustomPathValidationRejectsTheRequest()
+    {
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        var steer = new SequencedPathValidationNavSteering(false);
+        steer.ApplyPathQuery(CreateSurfaceQuery());
+
+        Vector3d heading = steer.GetHeading(agent, out NavigationTransitionInstruction? pending);
+
+        heading.Should().Be(Vector3d.Zero);
+        pending.Should().BeNull();
+        steer.ShouldMove.Should().BeFalse();
+        steer.IsAtDestination.Should().BeTrue();
+        steer.CurrentQuery.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetHeading_ShouldHonorCustomValidationThatEndsTheSession()
+    {
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        var steer = new SessionEndingPathValidationNavSteering();
+        steer.ApplyPathQuery(CreateSurfaceQuery());
+
+        Action resolveHeading = () => steer.GetHeading(agent, out _);
+
+        resolveHeading.Should().NotThrow();
+        steer.ShouldMove.Should().BeFalse();
+        steer.IsAtDestination.Should().BeTrue();
+        steer.CurrentQuery.Should().BeNull();
+    }
+
+    [Fact]
     public void FindTargetDirection_ShouldKeepZeroHeadingUnchanged()
     {
         var steer = new TestableNavSteering();
@@ -154,6 +203,115 @@ public class NavSteeringTests : IDisposable
 
         // Cleanup
         grid!.TryRemoveVoxelOccupant(neighbor);
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldApplySeparationForRegisteredGroupNeighbor()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero)
+        {
+            Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        var neighbor = new MockSteerAgent(Vector3d.Right)
+        {
+            Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        PathQuery query = new(
+            new NavigationEndpoint(Vector3d.Zero),
+            new NavigationEndpoint(new Vector3d(4, 0, 0)),
+            PathTestFactory.DefaultNavigationProfile,
+            new NavigationAreaPolicyKey("group-steering", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+            allowTransitions: false);
+        var ownerSteering = new NavSteering(TestWorld.Context)
+        {
+            BehaviorWeights = new GroupBehaviorWeights { Separation = Fixed64.One }
+        };
+        var neighborSteering = new NavSteering(TestWorld.Context);
+        ownerSteering.ApplyPathQuery(query, groupId: 7);
+        neighborSteering.ApplyPathQuery(query, groupId: 7);
+        ownerSteering.PrewarmMovementGroup(owner);
+        neighborSteering.PrewarmMovementGroup(neighbor);
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+
+        Vector3d force = ownerSteering.ComputeCombinedSteering(
+            owner.Position,
+            owner.Velocity,
+            owner.Speed,
+            owner.Radius,
+            owner.GlobalId);
+
+        force.X.Should().BeLessThan(Fixed64.Zero);
+
+        grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldIgnoreNonPhysicalSteeringOccupants()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero)
+        {
+            Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        var neighbor = new ZeroRadiusSteerAgent(Vector3d.Right);
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+        var steer = new NavSteering(TestWorld.Context);
+
+        Vector3d force = steer.ComputeCombinedSteering(
+            owner.Position,
+            owner.Velocity,
+            owner.Speed,
+            owner.Radius,
+            owner.GlobalId);
+
+        force.Should().Be(Vector3d.Zero);
+        grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldExcludeSameGroupNeighborOutsideGroupRadius()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero)
+        {
+            Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        var neighbor = new MockSteerAgent(Vector3d.Right)
+        {
+            Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        PathQuery query = CreateSurfaceQuery();
+        var ownerSteering = new NavSteering(TestWorld.Context)
+        {
+            GroupFactor = Fixed64.One,
+            AvoidFactor = (Fixed64)4,
+            BehaviorWeights = new GroupBehaviorWeights()
+        };
+        var neighborSteering = new NavSteering(TestWorld.Context);
+        ownerSteering.ApplyPathQuery(query, groupId: 7);
+        neighborSteering.ApplyPathQuery(query, groupId: 7);
+        ownerSteering.PrewarmMovementGroup(owner);
+        neighborSteering.PrewarmMovementGroup(neighbor);
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+
+        Vector3d force = ownerSteering.ComputeCombinedSteering(
+            owner.Position,
+            owner.Velocity,
+            owner.Speed,
+            owner.Radius,
+            owner.GlobalId);
+
+        force.Should().Be(Vector3d.Zero);
+        grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
     }
 
     [Fact]
@@ -462,6 +620,110 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void AddToMovementGroup_ShouldPreserveMembershipWhenReapplyingSameGroup()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero);
+        var steer = new NavSteering(TestWorld.Context);
+        PathQuery query = CreateSurfaceQuery();
+        steer.ApplyPathQuery(query, groupId: 7);
+        steer.PrewarmMovementGroup(owner);
+        var probe = new MovementGroupSession { GroupId = 7 };
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+                probe,
+                owner.GlobalId,
+                query.End.Position,
+                TestWorld.Context.FrameCount)
+            .Should().BeTrue();
+
+        steer.AddToMovementGroup(7);
+
+        steer.MovementGroupID.Should().Be(7);
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+                probe,
+                owner.GlobalId,
+                query.End.Position,
+                TestWorld.Context.FrameCount)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void AddToMovementGroup_ShouldReleasePreviousMembershipWhenSwitchingGroups()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero);
+        var steer = new NavSteering(TestWorld.Context);
+        PathQuery query = CreateSurfaceQuery();
+        steer.ApplyPathQuery(query, groupId: 7);
+        steer.PrewarmMovementGroup(owner);
+        var oldProbe = new MovementGroupSession { GroupId = 7 };
+
+        steer.AddToMovementGroup(8);
+
+        steer.MovementGroupID.Should().Be(8);
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+                oldProbe,
+                owner.GlobalId,
+                query.End.Position,
+                TestWorld.Context.FrameCount)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void BindContext_ShouldReleaseMembershipFromPreviousWorld()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero);
+        var steer = new NavSteering(TestWorld.Context);
+        PathQuery query = CreateSurfaceQuery();
+        steer.ApplyPathQuery(query, groupId: 7);
+        steer.PrewarmMovementGroup(owner);
+        var oldProbe = new MovementGroupSession { GroupId = 7 };
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+                oldProbe,
+                owner.GlobalId,
+                query.End.Position,
+                TestWorld.Context.FrameCount)
+            .Should().BeTrue();
+        using TrailblazerWorldContext replacement = TrailblazerWorldContext.CreateOwned();
+
+        steer.BindContext(replacement);
+
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+                oldProbe,
+                owner.GlobalId,
+                query.End.Position,
+                TestWorld.Context.FrameCount)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void StopMove_ShouldCancelGroupedRequestBeforeOwnerIsCached()
+    {
+        var steer = new NavSteering(TestWorld.Context);
+        int stopCount = 0;
+        steer.Events.OnStopMove += () => stopCount++;
+        steer.ApplyPathQuery(CreateSurfaceQuery(), groupId: 9);
+
+        steer.StopMove();
+
+        steer.ShouldMove.Should().BeFalse();
+        steer.IsInGroup.Should().BeFalse();
+        steer.MovementGroupID.Should().Be(-1);
+        stopCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void ApplyPathQuery_ShouldRaiseMoveRequestAppliedOnce()
+    {
+        var steer = new NavSteering(TestWorld.Context);
+        int appliedCount = 0;
+        steer.Events.OnMoveRequestApplied += () => appliedCount++;
+
+        steer.ApplyPathQuery(CreateSurfaceQuery());
+
+        appliedCount.Should().Be(1);
+        steer.ShouldMove.Should().BeTrue();
+    }
+
+    [Fact]
     public void GetHeading_ShouldRaiseStartTraversalEvent_WhenIdle()
     {
         var steer = new NavSteering(TestWorld.Context);
@@ -475,6 +737,126 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void CheckStuckStatus_ShouldLeaveGroupForRetryThenDeclareHardStuck()
+    {
+        var steer = new TestableNavSteering();
+        steer.AddToMovementGroup(7);
+        bool hardStuckRaised = false;
+        steer.Events.OnIsStuck += () => hardStuckRaised = true;
+
+        int frame = 0;
+        while (steer.IsInGroup && frame++ < 64)
+            steer.InvokeCheckStuckStatus(Fixed64.Zero, Fixed64.One).Should().BeTrue();
+
+        steer.IsInGroup.Should().BeFalse();
+        frame.Should().BeLessThanOrEqualTo(64);
+        steer.PathRetryRequested.Should().BeTrue();
+        steer.IsStuck.Should().BeFalse();
+
+        for (int retry = 0; retry < 3; retry++)
+            steer.InvokeCheckStuckStatus(Fixed64.Zero, Fixed64.One).Should().BeTrue();
+        steer.InvokeCheckStuckStatus(Fixed64.Zero, Fixed64.One).Should().BeFalse();
+
+        steer.IsStuck.Should().BeTrue();
+        hardStuckRaised.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CheckStuckStatus_ShouldHonorAutoStopCooldownWithoutRequestingRecovery()
+    {
+        var steer = new TestableNavSteering();
+        steer.PauseAutoStop();
+
+        for (int frame = 0; frame < TestWorld.Context.FrameRate; frame++)
+            steer.InvokeCheckStuckStatus(Fixed64.Zero, Fixed64.One).Should().BeTrue();
+
+        steer.CanAutoStop.Should().BeFalse();
+        steer.PathRetryRequested.Should().BeFalse();
+        steer.IsStuck.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetHeading_ShouldArriveAfterBoundedStuckRecoveryIsExhausted()
+    {
+        var agent = new MockSteerAgent(Vector3d.Zero)
+        {
+            Speed = Fixed64.Zero
+        };
+        var steer = new StuckHeadingNavSteering();
+        PathQuery query = new(
+            new NavigationEndpoint(Vector3d.Zero),
+            new NavigationEndpoint(new Vector3d(10, 0, 0)),
+            PathTestFactory.DefaultNavigationProfile,
+            new NavigationAreaPolicyKey("stuck-heading", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Gas),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+            allowTransitions: true);
+        int stuckEvents = 0;
+        int arrivalEvents = 0;
+        steer.Events.OnIsStuck += () => stuckEvents++;
+        steer.Events.OnArrive += () => arrivalEvents++;
+        steer.ApplyPathQuery(query);
+
+        int frameCount = 0;
+        while (!steer.IsAtDestination && frameCount++ < 64)
+            steer.GetHeading(agent, out _);
+
+        frameCount.Should().BeLessThanOrEqualTo(64);
+        steer.IsAtDestination.Should().BeTrue();
+        steer.IsStuck.Should().BeTrue();
+        steer.ShouldMove.Should().BeFalse();
+        stuckEvents.Should().Be(1);
+        arrivalEvents.Should().Be(1);
+    }
+
+    [Fact]
+    public void StopMove_ShouldClearRequestAndRaiseStopEventOnlyForActiveMovement()
+    {
+        var steer = new NavSteering(TestWorld.Context);
+        PathQuery query = new(
+            new NavigationEndpoint(Vector3d.Zero),
+            new NavigationEndpoint(Vector3d.Right),
+            PathTestFactory.DefaultNavigationProfile,
+            new NavigationAreaPolicyKey("steering-stop", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+            allowTransitions: false);
+        int stopCount = 0;
+        steer.Events.OnStopMove += () => stopCount++;
+        steer.ApplyPathQuery(query);
+
+        steer.StopMove();
+        steer.StopMove();
+
+        steer.ShouldMove.Should().BeFalse();
+        steer.CurrentQuery.Should().BeNull();
+        stopCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void PendingTransitionOwnership_ShouldRejectASecondNavigatorUntilReleased()
+    {
+        var steer = new NavSteering(TestWorld.Context);
+        var first = new TestNavigator(TestWorld.Context);
+        var second = new TestNavigator(TestWorld.Context);
+        steer.BindPendingTransitionOwner(first);
+
+        Action bindSecond = () => steer.BindPendingTransitionOwner(second);
+
+        bindSecond.Should().Throw<InvalidOperationException>()
+            .WithMessage("*already bound*different*owner*");
+
+        steer.UnbindPendingTransitionOwner(second);
+        bindSecond.Should().Throw<InvalidOperationException>()
+            .WithMessage("*already bound*different*owner*");
+
+        steer.UnbindPendingTransitionOwner(first);
+        steer.Invoking(value => value.BindPendingTransitionOwner(second)).Should().NotThrow();
+    }
+
+    [Fact]
     public void SetDeceleration_ShouldUseBrakingPower_WhenAccelerationIsZero()
     {
         var steer = new TestableNavSteering();
@@ -483,6 +865,32 @@ public class NavSteeringTests : IDisposable
         steer.InvokeSetDeceleration(Vector3d.Zero, Fixed64.One);
 
         steer.TargetDirection.Magnitude.Should().BeLessThan(Fixed64.One);
+    }
+
+    [Theory]
+    [InlineData(0, 1, 4, 3, 80)]
+    [InlineData(2, 1, 4, 1, 2)]
+    [InlineData(1, 0, 1, 1, 1)]
+    [InlineData(1, 2, 1, 1, 1)]
+    public void SetDeceleration_ShouldUseTheActiveBrakeSourceAndExactSlowDistanceBounds(
+        int accelerationMagnitude,
+        int distanceNumerator,
+        int distanceDenominator,
+        int expectedNumerator,
+        int expectedDenominator)
+    {
+        var steer = new TestableNavSteering();
+        steer.ForceHeadingState(
+            Vector3d.Right,
+            Fixed64.FromFraction(distanceNumerator, distanceDenominator));
+        Vector3d acceleration = accelerationMagnitude == 0
+            ? Vector3d.Zero
+            : Vector3d.Right * (Fixed64)accelerationMagnitude;
+
+        steer.InvokeSetDeceleration(acceleration, Fixed64.One);
+
+        steer.TargetDirection.Should().Be(
+            Vector3d.Right * Fixed64.FromFraction(expectedNumerator, expectedDenominator));
     }
 
     [Fact]
@@ -531,6 +939,11 @@ public class NavSteeringTests : IDisposable
     {
         public TestableNavSteering() : base(TestWorld.Context) { }
 
+        public bool PathRetryRequested => _shouldRequestPathThisFrame;
+
+        public bool InvokeCheckStuckStatus(Fixed64 speed, Fixed64 stuckThreshold) =>
+            CheckStuckStatus(Vector3d.Zero, speed, stuckThreshold);
+
         public void ForceMissingRequestState(Vector3d destination)
         {
             _destination = destination;
@@ -538,8 +951,6 @@ public class NavSteeringTests : IDisposable
             _shouldMove = true;
             _isAtDestination = false;
         }
-
-        public int GetGroupIndex() => GroupIndex;
 
         public void ForceHeadingState(
             Vector3d targetDirection,
@@ -607,6 +1018,53 @@ public class NavSteeringTests : IDisposable
         }
     }
 
+    private sealed class SessionEndingPathValidationNavSteering : NavSteering
+    {
+        public SessionEndingPathValidationNavSteering()
+            : base(TestWorld.Context)
+        {
+        }
+
+        protected override bool ValidateMovementPath(Vector3d origin)
+        {
+            Arrive();
+            return true;
+        }
+    }
+
+    private sealed class StuckHeadingNavSteering : NavSteering
+    {
+        public StuckHeadingNavSteering()
+            : base(TestWorld.Context)
+        {
+        }
+
+        protected override bool ValidateMovementPath(Vector3d origin)
+        {
+            _shouldRequestPathThisFrame = false;
+            return true;
+        }
+
+        protected override Vector3d FindTargetDirection(
+            Vector3d position,
+            out NavigationTransitionInstruction? pendingTransition)
+        {
+            pendingTransition = null;
+            _distanceToTarget = (Fixed64)10;
+            return Vector3d.Right;
+        }
+    }
+
+    private static PathQuery CreateSurfaceQuery() => new(
+        new NavigationEndpoint(Vector3d.Zero),
+        new NavigationEndpoint(Vector3d.Right),
+        PathTestFactory.DefaultNavigationProfile,
+        new NavigationAreaPolicyKey("steering-validation", 1),
+        new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+        PathAlgorithm.AStar,
+        new NavigationWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+        allowTransitions: false);
+
     private sealed class NonSteeringOccupant : IVoxelOccupant
     {
         public Guid GlobalId { get; } = Guid.NewGuid();
@@ -619,5 +1077,31 @@ public class NavSteeringTests : IDisposable
         {
             Position = position;
         }
+    }
+
+    private sealed class ZeroRadiusSteerAgent : ISteer
+    {
+        public ZeroRadiusSteerAgent(Vector3d position) => Position = position;
+
+        public Guid GlobalId { get; } =
+            new("40000000-0000-0000-0000-000000000001");
+
+        public Vector3d Position { get; }
+
+        public Vector3d Velocity => Vector3d.Zero;
+
+        public Fixed64 Speed => Fixed64.Zero;
+
+        public Vector3d Acceleration => Vector3d.Zero;
+
+        public Fixed64 StuckThresholdSpeed => Fixed64.Zero;
+
+        public NavigationAgentProfile NavigationProfile => PathTestFactory.DefaultNavigationProfile;
+
+        public KinematicBodyShape BodyShape => default;
+
+        public Fixed64 Radius => Fixed64.Zero;
+
+        public byte OccupantGroupId => 1;
     }
 }

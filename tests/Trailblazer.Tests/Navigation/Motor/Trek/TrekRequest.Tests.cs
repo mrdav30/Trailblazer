@@ -8,6 +8,27 @@ namespace Trailblazer.Tests.Navigation.Motor;
 
 public class TrekRequestTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SetRequest_ShouldNormalizeMissingOrZeroFacingDirection(bool useNull)
+    {
+        var request = new TrekRequest();
+        Vector3d? facingDirection = useNull ? null : Vector3d.Zero;
+
+        request.SetRequest(
+            Vector3d.Right,
+            TrekRate.Moderate,
+            isRequestingJump: false,
+            isRequestingFlight: false,
+            isRequestingSwim: false,
+            isRequestingClimb: false,
+            facingDirection);
+
+        request.Direction.Should().Be(Vector3d.Right);
+        request.FacingDirection.Should().BeNull();
+    }
+
     [Fact]
     public void Clone_ShouldCopyFrameState()
     {

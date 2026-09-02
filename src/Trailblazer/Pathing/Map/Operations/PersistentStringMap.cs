@@ -99,12 +99,6 @@ internal sealed class PersistentStringMap<T>
         }
     }
 
-    internal void CopyValuesTo(T[] destination)
-    {
-        int offset = 0;
-        CopyValues(_root, destination, ref offset);
-    }
-
     private static Node Set(Node? node, string key, T value)
     {
         if (node == null)
@@ -340,15 +334,6 @@ internal sealed class PersistentStringMap<T>
     {
         copiedNodeCount = checked(copiedNodeCount + 1);
         return new Node(key, value, left, right);
-    }
-
-    private static void CopyValues(Node? node, T[] destination, ref int offset)
-    {
-        if (node == null)
-            return;
-        CopyValues(node.Left, destination, ref offset);
-        destination[offset++] = node.Value;
-        CopyValues(node.Right, destination, ref offset);
     }
 
     private static int CountOf(Node? node) => node?.Count ?? 0;

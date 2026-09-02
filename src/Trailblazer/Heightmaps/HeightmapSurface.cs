@@ -116,15 +116,16 @@ public sealed class HeightmapSurface
         HeightmapCompression compression)
     {
         ValidateName(name);
-        if (heights == null)
-            throw new ArgumentNullException(nameof(heights));
+        SwiftThrowHelper.ThrowIfNull(heights, nameof(heights));
         ValidateInterval(interval);
         ValidateCompression(compression);
 
         int width = heights.GetLength(0);
         int depth = heights.GetLength(1);
-        if (width <= 0 || depth <= 0)
-            throw new ArgumentException("Height samples must have positive width and depth.", nameof(heights));
+        SwiftThrowHelper.ThrowIfArgument(
+            width <= 0 || depth <= 0,
+            paramName: nameof(heights),
+            message: "Height samples must have positive width and depth.");
 
         var compressed = new SwiftShortArray2D(width, depth);
         for (int x = 0; x < width; x++)
@@ -192,28 +193,36 @@ public sealed class HeightmapSurface
 
     private static void ValidateName(string name)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Heightmap surface name cannot be null or whitespace.", nameof(name));
+        SwiftThrowHelper.ThrowIfArgument(
+            string.IsNullOrWhiteSpace(name),
+            paramName: nameof(name),
+            message: "Heightmap surface name cannot be null or whitespace.");
     }
 
     private static void ValidateSamples(SwiftShortArray2D samples)
     {
-        if (samples == null)
-            throw new ArgumentNullException(nameof(samples));
-        if (samples.Width <= 0 || samples.Height <= 0)
-            throw new ArgumentException("Height samples must have positive width and depth.", nameof(samples));
+        SwiftThrowHelper.ThrowIfNull(samples, nameof(samples));
+        SwiftThrowHelper.ThrowIfArgument(
+            samples.Width <= 0 || samples.Height <= 0,
+            paramName: nameof(samples),
+            message: "Height samples must have positive width and depth.");
     }
 
     private static void ValidateInterval(Fixed64 interval)
     {
-        if (interval <= Fixed64.Zero)
-            throw new ArgumentOutOfRangeException(nameof(interval), "Heightmap interval must be positive.");
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            interval <= Fixed64.Zero,
+            actualValue: null,
+            paramName: nameof(interval),
+            message: "Heightmap interval must be positive.");
     }
 
     private static void ValidateCompression(HeightmapCompression compression)
     {
-        if (!compression.IsValid)
-            throw new ArgumentException("Heightmap compression requires a positive height step.", nameof(compression));
+        SwiftThrowHelper.ThrowIfArgument(
+            !compression.IsValid,
+            paramName: nameof(compression),
+            message: "Heightmap compression requires a positive height step.");
     }
 
     private static SwiftShortArray2D CopySamples(SwiftShortArray2D source)

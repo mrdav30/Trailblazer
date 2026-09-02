@@ -69,8 +69,6 @@ public partial class NavTurning : IRecordable
     /// </summary>
     private Fixed64 _radius;
 
-    private bool _isInitialized;
-
     private TrailblazerWorldContext? _context;
 
     /// <summary>
@@ -103,8 +101,6 @@ public partial class NavTurning : IRecordable
 
     #endregion
 
-    private NavTurning() { }
-
     /// <summary>
     /// Constructs and immediately initializes a context-bound <see cref="NavTurning"/>.
     /// </summary>
@@ -123,8 +119,7 @@ public partial class NavTurning : IRecordable
         _context = context;
     }
 
-    private TrailblazerWorldContext RequireContext() =>
-        _context ?? throw new InvalidOperationException("NavTurning requires an explicit TrailblazerWorldContext.");
+    private TrailblazerWorldContext RequireContext() => _context!;
 
     private int FrameRate => RequireContext().FrameRate;
 
@@ -136,8 +131,6 @@ public partial class NavTurning : IRecordable
     internal void OnInitialize(Fixed64 radius)
     {
         _radius = radius;
-        _isInitialized = true;
-
         TargetReached = true;
         TargetRotation = FixedQuaternion.Identity;
 
@@ -158,9 +151,6 @@ public partial class NavTurning : IRecordable
     {
         appliedRotation = FixedQuaternion.Identity;
         // 1) Preconditions
-        if (!_isInitialized)
-            throw new InvalidOperationException(
-              "NavTurning must be initialized before TrySimulateTurn().");
         if (!CanTurn) return false;
 
         // 2) If we’re idle (finished last turn):
@@ -217,13 +207,15 @@ public partial class NavTurning : IRecordable
 
         // 1) compute delta first
         Vector3d delta = position - lastPosition;
-        if (delta.MagnitudeSquared < GetCollisionTurnThreshold()
-            || !TargetReached
-            || (CanTurnOnCollision?.Invoke() == false))
+        if (delta.MagnitudeSquared < GetCollisionTurnThreshold())
         {
             // keep _isColliding true so we retry next frame
             return;
         }
+
+        Func<bool>? canTurnOnCollision = CanTurnOnCollision;
+        if (canTurnOnCollision != null && !canTurnOnCollision())
+            return;
 
         // 2) now we know we’ll actually turn
         _isColliding = false;

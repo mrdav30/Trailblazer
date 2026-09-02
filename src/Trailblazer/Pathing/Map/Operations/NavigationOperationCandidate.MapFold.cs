@@ -128,10 +128,16 @@ internal sealed partial class NavigationOperationCandidate
             _corridorAddressSet = corridorAddressSet;
             _working._maps.TryGetValue(mapId, out _current);
             _changedMapIds[0] = mapId;
-            _stage = _current == null ? Stage.Complete : Stage.Dependencies;
-            _rejection = _current == null
-                ? NavigationOperationRejection.MissingMap
-                : NavigationOperationRejection.None;
+            if (_current == null)
+            {
+                _stage = Stage.Complete;
+                _rejection = NavigationOperationRejection.MissingMap;
+            }
+            else
+            {
+                _stage = Stage.Dependencies;
+                _rejection = NavigationOperationRejection.None;
+            }
         }
 
         internal NavigationOperationCandidate Candidate => _working;
@@ -216,17 +222,15 @@ internal sealed partial class NavigationOperationCandidate
             }
             if (_stage == Stage.Commit)
                 Commit();
-            if (_stage == Stage.ExplicitConnections)
+            System.Diagnostics.Debug.Assert(_stage == Stage.ExplicitConnections);
+            if (!_explicitRefresh!.Advance(meter))
             {
-                if (!_explicitRefresh!.Advance(meter))
-                {
-                    rejection = NavigationOperationRejection.None;
-                    return false;
-                }
-                if (!_explicitRefresh.IsValid)
-                    _rejection = NavigationOperationRejection.ValidationFailed;
-                _stage = Stage.Complete;
+                rejection = NavigationOperationRejection.None;
+                return false;
             }
+            if (!_explicitRefresh.IsValid)
+                _rejection = NavigationOperationRejection.ValidationFailed;
+            _stage = Stage.Complete;
             rejection = _rejection;
             return true;
         }
@@ -253,8 +257,8 @@ internal sealed partial class NavigationOperationCandidate
             long retainedRuleCount = checked(
                 _working.TransitionRuleCount
                 - (_current?.Map.TransitionRuleSpan.Length ?? 0));
-            if (map.TransitionRuleSpan.Length > _limits.MaxTransitionRulesPerMap
-                || map.TransitionRuleSpan.Length > _limits.MaxTransitionRules - retainedRuleCount)
+            // Per-map rule capacity is rejected during admission before fold work exists.
+            if (map.TransitionRuleSpan.Length > _limits.MaxTransitionRules - retainedRuleCount)
             {
                 _rejection = NavigationOperationRejection.CapacityExceeded;
                 _stage = Stage.Complete;
@@ -462,9 +466,9 @@ internal sealed partial class NavigationOperationCandidate
                     _validationSourceIndex++;
                     continue;
                 }
-                if (_working._maps.TryGetValue(sourceId, out MapState source))
-                    return source;
-                _validationSourceIndex++;
+                bool hasSource = _working._maps.TryGetValue(sourceId, out MapState source);
+                System.Diagnostics.Debug.Assert(hasSource);
+                return source;
             }
             return null;
         }
@@ -485,8 +489,7 @@ internal sealed partial class NavigationOperationCandidate
                             overlay: _validationStage == 1,
                             _validationIndex++,
                             _changedMapIds,
-                            _changedStates,
-                            allowDormantEndpoints: true))
+                            _changedStates))
                     {
                         _rejection = NavigationOperationRejection.ValidationFailed;
                         _stage = Stage.Complete;

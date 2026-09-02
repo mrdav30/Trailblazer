@@ -7,7 +7,7 @@ using Xunit;
 namespace Trailblazer.Tests.Navigation.Motor;
 
 [Collection("TrailblazerCollection")]
-public sealed class PlatformLocomotionTailTests : IDisposable
+public sealed class PlatformLocomotionLifecycleTests : IDisposable
 {
     public void Dispose()
     {
@@ -16,7 +16,7 @@ public sealed class PlatformLocomotionTailTests : IDisposable
     }
 
     [Fact]
-    public void PropertiesAndHoldTick_ShouldCoverDisabledAndSamePlatformBranches()
+    public void PropertiesAndHoldTick_ShouldReflectDisabledAndSamePlatformState()
     {
         var locomotion = new PlatformLocomotion();
         PlatformSnapshot activePlatform = new(1, MockMotorAgentTestFactory.CreatePlatformTransform());
@@ -43,6 +43,48 @@ public sealed class PlatformLocomotionTailTests : IDisposable
         locomotion.IsActive.Should().BeFalse();
         locomotion.IsHoldingPlatform.Should().BeFalse();
         locomotion.InertiaApplied.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TickHoldOnPlatform_ShouldReleaseAfterExactLimit_WhenHeldPlatformChanged()
+    {
+        var locomotion = new PlatformLocomotion
+        {
+            ActivePlatform = new PlatformSnapshot(1, MockMotorAgentTestFactory.CreatePlatformTransform())
+        };
+        locomotion.SetHoldPlatform(new PlatformSnapshot(
+            2,
+            MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 0))));
+
+        locomotion.TickHoldOnPlatform().Should().BeFalse();
+        locomotion.TickHoldOnPlatform().Should().BeTrue();
+        locomotion.HoldPlatformFrames.Should().Be(0);
+    }
+
+    [Fact]
+    public void TickHoldOnPlatform_ShouldReleaseAfterExactLimit_WhenActivePlatformDisappears()
+    {
+        var locomotion = new PlatformLocomotion();
+        locomotion.SetHoldPlatform(new PlatformSnapshot(
+            2,
+            MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 0))));
+
+        locomotion.TickHoldOnPlatform().Should().BeFalse();
+        locomotion.TickHoldOnPlatform().Should().BeTrue();
+        locomotion.HoldPlatformFrames.Should().Be(0);
+    }
+
+    [Fact]
+    public void UpdatePlatformVelocity_ShouldRejectUnboundKinematicPlatformState()
+    {
+        var locomotion = new PlatformLocomotion
+        {
+            ActivePlatform = new PlatformSnapshot(1, MockMotorAgentTestFactory.CreatePlatformTransform())
+        };
+
+        locomotion.Invoking(value => value.UpdatePlatformVelocity())
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*TrailblazerWorldContext*");
     }
 
     [Fact]

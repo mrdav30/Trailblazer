@@ -317,8 +317,11 @@ public class MoveLocomotionTests : IDisposable
         agent.Motor.Handler.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
     }
 
-    [Fact]
-    public void Given_AgentOnSlope_When_Simulated_Then_VelocityShouldBeProjectedOntoSlope()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Given_AgentOnSlope_When_Simulated_Then_VelocityShouldBeProjectedOntoSlope(
+        bool coreOnly)
     {
         // Arrange
         var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
@@ -328,7 +331,8 @@ public class MoveLocomotionTests : IDisposable
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform
+            platformMatrix: platform,
+            profile: coreOnly ? LocomotionProfile.CreateCoreOnly() : null
         );
 
         agent.FrameRequest.Direction = Vector3d.Forward;
@@ -343,6 +347,64 @@ public class MoveLocomotionTests : IDisposable
         var expected = Vector3d.ProjectOnPlane(Vector3d.Forward, slopeNormal);
 
         velocity.Normalized.Should().BeApproximately(expected.Normalized, Fixed64.Epsilon);
+        if (coreOnly)
+            agent.Motor.Handler.Slide.Should().BeNull();
+    }
+
+    [Fact]
+    public void Given_FlatGround_When_SlopeCurveWouldReduceSpeed_Then_FlatSpeedIsUnmodified()
+    {
+        var agent = MockMotorAgentTestFactory.CreatePlatformAgent();
+        MoveLocomotion move = agent.Motor.Handler.Move;
+        move.SlopeSpeedMultiplier = new FixedCurve(
+            FixedCurveMode.Linear,
+            new FixedCurveKey((Fixed64)(-1), Fixed64.Quarter),
+            new FixedCurveKey(Fixed64.One, Fixed64.Quarter));
+
+        for (int frame = 0; frame < 16; frame++)
+        {
+            TestWorld.Context.Simulate();
+            agent.FrameRequest.Direction = Vector3d.Forward;
+            agent.FrameRequest.Rate = TrekRate.Slow;
+            agent.Simulate();
+        }
+
+        agent.Motor.FrameSlopeAngle.Should().Be(Fixed64.Zero);
+        agent.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeApproximately(
+            move.MaxSlowSpeed,
+            Fixed64.FromRaw(16));
+    }
+
+    [Fact]
+    public void Given_SlopeSpeedModificationDisabled_When_MovingAcrossSlope_Then_SpeedIsUnmodified()
+    {
+        Fixed64 slope = FixedMath.DegToRad((Fixed64)30);
+        Fixed4x4 platform = MockMotorAgentTestFactory.CreatePlatformTransform(
+            platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, slope));
+        var agent = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var limitedAgent = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        MoveLocomotion move = agent.Motor.Handler.Move;
+        MoveLocomotion limitedMove = limitedAgent.Motor.Handler.Move;
+        move.ModifySpeedOnSlope = false;
+        limitedMove.SlopeSpeedMultiplier = new FixedCurve(
+            FixedCurveMode.Linear,
+            new FixedCurveKey(-Fixed64.One, Fixed64.Quarter),
+            new FixedCurveKey(Fixed64.One, Fixed64.Quarter));
+
+        for (int frame = 0; frame < 16; frame++)
+        {
+            TestWorld.Context.Simulate();
+            agent.FrameRequest.Direction = Vector3d.Right;
+            agent.FrameRequest.Rate = TrekRate.Slow;
+            agent.Simulate();
+            limitedAgent.FrameRequest.Direction = Vector3d.Right;
+            limitedAgent.FrameRequest.Rate = TrekRate.Slow;
+            limitedAgent.Simulate();
+        }
+
+        agent.Motor.CurrentState.SlopeAngle.Should().BeGreaterThan(Fixed64.Zero);
+        limitedAgent.Motor.CurrentState.SlopeAngle.Should().Be(agent.Motor.CurrentState.SlopeAngle);
+        move.FrameVelocity.X.Should().BeGreaterThan(limitedMove.FrameVelocity.X);
     }
 
     [Fact]

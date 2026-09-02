@@ -61,8 +61,6 @@ public class TransitState
 
     #region Constructors
 
-    private TransitState() { }
-
     /// <summary>
     /// Initializes a new instance of the TransitState class using the specified trek condition.
     /// </summary>

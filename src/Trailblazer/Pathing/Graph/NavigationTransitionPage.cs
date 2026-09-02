@@ -29,9 +29,6 @@ internal readonly struct NavigationTransitionOwnerKey : IEquatable<NavigationTra
         string.Equals(MapId, other.MapId, StringComparison.Ordinal)
         && string.Equals(TransitionId, other.TransitionId, StringComparison.Ordinal);
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationTransitionOwnerKey other && Equals(other);
-
     public override int GetHashCode()
     {
         var comparer = SwiftHashTools.GetDeterministicStringEqualityComparer();
@@ -57,9 +54,6 @@ internal readonly struct NavigationTransitionPageAddress : IEquatable<Navigation
     public bool Equals(NavigationTransitionPageAddress other) =>
         PageIndex == other.PageIndex
         && string.Equals(MapId, other.MapId, StringComparison.Ordinal);
-
-    public override bool Equals(object? obj) =>
-        obj is NavigationTransitionPageAddress other && Equals(other);
 
     public override int GetHashCode()
     {
@@ -113,9 +107,6 @@ internal readonly struct NavigationPublishedTransition : IEquatable<NavigationPu
         && HasDestinationPage == other.HasDestinationPage
         && DestinationPageIndex == other.DestinationPageIndex;
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationPublishedTransition other && Equals(other);
-
     public override int GetHashCode() =>
         SwiftHashTools.CombineHashCodes(Owner.GetHashCode(), Definition.GetHashCode());
 }
@@ -158,9 +149,6 @@ internal readonly struct NavigationIncomingTransitionRef : IEquatable<Navigation
         && SourceMedium == other.SourceMedium
         && DestinationMedium == other.DestinationMedium
         && Type == other.Type;
-
-    public override bool Equals(object? obj) =>
-        obj is NavigationIncomingTransitionRef other && Equals(other);
 
     public override int GetHashCode() =>
         SwiftHashTools.CombineHashCodes(Owner.GetHashCode(), SourceIndex.GetHashCode());
@@ -311,10 +299,7 @@ internal sealed class NavigationTransitionPage
         comparison = ((int)left.Type).CompareTo((int)right.Type);
         if (comparison != 0)
             return comparison;
-        comparison = string.CompareOrdinal(left.Owner.MapId, right.Owner.MapId);
-        return comparison != 0
-            ? comparison
-            : string.CompareOrdinal(left.Owner.TransitionId, right.Owner.TransitionId);
+        return string.CompareOrdinal(left.Owner.TransitionId, right.Owner.TransitionId);
     }
 
     internal static long GetRetainedBytes(int outgoingCount, int incomingCount) => checked(
@@ -373,12 +358,11 @@ internal sealed class NavigationTransitionPage
             while (_incoming != null && _index < _incoming.Length)
             {
                 NavigationIncomingTransitionRef candidate = _incoming[_index++];
-                if (_graph!.TryGetPublishedTransition(
-                        candidate,
-                        out NavigationPublishedTransition record)
-                    && (_activeOnly
+                NavigationPublishedTransition record =
+                    _graph!.GetPublishedTransition(candidate);
+                if (_activeOnly
                         ? _graph.IsTransitionActive(record, _state, outgoing: false)
-                        : _graph.IsTransitionEndpoint(record, _state, outgoing: false)))
+                        : _graph.IsTransitionEndpoint(record, _state, outgoing: false))
                 {
                     Current = record;
                     return true;

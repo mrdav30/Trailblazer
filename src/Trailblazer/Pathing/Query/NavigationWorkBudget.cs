@@ -128,21 +128,4 @@ public readonly struct NavigationWorkBudget : IEquatable<NavigationWorkBudget>
     /// <summary>Returns whether two budgets differ.</summary>
     public static bool operator !=(NavigationWorkBudget left, NavigationWorkBudget right) => !left.Equals(right);
 
-    internal void Validate(string parameterName)
-    {
-        SwiftThrowHelper.ThrowIfArgument(
-            MaxLookupProbes < 0
-                || MaxEndpointCandidates < 0
-                || MaxExpandedNodes < 0
-                || MaxEvaluatedEdges < 0
-                || MaxConnectionLegs < 0
-                || MaxTransitionCandidates < 0
-                || MaxTransitionPairs < 0
-                || MaxStagedLegAttempts < 0
-                || MaxTraceIntervals < 0
-                || MaxCoveredVoxelIntervals < 0
-                || MaxSimplificationRays < 0,
-            parameterName,
-            "Navigation work budget contains a negative limit.");
-    }
 }

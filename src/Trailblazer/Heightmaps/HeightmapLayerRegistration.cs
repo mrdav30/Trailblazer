@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using FixedMathSharp;
 
 namespace Trailblazer.Heightmaps;
@@ -22,7 +21,7 @@ public sealed class HeightmapLayerRegistration
         int priority,
         int registrationOrder)
     {
-        Surface = surface ?? throw new ArgumentNullException(nameof(surface));
+        Surface = surface;
         LayerName = surface.Name;
         MinSelectionY = minSelectionY;
         MaxSelectionY = maxSelectionY;

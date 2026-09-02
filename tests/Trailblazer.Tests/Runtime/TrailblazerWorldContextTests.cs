@@ -31,6 +31,19 @@ public sealed class TrailblazerWorldContextTests : IDisposable
     }
 
     [Fact]
+    public void Attach_ShouldRetainExplicitContextSettings()
+    {
+        using var world = new GridWorld();
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(
+            world,
+            settings: settings);
+
+        context.Settings.Should().BeSameAs(settings);
+    }
+
+    [Fact]
     public void Attach_ShouldRejectNullOrInactiveWorlds()
     {
         Action nullWorld = () => TrailblazerWorldContext.Attach(null!);
@@ -75,6 +88,25 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         context.Dispose();
 
         world.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BoundContext_ShouldRejectUseAfterHostDisposesExternalWorld()
+    {
+        var world = new GridWorld();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+        world.Dispose();
+
+        Action readClock = () => _ = context.FrameRate;
+        Action simulate = context.Simulate;
+        Action inspectNavigationGraph = () => context.Pathing.GetNavigationGraphDiagnostics();
+
+        readClock.Should().Throw<InvalidOperationException>()
+            .WithMessage("*inactive GridWorld*");
+        simulate.Should().Throw<InvalidOperationException>()
+            .WithMessage("*inactive GridWorld*");
+        inspectNavigationGraph.Should().Throw<InvalidOperationException>()
+            .WithMessage("*inactive GridWorld*");
     }
 
     [Fact]
@@ -162,6 +194,25 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         context.Simulate();
 
         calls.Should().ContainInOrder("early", "late");
+    }
+
+    [Fact]
+    public void RegisterOnSimulate_ShouldRejectBlankAndDuplicateOwnersWithoutChangingHooks()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        int callCount = 0;
+        using IDisposable registration = context.RegisterOnSimulate(
+            "host",
+            0,
+            () => callCount++);
+
+        Action blank = () => context.RegisterOnSimulate(" ", 1, () => callCount++);
+        Action duplicate = () => context.RegisterOnSimulate("host", 1, () => callCount++);
+
+        blank.Should().Throw<ArgumentException>().WithParameterName("owner");
+        duplicate.Should().Throw<InvalidOperationException>().WithMessage("*host*already registered*");
+        context.Simulate();
+        callCount.Should().Be(1);
     }
 
 }

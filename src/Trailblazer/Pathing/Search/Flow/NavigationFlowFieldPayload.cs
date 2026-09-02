@@ -42,8 +42,10 @@ internal sealed class NavigationFlowFieldPayload
             transitionInstructions,
             nameof(transitionInstructions));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
-        if (nodes.Length == 0 || addressLookupOrdinals.Length != nodes.Length)
-            throw new ArgumentException("Flow payload arrays must be non-empty and aligned.");
+        SwiftThrowHelper.ThrowIfArgument(
+            nodes.Length == 0 || addressLookupOrdinals.Length != nodes.Length,
+            paramName: null,
+            message: "Flow payload arrays must be non-empty and aligned.");
         Key = key;
         Nodes = nodes;
         AddressLookupOrdinals = addressLookupOrdinals;

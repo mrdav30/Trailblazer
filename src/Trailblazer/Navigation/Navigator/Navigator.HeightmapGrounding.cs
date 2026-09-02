@@ -82,9 +82,6 @@ public abstract partial class Navigator
 
     private void ProjectRootWithoutVelocity(Vector3d correction)
     {
-        if (correction == Vector3d.Zero)
-            return;
-
         Vector3d oldPosition = _position;
         _position += correction;
         _lastPosition += correction;
@@ -93,11 +90,8 @@ public abstract partial class Navigator
 
     private void UpdateVoxelOccupancyAfterRootProjection(Vector3d oldPosition, Vector3d newPosition)
     {
-        if (_context == null || _context.IsDisposed || !_context.World.IsActive)
-            return;
-
         NavigatorOccupancyTracker.UpdateAfterRootProjection(
-            _context.World, this, oldPosition, newPosition);
+            _context!.World, this, oldPosition, newPosition);
     }
 
     #endregion

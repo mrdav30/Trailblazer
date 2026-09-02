@@ -59,13 +59,9 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         bool allowTransitions,
         FlowFieldQueryOptions flowField = default)
     {
-        start.Validate(nameof(start));
-        end.Validate(nameof(end));
         agent.Validate(nameof(agent));
         areaPolicy.Validate(nameof(areaPolicy));
         traversal.Validate(nameof(traversal));
-        budget.Validate(nameof(budget));
-        flowField.Validate(nameof(flowField));
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField,
             (int)algorithm,

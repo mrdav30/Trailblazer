@@ -109,11 +109,6 @@ internal sealed class NavigationSurfaceComponentIndex
         NavigationSurfaceComponentKey key,
         out NavigationSurfaceComponent component)
     {
-        if (!NavigationCell.IsKnownMedium(key.Medium))
-        {
-            component = null!;
-            return false;
-        }
         _components.TryGet(key.Medium, out var components);
         if (components.TryGetValue(
                 key.Representative.MapId,
@@ -221,8 +216,7 @@ internal sealed class NavigationSurfaceComponentIndex
         int componentMapPages = _componentMapPages - componentMap.PersistentNodeCount;
         componentMap = componentMap.Remove(key.Representative.Index, out bool removed, out int copied);
         copiedPersistentNodes = checked(copiedPersistentNodes + copied);
-        if (!removed)
-            return this;
+        System.Diagnostics.Debug.Assert(removed);
         if (componentMap.Count == 0)
         {
             components = components.Remove(key.Representative.MapId, out _, out copied);
@@ -256,7 +250,7 @@ internal sealed class NavigationSurfaceComponentIndex
                 address.MapId,
                 out PersistentVoxelIndexMap<NavigationSurfaceComponentKey> membershipMap)
             || !membershipMap.TryGetValue(address.Index, out NavigationSurfaceComponentKey key)
-            || key != expectedKey)
+            || !key.Equals(expectedKey))
         {
             return this;
         }

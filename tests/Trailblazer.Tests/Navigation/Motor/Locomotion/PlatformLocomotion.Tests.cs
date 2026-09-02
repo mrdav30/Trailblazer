@@ -16,6 +16,25 @@ public class PlatformLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void PlatformSnapshot_ValueIdentityShouldUseStablePlatformIdOnly()
+    {
+        PlatformSnapshot first = new(7, Fixed4x4.Identity);
+        PlatformSnapshot samePlatform = new(
+            7,
+            MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(4, 0, 0)),
+            inert: true);
+        PlatformSnapshot otherPlatform = new(8, Fixed4x4.Identity);
+
+        first.Should().Be(samePlatform);
+        (first == samePlatform).Should().BeTrue();
+        first.GetHashCode().Should().Be(samePlatform.GetHashCode());
+        (first != otherPlatform).Should().BeTrue();
+        first.Equals((object?)null).Should().BeFalse();
+        first.Equals("7").Should().BeFalse();
+        first.Equals((object)otherPlatform).Should().BeFalse();
+    }
+
+    [Fact]
     public void Given_ScoutOnMovingPlatform_When_SimulateRuns_Then_PositionShouldMatchPlatform()
     {
         // Arrange

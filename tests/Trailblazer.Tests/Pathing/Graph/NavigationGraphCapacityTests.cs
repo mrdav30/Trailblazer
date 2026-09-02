@@ -6,6 +6,7 @@ using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
+using SwiftCollections.Utility;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -13,6 +14,364 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed class NavigationGraphCapacityTests
 {
+    [Fact]
+    public void ZeroCapacityIngress_ShouldFailClosedToTheExactConfigurationScope()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 0);
+        GridConfiguration configuration = CreateConfiguration();
+        ingress.Enqueue(CreateVoxelEvent(configuration, sequence: 1, obstacleCount: 1));
+        ingress.HasPendingWork.Should().BeTrue();
+        var blocked = new NavigationGridChangeScope[1];
+
+        ingress.DetachInto(
+                Span<GridEventInfo>.Empty,
+                blocked,
+                out int blockedCount,
+                out bool blockAll)
+            .Should().Be(0);
+
+        blockedCount.Should().Be(1);
+        blocked[0].ConfigurationKey.Should().Be(configuration.ToGridKey());
+        blockAll.Should().BeFalse();
+        ingress.HasPendingWork.Should().BeFalse(
+            "detaching the fail-closed scope resets even a zero-slot free list");
+        ingress.Dispose();
+    }
+
+    [Fact]
+    public void BlockedScopeMerge_ShouldDeduplicateBeforePromotingOverflowToAllBlocked()
+    {
+        GridConfiguration first = CreateConfiguration();
+        GridConfiguration second = new(
+            new Vector3d(4, 0, 0),
+            new Vector3d(6, 1, 1),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        var firstScope = new NavigationGridChangeScope(first.ToGridKey(), 1, 1, 1);
+        var secondScope = new NavigationGridChangeScope(second.ToGridKey(), 1, 2, 1);
+        var merged = new NavigationGridChangeScope[2];
+
+        int mergedCount = NavigationGraphRuntime.MergeBlockedScopes(
+            new[] { firstScope },
+            blockedScopeCount: 1,
+            new[] { firstScope, secondScope },
+            deferredScopeCount: 2,
+            merged,
+            out bool blockAll);
+
+        blockAll.Should().BeFalse();
+        mergedCount.Should().Be(2);
+        merged[0].Should().Be(firstScope);
+        merged[1].Should().Be(secondScope,
+            "a duplicate deferred scope must not consume the remaining exact slot");
+
+        mergedCount = NavigationGraphRuntime.MergeBlockedScopes(
+            new[] { firstScope },
+            blockedScopeCount: 1,
+            new[] { secondScope },
+            deferredScopeCount: 1,
+            new NavigationGridChangeScope[1],
+            out blockAll);
+
+        blockAll.Should().BeTrue(
+            "an unrepresentable distinct scope must conservatively close the whole graph");
+        mergedCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(true, true, 0, false, 0, true)]
+    [InlineData(false, true, 0, false, 0, false)]
+    [InlineData(true, false, 0, false, 0, false)]
+    [InlineData(true, true, 1, false, 0, false)]
+    [InlineData(true, true, 0, true, 0, false)]
+    [InlineData(true, true, 0, false, 1, false)]
+    public void SafetyGate_ShouldClearOnlyAfterAnExactUnblockedResnapshot(
+        bool safetyPending,
+        bool resnapshotAll,
+        int blockedScopeCount,
+        bool deferAll,
+        int deferredScopeCount,
+        bool expected)
+    {
+        NavigationGraphRuntime.CanClearSafetyPendingAfterSnapshot(
+                safetyPending,
+                resnapshotAll,
+                blockedScopeCount,
+                deferAll,
+                deferredScopeCount)
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(
+        (int)NavigationOperationFrameResult.Deferred,
+        1,
+        true,
+        false,
+        true,
+        false,
+        (int)NavigationGraphRuntime.OperationTerminalDisposition.None)]
+    [InlineData(
+        (int)NavigationOperationFrameResult.Published,
+        0,
+        true,
+        false,
+        true,
+        false,
+        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndBeginRollback)]
+    [InlineData(
+        (int)NavigationOperationFrameResult.Published,
+        0,
+        false,
+        true,
+        true,
+        false,
+        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndBeginRollback)]
+    [InlineData(
+        (int)NavigationOperationFrameResult.Rejected,
+        0,
+        false,
+        false,
+        false,
+        false,
+        (int)NavigationGraphRuntime.OperationTerminalDisposition.Release)]
+    [InlineData(
+        (int)NavigationOperationFrameResult.Rejected,
+        1,
+        true,
+        true,
+        true,
+        false,
+        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndTryReopen)]
+    [InlineData(
+        (int)NavigationOperationFrameResult.Rejected,
+        0,
+        false,
+        false,
+        true,
+        true,
+        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndBeginRollback)]
+    public void TerminalPublication_ShouldClassifyRetainedAndRejectedCleanupDisposition(
+        int resultValue,
+        int retainedOperationWorkCount,
+        bool hasCompositionWork,
+        bool materializedCompletesOperation,
+        bool hasClosedStructuralScope,
+        bool automaticSeamFullRebuildPending,
+        int expectedValue)
+    {
+        NavigationGraphRuntime.ClassifyOperationTerminalDisposition(
+                (NavigationOperationFrameResult)resultValue,
+                retainedOperationWorkCount,
+                hasCompositionWork,
+                materializedCompletesOperation,
+                hasClosedStructuralScope,
+                automaticSeamFullRebuildPending)
+            .Should().Be((NavigationGraphRuntime.OperationTerminalDisposition)expectedValue);
+    }
+
+    [Theory]
+    [InlineData(
+        (int)NavigationCandidatePublication.Published,
+        (int)NavigationCandidatePublication.Deferred)]
+    [InlineData(
+        (int)NavigationCandidatePublication.Deferred,
+        (int)NavigationCandidatePublication.Deferred)]
+    [InlineData(
+        (int)NavigationCandidatePublication.PermanentCapacity,
+        (int)NavigationCandidatePublication.PermanentCapacity)]
+    public void RetainedWorkClosurePublication_ShouldYieldBeforeContinuation(
+        int publicationValue,
+        int expectedValue)
+    {
+        NavigationGraphRuntime.ContinueAfterRetainedClosure(
+                (NavigationCandidatePublication)publicationValue)
+            .Should().Be((NavigationCandidatePublication)expectedValue,
+                "a published composition or materialized safety closure consumes the current publication boundary");
+    }
+
+    [Theory]
+    [InlineData(
+        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Progressed,
+        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Continue)]
+    [InlineData(
+        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Blocked,
+        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Retain)]
+    [InlineData(
+        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.RestartRequired,
+        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Restart)]
+    [InlineData(
+        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded,
+        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Restart)]
+    [InlineData(
+        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Complete,
+        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Complete)]
+    public void AutomaticSeamAdvance_ShouldMapWorkerStatusToLifecycleAction(
+        int statusValue,
+        int expectedValue)
+    {
+        NavigationGraphRuntime.ClassifyAutomaticSeamAdvance(
+                (NavigationAutomaticSeamLifecycleWork.AdvanceStatus)statusValue)
+            .Should().Be((NavigationGraphRuntime.AutomaticSeamAdvanceDisposition)expectedValue);
+    }
+
+    [Theory]
+    [InlineData(true, false, false, false,
+        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Restart,
+        (int)NavigationCandidatePublication.Deferred)]
+    [InlineData(false, false, true, true,
+        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.RejectCapacity,
+        (int)NavigationCandidatePublication.PermanentCapacity)]
+    [InlineData(false, true, false, true,
+        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Defer,
+        null)]
+    [InlineData(false, true, true, false,
+        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Ready,
+        null)]
+    [InlineData(false, true, true, true,
+        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Publish,
+        null)]
+    public void MaterializedAdvance_ShouldPrioritizeRestartCapacityAndPublication(
+        bool requiresRestart,
+        bool withinCapacity,
+        bool complete,
+        bool publish,
+        int expectedValue,
+        int? expectedAbandonmentPublication)
+    {
+        NavigationGraphRuntime.ClassifyMaterializedAdvance(
+                requiresRestart,
+                withinCapacity,
+                complete,
+                publish,
+                out NavigationCandidatePublication? abandonmentPublication)
+            .Should().Be((NavigationGraphRuntime.MaterializedAdvanceDisposition)expectedValue);
+        abandonmentPublication.Should().Be(
+            expectedAbandonmentPublication.HasValue
+                ? (NavigationCandidatePublication?)expectedAbandonmentPublication.Value
+                : null);
+    }
+
+    [Fact]
+    public void OwnedClosureBaselineCapacity_ShouldCountOnlyAnUnretainedRoot()
+    {
+        NavigationWorldGraph emptyOwner = NavigationWorldGraph.Empty;
+        NavigationSurfaceComponentKeySet baseline =
+            NavigationSurfaceComponentKeySet.Empty.Add(
+                new NavigationSurfaceComponentKey(
+                    new NavigationCellAddress("map", default),
+                    TraversalMedium.Solid));
+        NavigationWorldGraph primaryOwner = emptyOwner.WithClosedStructuralComponents(
+            baseline,
+            closeAllStructuralComponents: false,
+            graphVersion: 1);
+        NavigationWorldGraph additionalOwner = emptyOwner.WithOwnedStructuralClosure(
+            NavigationSurfaceComponentKeySet.Empty,
+            baseline,
+            closeAllStructuralComponents: false,
+            graphVersion: 1);
+
+        AssertAdditionalCapacity(null, emptyOwner, 0, 0);
+        AssertAdditionalCapacity(NavigationSurfaceComponentKeySet.Empty, emptyOwner, 0, 0);
+        AssertAdditionalCapacity(baseline, primaryOwner, 0, 0);
+        AssertAdditionalCapacity(baseline, additionalOwner, 0, 0);
+        AssertAdditionalCapacity(
+            baseline,
+            emptyOwner,
+            baseline.RetainedBytes,
+            baseline.PersistentPageCount);
+
+        static void AssertAdditionalCapacity(
+            NavigationSurfaceComponentKeySet? candidate,
+            NavigationWorldGraph owner,
+            long expectedBytes,
+            int expectedPages)
+        {
+            NavigationGraphRuntime.GetOwnedClosureBaselineAdditionalCapacity(
+                candidate,
+                owner,
+                out long retainedBytes,
+                out int persistentPages);
+            retainedBytes.Should().Be(expectedBytes);
+            persistentPages.Should().Be(expectedPages);
+        }
+    }
+
+    [Theory]
+    [InlineData(20, 2, 30, 3, 50, 5, true)]
+    [InlineData(101, 2, 0, 3, 0, 5, false)]
+    [InlineData(20, 2, 81, 3, 0, 5, false)]
+    [InlineData(20, 2, 30, 3, 51, 5, false)]
+    [InlineData(20, 2, 30, 3, 50, 6, false)]
+    public void RetainedWorkCapacity_ShouldEnforceEachAggregateBoundary(
+        long rootBytes,
+        int rootPages,
+        long workBytes,
+        int workPages,
+        long rebuildBytes,
+        int rebuildPages,
+        bool expected)
+    {
+        NavigationGraphRuntime.IsRetainedWorkWithinCapacity(
+                rootBytes,
+                rootPages,
+                workBytes,
+                workPages,
+                rebuildBytes,
+                rebuildPages,
+                maximumBytes: 100,
+                maximumPages: 10)
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void DisposedIngress_ShouldIgnoreCallbacksAndUnpublishedPrefixes()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 2);
+        GridConfiguration configuration = CreateConfiguration();
+        GridEventInfo committed = CreateVoxelEvent(configuration, sequence: 1, obstacleCount: 1);
+        ingress.Enqueue(committed);
+
+        ingress.Dispose();
+        ingress.Enqueue(CreateVoxelEvent(configuration, sequence: 2, obstacleCount: 2));
+        ingress.RequeuePrefix(new[] { committed });
+
+        ingress.HasPendingWork.Should().BeFalse();
+        var events = new GridEventInfo[2];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(events, blocked, out int blockedCount, out bool blockAll)
+            .Should().Be(0);
+        blockedCount.Should().Be(0);
+        blockAll.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DisposedGraphStore_ShouldRejectLeasesAndPublicationIdempotently()
+    {
+        var store = new NavigationWorldGraphStore(
+            maxActiveSnapshots: 2,
+            maxRetiredSnapshots: 1,
+            maxRetiredBytes: 1_000_000,
+            maxActiveBytes: 1_000_000,
+            maxPersistentPages: 1_000,
+            maxConcurrentLeases: 2);
+        store.Dispose();
+        store.Dispose();
+
+        store.CanPublish.Should().BeFalse(
+            "a disposed store must reject publication before a candidate is built");
+        store.TryAcquire().Should().BeNull();
+        var leases = new NavigationWorldGraphLease?[2];
+        store.TryAcquirePrefix(leases).Should().Be(0);
+        leases.Should().OnlyContain(lease => lease == null);
+        store.TryPublish(new NavigationWorldGraph(
+                graphVersion: 1,
+                Array.Empty<NavigationMapInstance>()))
+            .Should().Be(NavigationCandidatePublication.Deferred);
+        store.Current.Should().BeSameAs(NavigationWorldGraph.Empty);
+    }
+
     [Fact]
     public void Ingress_ShouldCoalesceExactFinalStateAndFailClosedOnOverflow()
     {
@@ -72,6 +431,182 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
+    public void Ingress_ShouldMoveAMiddleReplacementToTailWithoutDisturbingItsNeighbors()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 3);
+        GridConfiguration configuration = CreateConfiguration();
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 1,
+            obstacleCount: 1,
+            index: new VoxelIndex(0, 0, 0)));
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 2,
+            obstacleCount: 1,
+            index: new VoxelIndex(1, 0, 0)));
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 3,
+            obstacleCount: 1,
+            index: new VoxelIndex(2, 0, 0)));
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 4,
+            obstacleCount: 2,
+            index: new VoxelIndex(1, 0, 0)));
+
+        var detached = new GridEventInfo[3];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(detached, blocked, out int blockedCount, out bool blockAll)
+            .Should().Be(3);
+
+        detached[0].ChangeSequence.Should().Be(1);
+        detached[1].ChangeSequence.Should().Be(3);
+        detached[2].ChangeSequence.Should().Be(4);
+        detached[2].VoxelIndex.Should().Be(new VoxelIndex(1, 0, 0));
+        detached[2].ObstacleCount.Should().Be(2);
+        blockedCount.Should().Be(0);
+        blockAll.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Ingress_ShouldKeepSameAddressEventsFromDistinctGridGenerations()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 4);
+        GridConfiguration configuration = CreateConfiguration();
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 1,
+            obstacleCount: 1,
+            worldSpawnToken: 1,
+            gridIndex: 0,
+            gridSpawnToken: 1));
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 2,
+            obstacleCount: 2,
+            worldSpawnToken: 2,
+            gridIndex: 0,
+            gridSpawnToken: 1));
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 3,
+            obstacleCount: 3,
+            worldSpawnToken: 2,
+            gridIndex: 1,
+            gridSpawnToken: 1));
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 4,
+            obstacleCount: 4,
+            worldSpawnToken: 2,
+            gridIndex: 1,
+            gridSpawnToken: 2));
+
+        var detached = new GridEventInfo[4];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(detached, blocked, out int blockedCount, out bool blockAll)
+            .Should().Be(4,
+                "world, grid slot, and grid generation are all part of coalescing identity");
+        detached[0].WorldSpawnToken.Should().Be(1);
+        detached[1].WorldSpawnToken.Should().Be(2);
+        detached[2].GridIndex.Should().Be(1);
+        detached[3].GridSpawnToken.Should().Be(2);
+        detached.Should().OnlyContain(info => info.VoxelIndex == default);
+        blockedCount.Should().Be(0);
+        blockAll.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Ingress_ShouldKeepDistinctIdentityFieldsAcrossDeterministicHashCollisions()
+    {
+        var configuration = new GridConfiguration(
+            Vector3d.Zero,
+            new Vector3d(30_000_000, 30_000_000, 30_000_000),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        (GridEventInfo First, GridEventInfo Second)[] collisions =
+        {
+            (
+                CreateVoxelEvent(
+                    configuration,
+                    sequence: 1,
+                    obstacleCount: 1,
+                    index: new VoxelIndex(29_138, 125_122, 440_498),
+                    gridIndex: 0,
+                    worldSpawnToken: 1,
+                    gridSpawnToken: 1_715),
+                CreateVoxelEvent(
+                    configuration,
+                    sequence: 2,
+                    obstacleCount: 2,
+                    index: new VoxelIndex(373_269, 1_602_861, 5_642_949),
+                    gridIndex: 0,
+                    worldSpawnToken: 1,
+                    gridSpawnToken: 21_958)),
+            (
+                CreateVoxelEvent(
+                    configuration,
+                    sequence: 3,
+                    obstacleCount: 1,
+                    index: new VoxelIndex(86_411, 364_429, 988_091),
+                    gridIndex: 3_757,
+                    worldSpawnToken: 1,
+                    gridSpawnToken: 1),
+                CreateVoxelEvent(
+                    configuration,
+                    sequence: 4,
+                    obstacleCount: 2,
+                    index: new VoxelIndex(231_771, 977_469, 2_650_251),
+                    gridIndex: 10_077,
+                    worldSpawnToken: 1,
+                    gridSpawnToken: 1)),
+            (
+                CreateVoxelEvent(
+                    configuration,
+                    sequence: 5,
+                    obstacleCount: 1,
+                    index: new VoxelIndex(1_665_093, 5_799_117, 15_445_173),
+                    gridIndex: 57_417,
+                    worldSpawnToken: 57_418,
+                    gridSpawnToken: 1),
+                CreateVoxelEvent(
+                    configuration,
+                    sequence: 6,
+                    obstacleCount: 2,
+                    index: new VoxelIndex(2_111_925, 7_355_325, 19_589_925),
+                    gridIndex: 7_290,
+                    worldSpawnToken: 72_826,
+                    gridSpawnToken: 2))
+        };
+
+        foreach ((GridEventInfo first, GridEventInfo second) in collisions)
+        {
+            GetIngressEventKeyHashCode(first).Should().Be(
+                GetIngressEventKeyHashCode(second),
+                "the fixture must exercise equality after a real deterministic hash collision");
+            var ingress = new NavigationGridChangeIngress(capacity: 2);
+            ingress.Enqueue(first);
+            ingress.Enqueue(second);
+            var detached = new GridEventInfo[2];
+
+            ingress.DetachInto(
+                    detached,
+                    Span<NavigationGridChangeScope>.Empty,
+                    out int blockedCount,
+                    out bool blockAll)
+                .Should().Be(2,
+                    "world, grid-slot, and grid-generation identity remain exact after hash collision");
+            detached[0].ChangeSequence.Should().Be(first.ChangeSequence);
+            detached[1].ChangeSequence.Should().Be(second.ChangeSequence);
+            blockedCount.Should().Be(0);
+            blockAll.Should().BeFalse();
+        }
+    }
+
+    [Fact]
     public void Ingress_ShouldRequeueStructuralCarryoverPrefixAheadOfNewerCommittedEvents()
     {
         var ingress = new NavigationGridChangeIngress(capacity: 8);
@@ -111,6 +646,91 @@ public sealed class NavigationGraphCapacityTests
         ordered[2].ChangeSequence.Should().Be(4);
         blockedCount.Should().Be(0);
         blockAll.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IngressRequeue_WhenLaterIngressConsumesCapacity_ShouldFailClosedWithoutPartialPrefix()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 2);
+        GridConfiguration configuration = CreateConfiguration();
+        GridEventInfo[] detached =
+        {
+            new(
+                1,
+                0,
+                1,
+                configuration,
+                1,
+                GridEventKind.GridRemoved,
+                changeStamp: new GridChangeStamp(1, 1)),
+            CreateVoxelEvent(
+                configuration,
+                sequence: 2,
+                obstacleCount: 1,
+                index: new VoxelIndex(1, 0, 0))
+        };
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 3,
+            obstacleCount: 1,
+            index: new VoxelIndex(2, 0, 0)));
+
+        ingress.RequeuePrefix(detached);
+
+        var events = new GridEventInfo[2];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(
+                events,
+                blocked,
+                out int blockedCount,
+                out bool blockAll,
+                out bool topologyLifecycleCoverageLost)
+            .Should().Be(0,
+                "an unpublished prefix must never be partially restored ahead of later changes");
+        topologyLifecycleCoverageLost.Should().BeTrue();
+        blockAll.Should().BeFalse();
+        blockedCount.Should().Be(1);
+        blocked[0].ConfigurationKey.Should().Be(configuration.ToGridKey());
+    }
+
+    [Fact]
+    public void IngressRequeue_WhenDetachedSequenceIsNotStrictlyIncreasing_ShouldFailClosed()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 4);
+        GridConfiguration configuration = CreateConfiguration();
+        ingress.Enqueue(CreateVoxelEvent(configuration, sequence: 3, obstacleCount: 1));
+        GridEventInfo[] detached =
+        {
+            CreateVoxelEvent(
+                configuration,
+                sequence: 2,
+                obstacleCount: 1,
+                index: new VoxelIndex(1, 0, 0)),
+            new(
+                1,
+                0,
+                1,
+                configuration,
+                1,
+                GridEventKind.GridRemoved,
+                changeStamp: new GridChangeStamp(1, 1))
+        };
+
+        ingress.RequeuePrefix(detached);
+
+        var events = new GridEventInfo[4];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(
+                events,
+                blocked,
+                out int blockedCount,
+                out bool blockAll,
+                out bool topologyLifecycleCoverageLost)
+            .Should().Be(0,
+                "committed sequence order cannot be repaired by silently sorting a stale prefix");
+        topologyLifecycleCoverageLost.Should().BeTrue();
+        blockAll.Should().BeFalse();
+        blockedCount.Should().Be(1);
     }
 
     [Fact]
@@ -165,6 +785,71 @@ public sealed class NavigationGraphCapacityTests
 
         topologyLifecycleCoverageLost.Should().BeTrue(
             "overflow discarded an exact grid-generation lifecycle event");
+    }
+
+    [Fact]
+    public void IngressOverflow_ShouldContinueTrackingLaterTopologyLifecycleEvents()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 1);
+        GridConfiguration configuration = CreateConfiguration();
+        ingress.Enqueue(CreateVoxelEvent(configuration, sequence: 1, obstacleCount: 1));
+        ingress.Enqueue(CreateVoxelEvent(
+            configuration,
+            sequence: 2,
+            obstacleCount: 1,
+            index: new VoxelIndex(1, 0, 0)));
+        ingress.Enqueue(new GridEventInfo(
+            1,
+            0,
+            1,
+            configuration,
+            gridVersion: 2,
+            changeKind: GridEventKind.GridRemoved,
+            changeStamp: new GridChangeStamp(3, 3)));
+
+        var detached = new GridEventInfo[1];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(
+                detached,
+                blocked,
+                out int blockedCount,
+                out bool blockAll,
+                out bool topologyLifecycleCoverageLost)
+            .Should().Be(0);
+
+        topologyLifecycleCoverageLost.Should().BeTrue(
+            "topology loss that arrives after overflow is still part of the fail-closed scope");
+        blockedCount.Should().Be(1);
+        blockAll.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IngressScopeSaturation_ShouldBlockAllWhileAnyUntrackedScopeRemains()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 2, maximumScopes: 1);
+        GridConfiguration first = CreateConfiguration();
+        var second = new GridConfiguration(
+            new Vector3d(10, 0, 0),
+            new Vector3d(12, 1, 1),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        ingress.Enqueue(CreateVoxelEvent(first, sequence: 1, obstacleCount: 1));
+        ingress.Enqueue(CreateVoxelEvent(
+            second,
+            sequence: 2,
+            obstacleCount: 1,
+            gridIndex: 1));
+
+        var detached = new GridEventInfo[1];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(detached, blocked, out int blockedCount, out bool blockAll)
+            .Should().Be(1);
+
+        detached[0].ChangeSequence.Should().Be(1);
+        blockedCount.Should().Be(0);
+        blockAll.Should().BeTrue(
+            "once distinct scope capacity is exhausted, the remaining committed work is global");
     }
 
     [Fact]
@@ -288,6 +973,139 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
+    public void WriterBlockingLease_ShouldKeepAdmissionClosedUntilExactPhysicalResnapshotPublishes()
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            maxRetiredSnapshots: 0,
+            maxRetiredSnapshotBytes: 0);
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
+        GridConfiguration configuration = CreateConfiguration();
+        context.World.TryAddGrid(configuration, out ushort gridIndex).Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationCell cell = new(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.One);
+        var install = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(
+                new NavigationMapBuilder("map", binding)
+                    .AddCell(default, cell)
+                    .Build(),
+                bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 1,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(install).Should().BeTrue();
+        for (int frame = 0;
+             frame < 64 && install.Receipt.Status == NavigationOperationStatus.Pending;
+             frame++)
+        {
+            context.Simulate();
+        }
+        install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        NavigationWorldGraphStore store = context.Pathing.NavigationGraphStore;
+        using (NavigationWorldGraphLease pressure = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            VoxelGrid grid = context.World.ActiveGrids[gridIndex];
+            grid.TryGetVoxel(default(VoxelIndex), out Voxel? voxel).Should().BeTrue();
+            grid.TryAddObstacle(voxel!, context.World.AllocateObstacleToken()).Should().BeTrue();
+
+            context.Simulate();
+
+            store.IsSafetyPending.Should().BeTrue(
+                "a leased writer-blocking root must retain the exact resnapshot obligation");
+            context.Pathing.TryAcquireNavigationGraph().Should().BeNull(
+                "no reader may observe the pre-resnapshot physical generation");
+        }
+
+        for (int frame = 0; frame < 64 && store.IsSafetyPending; frame++)
+            context.Simulate();
+
+        store.IsSafetyPending.Should().BeFalse(
+            "the exact unblocked resnapshot is the only publication that reopens admission");
+        context.Pathing.TryGetNavigationGraphCellState(
+                "map",
+                default,
+                out NavigationGraphCellState refreshed)
+            .Should().BeTrue();
+        refreshed.ObstacleCount.Should().Be(1);
+        using NavigationWorldGraphLease reopened = context.Pathing.TryAcquireNavigationGraph()!;
+        reopened.Should().NotBeNull();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WriterBlockingLease_ShouldRetainTopologyRemovalUntilFullRebuildPublishes(
+        bool overflowTopologyEvent)
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            maxIngressEntries: overflowTopologyEvent
+                ? 1
+                : TrailblazerWorldContextSettings.Default.MaxIngressEntries,
+            maxRetiredSnapshots: 0,
+            maxRetiredSnapshotBytes: 0);
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
+        GridConfiguration configuration = CreateConfiguration();
+        context.World.TryAddGrid(configuration, out ushort gridIndex).Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        var install = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(
+                new NavigationMapBuilder("map", binding)
+                    .AddCell(default, new NavigationCell(
+                        TraversalMedia.Solid,
+                        TraversalCapability.None,
+                        default,
+                        Fixed64.Zero,
+                        Fixed64.Zero,
+                        Fixed64.One))
+                    .Build(),
+                bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 1,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(install).Should().BeTrue();
+        SimulateUntil(context, () => install.Receipt.Status != NavigationOperationStatus.Pending);
+        install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        NavigationWorldGraphStore store = context.Pathing.NavigationGraphStore;
+        using (NavigationWorldGraphLease pressure = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            if (overflowTopologyEvent)
+            {
+                VoxelGrid grid = context.World.ActiveGrids[gridIndex];
+                grid.TryGetVoxel(new VoxelIndex(1, 0, 0), out Voxel? voxel).Should().BeTrue();
+                grid.TryAddObstacle(voxel!, context.World.AllocateObstacleToken()).Should().BeTrue();
+            }
+            context.World.TryRemoveGrid(gridIndex).Should().BeTrue();
+
+            context.Simulate();
+
+            store.IsSafetyPending.Should().BeTrue(
+                "a topology lifecycle event drained under writer pressure must stay fail-closed");
+            context.Pathing.TryAcquireNavigationGraph().Should().BeNull();
+        }
+
+        SimulateUntil(
+            context,
+            () => !store.IsSafetyPending && !store.Current.HasClosedStructuralScope);
+
+        context.Pathing.TryGetNavigationGraphCellState(
+                "map",
+                default,
+                out NavigationGraphCellState removed)
+            .Should().BeTrue();
+        removed.IsMaterialized.Should().BeFalse(
+            "the retained topology removal must drive an exact full rebuild after pressure clears");
+        using NavigationWorldGraphLease reopened = context.Pathing.TryAcquireNavigationGraph()!;
+        reopened.Graph.HasClosedStructuralScope.Should().BeFalse();
+    }
+
+    [Fact]
     public void DeferredReset_ShouldCloseSnapshotAdmissionUntilEmptyRootPublishes()
     {
         TrailblazerWorldContextSettings settings = CreateSettings(
@@ -334,6 +1152,14 @@ public sealed class NavigationGraphCapacityTests
             context.Pathing.TryAcquireNavigationGraph().Should().BeNull();
             context.Pathing.TryGetNavigationGraphCellState("map", default, out _)
                 .Should().BeTrue("the old root remains physically retained but is not query-admissible");
+
+            context.Simulate();
+
+            store.IsSafetyPending.Should().BeTrue(
+                "a reset must remain fail-closed while the empty root cannot publish");
+            context.Pathing.TryAcquireNavigationGraph().Should().BeNull();
+            context.Pathing.TryGetNavigationGraphCellState("map", default, out _)
+                .Should().BeTrue("blocked reset maintenance cannot discard the retained root");
         }
         finally
         {
@@ -507,16 +1333,18 @@ public sealed class NavigationGraphCapacityTests
         }
 
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
-        maximumObservedActiveSnapshotBytes.Should().Be(50_855_880,
+        maximumObservedActiveSnapshotBytes.Should().Be(50_855_688,
             "the active envelope includes the published root plus retained operation, "
             + "composition, the exact unpublished materialized candidate, and affected-component "
             + "work at the largest overlay boundary "
             + "with one retained 104-byte portal certificate, immutable transition pages, "
-            + "and no duplicate waypoint sequence per explicit corridor leg");
-        maximumObservedPersistentGraphPages.Should().Be(527_615,
+            + "and no duplicate waypoint sequence per explicit corridor leg; exact batch bounds "
+            + "also omit the former three 64-byte phantom-map tree nodes");
+        maximumObservedPersistentGraphPages.Should().Be(527_612,
             "the conservative page envelope counts shared persistent ownership at every "
             + "unpublished work boundary, including exact materialized candidate ownership "
-            + "and immutable transition-page roots");
+            + "and immutable transition-page roots, without the former phantom changed-map, "
+            + "whole-map, and transition-refresh source nodes beyond the batch count");
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
         diagnostics.ActiveSnapshotBytes.Should().Be(17_996_832,
@@ -1339,6 +2167,91 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
+    public void StructuralClosurePublication_ShouldRequeueAfterWriterLeasePressureClears()
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        var budget = new MaintenanceWorkBudget(
+            defaults.MaintenanceBudget.MaxConsumedEnvelopes,
+            defaults.MaintenanceBudget.MaxBaselineAddresses,
+            defaults.MaintenanceBudget.MaxOverlaySlots,
+            maxComponentNodes: 1,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
+            defaults.MaintenanceBudget.MaxExplicitEdges,
+            defaults.MaintenanceBudget.MaxDependencyEntries);
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
+            settings: CreateSettings(
+                maxRetiredSnapshots: 0,
+                maxRetiredSnapshotBytes: 0,
+                maintenanceBudget: budget));
+        GridConfiguration firstConfiguration = CreateConfiguration();
+        var secondConfiguration = new GridConfiguration(
+            new Vector3d(10, 0, 0),
+            new Vector3d(12, 1, 1),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        firstConfiguration.TryNormalize(out NormalizedGridConfiguration firstBinding)
+            .Should().BeTrue();
+        secondConfiguration.TryNormalize(out NormalizedGridConfiguration secondBinding)
+            .Should().BeTrue();
+        NavigationCell cell = new(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.One);
+        NavigationMap Map(string id, NormalizedGridConfiguration binding) =>
+            new NavigationMapBuilder(id, binding)
+                .AddCell(default, cell)
+                .Build();
+        var first = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(Map("first", firstBinding), 1),
+            OverlayReplacementPolicy.Clear,
+            1,
+            1);
+        context.Pathing.Admit(first).Should().BeTrue();
+        SimulateUntil(context, () => first.Receipt.Status != NavigationOperationStatus.Pending);
+        first.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        NavigationWorldGraphStore store = context.Pathing.NavigationGraphStore;
+        using (NavigationWorldGraphLease pressure = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            var second = new NavigationMapCommitOperation(
+                new PreparedNavigationMap(Map("second", secondBinding), 1),
+                OverlayReplacementPolicy.Clear,
+                2,
+                context.FrameCount + 1);
+            context.Pathing.Admit(second).Should().BeTrue();
+            for (int frame = 0; frame < 8; frame++)
+                context.Simulate();
+
+            second.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+            context.Pathing.RetainedOperationWorkCount.Should().Be(0,
+                "a failed initial closure publication requeues the operation before retaining composition work");
+            context.Pathing.RetainedCompositionWorkCount.Should().Be(0,
+                "a structural cursor cannot transfer ownership until its closure publishes");
+            pressure.Graph.HasClosedStructuralScope.Should().BeFalse(
+                "the writer-blocking generation remains the unchanged pre-operation root");
+            store.Current.Should().BeSameAs(pressure.Graph);
+
+            pressure.Dispose();
+            SimulateUntil(
+                context,
+                () => second.Receipt.Status != NavigationOperationStatus.Pending);
+
+            second.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        }
+
+        store.IsSafetyPending.Should().BeFalse();
+        store.Current.HasClosedStructuralScope.Should().BeFalse();
+        context.Pathing.TryGetNavigationGraphCellState("first", default, out _)
+            .Should().BeTrue();
+        context.Pathing.TryGetNavigationGraphCellState("second", default, out _)
+            .Should().BeTrue();
+    }
+
+    [Fact]
     public void StructuralWorkCapacity_ShouldRejectAggregateRootCandidateAndScratchAndCleanup()
     {
         var configuration = new GridConfiguration(
@@ -1402,6 +2315,96 @@ public sealed class NavigationGraphCapacityTests
         operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
         context.Pathing.RetainedOperationWorkCount.Should().Be(0);
         context.Pathing.RetainedCompositionWorkCount.Should().Be(0);
+        context.Pathing.TryGetNavigationGraphCellState("map", default, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void StructuralPublicationScratchBoundary_ShouldRejectBeforeRetainingAPartialComposition()
+    {
+        var limits = new NavigationOperationLimits(
+            maxPendingOperations: 1,
+            maxPendingDescriptorBytes: 1_000_000,
+            maxPreparedMapBytes: 1_000_000,
+            maxBatchItems: 1,
+            maxBatchDescriptorBytes: 1_000_000,
+            maxBatchSortScratchBytes: 4_096,
+            maxCorridorCells: 2,
+            maxMaps: 1,
+            maxRetainedMapIdentities: 1,
+            maxOverlayCellsPerMap: 0,
+            maxOverlayConnectionsPerMap: 0,
+            maxOverlayTransitionsPerMap: 0,
+            maxOverlayCells: 0,
+            maxOverlayConnections: 0,
+            maxOverlayTransitions: 0,
+            maxTransitionRulesPerMap: 1,
+            maxTransitionRules: 1);
+        GridConfiguration configuration = CreateConfiguration();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        var prepared = new PreparedNavigationMap(
+            new NavigationMapBuilder("map", binding)
+                .AddCell(default, new NavigationCell(
+                    TraversalMedia.Solid,
+                    TraversalCapability.None,
+                    default,
+                    Fixed64.Zero,
+                    Fixed64.Zero,
+                    Fixed64.One))
+                .Build(),
+            1);
+        var probeProcessor = new NavigationOperationProcessor(
+            limits,
+            maxBakedCellsPerMap: 1,
+            navigationAreaCount: 1);
+        long emptyOperationBytes = probeProcessor.Candidate.RetainedBytes;
+        var probeOperation = new NavigationMapCommitOperation(
+            prepared,
+            OverlayReplacementPolicy.Clear,
+            1,
+            1);
+        probeProcessor.Admit(probeOperation).Should().BeTrue();
+        probeProcessor.ProcessFrame(
+                1,
+                static (_, _, _, _) => NavigationCandidatePublication.Published)
+            .Should().Be(NavigationOperationFrameResult.Published);
+        NavigationWorldGraph empty = NavigationWorldGraph.CreateEmpty(0);
+        NavigationOperationCandidate candidate = probeProcessor.Candidate;
+        long candidateGrowth = Math.Max(0L, candidate.RetainedBytes - empty.RetainedBytes);
+        long operationGrowth = Math.Max(0L, candidate.RetainedBytes - emptyOperationBytes);
+        long minimumScratch = NavigationStructuralCompositionWork.GetMinimumScratchBytes(
+            sourceMapCount: 0,
+            candidateMapCount: 1,
+            changedMapCount: 1,
+            overlayCellCount: 0);
+        long exactPublicationBoundary = checked(
+            empty.RetainedBytes + candidateGrowth + minimumScratch);
+        long operationFoldBoundary = checked(
+            empty.RetainedBytes + operationGrowth + probeProcessor.CoverageScratchBytes);
+        exactPublicationBoundary.Should().BeGreaterThan(operationFoldBoundary,
+            "this fixture isolates structural publication scratch after operation folding fits");
+        exactPublicationBoundary.Should().BeGreaterThan(
+            TrailblazerWorldContextSettings.MinimumActiveSnapshotBytes);
+
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
+            settings: CreateSettings(
+                maxActiveSnapshotBytes: exactPublicationBoundary - 1,
+                operationLimits: limits,
+                maxDynamicCellSlotsPerMap: 1,
+                maxDynamicCellSlots: 1));
+        var operation = new NavigationMapCommitOperation(
+            prepared,
+            OverlayReplacementPolicy.Clear,
+            1,
+            1);
+
+        context.Pathing.Admit(operation).Should().BeTrue();
+        context.Simulate();
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        context.Pathing.RetainedOperationWorkCount.Should().Be(0);
+        context.Pathing.RetainedCompositionWorkCount.Should().Be(0,
+            "a preflight rejection cannot leave a closure or scratch owner behind");
         context.Pathing.TryGetNavigationGraphCellState("map", default, out _).Should().BeFalse();
     }
 
@@ -1652,10 +2655,12 @@ public sealed class NavigationGraphCapacityTests
         ulong sequence,
         byte obstacleCount,
         VoxelIndex index = default,
-        ushort gridIndex = 0) => new(
-        1,
+        ushort gridIndex = 0,
+        long worldSpawnToken = 1,
+        long gridSpawnToken = 1) => new(
+        worldSpawnToken,
         gridIndex,
-        1,
+        gridSpawnToken,
         configuration,
         1,
         GridEventKind.ObstacleAdded,
@@ -1666,6 +2671,15 @@ public sealed class NavigationGraphCapacityTests
         true,
         true,
         obstacleCount);
+
+    private static int GetIngressEventKeyHashCode(in GridEventInfo eventInfo)
+    {
+        int hash = SwiftHashTools.CombineHashCodes(
+            eventInfo.WorldSpawnToken.GetHashCode(),
+            eventInfo.GridSpawnToken.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, eventInfo.GridIndex.GetHashCode());
+        return SwiftHashTools.CombineHashCodes(hash, eventInfo.VoxelIndex.GetHashCode());
+    }
 
     private static NavigationOverlayCommitOperation CreateCellOperation(
         NavigationCellOverlayOperation cell,

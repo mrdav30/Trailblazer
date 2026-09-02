@@ -42,15 +42,7 @@ internal readonly struct NavigationNodeRef : IEquatable<NavigationNodeRef>
         _encodedMapOrdinal == other._encodedMapOrdinal
         && _encodedCellSlot == other._encodedCellSlot;
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationNodeRef other && Equals(other);
-
     public override int GetHashCode() =>
         SwiftHashTools.CombineHashCodes(_encodedMapOrdinal, _encodedCellSlot);
 
-    public static bool operator ==(NavigationNodeRef left, NavigationNodeRef right) =>
-        left.Equals(right);
-
-    public static bool operator !=(NavigationNodeRef left, NavigationNodeRef right) =>
-        !left.Equals(right);
 }

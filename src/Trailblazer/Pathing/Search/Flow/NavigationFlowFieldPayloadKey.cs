@@ -57,9 +57,6 @@ internal readonly struct NavigationFlowFieldPayloadKey :
         && AllowTransitions == other.AllowTransitions
         && FlowField == other.FlowField;
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationFlowFieldPayloadKey other && Equals(other);
-
     public override int GetHashCode()
     {
         int hash = SwiftHashTools.CombineHashCodes(
@@ -75,11 +72,4 @@ internal readonly struct NavigationFlowFieldPayloadKey :
         return SwiftHashTools.CombineHashCodes(hash, FlowField.GetHashCode());
     }
 
-    public static bool operator ==(
-        NavigationFlowFieldPayloadKey left,
-        NavigationFlowFieldPayloadKey right) => left.Equals(right);
-
-    public static bool operator !=(
-        NavigationFlowFieldPayloadKey left,
-        NavigationFlowFieldPayloadKey right) => !left.Equals(right);
 }

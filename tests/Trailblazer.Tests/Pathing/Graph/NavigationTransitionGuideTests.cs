@@ -54,6 +54,159 @@ public sealed class NavigationTransitionGuideTests
         solid.GetHashCode().Should().NotBe(gas.GetHashCode());
     }
 
+    [Fact]
+    public void FlowTransitionReplay_ExactSearchTransitionCandidateBudget_ShouldReportBudgetExceeded()
+    {
+        VoxelIndex sourceIndex = default;
+        var targetIndex = new VoxelIndex(2, 0, 0);
+        var transition = new TraversalTransitionDefinition(
+            "budgeted-transition",
+            TraversalTransitionType.Takeoff,
+            sourceIndex,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("map", targetIndex),
+            TraversalMedium.Gas,
+            actionCost: Fixed64.One);
+        using TrailblazerWorldContext context = CreateTransitionContext(
+            sourceIndex,
+            Cell(TraversalMedia.Solid),
+            targetIndex,
+            Cell(TraversalMedia.Gas),
+            transition);
+        using NavigationWorldGraphLease sourceLease =
+            context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationWorldGraph graph = WithPolicy(sourceLease.Graph);
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(graph, 2);
+        NavigationNodeRef source = Resolve(graph, sourceIndex);
+        NavigationNodeRef target = Resolve(graph, targetIndex);
+        var sourceAddress = new NavigationCellAddress("map", sourceIndex);
+        var targetAddress = new NavigationCellAddress("map", targetIndex);
+        Vector3d start = GetGuideAnchor(graph, source, TraversalMedium.Solid);
+        Vector3d end = GetGuideAnchor(graph, target, TraversalMedium.Gas);
+        PathQuery astar = Query(
+            start,
+            end,
+            TraversalMedia.Solid | TraversalMedia.Gas,
+            allowTransitions: true);
+        var baselineQuery = new PathQuery(
+            astar.Start,
+            astar.End,
+            astar.Agent,
+            astar.AreaPolicy,
+            astar.Traversal,
+            PathAlgorithm.FlowField,
+            astar.Budget,
+            allowTransitions: true,
+            new FlowFieldQueryOptions(Fixed64.Zero));
+        graph.AreaCatalog.TryGet(
+                baselineQuery.AreaPolicy,
+                out NavigationAreaPolicy? policy)
+            .Should().BeTrue();
+
+        NavigationResolvedPathQuery ResolveFlow(
+            PathQuery query,
+            out NavigationWorkMeter meter)
+        {
+            meter = new NavigationWorkMeter(query.Budget);
+            var resolved = new NavigationResolvedPathQuery();
+            resolved.Bind(
+                store.TryAcquire()!,
+                query,
+                new NavigationResolvedEndpoint(
+                    source,
+                    sourceAddress,
+                    TraversalMedia.Solid,
+                    TraversalMedium.Solid,
+                    start,
+                    Fixed64.Zero),
+                new NavigationResolvedEndpoint(
+                    target,
+                    targetAddress,
+                    TraversalMedia.Gas,
+                    TraversalMedium.Gas,
+                    end,
+                    Fixed64.Zero),
+                policy!,
+                TraversalMedium.Solid,
+                TraversalMedia.Gas,
+                meter,
+                context.World.ChangeSequence,
+                requiresWorldStamp: true);
+            return resolved;
+        }
+
+        static void AdvancePastSearch(
+            NavigationFlowFieldWork work,
+            NavigationFlowFieldWorkspace workspace)
+        {
+            for (int step = 0;
+                 step < 64
+                 && work.Status == NavigationFlowFieldStatus.Pending
+                 && workspace.SettledCount < 2;
+                 step++)
+            {
+                work.Advance(0, 1, 64, 64);
+            }
+            work.Status.Should().Be(NavigationFlowFieldStatus.Pending);
+            workspace.SettledCount.Should().Be(2);
+        }
+
+        int searchTransitionCandidateCount;
+        var baselineWorkspace = new NavigationFlowFieldWorkspace(1, 4, 4, 4, 32, 16);
+        using (var baseline = new NavigationFlowFieldWork(
+            context.World,
+            ResolveFlow(baselineQuery, out NavigationWorkMeter baselineMeter),
+            baselineWorkspace))
+        {
+            AdvancePastSearch(baseline, baselineWorkspace);
+            baseline.Advance(0, 64, 0, 64).Should().Be(
+                NavigationFlowFieldStatus.Pending,
+                "a zero local edge slice must stop before the selected transition replay debit");
+            searchTransitionCandidateCount = baselineMeter.TransitionCandidates;
+            searchTransitionCandidateCount.Should().BeGreaterThan(0);
+            searchTransitionCandidateCount.Should().BeLessThan(
+                baselineQuery.Budget.MaxTransitionCandidates);
+        }
+
+        NavigationWorkBudget budget = baselineQuery.Budget;
+        var exactSearchBudget = new NavigationWorkBudget(
+            budget.MaxLookupProbes,
+            budget.MaxEndpointCandidates,
+            budget.MaxExpandedNodes,
+            budget.MaxEvaluatedEdges,
+            budget.MaxConnectionLegs,
+            searchTransitionCandidateCount,
+            budget.MaxTransitionPairs,
+            budget.MaxStagedLegAttempts,
+            budget.MaxTraceIntervals,
+            budget.MaxCoveredVoxelIntervals,
+            budget.MaxSimplificationRays);
+        var exactSearchQuery = new PathQuery(
+            baselineQuery.Start,
+            baselineQuery.End,
+            baselineQuery.Agent,
+            baselineQuery.AreaPolicy,
+            baselineQuery.Traversal,
+            baselineQuery.Algorithm,
+            exactSearchBudget,
+            baselineQuery.AllowTransitions,
+            baselineQuery.FlowField);
+        var exactWorkspace = new NavigationFlowFieldWorkspace(1, 4, 4, 4, 32, 16);
+        using var exact = new NavigationFlowFieldWork(
+            context.World,
+            ResolveFlow(exactSearchQuery, out NavigationWorkMeter exactMeter),
+            exactWorkspace);
+        AdvancePastSearch(exact, exactWorkspace);
+
+        exact.Advance(0, 64, 64, 64).Should().Be(
+            NavigationFlowFieldStatus.BudgetExceeded,
+            "transition replay repeats candidate work after the exact search envelope");
+        exactMeter.TransitionCandidates.Should().Be(searchTransitionCandidateCount);
+        exact.Result.Should().BeNull();
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
     [Theory]
     [InlineData((int)TraversalMedium.Gas)]
     [InlineData((int)TraversalMedium.Liquid)]
@@ -67,12 +220,56 @@ public sealed class NavigationTransitionGuideTests
         NavigationWorldGraph graph = WithPolicy(sourceLease.Graph);
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(graph, 2);
-        var workspace = new NavigationAStarWorkspace(1, 16, 18, 8, 32, 32, 16);
-        NavigationWorldGraphLease lease = store.TryAcquire()!;
         NavigationNodeRef source = Resolve(graph, default);
         NavigationNodeRef target = Resolve(graph, new VoxelIndex(1, 0, 1));
         Vector3d start = GetVolumeAnchor(graph, source, Fixed64.One);
         Vector3d end = GetVolumeAnchor(graph, target, Fixed64.One);
+        PathQuery query = Query(
+            start,
+            end,
+            TraversalMedia.Gas | TraversalMedia.Liquid,
+            allowTransitions: false);
+        var insufficientWorkspace = new NavigationAStarWorkspace(
+            1,
+            16,
+            18,
+            8,
+            32,
+            32,
+            guidePointCapacity: 1);
+        using (var insufficientAdmission = new NavigationQueryAdmissionWork(
+            context.World,
+            store,
+            insufficientWorkspace.EndpointWorkspace,
+            insufficientWorkspace.RayWorkspace,
+            PathAlgorithm.AStar))
+        {
+            insufficientAdmission.Begin(
+                store.TryAcquire()!,
+                query,
+                medium,
+                TraversalMedia.Gas | TraversalMedia.Liquid);
+            AdvanceAdmission(insufficientAdmission);
+            insufficientAdmission.Status.Should().Be(
+                NavigationQueryAdmissionStatus.Success);
+            using var insufficient = new NavigationSurfaceAStarWork(
+                context.World,
+                store,
+                insufficientAdmission.Result,
+                insufficientWorkspace,
+                insufficientAdmission.RayWork,
+                long.MaxValue);
+
+            AdvanceSearch(insufficient);
+
+            insufficient.Status.Should().Be(
+                NavigationSurfaceAStarStatus.CapacityExceeded);
+            insufficientWorkspace.GuidePointCount.Should().Be(1,
+                "the source point must remain intact when the volume target does not fit");
+        }
+
+        var workspace = new NavigationAStarWorkspace(1, 16, 18, 8, 32, 32, 16);
+        NavigationWorldGraphLease lease = store.TryAcquire()!;
         using var admission = new NavigationQueryAdmissionWork(
             context.World,
             store,
@@ -81,11 +278,7 @@ public sealed class NavigationTransitionGuideTests
             PathAlgorithm.AStar);
         admission.Begin(
             lease,
-            Query(
-                start,
-                end,
-                TraversalMedia.Gas | TraversalMedia.Liquid,
-                allowTransitions: false),
+            query,
             medium,
             TraversalMedia.Gas | TraversalMedia.Liquid);
         AdvanceAdmission(admission);
@@ -134,12 +327,54 @@ public sealed class NavigationTransitionGuideTests
         NavigationWorldGraph graph = WithPolicy(sourceLease.Graph);
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(graph, 2);
-        var workspace = new NavigationAStarWorkspace(1, 16, 18, 8, 32, 32, 16);
-        NavigationWorldGraphLease lease = store.TryAcquire()!;
         NavigationNodeRef source = Resolve(graph, sourceIndex);
         NavigationNodeRef target = Resolve(graph, targetIndex);
         Vector3d start = GetGuideAnchor(graph, source, TraversalMedium.Solid);
         Vector3d end = GetGuideAnchor(graph, target, TraversalMedium.Gas);
+        PathQuery query = Query(
+            start,
+            end,
+            TraversalMedia.Solid | TraversalMedia.Gas,
+            allowTransitions: true);
+        foreach (int guidePointCapacity in new[] { 1, 2 })
+        {
+            var insufficientWorkspace = new NavigationAStarWorkspace(
+                1,
+                16,
+                18,
+                8,
+                32,
+                32,
+                guidePointCapacity);
+            using var insufficientAdmission = new NavigationQueryAdmissionWork(
+                context.World,
+                store,
+                insufficientWorkspace.EndpointWorkspace,
+                insufficientWorkspace.RayWorkspace,
+                PathAlgorithm.AStar);
+            insufficientAdmission.Begin(
+                store.TryAcquire()!,
+                query,
+                TraversalMedium.Solid,
+                TraversalMedia.Gas);
+            AdvanceAdmission(insufficientAdmission);
+            insufficientAdmission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+            using var insufficient = new NavigationSurfaceAStarWork(
+                context.World,
+                store,
+                insufficientAdmission.Result,
+                insufficientWorkspace,
+                insufficientAdmission.RayWork,
+                long.MaxValue);
+            AdvanceSearch(insufficient);
+
+            insufficient.Status.Should().Be(NavigationSurfaceAStarStatus.CapacityExceeded);
+            insufficientWorkspace.GuidePointCount.Should().Be(1,
+                "failed transition replay must roll back every partial transition point");
+        }
+
+        var workspace = new NavigationAStarWorkspace(1, 16, 18, 8, 32, 32, 16);
+        NavigationWorldGraphLease lease = store.TryAcquire()!;
         using var admission = new NavigationQueryAdmissionWork(
             context.World,
             store,
@@ -148,11 +383,7 @@ public sealed class NavigationTransitionGuideTests
             PathAlgorithm.AStar);
         admission.Begin(
             lease,
-            Query(
-                start,
-                end,
-                TraversalMedia.Solid | TraversalMedia.Gas,
-                allowTransitions: true),
+            query,
             TraversalMedium.Solid,
             TraversalMedia.Gas);
         AdvanceAdmission(admission);
@@ -165,9 +396,18 @@ public sealed class NavigationTransitionGuideTests
             admission.RayWork,
             long.MaxValue);
 
-        AdvanceSearch(search);
+        int advanceCount = 0;
+        for (;
+            advanceCount < 4_096
+                && search.Status == NavigationSurfaceAStarStatus.Pending;
+            advanceCount++)
+        {
+            search.Advance(1, 1, 1, 1);
+        }
 
         search.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        advanceCount.Should().BeGreaterThan(1,
+            "transition reconstruction and simplification must resume across unit chunks");
         search.Result.Cost.Should().Be((Fixed64)12);
         search.Result.Dependencies.HasTransitionRuleDependency.Should().BeTrue();
         NavigationAStarPayload.GetRetainedBytes(
@@ -251,25 +491,23 @@ public sealed class NavigationTransitionGuideTests
             .Should().Be(NavigationGuideStatus.Success);
         publicTransitionStep.Transition.Should().Be(instruction);
         const int hotPathIterationCount = 1_000;
-        for (int i = 0; i < hotPathIterationCount; i++)
+        Action sampleCurrentTransitionStep = () =>
         {
-            if (guide.TryGetCurrentStep(generation, out _)
-                != NavigationAStarQueryStatus.Success)
+            for (int i = 0; i < hotPathIterationCount; i++)
             {
-                throw new InvalidOperationException("The active transition step became unavailable during warmup.");
+                if (guide.TryGetCurrentStep(generation, out _)
+                    != NavigationAStarQueryStatus.Success)
+                {
+                    throw new InvalidOperationException(
+                        "The active transition step became unavailable during allocation sampling.");
+                }
             }
-        }
-        long allocationBefore = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < hotPathIterationCount; i++)
-        {
-            if (guide.TryGetCurrentStep(generation, out _)
-                != NavigationAStarQueryStatus.Success)
-            {
-                throw new InvalidOperationException("The active transition step became unavailable.");
-            }
-        }
-        long allocationAfter = GC.GetAllocatedBytesForCurrentThread();
-        (allocationAfter - allocationBefore).Should().Be(0);
+        };
+        sampleCurrentTransitionStep();
+        _ = AllocationTestUtility.MeasureAllocatedBytes(sampleCurrentTransitionStep);
+        AllocationTestUtility.MeasureAllocatedBytes(sampleCurrentTransitionStep)
+            .Should().Be(0,
+                "the exact transition-step hot path must be allocation free after runtime instrumentation settles");
         secondGuide.TryAdvanceWaypoint(secondGeneration)
             .Should().Be(NavigationAStarQueryStatus.Success);
         secondGuide.TryGetCurrentStep(
@@ -311,6 +549,9 @@ public sealed class NavigationTransitionGuideTests
         guide.Dispose(generation);
         guide.TryGetCurrentStep(generation, out _)
             .Should().Be(NavigationAStarQueryStatus.Stale);
+        guide.CompletePendingTransition(generation, instruction)
+            .Should().Be(NavigationAStarQueryStatus.Stale,
+                "a disposed generation cannot complete a transition through a stale alias");
         cache.ActiveLeaseCount.Should().Be(0);
         cache.TryCheckoutReserved(
                 search.Result.Key,
@@ -768,6 +1009,32 @@ public sealed class NavigationTransitionGuideTests
         outsideSample.Heading.Should().Be((end - outsideArrival).Normalized);
         boundarySample.Medium.Should().Be(TraversalMedium.Gas);
         boundarySample.Heading.Should().Be(Vector3d.Zero);
+        var noRebaseBudget = new GuideSampleWorkBudget(
+            maxCurrentNodeLookupProbes: 256,
+            maxCursorLegScans: 256,
+            maxCursorRebases: 0,
+            maxPortalChecks: 64,
+            maxPrismChecks: 64,
+            maxTraceIntervals: 256,
+            maxLocalRecoveryAttempts: 64);
+        Sample(
+                inner,
+                inner.Generation,
+                end,
+                noRebaseBudget,
+                out NavigationFlowSample _)
+            .Should().Be(NavigationGuideStatus.BudgetExceeded,
+                "reaching the next volume anchor must account for the cursor advance");
+        Sample(
+                inner,
+                inner.Generation,
+                end,
+                GenerousSampleBudget,
+                out NavigationFlowSample atDestination)
+            .Should().Be(NavigationGuideStatus.Success);
+        atDestination.Medium.Should().Be(TraversalMedium.Gas);
+        atDestination.Target.Should().Be(end);
+        atDestination.Heading.Should().Be(Vector3d.Zero);
         guide.Dispose();
     }
 
@@ -848,14 +1115,17 @@ public sealed class NavigationTransitionGuideTests
             context.World,
             resolved,
             workspace);
-        for (int step = 0;
-            step < 256 && work.Status == NavigationFlowFieldStatus.Pending;
-            step++)
+        int advanceCount = 0;
+        for (;
+            advanceCount < 256 && work.Status == NavigationFlowFieldStatus.Pending;
+            advanceCount++)
         {
-            work.Advance(64, 64, 64, 64);
+            work.Advance(1, 1, 1, 1);
         }
 
         work.Status.Should().Be(NavigationFlowFieldStatus.Success);
+        advanceCount.Should().BeGreaterThan(1,
+            "transition replay must resume correctly across unit-sized work chunks");
         work.Result!.TryGetNode(
                 sourceAddress,
                 TraversalMedium.Solid,
@@ -1036,7 +1306,6 @@ public sealed class NavigationTransitionGuideTests
                 new NavigationFlowQueryResult(sourceAddress, secondPayloadLease),
                 out NavigationFlowFieldLease secondFlowGuide)
             .Should().Be(NavigationGuideStatus.Success);
-        NavigationFlowFieldGuideLease secondInner = GetInner(secondFlowGuide);
         secondFlowGuide.TrySample(
                 start,
                 GenerousSampleBudget,
@@ -1053,19 +1322,6 @@ public sealed class NavigationTransitionGuideTests
                 "the completed sample ordinal cannot be replayed");
         secondFlowGuide.CompletePendingTransition(secondSample.Transition)
             .Should().Be(NavigationGuideStatus.Success);
-        SetPrivateField(secondInner, "_currentSource", sourceAddress);
-        SetPrivateField(secondInner, "_currentMedium", TraversalMedium.Solid);
-        SetPrivateField(secondInner, "_hasPendingTransition", false);
-        SetPrivateField(secondInner, "_sampleOrdinal", long.MaxValue);
-        Sample(
-                secondInner,
-                secondInner.Generation,
-                start,
-                GenerousSampleBudget,
-                out NavigationFlowSample exhausted)
-            .Should().Be(NavigationGuideStatus.Stale,
-                "completion ordinals retire before a same-lease wrap");
-        exhausted.Should().Be(default(NavigationFlowSample));
         secondFlowGuide.Dispose();
         flowGuide.Dispose();
 
@@ -2331,13 +2587,6 @@ public sealed class NavigationTransitionGuideTests
         (T)instance.GetType()
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(instance)!;
-
-    private static void SetPrivateField<T>(
-        object instance,
-        string name,
-        T value) => instance.GetType()
-            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(instance, value);
 
     private static NavigationGuideStatus Sample(
         NavigationFlowFieldGuideLease lease,

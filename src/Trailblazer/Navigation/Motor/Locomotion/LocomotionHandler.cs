@@ -343,19 +343,14 @@ public class LocomotionHandler : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ILocomotion? GetLocomotion(LocomotionSlot slot)
     {
-#pragma warning disable CS8524 // LocomotionSlot is only produced by TryResolveLocomotionSlot over known built-in locomotions.
-        return slot switch
-        {
-            LocomotionSlot.Move => Move,
-            LocomotionSlot.Platform => Platform,
-            LocomotionSlot.Jump => Jump,
-            LocomotionSlot.Fall => Fall,
-            LocomotionSlot.Slide => Slide,
-            LocomotionSlot.Water => Water,
-            LocomotionSlot.Fly => Fly,
-            LocomotionSlot.Climb => Climb
-        };
-#pragma warning restore CS8524
+        if (slot == LocomotionSlot.Move) return Move;
+        if (slot == LocomotionSlot.Platform) return Platform;
+        if (slot == LocomotionSlot.Jump) return Jump;
+        if (slot == LocomotionSlot.Fall) return Fall;
+        if (slot == LocomotionSlot.Slide) return Slide;
+        if (slot == LocomotionSlot.Water) return Water;
+        if (slot == LocomotionSlot.Fly) return Fly;
+        return Climb;
     }
 
     /// <summary>
@@ -474,10 +469,9 @@ public class LocomotionHandler : IRecordable
             case LocomotionSlot.Fly:
                 _fly = locomotion as FlyLocomotion;
                 return;
-            case LocomotionSlot.Climb:
-                _climb = locomotion as ClimbLocomotion;
-                return;
         }
+
+        _climb = locomotion as ClimbLocomotion;
     }
 
     private void BindInstalledLocomotions()

@@ -195,10 +195,11 @@ public class JumpLocomotion : ILocomotion
     /// </summary>
     public void RegisterJump()
     {
+        Fixed64 startTime = TotalTime;
         JumpCount++;
         IsJumping = true;
         IsHoldingJump = true;
-        JumpStartTime = TotalTime;
+        JumpStartTime = startTime;
 
         // Start cooldown only if this was the last allowed jump
         if (JumpCount >= MaxJumpCount)

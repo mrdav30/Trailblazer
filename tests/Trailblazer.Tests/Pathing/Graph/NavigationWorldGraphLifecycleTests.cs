@@ -1,3 +1,4 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -13,6 +14,27 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationWorldGraphLifecycleTests
 {
+    [Fact]
+    public void AffectedMapOrdinalCollection_ShouldIgnoreMissingAndDuplicateOwners()
+    {
+        var ordinals = new int[2];
+        var stamps = new int[3];
+        int count = 0;
+
+        NavigationWorldGraph.TryMarkOrdinal(-1, ordinals, ref count, stamps, stamp: 7)
+            .Should().BeFalse();
+        NavigationWorldGraph.TryMarkOrdinal(1, ordinals, ref count, stamps, stamp: 7)
+            .Should().BeTrue();
+        NavigationWorldGraph.TryMarkOrdinal(1, ordinals, ref count, stamps, stamp: 7)
+            .Should().BeFalse();
+        NavigationWorldGraph.TryMarkOrdinal(2, ordinals, ref count, stamps, stamp: 7)
+            .Should().BeTrue();
+
+        count.Should().Be(2);
+        ordinals.Should().Equal(1, 2);
+        stamps.Should().Equal(0, 7, 7);
+    }
+
     private static readonly NavigationCell SolidCell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
@@ -20,6 +42,49 @@ public sealed class NavigationWorldGraphLifecycleTests
         Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.One);
+
+    [Fact]
+    public void SameGraphVersion_ShouldReuseTheExactImmutableRootAndAccounting()
+    {
+        NavigationWorldGraph graph = NavigationWorldGraph.Empty;
+
+        NavigationWorldGraph same = graph.WithGraphVersion(graph.GraphVersion);
+
+        same.Should().BeSameAs(graph,
+            "an unchanged version must not allocate or transfer persistent ownership");
+        same.RetainedBytes.Should().Be(graph.RetainedBytes);
+        same.PersistentPageCount.Should().Be(graph.PersistentPageCount);
+    }
+
+    [Fact]
+    public void RuntimeCallbacks_ShouldIgnoreForeignWorldsAndDisposedOwners()
+    {
+        using var world = new GridWorld();
+        var runtime = new NavigationGraphRuntime(world, TrailblazerWorldContextSettings.Default);
+        GridConfiguration configuration = CreateConfiguration(
+            GridTopologyKind.RectangularPrism,
+            GridStorageKind.Dense);
+        var foreign = new GridEventInfo(
+            world.SpawnToken + 1,
+            gridIndex: 0,
+            gridSpawnToken: 1,
+            configuration,
+            gridVersion: 1,
+            changeKind: GridEventKind.GridAdded);
+
+        runtime.EnqueueCommittedChange(foreign);
+        runtime.Maintain(1);
+
+        runtime.LastAffectedMapCollectionCount.Should().Be(0);
+        runtime.RetainedBaselineCaptureCount.Should().Be(0);
+        runtime.RetainedCompositionWorkCount.Should().Be(0,
+            "a callback from another world cannot create graph maintenance ownership");
+
+        runtime.Dispose();
+        Action lateCallback = () => runtime.EnqueueCommittedChange(foreign);
+        lateCallback.Should().NotThrow(
+            "GridForge may finish dispatching a callback while its graph owner is tearing down");
+    }
 
     [Theory]
     [InlineData(GridTopologyKind.RectangularPrism, GridStorageKind.Dense)]
@@ -241,6 +306,146 @@ public sealed class NavigationWorldGraphLifecycleTests
         context.Simulate();
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
             lease.Graph.IsDependencyCurrent(stamp).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PageOnlyDependency_ShouldBecomeStaleWhenItsMapIsRemoved()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        AdmitMap(context, CreateWideMap("A", xOffset: 0, cellCount: 1), 1, 1);
+        var policyKey = new NavigationAreaPolicyKey("ground", 1);
+        context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(
+                new NavigationAreaPolicy(
+                    policyKey,
+                    new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
+                publicationSequence: 2,
+                effectiveFrame: context.FrameCount + 1))
+            .Should().BeTrue();
+        context.Simulate();
+
+        GraphDependencyStamp stamp;
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            lease.Graph.TryGetDependencyStamp(
+                    policyKey,
+                    Array.Empty<NavigationSurfaceComponentKey>(),
+                    new[] { new GraphPageDependencyAddress("A", 0) },
+                    out stamp)
+                .Should().BeTrue();
+            lease.Graph.IsDependencyCurrent(stamp).Should().BeTrue();
+        }
+
+        var removal = new NavigationMapRemoveOperation(
+            "A",
+            operationSequence: 3,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(removal).Should().BeTrue();
+        while (removal.Receipt.Status == NavigationOperationStatus.Pending)
+            context.Simulate();
+
+        removal.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease removed = context.Pathing.TryAcquireNavigationGraph()!;
+        removed.Graph.IsDependencyCurrent(stamp).Should().BeFalse(
+            "removing a consumed map invalidates its exact page dependency");
+    }
+
+    [Fact]
+    public void DependencyStamp_ShouldAcceptCanonicalAndRejectNoncanonicalOrUnresolvedInputs()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        AdmitMap(context, CreateWideMap("A", xOffset: 0, cellCount: 1), 1, 1);
+        AdmitMap(context, CreateWideMap("B", xOffset: 256, cellCount: 1), 2, 1);
+        var policyKey = new NavigationAreaPolicyKey("ground", 1);
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            new NavigationAreaPolicy(
+                policyKey,
+                new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
+            publicationSequence: 3,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(policyOperation).Should().BeTrue();
+        context.Simulate();
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationSurfaceComponentKey firstComponent = GetSurfaceComponentKey(
+            lease.Graph,
+            new NavigationCellAddress("A", default));
+        NavigationSurfaceComponentKey secondComponent = GetSurfaceComponentKey(
+            lease.Graph,
+            new NavigationCellAddress("B", default));
+        var missingComponent = new NavigationSurfaceComponentKey(
+            new NavigationCellAddress("missing", default),
+            TraversalMedium.Solid);
+
+        lease.Graph.TryGetDependencyStamp(
+                policyKey,
+                new[] { firstComponent, secondComponent },
+                new[]
+                {
+                    new GraphPageDependencyAddress("A", 0),
+                    new GraphPageDependencyAddress("A", 1),
+                    new GraphPageDependencyAddress("B", 0)
+                },
+                out GraphDependencyStamp canonical)
+            .Should().BeTrue(
+                "canonical dependencies may include an empty future page at its zero version");
+        canonical.Components.Should().HaveCount(2);
+        canonical.Pages.Should().HaveCount(3);
+        lease.Graph.IsDependencyCurrent(canonical).Should().BeTrue();
+
+        void ShouldReject(
+            NavigationAreaPolicyKey policy,
+            NavigationSurfaceComponentKey[] components,
+            GraphPageDependencyAddress[] pages)
+        {
+            lease.Graph.TryGetDependencyStamp(policy, components, pages, out GraphDependencyStamp stamp)
+                .Should().BeFalse();
+            stamp.Should().BeNull(
+                "a partial dependency stamp could validate a stale cached guide");
+        }
+
+        ShouldReject(
+            new NavigationAreaPolicyKey("missing", 1),
+            Array.Empty<NavigationSurfaceComponentKey>(),
+            Array.Empty<GraphPageDependencyAddress>());
+        ShouldReject(
+            policyKey,
+            new[] { firstComponent, firstComponent },
+            Array.Empty<GraphPageDependencyAddress>());
+        ShouldReject(
+            policyKey,
+            new[] { secondComponent, firstComponent },
+            Array.Empty<GraphPageDependencyAddress>());
+        ShouldReject(
+            policyKey,
+            new[] { missingComponent },
+            Array.Empty<GraphPageDependencyAddress>());
+        ShouldReject(
+            policyKey,
+            Array.Empty<NavigationSurfaceComponentKey>(),
+            new[] { new GraphPageDependencyAddress(string.Empty, 0) });
+        ShouldReject(
+            policyKey,
+            Array.Empty<NavigationSurfaceComponentKey>(),
+            new[] { new GraphPageDependencyAddress("A", -1) });
+        ShouldReject(
+            policyKey,
+            Array.Empty<NavigationSurfaceComponentKey>(),
+            new[]
+            {
+                new GraphPageDependencyAddress("B", 0),
+                new GraphPageDependencyAddress("A", 0)
+            });
+        ShouldReject(
+            policyKey,
+            Array.Empty<NavigationSurfaceComponentKey>(),
+            new[]
+            {
+                new GraphPageDependencyAddress("A", 0),
+                new GraphPageDependencyAddress("A", 0)
+            });
+        ShouldReject(
+            policyKey,
+            Array.Empty<NavigationSurfaceComponentKey>(),
+            new[] { new GraphPageDependencyAddress("missing", 0) });
     }
 
     [Fact]

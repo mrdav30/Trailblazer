@@ -78,8 +78,7 @@ internal sealed class NavigationAreaCatalogProcessor
             rejection = NavigationOperationRejection.ValidationFailed;
         else if (_pending.Count >= _maxPending)
             rejection = NavigationOperationRejection.CapacityExceeded;
-        else if (operation.Policy.RuleCount > _maxRulesPerPolicy
-            || operation.Policy.RuleCount > _maxRules - _pendingRuleCount
+        else if (operation.Policy.RuleCount > _maxRules - _pendingRuleCount
             || operation.Policy.RetainedBytes > _maxPendingBytes - _pendingRetainedBytes)
             rejection = NavigationOperationRejection.CapacityExceeded;
 

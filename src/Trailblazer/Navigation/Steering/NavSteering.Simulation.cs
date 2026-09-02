@@ -54,14 +54,9 @@ public partial class NavSteering
 
     private TrailblazerWorldContext ResolveContext()
     {
-        TrailblazerWorldContext? context = _context;
-        if (context != null)
-        {
-            TrailblazerWorldContext.ThrowIfUnusable(context);
-            return context;
-        }
-
-        throw new InvalidOperationException("NavSteering requires an explicit TrailblazerWorldContext.");
+        TrailblazerWorldContext context = _context!;
+        TrailblazerWorldContext.ThrowIfUnusable(context);
+        return context;
     }
 
     private MovementGroupCoordinatorState MovementGroups => ResolveContext().Navigation.MovementGroups;
@@ -77,9 +72,7 @@ public partial class NavSteering
 
     private int ResolveFrameRate()
     {
-        if (_context != null)
-            return _context.FrameRate;
-        return TrailblazerClock.DefaultFrameRate;
+        return ResolveContext().FrameRate;
     }
 
     /// <summary>
@@ -151,16 +144,17 @@ public partial class NavSteering
 
     private bool ValidateGraphMovementPath(Vector3d origin)
     {
-        if (_hasLineOfSightPath && !_shouldRequestPathThisFrame)
+        if (_hasLineOfSightPath)
             return true;
         if (_currentQuery!.Value.Algorithm == PathAlgorithm.FlowField)
             return ValidateGraphFlowMovementPath(origin);
 
-        if (_navigationGuideLease?.Status == NavigationGuideStatus.Stale)
+        if (_navigationGuideLease?.Status is NavigationGuideStatus.Stale
+            or NavigationGuideStatus.CapacityExceeded)
             PreparePathRetry();
 
         if (!_shouldRequestPathThisFrame)
-            return _navigationGuideLease?.Status == NavigationGuideStatus.Success;
+            return true;
 
         _shouldRequestPathThisFrame = false;
         PathQuery currentQuery = _currentQuery!.Value;
@@ -178,9 +172,8 @@ public partial class NavSteering
         NavigationGuideStatus status = ResolveContext().Guides.RequestGuide(
             query,
             out NavigationGuideLease? lease);
-        if (status != NavigationGuideStatus.Success || lease == null)
+        if (status != NavigationGuideStatus.Success)
         {
-            lease?.Dispose();
             if (status is NavigationGuideStatus.Stale
                 or NavigationGuideStatus.CapacityExceeded)
             {
@@ -191,7 +184,7 @@ public partial class NavSteering
             return false;
         }
 
-        _navigationGuideLease = lease;
+        _navigationGuideLease = lease!.Value;
         return true;
     }
 
@@ -225,9 +218,8 @@ public partial class NavSteering
         NavigationGuideStatus status = ResolveContext().Guides.RequestFlowField(
             query,
             out NavigationFlowFieldLease? lease);
-        if (status != NavigationGuideStatus.Success || lease == null)
+        if (status != NavigationGuideStatus.Success)
         {
-            lease?.Dispose();
             if (status is NavigationGuideStatus.Stale
                 or NavigationGuideStatus.CapacityExceeded)
             {
@@ -238,7 +230,7 @@ public partial class NavSteering
             return false;
         }
 
-        _navigationFlowFieldLease = lease;
+        _navigationFlowFieldLease = lease!.Value;
         return true;
     }
 
@@ -297,37 +289,21 @@ public partial class NavSteering
                 return Vector3d.Zero;
             if (status == NavigationGuideStatus.LocalRecoveryRequired)
                 return Vector3d.Zero;
-            else if (status != NavigationGuideStatus.Success)
+            if (sample.HasTransition)
             {
-                HandleInvalidPath("Invalid graph flow path detected!");
+                pendingTransition = sample.Transition;
                 return Vector3d.Zero;
             }
-            else
+            if (targetDirection == Vector3d.Zero)
             {
-                if (sample.HasTransition)
-                {
-                    pendingTransition = sample.Transition;
-                    return Vector3d.Zero;
-                }
-                if (targetDirection == Vector3d.Zero)
-                {
-                    Arrive();
-                    return Vector3d.Zero;
-                }
+                Arrive();
+                return Vector3d.Zero;
             }
         }
         else if (_navigationGuideLease != null)
         {
             NavigationGuideLease guide = _navigationGuideLease.Value;
-            NavigationGuideStatus status = guide.TryGetCurrentStep(
-                out NavigationGuideStep step);
-            if (status == NavigationGuideStatus.Stale)
-            {
-                PreparePathRetry();
-                return Vector3d.Zero;
-            }
-            if (status != NavigationGuideStatus.Success)
-                return Vector3d.Zero;
+            guide.TryGetCurrentStep(out NavigationGuideStep step);
 
             if (step.HasTransition)
             {
@@ -350,23 +326,8 @@ public partial class NavSteering
                     return Vector3d.Zero;
                 }
 
-                status = guide.TryAdvanceStep();
-                if (status == NavigationGuideStatus.Stale)
-                {
-                    PreparePathRetry();
-                    return Vector3d.Zero;
-                }
-                if (status != NavigationGuideStatus.Success)
-                    return Vector3d.Zero;
-
-                status = guide.TryGetCurrentStep(out step);
-                if (status == NavigationGuideStatus.Stale)
-                {
-                    PreparePathRetry();
-                    return Vector3d.Zero;
-                }
-                if (status != NavigationGuideStatus.Success)
-                    return Vector3d.Zero;
+                guide.TryAdvanceStep();
+                guide.TryGetCurrentStep(out step);
 
                 if (step.HasTransition)
                 {
@@ -518,7 +479,7 @@ public partial class NavSteering
             out pendingTransition);
         isAStarTransitionApproach = pendingTransition == null
             && IsCurrentAStarTransitionStep();
-        if (_targetDirection == Vector3d.Zero || !ShouldMove || IsAtDestination)
+        if (_targetDirection == Vector3d.Zero)
             return;
         _targetDirection += ComputeCombinedSteering(
             vessel.Position,
@@ -533,9 +494,8 @@ public partial class NavSteering
         if (_navigationGuideLease is not NavigationGuideLease guide)
             return false;
 
-        return guide.TryGetCurrentStep(out NavigationGuideStep step)
-            == NavigationGuideStatus.Success
-            && step.HasTransition;
+        guide.TryGetCurrentStep(out NavigationGuideStep step);
+        return step.HasTransition;
     }
 
     private bool ShouldArriveWithoutNavigationGuidance()
@@ -569,9 +529,7 @@ public partial class NavSteering
             }
             else if (ShouldAdvanceToNextWaypoint())
             {
-                NavigationGuideStatus status = currentGuide.TryAdvanceStep();
-                if (status == NavigationGuideStatus.Stale)
-                    PreparePathRetry();
+                currentGuide.TryAdvanceStep();
             }
         }
 
@@ -582,18 +540,16 @@ public partial class NavSteering
     }
 
     private static bool IsAtFinalWaypoint(NavigationGuideLease guide) =>
-        guide.StepCount > 0
-        && guide.CurrentStepIndex == guide.StepCount - 1;
+        guide.CurrentStepIndex == guide.StepCount - 1;
 
     internal NavigationGuideStatus CompletePendingTransition(
         in NavigationTransitionInstruction instruction)
     {
-        NavigationGuideStatus status = _navigationGuideLease is NavigationGuideLease guide
-            ? guide.CompletePendingTransition(instruction)
-            : _navigationFlowFieldLease is NavigationFlowFieldLease flow
-                ? flow.CompletePendingTransition(instruction)
-                : NavigationGuideStatus.Stale;
-        if (status == NavigationGuideStatus.Success && _currentQuery is PathQuery query)
+        PathQuery query = _currentQuery!.Value;
+        NavigationGuideStatus status = query.Algorithm == PathAlgorithm.AStar
+            ? _navigationGuideLease!.Value.CompletePendingTransition(instruction)
+            : _navigationFlowFieldLease!.Value.CompletePendingTransition(instruction);
+        if (status == NavigationGuideStatus.Success)
         {
             _currentQuery = query.WithStartState(
                 query.Start.Position,

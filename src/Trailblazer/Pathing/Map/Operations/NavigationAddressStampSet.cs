@@ -32,9 +32,9 @@ internal sealed class NavigationAddressStampSet
 
     internal void Reset()
     {
-        if (_generation == long.MaxValue)
-            throw new InvalidOperationException("Address stamp generation capacity is exhausted.");
-        _generation++;
+        _generation = NavigationGenerationCounter.Advance(
+            _generation,
+            "Address stamp generation capacity is exhausted.");
     }
 
     internal bool Add(NavigationCellAddress value)

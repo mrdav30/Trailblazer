@@ -123,9 +123,6 @@ internal sealed class NavigationAutomaticSeamIndex
     internal NavigationPagedSequence<NavigationAutomaticSeamPair> GetActiveRow(
         NavigationCellAddress address) => GetRow(_active, address);
 
-    internal EndpointEnumerator GetDependencyEnumerator(NavigationCellAddress address) =>
-        new(address, GetDependencyRow(address));
-
     internal EndpointEnumerator GetActiveEndpointEnumerator(NavigationCellAddress address) =>
         new(address, GetActiveRow(address));
 
@@ -362,8 +359,9 @@ internal sealed class NavigationAutomaticSeamIndex
 
         internal NavigationAutomaticSeamIndex Seal()
         {
-            if (_sealed)
-                throw new System.InvalidOperationException("The seam index edit is already sealed.");
+            SwiftThrowHelper.ThrowIfTrue(
+                _sealed,
+                message: "The seam index edit is already sealed.");
             _sealed = true;
             if (!IsChanged)
                 return _source;
@@ -441,22 +439,22 @@ internal sealed class NavigationAutomaticSeamIndex
         }
 
         private static void ReplacePayload<T>(
-            T? prior,
-            T? next,
-            T? shared,
+            T prior,
+            T next,
+            T shared,
             long nextBytes,
             int nextPages,
             ref long bytes,
             ref int pages)
             where T : class
         {
-            if (prior != null && !ReferenceEquals(prior, shared))
+            if (!ReferenceEquals(prior, shared))
             {
                 GetPayloadSize(prior, out long priorBytes, out int priorPages);
                 bytes -= priorBytes;
                 pages -= priorPages;
             }
-            if (next != null && !ReferenceEquals(next, shared))
+            if (!ReferenceEquals(next, shared))
             {
                 bytes = checked(bytes + nextBytes);
                 pages = checked(pages + nextPages);

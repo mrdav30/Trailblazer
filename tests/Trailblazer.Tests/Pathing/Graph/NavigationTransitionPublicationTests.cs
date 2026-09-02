@@ -16,6 +16,85 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationTransitionPublicationTests
 {
     [Fact]
+    public void ActiveTransitionIdentity_ShouldMatchOnlyItsDirectedEndpoint()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = Configuration(2);
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        var sourceAddress = new NavigationCellAddress("map", default);
+        var destinationAddress = new NavigationCellAddress(
+            "map",
+            new VoxelIndex(1, 0, 0));
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, Cell(TraversalMedia.Solid))
+            .AddCell(new VoxelIndex(1, 0, 0), Cell(TraversalMedia.Gas))
+            .AddTransition(new TraversalTransitionDefinition(
+                "directed-endpoints",
+                TraversalTransitionType.Jump,
+                default,
+                TraversalMedium.Solid,
+                destinationAddress,
+                TraversalMedium.Gas))
+            .Build();
+        NavigationWorldGraph graph = ComposeGraph(world, map);
+        graph.TryGetMediumStateRef(
+                sourceAddress,
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        graph.TryGetMediumStateRef(
+                destinationAddress,
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef destination)
+            .Should().BeTrue();
+        NavigationTransitionPage.Enumerator outgoing =
+            graph.EnumerateOutgoingTransitions(source);
+        outgoing.MoveNext().Should().BeTrue();
+        NavigationPublishedTransition transition = outgoing.Current;
+
+        graph.IsTransitionActive(transition, source, outgoing: true)
+            .Should().BeTrue();
+        graph.IsTransitionActive(transition, destination, outgoing: false)
+            .Should().BeTrue();
+        graph.IsTransitionActive(transition, source, outgoing: false)
+            .Should().BeFalse();
+        graph.IsTransitionActive(transition, destination, outgoing: true)
+            .Should().BeFalse();
+
+        NavigationWorldGraph failClosed = graph.WithClosedStructuralComponents(
+            NavigationSurfaceComponentKeySet.Empty,
+            closeAllStructuralComponents: true,
+            graph.GraphVersion + 1);
+        failClosed.IsTransitionActive(transition, destination, outgoing: false)
+            .Should().BeFalse(
+                "a transition is inactive when fail-closed publication hides its source endpoint");
+    }
+
+    [Fact]
+    public void RulelessCell_ShouldEnumerateNoIncomingTransitionPage()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = ConfigurationAt(origin: 0);
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        NavigationMap map = RulelessMap("map", origin: 0, TraversalMedia.Solid);
+        NavigationWorldGraph graph = ComposeRawGraph(world, new[] { map }, version: 1);
+        graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", default),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef state)
+            .Should().BeTrue();
+
+        NavigationTransitionPage.Enumerator incoming = graph.EnumerateIncomingTransitions(state);
+        NavigationTransitionPage.Enumerator candidates =
+            graph.EnumerateIncomingTransitionCandidates(state);
+
+        incoming.MoveNext().Should().BeFalse();
+        candidates.MoveNext().Should().BeFalse();
+    }
+
+    [Fact]
     public void TransitionRecordAccounting_ShouldUseCompiledStructLayouts()
     {
         NavigationTransitionPage.OutgoingRecordBytes.Should().Be(
@@ -140,6 +219,32 @@ public sealed class NavigationTransitionPublicationTests
             });
             incoming.MoveNext().Should().BeFalse();
         }
+
+        var placementWork = new NavigationTransitionRefreshWork(
+            graph,
+            graph,
+            operationCandidate: null,
+            PersistentStringMap<bool>.Empty.Set("map", true),
+            rebuildRules: false,
+            version: 2);
+        MaintenanceWorkBudget placementBudget =
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        var placementMeter = new MaintenanceWorkMeter(placementBudget);
+        placementMeter.TryConsumeDependencyEntries(placementBudget.MaxDependencyEntries)
+            .Should().BeTrue();
+        placementWork.Advance(placementMeter).Should().BeFalse(
+            "retained page placement waits when its persistent dependency debit is unavailable");
+        placementMeter.ExplicitEdges.Should().BePositive(
+            "the canonical definition is inspected before its retained page attachment is retried");
+        placementWork.IsComplete.Should().BeFalse();
+        for (int frame = 0; frame < 64 && !placementWork.IsComplete; frame++)
+        {
+            placementMeter.Reset();
+            placementWork.Advance(placementMeter);
+        }
+        placementWork.IsComplete.Should().BeTrue();
+        placementWork.Pages.Should().BeSameAs(graph.TransitionPages,
+            "an unchanged retry reuses the published page root exactly");
     }
 
     [Fact]
@@ -414,10 +519,34 @@ public sealed class NavigationTransitionPublicationTests
             world,
             new[] { sourceMap, targetMap },
             version: 2);
+        PersistentStringMap<bool> targetChanged =
+            PersistentStringMap<bool>.Empty.Set("target", true);
+        var blockedWork = new NavigationTransitionRefreshWork(
+            sourceGraph,
+            candidate,
+            operationCandidate,
+            targetChanged,
+            rebuildRules: true,
+            version: 2);
+        MaintenanceWorkBudget budget =
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        var blockedMeter = new MaintenanceWorkMeter(budget);
+        blockedMeter.TryConsumeDependencyEntries(budget.MaxDependencyEntries)
+            .Should().BeTrue();
+        blockedWork.Advance(blockedMeter).Should().BeFalse(
+            "the incoming source relation must remain pending when its frame debit is unavailable");
+        blockedMeter.ComponentNodes.Should().Be(1,
+            "the changed destination map is charged before incoming ownership is resumed");
+        blockedWork.IsComplete.Should().BeFalse();
+        blockedMeter.Reset();
+        blockedMeter.TryConsumeComponentNodes(budget.MaxComponentNodes).Should().BeTrue();
+        blockedWork.Advance(blockedMeter).Should().BeFalse();
+        blockedMeter.DependencyEntries.Should().BePositive(
+            "the resumed relation bypasses the already captured map's exhausted component debit");
         NavigationWorldGraph active = Refresh(
             sourceGraph,
             candidate,
-            PersistentStringMap<bool>.Empty.Set("target", true),
+            targetChanged,
             rebuildRules: true,
             version: 2,
             operationCandidate);
@@ -644,67 +773,6 @@ public sealed class NavigationTransitionPublicationTests
     }
 
     [Fact]
-    public void MaterializedWork_ShouldCountEachDistinctRetainedGraphWrapper()
-    {
-        var work = new NavigationMaterializedComponentWork(
-            NavigationWorldGraph.Empty,
-            NavigationSurfaceComponentKeySet.Empty,
-            NavigationSurfaceComponentKeySet.Empty,
-            NavigationCellAddressSet.Empty,
-            affectedMemberCount: 0,
-            world: null,
-            baselineCaptures: null,
-            affectedMapOrdinals: null,
-            affectedMapCount: 0,
-            events: null,
-            eventCount: 0);
-        long baseline = work.RetainedBytes;
-        NavigationWorldGraph transition = NavigationWorldGraph.Empty.WithGraphVersion(1);
-        NavigationWorldGraph component = transition.WithGraphVersion(2);
-        System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance
-            | System.Reflection.BindingFlags.NonPublic;
-
-        typeof(NavigationMaterializedComponentWork).GetField("_transitionGraph", flags)!
-            .SetValue(work, transition);
-        work.RetainedBytes.Should().Be(
-            baseline + NavigationWorldGraph.BaseRetainedBytes,
-            "a transition wrapper remains live while seam refresh is blocked");
-
-        typeof(NavigationMaterializedComponentWork).GetField("_componentGraph", flags)!
-            .SetValue(work, component);
-        work.RetainedBytes.Should().Be(
-            baseline + (2L * NavigationWorldGraph.BaseRetainedBytes),
-            "the transition and seam/component wrappers coexist until publication");
-    }
-
-    [Fact]
-    public void StructuralPreparation_ShouldCountDistinctPublishedGraphWrapper()
-    {
-        var work = new NavigationWorldGraph.StructuralPreparationWork(
-            NavigationWorldGraph.Empty,
-            new NavigationOperationCandidate(navigationAreaCount: 1),
-            Array.Empty<NavigationOperationFrameChange>(),
-            changeCount: 0,
-            PersistentStringMap<bool>.Empty,
-            version: 1);
-        long baseline = work.RetainedBytes;
-        NavigationWorldGraph prepared = NavigationWorldGraph.Empty.WithGraphVersion(1);
-        NavigationWorldGraph published = prepared.WithGraphVersion(2);
-        System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance
-            | System.Reflection.BindingFlags.NonPublic;
-
-        typeof(NavigationWorldGraph.StructuralPreparationWork).GetField("_prepared", flags)!
-            .SetValue(work, prepared);
-        typeof(NavigationWorldGraph.StructuralPreparationWork)
-            .GetField("<Result>k__BackingField", flags)!
-            .SetValue(work, published);
-
-        work.RetainedBytes.Should().Be(
-            baseline + NavigationWorldGraph.BaseRetainedBytes,
-            "prepared and transition-published wrappers coexist until store publication");
-    }
-
-    [Fact]
     public void MaterializedDefaultSource_ShouldPublishWhenItsPhysicalSlotFirstAppears()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
@@ -889,6 +957,127 @@ public sealed class NavigationTransitionPublicationTests
     }
 
     [Fact]
+    public void DestinationPageRefresh_ShouldRetainUnchangedOutgoingAndIncomingOwnersAcrossFrames()
+    {
+        using var world = new GridWorld();
+        GridConfiguration firstSourceConfiguration = ConfigurationAt(origin: 0);
+        GridConfiguration secondSourceConfiguration = ConfigurationAt(origin: 10);
+        GridConfiguration targetConfiguration = new(
+            new Vector3d(20, 0, 0),
+            new Vector3d(21, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        world.TryAddGrid(firstSourceConfiguration, out _).Should().BeTrue();
+        world.TryAddGrid(secondSourceConfiguration, out _).Should().BeTrue();
+        world.TryAddGrid(targetConfiguration, out _).Should().BeTrue();
+        firstSourceConfiguration.TryNormalize(out NormalizedGridConfiguration firstBinding)
+            .Should().BeTrue();
+        secondSourceConfiguration.TryNormalize(out NormalizedGridConfiguration secondBinding)
+            .Should().BeTrue();
+        targetConfiguration.TryNormalize(out NormalizedGridConfiguration targetBinding)
+            .Should().BeTrue();
+        var targetAddress = new NavigationCellAddress("target", default);
+        NavigationCell solid = Cell(TraversalMedia.Solid);
+        NavigationMap firstSource = new NavigationMapBuilder("first", firstBinding)
+            .AddCell(default, solid)
+            .AddTransition(new TraversalTransitionDefinition(
+                "removed",
+                TraversalTransitionType.Jump,
+                default,
+                TraversalMedium.Solid,
+                targetAddress,
+                TraversalMedium.Solid))
+            .Build();
+        NavigationMap secondSource = new NavigationMapBuilder("second", secondBinding)
+            .AddCell(default, solid)
+            .AddTransition(new TraversalTransitionDefinition(
+                "retained-incoming",
+                TraversalTransitionType.Jump,
+                default,
+                TraversalMedium.Solid,
+                targetAddress,
+                TraversalMedium.Solid))
+            .Build();
+        NavigationMap target = new NavigationMapBuilder("target", targetBinding)
+            .AddCell(default, solid)
+            .AddCell(new VoxelIndex(1, 0, 0), solid)
+            .AddTransition(new TraversalTransitionDefinition(
+                "retained-outgoing",
+                TraversalTransitionType.Jump,
+                default,
+                TraversalMedium.Solid,
+                new NavigationCellAddress("target", new VoxelIndex(1, 0, 0)),
+                TraversalMedium.Solid))
+            .Build();
+        NavigationWorldGraph initialRaw = ComposeRawGraph(
+            world,
+            new[] { firstSource, secondSource, target },
+            version: 1);
+        PersistentStringMap<bool> allChanged = PersistentStringMap<bool>.Empty
+            .Set("first", true)
+            .Set("second", true)
+            .Set("target", true);
+        NavigationWorldGraph initial = Refresh(
+            NavigationWorldGraph.Empty,
+            initialRaw,
+            allChanged,
+            rebuildRules: false,
+            version: 1);
+        NavigationMap firstWithoutTransition = new NavigationMapBuilder("first", firstBinding)
+            .AddCell(default, solid)
+            .Build();
+        NavigationWorldGraph candidate = ComposeRawGraph(
+            world,
+            new[] { firstWithoutTransition, secondSource, target },
+            version: 2);
+        var work = new NavigationTransitionRefreshWork(
+            initial,
+            candidate,
+            operationCandidate: null,
+            PersistentStringMap<bool>.Empty.Set("first", true),
+            rebuildRules: false,
+            version: 2);
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
+            maxConsumedEnvelopes: 1,
+            maxBaselineAddresses: 1,
+            maxOverlaySlots: 1,
+            maxComponentNodes: 1,
+            maxSeamCandidateProbes: 1,
+            maxExplicitEdges: 1,
+            maxDependencyEntries: 1,
+            maxSurfaceComponentEdges: 1));
+        int frames = 0;
+        while (!work.Advance(meter) && frames < 128)
+        {
+            meter.ExplicitEdges.Should().BeLessThanOrEqualTo(1);
+            meter.DependencyEntries.Should().BeLessThanOrEqualTo(1);
+            frames++;
+            meter.Reset();
+        }
+
+        work.IsComplete.Should().BeTrue();
+        frames.Should().BeGreaterThan(4,
+            "retained counts and copies are separately resumable work");
+        var targetPageAddress = new NavigationTransitionPageAddress("target", 0);
+        work.Pages.TryGet(targetPageAddress, out NavigationTransitionPage refreshed)
+            .Should().BeTrue();
+        refreshed.OutgoingCount.Should().Be(1);
+        refreshed.GetOutgoingAt(0).Definition.Id.Should().Be("retained-outgoing");
+        refreshed.IncomingCount.Should().Be(2,
+            "the retained local transition contributes its destination-side record too");
+        NavigationTransitionOwnerKey firstIncoming = refreshed.GetIncomingAt(0).Owner;
+        NavigationTransitionOwnerKey secondIncoming = refreshed.GetIncomingAt(1).Owner;
+        new[] { firstIncoming, secondIncoming }.Should().BeEquivalentTo(new[]
+        {
+            new NavigationTransitionOwnerKey("second", "retained-incoming"),
+            new NavigationTransitionOwnerKey("target", "retained-outgoing")
+        });
+        new[] { firstIncoming, secondIncoming }.Should().NotContain(
+            new NavigationTransitionOwnerKey("first", "removed"));
+    }
+
+    [Fact]
     public void PageSealCarryover_ShouldRetainUnpublishedFinalArraysAtExactBytesAndPages()
     {
         using var world = new GridWorld();
@@ -987,28 +1176,69 @@ public sealed class NavigationTransitionPublicationTests
         using var world = new GridWorld();
         GridConfiguration firstConfiguration = ConfigurationAt(origin: 0);
         GridConfiguration secondConfiguration = ConfigurationAt(origin: 10);
+        GridConfiguration thirdConfiguration = ConfigurationAt(origin: 20);
         world.TryAddGrid(firstConfiguration, out _).Should().BeTrue();
         world.TryAddGrid(secondConfiguration, out _).Should().BeTrue();
+        world.TryAddGrid(thirdConfiguration, out _).Should().BeTrue();
         NavigationMap first = RuleMap("first", origin: 0, "z-rule");
         NavigationMap second = RuleMap("second", origin: 10, "a-rule");
-        NavigationWorldGraph raw = ComposeRawGraph(world, new[] { first, second }, version: 1);
+        NavigationMap third = RuleMap("third", origin: 20, "m-rule");
+        NavigationWorldGraph raw = ComposeRawGraph(
+            world,
+            new[] { first, second, third },
+            version: 1);
         PersistentStringMap<bool> changed = PersistentStringMap<bool>.Empty
             .Set("first", true)
-            .Set("second", true);
-        NavigationWorldGraph graph = Refresh(
+            .Set("second", true)
+            .Set("third", true);
+        var work = new NavigationTransitionRefreshWork(
             NavigationWorldGraph.Empty,
             raw,
+            operationCandidate: null,
             changed,
             rebuildRules: true,
             version: 1);
+        MaintenanceWorkBudget sourceBudget =
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
+            sourceBudget.MaxConsumedEnvelopes,
+            sourceBudget.MaxBaselineAddresses,
+            sourceBudget.MaxOverlaySlots,
+            sourceBudget.MaxComponentNodes,
+            sourceBudget.MaxSeamCandidateProbes,
+            sourceBudget.MaxExplicitEdges,
+            maxDependencyEntries: 1,
+            sourceBudget.MaxSurfaceComponentEdges));
+        int frames = 0;
+        long initialWorkBytes = work.RetainedBytes;
+        int initialWorkPages = work.PersistentPageCount;
+        long peakWorkBytes = initialWorkBytes;
+        int peakWorkPages = initialWorkPages;
+        while (!work.Advance(meter) && frames < 32)
+        {
+            meter.DependencyEntries.Should().BeLessThanOrEqualTo(1);
+            peakWorkBytes = Math.Max(peakWorkBytes, work.RetainedBytes);
+            peakWorkPages = Math.Max(peakWorkPages, work.PersistentPageCount);
+            frames++;
+            meter.Reset();
+        }
+        work.IsComplete.Should().BeTrue();
+        frames.Should().BeGreaterThanOrEqualTo(3,
+            "four map-row probes require three blocked frames before the completing frame");
+        peakWorkBytes.Should().BeGreaterThan(initialWorkBytes,
+            "the paused canonical merge owns its rule buffer and per-map merge ordinals");
+        peakWorkPages.Should().BeGreaterThan(initialWorkPages,
+            "the paused non-empty rule buffer is retained as one bounded work page");
+        NavigationWorldGraph graph = raw.WithTransitionPublication(work.Pages, work.Rules);
 
-        graph.TransitionRules.Count.Should().Be(2);
+        graph.TransitionRules.Count.Should().Be(3);
         graph.TransitionRules[0].Id.Should().Be("a-rule");
-        graph.TransitionRules[1].Id.Should().Be("z-rule");
+        graph.TransitionRules[1].Id.Should().Be("m-rule");
+        graph.TransitionRules[2].Id.Should().Be("z-rule");
         graph.TransitionRules.RetainedBytes.Should().Be(
             NavigationTransitionRuleTable.BaseRetainedBytes
             + 24L
-            + (2L * NavigationTransitionRuleTable.RecordRetainedBytes));
+            + (3L * NavigationTransitionRuleTable.RecordRetainedBytes));
 
         NavigationWorldGraph same = Refresh(
             graph,

@@ -140,8 +140,6 @@ internal sealed class NavigationSurfaceComponentBuildWork
             {
                 if (!TryBeginNextComponent(ref unmeteredRootProbes))
                     return IsComplete;
-                if (!_componentActive)
-                    return false;
             }
 
             if (!_nodeActive)
@@ -158,8 +156,8 @@ internal sealed class NavigationSurfaceComponentBuildWork
                 _memberCount++;
                 if (_memberCount == 1 || currentAddress.CompareTo(_representative) < 0)
                     _representative = currentAddress;
-                if (!_graph.TryGetNodeRef(currentAddress, out NavigationNodeRef current))
-                    continue;
+                bool found = _graph.TryGetNodeRef(currentAddress, out NavigationNodeRef current);
+                System.Diagnostics.Debug.Assert(found);
                 if (_medium != TraversalMedium.Solid)
                 {
                     _primaryDirectionOrdinal = 0;
@@ -280,8 +278,9 @@ internal sealed class NavigationSurfaceComponentBuildWork
 
     private void AddNeighbor(NavigationNodeRef neighbor)
     {
-        if (!_graph.TryGetNodeAddress(neighbor, out NavigationCellAddress address)
-            || !_graph.TryGetStructuralMediumStateRef(
+        bool found = _graph.TryGetNodeAddress(neighbor, out NavigationCellAddress address);
+        System.Diagnostics.Debug.Assert(found);
+        if (!_graph.TryGetStructuralMediumStateRef(
                 address,
                 TraversalMedium.Solid,
                 out _)
@@ -289,11 +288,9 @@ internal sealed class NavigationSurfaceComponentBuildWork
         {
             return;
         }
-        if (!_domain.Contains(address))
-        {
-            throw new InvalidOperationException(
-                "Surface-component closure omitted a structurally adjacent prior component.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            !_domain.Contains(address),
+            message: "Surface-component closure omitted a structurally adjacent prior component.");
         _queue[_queueWrite++] = address;
     }
 
@@ -305,16 +302,20 @@ internal sealed class NavigationSurfaceComponentBuildWork
                 return false;
             int ordinal = _primaryDirectionOrdinal++;
             NavigationCellAddress current = _queue[_queueRead - 1];
-            if (_graph.TryGetStructuralMediumStateRef(
-                    current,
-                    _medium,
-                    out NavigationMediumStateRef source)
-                && _graph.TryGetStructuralPrimaryMediumNeighbor(
+            bool found = _graph.TryGetStructuralMediumStateRef(
+                current,
+                _medium,
+                out NavigationMediumStateRef source);
+            System.Diagnostics.Debug.Assert(found);
+            if (_graph.TryGetStructuralPrimaryMediumNeighbor(
                     source,
                     ordinal,
-                    out NavigationMediumStateRef neighbor)
-                && _graph.TryGetNodeAddress(neighbor.Node, out NavigationCellAddress address))
+                    out NavigationMediumStateRef neighbor))
             {
+                found = _graph.TryGetNodeAddress(
+                    neighbor.Node,
+                    out NavigationCellAddress address);
+                System.Diagnostics.Debug.Assert(found);
                 AddVolumeNeighbor(address);
             }
         }
@@ -339,11 +340,9 @@ internal sealed class NavigationSurfaceComponentBuildWork
     {
         if (!_visited.Add(address))
             return;
-        if (!_domain.Contains(address))
-        {
-            throw new InvalidOperationException(
-                "Medium-component closure omitted a positive-face neighbor.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            !_domain.Contains(address),
+            message: "Medium-component closure omitted a positive-face neighbor.");
         _queue[_queueWrite++] = address;
     }
 
@@ -353,12 +352,16 @@ internal sealed class NavigationSurfaceComponentBuildWork
         {
             if (_removedComponent == null)
             {
-                if (!_affectedKeyEnumerator.MoveNext())
-                    break;
+                bool hasNext = _affectedKeyEnumerator.MoveNext();
+                System.Diagnostics.Debug.Assert(
+                    hasNext,
+                    "The immutable affected-key count matches its enumerator.");
                 _affectedKeyOrdinal++;
                 NavigationSurfaceComponentKey key = _affectedKeyEnumerator.Current;
-                if (!_previousGraph.SurfaceComponents.TryGet(key, out _removedComponent))
-                    continue;
+                _previousGraph.SurfaceComponents.TryGet(key, out _removedComponent);
+                System.Diagnostics.Debug.Assert(
+                    _removedComponent != null,
+                    "Affected keys originate from the previous component root.");
                 _removedMembers = _removedComponent.Members.GetEnumerator();
                 _removedRecord = false;
             }

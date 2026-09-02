@@ -23,6 +23,29 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationAutomaticSeamTests
 {
+    [Theory]
+    [InlineData(true, false, false, false, false)]
+    [InlineData(true, true, false, false, true)]
+    [InlineData(true, false, false, true, false)]
+    [InlineData(false, false, false, false, false)]
+    [InlineData(false, true, false, false, true)]
+    [InlineData(false, false, false, true, true)]
+    [InlineData(false, false, true, true, false)]
+    public void ChangedPairFiltering_ShouldSeparateGeometryDependenciesFromActiveRows(
+        bool dependencyRow,
+        bool geometryChanged,
+        bool sourceActive,
+        bool finalActive,
+        bool expected)
+    {
+        NavigationAutomaticSeamRefreshWork.ShouldFilterChangedPair(
+                dependencyRow,
+                geometryChanged,
+                sourceActive,
+                finalActive)
+            .Should().Be(expected);
+    }
+
     private static readonly NavigationCell SeamCell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
@@ -58,8 +81,18 @@ public sealed class NavigationAutomaticSeamTests
                 changes,
                 0);
         }
-        long before = GC.GetAllocatedBytesForCurrentThread();
         const int Iterations = 256;
+        for (int i = 0; i < Iterations; i++)
+        {
+            last = new NavigationAutomaticSeamRefreshWork(
+                world,
+                NavigationWorldGraph.Empty,
+                NavigationWorldGraph.Empty,
+                changes,
+                0);
+        }
+        GC.KeepAlive(last);
+        long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < Iterations; i++)
         {
             last = new NavigationAutomaticSeamRefreshWork(
@@ -95,8 +128,17 @@ public sealed class NavigationAutomaticSeamTests
                 events,
                 0);
         }
-        long before = GC.GetAllocatedBytesForCurrentThread();
         const int Iterations = 256;
+        for (int i = 0; i < Iterations; i++)
+        {
+            last = new NavigationAutomaticSeamLifecycleWork(
+                world,
+                NavigationWorldGraph.Empty,
+                events,
+                0);
+        }
+        GC.KeepAlive(last);
+        long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < Iterations; i++)
         {
             last = new NavigationAutomaticSeamLifecycleWork(
@@ -148,6 +190,432 @@ public sealed class NavigationAutomaticSeamTests
                 exactBytes - 1,
                 maximumPersistentPages: 5)
             .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded);
+    }
+
+    [Fact]
+    public void SeamLifecycleCapacity_ShouldRejectComponentWorkAddedAfterRefresh()
+    {
+        using var world = new GridWorld();
+        var work = new NavigationAutomaticSeamLifecycleWork(
+            world,
+            NavigationWorldGraph.Empty,
+            Array.Empty<GridEventInfo>(),
+            0);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+
+        work.AdvanceOne(meter, long.MaxValue, int.MaxValue)
+            .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Progressed);
+        long refreshBytes = work.RetainedBytes;
+        int refreshPages = work.PersistentPageCount;
+        meter.Reset();
+
+        work.AdvanceOne(meter, refreshBytes, refreshPages)
+            .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded,
+                "the exact refresh-only ceiling cannot retain the subsequent component rebuild");
+        work.RetainedBytes.Should().BeGreaterThan(refreshBytes);
+        work.PersistentPageCount.Should().BeGreaterThan(refreshPages);
+    }
+
+    [Fact]
+    public void SeamLifecycleCapacity_ShouldRejectAffectedEndpointRootAddedAfterRefresh()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        CreateOneToManyScenario(context);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        GridEventInfo[] events = Array.Empty<GridEventInfo>();
+        var refresh = new NavigationAutomaticSeamRefreshWork(
+            context.World,
+            lease.Graph,
+            lease.Graph,
+            events,
+            0,
+            fullRebuild: true);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        int refreshSteps = 0;
+        while (!refresh.IsComplete && refreshSteps < 4_096)
+        {
+            refresh.AdvanceOne(meter);
+            meter.Reset();
+            refreshSteps++;
+        }
+        refresh.IsComplete.Should().BeTrue();
+        refresh.ChangedStructuralEndpointCount.Should().BePositive(
+            "a full rebuild must expose the retained seam endpoints to component repair");
+        var lifecycle = new NavigationAutomaticSeamLifecycleWork(
+            context.World,
+            lease.Graph,
+            events,
+            0,
+            fullRebuild: true);
+        for (int step = 0; step < refreshSteps; step++)
+        {
+            lifecycle.AdvanceOne(meter, long.MaxValue, int.MaxValue)
+                .Should().NotBe(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded);
+            meter.Reset();
+        }
+        long refreshOnlyBytes = lifecycle.RetainedBytes;
+        int refreshOnlyPages = lifecycle.PersistentPageCount;
+
+        lifecycle.AdvanceOne(meter, refreshOnlyBytes, int.MaxValue)
+            .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded,
+                "the refresh-only ceiling cannot retain the first affected endpoint root");
+        lifecycle.RetainedBytes.Should().BeGreaterThan(refreshOnlyBytes);
+        lifecycle.PersistentPageCount.Should().BeGreaterThan(refreshOnlyPages);
+        meter.DependencyEntries.Should().BePositive(
+            "endpoint capture is charged before capacity rejects its retained root");
+    }
+
+    [Fact]
+    public void SeamRefreshBudgets_ShouldRetryTheExactUnconsumedMapAndOverlayWork()
+    {
+        MaintenanceWorkBudget budget = TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        using var world = new GridWorld();
+        NavigationOperationFrameChange[] removeChanges =
+        {
+            NavigationOperationFrameChange.MapRemove("map", operationSequence: 1)
+        };
+        var removeWork = new NavigationAutomaticSeamRefreshWork(
+            world,
+            NavigationWorldGraph.Empty,
+            NavigationWorldGraph.Empty,
+            removeChanges,
+            removeChanges.Length);
+        var removeMeter = new MaintenanceWorkMeter(budget);
+        removeMeter.TryConsumeComponentNodes(budget.MaxComponentNodes).Should().BeTrue();
+
+        removeWork.AdvanceOne(removeMeter).Should().Be(
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked);
+        removeWork.IsComplete.Should().BeFalse();
+        removeMeter.ComponentNodes.Should().Be(budget.MaxComponentNodes);
+
+        removeMeter.Reset();
+        for (int step = 0; step < 32 && !removeWork.IsComplete; step++)
+        {
+            removeWork.AdvanceOne(removeMeter);
+            removeMeter.Reset();
+        }
+        removeWork.IsComplete.Should().BeTrue(
+            "a component-budget stop must retry rather than drop the pending map removal");
+
+        var delta = new NavigationMapOverlayDelta(
+            "map",
+            new[] { NavigationCellOverlayOperation.Set(default, SeamCell) });
+        var prepared = new PreparedNavigationOverlay(new NavigationOverlayTransaction(
+            new[] { delta }));
+        NavigationOperationFrameChange[] overlayChanges =
+        {
+            NavigationOperationFrameChange.Overlay(prepared, operationSequence: 2)
+        };
+        var overlayWork = new NavigationAutomaticSeamRefreshWork(
+            world,
+            NavigationWorldGraph.Empty,
+            NavigationWorldGraph.Empty,
+            overlayChanges,
+            overlayChanges.Length);
+        var overlayMeter = new MaintenanceWorkMeter(budget);
+        overlayMeter.TryConsumeDependencyEntries(budget.MaxDependencyEntries).Should().BeTrue();
+
+        overlayWork.AdvanceOne(overlayMeter).Should().Be(
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked);
+        overlayWork.IsComplete.Should().BeFalse();
+        overlayMeter.ComponentNodes.Should().Be(1,
+            "the map inspection is retained even when its first cell cannot debit dependency work");
+
+        overlayMeter.Reset();
+        for (int step = 0; step < 32 && !overlayWork.IsComplete; step++)
+        {
+            overlayWork.AdvanceOne(overlayMeter);
+            overlayMeter.Reset();
+        }
+        overlayWork.IsComplete.Should().BeTrue(
+            "the same overlay cell must resume after the dependency budget is restored");
+    }
+
+    [Fact]
+    public void CompletedSeamRefresh_ShouldRevalidateItsWorldCursorBeforeReuse()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        CreateOneToManyScenario(context);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        PersistentStringMap<bool> discovery =
+            PersistentStringMap<bool>.Empty.Set("source", true);
+        var work = new NavigationAutomaticSeamRefreshWork(
+            context.World,
+            lease.Graph,
+            lease.Graph,
+            discovery);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+
+        for (int step = 0; step < 4096 && !work.IsComplete; step++)
+        {
+            work.AdvanceOne(meter);
+            meter.Reset();
+        }
+
+        work.IsComplete.Should().BeTrue();
+        work.AdvanceOne(meter).Should().Be(
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Complete,
+            "an unchanged completed cursor is idempotently reusable");
+        lease.Graph.TryGetMap("source", out NavigationMapInstance? source).Should().BeTrue();
+        context.World.TryRemoveGrid(source!.GridIdentity.GridIndex).Should().BeTrue();
+
+        work.AdvanceOne(meter).Should().Be(
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked,
+            "a completed seam result cannot survive removal of its validated grid generation");
+        work.IsComplete.Should().BeFalse();
+        work.Revision.Should().Be(1);
+        work.Result.Should().BeSameAs(lease.Graph.AutomaticSeams,
+            "stale work must discard every unpublished journal before retrying");
+    }
+
+    [Fact]
+    public void CompletedEmptyDiscovery_ShouldRevalidateBeforeSealingAfterGridRemoval()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
+        GridConfiguration configuration = CreateConfiguration(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            metrics,
+            GridStorageKind.Dense);
+        NormalizedGridConfiguration binding = AddDenseGrid(context, configuration);
+        NavigationMapCommitOperation install = AdmitMap(
+            context,
+            "only",
+            binding,
+            new[] { default(VoxelIndex) },
+            1);
+        SimulateUntilTerminal(context, install.Receipt);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        PersistentStringMap<bool> discovery =
+            PersistentStringMap<bool>.Empty.Set("only", true);
+        var work = new NavigationAutomaticSeamRefreshWork(
+            context.World,
+            lease.Graph,
+            lease.Graph,
+            discovery);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+
+        bool completedEmptyProbe = false;
+        for (int step = 0; step < 256 && !completedEmptyProbe; step++)
+        {
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus status =
+                work.AdvanceOne(meter);
+            completedEmptyProbe = status
+                    == NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Progressed
+                && meter.SeamCandidateProbes > 0;
+            if (!completedEmptyProbe)
+                meter.Reset();
+        }
+        completedEmptyProbe.Should().BeTrue();
+        lease.Graph.TryGetMap("only", out NavigationMapInstance? only).Should().BeTrue();
+        context.World.TryRemoveGrid(only!.GridIdentity.GridIndex).Should().BeTrue();
+        meter.Reset();
+
+        work.AdvanceOne(meter).Should().Be(
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked,
+            "the completed zero-contact cursor must be revalidated before an empty result seals");
+        work.Revision.Should().Be(1);
+        work.IsComplete.Should().BeFalse();
+        work.Result.Should().BeSameAs(lease.Graph.AutomaticSeams);
+    }
+
+    [Fact]
+    public void QueuedDiscovery_ShouldRevalidateTheCompletedPriorCursorBeforeBeginning()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
+        GridConfiguration firstConfiguration = CreateConfiguration(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            metrics,
+            GridStorageKind.Dense);
+        var secondCenter = new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero);
+        GridConfiguration secondConfiguration = CreateConfiguration(
+            secondCenter,
+            secondCenter,
+            metrics,
+            GridStorageKind.Dense);
+        NormalizedGridConfiguration first = AddDenseGrid(context, firstConfiguration);
+        NormalizedGridConfiguration second = AddDenseGrid(context, secondConfiguration);
+        AdmitMap(context, "first", first, new[] { default(VoxelIndex) }, 1);
+        NavigationMapCommitOperation secondOperation =
+            AdmitMap(context, "second", second, new[] { default(VoxelIndex) }, 2);
+        SimulateUntilTerminal(context, secondOperation.Receipt);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        PersistentStringMap<bool> discovery = PersistentStringMap<bool>.Empty
+            .Set("first", true)
+            .Set("second", true);
+        var work = new NavigationAutomaticSeamRefreshWork(
+            context.World,
+            lease.Graph,
+            lease.Graph,
+            discovery);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+
+        bool completedFirstDiscovery = false;
+        for (int step = 0; step < 64 && !completedFirstDiscovery; step++)
+        {
+            meter.Reset();
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus status =
+                work.AdvanceOne(meter);
+            status.Should().NotBe(NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Complete);
+            completedFirstDiscovery = meter.SeamCandidateProbes > 0;
+        }
+        completedFirstDiscovery.Should().BeTrue(
+            "the first discovery must begin consuming its world-generation cursor");
+        bool heldBeforeSecondMap = false;
+        MaintenanceWorkBudget budget =
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        for (int step = 0; step < 64 && !heldBeforeSecondMap; step++)
+        {
+            meter.Reset();
+            meter.TryConsumeComponentNodes(budget.MaxComponentNodes).Should().BeTrue();
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus status =
+                work.AdvanceOne(meter);
+            heldBeforeSecondMap =
+                status == NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked
+                && meter.SeamCandidateProbes == 0;
+        }
+        heldBeforeSecondMap.Should().BeTrue(
+            "component pressure must hold the queued map after the first cursor completes");
+        lease.Graph.TryGetMap("first", out NavigationMapInstance? firstMap).Should().BeTrue();
+        context.World.TryRemoveGrid(firstMap!.GridIdentity.GridIndex).Should().BeTrue();
+        lease.Graph.TryGetMap("second", out NavigationMapInstance? secondMap).Should().BeTrue();
+        context.World.TryRemoveGrid(secondMap!.GridIdentity.GridIndex).Should().BeTrue();
+
+        bool restartedBeforeSecondDiscovery = false;
+        NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus lastStatus = default;
+        for (int step = 0; step < 64 && !restartedBeforeSecondDiscovery; step++)
+        {
+            meter.Reset();
+            lastStatus = work.AdvanceOne(meter);
+            restartedBeforeSecondDiscovery =
+                lastStatus == NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked
+                && work.Revision == 1
+                && meter.SeamCandidateProbes == 0;
+        }
+        restartedBeforeSecondDiscovery.Should().BeTrue(
+            "the stale prior cursor must restart before a new cursor begins; final status {0}, revision {1}, probes {2}",
+            lastStatus,
+            work.Revision,
+            meter.SeamCandidateProbes);
+
+        work.Revision.Should().Be(1);
+        work.IsComplete.Should().BeFalse();
+        meter.SeamCandidateProbes.Should().Be(0,
+            "pre-begin staleness is detected without debiting a probe against the next map");
+        work.Result.Should().BeSameAs(lease.Graph.AutomaticSeams);
+    }
+
+    [Theory]
+    [InlineData(false, false, false, true, false, 1)]
+    [InlineData(false, true, false, true, true, 0)]
+    [InlineData(true, true, true, false, false, 1)]
+    public void DiscoveryCursorStart_ShouldApplyExactMissingAndStaleEffects(
+        bool began,
+        bool completedCursorCurrent,
+        bool hadRunStamp,
+        bool runStampMatches,
+        bool expectedProgress,
+        int expectedRevision)
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridConfiguration configuration = CreateConfiguration(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            GridTopologyMetrics.Rectangular(Fixed64.One),
+            GridStorageKind.Dense);
+        NormalizedGridConfiguration binding = AddDenseGrid(context, configuration);
+        NavigationMapCommitOperation install = AdmitMap(
+            context,
+            "map",
+            binding,
+            new[] { default(VoxelIndex) },
+            1);
+        SimulateUntilTerminal(context, install.Receipt);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMap("map", out NavigationMapInstance? instance).Should().BeTrue();
+        NavigationOperationFrameChange[] changes =
+        {
+            NavigationOperationFrameChange.MapCommit(
+                new PreparedNavigationMap(instance!.Map, instance.BakeVersion),
+                OverlayReplacementPolicy.Clear,
+                operationSequence: 2)
+        };
+        var work = new NavigationAutomaticSeamRefreshWork(
+            context.World,
+            NavigationWorldGraph.Empty,
+            lease.Graph,
+            changes,
+            changes.Length);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        work.AdvanceOne(meter).Should().Be(
+            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Progressed,
+            "the map commit first enters its discovery mode");
+        meter.Reset();
+
+        work.AdvanceDiscoveryAfterCursorStart(
+                meter,
+                began,
+                completedCursorCurrent,
+                hadRunStamp,
+                runStampMatches)
+            .Should().Be(expectedProgress);
+
+        work.Revision.Should().Be(expectedRevision);
+        work.IsComplete.Should().BeFalse();
+        meter.SeamCandidateProbes.Should().Be(0,
+            "a missing grid or stale start is resolved before candidate enumeration");
+        work.Result.Should().BeSameAs(NavigationAutomaticSeamIndex.Empty);
+    }
+
+    [Fact]
+    public void FullSeamRebuild_ShouldPreserveExactLinkCountsWhenRemovalAndDiscoveryCancel()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        CreateOneToManyScenario(context);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var work = new NavigationAutomaticSeamRefreshWork(
+            context.World,
+            lease.Graph,
+            lease.Graph,
+            Array.Empty<GridEventInfo>(),
+            gridEventCount: 0,
+            fullRebuild: true);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+
+        for (int step = 0; step < 8192 && !work.IsComplete; step++)
+        {
+            work.AdvanceOne(meter);
+            meter.Reset();
+        }
+
+        work.IsComplete.Should().BeTrue();
+        work.Result.PairCount.Should().Be(lease.Graph.AutomaticSeams.PairCount);
+        NavigationPagedSequence<NavigationStructuralLink> priorLinks =
+            lease.Graph.AutomaticSeams.GetStructuralLinks("source");
+        NavigationPagedSequence<NavigationStructuralLink> rebuiltLinks =
+            work.Result.GetStructuralLinks("source");
+        rebuiltLinks.Count.Should().Be(priorLinks.Count);
+        NavigationPagedSequence<NavigationStructuralLink>.Enumerator prior =
+            priorLinks.GetEnumerator();
+        NavigationPagedSequence<NavigationStructuralLink>.Enumerator rebuilt =
+            rebuiltLinks.GetEnumerator();
+        while (prior.MoveNext())
+        {
+            rebuilt.MoveNext().Should().BeTrue();
+            rebuilt.Current.Should().Be(prior.Current,
+                "remove-then-rediscover must coalesce to the exact original directed link count");
+        }
+        rebuilt.MoveNext().Should().BeFalse();
     }
 
     [Fact]
@@ -335,8 +803,11 @@ public sealed class NavigationAutomaticSeamTests
             "a grid last-change sequence advance must restart from a fresh cursor generation");
     }
 
-    [Fact]
-    public void UnauthoredBoundaryCellSet_ShouldActivateRetainedGeometryWithoutSeamProbe()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UnauthoredBoundaryCellSet_ShouldActivateRetainedGeometryWithoutSeamProbe(
+        bool omitSource)
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
         GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
@@ -353,12 +824,24 @@ public sealed class NavigationAutomaticSeamTests
             GridStorageKind.Dense);
         NormalizedGridConfiguration source = AddDenseGrid(context, sourceConfiguration);
         NormalizedGridConfiguration target = AddDenseGrid(context, targetConfiguration);
-        AdmitMap(context, "source", source, new[] { default(VoxelIndex) }, 1);
+        AdmitMap(
+            context,
+            "source",
+            source,
+            omitSource ? Array.Empty<VoxelIndex>() : new[] { default(VoxelIndex) },
+            1);
         NavigationMapCommitOperation targetOperation =
-            AdmitMap(context, "target", target, Array.Empty<VoxelIndex>(), 2);
+            AdmitMap(
+                context,
+                "target",
+                target,
+                omitSource ? new[] { default(VoxelIndex) } : Array.Empty<VoxelIndex>(),
+                2);
         SimulateUntilTerminal(context, targetOperation.Receipt);
         var sourceAddress = new NavigationCellAddress("source", default);
         CountCrossMapTargets(context, sourceAddress, "target").Should().Be(0);
+
+        string omittedMapId = omitSource ? "source" : "target";
 
         var activate = new NavigationOverlayCommitOperation(
             new PreparedNavigationOverlay(
@@ -366,7 +849,7 @@ public sealed class NavigationAutomaticSeamTests
                     new[]
                     {
                         new NavigationMapOverlayDelta(
-                            "target",
+                            omittedMapId,
                             new[] { NavigationCellOverlayOperation.Set(default, SeamCell) })
                     })),
             operationSequence: 3,
@@ -428,6 +911,52 @@ public sealed class NavigationAutomaticSeamTests
     }
 
     [Fact]
+    public void SameMapSeamSwap_ShouldPreserveItsExactStructuralLinkCount()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        SeamScenario scenario = CreateOneToManyScenario(context);
+        NavigationOverlayCommitOperation firstSuppression = AdmitCellOverlay(
+            context,
+            scenario.SecondTarget.MapId,
+            NavigationCellOverlayOperation.Suppress(scenario.SecondTarget.Index),
+            sequence: 3);
+        SimulateOverlayWithNoSeamProbes(context, firstSuppression);
+        GetCrossMapTargets(context, scenario.Source, "target").Should().Equal(
+            scenario.FirstTarget);
+
+        var swap = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(
+                new NavigationOverlayTransaction(
+                    new[]
+                    {
+                        new NavigationMapOverlayDelta(
+                            scenario.FirstTarget.MapId,
+                            new[]
+                            {
+                                NavigationCellOverlayOperation.Suppress(
+                                    scenario.FirstTarget.Index),
+                                NavigationCellOverlayOperation.RevertToBake(
+                                    scenario.SecondTarget.Index)
+                            })
+                    })),
+            operationSequence: 4,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(swap).Should().BeTrue();
+
+        SimulateOverlayWithNoSeamProbes(context, swap);
+
+        GetCrossMapTargets(context, scenario.Source, "target").Should().Equal(
+            new[] { scenario.SecondTarget },
+            "the replacement pair must atomically supersede the suppressed pair");
+        using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationPagedSequence<NavigationStructuralLink> links =
+            published.Graph.AutomaticSeams.GetStructuralLinks(scenario.Source.MapId);
+        links.Count.Should().Be(1);
+        links[0].Count.Should().Be(1,
+            "opposite pair deltas for one map link must cancel instead of retaining a zero delta");
+    }
+
+    [Fact]
     public void TwoNewMapsInOneBatch_ShouldResolveExactParticipantsAndSuppressDuplicateDiscovery()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
@@ -458,6 +987,99 @@ public sealed class NavigationAutomaticSeamTests
         CountCrossMapTargets(context, sourceAddress, "target").Should().Be(1);
         CountCrossMapTargets(context, targetAddress, "source").Should().Be(1,
             "the two incident filtered scans must converge on one durable pair");
+    }
+
+    [Fact]
+    public void MixedMappedAndUnmappedGridLifecycleBatches_ShouldRefreshOnlyTheMappedConfiguration()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
+            settings: CreateTinyBudgetSettings());
+        GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
+        GridConfiguration mappedConfiguration = CreateConfiguration(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            metrics,
+            GridStorageKind.Dense);
+        GridConfiguration unmappedConfiguration = CreateConfiguration(
+            new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+            new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+            metrics,
+            GridStorageKind.Dense);
+        mappedConfiguration.TryNormalize(out NormalizedGridConfiguration mapped).Should().BeTrue();
+        NavigationMapCommitOperation dormant =
+            AdmitMap(context, "mapped", mapped, new[] { default(VoxelIndex) }, 1);
+        SimulateUntilTerminal(context, dormant.Receipt);
+        dormant.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        context.Pathing.TryGetNavigationGraphCellState(
+                "mapped",
+                default,
+                out NavigationGraphCellState dormantState)
+            .Should().BeTrue();
+        dormantState.IsMaterialized.Should().BeFalse();
+        long dormantVersion;
+        using (NavigationWorldGraphLease dormantGraph = context.Pathing.TryAcquireNavigationGraph()!)
+            dormantVersion = dormantGraph.Graph.GraphVersion;
+
+        context.World.TryAddGrid(mappedConfiguration, out ushort mappedGridIndex).Should().BeTrue();
+        context.World.TryAddGrid(unmappedConfiguration, out ushort unmappedGridIndex).Should().BeTrue();
+        for (int frame = 0; frame < 512; frame++)
+        {
+            context.Simulate();
+            if (context.Pathing.RetainedCompositionWorkCount == 0
+                && context.Pathing.TryGetNavigationGraphCellState(
+                    "mapped",
+                    default,
+                    out NavigationGraphCellState candidate)
+                && candidate.IsMaterialized)
+            {
+                break;
+            }
+        }
+
+        context.Pathing.TryGetNavigationGraphCellState(
+                "mapped",
+                default,
+                out NavigationGraphCellState materialized)
+            .Should().BeTrue();
+        materialized.IsMaterialized.Should().BeTrue(
+            "the mapped GridAdded event must refresh its dormant navigation cell");
+        long materializedVersion;
+        using (NavigationWorldGraphLease materializedGraph =
+            context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            materializedGraph.Graph.AutomaticSeams.PairCount.Should().Be(0,
+                "the unrelated unmapped grid cannot contribute seam geometry");
+            materializedVersion = materializedGraph.Graph.GraphVersion;
+        }
+        materializedVersion.Should().BeGreaterThan(dormantVersion);
+
+        context.World.TryRemoveGrid(mappedGridIndex).Should().BeTrue();
+        context.World.TryRemoveGrid(unmappedGridIndex).Should().BeTrue();
+        for (int frame = 0; frame < 512; frame++)
+        {
+            context.Simulate();
+            if (context.Pathing.RetainedCompositionWorkCount == 0
+                && context.Pathing.TryGetNavigationGraphCellState(
+                    "mapped",
+                    default,
+                    out NavigationGraphCellState candidate)
+                && !candidate.IsMaterialized)
+            {
+                break;
+            }
+        }
+
+        context.Pathing.TryGetNavigationGraphCellState(
+                "mapped",
+                default,
+                out NavigationGraphCellState removed)
+            .Should().BeTrue();
+        removed.IsMaterialized.Should().BeFalse(
+            "the mapped GridRemoved event must retire its physical generation");
+        context.Pathing.RetainedCompositionWorkCount.Should().Be(0);
+        using NavigationWorldGraphLease removedGraph = context.Pathing.TryAcquireNavigationGraph()!;
+        removedGraph.Graph.GraphVersion.Should().BeGreaterThan(materializedVersion);
+        removedGraph.Graph.AutomaticSeams.PairCount.Should().Be(0);
     }
 
     [Fact]
@@ -547,6 +1169,14 @@ public sealed class NavigationAutomaticSeamTests
                 "unknown lifecycle scope must fail closed before bounded incidence finishes");
             pending.Graph.AutomaticSeams.PairCount.Should().Be(1,
                 "the old pair remains private to the closed published source until atomic replacement");
+            NavigationGraphDiagnosticsSnapshot diagnostics =
+                context.Pathing.GetNavigationGraphDiagnostics();
+            diagnostics.ActiveSnapshotBytes.Should().BeGreaterThan(
+                pending.Graph.RetainedBytes,
+                "the retained lifecycle owns bounded work in addition to its closed graph root");
+            diagnostics.PersistentGraphPageCount.Should().BeGreaterThan(
+                pending.Graph.PersistentPageCount,
+                "every retained lifecycle page must participate in the configured page ceiling");
         }
 
         for (int frame = 0;
@@ -820,6 +1450,27 @@ public sealed class NavigationAutomaticSeamTests
         context.Simulate();
         context.Pathing.RetainedCompositionWorkCount.Should().Be(1,
             "publication pressure may not discard or overwrite retained lifecycle work");
+        context.Pathing.RetainedOperationWorkCount.Should().Be(0);
+        NavigationGraphDiagnosticsSnapshot retained =
+            context.Pathing.GetNavigationGraphDiagnostics();
+        retained.GraphVersion.Should().Be(blockedLease.Graph.GraphVersion,
+            "the checked-out current generation is the lifecycle's published safety owner");
+        long lifecycleBytes = checked(
+            retained.ActiveSnapshotBytes
+            - blockedLease.Graph.RetainedBytes
+            - retained.BaselineRebuildBytes
+            - retained.PendingAreaPolicyBytes);
+        int lifecyclePages = checked(
+            retained.PersistentGraphPageCount
+            - blockedLease.Graph.PersistentPageCount
+            - retained.BaselineRebuildPageCount
+            - retained.PendingAreaPolicyCount);
+        lifecycleBytes.Should().BeGreaterThanOrEqualTo(
+            NavigationAutomaticSeamLifecycleWork.BaseRetainedBytes
+            + NavigationAutomaticSeamRefreshWork.FixedRetainedBytes,
+            "the diagnostic total must charge the retained lifecycle and its refresh owner");
+        lifecyclePages.Should().BeGreaterThanOrEqualTo(5,
+            "the lifecycle, refresh work, two cursors, and contact array remain retained");
         blockedLease.Dispose();
 
         bool observedRestartedProbe = false;
@@ -1428,6 +2079,73 @@ public sealed class NavigationAutomaticSeamTests
     }
 
     [Fact]
+    public void StaleSeamBeforeAffectedClosure_ShouldRepublishAllClosedBeforeRestart()
+    {
+        int framesUntilAffectedClosure = 0;
+        using (TrailblazerWorldContext probe = CreatePreAffectedClosureScenario(
+            out NavigationMapCommitOperation probeOperation,
+            out _))
+        {
+            for (int frame = 1;
+                 frame <= 512 && probeOperation.Receipt.Status == NavigationOperationStatus.Pending;
+                 frame++)
+            {
+                probe.Simulate();
+                using NavigationWorldGraphLease published = probe.Pathing.TryAcquireNavigationGraph()!;
+                if (published.Graph.HasClosedStructuralScope
+                    && !published.Graph.AreAllStructuralComponentsClosed)
+                {
+                    framesUntilAffectedClosure = frame;
+                    break;
+                }
+            }
+        }
+
+        framesUntilAffectedClosure.Should().BeGreaterThan(1,
+            "the affected closure must publish on a deterministic later maintenance frame");
+        using TrailblazerWorldContext context = CreatePreAffectedClosureScenario(
+            out NavigationMapCommitOperation targetOperation,
+            out VoxelGrid targetGrid);
+        for (int frame = 1; frame < framesUntilAffectedClosure; frame++)
+            context.Simulate();
+        targetOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        context.Pathing.RetainedCompositionWorkCount.Should().Be(1);
+        long allClosedVersion;
+        using (NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            published.Graph.AreAllStructuralComponentsClosed.Should().BeTrue(
+                "the measured predecessor owns completed seam capture before affected closure publication");
+            allClosedVersion = published.Graph.GraphVersion;
+        }
+        context.World.TryRemoveGrid(targetGrid.GridIndex).Should().BeTrue();
+
+        bool observedAllCloseRepublication = false;
+        for (int frame = 0; frame < 1024; frame++)
+        {
+            context.Simulate();
+            using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
+            observedAllCloseRepublication |= published.Graph.GraphVersion > allClosedVersion
+                && published.Graph.AreAllStructuralComponentsClosed
+                && targetOperation.Receipt.Status == NavigationOperationStatus.Pending
+                && context.Pathing.RetainedCompositionWorkCount == 1;
+            if (targetOperation.Receipt.Status != NavigationOperationStatus.Pending
+                && context.Pathing.RetainedCompositionWorkCount == 0
+                && !published.Graph.HasClosedStructuralScope)
+            {
+                break;
+            }
+        }
+
+        observedAllCloseRepublication.Should().BeTrue(
+            "stale affected-closure ownership must republish all closed before restarting the seam cursor");
+        targetOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        CountCrossMapTargets(
+            context,
+            new NavigationCellAddress("source", new VoxelIndex(1, 0, 0)),
+            "target").Should().Be(0);
+    }
+
+    [Fact]
     public void StaleSeamAfterAffectedClosure_ShouldRepublishAllClosedBeforeRestart()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -1440,14 +2158,18 @@ public sealed class NavigationAutomaticSeamTests
             Vector3d.Zero,
             new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.Zero),
             metrics,
-            GridStorageKind.Dense);
+            GridStorageKind.Sparse);
         var targetCenter = new Vector3d((Fixed64)2, Fixed64.Zero, Fixed64.Zero);
         GridConfiguration targetConfiguration = CreateConfiguration(
             targetCenter,
             targetCenter,
             metrics,
             GridStorageKind.Sparse);
-        NormalizedGridConfiguration source = AddDenseGrid(context, sourceConfiguration);
+        NormalizedGridConfiguration source = AddSparseGrid(
+            context,
+            sourceConfiguration,
+            new[] { default(VoxelIndex), new VoxelIndex(1, 0, 0) },
+            out VoxelGrid sourceGrid);
         NormalizedGridConfiguration target = AddSparseGrid(
             context,
             targetConfiguration,
@@ -1461,7 +2183,12 @@ public sealed class NavigationAutomaticSeamTests
             1);
         SimulateUntilTerminal(context, sourceOperation.Receipt);
         NavigationMapCommitOperation targetOperation =
-            AdmitMap(context, "target", target, new[] { default(VoxelIndex) }, 2);
+            AdmitMap(
+                context,
+                "target",
+                target,
+                new[] { default(VoxelIndex) },
+                2);
         bool observedAffectedClosure = false;
         for (int frame = 0;
              frame < 512 && targetOperation.Receipt.Status == NavigationOperationStatus.Pending;
@@ -1476,6 +2203,7 @@ public sealed class NavigationAutomaticSeamTests
             }
             observedAffectedClosure = true;
             targetGrid.TryRemoveVoxel(default).Should().BeTrue();
+            sourceGrid.TryRemoveVoxel(default).Should().BeTrue();
             break;
         }
 
@@ -1498,7 +2226,9 @@ public sealed class NavigationAutomaticSeamTests
         }
 
         observedAllCloseRepublish.Should().BeTrue(
-            "a stale seam after exact closure must widen safety before restarting composition");
+            "a stale seam after exact closure must widen safety before restarting composition; " +
+            $"status={targetOperation.Receipt.Status}, composition={context.Pathing.RetainedCompositionWorkCount}, " +
+            $"operation={context.Pathing.RetainedOperationWorkCount}");
         targetOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         CountCrossMapTargets(
             context,
@@ -1845,6 +2575,15 @@ public sealed class NavigationAutomaticSeamTests
         return GetCrossMapTargets(lease.Graph, source, targetMapId).Count;
     }
 
+    private static List<NavigationCellAddress> GetCrossMapTargets(
+        TrailblazerWorldContext context,
+        NavigationCellAddress source,
+        string targetMapId)
+    {
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        return GetCrossMapTargets(lease.Graph, source, targetMapId);
+    }
+
     private static void SimulateUntilCrossMapCount(
         TrailblazerWorldContext context,
         NavigationCellAddress source,
@@ -1887,11 +2626,81 @@ public sealed class NavigationAutomaticSeamTests
             policy,
             TraversalMedium.Solid);
 
+    private static TrailblazerWorldContext CreatePreAffectedClosureScenario(
+        out NavigationMapCommitOperation targetOperation,
+        out VoxelGrid targetGrid)
+    {
+        TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
+            settings: CreateSeamBudgetSettings(
+                maxSeamCandidateProbes: 64,
+                maxExplicitEdges: 64,
+                maxDependencyEntries: 64));
+        GridTopologyMetrics metrics = GridTopologyMetrics.Rectangular(Fixed64.One);
+        GridConfiguration sourceConfiguration = CreateConfiguration(
+            Vector3d.Zero,
+            new Vector3d(Fixed64.One, Fixed64.Zero, Fixed64.Zero),
+            metrics,
+            GridStorageKind.Dense);
+        var targetCenter = new Vector3d((Fixed64)2, Fixed64.Zero, Fixed64.Zero);
+        GridConfiguration targetConfiguration = CreateConfiguration(
+            targetCenter,
+            targetCenter,
+            metrics,
+            GridStorageKind.Sparse);
+        NormalizedGridConfiguration source = AddDenseGrid(context, sourceConfiguration);
+        NormalizedGridConfiguration target = AddSparseGrid(
+            context,
+            targetConfiguration,
+            new[] { default(VoxelIndex) },
+            out targetGrid);
+        NavigationMapCommitOperation sourceOperation = AdmitMap(
+            context,
+            "source",
+            source,
+            new[] { default(VoxelIndex), new VoxelIndex(1, 0, 0) },
+            1);
+        SimulateUntilTerminal(context, sourceOperation.Receipt);
+        sourceOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        targetOperation = AdmitMap(
+            context,
+            "target",
+            target,
+            new[] { default(VoxelIndex) },
+            2);
+        return context;
+    }
+
     private static TrailblazerWorldContextSettings CreateTinyBudgetSettings()
         => CreateSeamBudgetSettings(
             maxSeamCandidateProbes: 1,
             maxExplicitEdges: 1,
             maxDependencyEntries: 3);
+
+    private static TrailblazerWorldContextSettings CreatePersistentPageSettings(
+        int maximumPersistentGraphPages)
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        return new TrailblazerWorldContextSettings(
+            defaults.OperationLimits,
+            defaults.MaintenanceBudget,
+            defaults.GuideSampleBudget,
+            defaults.MovementGroupPadding,
+            defaults.MaxIngressEntries,
+            defaults.MaxIngressBytes,
+            defaults.MaxActiveSnapshots,
+            defaults.MaxActiveSnapshotBytes,
+            defaults.MaxRetiredSnapshots,
+            defaults.MaxRetiredSnapshotBytes,
+            maximumPersistentGraphPages,
+            defaults.MaxDynamicCellSlotsPerMap,
+            defaults.MaxDynamicCellSlots,
+            navigationAreaCount: 1,
+            maxAreaPolicies: 1,
+            maxAreaRulesPerPolicy: 1,
+            maxAreaRules: 1,
+            defaults.MaxConcurrentSnapshotLeases,
+            defaults.QueryLimits);
+    }
 
     private static TrailblazerWorldContextSettings CreateSeamBudgetSettings(
         int maxSeamCandidateProbes,

@@ -198,8 +198,7 @@ public partial class NavMotor : IRecordable
         _handler.BindContext(context);
     }
 
-    private TrailblazerWorldContext RequireContext() =>
-        _context ?? throw new InvalidOperationException("NavMotor requires an explicit TrailblazerWorldContext.");
+    private TrailblazerWorldContext RequireContext() => _context!;
 
     private int FrameCount => RequireContext().FrameCount;
 
@@ -217,8 +216,7 @@ public partial class NavMotor : IRecordable
     public void OnInitialize(TrekCondition condition, LocomotionProfile? profile = null)
     {
         _handler = profile != null ? new LocomotionHandler(profile) : new LocomotionHandler();
-        if (_context != null)
-            _handler.BindContext(_context);
+        _handler.BindContext(RequireContext());
         CurrentState = new TransitState(condition);
         if (CurrentState.GroundState.HasValue)
             PlatformModule.HandlePlatformChange(CurrentState.GroundState); // set the initial platform
@@ -233,8 +231,9 @@ public partial class NavMotor : IRecordable
     {
         SwiftThrowHelper.ThrowIfNull(profile, nameof(profile));
 
-        if (TraversalInProgress)
-            throw new InvalidOperationException("Cannot change locomotion composition while a traversal frame is in progress.");
+        SwiftThrowHelper.ThrowIfTrue(
+            TraversalInProgress,
+            message: "Cannot change locomotion composition while a traversal frame is in progress.");
 
         Handler.ApplyProfile(profile);
 

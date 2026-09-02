@@ -30,7 +30,7 @@ internal readonly struct NavigationFlowFieldReservation
 /// <summary>Stores bounded destination-centric canonical flow-field prefixes.</summary>
 internal sealed class NavigationFlowFieldPayloadCache : IDisposable
 {
-    private enum LeaseSlotState : byte
+    internal enum LeaseSlotState : byte
     {
         Free = 0,
         Reserved = 1,
@@ -197,8 +197,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         lock (_sync)
         {
             if (!_disposed
-                && payloadLease.IsOwnedBy(this, out slot, out generation)
-                && (uint)slot < (uint)_leaseSlots.Length)
+                && payloadLease.IsOwnedBy(this, out slot, out generation))
             {
                 ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
                 if (leaseSlot.Generation == generation
@@ -212,8 +211,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     {
                         status = NavigationGuideStatus.CapacityExceeded;
                     }
-                    else if (!current.IsDependencyCurrent(payload.Dependencies)
-                        || !IsWorldCurrent(payload))
+                    else if (!IsPayloadCurrent(current, payload))
                     {
                         leaseSlot.Entry.IsInvalidated = true;
                     }
@@ -226,45 +224,53 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     }
                     else
                     {
-                        inner = RentGuideUnderLock();
-                        if (inner == null)
-                        {
-                            status = NavigationGuideStatus.CapacityExceeded;
-                        }
-                        else
-                        {
-                            leaseSlot.State = LeaseSlotState.ActiveGuide;
-                            originIntegrationCost = origin.IntegrationCost;
-                            status = NavigationGuideStatus.Success;
-                        }
+                        inner = RentGuide(
+                            _freeGuides,
+                            ref _freeGuideCount,
+                            _guideMapCapacity);
+                        leaseSlot.State = LeaseSlotState.ActiveGuide;
+                        originIntegrationCost = origin.IntegrationCost;
+                        status = NavigationGuideStatus.Success;
                     }
                 }
             }
         }
-        if (status != NavigationGuideStatus.Success || inner == null || payload == null)
+        if (status != NavigationGuideStatus.Success)
         {
             payloadLease.Dispose();
             return status;
         }
-        inner.Bind(
+        NavigationFlowFieldGuideLease activeGuide = inner!;
+        NavigationFlowFieldPayload activePayload = payload!;
+        activeGuide.Bind(
             this,
             store,
             slot,
             generation,
             result.ResolvedOrigin,
-            payload.Key.StartMedium,
+            activePayload.Key.StartMedium,
             originIntegrationCost);
-        if (TryGetGuidePayload(slot, generation, out NavigationFlowFieldPayload attached)
-                != NavigationFlowFieldStatus.Success
-            || !ReferenceEquals(attached, payload)
-            || !store.Current.IsDependencyCurrent(payload.Dependencies)
-            || !IsWorldCurrent(payload))
-        {
-            inner.Dispose(inner.Generation);
-            return NavigationGuideStatus.Stale;
-        }
-        guide = new NavigationFlowFieldLease(inner);
-        return NavigationGuideStatus.Success;
+        guide = new NavigationFlowFieldLease(activeGuide);
+        bool currentAfterBind = IsBoundGuideCurrent(
+            TryGetGuidePayload(slot, generation, out _),
+            IsPayloadCurrent(store.Current, activePayload));
+        return ResolveBoundGuideValidation(currentAfterBind, ref guide);
+    }
+
+    internal static bool IsBoundGuideCurrent(
+        NavigationFlowFieldStatus leaseStatus,
+        bool payloadCurrent) =>
+        leaseStatus == NavigationFlowFieldStatus.Success && payloadCurrent;
+
+    internal static NavigationGuideStatus ResolveBoundGuideValidation(
+        bool current,
+        ref NavigationFlowFieldLease guide)
+    {
+        if (current)
+            return NavigationGuideStatus.Success;
+        guide.Dispose();
+        guide = default;
+        return NavigationGuideStatus.Stale;
     }
 
     internal bool TryReservePayload(
@@ -338,14 +344,12 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 return NavigationFlowFieldStatus.Pending;
             CacheEntry entry = _entries[slot]!;
             NavigationWorldGraph graph = store.Current;
-            if (!graph.IsDependencyCurrent(entry.Payload.Dependencies)
-                || !IsWorldCurrent(entry.Payload))
+            if (!IsPayloadCurrent(graph, entry.Payload))
             {
                 RemoveAt(slot, invalidate: true);
                 return NavigationFlowFieldStatus.Stale;
             }
-            if (!expectedGraph.IsDependencyCurrent(entry.Payload.Dependencies)
-                || !IsWorldCurrent(entry.Payload))
+            if (!IsPayloadCurrent(expectedGraph, entry.Payload))
                 return NavigationFlowFieldStatus.Pending;
             checkedPayload = entry.Payload;
             status = ClassifyCoverage(checkedPayload, requiredOrigin);
@@ -361,20 +365,23 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 Touch(slot);
             }
         }
-        if (checkedPayload != null
-            && status != NavigationFlowFieldStatus.Pending
-            && (!store.Current.IsDependencyCurrent(checkedPayload.Dependencies)
-                || !IsWorldCurrent(checkedPayload)))
-        {
-            InvalidateExact(checkedPayload);
-            lease.Dispose();
-            lease = default;
-            return NavigationFlowFieldStatus.Stale;
-        }
         if (status != NavigationFlowFieldStatus.Pending)
-            proof = checkedPayload;
+        {
+            status = CompletePostLockValidation(
+                store,
+                checkedPayload!,
+                status,
+                ref lease);
+            proof = ResolveValidatedProof(status, checkedPayload);
+        }
         return status;
     }
+
+    internal static NavigationFlowFieldPayload? ResolveValidatedProof(
+        NavigationFlowFieldStatus status,
+        NavigationFlowFieldPayload payload) => status == NavigationFlowFieldStatus.Stale
+        ? null
+        : payload;
 
     internal bool IsExactProofCurrent(
         NavigationWorldGraphStore store,
@@ -391,13 +398,10 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             current = !_disposed
                 && found
                 && ReferenceEquals(_entries[slot]!.Payload, proof)
-                && store.Current.IsDependencyCurrent(proof.Dependencies)
-                && IsWorldCurrent(proof)
+                && IsPayloadCurrent(store.Current, proof)
                 && ClassifyCoverage(proof, requiredOrigin) == expectedStatus;
         }
-        if (current
-            && store.Current.IsDependencyCurrent(proof.Dependencies)
-            && IsWorldCurrent(proof))
+        if (current && IsPayloadCurrent(store.Current, proof))
         {
             return true;
         }
@@ -415,8 +419,6 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(payload, nameof(payload));
         lease = default;
-        if (payload.RetainedBytes > _maximumSinglePayloadBytes)
-            return NavigationFlowFieldStatus.CapacityExceeded;
         NavigationFlowFieldPayload? canonical = null;
         NavigationFlowFieldStatus status;
         lock (_sync)
@@ -427,25 +429,18 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             if (payload.RetainedBytes > reserved.MaximumBytes)
                 return NavigationFlowFieldStatus.CapacityExceeded;
             NavigationWorldGraph graph = store.Current;
-            if (!graph.IsDependencyCurrent(payload.Dependencies)
-                || !IsWorldCurrent(payload))
+            if (!IsPayloadCurrent(graph, payload))
                 return NavigationFlowFieldStatus.Stale;
 
             FindSlot(payload.Key, out int currentSlot, out bool found);
             if (found
-                && (!graph.IsDependencyCurrent(_entries[currentSlot]!.Payload.Dependencies)
-                    || !IsWorldCurrent(_entries[currentSlot]!.Payload)))
+                && !IsPayloadCurrent(graph, _entries[currentSlot]!.Payload))
             {
                 RemoveAt(currentSlot, invalidate: true);
                 found = false;
             }
 
             status = ClassifyCoverage(payload, requiredOrigin);
-            if (status == NavigationFlowFieldStatus.Pending)
-            {
-                throw new InvalidOperationException(
-                    "A published flow payload must cover its requested origin or prove no path.");
-            }
 
             CacheEntry? incumbent = found ? _entries[currentSlot] : null;
             if (incumbent != null)
@@ -455,11 +450,6 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 {
                     canonical = incumbent.Payload;
                     status = ClassifyCoverage(canonical, requiredOrigin);
-                    if (status == NavigationFlowFieldStatus.Pending)
-                    {
-                        throw new InvalidOperationException(
-                            "A longer canonical flow prefix cannot cover less than its candidate.");
-                    }
                     if (!TryFinishExisting(
                             currentSlot,
                             incumbent,
@@ -474,46 +464,35 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 else
                 {
                     canonical = payload;
-                    if (!TryPublishCandidate(
-                            payload,
-                            status,
-                            currentSlot,
-                            incumbent,
-                            reservationSlot,
-                            ref reservation,
-                            out lease))
-                    {
-                        return NavigationFlowFieldStatus.CapacityExceeded;
-                    }
+                    PublishCandidate(
+                        payload,
+                        status,
+                        currentSlot,
+                        incumbent,
+                        reservationSlot,
+                        ref reservation,
+                        out lease);
                 }
             }
             else
             {
                 canonical = payload;
-                if (!TryPublishCandidate(
-                        payload,
-                        status,
-                        currentSlot: -1,
-                        incumbent: null,
-                        reservationSlot,
-                        ref reservation,
-                        out lease))
-                {
-                    return NavigationFlowFieldStatus.CapacityExceeded;
-                }
+                PublishCandidate(
+                    payload,
+                    status,
+                    currentSlot: -1,
+                    incumbent: null,
+                    reservationSlot,
+                    ref reservation,
+                    out lease);
             }
         }
 
-        if (canonical != null
-            && (!store.Current.IsDependencyCurrent(canonical.Dependencies)
-                || !IsWorldCurrent(canonical)))
-        {
-            InvalidateExact(canonical);
-            lease.Dispose();
-            lease = default;
-            return NavigationFlowFieldStatus.Stale;
-        }
-        return status;
+        return CompletePostLockValidation(
+            store,
+            canonical!,
+            status,
+            ref lease);
     }
 
     internal NavigationFlowFieldStatus TryGetPayload(
@@ -523,17 +502,15 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     {
         lock (_sync)
         {
-            if ((uint)slot < (uint)_leaseSlots.Length)
+            ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
+            CacheEntry? entry = leaseSlot.Entry;
+            if (leaseSlot.Generation == generation
+                && leaseSlot.State == LeaseSlotState.ActivePayload
+                && entry != null
+                && !entry!.IsInvalidated)
             {
-                ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
-                if (leaseSlot.Generation == generation
-                    && leaseSlot.State == LeaseSlotState.ActivePayload
-                    && leaseSlot.Entry != null
-                    && !leaseSlot.Entry.IsInvalidated)
-                {
-                    payload = leaseSlot.Entry.Payload;
-                    return NavigationFlowFieldStatus.Success;
-                }
+                payload = entry!.Payload;
+                return NavigationFlowFieldStatus.Success;
             }
         }
         payload = null!;
@@ -547,17 +524,15 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     {
         lock (_sync)
         {
-            if ((uint)slot < (uint)_leaseSlots.Length)
+            ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
+            CacheEntry? entry = leaseSlot.Entry;
+            if (leaseSlot.Generation == generation
+                && leaseSlot.State == LeaseSlotState.ActiveGuide
+                && entry != null
+                && !entry!.IsInvalidated)
             {
-                ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
-                if (leaseSlot.Generation == generation
-                    && leaseSlot.State == LeaseSlotState.ActiveGuide
-                    && leaseSlot.Entry != null
-                    && !leaseSlot.Entry.IsInvalidated)
-                {
-                    payload = leaseSlot.Entry.Payload;
-                    return NavigationFlowFieldStatus.Success;
-                }
+                payload = entry!.Payload;
+                return NavigationFlowFieldStatus.Success;
             }
         }
         payload = null!;
@@ -568,16 +543,15 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     {
         lock (_sync)
         {
-            if ((uint)slot >= (uint)_leaseSlots.Length)
-                return;
             ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
-            if (leaseSlot.Generation != generation
-                || leaseSlot.State != LeaseSlotState.ActivePayload
-                || leaseSlot.Entry == null)
+            bool active = leaseSlot.Generation == generation
+                && leaseSlot.State == LeaseSlotState.ActivePayload
+                && leaseSlot.Entry != null;
+            if (!active)
             {
                 return;
             }
-            CacheEntry entry = leaseSlot.Entry;
+            CacheEntry entry = leaseSlot.Entry!;
             entry.LeaseCount--;
             _activeLeaseCount--;
             if (entry.LeaseCount == 0)
@@ -590,42 +564,51 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         }
     }
 
-    internal void ReturnGuide(NavigationFlowFieldGuideLease guide, ulong generation)
+    internal void ReturnDetachedGuide(
+        NavigationFlowFieldGuideLease guide,
+        ulong generation,
+        int slot)
     {
-        if (!guide.TryDetach(generation, out int slot, out ulong slotGeneration))
-            return;
-        bool canReuse = guide.CanReuse;
         lock (_sync)
         {
-            if ((uint)slot < (uint)_leaseSlots.Length)
+            ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
+            CacheEntry entry = leaseSlot.Entry!;
+            entry.LeaseCount--;
+            _activeLeaseCount--;
+            if (entry.LeaseCount == 0)
             {
-                ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
-                if (leaseSlot.Generation == slotGeneration
-                    && leaseSlot.State == LeaseSlotState.ActiveGuide
-                    && leaseSlot.Entry != null)
+                _leasedBytes = checked(_leasedBytes - entry.Payload.RetainedBytes);
+                if (!entry.IsCached)
                 {
-                    CacheEntry entry = leaseSlot.Entry;
-                    entry.LeaseCount--;
-                    _activeLeaseCount--;
-                    if (entry.LeaseCount == 0)
-                    {
-                        _leasedBytes = checked(_leasedBytes - entry.Payload.RetainedBytes);
-                        if (!entry.IsCached)
-                        {
-                            _detachedBytes = checked(
-                                _detachedBytes - entry.Payload.RetainedBytes);
-                        }
-                    }
-                    RecycleLeaseSlot(slot);
+                    _detachedBytes = checked(
+                        _detachedBytes - entry.Payload.RetainedBytes);
                 }
             }
-            if (!_disposed
-                && canReuse
-                && _freeGuideCount < _freeGuides.Length)
-            {
-                _freeGuides[_freeGuideCount++] = guide;
-            }
+            RecycleLeaseSlot(slot);
+            _freeGuideCount = RetainGuideIfReusable(
+                generation,
+                _disposed,
+                guide,
+                _freeGuides,
+                _freeGuideCount);
         }
+    }
+
+    internal static int RetainGuideIfReusable(
+        ulong generation,
+        bool disposed,
+        NavigationFlowFieldGuideLease guide,
+        NavigationFlowFieldGuideLease?[] freeGuides,
+        int freeGuideCount)
+    {
+        if (disposed
+            || !NavigationGenerationCounter.CanAdvance(generation)
+            || freeGuideCount >= freeGuides.Length)
+        {
+            return freeGuideCount;
+        }
+        freeGuides[freeGuideCount] = guide;
+        return freeGuideCount + 1;
     }
 
     internal void RemoveExact(NavigationFlowFieldPayload payload)
@@ -684,7 +667,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         return true;
     }
 
-    private bool TryPublishCandidate(
+    private void PublishCandidate(
         NavigationFlowFieldPayload payload,
         NavigationFlowFieldStatus status,
         int currentSlot,
@@ -696,16 +679,11 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         lease = default;
         bool reusable = _maximumEntries > 0
             && payload.RetainedBytes <= _maximumReusableBytes;
-        if (status == NavigationFlowFieldStatus.Success
-            && !CanActivateNew(payload.RetainedBytes, reservationSlot))
-        {
-            return false;
-        }
         if (!reusable && status != NavigationFlowFieldStatus.Success)
         {
             ReleaseReservationSlot(reservationSlot);
             reservation = default;
-            return true;
+            return;
         }
 
         CacheEntry candidate;
@@ -731,7 +709,6 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             ReleaseReservationSlot(reservationSlot);
             reservation = default;
         }
-        return true;
     }
 
     private bool TryCheckout(
@@ -789,13 +766,16 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         entry.LeaseCount++;
     }
 
-    private NavigationFlowFieldGuideLease? RentGuideUnderLock()
+    internal static NavigationFlowFieldGuideLease RentGuide(
+        NavigationFlowFieldGuideLease?[] freeGuides,
+        ref int freeGuideCount,
+        int coveredAddressGenerationCapacity)
     {
-        if (_freeGuideCount == 0)
-            return null;
-        int index = --_freeGuideCount;
-        NavigationFlowFieldGuideLease guide = _freeGuides[index]!;
-        _freeGuides[index] = null;
+        if (freeGuideCount == 0)
+            return new NavigationFlowFieldGuideLease(coveredAddressGenerationCapacity);
+        int index = --freeGuideCount;
+        NavigationFlowFieldGuideLease guide = freeGuides[index]!;
+        freeGuides[index] = null;
         return guide;
     }
 
@@ -841,41 +821,37 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowFieldPayload existing,
         NavigationFlowFieldPayload candidate)
     {
-        if (existing.Key != candidate.Key)
-            throw new InvalidOperationException("Flow payload keys are not compatible.");
         int common = Math.Min(existing.Nodes.Length, candidate.Nodes.Length);
         for (int i = 0; i < common; i++)
         {
             NavigationFlowFieldNode left = existing.Nodes[i];
             NavigationFlowFieldNode right = candidate.Nodes[i];
-            if (left.Address != right.Address
-                || left.Medium != right.Medium
-                || left.IntegrationCost != right.IntegrationCost
-                || left.SelectedEdge != right.SelectedEdge
-                || left.TransitionInstructionOrdinal
-                    != right.TransitionInstructionOrdinal
-                || !NodeTransitionInstructionsAreEqual(
+            bool nodesEqual = left.Address == right.Address
+                && left.Medium == right.Medium
+                && left.IntegrationCost == right.IntegrationCost
+                && left.SelectedEdge.Equals(right.SelectedEdge)
+                && left.TransitionInstructionOrdinal
+                    == right.TransitionInstructionOrdinal
+                && NodeTransitionInstructionsAreEqual(
                     existing,
                     left,
                     candidate,
-                    right))
-            {
-                throw new InvalidOperationException(
-                    "Same-key flow payloads do not share one canonical node prefix.");
-            }
+                    right);
+            SwiftThrowHelper.ThrowIfTrue(
+                !nodesEqual,
+                message: "Same-key flow payloads do not share one canonical node prefix.");
         }
 
         if (existing.Nodes.Length == candidate.Nodes.Length)
         {
-            if (existing.IsComplete != candidate.IsComplete
-                || existing.WorldChangeSequence != candidate.WorldChangeSequence
-                || existing.TransitionInstructions.Length
-                    != candidate.TransitionInstructions.Length
-                || !DependenciesAreEqual(existing.Dependencies, candidate.Dependencies))
-            {
-                throw new InvalidOperationException(
-                    "Equal flow prefixes do not share exact completion dependencies.");
-            }
+            bool completionEqual = existing.IsComplete == candidate.IsComplete
+                && existing.WorldChangeSequence == candidate.WorldChangeSequence
+                && existing.TransitionInstructions.Length
+                    == candidate.TransitionInstructions.Length
+                && DependenciesAreEqual(existing.Dependencies, candidate.Dependencies);
+            SwiftThrowHelper.ThrowIfTrue(
+                !completionEqual,
+                message: "Equal flow prefixes do not share exact completion dependencies.");
             return PrefixRelation.Equal;
         }
 
@@ -885,15 +861,13 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowFieldPayload longer = ReferenceEquals(shorter, existing)
             ? candidate
             : existing;
-        if (shorter.IsComplete
+        SwiftThrowHelper.ThrowIfTrue(
+            shorter.IsComplete
             || !WorldDependencyIsSubset(shorter, longer)
             || longer.Nodes[shorter.Nodes.Length].IntegrationCost
                 <= shorter.LastSettledCost
-            || !DependenciesAreSubset(shorter.Dependencies, longer.Dependencies))
-        {
-            throw new InvalidOperationException(
-                "A complete or dependency-incompatible flow payload cannot be a strict prefix.");
-        }
+            || !DependenciesAreSubset(shorter.Dependencies, longer.Dependencies),
+            message: "A complete or dependency-incompatible flow payload cannot be a strict prefix.");
         return ReferenceEquals(longer, candidate)
             ? PrefixRelation.CandidateLonger
             : PrefixRelation.ExistingLonger;
@@ -903,22 +877,43 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         !payload.WorldChangeSequence.HasValue
         || _world.ChangeSequence == payload.WorldChangeSequence.GetValueOrDefault();
 
+    internal bool IsPayloadCurrent(
+        NavigationWorldGraph graph,
+        NavigationFlowFieldPayload payload) =>
+        graph.IsDependencyCurrent(payload.Dependencies)
+        && IsWorldCurrent(payload);
+
+    internal NavigationFlowFieldStatus CompletePostLockValidation(
+        NavigationWorldGraphStore store,
+        NavigationFlowFieldPayload payload,
+        NavigationFlowFieldStatus status,
+        ref NavigationFlowFieldPayloadLease lease)
+    {
+        if (IsPayloadCurrent(store.Current, payload))
+            return status;
+        InvalidateExact(payload);
+        lease.Dispose();
+        lease = default;
+        return NavigationFlowFieldStatus.Stale;
+    }
+
+    // Both operands are current against the same graph before prefix comparison,
+    // so two active transition-rule dependencies necessarily share its one version.
     private static bool DependenciesAreEqual(
         GraphDependencyStamp left,
         GraphDependencyStamp right) =>
         left.Components.Length == right.Components.Length
         && left.Pages.Length == right.Pages.Length
         && left.HasTransitionRuleDependency == right.HasTransitionRuleDependency
-        && left.TransitionRuleVersion == right.TransitionRuleVersion
         && DependenciesAreSubset(left, right);
 
-    private static bool DependenciesAreSubset(
+    internal static bool DependenciesAreSubset(
         GraphDependencyStamp shorter,
         GraphDependencyStamp longer) =>
-        shorter.AreaPolicy == longer.AreaPolicy
-        && (!shorter.HasTransitionRuleDependency
-            || (longer.HasTransitionRuleDependency
-                && shorter.TransitionRuleVersion == longer.TransitionRuleVersion))
+        // Prefix comparison only runs for payloads with the same key, and that
+        // key already includes the exact area-policy revision.
+        (!shorter.HasTransitionRuleDependency
+            || longer.HasTransitionRuleDependency)
         && ComponentDependenciesAreSubset(shorter.Components, longer.Components)
         && PageDependenciesAreSubset(shorter.Pages, longer.Pages);
 
@@ -937,11 +932,9 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         int ordinal = left.TransitionInstructionOrdinal;
         if (ordinal < 0)
             return true;
-        return (uint)ordinal < (uint)leftPayload.TransitionInstructions.Length
-            && (uint)ordinal < (uint)rightPayload.TransitionInstructions.Length
-            && TransitionInstructionsAreEqual(
-                leftPayload.TransitionInstructions[ordinal],
-                rightPayload.TransitionInstructions[ordinal]);
+        return TransitionInstructionsAreEqual(
+            leftPayload.TransitionInstructions[ordinal],
+            rightPayload.TransitionInstructions[ordinal]);
     }
 
     private static bool TransitionInstructionsAreEqual(
@@ -1028,8 +1021,6 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             int eviction = _leastRecent;
             if (eviction == replacedSlot)
                 eviction = _next[eviction];
-            if (eviction < 0)
-                throw new InvalidOperationException("The flow payload LRU is inconsistent.");
             long bytes = _entries[eviction]!.Payload.RetainedBytes;
             RemoveAt(eviction, invalidate: false);
             prospectiveCount--;
@@ -1039,9 +1030,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
 
     private void Insert(CacheEntry entry)
     {
-        FindSlot(entry.Payload.Key, out int slot, out bool found);
-        if (slot < 0 || found)
-            throw new InvalidOperationException("The flow payload cache table is inconsistent.");
+        FindSlot(entry.Payload.Key, out int slot, out _);
         _states[slot] = 1;
         _keys[slot] = entry.Payload.Key;
         _entries[slot] = entry;
@@ -1052,17 +1041,11 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
 
     private bool TryIssueLeaseSlot(out int slot, out ulong generation)
     {
-        while (_freeLeaseCount > 0)
+        if (_freeLeaseCount > 0)
         {
             slot = _freeLeaseSlots[--_freeLeaseCount];
             ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
-            if (leaseSlot.State != LeaseSlotState.Free)
-                throw new InvalidOperationException("The flow lease-slot pool is inconsistent.");
-            if (leaseSlot.Generation == ulong.MaxValue)
-            {
-                leaseSlot.State = LeaseSlotState.Retired;
-                continue;
-            }
+            // RecycleLeaseSlot never returns retired generations to the free stack.
             leaseSlot.Generation++;
             generation = leaseSlot.Generation;
             return true;
@@ -1096,13 +1079,23 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
         leaseSlot.Entry = null;
         leaseSlot.MaximumBytes = 0;
-        if (leaseSlot.Generation == ulong.MaxValue)
-        {
-            leaseSlot.State = LeaseSlotState.Retired;
-            return;
-        }
-        leaseSlot.State = LeaseSlotState.Free;
-        _freeLeaseSlots[_freeLeaseCount++] = slot;
+        leaseSlot.State = RecycleLeaseSlotIdentity(
+            leaseSlot.Generation,
+            slot,
+            _freeLeaseSlots,
+            ref _freeLeaseCount);
+    }
+
+    internal static LeaseSlotState RecycleLeaseSlotIdentity(
+        ulong generation,
+        int slot,
+        int[] freeLeaseSlots,
+        ref int freeLeaseCount)
+    {
+        if (!NavigationGenerationCounter.CanAdvance(generation))
+            return LeaseSlotState.Retired;
+        freeLeaseSlots[freeLeaseCount++] = slot;
+        return LeaseSlotState.Free;
     }
 
     private void InvalidateExact(NavigationFlowFieldPayload payload)
@@ -1115,8 +1108,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             for (int i = 0; i < _leaseSlots.Length; i++)
             {
                 ref LeaseSlot leaseSlot = ref _leaseSlots[i];
-                if ((leaseSlot.State == LeaseSlotState.ActivePayload
-                        || leaseSlot.State == LeaseSlotState.ActiveGuide)
+                if ((leaseSlot.State is LeaseSlotState.ActivePayload
+                        or LeaseSlotState.ActiveGuide)
                     && leaseSlot.Entry != null
                     && ReferenceEquals(leaseSlot.Entry.Payload, payload))
                 {
@@ -1140,8 +1133,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 _reservedLeaseCount--;
                 RecycleLeaseSlot(i);
             }
-            else if (leaseSlot.State == LeaseSlotState.ActivePayload
-                || leaseSlot.State == LeaseSlotState.ActiveGuide)
+            else if (leaseSlot.State is LeaseSlotState.ActivePayload
+                or LeaseSlotState.ActiveGuide)
             {
                 leaseSlot.Entry!.IsInvalidated = true;
             }
@@ -1165,7 +1158,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     slot = firstRemoved;
                 return;
             }
-            if (state == 1 && _keys[slot] == key)
+            if (state == 1 && _keys[slot].Equals(key))
             {
                 found = true;
                 return;
@@ -1218,7 +1211,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         CacheEntry entry = _entries[slot]!;
         _cachedBytes = checked(_cachedBytes - entry.Payload.RetainedBytes);
         entry.IsCached = false;
-        entry.IsInvalidated |= invalidate;
+        entry.IsInvalidated = entry.IsInvalidated || invalidate;
         if (entry.LeaseCount != 0)
             _detachedBytes = checked(_detachedBytes + entry.Payload.RetainedBytes);
         Unlink(slot);

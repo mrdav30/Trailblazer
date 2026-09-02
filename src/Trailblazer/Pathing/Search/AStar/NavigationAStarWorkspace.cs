@@ -92,11 +92,6 @@ internal sealed class NavigationAStarWorkspace
         return EndpointWorkspace.TryRecordComponent(componentKey);
     }
 
-    internal bool TryRecordEndpointPage(string mapId, int pageIndex)
-    {
-        return EndpointWorkspace.TryRecordPage(mapId, pageIndex);
-    }
-
     internal void ResetSearch()
     {
         NodeTable.Reset();

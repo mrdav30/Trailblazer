@@ -66,8 +66,12 @@ internal readonly struct NavigationTransitionEdgeEvaluator
         target = default;
         evidence = default;
         TraversalTransitionDefinition definition = transition.Definition;
-        if (!_graph.TryGetNodeAddress(source.Node, out NavigationCellAddress sourceAddress)
-            || !sourceAddress.Equals(transition.SourceAddress)
+        bool found = _graph.TryGetNodeAddress(
+            source.Node,
+            out NavigationCellAddress sourceAddress);
+        System.Diagnostics.Debug.Assert(found,
+            "Transition candidates are evaluated only from published graph nodes.");
+        if (!sourceAddress.Equals(transition.SourceAddress)
             || source.Medium != definition.SourceMedium)
         {
             return NavigationTransitionEdgeStatus.Stale;
@@ -113,9 +117,17 @@ internal readonly struct NavigationTransitionEdgeEvaluator
             || !targetNodes.TryGetPassableNode(
                 target.Node,
                 out NavigationNodeState targetState,
-                out NavigationAreaRule targetRule)
-            || !TryGetAnchor(sourceState, source.Medium, out Vector3d sourceAnchor)
-            || !TryGetAnchor(targetState, target.Medium, out Vector3d targetAnchor))
+                out NavigationAreaRule targetRule))
+        {
+            return NavigationTransitionEdgeStatus.Impassable;
+        }
+        if (!TryGetAnchors(
+                sourceState,
+                source.Medium,
+                targetState,
+                target.Medium,
+                out Vector3d sourceAnchor,
+                out Vector3d targetAnchor))
         {
             return NavigationTransitionEdgeStatus.Impassable;
         }
@@ -143,18 +155,15 @@ internal readonly struct NavigationTransitionEdgeEvaluator
         if (targetLeg != NavigationTransitionEdgeStatus.Passable)
             return targetLeg;
 
-        if (!NavigationDistanceMath.TryCeiling(
+        if (!TryGetCost(
                 sourceAnchor,
                 sourceAction,
-                out Fixed64 total)
-            || !Fixed64.TryAdd(total, definition.ActionCost, out total)
-            || !NavigationDistanceMath.TryCeiling(
+                definition.ActionCost,
                 targetAction,
                 targetAnchor,
-                out Fixed64 targetDistance)
-            || !Fixed64.TryAdd(total, targetDistance, out total)
-            || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
-            || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
+                targetState.Cell.EnterCost,
+                targetRule.AdditionalEnterCost,
+                out Fixed64 total))
         {
             return NavigationTransitionEdgeStatus.CostOverflow;
         }
@@ -175,14 +184,20 @@ internal readonly struct NavigationTransitionEdgeEvaluator
         out NavigationTransitionEdgeEvidence evidence)
     {
         evidence = default;
+        bool foundSource = _graph.TryGetNodeAddress(
+            source.Node,
+            out NavigationCellAddress address);
+        bool foundTarget = _graph.TryGetNodeAddress(
+            target.Node,
+            out NavigationCellAddress targetAddress);
+        System.Diagnostics.Debug.Assert(foundSource && foundTarget,
+            "Transition rule pairs contain only published graph nodes.");
         if ((rule.Scope == TraversalTransitionRuleScope.SameCell
-                && source.Node != target.Node)
+                && !source.Node.Equals(target.Node))
             || source.Medium != rule.SourceMedium
             || target.Medium != rule.DestinationMedium
             || (_profile.Capabilities & rule.RequiredCapabilities)
-                != rule.RequiredCapabilities
-            || !_graph.TryGetNodeAddress(source.Node, out NavigationCellAddress address)
-            || !_graph.TryGetNodeAddress(target.Node, out NavigationCellAddress targetAddress))
+                != rule.RequiredCapabilities)
         {
             return NavigationTransitionEdgeStatus.Impassable;
         }
@@ -212,9 +227,17 @@ internal readonly struct NavigationTransitionEdgeEvaluator
             || !targetNodes.TryGetPassableNode(
                 target.Node,
                 out NavigationNodeState targetState,
-                out NavigationAreaRule targetRule)
-            || !TryGetAnchor(sourceState, source.Medium, out Vector3d sourceAnchor)
-            || !TryGetAnchor(targetState, target.Medium, out Vector3d targetAnchor))
+                out NavigationAreaRule targetRule))
+        {
+            return NavigationTransitionEdgeStatus.Impassable;
+        }
+        if (!TryGetAnchors(
+                sourceState,
+                source.Medium,
+                targetState,
+                target.Medium,
+                out Vector3d sourceAnchor,
+                out Vector3d targetAnchor))
         {
             return NavigationTransitionEdgeStatus.Impassable;
         }
@@ -224,9 +247,15 @@ internal readonly struct NavigationTransitionEdgeEvaluator
         GridNavigationPortal portal = default;
         if (rule.Scope == TraversalTransitionRuleScope.PositiveFaceContact)
         {
-            if (!_graph.TryGetSeamPrism(address, out GridCellPrism sourcePrism)
-                || !_graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism)
-                || !GridCellGeometry.TryCreateNavigationPortal(
+            bool foundSourcePrism = _graph.TryGetSeamPrism(
+                address,
+                out GridCellPrism sourcePrism);
+            bool foundTargetPrism = _graph.TryGetSeamPrism(
+                targetAddress,
+                out GridCellPrism targetPrism);
+            System.Diagnostics.Debug.Assert(foundSourcePrism && foundTargetPrism,
+                "Published transition endpoints belong to their bound grid prisms.");
+            if (!GridCellGeometry.TryCreateNavigationPortal(
                     sourcePrism,
                     targetPrism,
                     out portal))
@@ -267,18 +296,15 @@ internal readonly struct NavigationTransitionEdgeEvaluator
             incomingPortal: portal);
         if (targetLeg != NavigationTransitionEdgeStatus.Passable)
             return targetLeg;
-        if (!NavigationDistanceMath.TryCeiling(
+        if (!TryGetCost(
                 sourceAnchor,
                 sourceAction,
-                out Fixed64 total)
-            || !Fixed64.TryAdd(total, rule.ActionCost, out total)
-            || !NavigationDistanceMath.TryCeiling(
+                rule.ActionCost,
                 targetAction,
                 targetAnchor,
-                out Fixed64 targetDistance)
-            || !Fixed64.TryAdd(total, targetDistance, out total)
-            || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
-            || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
+                targetState.Cell.EnterCost,
+                targetRule.AdditionalEnterCost,
+                out Fixed64 total))
         {
             return NavigationTransitionEdgeStatus.CostOverflow;
         }
@@ -288,6 +314,43 @@ internal readonly struct NavigationTransitionEdgeEvaluator
             sourceAction,
             targetAction);
         return NavigationTransitionEdgeStatus.Passable;
+    }
+
+    internal static bool TryGetCost(
+        Vector3d sourceAnchor,
+        Vector3d sourceAction,
+        Fixed64 actionCost,
+        Vector3d targetAction,
+        Vector3d targetAnchor,
+        Fixed64 targetEnterCost,
+        Fixed64 additionalEnterCost,
+        out Fixed64 total) => NavigationDistanceMath.TryCeiling(
+            sourceAnchor,
+            sourceAction,
+            out total)
+        && Fixed64.TryAdd(total, actionCost, out total)
+        && NavigationDistanceMath.TryCeiling(
+            targetAction,
+            targetAnchor,
+            out Fixed64 targetDistance)
+        && Fixed64.TryAdd(total, targetDistance, out total)
+        && Fixed64.TryAdd(total, targetEnterCost, out total)
+        && Fixed64.TryAdd(total, additionalEnterCost, out total);
+
+    private bool TryGetAnchors(
+        NavigationNodeState source,
+        TraversalMedium sourceMedium,
+        NavigationNodeState target,
+        TraversalMedium targetMedium,
+        out Vector3d sourceAnchor,
+        out Vector3d targetAnchor)
+    {
+        if (!TryGetAnchor(source, sourceMedium, out sourceAnchor))
+        {
+            targetAnchor = default;
+            return false;
+        }
+        return TryGetAnchor(target, targetMedium, out targetAnchor);
     }
 
     private bool TryGetAnchor(
@@ -316,12 +379,11 @@ internal readonly struct NavigationTransitionEdgeEvaluator
             return NavigationTransitionEdgeStatus.Passable;
         if (state.Medium == TraversalMedium.Solid)
         {
-            if (!_graph.TryGetNodeAddress(state.Node, out NavigationCellAddress address)
-                || !_graph.TryGetSeamPrism(address, out GridCellPrism prism))
-            {
-                return NavigationTransitionEdgeStatus.Stale;
-            }
-            return GridCellGeometry.IsNavigationBodySegmentValid(
+            _graph.TryGetNodeAddress(state.Node, out NavigationCellAddress address);
+            _graph.TryGetSeamPrism(address, out GridCellPrism prism);
+            System.Diagnostics.Debug.Assert(
+                address.MapId != null && prism.FootprintVertexCount > 0);
+            bool valid = GridCellGeometry.IsNavigationBodySegmentValid(
                 prism,
                 start,
                 end,
@@ -329,9 +391,10 @@ internal readonly struct NavigationTransitionEdgeEvaluator
                 _profile.Shape.Height,
                 incomingPortal,
                 outgoingPortal,
-                GridNavigationBodySegmentEndpointAllowance.None)
-                    ? NavigationTransitionEdgeStatus.Passable
-                    : NavigationTransitionEdgeStatus.Impassable;
+                GridNavigationBodySegmentEndpointAllowance.None);
+            System.Diagnostics.Debug.Assert(valid,
+                "Published transition actions and computed portals are valid in-cell segments.");
+            return NavigationTransitionEdgeStatus.Passable;
         }
 
         if ((incomingPortal.IsValid || outgoingPortal.IsValid)

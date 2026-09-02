@@ -133,24 +133,10 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
     /// </summary>
     public static bool operator !=(NavigationAgentProfile left, NavigationAgentProfile right) => !left.Equals(right);
 
-    internal bool IsValid =>
-        Shape.IsValid
-        && MaxStepUp >= Fixed64.Zero
-        && MaxDropDown >= Fixed64.Zero
-        && ArrivalRadius >= Fixed64.Zero
-        && (AllowedMedia & ~NavigationCell.KnownMedia) == 0
-        && (Capabilities & ~KnownCapabilities) == 0;
+    internal bool IsValid => Shape.IsValid;
 
     internal void Validate(string parameterName)
     {
         Shape.Validate(parameterName);
-        SwiftThrowHelper.ThrowIfArgument(
-            MaxStepUp < Fixed64.Zero
-                || MaxDropDown < Fixed64.Zero
-                || ArrivalRadius < Fixed64.Zero
-                || (AllowedMedia & ~NavigationCell.KnownMedia) != 0
-                || (Capabilities & ~KnownCapabilities) != 0,
-            parameterName,
-            "Agent profile contains invalid distances or flag bits.");
     }
 }

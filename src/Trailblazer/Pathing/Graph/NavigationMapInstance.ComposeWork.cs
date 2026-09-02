@@ -334,9 +334,9 @@ internal sealed partial class NavigationMapInstance
                 slot = dynamicSlot.Slot;
             }
             if (slot < 0
-                && (operation.Kind == NavigationCellOverlayOperationKind.Set
-                    || _state.Map.DefaultCell.HasValue
-                        && operation.Kind == NavigationCellOverlayOperationKind.Suppress))
+                && ShouldAllocateDynamicSlot(
+                    operation.Kind,
+                    _state.Map.DefaultCell.HasValue))
             {
                 slot = _nextDynamicSlot++;
                 var addedDynamicSlot = new NavigationDynamicCellSlot(operation.Index, slot);
@@ -362,23 +362,26 @@ internal sealed partial class NavigationMapInstance
                 operation,
                 _version,
                 out int semanticCopies);
-            if (!ReferenceEquals(updated, _semanticPages))
+            System.Diagnostics.Debug.Assert(!ReferenceEquals(updated, _semanticPages));
+            RecordPersistentCopies(semanticCopies, 72L);
+            int pageIndex = slot / NavigationSemanticPage.SlotCount;
+            if (pageIndex != _lastCopiedSemanticPageIndex)
             {
-                RecordPersistentCopies(semanticCopies, 72L);
-                int pageIndex = slot / NavigationSemanticPage.SlotCount;
-                if (pageIndex != _lastCopiedSemanticPageIndex)
+                _copiedSemanticPages++;
+                if (_previous != null
+                    && _previous._semanticPages.TryGetValue(pageIndex, out _))
                 {
-                    _copiedSemanticPages++;
-                    if (_previous != null
-                        && _previous._semanticPages.TryGetValue(pageIndex, out _))
-                    {
-                        _retainedCopiedSemanticPages++;
-                    }
-                    _lastCopiedSemanticPageIndex = pageIndex;
+                    _retainedCopiedSemanticPages++;
                 }
+                _lastCopiedSemanticPageIndex = pageIndex;
             }
             _semanticPages = updated;
         }
+
+        internal static bool ShouldAllocateDynamicSlot(
+            NavigationCellOverlayOperationKind kind,
+            bool hasDefaultCell) => kind == NavigationCellOverlayOperationKind.Set
+            || hasDefaultCell && kind == NavigationCellOverlayOperationKind.Suppress;
 
         private bool HasSameSemanticState(
             int slot,

@@ -84,8 +84,6 @@ internal sealed class NavigationDependencyWorkspace
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         missingComponents = 0;
         missingPages = 0;
-        if (source.ComponentCount > int.MaxValue - source.PageCount)
-            return false;
         int probeCount = source.ComponentCount + source.PageCount;
         if (!meter.TryConsumeLookupProbes(probeCount))
             return false;

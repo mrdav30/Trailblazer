@@ -283,6 +283,8 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
             hints);
 
         equal.Should().Be(expected);
+        expected.Equals((object)equal).Should().BeTrue();
+        expected.Equals((object)"climb").Should().BeFalse();
         equal.GetHashCode().Should().Be(expected.GetHashCode());
         expected.SourceMedium.Should().Be(expected.DestinationMedium);
         expected.LocomotionHints.Should().Be(hints);
@@ -295,6 +297,8 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
             "destination", destinationMedium: (TraversalMedium)99);
         Action unknownScope = () => _ = CreateRule(
             "scope", scope: (TraversalTransitionRuleScope)99);
+        Action scopeBelowRange = () => _ = CreateRule(
+            "scope-low", scope: (TraversalTransitionRuleScope)(-1));
         Action unknownCapability = () => _ = CreateRule(
             "capability", capabilities: (TraversalCapability)(1 << 20));
         Action negativeCost = () => _ = CreateRule("cost", actionCost: -Fixed64.One);
@@ -306,9 +310,17 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
         unknownSource.Should().Throw<ArgumentException>();
         unknownDestination.Should().Throw<ArgumentException>();
         unknownScope.Should().Throw<ArgumentException>();
+        scopeBelowRange.Should().Throw<ArgumentException>();
         unknownCapability.Should().Throw<ArgumentException>();
         negativeCost.Should().Throw<ArgumentException>();
         unknownHint.Should().Throw<ArgumentException>();
+
+        var defaults = new System.Collections.Generic.HashSet<TraversalTransitionRule>
+        {
+            default
+        };
+        defaults.Add(default).Should().BeFalse(
+            "default rules from failed lookups remain stable value keys");
     }
 
     [Fact]
@@ -351,16 +363,28 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
             .AddCell(destination, SolidExplicit)
             .AddCell(source, SolidExplicit)
             .Build();
+        NavigationMap differentRule = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidExplicit)
+            .AddCell(destination, SolidExplicit)
+            .AddTransition(sameIdDefinition)
+            .AddTransitionRule(CreateRule(
+                "b-rule",
+                TraversalTransitionType.Takeoff,
+                TraversalMedium.Liquid,
+                TraversalMedium.Gas,
+                TraversalTransitionRuleScope.PositiveFaceContact,
+                TraversalCapability.Swim | TraversalCapability.Fly,
+                (Fixed64)2,
+                TraversalTransitionLocomotionHints.None))
+            .AddTransitionRule(second)
+            .Build();
 
         reverse.Should().Be(forward);
         reverse.GetHashCode().Should().Be(forward.GetHashCode());
-        forward.TransitionRuleSpan[0].Id.Should().Be("a-rule");
-        forward.TransitionRuleSpan[1].Id.Should().Be("b-rule");
+        differentRule.Should().NotBe(forward);
+        forward.TransitionRules[0].Id.Should().Be("a-rule");
+        forward.TransitionRules[1].Id.Should().Be("b-rule");
         forward.Transitions.Should().ContainSingle(transition => transition.Id == "a-rule");
-        TraversalTransitionRuleComparer.Instance.Compare(
-            second,
-            CreateRule("a-rule", actionCost: Fixed64.One)).Should().NotBe(0);
-
         Action duplicate = () => new NavigationMapBuilder("duplicate", binding)
             .AddTransitionRule(CreateRule("same"))
             .AddTransitionRule(CreateRule(
@@ -536,6 +560,52 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
         processor.Admit(install).Should().BeTrue();
         processor.ProcessFrame(0);
         install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+    }
+
+    [Fact]
+    public void DormantCrossMapTransition_ShouldRequireMatchingTargetDefaultOnFirstPublication()
+    {
+        (NavigationOperationStatus Status, NavigationOperationRejection Rejection) PublishTarget(
+            NavigationCell? targetDefault)
+        {
+            var processor = new NavigationOperationProcessor(CreateLimits());
+            CreateConfiguration(GridStorageKind.Dense).TryNormalize(
+                out NormalizedGridConfiguration sourceBinding).Should().BeTrue();
+            CreateConfiguration(GridStorageKind.Dense, originX: 10).TryNormalize(
+                out NormalizedGridConfiguration targetBinding).Should().BeTrue();
+            var transition = new TraversalTransitionDefinition(
+                "to-target",
+                TraversalTransitionType.Takeoff,
+                default,
+                TraversalMedium.Solid,
+                new NavigationCellAddress("target", default),
+                TraversalMedium.Gas,
+                TraversalCapability.Fly);
+            NavigationMap source = new NavigationMapBuilder("source", sourceBinding)
+                .AddCell(default, SolidExplicit)
+                .AddTransition(transition)
+                .Build();
+            var targetBuilder = new NavigationMapBuilder("target", targetBinding);
+            if (targetDefault.HasValue)
+                targetBuilder.SetDefaultCell(targetDefault.Value);
+            NavigationMap target = targetBuilder.Build();
+            processor.Admit(Commit(source, 1, 0)).Should().BeTrue();
+            processor.ProcessFrame(0);
+            NavigationMapCommitOperation targetInstall = Commit(target, 2, 1);
+            processor.Admit(targetInstall).Should().BeTrue();
+
+            processor.ProcessFrame(1);
+
+            return (targetInstall.Receipt.Status, targetInstall.Receipt.Rejection);
+        }
+
+        PublishTarget(targetDefault: null).Should().Be((
+            NavigationOperationStatus.Rejected,
+            NavigationOperationRejection.ValidationFailed));
+        PublishTarget(SolidExplicit).Should().Be((
+            NavigationOperationStatus.Rejected,
+            NavigationOperationRejection.ValidationFailed));
+        PublishTarget(GasDefault).Status.Should().Be(NavigationOperationStatus.Applied);
     }
 
     private static GridConfiguration CreateConfiguration(

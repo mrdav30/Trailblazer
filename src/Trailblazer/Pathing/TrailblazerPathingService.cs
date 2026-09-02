@@ -76,20 +76,8 @@ public sealed class TrailblazerPathingService
     internal int RetainedCompositionWorkCount =>
         _navigationGraph.RetainedCompositionWorkCount;
 
-    internal long RetainedCompositionWorkBytes =>
-        _navigationGraph.RetainedCompositionWorkBytes;
-
-    internal long RetainedOperationWorkBytes =>
-        _navigationGraph.RetainedOperationWorkBytes;
-
     internal int RetainedOperationWorkCount =>
         _navigationGraph.RetainedOperationWorkCount;
-
-    internal int RetainedCompositionWorkPageCount =>
-        _navigationGraph.RetainedCompositionWorkPageCount;
-
-    internal int RetainedOperationWorkPageCount =>
-        _navigationGraph.RetainedOperationWorkPageCount;
 
     internal MaintenanceWorkMeter NavigationMaintenanceMeter =>
         _navigationGraph.MaintenanceMeter;
@@ -153,14 +141,14 @@ public sealed class TrailblazerPathingService
         EnsureUsable();
         NavigationWorldGraph graph = _navigationGraph.Current;
         graphVersion = graph.GraphVersion;
-        if (!graph.TryGetMapId(gridKey, out string mapId)
-            || !graph.TryGetMap(mapId, out NavigationMapInstance? instance)
-            || instance == null)
+        if (!graph.TryGetMapId(gridKey, out string mapId))
         {
             address = default;
             area = default;
             return NavigationCommittedCellResolveStatus.NoCell;
         }
+        graph.TryGetMap(mapId, out NavigationMapInstance? instance);
+        System.Diagnostics.Debug.Assert(instance != null);
         if (!instance.GridIdentity.Matches(
                 worldIndex.WorldSpawnToken,
                 worldIndex.GridIndex,
@@ -171,9 +159,15 @@ public sealed class TrailblazerPathingService
             return NavigationCommittedCellResolveStatus.Unavailable;
         }
         NavigationCell cell;
-        if (!instance.TryGetSlot(worldIndex.VoxelIndex, out int slot)
-            || !instance.TryGetPhysicalState(slot, out bool isPresent, out _)
-            || !isPresent
+        if (!instance.TryGetSlot(worldIndex.VoxelIndex, out int slot))
+        {
+            address = default;
+            area = default;
+            return NavigationCommittedCellResolveStatus.NoCell;
+        }
+        bool foundPhysicalState = instance.TryGetPhysicalState(slot, out bool isPresent, out _);
+        System.Diagnostics.Debug.Assert(foundPhysicalState);
+        if (!isPresent
             || !instance.TryGetEffectiveCell(slot, out cell))
         {
             address = default;
@@ -215,9 +209,6 @@ public sealed class TrailblazerPathingService
 
     internal void Dispose()
     {
-        if (_disposed)
-            return;
-
         _context.World.OnChangeCommitted -= HandleCommittedChange;
         _navigationAStarAdmissionGate.Dispose();
         _navigationFlowAdmissionGate.Dispose();
@@ -225,17 +216,13 @@ public sealed class TrailblazerPathingService
         _disposed = true;
     }
 
-    private void HandleCommittedChange(GridEventInfo eventInfo)
-    {
-        if (_disposed || eventInfo.WorldSpawnToken != _context.World.SpawnToken)
-            return;
+    private void HandleCommittedChange(GridEventInfo eventInfo) =>
         _navigationGraph.EnqueueCommittedChange(eventInfo);
-    }
 
     private void EnsureUsable()
     {
         SwiftThrowHelper.ThrowIfDisposed(
-            _disposed || _context.IsDisposed,
+            _disposed,
             nameof(TrailblazerWorldContext));
         SwiftThrowHelper.ThrowIfTrue(
             !_context.World.IsActive,

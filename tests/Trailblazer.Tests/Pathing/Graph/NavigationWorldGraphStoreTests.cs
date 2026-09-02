@@ -107,6 +107,40 @@ public sealed class NavigationWorldGraphStoreTests
     }
 
     [Fact]
+    public void TryAcquirePrefix_ShouldRejectAReaderThatWouldConsumeTheLastRetirementSlot()
+    {
+        using var store = CreateStore(maxRetiredSnapshots: 1);
+        using NavigationWorldGraphLease retired = store.TryAcquire()!;
+        store.TryPublish(NavigationWorldGraph.CreateEmpty(1))
+            .Should().Be(NavigationCandidatePublication.Published);
+        var leases = new NavigationWorldGraphLease?[2];
+
+        store.TryAcquirePrefix(leases).Should().Be(0);
+
+        leases.Should().OnlyContain(lease => lease == null);
+        store.ActiveLeaseCount.Should().Be(1);
+        store.RetiredGenerationCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void Publication_ShouldAccountForEveryLeasedRetiredGeneration()
+    {
+        using var store = CreateStore(maxRetiredSnapshots: 2);
+        using NavigationWorldGraphLease oldest = store.TryAcquire()!;
+        store.TryPublish(NavigationWorldGraph.CreateEmpty(1))
+            .Should().Be(NavigationCandidatePublication.Published);
+        using NavigationWorldGraphLease prior = store.TryAcquire()!;
+
+        store.TryPublish(NavigationWorldGraph.CreateEmpty(2))
+            .Should().Be(NavigationCandidatePublication.Published);
+
+        store.RetiredGenerationCount.Should().Be(2);
+        store.RetiredBytes.Should().Be(oldest.Graph.RetainedBytes + prior.Graph.RetainedBytes);
+        store.CanPublish.Should().BeTrue(
+            "an unleased current root does not require another retirement slot");
+    }
+
+    [Fact]
     public void GraphAccounting_ShouldIncludeCatalogAndStructuralRoots()
     {
         NavigationAreaCatalog emptyCatalog = NavigationAreaCatalog.Empty;

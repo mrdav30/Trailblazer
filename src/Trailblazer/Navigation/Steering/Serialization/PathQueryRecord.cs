@@ -179,13 +179,12 @@ public sealed class PathQueryRecord : IRecordable
         bool isLoading = chronicler.Mode == SerializationMode.Loading;
         if (!isLoading)
         {
-            if (Query is not PathQuery query)
-            {
-                throw new InvalidOperationException(
-                    "PathQueryRecord must contain a query before it can be serialized.");
-            }
+            PathQuery? query = Query;
+            SwiftThrowHelper.ThrowIfTrue(
+                !query.HasValue,
+                message: "PathQueryRecord must contain a query before it can be serialized.");
 
-            Capture(query);
+            Capture(query.Value);
         }
 
         RecordValues.Look(chronicler, ref SchemaVersion, "SchemaVersion", 0);
@@ -219,11 +218,9 @@ public sealed class PathQueryRecord : IRecordable
 
         if (isLoading)
         {
-            if (!TryCreateQuery(out PathQuery? query) || !query.HasValue)
-            {
-                throw new InvalidOperationException(
-                    "Serialized PathQuery is missing, invalid, or unsupported.");
-            }
+            SwiftThrowHelper.ThrowIfTrue(
+                !TryCreateQuery(out PathQuery? query) || !query.HasValue,
+                message: "Serialized PathQuery is missing, invalid, or unsupported.");
 
             Query = query.Value;
         }

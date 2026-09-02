@@ -69,13 +69,12 @@ internal sealed class NavigationQueryAdmissionCoordinator
             int count = Math.Min(requestedCount, _maximumCount - _activeCount);
             if (requestedCount == 0
                 || state.Active
-                || state.Generation == ulong.MaxValue
                 || count == 0)
             {
                 reservation = default;
                 return 0;
             }
-            state.Generation++;
+            state.Generation = unchecked(state.Generation + 1UL);
             state.Count = count;
             state.Active = true;
             _activeCount += count;
@@ -92,10 +91,6 @@ internal sealed class NavigationQueryAdmissionCoordinator
         NavigationQueryCapacityReservation reservation,
         int retainedCount)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            retainedCount < 0 || retainedCount > reservation.Count,
-            retainedCount,
-            nameof(retainedCount));
         lock (_sync)
         {
             if (!TryGetActiveLane(reservation, out int lane))
@@ -141,12 +136,8 @@ internal sealed class NavigationQueryAdmissionCoordinator
             && _lanes[lane].Count == reservation.Count;
     }
 
-    private static int GetLane(PathAlgorithm algorithm) => algorithm switch
-    {
-        PathAlgorithm.AStar => 0,
-        PathAlgorithm.FlowField => 1,
-        _ => throw new ArgumentOutOfRangeException(nameof(algorithm))
-    };
+    private static int GetLane(PathAlgorithm algorithm) =>
+        algorithm == PathAlgorithm.AStar ? 0 : 1;
 
     private struct LaneState
     {

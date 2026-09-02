@@ -15,6 +15,49 @@ namespace Trailblazer.Pathing;
 /// <summary>Owns map operations, GridForge ingress, and immutable root publication for one context.</summary>
 internal sealed class NavigationGraphRuntime : IDisposable
 {
+    internal enum OperationTerminalDisposition
+    {
+        None,
+        Release,
+        ReleaseAndBeginRollback,
+        ReleaseAndTryReopen
+    }
+
+    internal enum PolicyFrameDisposition
+    {
+        None,
+        Complete,
+        RejectCapacity
+    }
+
+    internal enum AutomaticSeamAdvanceDisposition
+    {
+        Continue,
+        Retain,
+        Restart,
+        Complete
+    }
+
+    internal enum MaterializedAdvanceDisposition
+    {
+        Restart,
+        RejectCapacity,
+        Defer,
+        Ready,
+        Publish
+    }
+
+    internal enum PublishedCandidateEffect
+    {
+        InstallMaterialized,
+        CompleteMaterialized,
+        CompleteMaterializedWithinStructuralPublication,
+        CompleteAutomaticSeam,
+        CompleteComposition,
+        ReopenStructuralScopes,
+        StartAutomaticSeam
+    }
+
     private readonly GridWorld _world;
     private readonly NavigationOperationProcessor _operations;
     private readonly NavigationGridChangeIngress _ingress;
@@ -150,7 +193,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
         (_compositionWork?.RetainedBytes ?? 0L)
         + (_materializedComponentWork?.RetainedBytes ?? 0L)
         + (_lifecycleWork?.RetainedBytes ?? 0L)
-        + GetOwnedClosureBaselineAdditionalRetainedBytes());
+        + GetOwnedClosureBaselineAdditionalRetainedBytes(_store.Current));
 
     internal long RetainedOperationWorkBytes => _operations.RetainedOperationWorkBytes;
 
@@ -161,7 +204,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
             (_compositionWork?.PersistentPageCount ?? 0)
             + (_materializedComponentWork?.PersistentPageCount ?? 0)
             + (_lifecycleWork?.PersistentPageCount ?? 0)
-            + GetOwnedClosureBaselineAdditionalPersistentPages());
+            + GetOwnedClosureBaselineAdditionalPersistentPages(_store.Current));
 
     internal int RetainedOperationWorkPageCount => _operations.RetainedOperationWorkPageCount;
 
@@ -214,13 +257,15 @@ internal sealed class NavigationGraphRuntime : IDisposable
             _resetPending = false;
             _store.ClearSafetyPending();
         }
-        if (_operationClosureRollbackPending && !_automaticSeamFullRebuildPending)
+        if (_operationClosureRollbackPending
+            && !_automaticSeamFullRebuildPending
+            && !_ingress.HasPendingWork
+            && _materializedComponentWork == null
+            && _lifecycleWork == null)
         {
-            if (!TryPublishReopenedStructuralScopes())
-                return;
-            _operationClosureRollbackPending = false;
-            if (_publishedThisMaintenance)
-                return;
+            ApplyOperationTerminalRollback(
+                OperationTerminalDisposition.ReleaseAndTryReopen);
+            return;
         }
         if (_lifecycleWork != null)
         {
@@ -247,7 +292,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 MaintainMaterializedComponentWork();
                 return;
             }
-
             if (MaintainMaterializedComponentWork(publish: false)
                 == NavigationCandidatePublication.Deferred)
             {
@@ -296,18 +340,24 @@ internal sealed class NavigationGraphRuntime : IDisposable
             _publishCandidate,
             _maintenanceMeter,
             _retainedWorkGuard);
-        if (operationResult == NavigationOperationFrameResult.Published
-            && _operations.RetainedOperationWorkCount == 0
-            && (_compositionWork != null || _materializedComponentWorkCompletesOperation))
+        OperationTerminalDisposition terminalDisposition =
+            ClassifyOperationTerminalDisposition(
+                operationResult,
+                _operations.RetainedOperationWorkCount,
+                _compositionWork != null,
+                _materializedComponentWorkCompletesOperation,
+                _store.Current.HasClosedStructuralScope,
+                _automaticSeamFullRebuildPending);
+        if (terminalDisposition != OperationTerminalDisposition.None)
         {
             _compositionWork = null;
-            if (_materializedComponentWorkCompletesOperation)
-                AbandonMaterializedSnapshot();
-            if (_store.Current.HasClosedStructuralScope)
-            {
-                BeginOperationClosureRollback();
+            AbandonMaterializedSnapshot(_materializedComponentWorkCompletesOperation);
+            bool returnsAfterCleanup = terminalDisposition is
+                OperationTerminalDisposition.ReleaseAndBeginRollback or
+                OperationTerminalDisposition.ReleaseAndTryReopen;
+            ApplyOperationTerminalRollback(terminalDisposition);
+            if (returnsAfterCleanup)
                 return;
-            }
         }
         if (operationResult == NavigationOperationFrameResult.Published)
         {
@@ -324,14 +374,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
             int retainedWorkPages = checked(
                 _operations.RetainedOperationWorkPageCount
                 + (_compositionWork?.PersistentPageCount ?? 0));
-            if (!IsWithinRetainedWorkCapacity(
-                    retainedWorkBytes,
-                    retainedWorkPages))
-            {
-                _operations.RejectDeferredCapacity();
-                _compositionWork = null;
-                BeginOperationClosureRollback();
-            }
+            if (!IsWithinRetainedWorkCapacity(retainedWorkBytes, retainedWorkPages)) RejectDeferredOperationForCapacity();
             else if (_compositionWork != null)
             {
                 if (!_publishedThisMaintenance)
@@ -343,55 +386,27 @@ internal sealed class NavigationGraphRuntime : IDisposable
                         0,
                         compositionCurrent.GraphVersion + 1);
                 }
-                RequeuePublicationEvents();
-                return;
             }
             else if (!_publishedThisMaintenance)
             {
                 NavigationWorldGraph publishedGraph = _store.Current;
-                if (!IsWithinRetainedWorkCapacity(
-                        _operations.RetainedOperationWorkBytes,
-                        _operations.RetainedOperationWorkPageCount))
-                {
-                    _operations.RejectDeferredCapacity();
-                    BeginOperationClosureRollback();
-                }
-                else
-                {
-                    long safetyVersion = publishedGraph.GraphVersion + 1;
-                    CaptureOwnedStructuralClosureBaseline(publishedGraph);
-                    NavigationWorldGraph closed = publishedGraph.WithClosedStructuralComponents(
-                        NavigationSurfaceComponentKeySet.Empty,
-                        true,
-                        safetyVersion);
-                    NavigationCandidatePublication closurePublication = ReconcileAndPublish(
-                        closed,
-                        Array.Empty<NavigationOperationFrameChange>(),
-                        0,
-                        safetyVersion);
-                    if (closurePublication == NavigationCandidatePublication.PermanentCapacity)
-                    {
-                        _operations.RejectDeferredCapacity();
-                        BeginOperationClosureRollback();
-                    }
-                }
+                long safetyVersion = publishedGraph.GraphVersion + 1;
+                CaptureOwnedStructuralClosureBaseline(publishedGraph);
+                NavigationWorldGraph closed = publishedGraph.WithClosedStructuralComponents(
+                    NavigationSurfaceComponentKeySet.Empty,
+                    true,
+                    safetyVersion);
+                NavigationCandidatePublication closurePublication = ReconcileAndPublish(
+                    closed,
+                    Array.Empty<NavigationOperationFrameChange>(),
+                    0,
+                    safetyVersion);
+                if (closurePublication == NavigationCandidatePublication.PermanentCapacity)
+                    RejectDeferredOperationForCapacity();
             }
             if (_compositionWork != null)
                 RequeuePublicationEvents();
             return;
-        }
-
-        if (operationResult == NavigationOperationFrameResult.Rejected)
-        {
-            _compositionWork = null;
-            if (_materializedComponentWorkCompletesOperation)
-                AbandonMaterializedSnapshot();
-            if (_store.Current.HasClosedStructuralScope)
-            {
-                if (!TryPublishReopenedStructuralScopes())
-                    _operationClosureRollbackPending = true;
-                return;
-            }
         }
 
         NavigationWorldGraph current = _store.Current;
@@ -404,12 +419,142 @@ internal sealed class NavigationGraphRuntime : IDisposable
             Array.Empty<NavigationOperationFrameChange>(),
             0,
             nextVersion);
-        if (policyPrepared && fallbackPublication == NavigationCandidatePublication.Published)
-            policyFrame.Complete(frame);
-        else if (policyPrepared
-            && fallbackPublication == NavigationCandidatePublication.PermanentCapacity)
-            policyFrame.CompleteCapacityRejected();
+        CompletePolicyFrame(policyFrame, frame, policyPrepared, fallbackPublication);
         _publicationAreaCatalog = _store.Current.AreaCatalog;
+    }
+
+    internal static void CompletePolicyFrame(
+        NavigationAreaCatalogProcessor.PreparedFrame policyFrame,
+        int frame,
+        bool policyPrepared,
+        NavigationCandidatePublication publication)
+    {
+        switch (ClassifyPolicyFrameDisposition(policyPrepared, publication))
+        {
+            case PolicyFrameDisposition.Complete:
+                policyFrame.Complete(frame);
+                break;
+            case PolicyFrameDisposition.RejectCapacity:
+                policyFrame.CompleteCapacityRejected();
+                break;
+        }
+    }
+
+    internal static PolicyFrameDisposition ClassifyPolicyFrameDisposition(
+        bool policyPrepared,
+        NavigationCandidatePublication publication)
+    {
+        if (!policyPrepared)
+            return PolicyFrameDisposition.None;
+        return publication switch
+        {
+            NavigationCandidatePublication.Published => PolicyFrameDisposition.Complete,
+            NavigationCandidatePublication.PermanentCapacity => PolicyFrameDisposition.RejectCapacity,
+            _ => PolicyFrameDisposition.None
+        };
+    }
+
+    internal static NavigationCandidatePublication ContinueAfterRetainedClosure(
+        NavigationCandidatePublication publication) =>
+        publication == NavigationCandidatePublication.Published
+            ? NavigationCandidatePublication.Deferred
+            : publication;
+
+    internal static AutomaticSeamAdvanceDisposition ClassifyAutomaticSeamAdvance(
+        NavigationAutomaticSeamLifecycleWork.AdvanceStatus status)
+    {
+        if (status == NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Progressed)
+            return AutomaticSeamAdvanceDisposition.Continue;
+        if (status == NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Blocked)
+            return AutomaticSeamAdvanceDisposition.Retain;
+        return status == NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Complete
+            ? AutomaticSeamAdvanceDisposition.Complete
+            : AutomaticSeamAdvanceDisposition.Restart;
+    }
+
+    internal static MaterializedAdvanceDisposition ClassifyMaterializedAdvance(
+        bool requiresRestart,
+        bool withinCapacity,
+        bool complete,
+        bool publish,
+        out NavigationCandidatePublication? abandonmentPublication)
+    {
+        if (requiresRestart)
+        {
+            abandonmentPublication = NavigationCandidatePublication.Deferred;
+            return MaterializedAdvanceDisposition.Restart;
+        }
+        if (!withinCapacity)
+        {
+            abandonmentPublication = NavigationCandidatePublication.PermanentCapacity;
+            return MaterializedAdvanceDisposition.RejectCapacity;
+        }
+        abandonmentPublication = null;
+        if (!complete)
+            return MaterializedAdvanceDisposition.Defer;
+        return publish
+            ? MaterializedAdvanceDisposition.Publish
+            : MaterializedAdvanceDisposition.Ready;
+    }
+
+    internal static OperationTerminalDisposition ClassifyOperationTerminalDisposition(
+        NavigationOperationFrameResult result,
+        int retainedOperationWorkCount,
+        bool hasCompositionWork,
+        bool materializedCompletesOperation,
+        bool hasClosedStructuralScope,
+        bool automaticSeamFullRebuildPending)
+    {
+        if (result == NavigationOperationFrameResult.Published
+            && retainedOperationWorkCount == 0
+            && (hasCompositionWork || materializedCompletesOperation))
+        {
+            return OperationTerminalDisposition.ReleaseAndBeginRollback;
+        }
+        if (result != NavigationOperationFrameResult.Rejected)
+            return OperationTerminalDisposition.None;
+        if (!hasClosedStructuralScope)
+            return OperationTerminalDisposition.Release;
+        return automaticSeamFullRebuildPending
+            ? OperationTerminalDisposition.ReleaseAndBeginRollback
+            : OperationTerminalDisposition.ReleaseAndTryReopen;
+    }
+
+    internal static void GetOwnedClosureBaselineAdditionalCapacity(
+        NavigationSurfaceComponentKeySet? baseline,
+        NavigationWorldGraph ownerGraph,
+        out long retainedBytes,
+        out int persistentPages)
+    {
+        if (baseline == null
+            || ReferenceEquals(baseline, NavigationSurfaceComponentKeySet.Empty)
+            || ownerGraph.RetainsClosedComponentRoot(baseline))
+        {
+            retainedBytes = 0;
+            persistentPages = 0;
+            return;
+        }
+        retainedBytes = baseline.RetainedBytes;
+        persistentPages = baseline.PersistentPageCount;
+    }
+
+    internal static bool IsRetainedWorkWithinCapacity(
+        long rootBytes,
+        int rootPages,
+        long workBytes,
+        int workPages,
+        long rebuildBytes,
+        int rebuildPages,
+        long maximumBytes,
+        int maximumPages)
+    {
+        System.Diagnostics.Debug.Assert(workPages >= 0);
+        System.Diagnostics.Debug.Assert(rebuildPages >= 0);
+        long retainedPages = (long)rootPages + workPages + rebuildPages;
+        return rootBytes <= maximumBytes
+            && workBytes <= maximumBytes - rootBytes
+            && rebuildBytes <= maximumBytes - rootBytes - workBytes
+            && retainedPages <= maximumPages;
     }
 
     private void MaintainSnapshot()
@@ -474,7 +619,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
         bool startAutomaticSeamLifecycle = false)
     {
         if (_materializedComponentWork != null)
-            return MaintainMaterializedComponentWork();
+            return MaintainMaterializedComponentWork(structuralClosure: graph);
         AdvanceCoveredBaselineRebuilds(graph);
         _snapshotGraph = graph;
         _snapshotPreviousGraph = _store.Current;
@@ -484,7 +629,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _world.ExecuteNavigationMaintenanceSnapshot(_maintainSnapshot);
 
         NavigationCandidatePublication publication;
-        bool lifecycleEventsRequeued = false;
         try
         {
             NavigationWorldGraph next = graph.ApplyMaintenanceSnapshot(
@@ -525,8 +669,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 ? StartAutomaticSeamLifecycle(
                     current,
                     next,
-                    graphVersion,
-                    out lifecycleEventsRequeued)
+                    graphVersion)
                 : ReferenceEquals(current, next)
                     ? NavigationCandidatePublication.Published
                     : _store.TryPublish(next);
@@ -555,23 +698,19 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 _publicationBlockAll,
                 _snapshotDeferredScopeCount,
                 _snapshotDeferAll);
-            if (_store.IsSafetyPending
-                && _publicationResnapshotAll
-                && !_publicationBlockAll
-                && _publicationBlockedScopeCount == 0
-                && !_snapshotDeferAll
-                && _snapshotDeferredScopeCount == 0)
-            {
-                _store.ClearSafetyPending();
-            }
+            ClearSafetyPendingAfterExactResnapshot();
         }
         else
         {
+            bool hasMaterializedWork = _materializedComponentWork != null;
+            bool materializedWorkOwnsAllClosedSource = hasMaterializedWork
+                && _store.Current.AreAllStructuralComponentsClosed;
             if (_automaticSeamFullRebuildPending
-                && !(_materializedComponentWork != null
-                    && _store.Current.AreAllStructuralComponentsClosed))
+                && !materializedWorkOwnsAllClosedSource)
+            {
                 _store.MarkSafetyPending();
-            if (!lifecycleEventsRequeued && _materializedComponentWork == null)
+            }
+            if (!hasMaterializedWork)
                 MarkResnapshotRequired();
         }
         return publication;
@@ -614,49 +753,58 @@ internal sealed class NavigationGraphRuntime : IDisposable
             NavigationSurfaceComponentKeySet.Empty,
             closeAll: true,
             current.GraphVersion + 1);
-        NavigationCandidatePublication publication = ReferenceEquals(current, closed)
-            ? NavigationCandidatePublication.Published
-            : _store.TryPublish(closed);
-        if (publication != NavigationCandidatePublication.Published)
-            return publication;
-        if (!ReferenceEquals(current, closed))
-            _publishedThisMaintenance = true;
-        _materializedComponentWork = work;
-        _materializedComponentWorkCompletesOperation =
-            _operations.RetainedOperationWorkCount != 0;
-        _materializedStartsAutomaticSeamLifecycle = startsAutomaticSeamLifecycle;
-        return NavigationCandidatePublication.Deferred;
+        System.Diagnostics.Debug.Assert(!ReferenceEquals(current, closed),
+            "Materialized work closes a newly versioned maintenance candidate.");
+        NavigationCandidatePublication publication = _store.TryPublish(closed);
+        ApplyPublishedCandidate(
+            publication,
+            PublishedCandidateEffect.InstallMaterialized,
+            work,
+            startsAutomaticSeamLifecycle);
+        return ContinueAfterRetainedClosure(publication);
     }
 
     private NavigationCandidatePublication MaintainMaterializedComponentWork(
-        bool publish = true)
+        bool publish = true,
+        NavigationWorldGraph? structuralClosure = null)
     {
         NavigationMaterializedComponentWork work = _materializedComponentWork!;
         bool complete = work.Advance(_maintenanceMeter);
-        if (work.RequiresSnapshotRestart)
-            return RestartMaterializedSnapshot();
-        bool revalidated = complete && work.RevalidateForPublication();
-        if (work.RequiresSnapshotRestart)
-            return RestartMaterializedSnapshot();
-        if (!IsWithinRetainedWorkCapacity(
+        bool requiresRestart = work.RequiresSnapshotRestart;
+        bool revalidated = !requiresRestart
+            && complete
+            && work.RevalidateForPublication();
+        requiresRestart |= work.RequiresSnapshotRestart;
+        bool withinCapacity = requiresRestart
+            || IsWithinRetainedWorkCapacity(
                 GetCombinedMaterializedWorkBytes(work),
-                GetCombinedMaterializedWorkPages(work)))
-        {
-            AbandonMaterializedSnapshot();
-            return NavigationCandidatePublication.PermanentCapacity;
-        }
-        if (!complete)
+                GetCombinedMaterializedWorkPages(work));
+        MaterializedAdvanceDisposition disposition = ClassifyMaterializedAdvance(
+            requiresRestart,
+            withinCapacity,
+            complete,
+            publish,
+            out NavigationCandidatePublication? abandonmentPublication);
+        if (abandonmentPublication.HasValue)
+            return RestartMaterializedSnapshot(abandonmentPublication.Value);
+        if (disposition == MaterializedAdvanceDisposition.Defer)
             return NavigationCandidatePublication.Deferred;
-        if (!revalidated)
-            return NavigationCandidatePublication.Deferred;
-        if (!publish)
+        System.Diagnostics.Debug.Assert(revalidated,
+            "Completed failed revalidation always requests a snapshot restart above.");
+        if (disposition == MaterializedAdvanceDisposition.Ready)
             return NavigationCandidatePublication.Published;
 
         NavigationWorldGraph current = _store.Current;
-        NavigationWorldGraph completed = work.Result.WithClosedStructuralComponents(
-            _ownedStructuralClosureBaseline ?? NavigationSurfaceComponentKeySet.Empty,
-            _ownedStructuralClosureBaselineAll,
-            current.GraphVersion + 1);
+        System.Diagnostics.Debug.Assert(_ownedStructuralClosureBaseline != null,
+            "Retained materialized work owns the structural-closure baseline captured at installation.");
+        NavigationWorldGraph completed = structuralClosure == null
+            ? work.Result.WithClosedStructuralComponents(
+                _ownedStructuralClosureBaseline!,
+                _ownedStructuralClosureBaselineAll,
+                current.GraphVersion + 1)
+            : work.Result.WithStructuralClosureFrom(
+                structuralClosure,
+                current.GraphVersion + 1);
         NavigationCandidatePublication publication;
         if (_materializedStartsAutomaticSeamLifecycle)
         {
@@ -664,48 +812,31 @@ internal sealed class NavigationGraphRuntime : IDisposable
             publication = StartAutomaticSeamLifecycle(
                 current,
                 completed,
-                completed.GraphVersion,
-                out _);
+                completed.GraphVersion);
         }
         else
         {
             publication = _store.TryPublish(completed);
         }
-        if (publication == NavigationCandidatePublication.Published)
-        {
-            _publishedThisMaintenance = true;
-            _materializedComponentWork = null;
-            _materializedComponentWorkCompletesOperation = false;
-            _materializedStartsAutomaticSeamLifecycle = false;
-            ClearBaselineCaptures();
-            RemoveCompletedBaselineRebuilds();
-            CommitBlockedScopes(
-                _publicationBlockedScopeCount,
-                _publicationBlockAll,
-                _snapshotDeferredScopeCount,
-                _snapshotDeferAll);
-            if (_store.IsSafetyPending
-                && _publicationResnapshotAll
-                && !_publicationBlockAll
-                && _publicationBlockedScopeCount == 0
-                && !_snapshotDeferAll
-                && _snapshotDeferredScopeCount == 0)
-            {
-                _store.ClearSafetyPending();
-            }
-            ClearOwnedStructuralClosureBaseline();
-        }
+        ApplyPublishedCandidate(
+            publication,
+            structuralClosure == null
+                ? PublishedCandidateEffect.CompleteMaterialized
+                : PublishedCandidateEffect.CompleteMaterializedWithinStructuralPublication);
         return publication;
     }
 
-    private NavigationCandidatePublication RestartMaterializedSnapshot()
+    private NavigationCandidatePublication RestartMaterializedSnapshot(
+        NavigationCandidatePublication publication = NavigationCandidatePublication.Deferred)
     {
         AbandonMaterializedSnapshot();
-        return NavigationCandidatePublication.Deferred;
+        return publication;
     }
 
-    private void AbandonMaterializedSnapshot()
+    private void AbandonMaterializedSnapshot(bool required = true)
     {
+        if (!required)
+            return;
         _publicationEventCount = _materializedComponentWork!.RetainedEventCount;
         _materializedComponentWork = null;
         _materializedComponentWorkCompletesOperation = false;
@@ -729,14 +860,16 @@ internal sealed class NavigationGraphRuntime : IDisposable
         {
             NavigationBaselineRebuild rebuild = _baselineRebuilds.GetValueAt(i);
             if (!rebuild.RequiresCoveredDiscovery
-                || rebuild.IsComplete
-                || rebuild.IsCapacityBlocked
-                || !graph.TryGetMap(rebuild.MapId, out NavigationMapInstance? instance)
-                || instance == null
-                || !rebuild.Matches(instance))
+                || rebuild.IsComplete)
             {
                 continue;
             }
+            bool mapFound = graph.TryGetMap(
+                rebuild.MapId,
+                out NavigationMapInstance instance);
+            System.Diagnostics.Debug.Assert(
+                mapFound && rebuild.Matches(instance),
+                "An inspectable covered-baseline rebuild retains the exact live map generation that owns it.");
             long beforeBytes = rebuild.RetainedBytes;
             int beforePages = rebuild.PersistentPageCount;
             long maximumBytes = Math.Max(
@@ -796,49 +929,31 @@ internal sealed class NavigationGraphRuntime : IDisposable
     private NavigationCandidatePublication StartAutomaticSeamLifecycle(
         NavigationWorldGraph current,
         NavigationWorldGraph prepared,
-        long graphVersion,
-        out bool eventsRequeued)
+        long graphVersion)
     {
-        eventsRequeued = false;
         NavigationWorldGraph closed = prepared.WithClosedStructuralComponents(
             NavigationSurfaceComponentKeySet.Empty,
             true,
             graphVersion);
-        long minimumBytes = checked(
-            NavigationAutomaticSeamLifecycleWork.BaseRetainedBytes
-            + NavigationAutomaticSeamRefreshWork.FixedRetainedBytes);
-        const int MinimumPages = 5;
-        bool canRetainWork = IsWithinRetainedWorkCapacity(
-            minimumBytes,
-            MinimumPages,
-            closed);
-        NavigationCandidatePublication publication = ReferenceEquals(current, closed)
-            ? NavigationCandidatePublication.Published
-            : _store.TryPublish(closed);
-        if (publication != NavigationCandidatePublication.Published)
-        {
-            RequeuePublicationEvents();
-            eventsRequeued = true;
-            _store.MarkSafetyPending();
-            return publication;
-        }
-        if (!ReferenceEquals(current, closed))
-            _publishedThisMaintenance = true;
-        _store.ClearSafetyPending();
-        if (!canRetainWork)
-        {
-            RequeuePublicationEvents();
-            return NavigationCandidatePublication.Published;
-        }
-
-        _lifecycleEventCount = _publicationEventCount;
-        _lifecycleWork = new NavigationAutomaticSeamLifecycleWork(
-            _world,
-            closed,
-            _maintenanceEvents,
-            _lifecycleEventCount,
-            _automaticSeamFullRebuildPending);
-        return NavigationCandidatePublication.Published;
+        System.Diagnostics.Debug.Assert(IsWithinRetainedWorkCapacity(
+                checked(
+                    NavigationAutomaticSeamLifecycleWork.BaseRetainedBytes
+                    + NavigationAutomaticSeamRefreshWork.FixedRetainedBytes),
+                5,
+                closed),
+            "Successful materialized preparation strictly dominates the automatic-seam minimum retained-work envelope.");
+        System.Diagnostics.Debug.Assert(!ReferenceEquals(current, closed),
+            "Automatic seam lifecycle starts from a newly versioned closed candidate.");
+        NavigationCandidatePublication publication = _store.TryPublish(closed);
+        System.Diagnostics.Debug.Assert(
+            publication == NavigationCandidatePublication.Published,
+            "Maintenance preflight and retained-work bounds guarantee automatic-seam closure publication.");
+        _store.SetSafetyPending(false);
+        ApplyPublishedCandidate(
+            publication,
+            PublishedCandidateEffect.StartAutomaticSeam,
+            automaticSeamGraph: closed);
+        return publication;
     }
 
     private void MaintainAutomaticSeamLifecycle()
@@ -851,40 +966,33 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 _maintenanceMeter,
                 bytes,
                 pages);
-            switch (status)
+            AutomaticSeamAdvanceDisposition disposition =
+                ClassifyAutomaticSeamAdvance(status);
+            if (disposition == AutomaticSeamAdvanceDisposition.Complete)
             {
-                case NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Progressed:
+                bool revalidated = work.RevalidateForPublication();
+                bool withinCapacity = IsWithinRetainedWorkCapacity(0, 0, work.Result);
+                System.Diagnostics.Debug.Assert(revalidated,
+                    "A completed seam cursor is revalidated on the same deterministic maintenance boundary.");
+                System.Diagnostics.Debug.Assert(withinCapacity,
+                    "Completed automatic-seam work remains inside its exact retained-work allowance.");
+                disposition = AutomaticSeamAdvanceDisposition.Complete;
+            }
+            switch (disposition)
+            {
+                case AutomaticSeamAdvanceDisposition.Continue:
                     continue;
-                case NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Blocked:
+                case AutomaticSeamAdvanceDisposition.Retain:
                     return;
-                case NavigationAutomaticSeamLifecycleWork.AdvanceStatus.RestartRequired:
-                case NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded:
-                    RequeueAutomaticSeamLifecyclePrefix();
-                    _lifecycleWork = null;
+                case AutomaticSeamAdvanceDisposition.Restart:
+                    RestartAutomaticSeamLifecycle();
                     return;
-                case NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Complete:
-                    if (!work.RevalidateForPublication())
-                    {
-                        RequeueAutomaticSeamLifecyclePrefix();
-                        _lifecycleWork = null;
-                        return;
-                    }
+                case AutomaticSeamAdvanceDisposition.Complete:
                     NavigationWorldGraph next = work.Result;
-                    if (!IsWithinRetainedWorkCapacity(0, 0, next))
-                    {
-                        RequeueAutomaticSeamLifecyclePrefix();
-                        _lifecycleWork = null;
-                        return;
-                    }
                     NavigationCandidatePublication publication = _store.TryPublish(next);
-                    if (publication == NavigationCandidatePublication.Published)
-                    {
-                        _publishedThisMaintenance = true;
-                        _lifecycleWork = null;
-                        _lifecycleEventCount = 0;
-                        _automaticSeamFullRebuildPending = false;
-                        _store.ClearSafetyPending();
-                    }
+                    ApplyPublishedCandidate(
+                        publication,
+                        PublishedCandidateEffect.CompleteAutomaticSeam);
                     return;
             }
         }
@@ -892,6 +1000,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     private void GetLifecycleWorkAllowance(out long bytes, out int pages)
     {
+        System.Diagnostics.Debug.Assert(_compositionWork == null,
+            "Automatic-seam lifecycle work starts only from ingress reconciliation without operation composition ownership.");
         NavigationBaselineRebuild.GetRetainedTotals(
             _baselineRebuilds,
             out long rebuildBytes,
@@ -900,19 +1010,23 @@ internal sealed class NavigationGraphRuntime : IDisposable
         bytes = _maxActiveSnapshotBytes
             - current.RetainedBytes
             - rebuildBytes
-            - _operations.RetainedOperationWorkBytes
-            - (_compositionWork?.RetainedBytes ?? 0L);
+            - _operations.RetainedOperationWorkBytes;
         pages = _maxPersistentGraphPages
             - current.PersistentPageCount
             - rebuildPages
-            - _operations.RetainedOperationWorkPageCount
-            - (_compositionWork?.PersistentPageCount ?? 0);
+            - _operations.RetainedOperationWorkPageCount;
     }
 
     private void RequeueAutomaticSeamLifecyclePrefix()
     {
         _ingress.RequeuePrefix(_maintenanceEvents.AsSpan(0, _lifecycleEventCount));
         _lifecycleEventCount = 0;
+    }
+
+    private void RestartAutomaticSeamLifecycle()
+    {
+        RequeueAutomaticSeamLifecyclePrefix();
+        _lifecycleWork = null;
     }
 
     internal bool TryGetCellState(
@@ -922,8 +1036,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
     {
         EnsureUsable();
         NavigationWorldGraph graph = _store.Current;
-        if (!graph.TryGetMap(mapId, out NavigationMapInstance? instance)
-            || instance == null
+        if (!graph.TryGetMap(mapId, out NavigationMapInstance instance)
             || !instance.TryGetSlot(index, out int slot))
         {
             state = default;
@@ -965,12 +1078,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
             _baselineRebuilds,
             out long baselineRebuildBytes,
             out int baselineRebuildPages);
-        int baselineCapacityBlockedCount = 0;
-        for (int i = 0; i < _baselineRebuilds.Count; i++)
-        {
-            if (_baselineRebuilds.GetValueAt(i).IsCapacityBlocked)
-                baselineCapacityBlockedCount++;
-        }
+        int baselineCapacityBlockedCount =
+            NavigationBaselineRebuild.CountCapacityBlocked(_baselineRebuilds);
         long compositionWorkBytes = RetainedCompositionWorkBytes;
         int compositionWorkPages = RetainedCompositionWorkPageCount;
         long operationWorkBytes = _operations.RetainedOperationWorkBytes;
@@ -1063,7 +1172,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 componentVersion = version;
                 found = true;
             }
-            else if (key != selected)
+            else if (!key.Equals(selected))
             {
                 componentId = -1;
                 componentVersion = 0;
@@ -1094,9 +1203,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _resetPending = _store.TryPublish(
             NavigationWorldGraph.CreateEmpty(_store.Current.GraphVersion + 1))
             != NavigationCandidatePublication.Published;
-        if (_resetPending)
-            _store.MarkSafetyPending();
-        else
+        MarkSafetyPendingIf(_resetPending);
+        if (!_resetPending)
             _store.ClearSafetyPending();
     }
 
@@ -1124,41 +1232,13 @@ internal sealed class NavigationGraphRuntime : IDisposable
         NavigationOperationFrameChange[] changes,
         int changeCount)
     {
-        if (candidate.GetTotalDynamicCellCandidateCount() > _maxDynamicSlots)
-        {
-            if (_compositionWork != null && !TryRollbackCompositionClosure())
-                return NavigationCandidatePublication.Deferred;
-            _compositionWork = null;
-            return NavigationCandidatePublication.PermanentCapacity;
-        }
-
         if (_compositionWork != null)
         {
-            if (!_compositionWork.Matches(changes, changeCount))
-                return NavigationCandidatePublication.Deferred;
-            if (_compositionWork.RequiresAllClosePublication)
-            {
-                NavigationCandidatePublication closeAllPublication =
-                    PublishAllCompositionClosure(_compositionWork);
-                if (closeAllPublication != NavigationCandidatePublication.Published)
-                    return closeAllPublication;
-                if (_publishedThisMaintenance)
-                    return NavigationCandidatePublication.Deferred;
-            }
+            if (_compositionWork.RequiresAllClosePublication) return PublishAllCompositionClosureAndDefer(_compositionWork);
             if (_compositionWork.RequiresAffectedClosurePublication)
             {
-                if (!_compositionWork.RevalidateAutomaticSeamsForPublication())
-                {
-                    if (_compositionWork.RequiresAllClosePublication)
-                        return PublishAllCompositionClosure(_compositionWork);
-                    return NavigationCandidatePublication.Deferred;
-                }
-                NavigationCandidatePublication closurePublication =
-                    PublishAffectedCompositionClosure(_compositionWork);
-                if (closurePublication != NavigationCandidatePublication.Published)
-                    return closurePublication;
-                if (_publishedThisMaintenance)
-                    return NavigationCandidatePublication.Deferred;
+                if (!_compositionWork.RevalidateAutomaticSeamsForPublication()) return NavigationCandidatePublication.Deferred;
+                return PublishAffectedCompositionClosureAndDefer(_compositionWork);
             }
             GetCompositionWorkAllowance(out long resumedBytes, out int resumedPages);
             if (!_compositionWork.Advance(
@@ -1167,77 +1247,46 @@ internal sealed class NavigationGraphRuntime : IDisposable
                     resumedPages,
                     out bool resumedCapacityExceeded))
             {
-                if (_compositionWork.RequiresAllClosePublication)
-                    return PublishAllCompositionClosure(_compositionWork);
-                if (resumedCapacityExceeded || !IsWithinRetainedWorkCapacity(
-                        GetCombinedCompositionWorkBytes(_compositionWork),
-                        GetCombinedCompositionWorkPages(_compositionWork)))
-                {
-                    if (!TryRollbackCompositionClosure())
-                        return NavigationCandidatePublication.Deferred;
-                    _compositionWork = null;
-                    return NavigationCandidatePublication.PermanentCapacity;
-                }
+                System.Diagnostics.Debug.Assert(
+                    !_compositionWork.RequiresAllClosePublication,
+                    "Affected closure publication follows completed seam capture; incomplete advancement cannot invalidate that completed cursor.");
+                if (resumedCapacityExceeded) return RollbackCompositionForCapacityRejection();
+                System.Diagnostics.Debug.Assert(IsWithinRetainedWorkCapacity(
+                        GetCombinedCompositionWorkBytes(_compositionWork, _store.Current),
+                        GetCombinedCompositionWorkPages(_compositionWork, _store.Current)),
+                    "A non-capacity blocked advance remains inside its exact unchanged-root allowance.");
                 return NavigationCandidatePublication.Deferred;
             }
             if (!_compositionWork.RevalidateAutomaticSeamsForPublication())
             {
-                if (_compositionWork.RequiresAllClosePublication)
-                {
-                    NavigationCandidatePublication allClosePublication =
-                        PublishAllCompositionClosure(_compositionWork);
-                    return allClosePublication == NavigationCandidatePublication.Published
-                        ? NavigationCandidatePublication.Deferred
-                        : allClosePublication;
-                }
-                return NavigationCandidatePublication.Deferred;
+                System.Diagnostics.Debug.Assert(
+                    _compositionWork.RequiresAllClosePublication,
+                    "Failed completed-work revalidation invalidates an affected-closure owner and requires all-close republication.");
+                return PublishAllCompositionClosureAndDefer(_compositionWork);
             }
-            if (!IsWithinRetainedWorkCapacity(
-                    GetCombinedCompositionWorkBytes(_compositionWork),
-                    GetCombinedCompositionWorkPages(_compositionWork)))
-            {
-                if (!TryRollbackCompositionClosure())
-                    return NavigationCandidatePublication.Deferred;
-                _compositionWork = null;
-                return NavigationCandidatePublication.PermanentCapacity;
-            }
+            System.Diagnostics.Debug.Assert(IsWithinRetainedWorkCapacity(
+                    GetCombinedCompositionWorkBytes(_compositionWork, _store.Current),
+                    GetCombinedCompositionWorkPages(_compositionWork, _store.Current)),
+                "Completed revalidated work has not grown since its exact advance allowance check.");
             long completedVersion = checked(_store.Current.GraphVersion + 1);
             NavigationWorldGraph completed = _compositionWork.Result.WithAreaCatalog(
                 areaCatalog,
                 completedVersion).WithGraphVersion(completedVersion);
             completed = PreservePriorStructuralClosures(completed);
-            if (!completed.IsWithinDynamicSlotCapacity(_maxDynamicSlotsPerMap, _maxDynamicSlots))
-            {
-                if (!TryRollbackCompositionClosure())
-                    return NavigationCandidatePublication.Deferred;
-                _compositionWork = null;
-                return NavigationCandidatePublication.PermanentCapacity;
-            }
+            if (!completed.IsWithinDynamicSlotCapacity(_maxDynamicSlotsPerMap, _maxDynamicSlots)) return RollbackCompositionForCapacityRejection();
             NavigationCandidatePublication completedPublication = ReconcileAndPublish(
                 completed,
                 changes,
                 changeCount,
                 completedVersion);
-            if (completedPublication == NavigationCandidatePublication.PermanentCapacity
-                && !TryRollbackCompositionClosure())
-            {
-                return NavigationCandidatePublication.Deferred;
-            }
-            if (completedPublication != NavigationCandidatePublication.Deferred)
-            {
-                _compositionWork = null;
-                if (completedPublication == NavigationCandidatePublication.Published)
-                    ClearOwnedStructuralClosureBaseline();
-            }
+            if (completedPublication == NavigationCandidatePublication.PermanentCapacity) return RollbackCompositionForCapacityRejection();
+            ApplyPublishedCandidate(
+                completedPublication,
+                PublishedCandidateEffect.CompleteComposition);
             return completedPublication;
         }
 
         NavigationWorldGraph current = _store.Current;
-        bool hasStructuralChanges = NavigationWorldGraph.HasStructuralChanges(
-            changes,
-            changeCount,
-            candidate,
-            current);
         long nextVersion = current.GraphVersion + 1;
         NavigationWorldGraph? completedStructural = null;
         if (changeCount > 0)
@@ -1258,82 +1307,61 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 candidate.PersistentPageCount - current.PersistentPageCount);
             if (!IsWithinRetainedWorkCapacity(
                     checked(candidateGrowthBytes + minimumScratchBytes),
-                    checked(candidateGrowthPages + minimumScratchPages)))
-            {
-                return NavigationCandidatePublication.PermanentCapacity;
-            }
+                    checked(candidateGrowthPages + minimumScratchPages))) return RejectInitialCompositionForCapacity();
             var work = new NavigationStructuralCompositionWork(
                 _world,
                 current,
                 candidate,
                 changes,
-                changeCount,
-                hasStructuralChanges);
+                changeCount);
             GetCompositionWorkAllowance(out long initialBytes, out int initialPages);
             if (!work.Advance(
                     _maintenanceMeter,
                     initialBytes,
                     initialPages,
-                    out bool initialCapacityExceeded))
+                    out _))
             {
-                if (initialCapacityExceeded)
-                    return NavigationCandidatePublication.PermanentCapacity;
-                if (hasStructuralChanges)
-                    CaptureOwnedStructuralClosureBaseline(current);
-                NavigationWorldGraph closed = hasStructuralChanges
-                    ? CreateOwnedStructuralClosure(
-                        current,
-                        work.AffectedComponents,
-                        !work.IsChangedMapCaptureComplete,
-                        current.GraphVersion + 1)
-                    : current;
+                NavigationSurfaceComponentKeySet closureBaseline =
+                    _ownedStructuralClosureBaseline ?? current.ClosedStructuralComponents;
+                bool closureBaselineAll = _ownedStructuralClosureBaseline == null
+                    ? current.AreAllStructuralComponentsClosed
+                    : _ownedStructuralClosureBaselineAll;
+                NavigationWorldGraph closed = current.WithOwnedStructuralClosure(
+                    closureBaseline,
+                    work.AffectedComponents,
+                    !work.IsChangedMapCaptureComplete || closureBaselineAll,
+                    current.GraphVersion + 1);
                 if (!IsWithinRetainedWorkCapacity(
                         GetCombinedCompositionWorkBytes(work, closed),
                         GetCombinedCompositionWorkPages(work, closed),
-                        closed))
-                {
-                    return NavigationCandidatePublication.PermanentCapacity;
-                }
-                if (!ReferenceEquals(closed, current))
-                {
-                    NavigationCandidatePublication closedPublication = ReconcileAndPublish(
-                        closed,
-                        Array.Empty<NavigationOperationFrameChange>(),
-                        0,
-                        closed.GraphVersion);
-                    if (closedPublication != NavigationCandidatePublication.Published)
-                        return closedPublication;
-                }
-                if (hasStructuralChanges)
-                {
-                    if (work.IsChangedMapCaptureComplete)
-                        work.MarkAffectedClosurePublished();
-                    else
-                        work.MarkAllClosePublished();
-                }
+                        closed)) return RejectInitialCompositionForCapacity();
+                CaptureOwnedStructuralClosureBaseline(current);
+                System.Diagnostics.Debug.Assert(!ReferenceEquals(closed, current),
+                    "An operation closure always advances the graph version.");
+                NavigationCandidatePublication closedPublication = ReconcileAndPublish(
+                    closed,
+                    Array.Empty<NavigationOperationFrameChange>(),
+                    0,
+                    closed.GraphVersion);
+                if (closedPublication != NavigationCandidatePublication.Published) return closedPublication;
+                work.MarkInitialClosurePublished();
                 _compositionWork = work;
                 return NavigationCandidatePublication.Deferred;
-            }
-            if (!IsWithinRetainedWorkCapacity(
-                    GetCombinedCompositionWorkBytes(work),
-                    GetCombinedCompositionWorkPages(work)))
-            {
-                return NavigationCandidatePublication.PermanentCapacity;
             }
             completedStructural = PreservePriorStructuralClosures(work.Result);
         }
         NavigationWorldGraph next = changeCount == 0
             ? current.ReopenStructuralScopes(nextVersion)
             : completedStructural!;
-        if (!next.IsWithinDynamicSlotCapacity(_maxDynamicSlotsPerMap, _maxDynamicSlots))
-            return NavigationCandidatePublication.PermanentCapacity;
+        if (!next.IsWithinDynamicSlotCapacity(_maxDynamicSlotsPerMap, _maxDynamicSlots)) return RejectInitialCompositionForCapacity();
         NavigationCandidatePublication publication = ReconcileAndPublish(
             next.WithAreaCatalog(areaCatalog, nextVersion),
             changes,
             changeCount,
             nextVersion);
-        if (publication == NavigationCandidatePublication.Published)
-            ClearOwnedStructuralClosureBaseline();
+        ApplyPublishedCandidate(
+            publication,
+            PublishedCandidateEffect.CompleteComposition);
         return publication;
     }
 
@@ -1349,22 +1377,43 @@ internal sealed class NavigationGraphRuntime : IDisposable
         NavigationWorldGraph root = graph ?? _store.Current;
         // Conservative sum: persistent roots share pages, but double-counting is safer than
         // allowing aggregate active state to escape its configured ceiling.
-        return root.RetainedBytes <= _maxActiveSnapshotBytes
-            && workBytes <= _maxActiveSnapshotBytes - root.RetainedBytes
-            && rebuildBytes <= _maxActiveSnapshotBytes - root.RetainedBytes - workBytes
-            && root.PersistentPageCount <= _maxPersistentGraphPages
-            && workPages <= _maxPersistentGraphPages - root.PersistentPageCount
-            && rebuildPages <= _maxPersistentGraphPages - root.PersistentPageCount - workPages;
+        return IsRetainedWorkWithinCapacity(
+            root.RetainedBytes,
+            root.PersistentPageCount,
+            workBytes,
+            workPages,
+            rebuildBytes,
+            rebuildPages,
+            _maxActiveSnapshotBytes,
+            _maxPersistentGraphPages);
     }
 
     private bool TryRollbackCompositionClosure()
+        => _automaticSeamFullRebuildPending || TryPublishReopenedStructuralScopes();
+
+    private NavigationCandidatePublication RollbackCompositionForCapacityRejection()
     {
-        if (_automaticSeamFullRebuildPending)
-            return true;
-        return TryPublishReopenedStructuralScopes();
+        bool rollbackCompleted = TryRollbackCompositionClosure();
+        System.Diagnostics.Debug.Assert(rollbackCompleted,
+            "A retained composition rolls back only after the maintenance writer preflight succeeds.");
+        _compositionWork = null;
+        return NavigationCandidatePublication.PermanentCapacity;
     }
 
-    private NavigationCandidatePublication PublishAffectedCompositionClosure(
+    private NavigationCandidatePublication RejectInitialCompositionForCapacity()
+    {
+        System.Diagnostics.Debug.Assert(_compositionWork == null,
+            "Initial composition capacity rejection cannot own retained composition work.");
+        return NavigationCandidatePublication.PermanentCapacity;
+    }
+
+    private void CompleteCompositionPublication()
+    {
+        _compositionWork = null;
+        ClearOwnedStructuralClosureBaseline();
+    }
+
+    private NavigationCandidatePublication PublishAffectedCompositionClosureAndDefer(
         NavigationStructuralCompositionWork work)
     {
         NavigationWorldGraph current = _store.Current;
@@ -1374,22 +1423,18 @@ internal sealed class NavigationGraphRuntime : IDisposable
             work.AffectedComponents,
             false,
             current.GraphVersion + 1);
-        if (ReferenceEquals(current, narrowed))
-        {
-            work.MarkAffectedClosurePublished();
-            return NavigationCandidatePublication.Published;
-        }
+        System.Diagnostics.Debug.Assert(!ReferenceEquals(current, narrowed),
+            "Narrowing an owned all-close publication changes its closure root.");
         NavigationCandidatePublication publication = ReconcileAndPublish(
             narrowed,
             Array.Empty<NavigationOperationFrameChange>(),
             0,
             narrowed.GraphVersion);
-        if (publication == NavigationCandidatePublication.Published)
-            work.MarkAffectedClosurePublished();
-        return publication;
+        work.RecordAffectedClosurePublication(publication);
+        return ContinueAfterRetainedClosure(publication);
     }
 
-    private NavigationCandidatePublication PublishAllCompositionClosure(
+    private NavigationCandidatePublication PublishAllCompositionClosureAndDefer(
         NavigationStructuralCompositionWork work)
     {
         NavigationWorldGraph current = _store.Current;
@@ -1398,47 +1443,142 @@ internal sealed class NavigationGraphRuntime : IDisposable
             NavigationSurfaceComponentKeySet.Empty,
             true,
             current.GraphVersion + 1);
-        if (ReferenceEquals(current, closed))
-        {
-            work.MarkAllCloseRepublished();
-            return NavigationCandidatePublication.Published;
-        }
+        System.Diagnostics.Debug.Assert(!ReferenceEquals(current, closed),
+            "A stale affected closure must broaden before seam work restarts.");
         NavigationCandidatePublication publication = ReconcileAndPublish(
             closed,
             Array.Empty<NavigationOperationFrameChange>(),
             0,
             closed.GraphVersion);
-        if (publication == NavigationCandidatePublication.Published)
-            work.MarkAllCloseRepublished();
-        return publication;
+        work.RecordAllClosePublication(publication);
+        return ContinueAfterRetainedClosure(publication);
     }
 
     private void BeginOperationClosureRollback()
+    {
+        System.Diagnostics.Debug.Assert(_materializedComponentWork == null);
+        System.Diagnostics.Debug.Assert(_lifecycleWork == null);
+        System.Diagnostics.Debug.Assert(
+            _automaticSeamFullRebuildPending
+                || _publishedThisMaintenance
+                || _ingress.HasPendingWork,
+            "Terminal work begins rollback only while this maintenance pass still owns publication or ingress state.");
+        _operationClosureRollbackPending = true;
+    }
+
+    private void ApplyOperationTerminalRollback(
+        OperationTerminalDisposition disposition)
+    {
+        System.Diagnostics.Debug.Assert(disposition != OperationTerminalDisposition.None);
+        if (disposition == OperationTerminalDisposition.ReleaseAndBeginRollback)
+        {
+            BeginOperationClosureRollback();
+            return;
+        }
+        if (disposition == OperationTerminalDisposition.ReleaseAndTryReopen)
+            TryCompleteOperationClosureRollback();
+    }
+
+    private void RejectDeferredOperationForCapacity()
+    {
+        _operations.RejectDeferredCapacity();
+        _compositionWork = null;
+        BeginOperationClosureRollback();
+    }
+
+    private void TryCompleteOperationClosureRollback()
     {
         _operationClosureRollbackPending = !TryPublishReopenedStructuralScopes();
     }
 
     private bool TryPublishReopenedStructuralScopes()
     {
-        if (_automaticSeamFullRebuildPending || _publishedThisMaintenance)
-            return false;
-        if (_ownedStructuralClosureBaseline == null)
-            return true;
+        System.Diagnostics.Debug.Assert(!_automaticSeamFullRebuildPending);
+        System.Diagnostics.Debug.Assert(!_publishedThisMaintenance);
+        System.Diagnostics.Debug.Assert(
+            _ownedStructuralClosureBaseline != null,
+            "Only an operation-owned structural closure enters rollback.");
         NavigationWorldGraph current = _store.Current;
         NavigationWorldGraph reopened = current.WithClosedStructuralComponents(
-            _ownedStructuralClosureBaseline,
+            _ownedStructuralClosureBaseline!,
             _ownedStructuralClosureBaselineAll,
             current.GraphVersion + 1);
-        if (ReferenceEquals(current, reopened))
+        System.Diagnostics.Debug.Assert(!ReferenceEquals(current, reopened),
+            "An owned closure differs from the baseline it must restore.");
+        NavigationCandidatePublication publication = _store.TryPublish(reopened);
+        ApplyPublishedCandidate(
+            publication,
+            PublishedCandidateEffect.ReopenStructuralScopes);
+        bool published = publication == NavigationCandidatePublication.Published;
+        return published;
+    }
+
+    private void ApplyPublishedCandidate(
+        NavigationCandidatePublication publication,
+        PublishedCandidateEffect effect,
+        NavigationMaterializedComponentWork? materializedWork = null,
+        bool startsAutomaticSeamLifecycle = false,
+        NavigationWorldGraph? automaticSeamGraph = null)
+    {
+        if (publication != NavigationCandidatePublication.Published)
+            return;
+        _publishedThisMaintenance = true;
+        if (effect == PublishedCandidateEffect.InstallMaterialized)
+        {
+            System.Diagnostics.Debug.Assert(materializedWork != null);
+            _materializedComponentWork = materializedWork;
+            _materializedComponentWorkCompletesOperation =
+                _operations.RetainedOperationWorkCount != 0;
+            _materializedStartsAutomaticSeamLifecycle = startsAutomaticSeamLifecycle;
+            return;
+        }
+        if (effect == PublishedCandidateEffect.CompleteMaterialized
+            || effect == PublishedCandidateEffect.CompleteMaterializedWithinStructuralPublication)
+        {
+            _materializedComponentWork = null;
+            _materializedComponentWorkCompletesOperation = false;
+            _materializedStartsAutomaticSeamLifecycle = false;
+            ClearBaselineCaptures();
+            RemoveCompletedBaselineRebuilds();
+            CommitBlockedScopes(
+                _publicationBlockedScopeCount,
+                _publicationBlockAll,
+                _snapshotDeferredScopeCount,
+                _snapshotDeferAll);
+            ClearSafetyPendingAfterExactResnapshot();
+            if (effect == PublishedCandidateEffect.CompleteMaterialized)
+                ClearOwnedStructuralClosureBaseline();
+            return;
+        }
+        if (effect == PublishedCandidateEffect.CompleteAutomaticSeam)
+        {
+            _lifecycleWork = null;
+            _lifecycleEventCount = 0;
+            _automaticSeamFullRebuildPending = false;
+            _store.ClearSafetyPending();
+            return;
+        }
+        if (effect == PublishedCandidateEffect.CompleteComposition)
+        {
+            CompleteCompositionPublication();
+            return;
+        }
+        if (effect == PublishedCandidateEffect.ReopenStructuralScopes)
         {
             ClearOwnedStructuralClosureBaseline();
-            return true;
+            return;
         }
-        if (_store.TryPublish(reopened) != NavigationCandidatePublication.Published)
-            return false;
-        _publishedThisMaintenance = true;
-        ClearOwnedStructuralClosureBaseline();
-        return true;
+        System.Diagnostics.Debug.Assert(
+            effect == PublishedCandidateEffect.StartAutomaticSeam,
+            "Every non-terminal published-candidate effect starts automatic-seam work.");
+        System.Diagnostics.Debug.Assert(automaticSeamGraph != null);
+        _lifecycleEventCount = _publicationEventCount;
+        _lifecycleWork = new NavigationAutomaticSeamLifecycleWork(
+            _world,
+            automaticSeamGraph!,
+            _maintenanceEvents,
+            _lifecycleEventCount,
+            _automaticSeamFullRebuildPending);
     }
 
     private void CaptureOwnedStructuralClosureBaseline(NavigationWorldGraph graph)
@@ -1481,7 +1621,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     private long GetCombinedCompositionWorkBytes(
         NavigationStructuralCompositionWork work,
-        NavigationWorldGraph? ownerGraph = null) =>
+        NavigationWorldGraph ownerGraph) =>
         checked(
             work.RetainedBytes
             + _operations.RetainedOperationWorkBytes
@@ -1489,50 +1629,56 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     private int GetCombinedCompositionWorkPages(
         NavigationStructuralCompositionWork work,
-        NavigationWorldGraph? ownerGraph = null) =>
+        NavigationWorldGraph ownerGraph) =>
         checked(
             work.PersistentPageCount
             + _operations.RetainedOperationWorkPageCount
             + GetOwnedClosureBaselineAdditionalPersistentPages(ownerGraph));
 
     private long GetCombinedMaterializedWorkBytes(
-        NavigationMaterializedComponentWork work) =>
-        checked(
+        NavigationMaterializedComponentWork work)
+    {
+        System.Diagnostics.Debug.Assert(_lifecycleWork == null,
+            "Materialized and automatic-seam lifecycle work are mutually exclusive.");
+        return checked(
             work.RetainedBytes
             + _operations.RetainedOperationWorkBytes
             + (_compositionWork?.RetainedBytes ?? 0L)
-            + (_lifecycleWork?.RetainedBytes ?? 0L)
-            + GetOwnedClosureBaselineAdditionalRetainedBytes());
+            + GetOwnedClosureBaselineAdditionalRetainedBytes(_store.Current));
+    }
 
     private int GetCombinedMaterializedWorkPages(
-        NavigationMaterializedComponentWork work) =>
-        checked(
+        NavigationMaterializedComponentWork work)
+    {
+        System.Diagnostics.Debug.Assert(_lifecycleWork == null,
+            "Materialized and automatic-seam lifecycle work are mutually exclusive.");
+        return checked(
             work.PersistentPageCount
             + _operations.RetainedOperationWorkPageCount
             + (_compositionWork?.PersistentPageCount ?? 0)
-            + (_lifecycleWork?.PersistentPageCount ?? 0)
-            + GetOwnedClosureBaselineAdditionalPersistentPages());
+            + GetOwnedClosureBaselineAdditionalPersistentPages(_store.Current));
+    }
 
     private long GetOwnedClosureBaselineAdditionalRetainedBytes(
-        NavigationWorldGraph? ownerGraph = null)
+        NavigationWorldGraph ownerGraph)
     {
-        NavigationSurfaceComponentKeySet? baseline = _ownedStructuralClosureBaseline;
-        return baseline == null
-            || ReferenceEquals(baseline, NavigationSurfaceComponentKeySet.Empty)
-            || (ownerGraph ?? _store.Current).RetainsClosedComponentRoot(baseline)
-                ? 0L
-                : baseline.RetainedBytes;
+        GetOwnedClosureBaselineAdditionalCapacity(
+            _ownedStructuralClosureBaseline,
+            ownerGraph,
+            out long retainedBytes,
+            out _);
+        return retainedBytes;
     }
 
     private int GetOwnedClosureBaselineAdditionalPersistentPages(
-        NavigationWorldGraph? ownerGraph = null)
+        NavigationWorldGraph ownerGraph)
     {
-        NavigationSurfaceComponentKeySet? baseline = _ownedStructuralClosureBaseline;
-        return baseline == null
-            || ReferenceEquals(baseline, NavigationSurfaceComponentKeySet.Empty)
-            || (ownerGraph ?? _store.Current).RetainsClosedComponentRoot(baseline)
-                ? 0
-                : baseline.PersistentPageCount;
+        GetOwnedClosureBaselineAdditionalCapacity(
+            _ownedStructuralClosureBaseline,
+            ownerGraph,
+            out _,
+            out int persistentPages);
+        return persistentPages;
     }
 
     private void GetCompositionWorkAllowance(out long bytes, out int pages)
@@ -1546,12 +1692,12 @@ internal sealed class NavigationGraphRuntime : IDisposable
             - current.RetainedBytes
             - rebuildBytes
             - _operations.RetainedOperationWorkBytes
-            - GetOwnedClosureBaselineAdditionalRetainedBytes();
+            - GetOwnedClosureBaselineAdditionalRetainedBytes(current);
         pages = _maxPersistentGraphPages
             - current.PersistentPageCount
             - rebuildPages
             - _operations.RetainedOperationWorkPageCount
-            - GetOwnedClosureBaselineAdditionalPersistentPages();
+            - GetOwnedClosureBaselineAdditionalPersistentPages(current);
     }
 
     private NavigationCandidatePublication PublishPendingCandidate(
@@ -1562,11 +1708,11 @@ internal sealed class NavigationGraphRuntime : IDisposable
     {
         if (changeCount == 0 && _store.Current.HasClosedStructuralScope)
         {
-            if (_automaticSeamFullRebuildPending)
-                return NavigationCandidatePublication.Published;
-            return TryPublishReopenedStructuralScopes()
-                ? NavigationCandidatePublication.Published
-                : NavigationCandidatePublication.Deferred;
+            bool available = _automaticSeamFullRebuildPending
+                || TryPublishReopenedStructuralScopes();
+            System.Diagnostics.Debug.Assert(available,
+                "A no-change operation reopens its owned closure only after writer preflight succeeds.");
+            return NavigationCandidatePublication.Published;
         }
         return PublishCandidate(
             candidate,
@@ -1603,24 +1749,42 @@ internal sealed class NavigationGraphRuntime : IDisposable
             return;
         }
 
+        _priorBlockedScopeCount = MergeBlockedScopes(
+            _blockedScopes,
+            blockedScopeCount,
+            _deferredScopes,
+            deferredScopeCount,
+            _priorBlockedScopes,
+            out _priorBlockAll);
+    }
+
+    internal static int MergeBlockedScopes(
+        NavigationGridChangeScope[] blockedScopes,
+        int blockedScopeCount,
+        NavigationGridChangeScope[] deferredScopes,
+        int deferredScopeCount,
+        NavigationGridChangeScope[] destination,
+        out bool blockAll)
+    {
+        System.Diagnostics.Debug.Assert(blockedScopeCount <= destination.Length,
+            "The runtime sizes blocked-scope capture to its committed-scope capacity.");
         int count = 0;
         for (int i = 0; i < blockedScopeCount; i++)
-            _priorBlockedScopes[count++] = _blockedScopes[i];
+            destination[count++] = blockedScopes[i];
         for (int i = 0; i < deferredScopeCount; i++)
         {
-            NavigationGridChangeScope deferred = _deferredScopes[i];
-            if (ContainsScope(_priorBlockedScopes, count, deferred.ConfigurationKey))
+            NavigationGridChangeScope deferred = deferredScopes[i];
+            if (ContainsScope(destination, count, deferred.ConfigurationKey))
                 continue;
-            if (count == _priorBlockedScopes.Length)
+            if (count == destination.Length)
             {
-                _priorBlockedScopeCount = 0;
-                _priorBlockAll = true;
-                return;
+                blockAll = true;
+                return 0;
             }
-            _priorBlockedScopes[count++] = deferred;
+            destination[count++] = deferred;
         }
-        _priorBlockedScopeCount = count;
-        _priorBlockAll = false;
+        blockAll = false;
+        return count;
     }
 
     private static bool ContainsScope(
@@ -1648,6 +1812,37 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _ingress.MarkResnapshotRequired();
     }
 
+    private void MarkSafetyPendingIf(bool required)
+    {
+        if (required)
+            _store.MarkSafetyPending();
+    }
+
+    private void ClearSafetyPendingAfterExactResnapshot()
+    {
+        System.Diagnostics.Debug.Assert(!_publicationResnapshotAll || !_publicationBlockAll);
+        if (CanClearSafetyPendingAfterSnapshot(
+                _store.IsSafetyPending,
+                _publicationResnapshotAll,
+                _publicationBlockedScopeCount,
+                _snapshotDeferAll,
+                _snapshotDeferredScopeCount))
+        {
+            _store.ClearSafetyPending();
+        }
+    }
+
+    internal static bool CanClearSafetyPendingAfterSnapshot(
+        bool safetyPending,
+        bool resnapshotAll,
+        int blockedScopeCount,
+        bool deferAll,
+        int deferredScopeCount) => safetyPending
+        && resnapshotAll
+        && blockedScopeCount == 0
+        && !deferAll
+        && deferredScopeCount == 0;
+
     private void RequeuePublicationEvents()
     {
         _ingress.RequeuePrefix(_maintenanceEvents.AsSpan(0, _publicationEventCount));
@@ -1667,12 +1862,13 @@ internal sealed class NavigationGraphRuntime : IDisposable
         {
             _automaticSeamFullRebuildPending = true;
         }
-        if (count != 0 || blockedScopeCount != 0 || blockAll)
+        bool requiresResnapshot = count != 0 || blockedScopeCount != 0 || blockAll;
+        MarkSafetyPendingIf(requiresResnapshot);
+        if (requiresResnapshot)
         {
             // Snapshot admission is already closed by the store while bounded leased generations
             // prevent publication. Drain a bounded final-state prefix now, then require an exact
             // baseline before any affected scope can reopen once publication pressure clears.
-            _store.MarkSafetyPending();
             _ingress.MarkResnapshotRequired();
         }
     }

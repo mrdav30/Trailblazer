@@ -96,8 +96,6 @@ internal readonly struct GraphComponentDependency : IEquatable<GraphComponentDep
         Key.Equals(other.Key)
         && Version == other.Version;
 
-    public override bool Equals(object? obj) => obj is GraphComponentDependency other && Equals(other);
-
     public override int GetHashCode()
     {
         return SwiftHashTools.CombineHashCodes(Key.GetHashCode(), Version.GetHashCode());
@@ -155,8 +153,6 @@ internal readonly struct GraphPageDependency : IEquatable<GraphPageDependency>
         && SemanticVersion == other.SemanticVersion
         && PhysicalVersion == other.PhysicalVersion
         && TransitionVersion == other.TransitionVersion;
-
-    public override bool Equals(object? obj) => obj is GraphPageDependency other && Equals(other);
 
     public override int GetHashCode()
     {

@@ -117,7 +117,6 @@ internal sealed class NavigatorPathSessionRecord : IRecordable
         if (!HasQuery)
             return true;
         if (Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
-            || !TraversalTransitionDefinition.IsKnownMedium(startMedium)
             || TargetMedia == TraversalMedia.None
             || (TargetMedia & ~NavigationCell.KnownMedia) != 0
             || string.IsNullOrWhiteSpace(AreaPolicyId))

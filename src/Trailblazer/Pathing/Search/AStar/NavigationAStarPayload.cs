@@ -43,12 +43,10 @@ internal sealed class NavigationAStarPayload
             transitionInstructions,
             nameof(transitionInstructions));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
-        if (!IsReusableResult(status, guidePoints.Length))
-        {
-            throw new ArgumentException(
-                "Only successful paths and exact no-path results are reusable.",
-                nameof(status));
-        }
+        SwiftThrowHelper.ThrowIfArgument(
+            !IsReusableResult(status, guidePoints.Length),
+            paramName: nameof(status),
+            message: "Only successful paths and exact no-path results are reusable.");
         Key = key;
         GuidePoints = guidePoints;
         TransitionInstructions = transitionInstructions;

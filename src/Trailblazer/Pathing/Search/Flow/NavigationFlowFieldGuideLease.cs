@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using System.Diagnostics;
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Grids.Topology;
@@ -47,11 +48,6 @@ internal sealed class NavigationFlowFieldGuideLease
         get { lock (_sync) return _generation; }
     }
 
-    internal bool CanReuse
-    {
-        get { lock (_sync) return _generation < ulong.MaxValue; }
-    }
-
     internal void Bind(
         NavigationFlowFieldPayloadCache owner,
         NavigationWorldGraphStore store,
@@ -63,13 +59,12 @@ internal sealed class NavigationFlowFieldGuideLease
     {
         lock (_sync)
         {
-            if (_owner != null
-                || _store != null
-                || _payloadSlot >= 0)
-                throw new InvalidOperationException("The flow guide lease is already active.");
-            if (_generation == ulong.MaxValue)
-                throw new InvalidOperationException("The flow guide generation is exhausted.");
-            _generation++;
+            // The cache rents only detached guides and does not return one to its pool
+            // until TryDetach has cleared this complete ownership tuple.
+            Debug.Assert(_owner == null);
+            _generation = NavigationGenerationCounter.Advance(
+                _generation,
+                "The flow guide generation is exhausted.");
             _owner = owner;
             _store = store;
             _payloadSlot = payloadSlot;
@@ -132,28 +127,32 @@ internal sealed class NavigationFlowFieldGuideLease
             using (graphLease)
             {
                 NavigationWorldGraph graph = graphLease.Graph;
-                if (!graph.IsDependencyCurrent(payload.Dependencies))
-                    return MarkStaleUnderLock();
+                bool dependencyCurrent = graph.IsDependencyCurrent(payload.Dependencies);
                 NavigationCellAddress candidateSource = _currentSource;
-                NavigationGuideStatus status = NavigationSelectedEdgeProgressWork.TrySample(
-                    world,
-                    store,
-                    graph,
-                    payload,
-                    _currentSource,
-                    _currentMedium,
-                    actualFootPosition,
-                    ref meter,
-                    _coveredAddressCursor,
-                    _coveredAddressGenerations,
-                    _coveredAddressOutput,
-                    owner.ImmediateRayWorkspace,
-                    out NavigationFlowFieldNode currentNode,
-                    out candidateSource,
-                    out Vector3d target,
-                    out Vector3d candidateHeading);
-                if (!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload current)
-                    || !ReferenceEquals(current, payload)
+                NavigationFlowFieldNode currentNode = default;
+                Vector3d target = default;
+                Vector3d candidateHeading = default;
+                NavigationGuideStatus status =
+                    NavigationSelectedEdgeProgressWork.TrySample(
+                        dependencyCurrent,
+                        world,
+                        store,
+                        graph,
+                        payload,
+                        _currentSource,
+                        _currentMedium,
+                        actualFootPosition,
+                        ref meter,
+                        _coveredAddressCursor,
+                        _coveredAddressGenerations,
+                        _coveredAddressOutput,
+                        owner.ImmediateRayWorkspace,
+                        out currentNode,
+                        out candidateSource,
+                        out target,
+                        out candidateHeading);
+                if (!dependencyCurrent
+                    || !TryGetCurrentPayloadUnderLock(out _)
                     || world.ChangeSequence != worldSequence)
                 {
                     return MarkStaleUnderLock();
@@ -163,11 +162,12 @@ internal sealed class NavigationFlowFieldGuideLease
                 if (status == NavigationGuideStatus.Success)
                 {
                     bool sourceChanged = candidateSource != _currentSource;
-                    if (sourceChanged && _sampleOrdinal == long.MaxValue)
-                        return MarkStaleUnderLock();
-                    long candidateSampleOrdinal = sourceChanged
-                        ? _sampleOrdinal + 1L
-                        : _sampleOrdinal;
+                    // Selected edges target earlier-settled nodes in this int-bounded
+                    // payload, so one lease cannot exhaust a long source identity.
+                    Debug.Assert(_sampleOrdinal < payload.Nodes.Length);
+                    long candidateSampleOrdinal = AdvanceSampleOrdinal(
+                        _sampleOrdinal,
+                        sourceChanged);
                     if (currentNode.TransitionInstructionOrdinal >= 0)
                     {
                         NavigationGuideStatus transitionStatus =
@@ -184,18 +184,18 @@ internal sealed class NavigationFlowFieldGuideLease
                             actualFootPosition,
                             ref meter,
                             out sample);
+                        bool transitionEpochCurrent = IsSampleEpochCurrent(
+                            TryGetCurrentPayloadUnderLock(out _),
+                            world.ChangeSequence,
+                            worldSequence);
+                        transitionStatus = ResolveTransitionSampleStatus(
+                            transitionEpochCurrent,
+                            transitionStatus,
+                            ref sample);
                         if (transitionStatus == NavigationGuideStatus.Stale)
                             return MarkStaleUnderLock();
                         if (transitionStatus != NavigationGuideStatus.Success)
                             return transitionStatus;
-                        if (!TryGetCurrentPayloadUnderLock(
-                                out NavigationFlowFieldPayload transitionPayload)
-                            || !ReferenceEquals(transitionPayload, payload)
-                            || world.ChangeSequence != worldSequence)
-                        {
-                            sample = default;
-                            return MarkStaleUnderLock();
-                        }
                         _currentSource = candidateSource;
                         _sampleOrdinal = candidateSampleOrdinal;
                         _hasPendingTransition = sample.HasTransition;
@@ -228,8 +228,6 @@ internal sealed class NavigationFlowFieldGuideLease
                     _currentSource,
                     _currentMedium,
                     out NavigationFlowFieldNode current)
-                || (uint)current.TransitionInstructionOrdinal
-                    >= (uint)payload.TransitionInstructions.Length
                 || !instruction.MatchesCompletion(
                     this,
                     generation,
@@ -239,36 +237,71 @@ internal sealed class NavigationFlowFieldGuideLease
             }
             NavigationTransitionInstruction expected =
                 payload.TransitionInstructions[current.TransitionInstructionOrdinal];
-            if (expected.SourceAddress != _currentSource
-                || expected.SourceMedium != _currentMedium
-                || expected.DestinationAddress != current.SelectedEdge.Target
-                || expected.DestinationMedium != current.SelectedEdge.TargetMedium)
-            {
-                return MarkStaleUnderLock();
-            }
-            if (_sampleOrdinal == long.MaxValue)
-                return MarkStaleUnderLock();
-            _currentSource = expected.DestinationAddress;
-            _currentMedium = expected.DestinationMedium;
-            _hasPendingTransition = false;
-            _sampleOrdinal++;
-            return NavigationGuideStatus.Success;
+            Debug.Assert(_sampleOrdinal < payload.Nodes.Length);
+            _status = ResolveTransitionCompletion(
+                expected.DestinationAddress,
+                expected.DestinationMedium,
+                AdvanceSampleOrdinal(_sampleOrdinal, advance: true),
+                ref _currentSource,
+                ref _currentMedium,
+                ref _hasPendingTransition,
+                ref _sampleOrdinal);
+            return _status;
         }
+    }
+
+    internal static NavigationGuideStatus ResolveTransitionSampleStatus(
+        bool epochCurrent,
+        NavigationGuideStatus status,
+        ref NavigationFlowSample sample)
+    {
+        if (status != NavigationGuideStatus.Success || epochCurrent)
+            return status;
+        sample = default;
+        return NavigationGuideStatus.Stale;
+    }
+
+    internal static long AdvanceSampleOrdinal(long current, bool advance)
+    {
+        Debug.Assert(!advance || current < long.MaxValue);
+        return current + (advance ? 1L : 0L);
+    }
+
+    internal static bool IsSampleEpochCurrent(
+        bool payloadCurrent,
+        ulong currentWorldSequence,
+        ulong expectedWorldSequence) =>
+        payloadCurrent && currentWorldSequence == expectedWorldSequence;
+
+    internal static NavigationGuideStatus ResolveTransitionCompletion(
+        NavigationCellAddress destination,
+        TraversalMedium destinationMedium,
+        long nextSampleOrdinal,
+        ref NavigationCellAddress currentSource,
+        ref TraversalMedium currentMedium,
+        ref bool hasPendingTransition,
+        ref long sampleOrdinal)
+    {
+        currentSource = destination;
+        currentMedium = destinationMedium;
+        hasPendingTransition = false;
+        sampleOrdinal = nextSampleOrdinal;
+        return NavigationGuideStatus.Success;
     }
 
     internal bool TryDetach(
         ulong generation,
-        out int payloadSlot,
-        out ulong payloadGeneration)
+        out NavigationFlowFieldPayloadCache owner,
+        out int payloadSlot)
     {
         lock (_sync)
         {
+            owner = null!;
             payloadSlot = -1;
-            payloadGeneration = 0;
             if (!IsGenerationActiveUnderLock(generation))
                 return false;
+            owner = _owner!;
             payloadSlot = _payloadSlot;
-            payloadGeneration = _payloadGeneration;
             _owner = null;
             _store = null;
             _currentSource = default;
@@ -285,10 +318,14 @@ internal sealed class NavigationFlowFieldGuideLease
 
     internal void Dispose(ulong generation)
     {
-        NavigationFlowFieldPayloadCache? owner;
-        lock (_sync)
-            owner = IsGenerationActiveUnderLock(generation) ? _owner : null;
-        owner?.ReturnGuide(this, generation);
+        if (!TryDetach(
+                generation,
+                out NavigationFlowFieldPayloadCache owner,
+                out int payloadSlot))
+        {
+            return;
+        }
+        owner.ReturnDetachedGuide(this, generation, payloadSlot);
     }
 
     private bool IsGenerationActiveUnderLock(ulong generation) =>
@@ -309,8 +346,7 @@ internal sealed class NavigationFlowFieldGuideLease
                     _payloadSlot,
                     _payloadGeneration,
                     out payload) == NavigationFlowFieldStatus.Success
-            && store.Current.IsDependencyCurrent(payload.Dependencies)
-            && owner.IsWorldCurrent(payload))
+            && owner.IsPayloadCurrent(store.Current, payload))
         {
             return true;
         }
@@ -339,20 +375,8 @@ internal sealed class NavigationFlowFieldGuideLease
         out NavigationFlowSample sample)
     {
         sample = default;
-        if ((uint)node.TransitionInstructionOrdinal
-                >= (uint)payload.TransitionInstructions.Length)
-        {
-            return MarkStaleUnderLock();
-        }
         NavigationTransitionInstruction instruction =
             payload.TransitionInstructions[node.TransitionInstructionOrdinal];
-        if (instruction.SourceAddress != candidateSource
-            || instruction.SourceMedium != _currentMedium
-            || instruction.DestinationAddress != node.SelectedEdge.Target
-            || instruction.DestinationMedium != node.SelectedEdge.TargetMedium)
-        {
-            return MarkStaleUnderLock();
-        }
         NavigationGuideStatus headingStatus;
         Vector3d heading;
         if (_hasPendingTransition)
@@ -378,8 +402,7 @@ internal sealed class NavigationFlowFieldGuideLease
         if (headingStatus != NavigationGuideStatus.Success)
             return headingStatus;
         bool hasTransition = heading == Vector3d.Zero;
-        if (hasTransition && candidateSampleOrdinal == long.MaxValue)
-            return NavigationGuideStatus.Stale;
+        Debug.Assert(!hasTransition || candidateSampleOrdinal < payload.Nodes.Length);
         sample = new NavigationFlowSample(
             heading,
             instruction.SourcePosition,

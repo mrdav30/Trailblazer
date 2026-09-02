@@ -1,6 +1,7 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
+using GridForge.Grids.Topology;
 using GridForge.Spatial;
 using Trailblazer.Pathing;
 using Xunit;
@@ -35,6 +36,28 @@ public sealed class PersistentMapRemovalTests
     }
 
     [Fact]
+    public void IntMapRepeatedValueAndMissingLeftRemoval_ShouldAvoidPersistentCopies()
+    {
+        string retained = new('x', 1);
+        PersistentIntMap<string> source = PersistentIntMap<string>.Empty
+            .Set(2, retained)
+            .Set(3, "right");
+
+        PersistentIntMap<string> uncounted = source.Set(2, retained);
+        PersistentIntMap<string> counted = source.Set(2, retained, out int setCopies);
+        PersistentIntMap<string> missing = source.Remove(-1);
+        PersistentIntMap<string> countedMissing = source.Remove(-1, out int removeCopies);
+
+        uncounted.GetValueAt(0).Should().BeSameAs(retained);
+        counted.GetValueAt(0).Should().BeSameAs(retained);
+        setCopies.Should().Be(0,
+            "retaining the same immutable value must reuse its complete persistent path");
+        missing.Should().BeSameAs(source);
+        countedMissing.Should().BeSameAs(source);
+        removeCopies.Should().Be(0);
+    }
+
+    [Fact]
     public void VoxelMapRemoval_ShouldPreserveThePriorRootAndOrderedSurvivors()
     {
         PersistentVoxelIndexMap<string> source = PersistentVoxelIndexMap<string>.Empty;
@@ -52,6 +75,9 @@ public sealed class PersistentMapRemovalTests
             Index(99),
             out bool removedAbsent,
             out int absentCopies);
+        PersistentVoxelIndexMap<string> uncountedAbsent = source.Remove(
+            Index(99),
+            out bool removedUncountedAbsent);
 
         didRemove.Should().BeTrue();
         didRemoveCounted.Should().BeTrue();
@@ -67,6 +93,30 @@ public sealed class PersistentMapRemovalTests
         removedAbsent.Should().BeFalse();
         absent.Should().BeSameAs(source);
         absentCopies.Should().Be(0);
+        removedUncountedAbsent.Should().BeFalse();
+        uncountedAbsent.Should().BeSameAs(source);
+    }
+
+    [Fact]
+    public void VoxelMapMissingLeftRemoval_ShouldPreserveRootWithoutCopies()
+    {
+        PersistentVoxelIndexMap<string> source = PersistentVoxelIndexMap<string>.Empty
+            .Set(Index(2), "two")
+            .Set(Index(3), "three");
+
+        PersistentVoxelIndexMap<string> uncounted = source.Remove(
+            Index(-1),
+            out bool removed);
+        PersistentVoxelIndexMap<string> counted = source.Remove(
+            Index(-1),
+            out bool countedRemoved,
+            out int copies);
+
+        removed.Should().BeFalse();
+        countedRemoved.Should().BeFalse();
+        uncounted.Should().BeSameAs(source);
+        counted.Should().BeSameAs(source);
+        copies.Should().Be(0);
     }
 
     [Fact]
@@ -106,6 +156,148 @@ public sealed class PersistentMapRemovalTests
         absentCopies.Should().Be(0);
     }
 
+    [Fact]
+    public void GridConfigurationMapReplacementAndMissingRemoval_ShouldPreserveCountAndOrder()
+    {
+        PersistentGridConfigurationMap<string> source = PersistentGridConfigurationMap<string>.Empty;
+        for (int key = 1; key <= 7; key++)
+            source = source.Set(ConfigurationKey(key), key.ToString());
+
+        PersistentGridConfigurationMap<string> replacement = source.Set(
+            ConfigurationKey(4),
+            "replacement");
+        replacement.Count.Should().Be(7);
+        replacement.TryGetValue(ConfigurationKey(4), out string replacementValue)
+            .Should().BeTrue();
+        replacementValue.Should().Be("replacement");
+
+        PersistentGridConfigurationMap<string> uncountedAbsent =
+            source.Remove(ConfigurationKey(99));
+        GridValues(uncountedAbsent).Should().Equal("1", "2", "3", "4", "5", "6", "7");
+    }
+
+    [Fact]
+    public void GridConfigurationMapMissingLeftRemoval_ShouldPreserveRootWithoutCopies()
+    {
+        PersistentGridConfigurationMap<string> source =
+            PersistentGridConfigurationMap<string>.Empty
+                .Set(ConfigurationKey(2), "two")
+                .Set(ConfigurationKey(3), "three");
+
+        PersistentGridConfigurationMap<string> uncounted = source.Remove(ConfigurationKey(-1));
+        PersistentGridConfigurationMap<string> counted = source.Remove(
+            ConfigurationKey(-1),
+            out bool removed,
+            out int copies);
+
+        GridValues(uncounted).Should().Equal("two", "three");
+        counted.Should().BeSameAs(source);
+        removed.Should().BeFalse();
+        copies.Should().Be(0);
+    }
+
+    [Fact]
+    public void GridConfigurationMap_ShouldOrderAllStructuralConfigurationDimensions()
+    {
+        GridConfigurationKey[] keys =
+        {
+            ConfigurationKey(new Vector3d(0, 0, 0), new Vector3d(2, 2, 2),
+                GridTopologyKind.RectangularPrism,
+                GridTopologyMetrics.Rectangular((Fixed64)1, (Fixed64)1, (Fixed64)1)),
+            ConfigurationKey(new Vector3d(0, 0, 0), new Vector3d(2, 2, 3),
+                GridTopologyKind.RectangularPrism,
+                GridTopologyMetrics.Rectangular((Fixed64)1, (Fixed64)1, (Fixed64)1)),
+            ConfigurationKey(new Vector3d(0, 0, 0), new Vector3d(2, 2, 2),
+                GridTopologyKind.HexPrism,
+                GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One, HexOrientation.PointyTop)),
+            ConfigurationKey(new Vector3d(0, 0, 0), new Vector3d(2, 2, 2),
+                GridTopologyKind.RectangularPrism,
+                GridTopologyMetrics.Rectangular((Fixed64)2, (Fixed64)1, (Fixed64)1)),
+            ConfigurationKey(new Vector3d(0, 0, 0), new Vector3d(2, 2, 2),
+                GridTopologyKind.RectangularPrism,
+                GridTopologyMetrics.Rectangular((Fixed64)1, (Fixed64)2, (Fixed64)1)),
+            ConfigurationKey(new Vector3d(0, 0, 0), new Vector3d(2, 2, 2),
+                GridTopologyKind.RectangularPrism,
+                GridTopologyMetrics.Rectangular((Fixed64)1, (Fixed64)1, (Fixed64)2))
+        };
+        PersistentGridConfigurationMap<string> map = PersistentGridConfigurationMap<string>.Empty;
+        for (int i = keys.Length - 1; i >= 0; i--)
+            map = map.Set(keys[i], i.ToString());
+
+        map.Count.Should().Be(keys.Length,
+            "bounds, topology, and each metric are independent configuration identities");
+        for (int i = 0; i < keys.Length; i++)
+        {
+            map.TryGetValue(keys[i], out string value).Should().BeTrue();
+            value.Should().Be(i.ToString());
+        }
+
+
+        Vector3d point = Vector3d.Zero;
+        GridConfigurationKey rectangularPoint = ConfigurationKey(
+            point,
+            point,
+            GridTopologyKind.RectangularPrism,
+            GridTopologyMetrics.Rectangular(Fixed64.One));
+        GridConfigurationKey hexPoint = ConfigurationKey(
+            point,
+            point,
+            GridTopologyKind.HexPrism,
+            GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One, HexOrientation.PointyTop));
+        GridConfigurationKey widerHexPoint = ConfigurationKey(
+            point,
+            point,
+            GridTopologyKind.HexPrism,
+            GridTopologyMetrics.Hex((Fixed64)2, Fixed64.One, HexOrientation.PointyTop));
+        PersistentGridConfigurationMap<string> topologyMap =
+            PersistentGridConfigurationMap<string>.Empty
+                .Set(rectangularPoint, "rectangular")
+                .Set(hexPoint, "hex")
+                .Set(widerHexPoint, "wide-hex");
+        topologyMap.TryGetValue(rectangularPoint, out _).Should().BeTrue();
+        topologyMap.TryGetValue(hexPoint, out _).Should().BeTrue();
+        topologyMap.TryGetValue(widerHexPoint, out _).Should().BeTrue();
+
+        PersistentGridConfigurationMap<string> singleRotation =
+            PersistentGridConfigurationMap<string>.Empty
+                .Set(ConfigurationKey(3), "three")
+                .Set(ConfigurationKey(2), "two")
+                .Set(ConfigurationKey(1), "one");
+        GridValues(singleRotation).Should().Equal("one", "two", "three");
+    }
+
+    [Fact]
+    public void GridConfigurationMapRemovalRotations_ShouldPreserveCanonicalOrder()
+    {
+
+        PersistentGridConfigurationMap<string> leftRight =
+            PersistentGridConfigurationMap<string>.Empty
+                .Set(ConfigurationKey(3), "3")
+                .Set(ConfigurationKey(1), "1")
+                .Set(ConfigurationKey(4), "4")
+                .Set(ConfigurationKey(2), "2")
+                .Remove(ConfigurationKey(4));
+        GridValues(leftRight).Should().Equal("1", "2", "3");
+
+        PersistentGridConfigurationMap<string> singleLeft =
+            PersistentGridConfigurationMap<string>.Empty
+                .Set(ConfigurationKey(2), "2")
+                .Set(ConfigurationKey(1), "1")
+                .Remove(ConfigurationKey(2));
+        GridValues(singleLeft).Should().Equal("1");
+    }
+
+    [Fact]
+    public void GridConfigurationMapOrdinalOutsideCount_ShouldReject()
+    {
+        PersistentGridConfigurationMap<string> source =
+            PersistentGridConfigurationMap<string>.Empty.Set(ConfigurationKey(1), "1");
+
+        ((System.Action)(() => _ = source.GetValueAt(-1))).Should()
+            .Throw<System.ArgumentOutOfRangeException>()
+            .WithParameterName("ordinal");
+    }
+
     private static string[] EnumerableValues(PersistentIntMap<string> map)
     {
         var values = new string[map.Count];
@@ -136,6 +328,22 @@ public sealed class PersistentMapRemovalTests
     {
         var position = new Vector3d((Fixed64)key, Fixed64.Zero, Fixed64.Zero);
         var configuration = new GridConfiguration(position, position);
+        configuration.TryNormalize(out NormalizedGridConfiguration normalized)
+            .Should().BeTrue();
+        return normalized.Key;
+    }
+
+    private static GridConfigurationKey ConfigurationKey(
+        Vector3d boundsMin,
+        Vector3d boundsMax,
+        GridTopologyKind topology,
+        GridTopologyMetrics metrics)
+    {
+        var configuration = new GridConfiguration(
+            boundsMin,
+            boundsMax,
+            topologyKind: topology,
+            topologyMetrics: metrics);
         configuration.TryNormalize(out NormalizedGridConfiguration normalized)
             .Should().BeTrue();
         return normalized.Key;

@@ -140,8 +140,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     private bool CanBegin() =>
         !_disposed
-        && !_active
-        && _generation != ulong.MaxValue;
+        && !_active;
 
     private bool FitsBatchEnvelope(PathQueryBatch batch) =>
         batch.Count > 0
@@ -196,7 +195,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 ref _reservations[i]);
             _leases[i] = null;
         }
-        _generation = checked(_generation + 1UL);
+        _generation = unchecked(_generation + 1UL);
         _activeGeneration = _generation;
         _activeCount = count;
         _activeAdmittedCount = admitted;
@@ -213,12 +212,10 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             inputIndex < 0 || inputIndex >= _activeCount,
             inputIndex,
             nameof(inputIndex));
-        for (int i = 0; i < _activeCount; i++)
-        {
-            if (_descriptors[i].InputIndex == inputIndex)
-                return _descriptors[i];
-        }
-        throw new InvalidOperationException("The A* batch descriptor set is inconsistent.");
+        int descriptorOrdinal = 0;
+        while (_descriptors[descriptorOrdinal].InputIndex != inputIndex)
+            descriptorOrdinal++;
+        return _descriptors[descriptorOrdinal];
     }
 
     internal int GetAdmittedCount(NavigationAStarBatchWork work)
@@ -306,8 +303,9 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             if (descriptor.SlotIndex < 0)
                 return NavigationAStarQueryStatus.CapacityExceeded;
             query = _queries[descriptor.SlotIndex];
-            if (!query.IsPrepared)
-                throw new InvalidOperationException("The query has not completed sequential admission.");
+            SwiftThrowHelper.ThrowIfTrue(
+                !query.IsPrepared,
+                message: "The query has not completed sequential admission.");
             Monitor.Enter(query);
         }
         try
@@ -358,8 +356,9 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         {
             EnsureActive(work);
             BatchDescriptor descriptor = GetDescriptor(inputIndex);
-            if (descriptor.SlotIndex < 0)
-                throw new InvalidOperationException("The query was not admitted.");
+            SwiftThrowHelper.ThrowIfTrue(
+                descriptor.SlotIndex < 0,
+                message: "The query was not admitted.");
             return _queries[descriptor.SlotIndex].TakeResult();
         }
     }

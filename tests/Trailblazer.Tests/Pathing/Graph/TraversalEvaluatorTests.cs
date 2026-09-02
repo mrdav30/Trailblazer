@@ -44,6 +44,160 @@ public sealed class TraversalEvaluatorTests
     }
 
     [Fact]
+    public void NavigationDistanceMath_ShouldRejectUnrepresentableEndpointSeparation()
+    {
+        var start = new Vector3d(Fixed64.MinValue, Fixed64.Zero, Fixed64.Zero);
+        var end = new Vector3d(Fixed64.MaxValue, Fixed64.Zero, Fixed64.Zero);
+
+        NavigationDistanceMath.TryFloor(start, end, out _).Should().BeFalse();
+        NavigationDistanceMath.TryCeiling(start, end, out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    public void ExplicitConnectionCost_ShouldPreserveEveryCheckedStageAndExactSum(int stage)
+    {
+        Vector3d sourceFoot = Vector3d.Zero;
+        Vector3d entry = Vector3d.Zero;
+        Fixed64 corridorCost = Fixed64.Zero;
+        Vector3d exit = Vector3d.Zero;
+        Vector3d targetFoot = Vector3d.Zero;
+        Fixed64 additionalCost = Fixed64.Zero;
+        Fixed64 targetEnterCost = Fixed64.Zero;
+        Fixed64 targetAreaEnterCost = Fixed64.Zero;
+        var minimum = new Vector3d(Fixed64.MinValue, Fixed64.Zero, Fixed64.Zero);
+        var maximum = new Vector3d(Fixed64.MaxValue, Fixed64.Zero, Fixed64.Zero);
+
+        switch (stage)
+        {
+            case 0:
+                sourceFoot = minimum;
+                entry = maximum;
+                break;
+            case 1:
+                exit = minimum;
+                targetFoot = maximum;
+                break;
+            case 2:
+                entry = Vector3d.Right;
+                corridorCost = Fixed64.MaxValue;
+                break;
+            case 3:
+                corridorCost = Fixed64.MaxValue;
+                targetFoot = Vector3d.Right;
+                break;
+            case 4:
+                corridorCost = Fixed64.MaxValue;
+                additionalCost = Fixed64.One;
+                break;
+            case 5:
+                corridorCost = Fixed64.MaxValue;
+                targetEnterCost = Fixed64.One;
+                break;
+            case 6:
+                corridorCost = Fixed64.MaxValue;
+                targetAreaEnterCost = Fixed64.One;
+                break;
+            default:
+                entry = Vector3d.Right;
+                corridorCost = (Fixed64)2;
+                targetFoot = Vector3d.Right;
+                additionalCost = (Fixed64)3;
+                targetEnterCost = (Fixed64)4;
+                targetAreaEnterCost = (Fixed64)5;
+                break;
+        }
+
+        TraversalEvaluator.TryGetExplicitConnectionCost(
+                sourceFoot,
+                entry,
+                corridorCost,
+                exit,
+                targetFoot,
+                additionalCost,
+                targetEnterCost,
+                targetAreaEnterCost,
+                out Fixed64 total)
+            .Should().Be(stage == 7);
+
+        if (stage == 7)
+            total.Should().Be((Fixed64)16);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void PortalTraversalCost_ShouldPreserveDistanceModeCheckedStagesAndExactSum(int stage)
+    {
+        bool useCeilingDistance = stage != 6;
+        Vector3d sourceFoot = Vector3d.Zero;
+        Vector3d sourcePortal = Vector3d.Zero;
+        Vector3d targetPortal = Vector3d.Zero;
+        Vector3d targetFoot = Vector3d.Zero;
+        Fixed64 targetEnterCost = Fixed64.Zero;
+        Fixed64 targetAreaEnterCost = Fixed64.Zero;
+        var minimum = new Vector3d(Fixed64.MinValue, Fixed64.Zero, Fixed64.Zero);
+        var maximum = new Vector3d(Fixed64.MaxValue, Fixed64.Zero, Fixed64.Zero);
+
+        switch (stage)
+        {
+            case 0:
+                sourceFoot = minimum;
+                sourcePortal = maximum;
+                break;
+            case 1:
+                targetPortal = minimum;
+                targetFoot = maximum;
+                break;
+            case 2:
+                Fixed64 halfOverflow = Fixed64.FromRaw((long.MaxValue / 2L) + 1L);
+                sourcePortal = new Vector3d(halfOverflow, Fixed64.Zero, Fixed64.Zero);
+                targetFoot = new Vector3d(halfOverflow, Fixed64.Zero, Fixed64.Zero);
+                break;
+            case 3:
+                targetEnterCost = Fixed64.MaxValue;
+                sourcePortal = Vector3d.Right;
+                break;
+            case 4:
+                targetEnterCost = Fixed64.MaxValue;
+                targetAreaEnterCost = Fixed64.One;
+                break;
+            default:
+                sourcePortal = Vector3d.Right;
+                targetFoot = Vector3d.Right;
+                targetEnterCost = (Fixed64)2;
+                targetAreaEnterCost = (Fixed64)3;
+                break;
+        }
+
+        TraversalEvaluator.TryGetPortalTraversalCost(
+                useCeilingDistance,
+                sourceFoot,
+                sourcePortal,
+                targetPortal,
+                targetFoot,
+                targetEnterCost,
+                targetAreaEnterCost,
+                out Fixed64 total)
+            .Should().Be(stage >= 5);
+
+        if (stage >= 5)
+            total.Should().Be((Fixed64)7);
+    }
+
+    [Fact]
     public void EvaluateEdge_ShouldUseExactTargetEnterCostsAndRemainDirectionAsymmetric()
     {
         NavigationCell west = Cell(enterCost: Fixed64.One);
@@ -74,33 +228,73 @@ public sealed class TraversalEvaluatorTests
         westToEast.NativePortal.IsValid.Should().BeTrue();
     }
 
-    [Fact]
-    public void EvaluateEdge_ShouldReportStaleForAnUncertifiedNativePortal()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AutomaticSeamEvaluation_ShouldRejectEitherBlockedEndpointAfterPublication(
+        bool blockSource)
     {
-        using TrailblazerWorldContext context = CreateContext(Cell(), Cell());
-        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
-        NavigationNodeRef source = Resolve(lease.Graph, default);
-        NavigationGraphEdge current = FindEdge(
-            lease.Graph,
+        using NavigationAStarExitTestHarness.SeamFixture fixture =
+            NavigationAStarExitTestHarness.CreateAutomaticSeam(stacked: false);
+        var sourceAddress = new NavigationCellAddress("source", default);
+        var targetAddress = new NavigationCellAddress("target", default);
+        fixture.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef source)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(targetAddress, out NavigationNodeRef targetNode)
+            .Should().BeTrue();
+        NavigationGraphEdge retainedEdge = FindSurfaceEdge(
+            fixture.Graph,
             source,
-            Resolve(lease.Graph, new VoxelIndex(1, 0, 0)));
-        var uncertified = new NavigationGraphEdge(
-            current.Target,
-            NavigationGraphEdgeKind.Native,
-            default,
-            current.NativeDirectionOrdinal);
-        var evaluator = new TraversalEvaluator(
-            lease.Graph,
-            Profile(),
-            DefaultPolicy,
-            TraversalMedium.Solid);
+            targetNode);
+        VoxelGrid blockedGrid = fixture.Context.World.ActiveGrids[blockSource ? 0 : 1];
+        blockedGrid.TryGetVoxel(default(VoxelIndex), out Voxel? blocked).Should().BeTrue();
+        blockedGrid.TryAddObstacle(blocked!, fixture.Context.World.AllocateObstacleToken())
+            .Should().BeTrue();
 
-        evaluator.EvaluateEdge(source, uncertified, out _)
-            .Should().Be(TraversalEvaluationStatus.Stale);
+        fixture.Context.Simulate();
+
+        using NavigationWorldGraphLease lease =
+            fixture.Context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationWorldGraph graph = NavigationAStarExitTestHarness.WithPolicy(lease.Graph);
+
+        new TraversalEvaluator(
+                graph,
+                fixture.DefaultProfile,
+                NavigationAStarExitTestHarness.Policy,
+                TraversalMedium.Solid)
+            .EvaluateEdge(source, retainedEdge, out TraversalEdgeEvidence evidence)
+            .Should().Be(TraversalEvaluationStatus.Impassable,
+                blockSource
+                    ? "a retained structural seam must still honor source physical blockage"
+                    : "a retained structural seam must still honor destination physical blockage");
+        evidence.Should().Be(default(TraversalEdgeEvidence));
     }
 
     [Fact]
-    public void EvaluateEdge_ShouldReportStaleForAnUncertifiedAutomaticSeam()
+    public void AutomaticSeamEvaluation_ShouldApplyTheProfileStepLimit()
+    {
+        using NavigationAStarExitTestHarness.SeamFixture fixture =
+            NavigationAStarExitTestHarness.CreateAutomaticSeam(stacked: true);
+        var sourceAddress = new NavigationCellAddress("source", default);
+        var targetAddress = new NavigationCellAddress("target", default);
+        fixture.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef source)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(targetAddress, out NavigationNodeRef target)
+            .Should().BeTrue();
+        NavigationGraphEdge edge = FindSurfaceEdge(fixture.Graph, source, target);
+
+        new TraversalEvaluator(
+                fixture.Graph,
+                fixture.DefaultProfile,
+                NavigationAStarExitTestHarness.Policy,
+                TraversalMedium.Solid)
+            .EvaluateEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.Impassable,
+                "the one-cell rise is larger than the profile's zero step allowance");
+    }
+
+    [Fact]
+    public void AutomaticSeamEvaluation_ShouldReportCheckedTargetAreaCostOverflow()
     {
         using NavigationAStarExitTestHarness.SeamFixture fixture =
             NavigationAStarExitTestHarness.CreateAutomaticSeam(stacked: false);
@@ -110,21 +304,18 @@ public sealed class TraversalEvaluatorTests
             .Should().BeTrue();
         fixture.Graph.TryGetNodeRef(targetAddress, out NavigationNodeRef target)
             .Should().BeTrue();
-        var pair = new NavigationAutomaticSeamPair(
-            sourceAddress,
-            targetAddress,
-            default);
-        var edge = new NavigationGraphEdge(
-            target,
-            new NavigationAutomaticSeamRef(pair, reverse: false));
-        var evaluator = new TraversalEvaluator(
-            fixture.Graph,
-            fixture.DefaultProfile,
-            NavigationAStarExitTestHarness.Policy,
-            TraversalMedium.Solid);
+        NavigationGraphEdge edge = FindSurfaceEdge(fixture.Graph, source, target);
+        var expensivePolicy = CreatePolicy(
+            new NavigationAreaRule(isAllowed: true, additionalEnterCost: Fixed64.MaxValue));
 
-        evaluator.EvaluateEdge(source, edge, out _)
-            .Should().Be(TraversalEvaluationStatus.Stale);
+        new TraversalEvaluator(
+                fixture.Graph,
+                fixture.DefaultProfile,
+                expensivePolicy,
+                TraversalMedium.Solid)
+            .EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
+            .Should().Be(TraversalEvaluationStatus.CostOverflow);
+        evidence.Cost.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -437,6 +628,28 @@ public sealed class TraversalEvaluatorTests
             evidence.Cost.Should().Be(Fixed64.Zero);
         }
 
+        using (TrailblazerWorldContext costContext = CreateContext(Cell(), Cell()))
+        using (NavigationWorldGraphLease lease = costContext.Pathing.TryAcquireNavigationGraph()!)
+        {
+            NavigationNodeRef source = Resolve(lease.Graph, default);
+            NavigationGraphEdge edge = FindEdge(
+                lease.Graph,
+                source,
+                Resolve(lease.Graph, new VoxelIndex(1, 0, 0)));
+            var expensivePolicy = CreatePolicy(
+                new NavigationAreaRule(isAllowed: true, additionalEnterCost: Fixed64.MaxValue));
+
+            new TraversalEvaluator(
+                    lease.Graph,
+                    Profile(),
+                    expensivePolicy,
+                    TraversalMedium.Solid)
+                .EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
+                .Should().Be(TraversalEvaluationStatus.CostOverflow,
+                    "the native target-area surcharge is part of the checked traversal cost");
+            evidence.Cost.Should().Be(Fixed64.Zero);
+        }
+
         VoxelGrid grid = context.World.ActiveGrids[0];
         grid.TryGetVoxel(new VoxelIndex(1, 0, 0), out Voxel? target).Should().BeTrue();
         grid.TryAddObstacle(target!, context.World.AllocateObstacleToken()).Should().BeTrue();
@@ -454,7 +667,34 @@ public sealed class TraversalEvaluatorTests
                 DefaultPolicy,
                 TraversalMedium.Solid)
             .EvaluateEdge(blockedSource, blockedEdge, out _)
-            .Should().Be(TraversalEvaluationStatus.Impassable);
+                .Should().Be(TraversalEvaluationStatus.Impassable);
+    }
+
+    [Fact]
+    public void EvaluateEdge_ShouldRejectABlockedSourceBeforeNativeCostEvaluation()
+    {
+        using TrailblazerWorldContext context = CreateContext(Cell(), Cell());
+        VoxelGrid grid = context.World.ActiveGrids[0];
+        grid.TryGetVoxel(default(VoxelIndex), out Voxel? sourceVoxel).Should().BeTrue();
+        grid.TryAddObstacle(sourceVoxel!, context.World.AllocateObstacleToken())
+            .Should().BeTrue();
+        context.Simulate();
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef source = Resolve(lease.Graph, default);
+        NavigationNodeRef target = Resolve(lease.Graph, new VoxelIndex(1, 0, 0));
+        var edge = new NavigationGraphEdge(
+            target,
+            NavigationGraphEdgeKind.Native,
+            lease.Graph.GetInstance(0).Map.GetNativePortalTemplate(3));
+
+        new TraversalEvaluator(
+                lease.Graph,
+                Profile(),
+                DefaultPolicy,
+                TraversalMedium.Solid)
+            .EvaluateEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.Impassable,
+                "a blocked source must fail before portal distance or enter-cost evaluation");
     }
 
     [Fact]
@@ -621,10 +861,24 @@ public sealed class TraversalEvaluatorTests
         NavigationNativeSurfaceEdgeEnumerator edges = graph.EnumerateNativeSurfaceEdges(source);
         while (edges.MoveNext())
         {
-            if (edges.Current.Target == target)
+            if (edges.Current.Target.Equals(target))
                 return edges.Current;
         }
         throw new InvalidOperationException("Expected native edge was not enumerated.");
+    }
+
+    private static NavigationGraphEdge FindSurfaceEdge(
+        NavigationWorldGraph graph,
+        NavigationNodeRef source,
+        NavigationNodeRef target)
+    {
+        NavigationSurfaceEdgeEnumerator edges = graph.EnumerateSurfaceEdges(source);
+        while (edges.MoveNext())
+        {
+            if (edges.Current.Target.Equals(target))
+                return edges.Current;
+        }
+        throw new InvalidOperationException("Expected surface edge was not enumerated.");
     }
 
     private static void CommitCellOverlay(

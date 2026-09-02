@@ -81,6 +81,27 @@ public class FlyLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_FlyingAgent_When_JumpIsRequested_Then_FlightDoesNotStartAJump()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: new Vector3d(0, 10, 0),
+            startingMedium: TraversalMedium.Gas);
+        FlyLocomotion fly = TestRequire.NotNull(agent.Motor.Handler.Fly);
+        JumpLocomotion jump = TestRequire.NotNull(agent.Motor.Handler.Jump);
+        TestWorld.Context.Simulate();
+        agent.FrameRequest.IsRequestingFlight = true;
+        agent.Simulate();
+
+        TestWorld.Context.Simulate();
+        agent.FrameRequest.IsRequestingFlight = true;
+        agent.FrameRequest.IsRequestingJump = true;
+        agent.Simulate();
+
+        fly.IsFlying.Should().BeTrue();
+        jump.IsJumping.Should().BeFalse();
+    }
+
+    [Fact]
     public void Given_FlyingAgent_When_FlightRequestStops_Then_ShouldTransitionIntoFall()
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
@@ -164,6 +185,29 @@ public class FlyLocomotionTests : IDisposable
         Fixed64 speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast);
 
         speed.Should().Be((Fixed64)7);
+    }
+
+    [Fact]
+    public void Given_FlyOnlyOptionalProfile_When_FlightStarts_Then_MissingJumpAndSlideRemainOptional()
+    {
+        LocomotionProfile profile = new LocomotionProfileBuilder(includeOptionalLocomotions: false)
+            .WithFly()
+            .Build();
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: new Vector3d(0, 10, 0),
+            startingMedium: TraversalMedium.Gas,
+            profile: profile);
+
+        TestWorld.Context.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Right;
+        agent.FrameRequest.Rate = TrekRate.Fast;
+        agent.FrameRequest.IsRequestingFlight = true;
+        agent.Simulate();
+
+        agent.Motor.Handler.Jump.Should().BeNull();
+        agent.Motor.Handler.Slide.Should().BeNull();
+        TestRequire.NotNull(agent.Motor.Handler.Fly).IsFlying.Should().BeTrue();
+        agent.Position.X.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Theory]

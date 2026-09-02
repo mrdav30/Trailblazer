@@ -49,23 +49,9 @@ internal readonly struct NavigationMediumSlots<T>
                 : new NavigationMediumSlots<T>(_solid, _gas, value, (byte)(_mask | bit));
     }
 
-    internal NavigationMediumSlots<T> Remove(TraversalMedium medium)
+    internal static byte GetBit(TraversalMedium medium)
     {
-        byte bit = GetBit(medium);
-        return medium == TraversalMedium.Solid
-            ? new NavigationMediumSlots<T>(default!, _gas, _liquid, (byte)(_mask & ~bit))
-            : medium == TraversalMedium.Gas
-                ? new NavigationMediumSlots<T>(_solid, default!, _liquid, (byte)(_mask & ~bit))
-                : new NavigationMediumSlots<T>(_solid, _gas, default!, (byte)(_mask & ~bit));
+        System.Diagnostics.Debug.Assert(NavigationCell.IsKnownMedium(medium));
+        return (byte)(1 << ((int)medium - (int)TraversalMedium.Solid));
     }
-
-    internal bool IsEmpty => _mask == 0;
-
-    internal static byte GetBit(TraversalMedium medium) => medium switch
-    {
-        TraversalMedium.Solid => 1,
-        TraversalMedium.Gas => 2,
-        TraversalMedium.Liquid => 4,
-        _ => 0
-    };
 }

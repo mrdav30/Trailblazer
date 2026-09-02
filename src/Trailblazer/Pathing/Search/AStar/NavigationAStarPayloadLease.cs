@@ -28,8 +28,6 @@ internal sealed class NavigationAStarPayloadLease : IDisposable
 
     internal void Bind(NavigationAStarPayloadCache.CacheEntry entry)
     {
-        if (_entry != null)
-            throw new InvalidOperationException("The A* payload lease is already active.");
         _entry = entry;
     }
 

@@ -1,3 +1,4 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -44,6 +45,84 @@ public sealed class NavigationSurfaceComponentTests
             NavigationSurfaceComponentTestFactory.Build(graph);
         singleton.RetainedBytes.Should().Be(888L);
         singleton.PersistentPageCount.Should().Be(12);
+    }
+
+    [Fact]
+    public void ComponentIndexRemoval_ShouldBeIdempotentAndRequireExactMembershipKey()
+    {
+        var address = new NavigationCellAddress("map", default);
+        var key = new NavigationSurfaceComponentKey(address, TraversalMedium.Solid);
+        var otherKey = new NavigationSurfaceComponentKey(address, TraversalMedium.Gas);
+        var members = new NavigationPagedSequence<NavigationCellAddress>.Builder(40);
+        members.Append(address);
+        var component = new NavigationSurfaceComponent(
+            key,
+            version: 1,
+            members.Seal(),
+            allSurfaceEdgesEuclideanCertified: true);
+
+        NavigationSurfaceComponentIndex.Empty.RemoveComponentRecord(component, out int missingCopies)
+            .Should().BeSameAs(NavigationSurfaceComponentIndex.Empty);
+        missingCopies.Should().Be(0);
+        NavigationSurfaceComponentIndex index = NavigationSurfaceComponentIndex.Empty
+            .AddComponentRecord(component, out _)
+            .AddMembership(address, key, out _);
+        var missingAddress = new NavigationCellAddress("map", new VoxelIndex(1, 0, 0));
+        index.RemoveMembership(missingAddress, key, out int missingAddressCopies)
+            .Should().BeSameAs(index);
+        missingAddressCopies.Should().Be(0,
+            "a missing exact address must leave the persistent membership root untouched");
+        index.RemoveMembership(address, otherKey, out int mismatchedCopies)
+            .Should().BeSameAs(index);
+        mismatchedCopies.Should().Be(0);
+        index.TryGet(address, TraversalMedium.Solid, out NavigationSurfaceComponent found)
+            .Should().BeTrue();
+        found.Should().BeSameAs(component);
+
+        NavigationSurfaceComponentIndex withoutMembership = index.RemoveMembership(
+            address,
+            key,
+            out _);
+        withoutMembership.TryGet(address, TraversalMedium.Solid, out _).Should().BeFalse();
+        NavigationSurfaceComponentIndex empty = withoutMembership.RemoveComponentRecord(
+            component,
+            out _);
+        empty.TryGet(key, out _).Should().BeFalse();
+        // Removing the last values leaves distinct empty roots for the edited medium.
+        empty.RetainedBytes.Should().Be(240L);
+        empty.PersistentPageCount.Should().Be(4);
+    }
+
+    [Fact]
+    public void ComponentRecordReplacement_ShouldReleaseThePriorPayloadExactly()
+    {
+        var address = new NavigationCellAddress("map", default);
+        var key = new NavigationSurfaceComponentKey(address, TraversalMedium.Solid);
+        var members = new NavigationPagedSequence<NavigationCellAddress>.Builder(40);
+        members.Append(address);
+        NavigationPagedSequence<NavigationCellAddress> memberRow = members.Seal();
+        var first = new NavigationSurfaceComponent(
+            key,
+            version: 1,
+            memberRow,
+            allSurfaceEdgesEuclideanCertified: true);
+        var replacement = new NavigationSurfaceComponent(
+            key,
+            version: 2,
+            memberRow,
+            allSurfaceEdgesEuclideanCertified: false);
+        NavigationSurfaceComponentIndex original = NavigationSurfaceComponentIndex.Empty
+            .AddComponentRecord(first, out _);
+
+        NavigationSurfaceComponentIndex replaced = original.AddComponentRecord(
+            replacement,
+            out _);
+
+        replaced.TryGet(key, out NavigationSurfaceComponent published).Should().BeTrue();
+        published.Should().BeSameAs(replacement);
+        replaced.RetainedBytes.Should().Be(original.RetainedBytes,
+            "equal-sized replacement payloads must not accumulate retained ownership");
+        replaced.PersistentPageCount.Should().Be(original.PersistentPageCount);
     }
 
     [Fact]
@@ -134,6 +213,57 @@ public sealed class NavigationSurfaceComponentTests
         closed.TryGetComponentDependency(rightKey, out _).Should().BeTrue();
         closed.IsSurfaceAddressClosed(right, TraversalMedium.Solid).Should().BeFalse(
             "an exact closure must not degrade to its representative MapId");
+    }
+
+    [Fact]
+    public void OwnedClosure_ShouldRetainBaselineAndAffectedRootsWithoutAUnionCopy()
+    {
+        var baselineKey = new NavigationSurfaceComponentKey(
+            new NavigationCellAddress("baseline", default),
+            TraversalMedium.Solid);
+        var affectedKey = new NavigationSurfaceComponentKey(
+            new NavigationCellAddress("affected", default),
+            TraversalMedium.Solid);
+        NavigationSurfaceComponentKeySet baseline =
+            NavigationSurfaceComponentKeySet.Empty.Add(baselineKey);
+        NavigationSurfaceComponentKeySet affected =
+            NavigationSurfaceComponentKeySet.Empty.Add(affectedKey);
+
+        NavigationWorldGraph owned = NavigationWorldGraph.Empty.WithOwnedStructuralClosure(
+            baseline,
+            affected,
+            closeAllStructuralComponents: false,
+            graphVersion: 1);
+
+        owned.RetainsClosedComponentRoot(baseline).Should().BeTrue();
+        owned.RetainsClosedComponentRoot(affected).Should().BeTrue();
+        owned.RetainsClosedComponentRoot(
+                NavigationSurfaceComponentKeySet.Empty.Add(affectedKey))
+            .Should().BeFalse(
+                "retained ownership is exact root identity, not equivalent set contents");
+        owned.IsSurfaceComponentClosed(baselineKey).Should().BeTrue();
+        owned.IsSurfaceComponentClosed(affectedKey).Should().BeTrue();
+        owned.RetainedBytes.Should().Be(
+            NavigationWorldGraph.Empty.RetainedBytes
+            - NavigationWorldGraph.Empty.ClosedStructuralComponents.RetainedBytes
+            + baseline.RetainedBytes
+            + affected.RetainedBytes);
+        owned.PersistentPageCount.Should().Be(
+            NavigationWorldGraph.Empty.PersistentPageCount
+            - NavigationWorldGraph.Empty.ClosedStructuralComponents.PersistentPageCount
+            + baseline.PersistentPageCount
+            + affected.PersistentPageCount);
+
+        NavigationWorldGraph transferred = NavigationWorldGraph.Empty
+            .WithStructuralClosureFrom(owned, graphVersion: 2);
+
+        transferred.GraphVersion.Should().Be(2);
+        transferred.RetainsClosedComponentRoot(baseline).Should().BeTrue();
+        transferred.RetainsClosedComponentRoot(affected).Should().BeTrue();
+        transferred.IsSurfaceComponentClosed(baselineKey).Should().BeTrue();
+        transferred.IsSurfaceComponentClosed(affectedKey).Should().BeTrue();
+        transferred.RetainedBytes.Should().Be(owned.RetainedBytes);
+        transferred.PersistentPageCount.Should().Be(owned.PersistentPageCount);
     }
 
     [Fact]
@@ -584,6 +714,64 @@ public sealed class NavigationSurfaceComponentTests
                 TraversalMedium.Solid,
                 out _)
             .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(TraversalMedium.Solid, "Surface-component closure omitted a structurally adjacent prior component.")]
+    [InlineData(TraversalMedium.Gas, "Medium-component closure omitted a positive-face neighbor.")]
+    public void IncompleteAffectedDomain_ShouldFailClosedBeforeQueueOverflow(
+        TraversalMedium medium,
+        string expectedMessage)
+    {
+        using var world = new GridWorld();
+        var configuration = new GridConfiguration(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One));
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        TraversalMedia media = medium == TraversalMedium.Solid
+            ? TraversalMedia.Solid
+            : TraversalMedia.Gas;
+        var cell = new NavigationCell(
+            media,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.One);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, cell)
+            .AddCell(new VoxelIndex(1, 0, 0), cell)
+            .Build();
+        NavigationWorldGraph graph = new(1, new[] { Compose(world, map) });
+        NavigationCellAddressSet incompleteDomain = NavigationCellAddressSet.Empty.Add(
+            new NavigationCellAddress("map", default));
+        var work = new NavigationSurfaceComponentBuildWork(
+            graph,
+            NavigationWorldGraph.Empty,
+            NavigationSurfaceComponentKeySet.Empty,
+            incompleteDomain,
+            affectedAddressCapacity: 1);
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue));
+
+        Action advance = () => work.Advance(meter);
+
+        advance.Should().Throw<InvalidOperationException>().WithMessage(expectedMessage);
+        work.IsComplete.Should().BeFalse();
+        meter.ComponentNodes.Should().BePositive(
+            "the retained root is charged before its omitted neighbor is discovered");
+        meter.SurfaceComponentEdges.Should().BePositive(
+            "the topology edge that exposes the invalid closure is charged exactly once");
     }
 
     [Fact]

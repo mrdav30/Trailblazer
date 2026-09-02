@@ -97,9 +97,9 @@ internal static class NavigatorOccupancyTracker
             return false;
         }
 
-        if (!grid!.Configuration.TryNormalize(out NormalizedGridConfiguration binding)
-            || !binding.TryGetCellPrism(voxel!.Index, out GridCellPrism prism)
-            || !prism.Contains(position))
+        grid!.Configuration.TryNormalize(out NormalizedGridConfiguration binding);
+        binding.TryGetCellPrism(voxel!.Index, out GridCellPrism prism);
+        if (!prism.Contains(position))
         {
             grid = null;
             voxel = null;

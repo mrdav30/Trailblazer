@@ -100,29 +100,15 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     internal void Begin(PathQuery query, NavigationWorldGraphLease lease)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        if (_admissionActive
-            || _search != null
-            || _hasPendingLease
-            || _hasResult
-            || IsReadyToPublish
-            || _payloadReservation.Owner != null)
-        {
-            throw new InvalidOperationException("The flow query work is already active.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            _started,
+            message: "The flow query work is already active.");
         _started = true;
         ReservationRejected = false;
         _resolvedOrigin = default;
         _readyStatus = NavigationFlowQueryStatus.Pending;
         Volatile.Write(ref _readyToPublish, false);
         Status = NavigationFlowQueryStatus.Pending;
-        if (!NavigationQueryAdmissionWork.CanProjectPublicQuery(
-                query,
-                PathAlgorithm.FlowField))
-        {
-            lease.Dispose();
-            MarkReady(NavigationFlowQueryStatus.Unsupported);
-            return;
-        }
         _admission.Begin(
             lease,
             query,
@@ -156,14 +142,6 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         }
 
         NavigationResolvedPathQuery resolved = _admission.Result;
-        if (resolved.RequiresWorldStamp
-            && _cache.World.ChangeSequence != resolved.WorldChangeSequence)
-        {
-            resolved.Dispose();
-            DisposeAdmission();
-            MarkReady(NavigationFlowQueryStatus.Stale);
-            return Status;
-        }
         _resolvedOrigin = resolved.Start.Address;
         var key = new NavigationFlowFieldPayloadKey(
             resolved.Query,
@@ -256,15 +234,11 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         }
         if (_pendingProof != null)
         {
-            NavigationFlowFieldStatus expected = _readyStatus switch
-            {
-                NavigationFlowQueryStatus.NoPath => NavigationFlowFieldStatus.NoPath,
-                NavigationFlowQueryStatus.CostOverflow =>
-                    NavigationFlowFieldStatus.CostOverflow,
-                _ => NavigationFlowFieldStatus.Pending
-            };
-            if (expected == NavigationFlowFieldStatus.Pending
-                || !_cache.IsExactProofCurrent(
+            NavigationFlowFieldStatus expected =
+                _readyStatus == NavigationFlowQueryStatus.NoPath
+                    ? NavigationFlowFieldStatus.NoPath
+                    : NavigationFlowFieldStatus.CostOverflow;
+            if (!_cache.IsExactProofCurrent(
                     _store,
                     _pendingProof,
                     _resolvedOrigin,
@@ -291,8 +265,9 @@ internal sealed class NavigationFlowQueryWork : IDisposable
 
     internal NavigationFlowQueryResult TakeResult()
     {
-        if (Status != NavigationFlowQueryStatus.Success || !_hasResult)
-            throw new InvalidOperationException("The flow query has no successful payload lease.");
+        SwiftThrowHelper.ThrowIfTrue(
+            Status != NavigationFlowQueryStatus.Success || !_hasResult,
+            message: "The flow query has no successful payload lease.");
         NavigationFlowQueryResult result = _result;
         _result = default;
         _hasResult = false;
@@ -316,6 +291,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         _cache.ReleasePayloadReservation(ref _payloadReservation);
         ReservationRejected = false;
         Volatile.Write(ref _readyToPublish, false);
+        _started = false;
     }
 
     private void MarkReady(NavigationFlowQueryStatus status)
@@ -330,8 +306,8 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         NavigationFlowFieldStatus leaseStatus = lease.TryGetPayload(
             out NavigationFlowFieldPayload payload);
         if (leaseStatus != NavigationFlowFieldStatus.Success
-            || !_store.Current.IsDependencyCurrent(payload.Dependencies)
-            || !_cache.IsWorldCurrent(payload))
+            || (!_store.Current.IsDependencyCurrent(payload.Dependencies)
+                || !_cache.IsWorldCurrent(payload)))
         {
             if (leaseStatus == NavigationFlowFieldStatus.Success)
                 _cache.RemoveExact(payload);
@@ -370,31 +346,10 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     }
 
     private static NavigationFlowQueryStatus MapAdmissionStatus(
-        NavigationQueryAdmissionStatus status) => status switch
-        {
-            NavigationQueryAdmissionStatus.Success => NavigationFlowQueryStatus.Success,
-            NavigationQueryAdmissionStatus.Unsupported => NavigationFlowQueryStatus.Unsupported,
-            NavigationQueryAdmissionStatus.NoMap => NavigationFlowQueryStatus.NoMap,
-            NavigationQueryAdmissionStatus.InvalidProfile => NavigationFlowQueryStatus.InvalidProfile,
-            NavigationQueryAdmissionStatus.InvalidStart => NavigationFlowQueryStatus.InvalidStart,
-            NavigationQueryAdmissionStatus.InvalidEnd => NavigationFlowQueryStatus.InvalidEnd,
-            NavigationQueryAdmissionStatus.NoPath => NavigationFlowQueryStatus.NoPath,
-            NavigationQueryAdmissionStatus.BudgetExceeded => NavigationFlowQueryStatus.BudgetExceeded,
-            NavigationQueryAdmissionStatus.CostOverflow => NavigationFlowQueryStatus.CostOverflow,
-            NavigationQueryAdmissionStatus.CapacityExceeded => NavigationFlowQueryStatus.CapacityExceeded,
-            NavigationQueryAdmissionStatus.Stale => NavigationFlowQueryStatus.Stale,
-            _ => NavigationFlowQueryStatus.Pending
-        };
+        NavigationQueryAdmissionStatus status) => (NavigationFlowQueryStatus)status;
 
     private static NavigationFlowQueryStatus MapFlowStatus(
-        NavigationFlowFieldStatus status) => status switch
-        {
-            NavigationFlowFieldStatus.Success => NavigationFlowQueryStatus.Success,
-            NavigationFlowFieldStatus.NoPath => NavigationFlowQueryStatus.NoPath,
-            NavigationFlowFieldStatus.BudgetExceeded => NavigationFlowQueryStatus.BudgetExceeded,
-            NavigationFlowFieldStatus.CostOverflow => NavigationFlowQueryStatus.CostOverflow,
-            NavigationFlowFieldStatus.CapacityExceeded => NavigationFlowQueryStatus.CapacityExceeded,
-            NavigationFlowFieldStatus.Stale => NavigationFlowQueryStatus.Stale,
-            _ => NavigationFlowQueryStatus.Pending
-        };
+        NavigationFlowFieldStatus status) => status <= NavigationFlowFieldStatus.Success
+            ? (NavigationFlowQueryStatus)status
+            : (NavigationFlowQueryStatus)((byte)status + 5);
 }

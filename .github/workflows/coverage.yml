@@ -20,11 +20,14 @@ concurrency:
 
 jobs:
   coverage:
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -60,6 +63,15 @@ jobs:
             "-reports:artifacts/coverage/**/coverage.cobertura.xml" \
             "-targetdir:artifacts/coverage-report" \
             "-reporttypes:Html;MarkdownSummaryGithub;Badges;JsonSummary"
+
+      - name: Enforce exact coverage
+        run: |
+          jq -e '
+            .summary.coveredlines == .summary.coverablelines and
+            .summary.coveredbranches == .summary.totalbranches and
+            .summary.coveredmethods == .summary.totalmethods and
+            .summary.fullcoveredmethods == .summary.totalmethods
+          ' artifacts/coverage-report/Summary.json
 
       - name: Add coverage summary to job
         run: cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"

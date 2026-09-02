@@ -33,8 +33,6 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
-        if (_lease != null)
-            throw new InvalidOperationException("The resolved path query is already active.");
         _lease = lease;
         Query = query;
         Start = start;

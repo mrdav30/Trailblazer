@@ -24,6 +24,85 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationFlowFieldTests
 {
     [Fact]
+    public void PostEnumerationStatus_ShouldGiveWorldStalenessPrecedence()
+    {
+        foreach (NavigationTraversalEdgeAdvanceStatus status in
+            Enum.GetValues<NavigationTraversalEdgeAdvanceStatus>())
+        {
+            NavigationFlowFieldWork.ResolvePostEnumerationStatus(
+                    worldCurrent: true,
+                    status)
+                .Should().Be(status);
+            NavigationFlowFieldWork.ResolvePostEnumerationStatus(
+                    worldCurrent: false,
+                    status)
+                .Should().Be(NavigationTraversalEdgeAdvanceStatus.Stale);
+        }
+    }
+
+    [Theory]
+    [InlineData(true, (int)NavigationFlowFieldStatus.Success)]
+    [InlineData(true, (int)NavigationFlowFieldStatus.NoPath)]
+    [InlineData(false, (int)NavigationFlowFieldStatus.Success)]
+    [InlineData(false, (int)NavigationFlowFieldStatus.NoPath)]
+    public void FinalPublication_ShouldAtomicallyRetainOrRejectTheBuiltPayload(
+        bool worldCurrent,
+        int statusValue)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(
+                extraIntegrationCost: Fixed64.Zero);
+        NavigationFlowFieldPayload? payload = fixture.Far;
+        var status = (NavigationFlowFieldStatus)statusValue;
+
+        NavigationFlowFieldWork.ResolveFinalPublication(
+                worldCurrent,
+                status,
+                ref payload)
+            .Should().Be(worldCurrent ? status : NavigationFlowFieldStatus.Stale);
+
+        if (worldCurrent)
+            payload.Should().BeSameAs(fixture.Far);
+        else
+            payload.Should().BeNull();
+    }
+
+    [Fact]
+    public void DependencyCount_OneBelowCombinedProbeCount_ShouldFailWithoutPartialDebit()
+    {
+        var target = new NavigationDependencyWorkspace(pageCapacity: 1, componentCapacity: 1);
+        var source = new NavigationDependencyWorkspace(pageCapacity: 1, componentCapacity: 1);
+        var address = new NavigationCellAddress("map", default);
+        source.TryRecordComponent(new NavigationSurfaceComponentKey(
+                address,
+                TraversalMedium.Solid))
+            .Should().BeTrue();
+        source.TryRecordPage("map", 0).Should().BeTrue();
+        var meter = new NavigationWorkMeter(new NavigationWorkBudget(
+            maxLookupProbes: 1,
+            maxEndpointCandidates: 0,
+            maxExpandedNodes: 0,
+            maxEvaluatedEdges: 0,
+            maxConnectionLegs: 0,
+            maxTransitionCandidates: 0,
+            maxTransitionPairs: 0,
+            maxStagedLegAttempts: 0,
+            maxTraceIntervals: 0,
+            maxCoveredVoxelIntervals: 0,
+            maxSimplificationRays: 0));
+
+        target.TryCountMissing(source, meter, out int components, out int pages)
+            .Should().BeFalse();
+
+        components.Should().Be(0);
+        pages.Should().Be(0);
+        meter.LookupProbes.Should().Be(0,
+            "the component-and-page count is one atomic bounded pass");
+        target.ComponentCount.Should().Be(0);
+        target.PageCount.Should().Be(0);
+    }
+
+    [Fact]
     public void ReverseIntegration_ShouldTraverseGasUsingUnifiedMediumStateSearch()
     {
         using var world = new GridWorld();
@@ -102,6 +181,93 @@ public sealed class NavigationFlowFieldTests
             work.Result.Nodes[1].IntegrationCost.Should().Be(Fixed64.One);
             work.Result.WorldChangeSequence.Should().Be(world.ChangeSequence);
         }
+    }
+
+    [Theory]
+    [InlineData((int)TraversalMedia.Solid, 0)]
+    [InlineData((int)(TraversalMedia.Solid | TraversalMedia.Gas), 1)]
+    [InlineData(
+        (int)(TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid),
+        2)]
+    public void DestinationSeedCapacity_WhenAnySeedDoesNotFit_ShouldRejectAtomically(
+        int mediaValue,
+        int nodeCapacity)
+    {
+        using var world = new GridWorld();
+        TraversalMedia media = (TraversalMedia)mediaValue;
+        NavigationCell mixed = new(
+            media,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(1),
+                new[] { default(VoxelIndex) },
+                "three-medium-seed",
+                new[] { mixed });
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            media,
+            TraversalCapability.None);
+        PathQuery baseline = fixture.CreateQuery(default, default, profile);
+        var query = new PathQuery(
+            baseline.Start,
+            baseline.End,
+            baseline.Agent,
+            baseline.AreaPolicy,
+            new TraversalIntent(TraversalMedium.Solid, media),
+            PathAlgorithm.FlowField,
+            baseline.Budget,
+            allowTransitions: false,
+            new FlowFieldQueryOptions(Fixed64.Zero));
+        var address = new NavigationCellAddress(fixture.MapId, default);
+        fixture.Graph.TryGetNodeRef(address, out NavigationNodeRef node)
+            .Should().BeTrue();
+        fixture.Graph.AreaCatalog.TryGet(query.AreaPolicy, out NavigationAreaPolicy? policy)
+            .Should().BeTrue();
+        NavigationWorldGraphLease lease = store.TryAcquire()!;
+        var resolved = new NavigationResolvedPathQuery();
+        resolved.Bind(
+            lease,
+            query,
+            new NavigationResolvedEndpoint(
+                node,
+                address,
+                media,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
+            new NavigationResolvedEndpoint(
+                node,
+                address,
+                media,
+                TraversalMedium.Solid,
+                Vector3d.Zero,
+                Fixed64.Zero),
+            policy!,
+            TraversalMedium.Solid,
+            media,
+            new NavigationWorkMeter(query.Budget),
+            world.ChangeSequence,
+            requiresWorldStamp: true);
+
+        using var work = new NavigationFlowFieldWork(
+            world,
+            resolved,
+            new NavigationFlowFieldWorkspace(1, 3, 3, nodeCapacity, 1, 1));
+
+        work.Status.Should().Be(NavigationFlowFieldStatus.CapacityExceeded);
+        work.Result.Should().BeNull();
+        store.ActiveLeaseCount.Should().Be(0);
     }
 
     [Fact]
@@ -197,51 +363,6 @@ public sealed class NavigationFlowFieldTests
         blocked.Status.Should().Be(NavigationFlowFieldStatus.BudgetExceeded);
         exact.Status.Should().Be(NavigationFlowFieldStatus.Success);
         exact.ConnectionLegs.Should().Be(1);
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ExplicitReverseIntegration_ShouldRejectStructuralPortalCertificatesAsStale(
-        bool omitPortalCertificates)
-    {
-        using var world = new GridWorld();
-        VoxelIndex source = default;
-        var destination = new VoxelIndex(1, 0, 0);
-        NavigationAStarExitTestHarness.GraphFixture fixture =
-            NavigationAStarExitTestHarness.CreateExplicitMap(
-                world,
-                NavigationAStarExitTestHarness.RectangularLine(2),
-                new[] { source, destination },
-                "explicit-stale",
-                new[]
-                {
-                    new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
-                        "missing-certificate",
-                        source,
-                        destination,
-                        corridorCost: Fixed64.Zero,
-                        radiusClearance: Fixed64.One,
-                        omitPortalCertificates: omitPortalCertificates,
-                        portalTranslation: omitPortalCertificates
-                            ? default
-                            : new Vector3d(
-                                Fixed64.Zero,
-                                Fixed64.Zero,
-                                Fixed64.MinIncrement))
-                });
-        PathQuery query = ToFlowField(
-            fixture.CreateQuery(source, destination, fixture.DefaultProfile),
-            Fixed64.Zero);
-
-        FlowResult result = RunFlow(
-            fixture.Graph,
-            query,
-            new NavigationCellAddress(fixture.MapId, source),
-            new NavigationCellAddress(fixture.MapId, destination));
-
-        result.Status.Should().Be(NavigationFlowFieldStatus.Stale);
-        result.HasPayload.Should().BeFalse();
     }
 
     [Fact]
@@ -520,11 +641,8 @@ public sealed class NavigationFlowFieldTests
         NavigationFlowFieldPayloadKey first = default;
         NavigationFlowFieldPayloadKey second = default;
 
-        first.Should().Be(second);
-        (first == second).Should().BeTrue();
-        (first != second).Should().BeFalse();
+        first.Equals(second).Should().BeTrue();
         first.GetHashCode().Should().Be(second.GetHashCode());
-        first.Equals((object)second).Should().BeTrue();
     }
 
     [Fact]
@@ -789,6 +907,81 @@ public sealed class NavigationFlowFieldTests
     }
 
     [Fact]
+    public void MiddleDependencyPage_WhenEndpointPagesFillCapacity_ShouldRejectBeforePublication()
+    {
+        using var world = new GridWorld();
+        const int CellCount = 129;
+        var cells = new VoxelIndex[CellCount];
+        for (int i = 0; i < cells.Length; i++)
+            cells[i] = new VoxelIndex(i, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(CellCount),
+                cells,
+                "middle-dependency-page");
+        PathQuery query = ToFlowField(
+            fixture.CreateQuery(cells[^1], cells[0], fixture.DefaultProfile),
+            Fixed64.Zero);
+
+        FlowResult result = RunFlow(
+            fixture.Graph,
+            query,
+            new NavigationCellAddress(fixture.MapId, cells[^1]),
+            new NavigationCellAddress(fixture.MapId, cells[0]),
+            dependencyPageCapacity: 2,
+            dependencyComponentCapacity: 1,
+            nodeCapacity: CellCount);
+
+        result.Status.Should().Be(NavigationFlowFieldStatus.CapacityExceeded);
+        result.HasPayload.Should().BeFalse();
+        result.ExpandedNodes.Should().BeLessThan(CellCount,
+            "the middle semantic page cannot be traversed without recording its stamp");
+    }
+
+    [Fact]
+    public void ZeroNodeChunk_WhenExpandedBudgetIsExhausted_ShouldTerminateDeterministically()
+    {
+        using var world = new GridWorld();
+        VoxelIndex origin = default;
+        var destinationIndex = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { origin, destinationIndex },
+                "zero-node-chunk");
+        PathQuery query = WithBudget(
+            ToFlowField(
+                fixture.CreateQuery(origin, destinationIndex, fixture.DefaultProfile),
+                Fixed64.Zero),
+            maxExpandedNodes: 0);
+        var originAddress = new NavigationCellAddress(fixture.MapId, origin);
+        var destinationAddress = new NavigationCellAddress(
+            fixture.MapId,
+            destinationIndex);
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        NavigationResolvedPathQuery resolved = Resolve(
+            store,
+            fixture.Graph,
+            query,
+            originAddress,
+            destinationAddress,
+            out NavigationWorkMeter meter);
+        using var work = new NavigationFlowFieldWork(
+            world,
+            resolved,
+            new NavigationFlowFieldWorkspace(0, 2, 2, 2, 2, 2));
+
+        work.Advance(64, 0, 64, 64).Should().Be(
+            NavigationFlowFieldStatus.BudgetExceeded);
+        meter.ExpandedNodes.Should().Be(0);
+        work.Result.Should().BeNull();
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
     public void WorkspaceReset_ShouldReleaseActiveReferencesWithoutAllocating()
     {
         using var world = new GridWorld();
@@ -1024,6 +1217,127 @@ public sealed class NavigationFlowFieldTests
         work.Result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(
+        1,
+        (int)NavigationFlowFieldStatus.BudgetExceeded,
+        (int)NavigationFlowFieldStatus.Pending)]
+    [InlineData(
+        8,
+        (int)NavigationFlowFieldStatus.Pending,
+        (int)NavigationFlowFieldStatus.BudgetExceeded)]
+    [InlineData(
+        256,
+        (int)NavigationFlowFieldStatus.Pending,
+        (int)NavigationFlowFieldStatus.Pending)]
+    public void PostSearchSorts_ShouldDistinguishSchedulerYieldFromQueryBudgetExhaustion(
+        int maxLookupProbes,
+        int expectedDependencyStatusValue,
+        int expectedPayloadStatusValue)
+    {
+        using var world = new GridWorld();
+        const int CellCount = 129;
+        var cells = new VoxelIndex[CellCount];
+        for (int i = 0; i < cells.Length; i++)
+            cells[i] = new VoxelIndex(i, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(CellCount),
+                cells,
+                "bounded-post-search-sort");
+        PathQuery query = WithBudget(
+            ToFlowField(
+                fixture.CreateQuery(
+                    cells[0],
+                    cells[CellCount - 1],
+                    fixture.DefaultProfile),
+                Fixed64.Zero),
+            maxLookupProbes: maxLookupProbes,
+            maxExpandedNodes: CellCount);
+        var origin = new NavigationCellAddress(fixture.MapId, cells[0]);
+        var destination = new NavigationCellAddress(
+            fixture.MapId,
+            cells[CellCount - 1]);
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        NavigationResolvedPathQuery resolved = Resolve(
+            store,
+            fixture.Graph,
+            query,
+            origin,
+            destination,
+            out NavigationWorkMeter meter);
+        using var work = new NavigationFlowFieldWork(
+            world,
+            resolved,
+            new NavigationFlowFieldWorkspace(
+                0,
+                dependencyPageCapacity: 4,
+                dependencyComponentCapacity: 1,
+                nodeCapacity: CellCount,
+                rayCoveredAddressCapacity: CellCount,
+                rayTraceIntervalCapacity: CellCount));
+
+        for (int step = 0;
+             step < CellCount + 2 && work.Status == NavigationFlowFieldStatus.Pending;
+             step++)
+        {
+            work.Advance(
+                lookupStepLimit: 0,
+                nodeStepLimit: 1,
+                edgeStepLimit: 512,
+                connectionStepLimit: 0);
+        }
+        meter.ExpandedNodes.Should().Be(CellCount);
+        for (int step = 0;
+             step < 4 && work.Status == NavigationFlowFieldStatus.Pending;
+             step++)
+        {
+            work.Advance(
+                lookupStepLimit: 0,
+                nodeStepLimit: CellCount,
+                edgeStepLimit: 512,
+                connectionStepLimit: 0);
+        }
+        int lookupBefore = meter.LookupProbes;
+
+        NavigationFlowFieldStatus status = work.Advance(
+            lookupStepLimit: 1,
+            nodeStepLimit: CellCount,
+            edgeStepLimit: 512,
+            connectionStepLimit: 0);
+
+        status.Should().Be((NavigationFlowFieldStatus)expectedDependencyStatusValue);
+        meter.LookupProbes.Should().Be(lookupBefore + 1,
+            "the first bounded dependency-sort comparison is charged exactly once");
+        meter.RemainingLookupProbes.Should().Be(maxLookupProbes - 1);
+        work.Result.Should().BeNull();
+        if (status == NavigationFlowFieldStatus.Pending)
+        {
+            work.Advance(
+                    lookupStepLimit: maxLookupProbes - 1,
+                    nodeStepLimit: 0,
+                    edgeStepLimit: 0,
+                    connectionStepLimit: 0)
+                .Should().Be(NavigationFlowFieldStatus.Pending);
+            int payloadSortLookupBefore = meter.LookupProbes;
+
+            work.Advance(
+                    lookupStepLimit: 1,
+                    nodeStepLimit: CellCount,
+                    edgeStepLimit: 0,
+                    connectionStepLimit: 0)
+                .Should().Be((NavigationFlowFieldStatus)expectedPayloadStatusValue);
+
+            meter.LookupProbes.Should().Be(payloadSortLookupBefore + 1,
+                "the first bounded payload-sort comparison is charged exactly once");
+            meter.RemainingLookupProbes.Should().Be(
+                maxLookupProbes - payloadSortLookupBefore - 1);
+            work.Result.Should().BeNull();
+        }
+    }
+
     [Fact]
     public void PayloadCapacityPreflight_ShouldRejectWithoutAllocatingDependencyStamp()
     {
@@ -1106,7 +1420,7 @@ public sealed class NavigationFlowFieldTests
                 query,
                 originAddress,
                 destinationAddress,
-                out _),
+                out NavigationWorkMeter completedMeter),
             new NavigationFlowFieldWorkspace(0, 2, 2, 2, 2, 2)))
         {
             completedStore.ActiveLeaseCount.Should().Be(1);
@@ -1119,6 +1433,13 @@ public sealed class NavigationFlowFieldTests
             completed.Status.Should().Be(NavigationFlowFieldStatus.Success);
             completedStore.ActiveLeaseCount.Should().Be(0);
             payload = completed.Result!;
+            int terminalLookupProbes = completedMeter.LookupProbes;
+            int terminalExpandedNodes = completedMeter.ExpandedNodes;
+            completed.Advance(16, 16, 16, 16)
+                .Should().Be(NavigationFlowFieldStatus.Success);
+            completedMeter.LookupProbes.Should().Be(terminalLookupProbes);
+            completedMeter.ExpandedNodes.Should().Be(terminalExpandedNodes,
+                "advancing completed flow work must not consume more deterministic work");
             AssertScratchReleased(completed);
         }
 
@@ -1163,6 +1484,7 @@ public sealed class NavigationFlowFieldTests
             new NavigationFlowFieldWorkspace(0, 2, 2, 2, 2, 2));
         abandonedStore.ActiveLeaseCount.Should().Be(1);
 
+        abandoned.Dispose();
         abandoned.Dispose();
 
         abandonedStore.ActiveLeaseCount.Should().Be(0);

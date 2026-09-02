@@ -24,7 +24,6 @@ internal sealed class NavigationStructuralCompositionWork
     private readonly NavigationWorldGraph _sourceGraph;
     private readonly NavigationOperationCandidate _candidate;
     private readonly NavigationOperationFrameChange[] _changes;
-    private readonly bool _updateComposition;
     private PersistentStringMap<bool> _changedMapIds = PersistentStringMap<bool>.Empty;
     private NavigationSurfaceComponentKeySet _affectedComponents =
         NavigationSurfaceComponentKeySet.Empty;
@@ -52,7 +51,6 @@ internal sealed class NavigationStructuralCompositionWork
     private int _seamSourceIndex;
     private int _seamCapturePhase;
     private string? _pendingSeamMapId;
-    private NavigationSurfaceComponentKey? _pendingSeamComponentKey;
     private bool _seamCaptureComplete;
     private bool _exactCaptureComplete;
     private bool _pendingWholeMap;
@@ -80,14 +78,12 @@ internal sealed class NavigationStructuralCompositionWork
         NavigationWorldGraph sourceGraph,
         NavigationOperationCandidate candidate,
         NavigationOperationFrameChange[] changes,
-        int changeCount,
-        bool updateComposition)
+        int changeCount)
     {
         _world = world;
         _sourceGraph = sourceGraph;
         _candidate = candidate;
         _changes = changes;
-        _updateComposition = updateComposition;
         _batchChangeCount = changeCount;
     }
 
@@ -99,18 +95,14 @@ internal sealed class NavigationStructuralCompositionWork
 
     internal NavigationSurfaceComponentKeySet AffectedComponents => _affectedComponents;
 
-    internal bool RequiresAffectedClosurePublication => _updateComposition
-        && _allClosePublished
+    internal bool RequiresAffectedClosurePublication => _allClosePublished
         && IsChangedMapCaptureComplete
-        && (!_affectedClosurePublished
-            || !ReferenceEquals(_publishedAffectedComponents, _affectedComponents));
+        && !_affectedClosurePublished;
 
     internal bool RequiresAllClosePublication => _allCloseRepublishRequired;
 
     internal string GetCapturedChangedMapIdAt(int ordinal) =>
         _changedMapIds.GetKeyAt(ordinal);
-
-    internal bool UpdatesComposition => _updateComposition;
 
     internal NavigationWorldGraph PreparedGraph => _preparedGraph!;
 
@@ -143,24 +135,28 @@ internal sealed class NavigationStructuralCompositionWork
         + (_seamRefresh?.PersistentPageCount ?? 0)
         + (_componentUpdate?.PersistentPageCount ?? 0));
 
-    internal bool IsComplete => IsChangedMapCaptureComplete
-        && (_preparation?.IsComplete ?? false)
-        && (_seamRefresh?.IsComplete ?? false)
-        && (!_updateComposition
-            || (_affectedComponents.Count == 0 && _affectedAddresses.Count == 0
-                || (_componentUpdate?.IsComplete ?? false)));
+    internal bool IsComplete => IsLifecycleComplete(
+        IsChangedMapCaptureComplete,
+        _preparation?.IsComplete,
+        _seamRefresh?.IsComplete,
+        _affectedComponents.Count,
+        _affectedAddresses.Count,
+        _componentUpdate?.IsComplete);
 
-    internal NavigationWorldGraph Result => _updateComposition
-        ? _componentUpdate?.Result
-            ?? PreparedGraph.WithSurfaceComponents(_sourceGraph.SurfaceComponents)
-        : PreparedGraph;
+    internal static bool IsLifecycleComplete(
+        bool captureComplete,
+        bool? preparationComplete,
+        bool? seamRefreshComplete,
+        int affectedComponentCount,
+        int affectedAddressCount,
+        bool? componentUpdateComplete) => captureComplete
+        && preparationComplete == true
+        && seamRefreshComplete == true
+        && (affectedComponentCount == 0 && affectedAddressCount == 0
+            || componentUpdateComplete == true);
 
-    internal bool Matches(NavigationOperationFrameChange[] changes, int changeCount)
-    {
-        if (changeCount != _batchChangeCount)
-            return false;
-        return ReferenceEquals(changes, _changes);
-    }
+    internal NavigationWorldGraph Result => _componentUpdate?.Result
+        ?? PreparedGraph.WithSurfaceComponents(_sourceGraph.SurfaceComponents);
 
     internal bool Advance(MaintenanceWorkMeter meter)
     {
@@ -227,8 +223,6 @@ internal sealed class NavigationStructuralCompositionWork
             return false;
         if (RequiresAffectedClosurePublication || RequiresAllClosePublication)
             return false;
-        if (!_updateComposition)
-            return true;
         if (_affectedComponents.Count == 0 && _affectedAddresses.Count == 0)
             return true;
         _componentUpdate ??= new NavigationMaterializedComponentWork(
@@ -262,10 +256,25 @@ internal sealed class NavigationStructuralCompositionWork
         _affectedClosurePublished = true;
     }
 
+    internal void RecordAffectedClosurePublication(
+        NavigationCandidatePublication publication)
+    {
+        if (publication == NavigationCandidatePublication.Published)
+            MarkAffectedClosurePublished();
+    }
+
     internal void MarkAllClosePublished()
     {
         _allClosePublished = true;
         _allCloseRepublishRequired = false;
+    }
+
+    internal void MarkInitialClosurePublished()
+    {
+        if (IsChangedMapCaptureComplete)
+            MarkAffectedClosurePublished();
+        else
+            MarkAllClosePublished();
     }
 
     internal void MarkAllCloseRepublished()
@@ -276,6 +285,13 @@ internal sealed class NavigationStructuralCompositionWork
         _publishedAffectedComponents = NavigationSurfaceComponentKeySet.Empty;
     }
 
+    internal void RecordAllClosePublication(
+        NavigationCandidatePublication publication)
+    {
+        if (publication == NavigationCandidatePublication.Published)
+            MarkAllCloseRepublished();
+    }
+
     internal bool RevalidateAutomaticSeamsForPublication()
     {
         if (_seamRefresh == null || !_seamCaptureComplete)
@@ -283,14 +299,15 @@ internal sealed class NavigationStructuralCompositionWork
         long revision = _seamRefresh.Revision;
         if (_seamRefresh.RevalidateForPublication())
             return true;
-        if (_seamRefresh.Revision != revision)
-            ResetSeamState();
+        System.Diagnostics.Debug.Assert(_seamRefresh.Revision != revision,
+            "Failed seam revalidation resets the refresh and advances its revision.");
+        ResetSeamState();
         return false;
     }
 
     private bool AdvanceChangedMapCapture(MaintenanceWorkMeter meter)
     {
-        while (_capturePhase < 4)
+        while (true)
         {
             if (_capturePhase == 0)
             {
@@ -301,11 +318,14 @@ internal sealed class NavigationStructuralCompositionWork
                 }
                 if (!meter.TryConsumeComponentNodes(1))
                     return false;
-                TakeNextRawScope(
-                    out _pendingMapId,
-                    out _pendingExactAddress,
-                    out _pendingWholeMap);
-                string pendingMapId = _pendingMapId!;
+                if (!TryTakeNextRawScope(
+                        out _pendingMapId,
+                        out _pendingExactAddress,
+                        out _pendingWholeMap))
+                {
+                    _capturePhase = 4;
+                    return true;
+                }
                 _pendingComponentKey = null;
                 _pendingMedium = _pendingWholeMap
                     ? (TraversalMedium)((int)TraversalMedium.Liquid + 1)
@@ -427,7 +447,6 @@ internal sealed class NavigationStructuralCompositionWork
                 _capturePhase = 0;
             }
         }
-        return true;
     }
 
     private bool AdvanceSeamChangedMapCapture(MaintenanceWorkMeter meter)
@@ -439,32 +458,18 @@ internal sealed class NavigationStructuralCompositionWork
                 if (!meter.TryConsumeComponentNodes(1))
                     return false;
                 _pendingSeamMapId = _seamRefresh.GetChangedMapIdAt(_seamSourceIndex++);
-                _pendingSeamComponentKey = null;
                 _seamCapturePhase = 1;
             }
-            if (_seamCapturePhase == 1)
+            System.Diagnostics.Debug.Assert(_seamCapturePhase == 1,
+                "a metered seam-map read always advances directly into its ownership phase");
+            if (!_changedMapIds.ContainsKey(_pendingSeamMapId!))
             {
-                if (!_changedMapIds.ContainsKey(_pendingSeamMapId!))
-                {
-                    if (!meter.TryConsumeDependencyEntries(1))
-                        return false;
-                    _changedMapIds = _changedMapIds.Set(_pendingSeamMapId!, true);
-                }
-                _seamCapturePhase = 2;
+                if (!meter.TryConsumeDependencyEntries(1))
+                    return false;
+                _changedMapIds = _changedMapIds.Set(_pendingSeamMapId!, true);
             }
-            if (_seamCapturePhase == 2)
-            {
-                if (_pendingSeamComponentKey.HasValue
-                    && !_affectedComponents.Contains(_pendingSeamComponentKey.Value))
-                {
-                    if (!meter.TryConsumeDependencyEntries(1))
-                        return false;
-                    AddAffectedComponent(_pendingSeamComponentKey.Value);
-                }
-                _pendingSeamMapId = null;
-                _pendingSeamComponentKey = null;
-                _seamCapturePhase = 0;
-            }
+            _pendingSeamMapId = null;
+            _seamCapturePhase = 0;
         }
         _seamCaptureComplete = true;
         return true;
@@ -569,19 +574,18 @@ internal sealed class NavigationStructuralCompositionWork
                 while (_incidentMedium <= TraversalMedium.Liquid)
                 {
                     TraversalMedium medium = _incidentMedium++;
-                    if (!HasMediumStateChanged(address, medium)
-                        || _affectedMediumStates.Contains(
-                            new NavigationSurfaceComponentKey(address, medium)))
-                    {
+                    if (!HasMediumStateChanged(address, medium))
                         continue;
-                    }
+                    var affectedState = new NavigationSurfaceComponentKey(address, medium);
+                    System.Diagnostics.Debug.Assert(
+                        !_affectedMediumStates.Contains(affectedState),
+                        "the canonical affected-address cursor visits each exact medium once");
                     if (!meter.TryConsumeDependencyEntries(1))
                     {
                         _incidentMedium--;
                         return false;
                     }
-                    _affectedMediumStates = _affectedMediumStates.Add(
-                        new NavigationSurfaceComponentKey(address, medium));
+                    _affectedMediumStates = _affectedMediumStates.Add(affectedState);
                 }
                 if (!PreparedGraph.TryGetStructuralMediumStateRef(
                         address,
@@ -610,12 +614,12 @@ internal sealed class NavigationStructuralCompositionWork
                     continue;
                 if (status == NavigationSurfaceEdgeAdvanceStatus.Edge)
                 {
-                    if (PreparedGraph.TryGetNodeAddress(
-                            _incidentOutgoing.Current.Target,
-                            out NavigationCellAddress address))
-                    {
-                        _pendingIncidentAddress = address;
-                    }
+                    bool found = PreparedGraph.TryGetNodeAddress(
+                        _incidentOutgoing.Current.Target,
+                        out NavigationCellAddress address);
+                    System.Diagnostics.Debug.Assert(found,
+                        "A structural outgoing edge targets a node in the prepared graph.");
+                    _pendingIncidentAddress = address;
                     continue;
                 }
                 _incidentOutgoingComplete = true;
@@ -628,12 +632,12 @@ internal sealed class NavigationStructuralCompositionWork
                 continue;
             if (incomingStatus == NavigationSurfaceEdgeAdvanceStatus.Edge)
             {
-                if (PreparedGraph.TryGetNodeAddress(
-                        _incidentIncoming.Current.Predecessor,
-                        out NavigationCellAddress address))
-                {
-                    _pendingIncidentAddress = address;
-                }
+                bool found = PreparedGraph.TryGetNodeAddress(
+                    _incidentIncoming.Current.Predecessor,
+                    out NavigationCellAddress address);
+                System.Diagnostics.Debug.Assert(found,
+                    "A structural incoming edge originates at a node in the prepared graph.");
+                _pendingIncidentAddress = address;
                 continue;
             }
             _incidentOutgoing = default;
@@ -674,22 +678,11 @@ internal sealed class NavigationStructuralCompositionWork
         if (_affectedComponents.Contains(key))
             return;
         _affectedComponents = _affectedComponents.Add(key);
-        if (_sourceGraph.SurfaceComponents.TryGet(
-                key,
-                out NavigationSurfaceComponent component))
-        {
-            _affectedMemberCount = checked(
-                _affectedMemberCount + component.Members.Count);
-        }
-    }
-
-    private void AddAffectedComponent(NavigationSurfaceComponent component)
-    {
-        if (_affectedComponents.Contains(component.Key))
-            return;
-        _affectedComponents = _affectedComponents.Add(component.Key);
-        _affectedMemberCount = checked(
-            _affectedMemberCount + component.Members.Count);
+        _sourceGraph.SurfaceComponents.TryGet(key, out NavigationSurfaceComponent component);
+        System.Diagnostics.Debug.Assert(
+            component != null,
+            "Affected keys originate from resolved source-graph components.");
+        _affectedMemberCount = checked(_affectedMemberCount + component.Members.Count);
     }
 
     private void ResetSeamState()
@@ -714,7 +707,6 @@ internal sealed class NavigationStructuralCompositionWork
         _seamSourceIndex = 0;
         _seamCapturePhase = 0;
         _pendingSeamMapId = null;
-        _pendingSeamComponentKey = null;
         _seamCaptureComplete = false;
         _exactCaptureComplete = false;
         _explicitOwnerIndex = 0;
@@ -745,7 +737,7 @@ internal sealed class NavigationStructuralCompositionWork
         _explicitSourceIndex < _candidate.ExplicitChangedSourceCount
         || _changeIndex < _batchChangeCount;
 
-    private void TakeNextRawScope(
+    private bool TryTakeNextRawScope(
         out string mapId,
         out NavigationCellAddress? exactAddress,
         out bool wholeMap)
@@ -755,7 +747,7 @@ internal sealed class NavigationStructuralCompositionWork
             mapId = _candidate.GetExplicitChangedSourceAt(_explicitSourceIndex++);
             exactAddress = null;
             wholeMap = false;
-            return;
+            return true;
         }
         while (true)
         {
@@ -766,7 +758,7 @@ internal sealed class NavigationStructuralCompositionWork
                 mapId = change.MapId!;
                 exactAddress = null;
                 wholeMap = true;
-                return;
+                return true;
             }
             ReadOnlySpan<NavigationMapOverlayDelta> maps =
                 change.PreparedOverlay!.Transaction.MapSpan;
@@ -779,7 +771,7 @@ internal sealed class NavigationStructuralCompositionWork
                     map.CellSpan[_overlayCellIndex++].Index);
                 exactAddress = HasSameStructuralMedia(address) ? null : address;
                 wholeMap = false;
-                return;
+                return true;
             }
             bool hasNonCellStructuralDelta = !map.ConnectionSpan.IsEmpty
                 || !map.TransitionSpan.IsEmpty;
@@ -789,7 +781,7 @@ internal sealed class NavigationStructuralCompositionWork
                 mapId = map.MapId;
                 exactAddress = null;
                 wholeMap = false;
-                return;
+                return true;
             }
             _overlayIndex++;
             _overlayCellIndex = 0;
@@ -797,6 +789,13 @@ internal sealed class NavigationStructuralCompositionWork
             {
                 _overlayIndex = 0;
                 _changeIndex++;
+                if (_changeIndex == _batchChangeCount)
+                {
+                    mapId = null!;
+                    exactAddress = null;
+                    wholeMap = false;
+                    return false;
+                }
             }
         }
     }

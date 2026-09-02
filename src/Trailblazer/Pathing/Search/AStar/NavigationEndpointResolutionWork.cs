@@ -204,10 +204,8 @@ internal sealed class NavigationEndpointResolutionWork
         }
         if (_cursorComplete)
         {
-            return Finish(
-                _hasResult
-                    ? NavigationEndpointResolutionStatus.Success
-                    : NavigationEndpointResolutionStatus.InvalidEndpoint);
+            return Finish(NavigationSearchFinalizationRules.ResolveEndpointCursorStatus(
+                _hasResult));
         }
 
         int lookupRemaining = Math.Min(lookupStepLimit, _meter.RemainingLookupProbes);
@@ -235,14 +233,13 @@ internal sealed class NavigationEndpointResolutionWork
                 return Finish(NavigationEndpointResolutionStatus.NoMap);
             if (!TryGetBounds(out Vector3d minimum, out Vector3d maximum))
                 return Finish(NavigationEndpointResolutionStatus.CostOverflow);
-            if (!_world.TryBeginCoveredAddresses(
-                    _workspace.CoveredAddressCursor,
-                    minimum,
-                    maximum,
-                    _workspace.CoveredAddressGenerationCount))
-            {
-                return Finish(NavigationEndpointResolutionStatus.CapacityExceeded);
-            }
+            // Generation storage and the cursor are constructed from the same map capacity,
+            // and Begin rejects a graph whose count exceeds that storage before discovery.
+            _world.TryBeginCoveredAddresses(
+                _workspace.CoveredAddressCursor,
+                minimum,
+                maximum,
+                _workspace.CoveredAddressGenerationCount);
             _cursorBegun = true;
         }
 
@@ -282,10 +279,8 @@ internal sealed class NavigationEndpointResolutionWork
             }
             if (cursorStatus == GridCoveredAddressCursorStatus.Complete)
             {
-                return Finish(
-                    _hasResult
-                        ? NavigationEndpointResolutionStatus.Success
-                        : NavigationEndpointResolutionStatus.InvalidEndpoint);
+                return Finish(NavigationSearchFinalizationRules.ResolveEndpointCursorStatus(
+                    _hasResult));
             }
             if (consumedLookup == 0 && outputCount == 0)
                 break;
@@ -304,8 +299,7 @@ internal sealed class NavigationEndpointResolutionWork
     {
         if (_endpoint.MapId != null)
         {
-            if (_mapOrdinal == 0
-                && _graph.TryGetCoveredAddressGeneration(
+            if (_graph.TryGetCoveredAddressGeneration(
                     _endpoint.MapId,
                     out GridCoveredAddressGeneration generation))
             {
@@ -317,23 +311,22 @@ internal sealed class NavigationEndpointResolutionWork
             return;
         }
 
-        if (_mapOrdinal < _graph.MapCount
-            && _graph.TryGetCoveredAddressGeneration(
-                _mapOrdinal,
-                out string mapId,
-                out GridCoveredAddressGeneration generationAtOrdinal))
-        {
-            _workspace.CoveredAddressGenerations[
-                _workspace.CoveredAddressGenerationCount++] = generationAtOrdinal;
-        }
+        // This method is called only while discovery is incomplete, so the ordinal is in range.
+        _graph.TryGetCoveredAddressGeneration(
+            _mapOrdinal,
+            out _,
+            out GridCoveredAddressGeneration generationAtOrdinal);
+        _workspace.CoveredAddressGenerations[
+            _workspace.CoveredAddressGenerationCount++] = generationAtOrdinal;
         _mapOrdinal++;
         _discoveryComplete = _mapOrdinal >= _graph.MapCount;
     }
 
     private bool ConsiderCandidate(GridCoveredAddress candidate)
     {
-        if (!_graph.TryGetMapId(candidate.ConfigurationKey, out string mapId)
-            || !_graph.TryGetNodeRef(
+        // Covered generations originate from this graph's configuration index.
+        _graph.TryGetMapId(candidate.ConfigurationKey, out string mapId);
+        if (!_graph.TryGetNodeRef(
                 new NavigationCellAddress(mapId, candidate.VoxelIndex),
                 out NavigationNodeRef node))
         {
@@ -347,8 +340,7 @@ internal sealed class NavigationEndpointResolutionWork
             return false;
         }
         bool consumedVolumeWork = false;
-        if (!_graph.TryGetNodeState(node, out NavigationNodeState state))
-            return true;
+        _graph.TryGetNodeState(node, out NavigationNodeState state);
         bool qualified = TryQualifyCandidate(
                 node,
                 state,
@@ -360,11 +352,9 @@ internal sealed class NavigationEndpointResolutionWork
         if (consumedVolumeWork)
             _requiresWorldStamp = true;
         if (!qualified)
-            return !consumedVolumeWork;
+            return Status == NavigationEndpointResolutionStatus.Pending
+                && !consumedVolumeWork;
         var address = new NavigationCellAddress(mapId, candidate.VoxelIndex);
-        if (!CanBeatCurrentResult(address, distance, resolutionMedium))
-            return true;
-
         var resolved = new NavigationResolvedEndpoint(
             node,
             address,
@@ -372,6 +362,14 @@ internal sealed class NavigationEndpointResolutionWork
             resolutionMedium,
             footAnchor,
             distance);
+        if (!SelectPreferredCandidate(
+                _hasResult,
+                Result,
+                resolved,
+                out _))
+        {
+            return true;
+        }
         if (_endpoint.Resolution == EndpointResolutionPolicy.Strict
             || (qualifyingMedia & TraversalMedia.Solid) == 0)
         {
@@ -409,8 +407,6 @@ internal sealed class NavigationEndpointResolutionWork
     private NavigationEndpointResolutionStatus AdvanceCandidateRay()
     {
         NavigationRayStatus rayStatus = _rayWork.Advance(_meter);
-        if (rayStatus == NavigationRayStatus.Pending)
-            return Status;
         if (rayStatus is NavigationRayStatus.Success or NavigationRayStatus.Blocked)
         {
             if (!TryMergeRayDependencies())
@@ -423,16 +419,7 @@ internal sealed class NavigationEndpointResolutionWork
             _rayWork.Reset();
             return Status;
         }
-        return Finish(rayStatus switch
-        {
-            NavigationRayStatus.BudgetExceeded =>
-                NavigationEndpointResolutionStatus.BudgetExceeded,
-            NavigationRayStatus.CostOverflow =>
-                NavigationEndpointResolutionStatus.CostOverflow,
-            NavigationRayStatus.CapacityExceeded =>
-                NavigationEndpointResolutionStatus.CapacityExceeded,
-            _ => NavigationEndpointResolutionStatus.Stale
-        });
+        return Finish((NavigationEndpointResolutionStatus)((byte)rayStatus + 1));
     }
 
     private bool TryMergeRayDependencies()
@@ -455,44 +442,48 @@ internal sealed class NavigationEndpointResolutionWork
     private void TryAcceptPendingVolumeFallback()
     {
         TraversalMedia volumeMedia = _pendingCandidate.Media & TraversalMedia.AnyVolume;
-        if (volumeMedia == TraversalMedia.None
-            || !_graph.TryGetNodeState(
-                _pendingCandidate.Node,
-                out NavigationNodeState state)
-            || !state.TryGetCenteredVolumeFootAnchor(
-                _evaluator.Profile.Shape.Height,
-                out Vector3d footAnchor)
-            || !Vector3d.TryGetDistance(
-                _endpoint.Position,
-                footAnchor,
-                out Fixed64 distance))
-        {
+        if (volumeMedia == TraversalMedia.None)
             return;
-        }
+        _graph.TryGetNodeState(
+            _pendingCandidate.Node,
+            out NavigationNodeState state);
+        state.TryGetCenteredVolumeFootAnchor(
+            _evaluator.Profile.Shape.Height,
+            out Vector3d footAnchor);
+        _ = Vector3d.TryGetDistance(
+            _endpoint.Position,
+            footAnchor,
+            out Fixed64 distance);
 
-        TraversalMedium medium = FirstMedium(volumeMedia);
-        if (CanBeatCurrentResult(_pendingCandidate.Address, distance, medium))
-        {
-            AcceptCandidate(new NavigationResolvedEndpoint(
-                _pendingCandidate.Node,
-                _pendingCandidate.Address,
-                volumeMedia,
-                medium,
-                footAnchor,
-                distance));
-        }
+        TraversalMedium medium = FirstVolumeMedium(volumeMedia);
+        var candidate = new NavigationResolvedEndpoint(
+            _pendingCandidate.Node,
+            _pendingCandidate.Address,
+            volumeMedia,
+            medium,
+            footAnchor,
+            distance);
+        SelectPreferredCandidate(
+            _hasResult,
+            Result,
+            candidate,
+            out NavigationResolvedEndpoint preferred);
+        AcceptCandidate(preferred);
     }
 
-    private bool CanBeatCurrentResult(
-        NavigationCellAddress address,
-        Fixed64 distance,
-        TraversalMedium medium) =>
-        !_hasResult
-        || distance < Result.ResolutionDistance
-        || (distance == Result.ResolutionDistance
-            && (address.CompareTo(Result.Address) < 0
-                || (address.Equals(Result.Address)
-                    && (int)medium < (int)Result.ResolutionMedium)));
+    internal static bool SelectPreferredCandidate(
+        bool hasCurrent,
+        NavigationResolvedEndpoint current,
+        NavigationResolvedEndpoint candidate,
+        out NavigationResolvedEndpoint preferred)
+    {
+        bool selectCandidate = !hasCurrent
+            || candidate.ResolutionDistance < current.ResolutionDistance
+            || (candidate.ResolutionDistance == current.ResolutionDistance
+                && candidate.Address.CompareTo(current.Address) < 0);
+        preferred = selectCandidate ? candidate : current;
+        return selectCandidate;
+    }
 
     private void AcceptCandidate(NavigationResolvedEndpoint candidate)
     {
@@ -505,12 +496,22 @@ internal sealed class NavigationEndpointResolutionWork
         Fixed64 distance = _endpoint.Resolution == EndpointResolutionPolicy.Strict
             ? Fixed64.Zero
             : _endpoint.MaxResolutionDistance;
-        if (!Fixed64.TrySubtract(_endpoint.Position.X, distance, out Fixed64 minX)
-            || !Fixed64.TrySubtract(_endpoint.Position.Y, distance, out Fixed64 minY)
-            || !Fixed64.TrySubtract(_endpoint.Position.Z, distance, out Fixed64 minZ)
-            || !Fixed64.TryAdd(_endpoint.Position.X, distance, out Fixed64 maxX)
-            || !Fixed64.TryAdd(_endpoint.Position.Y, distance, out Fixed64 maxY)
-            || !Fixed64.TryAdd(_endpoint.Position.Z, distance, out Fixed64 maxZ))
+        Fixed64 minX = default;
+        Fixed64 minY = default;
+        Fixed64 minZ = default;
+        Fixed64 maxX = default;
+        Fixed64 maxY = default;
+        Fixed64 maxZ = default;
+        bool boundsValid = Fixed64.TrySubtract(
+                _endpoint.Position.X,
+                distance,
+                out minX)
+            && Fixed64.TrySubtract(_endpoint.Position.Y, distance, out minY)
+            && Fixed64.TrySubtract(_endpoint.Position.Z, distance, out minZ)
+            && Fixed64.TryAdd(_endpoint.Position.X, distance, out maxX)
+            && Fixed64.TryAdd(_endpoint.Position.Y, distance, out maxY)
+            && Fixed64.TryAdd(_endpoint.Position.Z, distance, out maxZ);
+        if (!boundsValid)
         {
             minimum = default;
             maximum = default;
@@ -530,15 +531,27 @@ internal sealed class NavigationEndpointResolutionWork
         {
             status = RecordResultComponents();
         }
-        if ((status == NavigationEndpointResolutionStatus.Success
-                || (status == NavigationEndpointResolutionStatus.InvalidEndpoint
-                    && (_workspace.PageCount != 0 || _workspace.ComponentCount != 0)))
-            && !AreDependenciesCurrent())
-        {
-            status = NavigationEndpointResolutionStatus.Stale;
-        }
-        if (_world.ChangeSequence != _worldChangeSequence)
-            status = NavigationEndpointResolutionStatus.Stale;
+        bool dependenciesWereRead = status == NavigationEndpointResolutionStatus.Success
+            || (status == NavigationEndpointResolutionStatus.InvalidEndpoint
+                && (_workspace.PageCount != 0 || _workspace.ComponentCount != 0));
+        bool epochWasCurrent = NavigationSearchFinalizationRules.IsEpochCurrent(
+            epochRequired: true,
+            expectedEpoch: _worldChangeSequence,
+            currentEpoch: _world.ChangeSequence);
+        bool dependenciesAreCurrent = !dependenciesWereRead
+            || (epochWasCurrent && AreDependenciesCurrent());
+        // Dependency validation can observe several immutable records, so recheck the
+        // world epoch before publishing the terminal result.
+        bool epochIsCurrent = epochWasCurrent
+            && NavigationSearchFinalizationRules.IsEpochCurrent(
+                epochRequired: true,
+                expectedEpoch: _worldChangeSequence,
+                currentEpoch: _world.ChangeSequence);
+        status = NavigationSearchFinalizationRules.ResolveEndpointStatus(
+            status,
+            dependenciesWereRead,
+            dependenciesAreCurrent,
+            epochIsCurrent);
         Status = status;
         if (status != NavigationEndpointResolutionStatus.Success)
             Result = default;
@@ -547,18 +560,14 @@ internal sealed class NavigationEndpointResolutionWork
 
     private bool AreDependenciesCurrent()
     {
-        if (_world.ChangeSequence != _worldChangeSequence)
-            return false;
         NavigationWorldGraph current = _store.Current;
         NavigationAreaPolicy areaPolicy = _evaluator.AreaPolicy;
         if (_graph.AreaCatalog.TryGet(
                 areaPolicy.Key,
-                out NavigationAreaPolicy? expectedPolicy)
-            && expectedPolicy != null
+                out NavigationAreaPolicy expectedPolicy)
             && (!current.AreaCatalog.TryGet(
                     areaPolicy.Key,
-                    out NavigationAreaPolicy? currentPolicy)
-                || currentPolicy == null
+                    out NavigationAreaPolicy currentPolicy)
                 || !currentPolicy.ContentEquals(expectedPolicy)))
         {
             return false;
@@ -567,8 +576,8 @@ internal sealed class NavigationEndpointResolutionWork
         for (int i = 0; i < dependencies.ComponentCount; i++)
         {
             NavigationSurfaceComponentKey key = dependencies.Components[i];
-            if (!_graph.TryGetComponentDependency(key, out GraphComponentDependency prior)
-                || !current.TryGetComponentDependency(key, out GraphComponentDependency next)
+            _graph.TryGetComponentDependency(key, out GraphComponentDependency prior);
+            if (!current.TryGetComponentDependency(key, out GraphComponentDependency next)
                 || !prior.Equals(next))
             {
                 return false;
@@ -577,14 +586,14 @@ internal sealed class NavigationEndpointResolutionWork
         for (int i = 0; i < dependencies.PageCount; i++)
         {
             GraphPageDependencyAddress address = dependencies.Pages[i];
-            if (!_graph.TryGetPageDependency(address, out GraphPageDependency prior)
-                || !current.TryGetPageDependency(address, out GraphPageDependency next)
+            _graph.TryGetPageDependency(address, out GraphPageDependency prior);
+            if (!current.TryGetPageDependency(address, out GraphPageDependency next)
                 || !prior.Equals(next))
             {
                 return false;
             }
         }
-        return _world.ChangeSequence == _worldChangeSequence;
+        return true;
     }
 
     private bool TryQualifyCandidate(
@@ -633,16 +642,7 @@ internal sealed class NavigationEndpointResolutionWork
                 or NavigationVolumeAnchorStatus.CapacityExceeded
                 or NavigationVolumeAnchorStatus.Stale)
             {
-                Finish(volumeStatus switch
-                {
-                    NavigationVolumeAnchorStatus.BudgetExceeded =>
-                        NavigationEndpointResolutionStatus.BudgetExceeded,
-                    NavigationVolumeAnchorStatus.CostOverflow =>
-                        NavigationEndpointResolutionStatus.CostOverflow,
-                    NavigationVolumeAnchorStatus.CapacityExceeded =>
-                        NavigationEndpointResolutionStatus.CapacityExceeded,
-                    _ => NavigationEndpointResolutionStatus.Stale
-                });
+                Finish((NavigationEndpointResolutionStatus)((byte)volumeStatus + 2));
                 return false;
             }
             for (TraversalMedium medium = TraversalMedium.Gas;
@@ -701,24 +701,19 @@ internal sealed class NavigationEndpointResolutionWork
         {
             if ((Result.Media & NavigationCell.ToMedia(medium)) == 0)
                 continue;
-            if (!_graph.TryGetSurfaceComponent(
-                    Result.Address,
-                    medium,
-                    out NavigationSurfaceComponentKey componentKey,
-                    out _))
-            {
-                return NavigationEndpointResolutionStatus.Stale;
-            }
+            _graph.TryGetSurfaceComponent(
+                Result.Address,
+                medium,
+                out NavigationSurfaceComponentKey componentKey,
+                out _);
             if (!_workspace.TryRecordComponent(componentKey))
                 return NavigationEndpointResolutionStatus.CapacityExceeded;
         }
         return NavigationEndpointResolutionStatus.Success;
     }
 
-    private static TraversalMedium FirstMedium(TraversalMedia media)
+    private static TraversalMedium FirstVolumeMedium(TraversalMedia media)
     {
-        if ((media & TraversalMedia.Solid) != 0)
-            return TraversalMedium.Solid;
         if ((media & TraversalMedia.Gas) != 0)
             return TraversalMedium.Gas;
         return TraversalMedium.Liquid;

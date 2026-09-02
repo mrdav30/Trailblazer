@@ -39,8 +39,7 @@ public sealed class TrailblazerGuideService
             NavigationWorldGraph graph = lease.Graph;
             if (!graph.AreaCatalog.TryGet(
                     query.AreaPolicy,
-                    out NavigationAreaPolicy? areaPolicy)
-                || areaPolicy == null)
+                    out NavigationAreaPolicy areaPolicy))
             {
                 return NavigationRayStatus.Stale;
             }
@@ -77,11 +76,7 @@ public sealed class TrailblazerGuideService
                 return status;
             if (!result.IsSemanticCostNeutral)
                 return NavigationRayStatus.Blocked;
-            if (!Vector3d.TrySubtract(query.End.Position, actualFoot, out Vector3d delta))
-                return NavigationRayStatus.CostOverflow;
-            if (delta != Vector3d.Zero)
-                heading = delta.Normalized;
-            return NavigationRayStatus.Success;
+            return ResolveDirectHeading(query.End.Position, actualFoot, out heading);
         }
     }
 
@@ -130,15 +125,10 @@ public sealed class TrailblazerGuideService
                 return NavigationGuideStatusMapper.ToPublic(status);
 
             NavigationAStarPayloadLease payloadLease = work.TakeResult(inputIndex: 0);
-            NavigationAStarQueryStatus guideStatus = gate.PayloadCache.TryCreateGuide(
+            return gate.PayloadCache.TryCreatePublicGuide(
                 _context.Pathing.NavigationGraphStore,
                 payloadLease,
-                out NavigationAStarGuideLease? guide);
-            if (guideStatus != NavigationAStarQueryStatus.Success || guide == null)
-                return NavigationGuideStatusMapper.ToPublic(guideStatus);
-
-            result = new NavigationGuideLease(guide);
-            return NavigationGuideStatus.Success;
+                out result);
         }
     }
 
@@ -162,7 +152,7 @@ public sealed class TrailblazerGuideService
         NavigationFlowAdmissionGate gate = _context.Pathing.NavigationFlowAdmissionGate;
         NavigationFlowQueryStatus beginStatus = gate.Begin(query, out NavigationFlowBatchWork work);
         if (beginStatus != NavigationFlowQueryStatus.Pending)
-            return ToPublic(beginStatus);
+            return NavigationGuideStatusMapper.ToPublic(beginStatus);
 
         using (work)
         {
@@ -186,7 +176,7 @@ public sealed class TrailblazerGuideService
             work.PublishReadyPrefix(maximumCount: 1);
             NavigationFlowQueryStatus status = work.GetStatus(inputIndex: 0);
             if (status != NavigationFlowQueryStatus.Success)
-                return ToPublic(status);
+                return NavigationGuideStatusMapper.ToPublic(status);
 
             using NavigationFlowQueryResult flowResult = work.TakeResult(inputIndex: 0);
             NavigationGuideStatus guideStatus = gate.PayloadCache.TryCreateGuide(
@@ -194,10 +184,7 @@ public sealed class TrailblazerGuideService
                 flowResult,
                 out NavigationFlowFieldLease guide);
             if (guideStatus != NavigationGuideStatus.Success)
-            {
-                guide.Dispose();
                 return guideStatus;
-            }
 
             result = guide;
             return NavigationGuideStatus.Success;
@@ -208,23 +195,22 @@ public sealed class TrailblazerGuideService
     {
         if (_context.IsDisposed)
             throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
-        if (!_context.World.IsActive)
-            throw new InvalidOperationException("TrailblazerGuideService is bound to an inactive GridWorld.");
+        SwiftThrowHelper.ThrowIfTrue(
+            !_context.World.IsActive,
+            message: "TrailblazerGuideService is bound to an inactive GridWorld.");
     }
 
-    private static NavigationGuideStatus ToPublic(NavigationFlowQueryStatus status) => status switch
+    internal static NavigationRayStatus ResolveDirectHeading(
+        Vector3d destination,
+        Vector3d actualFoot,
+        out Vector3d heading)
     {
-        NavigationFlowQueryStatus.Success => NavigationGuideStatus.Success,
-        NavigationFlowQueryStatus.Unsupported => NavigationGuideStatus.Unsupported,
-        NavigationFlowQueryStatus.NoMap => NavigationGuideStatus.NoMap,
-        NavigationFlowQueryStatus.InvalidProfile => NavigationGuideStatus.InvalidProfile,
-        NavigationFlowQueryStatus.InvalidStart => NavigationGuideStatus.InvalidStart,
-        NavigationFlowQueryStatus.InvalidEnd => NavigationGuideStatus.InvalidEnd,
-        NavigationFlowQueryStatus.NoPath => NavigationGuideStatus.NoPath,
-        NavigationFlowQueryStatus.BudgetExceeded => NavigationGuideStatus.BudgetExceeded,
-        NavigationFlowQueryStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
-        NavigationFlowQueryStatus.CapacityExceeded => NavigationGuideStatus.CapacityExceeded,
-        NavigationFlowQueryStatus.Stale => NavigationGuideStatus.Stale,
-        _ => NavigationGuideStatus.Stale
-    };
+        heading = Vector3d.Zero;
+        if (!Vector3d.TrySubtract(destination, actualFoot, out Vector3d delta))
+            return NavigationRayStatus.CostOverflow;
+        if (delta != Vector3d.Zero)
+            heading = delta.Normalized;
+        return NavigationRayStatus.Success;
+    }
+
 }

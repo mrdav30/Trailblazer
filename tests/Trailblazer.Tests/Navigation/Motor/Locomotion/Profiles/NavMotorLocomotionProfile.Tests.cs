@@ -95,11 +95,35 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
         swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Water!.MaxSwimAcceleration);
         swimmingAgent.Motor.Handler.Water.CanSwim = false;
         swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Move.MaxAirAcceleration);
+        swimmingAgent.Motor.Handler.Water.IsEnabled = false;
+        swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Move.MaxAirAcceleration);
+        swimmingAgent.Motor.Handler.Water.IsEnabled = true;
+        swimmingAgent.Motor.Handler.Water.CanSwim = true;
+        swimmingAgent.Motor.Handler.Water.IsSwimming = false;
+        swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Move.MaxAirAcceleration);
+        var coreOnlyLiquidAgent = MockMotorAgentTestFactory.CreateMockAgent(
+            startingMedium: TraversalMedium.Liquid,
+            profile: LocomotionProfile.CreateCoreOnly());
+        coreOnlyLiquidAgent.Motor.GetMaxAcceleration()
+            .Should().Be(coreOnlyLiquidAgent.Motor.Handler.Move.MaxAirAcceleration);
+
+        var climbingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        climbingAgent.Motor.Handler.Climb!.IsClimbing = true;
+        climbingAgent.Motor.GetMaxAcceleration().Should().Be(climbingAgent.Motor.Handler.Climb.MaxClimbAcceleration);
+        climbingAgent.Motor.Handler.Climb.CanClimb = false;
+        climbingAgent.Motor.GetMaxAcceleration().Should().Be(climbingAgent.Motor.Handler.Move.MaxAirAcceleration);
+        climbingAgent.Motor.Handler.Climb.CanClimb = true;
+        climbingAgent.Motor.Handler.Climb.IsEnabled = false;
+        climbingAgent.Motor.Handler.Climb.IsClimbing = true;
+        climbingAgent.Motor.GetMaxAcceleration().Should().Be(climbingAgent.Motor.Handler.Move.MaxAirAcceleration);
 
         var flyingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
         flyingAgent.Motor.Handler.Fly!.IsFlying = true;
         flyingAgent.Motor.GetMaxAcceleration().Should().Be(flyingAgent.Motor.Handler.Fly.MaxFlyAcceleration);
         flyingAgent.Motor.Handler.Fly.CanFly = false;
+        flyingAgent.Motor.GetMaxAcceleration().Should().Be(flyingAgent.Motor.Handler.Move.MaxAirAcceleration);
+        flyingAgent.Motor.Handler.Fly.IsEnabled = false;
+        flyingAgent.Motor.Handler.Fly.IsFlying = true;
         flyingAgent.Motor.GetMaxAcceleration().Should().Be(flyingAgent.Motor.Handler.Move.MaxAirAcceleration);
 
         var jumpingAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
@@ -130,6 +154,36 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
 
         flyingAgent.Motor.Handler.Move.MaxFastSpeed = Fixed64.Zero;
         (flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate) - (Fixed64)10).Abs().Should().BeLessThan((Fixed64)0.0001f);
+        flyingAgent.Motor.Handler.Fly.CanFly = false;
+        flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast)
+            .Should().Be(Fixed64.Zero);
+        flyingAgent.Motor.Handler.Fly.CanFly = true;
+        flyingAgent.Motor.Handler.Fly.IsEnabled = false;
+        flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast)
+            .Should().Be(Fixed64.Zero);
+
+        var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
+        WaterLocomotion water = TestRequire.NotNull(swimmingAgent.Motor.Handler.Water);
+        water.IsSwimming = true;
+        swimmingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast)
+            .Should().BeGreaterThan(Fixed64.Zero);
+        water.CanSwim = false;
+        swimmingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast)
+            .Should().Be(Fixed64.Zero);
+        water.CanSwim = true;
+        water.IsSwimming = false;
+        swimmingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast)
+            .Should().Be(Fixed64.Zero);
+        water.IsSwimming = true;
+        water.IsEnabled = false;
+        swimmingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast)
+            .Should().Be(Fixed64.Zero);
+
+        var waterlessLiquidAgent = MockMotorAgentTestFactory.CreateMockAgent(
+            startingMedium: TraversalMedium.Liquid,
+            profile: LocomotionProfile.CreateCoreOnly());
+        waterlessLiquidAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast)
+            .Should().Be(Fixed64.Zero);
 
         var jumpLessAgent = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Solid,

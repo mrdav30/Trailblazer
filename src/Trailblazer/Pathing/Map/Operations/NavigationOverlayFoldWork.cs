@@ -135,8 +135,10 @@ internal sealed class NavigationOverlayFoldWork
                     }
                     _overlay = _overlay!.Apply(change, _operationSequence);
                     _working.RecordPersistentCopies(_overlay.LastApplyCopiedNodeCount);
-                    if (change.Kind == NavigationCellOverlayOperationKind.Set
-                        && !_current.Map.ContainsCell(change.Index))
+                    if (!_current.Map.ContainsCell(change.Index)
+                        && (change.Kind == NavigationCellOverlayOperationKind.Set
+                            || (change.Kind == NavigationCellOverlayOperationKind.Suppress
+                                && _current.Map.DefaultCell.HasValue)))
                     {
                         _dynamicAddresses = _dynamicAddresses!.Set(
                             change.Index,
@@ -250,13 +252,11 @@ internal sealed class NavigationOverlayFoldWork
                     continue;
                 }
                 string sourceId = _working.GetIncomingSource(target, _validationSourceIndex);
-                if (!_working.TryGetState(sourceId, out NavigationOperationCandidate.MapState? source)
-                    || source == null)
-                {
-                    _validationSourceIndex++;
-                    continue;
-                }
-                state = source;
+                bool hasSource = _working.TryGetState(
+                    sourceId,
+                    out NavigationOperationCandidate.MapState? source);
+                System.Diagnostics.Debug.Assert(hasSource && source != null);
+                state = source!;
             }
             if (!AdvanceValidation(state, meter, out bool valid))
             {
@@ -300,12 +300,11 @@ internal sealed class NavigationOverlayFoldWork
         long bytes = 0;
         if (_current == null)
             return bytes;
-        if (_overlay != null && !ReferenceEquals(_overlay, _current.Overlay))
-            bytes = checked(bytes + _overlay.RetainedBytes);
-        if (_dynamicAddresses != null
-            && !ReferenceEquals(_dynamicAddresses, _current.DynamicAddresses))
+        if (!ReferenceEquals(_overlay, _current.Overlay))
+            bytes = checked(bytes + _overlay!.RetainedBytes);
+        if (!ReferenceEquals(_dynamicAddresses, _current.DynamicAddresses))
         {
-            bytes = checked(bytes + _dynamicAddresses.RetainedBytes);
+            bytes = checked(bytes + _dynamicAddresses!.RetainedBytes);
         }
         return bytes;
     }
@@ -315,12 +314,11 @@ internal sealed class NavigationOverlayFoldWork
         int pages = 0;
         if (_current == null)
             return pages;
-        if (_overlay != null && !ReferenceEquals(_overlay, _current.Overlay))
-            pages = checked(pages + _overlay.PersistentNodeCount);
-        if (_dynamicAddresses != null
-            && !ReferenceEquals(_dynamicAddresses, _current.DynamicAddresses))
+        if (!ReferenceEquals(_overlay, _current.Overlay))
+            pages = checked(pages + _overlay!.PersistentNodeCount);
+        if (!ReferenceEquals(_dynamicAddresses, _current.DynamicAddresses))
         {
-            pages = checked(pages + _dynamicAddresses.PersistentNodeCount);
+            pages = checked(pages + _dynamicAddresses!.PersistentNodeCount);
         }
         return pages;
     }
@@ -382,8 +380,7 @@ internal sealed class NavigationOverlayFoldWork
                         overlay: _validationStage == 1,
                         _validationEdgeIndex++,
                         _changedMapIds,
-                        _nextStates,
-                        allowDormantEndpoints: true))
+                        _nextStates))
                 {
                     valid = false;
                     return true;

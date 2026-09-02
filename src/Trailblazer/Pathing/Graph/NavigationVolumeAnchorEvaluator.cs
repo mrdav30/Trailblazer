@@ -56,11 +56,12 @@ internal readonly struct NavigationVolumeAnchorEvaluator
     {
         footAnchor = default;
         qualifyingMedia = TraversalMedia.None;
-        if (!_graph.TryGetNodeAddress(node, out NavigationCellAddress address)
-            || !_graph.TryGetRawNodeState(node, out NavigationNodeState state))
-        {
-            return NavigationVolumeAnchorStatus.Stale;
-        }
+        bool hasAddress = _graph.TryGetNodeAddress(
+            node,
+            out NavigationCellAddress address);
+        bool hasState = _graph.TryGetRawNodeState(node, out NavigationNodeState state);
+        System.Diagnostics.Debug.Assert(hasAddress && hasState,
+            "Volume anchor evaluation receives a node owned by its immutable graph.");
         if (!state.TryGetCenteredVolumeFootAnchor(
                 _profile.Shape.Height,
                 out footAnchor))
@@ -87,12 +88,14 @@ internal readonly struct NavigationVolumeAnchorEvaluator
         NavigationWorkMeter meter,
         NavigationDependencyWorkspace dependencies)
     {
-        if (source.Medium != target.Medium
-            || !_graph.TryGetNodeAddress(source.Node, out NavigationCellAddress sourceAddress)
-            || !_graph.TryGetNodeAddress(target.Node, out NavigationCellAddress targetAddress))
-        {
-            return NavigationVolumeAnchorStatus.Stale;
-        }
+        bool hasSourceAddress = _graph.TryGetNodeAddress(
+            source.Node,
+            out NavigationCellAddress sourceAddress);
+        bool hasTargetAddress = _graph.TryGetNodeAddress(
+            target.Node,
+            out NavigationCellAddress targetAddress);
+        System.Diagnostics.Debug.Assert(
+            source.Medium == target.Medium && hasSourceAddress && hasTargetAddress);
 
         return Trace(
             sourceAddress,
@@ -117,16 +120,12 @@ internal readonly struct NavigationVolumeAnchorEvaluator
     {
         qualifyingMedia = TraversalMedia.None;
         ulong before = _world.ChangeSequence;
-        if (!_graph.TryGetMap(sourceAddress.MapId, out NavigationMapInstance? sourceInstance)
-            || sourceInstance == null
-            || !_graph.TryGetMap(targetAddress.MapId, out NavigationMapInstance? targetInstance)
-            || targetInstance == null)
-        {
-            return NavigationVolumeAnchorStatus.Stale;
-        }
+        _graph.TryGetMap(sourceAddress.MapId, out NavigationMapInstance? sourceInstance);
+        _graph.TryGetMap(targetAddress.MapId, out NavigationMapInstance? targetInstance);
+        System.Diagnostics.Debug.Assert(sourceInstance != null && targetInstance != null);
 
-        NavigationGridGenerationIdentity sourceIdentity = sourceInstance.GridIdentity;
-        NavigationGridGenerationIdentity targetIdentity = targetInstance.GridIdentity;
+        NavigationGridGenerationIdentity sourceIdentity = sourceInstance!.GridIdentity;
+        NavigationGridGenerationIdentity targetIdentity = targetInstance!.GridIdentity;
         var sourceCell = new WorldVoxelIndex(
             sourceIdentity.WorldSpawnToken,
             sourceIdentity.GridIndex,
@@ -157,37 +156,21 @@ internal readonly struct NavigationVolumeAnchorEvaluator
             addressLimit,
             _workspace.CoveredAddressCapacity,
             candidateWorkLimit);
-        if (!meter.TryConsumeLookupProbes(report.GridCandidateCount)
-            || !meter.TryConsumeCoveredVoxelIntervals(report.AddressCandidateCount))
-        {
-            return NavigationVolumeAnchorStatus.BudgetExceeded;
-        }
-        if (before != _world.ChangeSequence)
-            return NavigationVolumeAnchorStatus.Stale;
-        NavigationVolumeAnchorStatus traceStatus = report.Status switch
-        {
-            GridNavigationBodyTraceStatus.Complete =>
-                NavigationVolumeAnchorStatus.Success,
-            GridNavigationBodyTraceStatus.IncompletePhysicalCoverage =>
-                NavigationVolumeAnchorStatus.Unavailable,
-            GridNavigationBodyTraceStatus.InvalidOrUnrepresentableGeometry =>
-                NavigationVolumeAnchorStatus.Unavailable,
-            GridNavigationBodyTraceStatus.ArithmeticOverflow =>
-                NavigationVolumeAnchorStatus.CostOverflow,
-            GridNavigationBodyTraceStatus.GridCandidateLimitExceeded =>
-                gridLimit < _workspace.MapCapacity
-                    ? NavigationVolumeAnchorStatus.BudgetExceeded
-                    : NavigationVolumeAnchorStatus.CapacityExceeded,
-            GridNavigationBodyTraceStatus.AddressLimitExceeded =>
-                addressLimit < _workspace.CoveredAddressCapacity
-                    ? NavigationVolumeAnchorStatus.BudgetExceeded
-                    : NavigationVolumeAnchorStatus.CapacityExceeded,
-            GridNavigationBodyTraceStatus.OutputLimitExceeded =>
-                NavigationVolumeAnchorStatus.CapacityExceeded,
-            GridNavigationBodyTraceStatus.CandidateWorkLimitExceeded =>
-                NavigationVolumeAnchorStatus.CapacityExceeded,
-            _ => NavigationVolumeAnchorStatus.Stale
-        };
+        bool consumedLookups = meter.TryConsumeLookupProbes(report.GridCandidateCount);
+        bool consumedAddresses =
+            meter.TryConsumeCoveredVoxelIntervals(report.AddressCandidateCount);
+        System.Diagnostics.Debug.Assert(consumedLookups && consumedAddresses);
+        System.Diagnostics.Debug.Assert(
+            report.Status != GridNavigationBodyTraceStatus.OutputLimitExceeded,
+            "the address ceiling never exceeds the shared body-trace output capacity");
+        NavigationVolumeAnchorStatus traceStatus = ResolveTraceStatus(
+            before,
+            _world.ChangeSequence,
+            report.Status,
+            gridLimit,
+            _workspace.MapCapacity,
+            addressLimit,
+            _workspace.CoveredAddressCapacity);
         if (traceStatus is not NavigationVolumeAnchorStatus.Success
             and not NavigationVolumeAnchorStatus.Unavailable)
         {
@@ -198,14 +181,21 @@ internal readonly struct NavigationVolumeAnchorEvaluator
         for (int i = 0; i < _workspace.BodyTraceCells.Count; i++)
         {
             GridNavigationBodyTraceCell traceCell = _workspace.BodyTraceCells[i];
-            if (!_graph.TryGetMapId(traceCell.ConfigurationKey, out string mapId)
-                || !_graph.TryGetMap(mapId, out NavigationMapInstance? traceInstance)
-                || traceInstance == null
-                || !traceInstance.GridIdentity.Matches(
-                    traceCell.Cell.WorldSpawnToken,
-                    traceCell.Cell.GridIndex,
-                    traceCell.Cell.GridSpawnToken)
-                || traceInstance.GridLastChangeSequence != traceCell.GridLastChangeSequence)
+            if (!_graph.TryGetMapId(traceCell.ConfigurationKey, out string mapId))
+                return NavigationVolumeAnchorStatus.Stale;
+            bool hasTraceInstance = _graph.TryGetMap(
+                mapId,
+                out NavigationMapInstance traceInstance);
+            System.Diagnostics.Debug.Assert(
+                hasTraceInstance,
+                "the immutable configuration index and map directory are built and replaced together");
+            if (!IsTraceGenerationCurrent(
+                    traceInstance.GridIdentity.Matches(
+                        traceCell.Cell.WorldSpawnToken,
+                        traceCell.Cell.GridIndex,
+                        traceCell.Cell.GridSpawnToken),
+                    traceInstance.GridLastChangeSequence,
+                    traceCell.GridLastChangeSequence))
             {
                 return NavigationVolumeAnchorStatus.Stale;
             }
@@ -233,10 +223,55 @@ internal readonly struct NavigationVolumeAnchorEvaluator
             || qualifyingMedia == TraversalMedia.None
             ? NavigationVolumeAnchorStatus.Unavailable
             : NavigationVolumeAnchorStatus.Success;
-        return before == _world.ChangeSequence
+        return ResolveFinalStatus(before, _world.ChangeSequence, result);
+    }
+
+    internal static bool IsTraceGenerationCurrent(
+        bool identityMatches,
+        ulong instanceLastChangeSequence,
+        ulong traceLastChangeSequence) =>
+        identityMatches && instanceLastChangeSequence == traceLastChangeSequence;
+
+    internal static NavigationVolumeAnchorStatus ResolveTraceStatus(
+        ulong worldSequenceBefore,
+        ulong worldSequenceAfter,
+        GridNavigationBodyTraceStatus status,
+        int gridLimit,
+        int mapCapacity,
+        int addressLimit,
+        int coveredAddressCapacity)
+    {
+        if (worldSequenceBefore != worldSequenceAfter)
+            return NavigationVolumeAnchorStatus.Stale;
+        return status switch
+        {
+            GridNavigationBodyTraceStatus.Complete =>
+                NavigationVolumeAnchorStatus.Success,
+            GridNavigationBodyTraceStatus.IncompletePhysicalCoverage =>
+                NavigationVolumeAnchorStatus.Unavailable,
+            GridNavigationBodyTraceStatus.InvalidOrUnrepresentableGeometry =>
+                NavigationVolumeAnchorStatus.Unavailable,
+            GridNavigationBodyTraceStatus.ArithmeticOverflow =>
+                NavigationVolumeAnchorStatus.CostOverflow,
+            GridNavigationBodyTraceStatus.GridCandidateLimitExceeded =>
+                gridLimit < mapCapacity
+                    ? NavigationVolumeAnchorStatus.BudgetExceeded
+                    : NavigationVolumeAnchorStatus.CapacityExceeded,
+            GridNavigationBodyTraceStatus.AddressLimitExceeded =>
+                addressLimit < coveredAddressCapacity
+                    ? NavigationVolumeAnchorStatus.BudgetExceeded
+                    : NavigationVolumeAnchorStatus.CapacityExceeded,
+            _ => NavigationVolumeAnchorStatus.BudgetExceeded
+        };
+    }
+
+    internal static NavigationVolumeAnchorStatus ResolveFinalStatus(
+        ulong worldSequenceBefore,
+        ulong worldSequenceAfter,
+        NavigationVolumeAnchorStatus result) =>
+        worldSequenceBefore == worldSequenceAfter
             ? result
             : NavigationVolumeAnchorStatus.Stale;
-    }
 
     private TraversalMedia FilterPassableMedia(
         NavigationNodeRef node,

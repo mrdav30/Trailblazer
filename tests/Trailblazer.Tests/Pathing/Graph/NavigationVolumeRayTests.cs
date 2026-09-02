@@ -657,7 +657,7 @@ public sealed class NavigationVolumeRayTests
             TraversalMedium.Gas);
         var work = new NavigationRayWork(new NavigationRayWorkspace(4, 16, 16, 256, 128));
         var meter = new NavigationWorkMeter(Budget());
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < 64; i++)
         {
             meter.Reset(Budget());
             work.Begin(request);
@@ -1144,7 +1144,7 @@ public sealed class NavigationVolumeRayTests
                 ref remaining, ref connectionRemaining);
             if (status == NavigationTraversalEdgeAdvanceStatus.Edge
                 && edges.CurrentKind == NavigationTraversalEdgeKind.Volume
-                && edges.CurrentTarget == new NavigationMediumStateRef(target, medium))
+                && edges.CurrentTarget.Equals(new NavigationMediumStateRef(target, medium)))
             {
                 return edges.CurrentCost;
             }

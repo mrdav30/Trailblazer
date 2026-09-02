@@ -45,8 +45,5 @@ internal readonly struct NavigationGridChangeScope : IEquatable<NavigationGridCh
     public bool Equals(NavigationGridChangeScope other) =>
         ConfigurationKey.Equals(other.ConfigurationKey);
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationGridChangeScope other && Equals(other);
-
     public override int GetHashCode() => ConfigurationKey.GetHashCode();
 }

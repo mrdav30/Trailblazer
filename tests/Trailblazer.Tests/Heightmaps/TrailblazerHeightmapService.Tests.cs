@@ -45,6 +45,20 @@ public sealed class TrailblazerHeightmapServiceTests
         context.Heightmaps.IsRegistered("Ground").Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void RegistryLookups_ShouldTreatInvalidLayerNamesAsMissing(string? layerName)
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+
+        context.Heightmaps.IsRegistered(layerName!).Should().BeFalse();
+        context.Heightmaps.TryGetRegistration(layerName!, out HeightmapLayerRegistration registration)
+            .Should().BeFalse();
+        registration.Should().BeNull();
+    }
+
     [Fact]
     public void Register_ShouldKeepSameLayerNameIndependentAcrossContexts()
     {

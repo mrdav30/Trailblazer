@@ -103,15 +103,34 @@ internal sealed class NavigationMaterializedComponentWork
         }
     }
 
-    internal bool IsComplete => _frontComplete
-        && (_transitionRefresh?.IsComplete ?? true)
-        && (_hasNoChanges
-            || ((_seamRefresh?.IsComplete ?? true)
-                && (_build?.IsComplete ?? false)));
+    internal bool IsComplete => IsLifecycleComplete(
+        _frontComplete,
+        _transitionRefresh?.IsComplete,
+        _hasNoChanges,
+        _seamRefresh?.IsComplete,
+        _build?.IsComplete);
 
-    internal NavigationWorldGraph Result => _build == null
-        ? _componentGraph ?? _candidate
-        : _componentGraph!.WithSurfaceComponents(_build.Result);
+    internal static bool IsLifecycleComplete(
+        bool frontComplete,
+        bool? transitionRefreshComplete,
+        bool hasNoChanges,
+        bool? seamRefreshComplete,
+        bool? buildComplete) => frontComplete
+        && transitionRefreshComplete != false
+        && (hasNoChanges
+            || (seamRefreshComplete != false && buildComplete == true));
+
+    internal NavigationWorldGraph Result
+    {
+        get
+        {
+            System.Diagnostics.Debug.Assert(_componentGraph != null,
+                "Completed materialized work owns an explicit component graph.");
+            return _build == null
+                ? _componentGraph!
+                : _componentGraph!.WithSurfaceComponents(_build.Result);
+        }
+    }
 
     internal bool RevalidateForPublication()
     {
@@ -120,11 +139,10 @@ internal sealed class NavigationMaterializedComponentWork
         long revision = _seamRefresh.Revision;
         if (_seamRefresh.RevalidateForPublication())
             return true;
-        if (_seamRefresh.Revision != revision)
-        {
-            ResetComponentState();
-            _requiresSnapshotRestart = true;
-        }
+        System.Diagnostics.Debug.Assert(_seamRefresh.Revision != revision,
+            "Failed seam revalidation resets the refresh and advances its revision.");
+        ResetComponentState();
+        _requiresSnapshotRestart = true;
         return false;
     }
 
@@ -220,7 +238,9 @@ internal sealed class NavigationMaterializedComponentWork
             if (_componentGraph == null)
             {
                 _seamRevision = _seamRefresh.Revision;
-                _componentGraph = (_transitionGraph ?? _candidate)
+                System.Diagnostics.Debug.Assert(_transitionGraph != null,
+                    "Seam refresh follows transition publication for materialized work.");
+                _componentGraph = _transitionGraph!
                     .WithAutomaticSeams(_seamRefresh.Result);
             }
         }
@@ -290,12 +310,11 @@ internal sealed class NavigationMaterializedComponentWork
             GridEventInfo eventInfo = _events![_frontEventOrdinal++];
             if (!_candidate.TryGetMapId(
                     eventInfo.Configuration.ToGridKey(),
-                    out string mapId)
-                || !_candidate.TryGetMap(mapId, out NavigationMapInstance? next)
-                || next == null)
-            {
+                    out string mapId))
                 continue;
-            }
+            bool foundMap = _candidate.TryGetMap(mapId, out NavigationMapInstance next);
+            System.Diagnostics.Debug.Assert(foundMap,
+                "The immutable configuration index and map directory share one candidate graph.");
             _transitionChangedMaps = _transitionChangedMaps.Set(mapId, true);
             if (eventInfo.HasVoxelState)
                 AddChangedMedia(next, eventInfo.VoxelIndex);
@@ -304,6 +323,7 @@ internal sealed class NavigationMaterializedComponentWork
         _frontComplete = true;
         if (_changedStates.Count == 0)
         {
+            _componentGraph = _candidate;
             _hasNoChanges = true;
             return true;
         }
@@ -352,8 +372,7 @@ internal sealed class NavigationMaterializedComponentWork
             {
                 if (!meter.TryConsumeComponentNodes(1))
                     return false;
-                if (!_changedStateEnumerator.MoveNext())
-                    return true;
+                _changedStateEnumerator.MoveNext();
                 _state = _changedStateEnumerator.Current;
                 _stateOrdinal++;
                 _statePhase = 1;
@@ -431,12 +450,12 @@ internal sealed class NavigationMaterializedComponentWork
                 return true;
             if (status == NavigationSurfaceEdgeAdvanceStatus.Edge)
             {
-                if (_componentGraph!.TryGetNodeAddress(
-                        _outgoing.Current.Target,
-                        out NavigationCellAddress address))
-                {
-                    _pendingNeighbor = address;
-                }
+                bool found = _componentGraph!.TryGetNodeAddress(
+                    _outgoing.Current.Target,
+                    out NavigationCellAddress address);
+                System.Diagnostics.Debug.Assert(found,
+                    "A published outgoing surface edge targets a node in the same graph.");
+                _pendingNeighbor = address;
                 return true;
             }
             _outgoingComplete = true;
@@ -450,12 +469,12 @@ internal sealed class NavigationMaterializedComponentWork
             return true;
         if (incoming == NavigationSurfaceEdgeAdvanceStatus.Edge)
         {
-            if (_componentGraph!.TryGetNodeAddress(
-                    _incoming.Current.Predecessor,
-                    out NavigationCellAddress address))
-            {
-                _pendingNeighbor = address;
-            }
+            bool found = _componentGraph!.TryGetNodeAddress(
+                _incoming.Current.Predecessor,
+                out NavigationCellAddress address);
+            System.Diagnostics.Debug.Assert(found,
+                "A published incoming surface edge originates at a node in the same graph.");
+            _pendingNeighbor = address;
             return true;
         }
         CompleteState();
@@ -506,20 +525,18 @@ internal sealed class NavigationMaterializedComponentWork
         TraversalMedium medium,
         MaintenanceWorkMeter meter)
     {
-        if (!_candidate.TryGetSurfaceComponent(
+        if (!_candidate.SurfaceComponents.TryGet(
                 address,
                 medium,
-                out NavigationSurfaceComponentKey key,
-                out _)
-            || _affectedKeys.Contains(key))
+                out NavigationSurfaceComponent component)
+            || _affectedKeys.Contains(component.Key))
         {
             return true;
         }
         if (!meter.TryConsumeDependencyEntries(1))
             return false;
-        _affectedKeys = _affectedKeys.Add(key);
-        if (_candidate.SurfaceComponents.TryGet(key, out NavigationSurfaceComponent component))
-            _affectedMemberCount = checked(_affectedMemberCount + component.Members.Count);
+        _affectedKeys = _affectedKeys.Add(component.Key);
+        _affectedMemberCount = checked(_affectedMemberCount + component.Members.Count);
         return true;
     }
 
@@ -538,6 +555,8 @@ internal sealed class NavigationMaterializedComponentWork
 
     private void ResetComponentState()
     {
+        System.Diagnostics.Debug.Assert(_seamRefresh != null,
+            "Only seam revision changes restart component discovery.");
         _affectedKeys = _initialAffectedKeys;
         _seeds = _initialSeeds;
         _affectedMemberCount = _initialAffectedMemberCount;
@@ -547,8 +566,8 @@ internal sealed class NavigationMaterializedComponentWork
         _statePhase = 0;
         _pendingNeighbor = null;
         _build = null;
-        _componentGraph = _seamRefresh == null ? _transitionGraph ?? _candidate : null;
-        _seamRevision = _seamRefresh?.Revision ?? -1;
+        _componentGraph = null;
+        _seamRevision = _seamRefresh!.Revision;
         CompleteState();
     }
 }

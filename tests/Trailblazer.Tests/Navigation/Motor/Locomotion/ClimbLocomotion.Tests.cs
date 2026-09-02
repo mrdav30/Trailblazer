@@ -42,6 +42,38 @@ public sealed class ClimbLocomotionTests : IDisposable
         locomotion.AttachedUpDirection.Should().Be(Vector3d.Zero);
     }
 
+    [Fact]
+    public void ClimbLocomotion_ReaffirmingEnabledState_ShouldPreserveActiveAttachment()
+    {
+        var locomotion = new ClimbLocomotion
+        {
+            IsClimbing = true,
+            AttachmentId = 7,
+            AttachmentPoint = new Vector3d(1, 2, 3)
+        };
+
+        locomotion.IsEnabled = true;
+
+        locomotion.IsClimbing.Should().BeTrue();
+        locomotion.AttachmentId.Should().Be(7);
+        locomotion.AttachmentPoint.Should().Be(new Vector3d(1, 2, 3));
+    }
+
+    [Fact]
+    public void CreateActiveMantleState_ShouldUseAttachmentPoint_WhenNoMantleTargetExists()
+    {
+        var locomotion = new ClimbLocomotion
+        {
+            ActiveClimbKind = ClimbAffordanceKind.Surface,
+            AttachmentPoint = new Vector3d(2, 3, 4),
+            MantleTargetPosition = null
+        };
+
+        ActiveMantleState state = locomotion.CreateActiveMantleState();
+
+        state.MantleTargetPosition.Should().Be(locomotion.AttachmentPoint);
+    }
+
     [Theory]
     [InlineData(false)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
@@ -364,7 +396,13 @@ public sealed class ClimbLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateFallingAgent(startVelocity: new Vector3d(0, -4, 0));
         agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
         {
-            Snapshot = CreateLadderSnapshot()
+            Snapshot = new ClimbAffordanceSnapshot(
+                ClimbAffordanceKind.Ladder,
+                Vector3d.Zero,
+                Vector3d.Backward,
+                Vector3d.Up,
+                affordanceId: 1,
+                allowDetachJump: false)
         };
 
         TestWorld.Context.Simulate();
@@ -419,6 +457,38 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.FrameRequest.IsRequestingClimb = false;
         agent.Simulate();
 
+        agent.Motor.IsClimbing.Should().BeFalse();
+        stoppedCount.Should().Be(1);
+        slippedCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(TraversalMedium.Liquid)]
+    [InlineData(TraversalMedium.Unknown)]
+    public void Given_ActiveClimb_When_HostLosesClimbableTraversal_Then_DetachesWithoutSlip(
+        TraversalMedium medium)
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLadderSnapshot()
+        };
+        int stoppedCount = 0;
+        int slippedCount = 0;
+        agent.Motor.Events.OnStopClimb = () => stoppedCount++;
+        agent.Motor.Events.OnClimbSlip = () => slippedCount++;
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.FrameCondition.Medium = medium;
+        agent.FrameCondition.SurfaceLevel = Fixed64.One;
+        agent.FrameCondition.GroundState = null;
+        TestWorld.Context.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Up;
+        agent.FrameRequest.Rate = TrekRate.Fast;
+        agent.FrameRequest.IsRequestingClimb = true;
+        agent.Simulate();
+
+        agent.Motor.CurrentState.Medium.Should().Be(medium);
         agent.Motor.IsClimbing.Should().BeFalse();
         stoppedCount.Should().Be(1);
         slippedCount.Should().Be(0);
@@ -494,8 +564,11 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.Motor.Handler.Climb!.IsMantling.Should().BeFalse();
     }
 
-    [Fact]
-    public void Given_ActiveMantle_When_TraversalBecomesUnknown_Then_SlipsAndStops()
+    [Theory]
+    [InlineData(TraversalMedium.Unknown)]
+    [InlineData(TraversalMedium.Liquid)]
+    public void Given_ActiveMantle_When_TraversalBecomesUnsupported_Then_SlipsAndStops(
+        TraversalMedium medium)
     {
         var agent = CreateClimbingAgent();
         agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
@@ -508,7 +581,8 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
-        agent.FrameCondition.Medium = TraversalMedium.Unknown;
+        agent.FrameCondition.Medium = medium;
+        agent.FrameCondition.SurfaceLevel = (Fixed64)10;
         agent.FrameCondition.GroundState = null;
 
         TestWorld.Context.Simulate();
@@ -667,6 +741,292 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.Position.Y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
+    [Fact]
+    public void Given_ParallelClimbAxes_When_LateralMovementRequested_Then_UsesDeterministicRightFallback()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateSurfaceSnapshot(
+                allowLateralTraverse: true,
+                surfaceNormal: Vector3d.Up,
+                upDirection: Vector3d.Up)
+        };
+
+        SimulateClimbFrame(agent, Vector3d.Right, TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeTrue();
+        agent.Position.X.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.Y.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Given_ActiveMantleWithoutTarget_When_Simulated_Then_HoldsPosition()
+    {
+        var agent = CreateClimbingAgent(new Vector3d(0, 2, 0));
+        ClimbLocomotion climb = agent.Motor.Handler.Climb!;
+        climb.IsClimbing = true;
+        climb.IsMantling = true;
+        climb.MantleTargetPosition = null;
+        Vector3d originalPosition = agent.Position;
+
+        TestWorld.Context.Simulate();
+        agent.Simulate();
+
+        agent.Position.Should().Be(originalPosition);
+        climb.IsClimbing.Should().BeTrue();
+        climb.IsMantling.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Given_ActiveMantleAtOrWithinTolerance_When_Simulated_Then_CompletesWithoutOvershoot(
+        int targetKind)
+    {
+        var agent = CreateClimbingAgent(new Vector3d(0, 2, 0));
+        ClimbLocomotion climb = agent.Motor.Handler.Climb!;
+        climb.IsClimbing = true;
+        climb.IsMantling = true;
+        climb.ClimbStartTolerance = Fixed64.Half;
+        climb.MantleTargetPosition = targetKind == 0
+            ? agent.Position
+            : agent.Position + Vector3d.Up * Fixed64.Quarter;
+        Vector3d originalPosition = agent.Position;
+
+        TestWorld.Context.Simulate();
+        agent.Simulate();
+
+        agent.Position.Should().Be(originalPosition);
+        climb.IsClimbing.Should().BeFalse();
+        climb.IsMantling.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Given_ActiveClimb_When_ARequiredMantleInputIsMissing_Then_ClimbContinues(
+        int missingInput)
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLadderSnapshot()
+        };
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        ClimbAffordanceKind kind = missingInput == 0
+            ? ClimbAffordanceKind.Surface
+            : ClimbAffordanceKind.Ledge;
+        bool allowMantle = missingInput != 1;
+        Vector3d? target = missingInput == 2
+            ? null
+            : new Vector3d(0, 2, 0);
+        resolver.Snapshot = new ClimbAffordanceSnapshot(
+            kind,
+            Vector3d.Zero,
+            Vector3d.Backward,
+            Vector3d.Up,
+            affordanceId: 1,
+            canContinueClimb: true,
+            allowMantle: allowMantle,
+            mantleTargetPosition: target);
+
+        SimulateClimbFrame(
+            agent,
+            Vector3d.Up,
+            missingInput == 3 ? TrekRate.Stationary : TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeTrue();
+        agent.Motor.Handler.Climb.IsMantling.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_ActiveMantleValidationWithoutValidatorInterface_When_Simulated_Then_Continues()
+    {
+        var agent = CreateClimbingAgent();
+        ClimbLocomotion climb = agent.Motor.Handler.Climb!;
+        climb.IsClimbing = true;
+        climb.IsMantling = true;
+        climb.MantleTargetPosition = new Vector3d(0, 3, 0);
+        climb.ValidateActiveMantleWithHost = true;
+        climb.ClimbResolver = new MutableClimbResolver();
+
+        TestWorld.Context.Simulate();
+        agent.Simulate();
+
+        climb.IsClimbing.Should().BeTrue();
+        climb.IsMantling.Should().BeTrue();
+        agent.Position.Y.Should().BeGreaterThan(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Given_ActiveMantleValidatorCannotResolve_When_Simulated_Then_SlipsAndStops()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MantleValidatingClimbResolver
+        {
+            ValidationResolve = false
+        };
+        ClimbLocomotion climb = agent.Motor.Handler.Climb!;
+        climb.IsClimbing = true;
+        climb.IsMantling = true;
+        climb.MantleTargetPosition = new Vector3d(0, 3, 0);
+        climb.ValidateActiveMantleWithHost = true;
+        climb.ClimbResolver = resolver;
+        int slips = 0;
+        agent.Motor.Events.OnClimbSlip = () => slips++;
+
+        TestWorld.Context.Simulate();
+        agent.Simulate();
+
+        climb.IsClimbing.Should().BeFalse();
+        climb.IsMantling.Should().BeFalse();
+        resolver.ValidationCallCount.Should().Be(1);
+        slips.Should().Be(1);
+    }
+
+    [Fact]
+    public void Given_UnidentifiedAffordanceChangesKind_When_Climbing_Then_SlipsAndStops()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MutableClimbResolver
+        {
+            Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true, affordanceId: null)
+        };
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        resolver.Snapshot = new ClimbAffordanceSnapshot(
+            ClimbAffordanceKind.Ladder,
+            Vector3d.Zero,
+            Vector3d.Backward,
+            Vector3d.Up,
+            affordanceId: null);
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_UnidentifiedAffordanceFlipsUpAxis_When_Climbing_Then_SlipsAndStops()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MutableClimbResolver
+        {
+            Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true, affordanceId: null)
+        };
+        agent.Motor.Handler.Climb!.ClimbResolver = resolver;
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        resolver.Snapshot = CreateSurfaceSnapshot(
+            allowLateralTraverse: true,
+            upDirection: Vector3d.Down,
+            affordanceId: null);
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_ClimbDisallowsDetachJump_When_JumpRequested_Then_RemainsAttached()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLadderSnapshot(allowDetachJump: false)
+        };
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        TestWorld.Context.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Up;
+        agent.FrameRequest.Rate = TrekRate.Fast;
+        agent.FrameRequest.IsRequestingClimb = true;
+        agent.FrameRequest.IsRequestingJump = true;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeTrue();
+        agent.Motor.IsJumping.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_CoreAndClimbProfile_When_ClimbStarts_Then_OptionalModuleAbsenceIsSafe()
+    {
+        LocomotionProfile profile = new LocomotionProfileBuilder(includeOptionalLocomotions: false)
+            .WithClimb()
+            .Build();
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(
+            startingMedium: TraversalMedium.Gas,
+            profile: profile);
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLadderSnapshot()
+        };
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeTrue();
+        agent.Motor.Handler.Jump.Should().BeNull();
+        agent.Motor.Handler.Fly.Should().BeNull();
+        agent.Motor.Handler.Slide.Should().BeNull();
+        agent.Position.Y.Should().BeGreaterThan(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Given_LedgeWithMissingUpAxis_When_MovingUp_Then_StartsMantleUsingWorldUp()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = new ClimbAffordanceSnapshot(
+                ClimbAffordanceKind.Ledge,
+                Vector3d.Zero,
+                Vector3d.Backward,
+                Vector3d.Zero,
+                affordanceId: 3,
+                allowMantle: true,
+                mantleTargetPosition: new Vector3d(0, 2, 0))
+        };
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.Motor.Handler.Climb!.IsMantling.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Given_ClimbWithMissingAxes_When_DetachJumpRequested_Then_UsesWorldFallbacks()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.Handler.Climb!.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = new ClimbAffordanceSnapshot(
+                ClimbAffordanceKind.Ladder,
+                Vector3d.Zero,
+                Vector3d.Zero,
+                Vector3d.Zero,
+                affordanceId: 1,
+                allowDetachJump: true)
+        };
+        SimulateClimbFrame(agent, Vector3d.Zero, TrekRate.Fast);
+        int jumpEvents = 0;
+        agent.Motor.Events.OnStartJump += _ => jumpEvents++;
+
+        TestWorld.Context.Simulate();
+        agent.FrameRequest.Rate = TrekRate.Fast;
+        agent.FrameRequest.IsRequestingClimb = true;
+        agent.FrameRequest.IsRequestingJump = true;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        agent.Motor.IsJumping.Should().BeTrue();
+        agent.Motor.Handler.Jump!.FrameJumpDirection.Y.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Motor.Handler.Jump.FrameJumpDirection.Z.Should().BeLessThan(Fixed64.Zero);
+        jumpEvents.Should().Be(1);
+    }
+
     private static MockMotorAgent CreateClimbingAgent(Vector3d? startPosition = null)
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
@@ -688,7 +1048,8 @@ public sealed class ClimbLocomotionTests : IDisposable
     private static ClimbAffordanceSnapshot CreateLadderSnapshot(
         bool allowDescent = true,
         bool canStartClimb = true,
-        bool canContinueClimb = true)
+        bool canContinueClimb = true,
+        bool allowDetachJump = true)
     {
         return new ClimbAffordanceSnapshot(
             kind: ClimbAffordanceKind.Ladder,
@@ -699,7 +1060,8 @@ public sealed class ClimbLocomotionTests : IDisposable
             canStartClimb: canStartClimb,
             canContinueClimb: canContinueClimb,
             allowLateralTraverse: false,
-            allowDescent: allowDescent);
+            allowDescent: allowDescent,
+            allowDetachJump: allowDetachJump);
     }
 
     private static ClimbAffordanceSnapshot CreateSurfaceSnapshot(

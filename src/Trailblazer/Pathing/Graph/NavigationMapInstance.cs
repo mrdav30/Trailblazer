@@ -47,14 +47,14 @@ internal sealed partial class NavigationMapInstance
         int lastBaselineAddressCount,
         int lastCopiedSemanticPages,
         int lastCopiedPhysicalPages,
-        PersistentVoxelIndexMap<byte>? dynamicAddresses = null)
+        PersistentVoxelIndexMap<byte> dynamicAddresses)
     {
         Map = map;
         BakeVersion = bakeVersion;
         Overlay = overlay;
         DynamicSlotGeneration = dynamicSlotGeneration;
         _dynamicSlots = dynamicSlots;
-        _dynamicAddresses = dynamicAddresses ?? PersistentVoxelIndexMap<byte>.Empty;
+        _dynamicAddresses = dynamicAddresses;
         _dynamicSlotIndexes = dynamicSlotIndexes;
         _nextDynamicSlot = nextDynamicSlot;
         _semanticPages = semanticPages;
@@ -150,10 +150,9 @@ internal sealed partial class NavigationMapInstance
 
     internal VoxelIndex GetSlotIndex(int slot)
     {
-        if ((uint)slot < (uint)Map.CellSpan.Length)
-            return Map.CellSpan[slot].Index;
-
-        return _dynamicSlotIndexes.TryGetValue(slot, out VoxelIndex index) ? index : default;
+        bool found = TryGetSlotIndex(slot, out VoxelIndex index);
+        System.Diagnostics.Debug.Assert(found, "Diagnostics enumerate only addressed slots.");
+        return index;
     }
 
     internal bool TryGetEffectiveCell(int slot, out NavigationCell cell)
@@ -274,8 +273,6 @@ internal sealed partial class NavigationMapInstance
 
         if (eventInfo.ChangeKind == GridEventKind.GridRemoved)
             return MakeDormant(instanceVersion);
-        if (!IsMaterialized)
-            return this;
         if (!eventInfo.HasVoxelState
             || !TryGetSlot(eventInfo.VoxelIndex, out int slot)
             || eventInfo.ChangeSequence <= GetBaselineCapturedChangeSequence(slot))
@@ -316,20 +313,12 @@ internal sealed partial class NavigationMapInstance
     {
         GridNavigationBaseline? baseline = capture.Baseline;
         if (!capture.IsRequested
-            || !capture.HasBaseline
-            || !capture.ConfigurationKey.Equals(Map.GridBinding.Key)
-            || (baseline != null && baseline.VoxelStates.Length != capture.AddressCount))
+            || !capture.HasBaseline)
         {
             return MakeDormant(instanceVersion);
         }
 
         NavigationMapInstance materializing = capture.PreparedInstance ?? this;
-        if (!ReferenceEquals(materializing.Map, Map)
-            || materializing.BakeVersion != BakeVersion
-            || materializing.Overlay.HighWaterSequence != Overlay.HighWaterSequence)
-        {
-            return MakeDormant(instanceVersion);
-        }
         PersistentIntMap<NavigationPhysicalPage> pages = capture.PreparedPages
             ?? (baseline == null
                 ? materializing._physicalPages
@@ -348,40 +337,11 @@ internal sealed partial class NavigationMapInstance
     {
         GridNavigationBaseline? baseline = capture.Baseline;
         if (!capture.IsRequested
-            || !previous.IsMaterialized
             || !capture.IsDelta)
         {
             return Materialize(capture, instanceVersion);
         }
-        if (capture.AddressCount == 0)
-        {
-            return new NavigationMapInstance(
-                Map,
-                BakeVersion,
-                Overlay,
-                DynamicSlotGeneration,
-                _dynamicSlots,
-                _dynamicSlotIndexes,
-                _nextDynamicSlot,
-                _semanticPages,
-                previous._physicalPages,
-                _dynamicBaselineCapturedChangeSequences,
-                _bakedLookup,
-                _preparedMapRetainedBytes,
-                previous.GridIdentity,
-                previous.BaselineCapturedChangeSequence,
-                capture.GridLastChangeSequence,
-                instanceVersion,
-                SemanticVersion,
-                previous.PhysicalVersion,
-                lastBaselineAddressCount: 0,
-                lastCopiedSemanticPages: LastCopiedSemanticPages,
-                lastCopiedPhysicalPages: 0,
-                dynamicAddresses: _dynamicAddresses);
-        }
-        if (baseline == null
-            || !baseline.ConfigurationKey.Equals(Map.GridBinding.Key)
-            || baseline.VoxelStates.Length != capture.AddressCount)
+        if (baseline == null)
         {
             return MakeDormant(instanceVersion);
         }
@@ -390,14 +350,13 @@ internal sealed partial class NavigationMapInstance
         PersistentIntMap<ulong> dynamicCapturedChangeSequences =
             _dynamicBaselineCapturedChangeSequences;
         var capturedAddresses = new VoxelIndex[capture.AddressCount];
-        int capturedCount = 0;
         for (int i = 0; i < capture.AddressCount; i++)
         {
             VoxelIndex address = baseline.VoxelStates[i].VoxelIndex;
-            if (previous.TryGetSlot(address, out _))
-                continue;
-            if (!TryGetSlot(address, out int slot))
-                continue;
+            System.Diagnostics.Debug.Assert(!previous.TryGetSlot(address, out _));
+            bool found = TryGetSlot(address, out int slot);
+            System.Diagnostics.Debug.Assert(found);
+            System.Diagnostics.Debug.Assert(slot >= DynamicSlotBase);
             NavigationBaselineVoxelState physical = baseline.VoxelStates[i];
             pages = ApplyPhysicalState(
                 pages,
@@ -405,13 +364,12 @@ internal sealed partial class NavigationMapInstance
                 physical.IsPresent,
                 physical.ObstacleCount,
                 instanceVersion);
-            if (slot >= DynamicSlotBase)
-                dynamicCapturedChangeSequences = dynamicCapturedChangeSequences.Set(
-                    slot,
-                    baseline.CapturedChangeSequence);
-            capturedAddresses[capturedCount] = address;
-            capturedCount++;
+            dynamicCapturedChangeSequences = dynamicCapturedChangeSequences.Set(
+                slot,
+                baseline.CapturedChangeSequence);
+            capturedAddresses[i] = address;
         }
+        System.Diagnostics.Debug.Assert(capture.AddressCount > 0);
 
         return new NavigationMapInstance(
             Map,
@@ -435,12 +393,13 @@ internal sealed partial class NavigationMapInstance
             baseline.GridLastChangeSequence,
             instanceVersion,
             SemanticVersion,
-            physicalVersion: capturedCount > 0 ? instanceVersion : PhysicalVersion,
-            lastBaselineAddressCount: capturedCount,
+            physicalVersion: instanceVersion,
+            lastBaselineAddressCount: capture.AddressCount,
             lastCopiedSemanticPages: LastCopiedSemanticPages,
-            lastCopiedPhysicalPages: capturedCount > 0
-                ? CountTouchedPages(capturedAddresses, capturedCount, _dynamicSlots)
-                : 0,
+            lastCopiedPhysicalPages: CountTouchedPages(
+                capturedAddresses,
+                capture.AddressCount,
+                _dynamicSlots),
             dynamicAddresses: _dynamicAddresses);
     }
 
@@ -542,8 +501,8 @@ internal sealed partial class NavigationMapInstance
         {
             if (!states[i].IsPresent && states[i].ObstacleCount == 0)
                 continue;
-            if (!TryGetSlot(states[i].VoxelIndex, out int slot))
-                continue;
+            bool found = TryGetSlot(states[i].VoxelIndex, out int slot);
+            System.Diagnostics.Debug.Assert(found);
             int pageIndex = slot / NavigationPhysicalPage.SlotCount;
             if (!pages.TryGetValue(pageIndex, out NavigationPhysicalPage? page))
             {
@@ -552,7 +511,7 @@ internal sealed partial class NavigationMapInstance
             }
             int offset = slot % NavigationPhysicalPage.SlotCount;
             page!.IsPresent[offset] = states[i].IsPresent;
-            page.ObstacleCounts[offset] = states[i].IsPresent ? states[i].ObstacleCount : (byte)0;
+            page.ObstacleCounts[offset] = states[i].ObstacleCount;
         }
         return pages;
     }
@@ -595,23 +554,25 @@ internal sealed partial class NavigationMapInstance
         return count;
     }
 
-    internal int CopyNewCanonicalAddresses(
+    internal bool TryCopyNewCanonicalAddresses(
         NavigationMapInstance previous,
-        Span<VoxelIndex> destination)
+        Span<VoxelIndex> destination,
+        out int count)
     {
-        if (AddressCount > destination.Length)
-            return 0;
         int bakedCursor = 0;
         int dynamicCursor = 0;
-        int count = 0;
+        count = 0;
+        Span<VoxelIndex> slot = stackalloc VoxelIndex[1];
         for (int i = 0; i < AddressCount; i++)
         {
-            Span<VoxelIndex> slot = destination.Slice(count, 1);
             CopyCanonicalAddressChunk(ref bakedCursor, ref dynamicCursor, slot);
-            if (!previous.TryGetSlot(slot[0], out _))
-                count++;
+            if (previous.TryGetSlot(slot[0], out _))
+                continue;
+            if (count == destination.Length)
+                return false;
+            destination[count++] = slot[0];
         }
-        return count;
+        return true;
     }
 
     private NavigationMapInstance MakeDormant(long instanceVersion)
@@ -656,8 +617,7 @@ internal sealed partial class NavigationMapInstance
         }
         VoxelIndex index = _dynamicSlots.GetKeyAt(ordinal);
         slot = _dynamicSlots.GetValueAt(ordinal);
-        retain = _dynamicAddresses.TryGetValue(index, out _)
-            || HasAuthoredDynamicSemantic(slot.Slot);
+        retain = _dynamicAddresses.TryGetValue(index, out _);
         return true;
     }
 
@@ -824,15 +784,6 @@ internal sealed partial class NavigationMapInstance
         + (_physicalPages.PersistentNodeCount * 2)
         + _dynamicBaselineCapturedChangeSequences.PersistentNodeCount);
 
-    private bool HasAuthoredDynamicSemantic(int slot)
-    {
-        NavigationSemanticPage? page = FindSemanticPage(slot / NavigationSemanticPage.SlotCount);
-        if (page == null)
-            return false;
-        int offset = slot % NavigationSemanticPage.SlotCount;
-        return page.HasOverride[offset] || page.IsSuppressed[offset];
-    }
-
     private NavigationMapInstance WithPhysicalState(
         int slot,
         bool isPresent,
@@ -987,8 +938,8 @@ internal sealed partial class NavigationMapInstance
         int priorPage = -1;
         for (int i = 0; i < count; i++)
         {
-            if (!slots.TryGetValue(addresses[i], out NavigationDynamicCellSlot slot))
-                continue;
+            bool found = slots.TryGetValue(addresses[i], out NavigationDynamicCellSlot slot);
+            System.Diagnostics.Debug.Assert(found);
             int page = slot.Slot / NavigationPhysicalPage.SlotCount;
             if (page != priorPage)
             {
@@ -1014,11 +965,11 @@ internal sealed partial class NavigationMapInstance
     {
         if (slot < BakedSlotCount)
             return BaselineCapturedChangeSequence;
-        return _dynamicBaselineCapturedChangeSequences.TryGetValue(
-                slot,
-                out ulong capturedChangeSequence)
-            ? capturedChangeSequence
-            : BaselineCapturedChangeSequence;
+        bool found = _dynamicBaselineCapturedChangeSequences.TryGetValue(
+            slot,
+            out ulong capturedChangeSequence);
+        System.Diagnostics.Debug.Assert(found);
+        return capturedChangeSequence;
     }
 
     private static PersistentIntMap<NavigationSemanticPage> ApplySemanticOperation(
@@ -1036,11 +987,6 @@ internal sealed partial class NavigationMapInstance
         }
         else
         {
-            if (operation.Kind == NavigationCellOverlayOperationKind.RevertToBake)
-            {
-                copiedNodeCount = 0;
-                return pages;
-            }
             page = new NavigationSemanticPage(pageIndex, version);
         }
 

@@ -27,17 +27,14 @@ internal static class TransientStateUtility
 
     internal static void Sync(ITransient instance, ITransient other)
     {
-        if (other == null)
-            throw new ArgumentNullException(nameof(other));
+        SwiftThrowHelper.ThrowIfNull(other, nameof(other));
 
         Type sourceType = instance.GetType();
         Type targetType = other.GetType();
-        if (sourceType != targetType)
-        {
-            throw new ArgumentException(
-                $"Type mismatch during SyncTransientState. Expected {sourceType.FullName}, but received {targetType.FullName}.",
-                nameof(other));
-        }
+        SwiftThrowHelper.ThrowIfArgument(
+            sourceType != targetType,
+            paramName: nameof(other),
+            message: $"Type mismatch during SyncTransientState. Expected {sourceType.FullName}, but received {targetType.FullName}.");
 
         _syncDelegates.GetOrAdd(sourceType, BuildSyncDelegate)(instance, other);
     }
@@ -92,8 +89,8 @@ internal static class TransientStateUtility
 
     private static Expression GetDefaultExpression(PropertyInfo property)
     {
-        TransientAttribute? attr = property.GetCustomAttribute<TransientAttribute>();
-        if (attr?.DefaultValueSource != null && attr.DefaultValueMember != null)
+        TransientAttribute attr = property.GetCustomAttribute<TransientAttribute>()!;
+        if (attr.DefaultValueSource != null && attr.DefaultValueMember != null)
             return GetStaticMemberExpression(attr.DefaultValueSource, attr.DefaultValueMember);
 
         return Expression.Default(property.PropertyType);
@@ -106,9 +103,9 @@ internal static class TransientStateUtility
             return Expression.Field(null, field);
 
         PropertyInfo? prop = type.GetProperty(memberName, BindingFlags.Public | BindingFlags.Static);
-        if (prop == null)
-            throw new InvalidOperationException(
-                $"Transient default member '{type.FullName}.{memberName}' was not found.");
+        SwiftThrowHelper.ThrowIfTrue(
+            prop == null,
+            message: $"Transient default member '{type.FullName}.{memberName}' was not found.");
 
         return Expression.Property(null, prop);
     }

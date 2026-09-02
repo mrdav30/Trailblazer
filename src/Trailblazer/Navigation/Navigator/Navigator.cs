@@ -262,8 +262,9 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (ReferenceEquals(_context, context))
             return;
 
-        if (_isSet || _isInitialized)
-            throw new InvalidOperationException("Navigator context cannot be changed after setup. Call Reset() before rebinding.");
+        SwiftThrowHelper.ThrowIfTrue(
+            _isSet || _isInitialized,
+            message: "Navigator context cannot be changed after setup. Call Reset() before rebinding.");
 
         _context = context;
         _steering?.BindContext(context);
@@ -351,14 +352,17 @@ public abstract partial class Navigator : INavigate, IRecordable
         Vector3d? velocity = null,
         Guid? globalId = null)
     {
-        if (_isSet || _isInitialized)
-            throw new InvalidOperationException("Navigator is already set up. Call Reset() before setting it up again.");
+        SwiftThrowHelper.ThrowIfTrue(
+            _isSet || _isInitialized,
+            message: "Navigator is already set up. Call Reset() before setting it up again.");
 
         EnsureContextForSetup();
         navigationProfile.Validate(nameof(navigationProfile));
 
-        if (globalId.HasValue && globalId.Value == Guid.Empty)
-            throw new ArgumentException("Navigator globalId cannot be Guid.Empty.", nameof(globalId));
+        SwiftThrowHelper.ThrowIfArgument(
+            globalId.HasValue && globalId.Value == Guid.Empty,
+            paramName: nameof(globalId),
+            message: "Navigator globalId cannot be Guid.Empty.");
 
         _globalId = globalId ?? GenerateGUID();
 
@@ -450,8 +454,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </remarks>
     public virtual void PrewarmMovementGroup()
     {
-        if (!IsActive)
-            throw new InvalidOperationException("Navigator must be Setup and Initialized before prewarming movement groups.");
+        SwiftThrowHelper.ThrowIfTrue(
+            !IsActive,
+            message: "Navigator must be Setup and Initialized before prewarming movement groups.");
 
         Steering!.PrewarmMovementGroup(this);
     }
@@ -654,8 +659,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     public virtual void Simulate()
     {
-        if (!IsActive)
-            throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
+        SwiftThrowHelper.ThrowIfTrue(
+            !IsActive,
+            message: "Navigator must be Setup and Initialized before Simulate().");
 
         Vector3d heading = Vector3d.Zero;
         if (IsGuided)
@@ -709,8 +715,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </remarks>
     public virtual void CommitFrameMotion()
     {
-        if (!IsActive)
-            throw new InvalidOperationException("Navigator must be Setup and Initialized before CommitFrameMotion().");
+        SwiftThrowHelper.ThrowIfTrue(
+            !IsActive,
+            message: "Navigator must be Setup and Initialized before CommitFrameMotion().");
 
         _lastPosition = _position;
         _position += _positionDelta + _velocityDelta;
@@ -870,8 +877,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     public virtual void SyncCurrentTrekConditionToMotor()
     {
-        if (!IsActive)
-            throw new InvalidOperationException("Navigator must be Setup and Initialized before syncing traversal state to the motor.");
+        SwiftThrowHelper.ThrowIfTrue(
+            !IsActive,
+            message: "Navigator must be Setup and Initialized before syncing traversal state to the motor.");
 
         Motor!.SyncTraversalState(_frameCondition);
     }
@@ -883,8 +891,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="updateMotorState">Flags whether or not to immediately sync the new traversal snapshot into the motor before the next traversal step.</param>
     public virtual void ReplaceTrekCondition(TrekCondition state, bool updateMotorState)
     {
-        if (updateMotorState && !IsActive)
-            throw new InvalidOperationException("Navigator must be Setup and Initialized before syncing traversal state to the motor.");
+        SwiftThrowHelper.ThrowIfTrue(
+            updateMotorState && !IsActive,
+            message: "Navigator must be Setup and Initialized before syncing traversal state to the motor.");
 
         _frameCondition = state.Clone();
         if (updateMotorState)
@@ -977,11 +986,9 @@ public abstract partial class Navigator : INavigate, IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TrailblazerWorldContext RequireContext()
     {
-        if (_context == null)
-        {
-            throw new InvalidOperationException(
-                "Navigator requires a TrailblazerWorldContext before simulation.");
-        }
+        SwiftThrowHelper.ThrowIfTrue(
+            _context == null,
+            message: "Navigator requires a TrailblazerWorldContext before simulation.");
 
         TrailblazerWorldContext.ThrowIfUnusable(_context);
         return _context;
@@ -1057,15 +1064,12 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     private void ValidateGuidedSurfaceQuery(PathQuery query)
     {
-        if (query.Agent != NavigationProfile
+        SwiftThrowHelper.ThrowIfArgument(
+            query.Agent != NavigationProfile
             || query.Start.Position != FootPosition
-            || query.Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
-            || query.Traversal.StartMedium != _frameCondition.Medium)
-        {
-            throw new ArgumentException(
-                "Guided queries must use the Navigator profile, current foot position, and current traversal medium.",
-                nameof(query));
-        }
+            || query.Traversal.StartMedium != _frameCondition.Medium,
+            paramName: nameof(query),
+            message: "Guided queries must use the Navigator profile, current foot position, and current traversal medium.");
     }
 
     private void ApplyTransitionLocomotionHints(

@@ -88,7 +88,8 @@ public sealed class NavigationTokenLegend
     /// </summary>
     public bool Register(string token, NavigationTokenLegendEntry entry)
     {
-        string normalizedToken = NormalizeToken(token);
+        SwiftThrowHelper.ThrowIfNull(token, nameof(token));
+        string normalizedToken = token.Trim();
         SwiftThrowHelper.ThrowIfArgument(
             normalizedToken.IndexOf('!') >= 0 || normalizedToken.IndexOf('_') >= 0,
             nameof(token),
@@ -104,8 +105,11 @@ public sealed class NavigationTokenLegend
     /// <summary>
     /// Attempts to resolve one token after ordinal whitespace trimming.
     /// </summary>
-    public bool TryGetEntry(string token, out NavigationTokenLegendEntry entry) =>
-        _entries.TryGetValue(NormalizeToken(token), out entry);
+    public bool TryGetEntry(string token, out NavigationTokenLegendEntry entry)
+    {
+        SwiftThrowHelper.ThrowIfNull(token, nameof(token));
+        return _entries.TryGetValue(token.Trim(), out entry);
+    }
 
     private static NavigationTokenLegendEntry CreateEntry(
         TraversalMedia media,
@@ -123,6 +127,4 @@ public sealed class NavigationTokenLegend
                 heightClearance,
                 flags),
             transitionMedia);
-
-    private static string NormalizeToken(string token) => token?.Trim() ?? string.Empty;
 }

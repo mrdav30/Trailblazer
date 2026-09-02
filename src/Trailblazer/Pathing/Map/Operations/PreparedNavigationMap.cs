@@ -32,17 +32,9 @@ public sealed class PreparedNavigationMap
         Map = map;
         BakeVersion = bakeVersion;
         BakedCellLookup = NavigationBakedCellLookup.Create(map);
-        try
-        {
-            RetainedBytes = checked(EstimateRetainedBytes(map) + BakedCellLookup.RetainedBytes);
-        }
-        catch (OverflowException)
-        {
-            SwiftThrowHelper.ThrowIfArgument(
-                true,
-                nameof(map),
-                "Prepared map retained-byte accounting overflowed.");
-        }
+        RetainedBytes = NavigationByteCount.SaturatingAdd(
+            EstimateRetainedBytes(map),
+            BakedCellLookup.RetainedBytes);
         CheckpointStamp = checkpointStamp;
     }
 
@@ -62,46 +54,50 @@ public sealed class PreparedNavigationMap
 
     private static long EstimateRetainedBytes(NavigationMap map)
     {
-        long bytes = checked(
-            128L
-            + (map.MapId.Length * sizeof(char))
-            + map.NativePortalTemplateRetainedBytes);
-        bytes = checked(bytes + ((long)map.Cells.Count * 96L));
+        long bytes = NavigationByteCount.SaturatingAdd(
+            128L,
+            (long)map.MapId.Length * sizeof(char));
+        bytes = NavigationByteCount.SaturatingAdd(bytes, map.NativePortalTemplateRetainedBytes);
+        bytes = NavigationByteCount.SaturatingAdd(bytes, (long)map.Cells.Count * 96L);
         if (map.DefaultCell.HasValue)
-            bytes = checked(bytes + DefaultCellRetainedBytes);
+            bytes = NavigationByteCount.SaturatingAdd(bytes, DefaultCellRetainedBytes);
         ReadOnlySpan<TraversalTransitionRule> rules = map.TransitionRuleSpan;
         for (int i = 0; i < rules.Length; i++)
         {
-            bytes = checked(
-                bytes
-                + TransitionRuleRetainedBytes
-                + (rules[i].Id.Length * sizeof(char)));
+            bytes = NavigationByteCount.SaturatingAdd(bytes, TransitionRuleRetainedBytes);
+            bytes = NavigationByteCount.SaturatingAdd(
+                bytes,
+                (long)rules[i].Id.Length * sizeof(char));
         }
         for (int i = 0; i < map.Connections.Count; i++)
         {
             NavigationConnection connection = map.Connections[i];
-            bytes = checked(
-                bytes
-                + 160L
-                + (connection.Id.Length * sizeof(char))
-                + (connection.Destination.MapId.Length * sizeof(char)));
+            bytes = NavigationByteCount.SaturatingAdd(bytes, 160L);
+            bytes = NavigationByteCount.SaturatingAdd(
+                bytes,
+                (long)connection.Id.Length * sizeof(char));
+            bytes = NavigationByteCount.SaturatingAdd(
+                bytes,
+                (long)connection.Destination.MapId.Length * sizeof(char));
             for (int witness = 0; witness < connection.Witnesses.Count; witness++)
             {
-                bytes = checked(
-                    bytes
-                    + 32L
-                    + (connection.Witnesses[witness].MapId.Length * sizeof(char)));
+                bytes = NavigationByteCount.SaturatingAdd(bytes, 32L);
+                bytes = NavigationByteCount.SaturatingAdd(
+                    bytes,
+                    (long)connection.Witnesses[witness].MapId.Length * sizeof(char));
             }
         }
 
         for (int i = 0; i < map.Transitions.Count; i++)
         {
             TraversalTransitionDefinition transition = map.Transitions[i];
-            bytes = checked(
-                bytes
-                + 144L
-                + (transition.Id.Length * sizeof(char))
-                + (transition.Destination.MapId.Length * sizeof(char)));
+            bytes = NavigationByteCount.SaturatingAdd(bytes, 144L);
+            bytes = NavigationByteCount.SaturatingAdd(
+                bytes,
+                (long)transition.Id.Length * sizeof(char));
+            bytes = NavigationByteCount.SaturatingAdd(
+                bytes,
+                (long)transition.Destination.MapId.Length * sizeof(char));
         }
 
         return bytes;

@@ -120,12 +120,10 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
             EnsureWritable();
             if (!TryGetValue(key, out _))
                 return false;
-            bool removed = false;
-            _root = Remove(_root, key, ref removed);
-            if (removed)
-                Count--;
-            IsChanged |= removed;
-            return removed;
+            _root = Remove(_root!, key);
+            Count--;
+            IsChanged = true;
+            return true;
         }
 
         internal NavigationSeamEditTree<TKey, TValue> Seal()
@@ -159,14 +157,11 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
             return Balance(node);
         }
 
-        private Node? Remove(Node? node, TKey key, ref bool removed)
+        private Node? Remove(Node node, TKey key)
         {
-            if (node == null)
-                return null;
             int comparison = key.CompareTo(node.Key);
             if (comparison == 0)
             {
-                removed = true;
                 if (node.Left == null || node.Right == null)
                 {
                     Node? replacement = node.Left ?? node.Right;
@@ -183,11 +178,9 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
             }
             node = Own(node);
             if (comparison < 0)
-                node.Left = Remove(node.Left, key, ref removed);
+                node.Left = Remove(node.Left!, key);
             else
-                node.Right = Remove(node.Right, key, ref removed);
-            if (!removed)
-                return node;
+                node.Right = Remove(node.Right!, key);
             Update(node);
             return Balance(node);
         }
@@ -267,8 +260,9 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
 
         private void EnsureWritable()
         {
-            if (_sealed)
-                throw new InvalidOperationException("The seam edit session is already sealed.");
+            SwiftThrowHelper.ThrowIfTrue(
+                _sealed,
+                message: "The seam edit session is already sealed.");
         }
     }
 
@@ -382,8 +376,9 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
 
         private void Push(Node node)
         {
-            if (_count == _stack.Length)
-                throw new InvalidOperationException("The configured seam tree height was exceeded.");
+            SwiftThrowHelper.ThrowIfTrue(
+                _count == _stack.Length,
+                message: "The configured seam tree height was exceeded.");
             _stack[_count++] = node;
         }
 

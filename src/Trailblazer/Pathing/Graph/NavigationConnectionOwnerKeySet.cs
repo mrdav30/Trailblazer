@@ -62,7 +62,7 @@ internal sealed class NavigationConnectionOwnerKeySet
             ordinal,
             nameof(ordinal));
         int remaining = ordinal;
-        for (int map = 0; map < _maps.Count; map++)
+        for (int map = 0; ; map++)
         {
             PersistentStringMap<bool> values = _maps.GetValueAt(map);
             if (remaining < values.Count)
@@ -73,6 +73,5 @@ internal sealed class NavigationConnectionOwnerKeySet
             }
             remaining -= values.Count;
         }
-        return default;
     }
 }

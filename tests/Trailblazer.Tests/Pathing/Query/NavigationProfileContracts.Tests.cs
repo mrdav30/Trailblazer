@@ -23,6 +23,9 @@ public sealed class NavigationProfileContractsTests
         first.GetHashCode().Should().Be(same.GetHashCode());
         first.Should().NotBe(different);
         (first != different).Should().BeTrue();
+        first.Equals(new KinematicBodyShape(Fixed64.Zero, (Fixed64)3, Fixed64.Half)).Should().BeFalse();
+        first.Equals(new KinematicBodyShape(Fixed64.Zero, (Fixed64)2, Fixed64.One)).Should().BeFalse();
+        first.Equals((object)"not a shape").Should().BeFalse();
     }
 
     [Theory]
@@ -72,6 +75,20 @@ public sealed class NavigationProfileContractsTests
         first.Should().Be(same);
         first.GetHashCode().Should().Be(same.GetHashCode());
         first.Should().NotBe(different);
+        first.Equals((object)"not a profile").Should().BeFalse();
+
+        NavigationAgentProfile[] fieldMutations =
+        {
+            CreateProfile(new KinematicBodyShape(Fixed64.One, (Fixed64)2, Fixed64.One), Fixed64.Half, Fixed64.One, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.One, Fixed64.One, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.Half, (Fixed64)2, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.Half, Fixed64.One, Fixed64.One, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.Half, Fixed64.One, Fixed64.Half, TraversalMedia.Solid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.Half, Fixed64.One, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Swim)
+        };
+
+        foreach (NavigationAgentProfile mutation in fieldMutations)
+            first.Equals(mutation).Should().BeFalse("every profile field is part of exact identity");
     }
 
     [Fact]

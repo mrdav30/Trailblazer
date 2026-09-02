@@ -18,8 +18,7 @@ internal enum NavigationSurfaceEdgeRouteStatus : byte
     Passable = 2,
     Impassable = 3,
     BudgetExceeded = 4,
-    CostOverflow = 5,
-    Stale = 6
+    CostOverflow = 5
 }
 
 /// <summary>Evaluates and expands one exact authored surface edge without allocation.</summary>
@@ -65,29 +64,12 @@ internal struct NavigationSurfaceEdgeRouteWork
         if (edge.Kind != NavigationGraphEdgeKind.Explicit)
             return _completionStatus;
 
-        NavigationExplicitConnectionRecord record = edge.ExplicitConnection;
-        if (record == null
-            || !record.IsActive)
-        {
-            return Complete(NavigationSurfaceEdgeRouteStatus.Stale);
-        }
-
         TraversalExplicitEdgeStatus status = evaluator.BeginExplicitEdge(
             source,
             edge,
             out _explicitWork);
         if (status != TraversalExplicitEdgeStatus.Pending)
-        {
-            return Complete(
-                status switch
-                {
-                    TraversalExplicitEdgeStatus.CostOverflow =>
-                        NavigationSurfaceEdgeRouteStatus.CostOverflow,
-                    TraversalExplicitEdgeStatus.Stale =>
-                        NavigationSurfaceEdgeRouteStatus.Stale,
-                    _ => NavigationSurfaceEdgeRouteStatus.Impassable
-                });
-        }
+            return Complete(NavigationSurfaceEdgeRouteStatus.Impassable);
         _explicit = true;
         return _completionStatus;
     }
@@ -104,8 +86,6 @@ internal struct NavigationSurfaceEdgeRouteWork
             ? AdvanceExplicit(meter, ref connectionStepRemaining)
             : AdvanceSimple();
     }
-
-    internal NavigationGraphEdge Edge => _edge;
 
     internal Fixed64 Cost => _cost;
 
@@ -130,8 +110,8 @@ internal struct NavigationSurfaceEdgeRouteWork
 
     internal void ConsumePoint()
     {
-        if (_pointOrdinal < _pointCount)
-            _pointOrdinal++;
+        System.Diagnostics.Debug.Assert(HasCurrentPoint);
+        _pointOrdinal++;
     }
 
     internal bool TryTakeDependencyNode(out NavigationNodeRef node)
@@ -180,18 +160,9 @@ internal struct NavigationSurfaceEdgeRouteWork
             out TraversalEdgeEvidence evidence);
         if (evaluation == TraversalEvaluationStatus.CostOverflow)
             return Complete(NavigationSurfaceEdgeRouteStatus.CostOverflow);
-        if (evaluation == TraversalEvaluationStatus.Stale)
-            return Complete(NavigationSurfaceEdgeRouteStatus.Stale);
         if (evaluation != TraversalEvaluationStatus.Passable)
             return Complete(NavigationSurfaceEdgeRouteStatus.Impassable);
-        if (!TraversalEvaluator.IsPortalTransitionValid(
-                evidence.SourcePrism,
-                evidence.TargetPrism,
-                evidence.Portal,
-                evidence.SourcePortalAnchor,
-                evidence.TargetPortalAnchor,
-                _evaluator.Profile.Shape)
-            || !GridCellGeometry.IsNavigationBodySegmentValid(
+        bool validSourceSegment = GridCellGeometry.IsNavigationBodySegmentValid(
                 evidence.SourcePrism,
                 evidence.SourceFootAnchor,
                 evidence.SourcePortalAnchor,
@@ -199,8 +170,8 @@ internal struct NavigationSurfaceEdgeRouteWork
                 _evaluator.Profile.Shape.Height,
                 default,
                 evidence.Portal,
-                GridNavigationBodySegmentEndpointAllowance.None)
-            || !GridCellGeometry.IsNavigationBodySegmentValid(
+                GridNavigationBodySegmentEndpointAllowance.None);
+        bool validTargetSegment = GridCellGeometry.IsNavigationBodySegmentValid(
                 evidence.TargetPrism,
                 evidence.TargetPortalAnchor,
                 evidence.TargetFootAnchor,
@@ -208,10 +179,23 @@ internal struct NavigationSurfaceEdgeRouteWork
                 _evaluator.Profile.Shape.Height,
                 evidence.Portal,
                 default,
-                GridNavigationBodySegmentEndpointAllowance.None))
-        {
-            return Complete(NavigationSurfaceEdgeRouteStatus.Impassable);
-        }
+                GridNavigationBodySegmentEndpointAllowance.None);
+        System.Diagnostics.Debug.Assert(
+            evidence.Portal.FaceKind != VoxelContactFaceKind.Horizontal
+            || (GridCellGeometry.TryGetNavigationPortalTraversalParameters(
+                    evidence.SourcePrism,
+                    evidence.TargetPrism,
+                    evidence.Portal,
+                    evidence.SourcePortalAnchor,
+                    evidence.TargetPortalAnchor,
+                    _evaluator.Profile.Shape.Radius,
+                    _evaluator.Profile.Shape.Height,
+                    out Fixed64 sourceParameter,
+                    out Fixed64 targetParameter)
+                && sourceParameter == Fixed64.Zero
+                && targetParameter == Fixed64.One),
+            "published surface portals retain the exact validated profile crossing");
+        System.Diagnostics.Debug.Assert(validSourceSegment && validTargetSegment);
 
         _cost = evidence.Cost;
         SetPoints(
@@ -245,15 +229,13 @@ internal struct NavigationSurfaceEdgeRouteWork
             ref _explicitWork,
             out TraversalEdgeEvidence evidence);
         NavigationNodeRef dependencyNode = evidence.DependencyNode;
-        if (dependencyNode.IsValid)
-        {
-            _dependencyNode = dependencyNode;
-            _hasDependencyNode = true;
-        }
+        System.Diagnostics.Debug.Assert(
+            dependencyNode.IsValid,
+            "every published explicit corridor leg resolves an immutable graph node");
+        _dependencyNode = dependencyNode;
+        _hasDependencyNode = true;
         if (semantic == TraversalExplicitEdgeStatus.CostOverflow)
             return Complete(NavigationSurfaceEdgeRouteStatus.CostOverflow);
-        if (semantic == TraversalExplicitEdgeStatus.Stale)
-            return Complete(NavigationSurfaceEdgeRouteStatus.Stale);
         if (semantic == TraversalExplicitEdgeStatus.Impassable)
             return Complete(NavigationSurfaceEdgeRouteStatus.Impassable);
 
@@ -334,7 +316,9 @@ internal struct NavigationSurfaceEdgeRouteWork
                     outgoing,
                     default,
                     GridNavigationBodySegmentEndpointAllowance.None))
+            {
                 return Complete(NavigationSurfaceEdgeRouteStatus.Impassable);
+            }
             AppendPoints(
                 evidence.TargetAddress,
                 targetAnchor,

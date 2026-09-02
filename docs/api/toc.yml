@@ -1,0 +1,36 @@
+items:
+  - name: Home
+    href: index.md
+  - name: API Reference
+    href: obj/api/
+    homepage: obj/api/Trailblazer.yml
+  - name: Guides
+    items:
+      - name: Getting Started
+        href: https://github.com/mrdav30/Trailblazer/wiki/GettingStarted
+      - name: Technical Overview
+        href: https://github.com/mrdav30/Trailblazer/wiki/Overview
+      - name: Map Authoring
+        href: https://github.com/mrdav30/Trailblazer/wiki/MapAuthoring
+      - name: Map Publication
+        href: https://github.com/mrdav30/Trailblazer/wiki/MapPublication
+      - name: Pathing
+        href: https://github.com/mrdav30/Trailblazer/wiki/Pathing
+      - name: Path Guides
+        href: https://github.com/mrdav30/Trailblazer/wiki/PathGuides
+      - name: Transitions
+        href: https://github.com/mrdav30/Trailblazer/wiki/Transitions
+      - name: Navigator
+        href: https://github.com/mrdav30/Trailblazer/wiki/Navigator
+      - name: Serialization
+        href: https://github.com/mrdav30/Trailblazer/wiki/Serialization
+  - name: Resources
+    items:
+      - name: Wiki
+        href: https://github.com/mrdav30/Trailblazer/wiki
+      - name: Migration Guide
+        href: https://github.com/mrdav30/Trailblazer/blob/main/docs/MIGRATION.md
+      - name: Source
+        href: https://github.com/mrdav30/Trailblazer
+      - name: Core Test Coverage
+        href: https://mrdav30.github.io/Trailblazer/coverage/

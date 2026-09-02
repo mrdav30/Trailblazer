@@ -1,7 +1,7 @@
 # Benchmark Performance Next Plan
 
 **Status:** Complete. Remaining work was extracted to
-[`benchmarkPerformanceFinalPlan.md`](../benchmarkPerformanceFinalPlan.md) when
+[`benchmarkPerformanceFinalPlan.md`](benchmarkPerformanceFinalPlan.md) when
 this plan was archived.
 
 ## Purpose
@@ -671,7 +671,7 @@ Short-run flood evidence:
 Remaining work:
 
 - All open fast-follow and carry-forward items were moved into
-  [`benchmarkPerformanceFinalPlan.md`](../benchmarkPerformanceFinalPlan.md).
+  [`benchmarkPerformanceFinalPlan.md`](benchmarkPerformanceFinalPlan.md).
 
 ## Suggested Verification Commands
 

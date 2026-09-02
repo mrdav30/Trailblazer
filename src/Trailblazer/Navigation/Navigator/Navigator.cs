@@ -18,7 +18,7 @@ using Trailblazer.Pathing;
 namespace Trailblazer.Navigation;
 
 /// <summary>
-/// Base class representing a object, responsible for handling movement, traversal state, and simulation flow.
+/// Base class for an object that owns movement, traversal state, and simulation flow.
 /// </summary>
 /// <remarks>
 /// This class acts as a bridge between the simulation logic and the entity's external representation.

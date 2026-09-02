@@ -9,8 +9,7 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: wiki-sync-main
@@ -18,10 +17,13 @@ concurrency:
 
 jobs:
   sync-wiki:
+    permissions:
+      contents: write
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_sha == github.sha
     runs-on: ubuntu-latest
 
     steps:

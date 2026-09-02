@@ -1,13 +1,14 @@
 # Trailblazer Wiki
 
 Welcome. Trailblazer is deterministic, engine-agnostic navigation for lockstep
-games and simulations. It combines GridForge-backed navigation maps, A* and
-flow fields, explicit traversal actions, steering, turning, locomotion, and
+games and simulations. It combines GridForge-backed navigation maps, A* and flow
+fields, explicit traversal actions, steering, turning, locomotion, and
 serialization without taking ownership of your engine or gameplay systems.
 
 Use this wiki when you want to understand how the pieces behave together. The
-public API defines individual signatures; its XML documentation supplies
-member-level guidance.
+[public API reference](https://mrdav30.github.io/Trailblazer/api/Trailblazer.html)
+defines individual signatures; this wiki explains how those APIs behave
+together.
 
 ## Start here
 
@@ -24,18 +25,18 @@ New to Trailblazer? Follow this path:
 
 ## Find the right guide
 
-| I want to... | Read... |
-| --- | --- |
-| Build or import navigation data | [Map Authoring](MapAuthoring.md) |
-| Publish maps, policies, or runtime changes | [Map Publication](MapPublication.md) |
-| Route through Gas or Liquid | [Volume Traversal](VolumeTraversal.md) |
-| Add ladders, jumps, takeoff, or teleporters | [Transitions](Transitions.md) |
-| Drive a complete controller | [Navigator](Navigator.md) |
-| Customize steering or facing | [NavSteering](NavSteering.md) and [NavTurning](NavTurning.md) |
-| Configure movement, jumping, water, or platforms | [NavMotor](NavMotor.md) and [Gravity](Gravity.md) |
-| Use deterministic ground-height data | [Heightmaps](HeightMaps.md) |
-| Save and restore runtime state | [Serialization](Serialization.md) |
-| Diagnose a failed query or stuck action | [Troubleshooting](Troubleshooting.md) |
+| I want to...                                     | Read...                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| Build or import navigation data                  | [Map Authoring](MapAuthoring.md)                              |
+| Publish maps, policies, or runtime changes       | [Map Publication](MapPublication.md)                          |
+| Route through Gas or Liquid                      | [Volume Traversal](VolumeTraversal.md)                        |
+| Add ladders, jumps, takeoff, or teleporters      | [Transitions](Transitions.md)                                 |
+| Drive a complete controller                      | [Navigator](Navigator.md)                                     |
+| Customize steering or facing                     | [NavSteering](NavSteering.md) and [NavTurning](NavTurning.md) |
+| Configure movement, jumping, water, or platforms | [NavMotor](NavMotor.md) and [Gravity](Gravity.md)             |
+| Use deterministic ground-height data             | [Heightmaps](HeightMaps.md)                                   |
+| Save and restore runtime state                   | [Serialization](Serialization.md)                             |
+| Diagnose a failed query or stuck action          | [Troubleshooting](Troubleshooting.md)                         |
 
 ## The mental model
 
@@ -56,7 +57,8 @@ classification, collision detection, physics, animation, and gameplay actions.
 - [GitHub repository](https://github.com/mrdav30/Trailblazer)
 - [Trailblazer on NuGet](https://www.nuget.org/packages/Trailblazer)
 - [Trailblazer.Lean on NuGet](https://www.nuget.org/packages/Trailblazer.Lean)
-- [Coverage report](https://mrdav30.github.io/Trailblazer/)
+- [API reference](https://mrdav30.github.io/Trailblazer/api/Trailblazer.html)
+- [Coverage report](https://mrdav30.github.io/Trailblazer/coverage/)
 - [v1 to v2 migration guide](../MIGRATION.md)
 
 For contributor workflow and repository boundaries, see

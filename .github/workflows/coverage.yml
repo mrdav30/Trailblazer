@@ -1,4 +1,4 @@
-name: coverage
+name: Coverage and documentation
 
 on:
   workflow_run:
@@ -9,10 +9,7 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: coverage-pages
@@ -20,36 +17,107 @@ concurrency:
 
 jobs:
   coverage:
-    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_sha == github.sha
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout tested commit
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Cache NuGet packages
         uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx', 'global.json', 'dotnet-tools.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore Trailblazer.slnx --property:Configuration=Release
 
-      - name: Build tests
-        run: dotnet build tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --no-restore
+      - name: Build solution
+        run: dotnet build Trailblazer.slnx --configuration Release --no-restore
 
       - name: Run tests with coverage
         run: dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --no-build --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Build API documentation
+        run: |
+          test -f src/Trailblazer/bin/Release/net8.0/Trailblazer.dll
+          test -f src/Trailblazer/bin/Release/net8.0/Trailblazer.xml
+          dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
+          test -f docs/api/obj/_site/index.html
+          test -f docs/api/obj/_site/api/Trailblazer.html
+          test -f docs/api/obj/_site/api/Trailblazer.Pathing.html
+          test -f docs/api/obj/_site/api/Trailblazer.Navigation.html
+          test -f docs/api/obj/_site/api/Trailblazer.Heightmaps.html
+          test -f docs/api/obj/_site/assets/icon_128x128.png
+          test -f docs/api/obj/_site/public/main.css
+          test -f docs/api/obj/_site/public/main.js
+          grep -Fq 'trb-hero' docs/api/obj/_site/index.html
+          grep -Fq -- '--trb-teal-rgb' docs/api/obj/_site/public/main.css
+          grep -Fq 'github.com/mrdav30/Trailblazer' docs/api/obj/_site/public/main.js
+          grep -Fq 'github.com/mrdav30/FixedMathSharp' docs/api/obj/_site/api/Trailblazer.html
+          grep -Fq 'github.com/mrdav30/Trailblazer/wiki/PathGuides' docs/api/obj/_site/api/Trailblazer.Pathing.html
+
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          site = Path("docs/api/obj/_site").resolve()
+          broken = []
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.hrefs = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "a":
+                      href = dict(attrs).get("href")
+                      if href:
+                          self.hrefs.append(href)
+
+          for page in site.rglob("*.html"):
+              parser = Links()
+              parser.feed(page.read_text(encoding="utf-8"))
+              for href in parser.hrefs:
+                  parsed = urlsplit(href)
+                  if parsed.scheme or parsed.netloc or not parsed.path:
+                      continue
+
+                  path = unquote(parsed.path)
+                  target = site / path.lstrip("/") if path.startswith("/") else page.parent / path
+                  target = target.resolve()
+                  if target.is_dir():
+                      target /= "index.html"
+                  if not target.exists():
+                      broken.append(f"{page.relative_to(site)} -> {href}")
+
+          if broken:
+              raise SystemExit("Broken local links:\n" + "\n".join(sorted(broken)))
+          PY
 
       - name: Install ReportGenerator
         run: dotnet tool install --global dotnet-reportgenerator-globaltool
@@ -76,15 +144,37 @@ jobs:
       - name: Add coverage summary to job
         run: cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Assemble Pages site
+        run: |
+          mkdir -p artifacts/pages/coverage
+          cp -a docs/api/obj/_site/. artifacts/pages/
+          cp -a artifacts/coverage-report/. artifacts/pages/coverage/
+          test -f artifacts/pages/index.html
+          test -f artifacts/pages/api/Trailblazer.html
+          test -f artifacts/pages/api/Trailblazer.Pathing.html
+          test -f artifacts/pages/assets/icon_128x128.png
+          test -f artifacts/pages/public/main.css
+          test -f artifacts/pages/coverage/Summary.json
+          test -f artifacts/pages/coverage/badge_branchcoverage.svg
+
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: artifacts/coverage-report
 
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: artifacts/pages
+
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: coverage
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -93,17 +183,6 @@ jobs:
     steps:
       - name: Configure Pages
         uses: actions/configure-pages@v6
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: coverage-report
-          path: artifacts/coverage-report
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: artifacts/coverage-report
 
       - name: Deploy to GitHub Pages
         id: deployment

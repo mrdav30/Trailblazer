@@ -13,18 +13,25 @@ FixedMathSharp for simulation math.
 
 Read these in order before making a non-trivial change:
 
-1. [`docs/wiki/Overview.md`](docs/wiki/Overview.md)
-2. [`README.md`](README.md)
-3. the relevant folder under [`src/Trailblazer`](src/Trailblazer)
-4. the matching area under
-   [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)
-5. [`src/Trailblazer/Trailblazer.csproj`](src/Trailblazer/Trailblazer.csproj)
-   and
-   [`tests/Trailblazer.Tests/Trailblazer.Tests.csproj`](tests/Trailblazer.Tests/Trailblazer.Tests.csproj)
+1. [`README.md`](README.md) for package orientation and documentation routes.
+2. [`docs/wiki/GettingStarted.md`](docs/wiki/GettingStarted.md) for the public
+   integration path and [`docs/wiki/Overview.md`](docs/wiki/Overview.md) for
+   architecture and ownership.
+3. [`Trailblazer.slnx`](Trailblazer.slnx),
+   [`src/Trailblazer/Trailblazer.csproj`](src/Trailblazer/Trailblazer.csproj),
+   and the project file for the matching test or benchmark area.
+4. the relevant folder under [`src/Trailblazer`](src/Trailblazer)
+5. the matching area under [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)
+6. [`tests/Trailblazer.Benchmarks/README.md`](tests/Trailblazer.Benchmarks/README.md)
+   before changing measured hot paths or benchmark cases.
+7. [`docs/feature-work/feature-work-overview.md`](docs/feature-work/feature-work-overview.md)
+   and the evergreen issue or benchmark tracker when a task belongs to an active
+   coordination thread.
 
 Read [`docs/wiki/Serialization.md`](docs/wiki/Serialization.md) before changing
-records or load behavior. Read [`docs/wiki/MapPublication.md`](docs/wiki/MapPublication.md)
-before changing map, overlay, policy, or graph lifecycle behavior.
+records or load behavior. Read
+[`docs/wiki/MapPublication.md`](docs/wiki/MapPublication.md) before changing
+map, overlay, policy, or graph lifecycle behavior.
 
 ## Source Of Truth
 
@@ -32,27 +39,36 @@ Code and tests are authoritative when prose disagrees. Keep public behavior
 aligned across:
 
 - [`README.md`](README.md);
+- [`AGENTS.md`](AGENTS.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md);
 - [`docs/wiki/Overview.md`](docs/wiki/Overview.md);
 - the relevant wiki reference;
+- [`docs/api`](docs/api) for the generated API-site configuration, landing
+  content, namespace overrides, logo, repository link, and custom theme;
+- [`docs/feature-work`](docs/feature-work) for tracker state and active plans;
 - public XML comments;
-- source and tests.
+- source, tests, benchmarks, and relevant workflows.
 
-Do not edit generated `bin/`, `obj/`, `TestResults/`, or documentation output.
+Keep links inside `docs/wiki` repository-friendly with their `.md` extensions.
+The wiki workflow rewrites only the published copy. Treat `docs/api/index.md`,
+`docs/api/toc.yml`, DocFX configuration, templates, and overwrite files as
+authored source. Never edit or commit generated `docs/api/obj` output.
 
 ## Repository Map
 
-| Path | Purpose |
-| --- | --- |
-| [`src/Trailblazer/Runtime`](src/Trailblazer/Runtime) | World context, clock, settings, and lifecycle ownership |
-| [`src/Trailblazer/Pathing/Map`](src/Trailblazer/Pathing/Map) | Immutable maps, cells, connections, transitions, overlays, and publication operations |
-| [`src/Trailblazer/Pathing/Graph`](src/Trailblazer/Pathing/Graph) | Immutable graph composition, dependencies, topology traversal, and diagnostics |
-| [`src/Trailblazer/Pathing/Query`](src/Trailblazer/Pathing/Query) | Public query, endpoint, profile, budget, status, and medium contracts |
-| [`src/Trailblazer/Pathing/Search`](src/Trailblazer/Pathing/Search) | Endpoint admission, A*, Flow, guide leases, and internal navigation rays |
-| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Navigator, steering, turning, motor, locomotion, occupancy, and controller records |
-| [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps) | Context-owned deterministic ground-height storage and sampling |
-| [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit v3 behavior, determinism, allocation, serialization, and API coverage |
-| [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks) | BenchmarkDotNet performance and semantic preflight scenarios |
-| [`docs/wiki`](docs/wiki) | Current public documentation |
+| Path                                                               | Purpose                                                                               |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [`src/Trailblazer/Runtime`](src/Trailblazer/Runtime)               | World context, clock, settings, and lifecycle ownership                               |
+| [`src/Trailblazer/Pathing/Map`](src/Trailblazer/Pathing/Map)       | Immutable maps, cells, connections, transitions, overlays, and publication operations |
+| [`src/Trailblazer/Pathing/Graph`](src/Trailblazer/Pathing/Graph)   | Immutable graph composition, dependencies, topology traversal, and diagnostics        |
+| [`src/Trailblazer/Pathing/Query`](src/Trailblazer/Pathing/Query)   | Public query, endpoint, profile, budget, status, and medium contracts                 |
+| [`src/Trailblazer/Pathing/Search`](src/Trailblazer/Pathing/Search) | Endpoint admission, A*, Flow, guide leases, and internal navigation rays              |
+| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation)         | Navigator, steering, turning, motor, locomotion, occupancy, and controller records    |
+| [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps)         | Context-owned deterministic ground-height storage and sampling                        |
+| [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)               | xUnit v3 behavior, determinism, allocation, serialization, and API coverage           |
+| [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks)     | BenchmarkDotNet performance and semantic preflight scenarios                          |
+| [`docs/api`](docs/api)                                             | DocFX configuration, branded landing content, namespace overrides, and theme          |
+| [`docs/wiki`](docs/wiki)                                           | Behavioral and integration guides synced to the GitHub Wiki                           |
+| [`docs/feature-work`](docs/feature-work)                           | Active plans plus evergreen issue and benchmark-signal trackers                       |
 
 ## Runtime Architecture
 
@@ -117,7 +133,8 @@ When changing public behavior:
 
 1. add or update behavior tests;
 2. update the exact public API snapshot when the change is approved;
-3. update README/wiki guidance and public XML in the same change;
+3. update README/wiki guidance, public XML, and the API landing/namespace
+   content in the same change when affected;
 4. update JSON and MemoryPack coverage when wire behavior changes.
 
 Examples presented as runnable C# must use current public signatures. Label
@@ -155,7 +172,9 @@ a small allocation.
 
 ## Testing Workflow
 
-CI validates Windows and Linux in both `Release` and `ReleaseLean`.
+`global.json` selects the .NET 10 SDK for `.slnx` tooling consistency. Install
+the .NET 8 runtime as well to execute the `net8.0` tests and benchmarks. CI
+validates Windows and Linux in both `Release` and `ReleaseLean`.
 
 ```bash
 dotnet restore Trailblazer.slnx --property:Configuration=Release
@@ -165,6 +184,19 @@ dotnet test Trailblazer.slnx --configuration Release --no-build
 
 Repeat with `ReleaseLean`. The library itself must build for both
 `netstandard2.1` and `net8.0`; tests and benchmarks target `net8.0`.
+
+Build the generated API site after a Release build:
+
+```bash
+dotnet tool restore
+dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
+```
+
+CI enforces exact reachable coverage in both package configurations. After a
+successful push to `main`, the coverage workflow checks out the exact tested
+commit, builds and validates the DocFX site, and deploys one Pages artifact with
+the API site at the root and coverage under `/coverage/`. The separate wiki
+workflow publishes `docs/wiki` from that tested commit.
 
 For focused work, filter the test project first:
 
@@ -208,6 +240,13 @@ Prioritize:
 6. Run the full required matrix before claiming completion.
 7. Update docs/XML/snapshots when public behavior changed.
 8. Report exact failures and evidence; do not hide or work around a red gate.
+
+Keep the root README concise, product-focused, and safe for NuGet rendering. Put
+architecture, lifecycle, subsystem behavior, and troubleshooting detail in the
+matching wiki page or generated API reference.
+
+Do not stage, commit, tag, push, publish packages, or create releases unless the
+user explicitly requests it. Preserve unrelated worktree changes.
 
 Treat graph publication, cache invalidation, transition ownership, controller
 load staging, and serialized schemas as high-risk boundaries.

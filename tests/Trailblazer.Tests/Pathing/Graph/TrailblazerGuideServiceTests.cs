@@ -153,7 +153,8 @@ public sealed class TrailblazerGuideServiceTests
     {
         using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
         query = ResolveDirectRoute(context, query);
-        for (int i = 0; i < 16; i++)
+        const int measurementCount = 256;
+        for (int i = 0; i < measurementCount; i++)
         {
             context.Guides.TryGetDirectHeading(query, query.Start.Position, out _)
                 .Should().Be(NavigationRayStatus.Success);
@@ -162,7 +163,7 @@ public sealed class TrailblazerGuideServiceTests
         NavigationRayStatus status = default;
         Vector3d heading = default;
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 256; i++)
+        for (int i = 0; i < measurementCount; i++)
         {
             status = context.Guides.TryGetDirectHeading(
                 query,

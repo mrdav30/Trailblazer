@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-101`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-102`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -28,6 +28,26 @@ follow-up passes.
 
 The issues below were resolved and verified as part of the 2026-09-01 coverage
 hardening and code-quality follow-up passes.
+
+### TRB-Issue-101 - Direct-heading allocation gate warms below its measurement window
+
+- **Discovered:** 2026-09-01
+- **Area:** Direct navigation-ray steady-state allocation regression
+- **Status:** Resolved; verified by the 2026-09-01 release gates.
+- **Evidence:** The full `Release` aggregate reported 4,792 bytes during the
+  256-call measurement window after only 16 warmup calls. Three fresh isolated
+  processes and the immediate full rerun all reported zero bytes with unchanged
+  successful behavior, matching the suite-order-sensitive runtime-tiering
+  pattern previously recorded for other allocation gates.
+- **Impact:** Tiered compilation can begin during the measured window depending
+  on earlier suite execution, intermittently failing a real zero-allocation
+  contract without a product allocation regression.
+- **Expected:** Warm the exact direct-heading path through one complete
+  measurement-sized window before recording current-thread allocations, while
+  retaining the strict zero-byte assertion over the following window.
+- **Verification:** The gate now uses the same 256-call count for warmup and
+  measurement. Focused repeated runs, full `Release`, full `ReleaseLean`, and
+  both exact coverage aggregates pass.
 
 ### TRB-Issue-100 - Coverage cleanup mixes runtime guards with internal invariants
 

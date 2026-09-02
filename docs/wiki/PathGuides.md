@@ -1,4 +1,4 @@
-# Path Guides Reference
+# Path Guides
 
 Trailblazer exposes two lease types over immutable graph payloads:
 
@@ -8,7 +8,7 @@ Trailblazer exposes two lease types over immutable graph payloads:
 The cached payload is immutable. Cursor, current medium, and pending-action state
 belong to one lease acquisition and are never shared between consumers.
 
-## 1. Acquisition
+## Acquisition
 
 This C# fragment assumes algorithm-matching A* and Flow queries:
 
@@ -25,7 +25,7 @@ NavigationGuideStatus flowStatus = context.Guides.RequestFlowField(
 The query algorithm must match the method. On success the nullable result has a
 value and must be disposed. On failure no lease is returned.
 
-## 2. A* Steps
+## A* Steps
 
 `NavigationGuideLease` exposes:
 
@@ -48,8 +48,9 @@ position. `TryAdvanceStep()` cannot cross it; call
 action. If completion returns transient `CapacityExceeded`, retry completion on
 a later frame without performing the action again.
 
-The following complete helper demonstrates the cursor boundary. The caller
-keeps `actionExecuted` with its host action state between fixed frames:
+The following complete helper demonstrates the cursor boundary. `moveToward`
+returns `true` only when the host has reached the step's exact position. The
+caller keeps `actionExecuted` with its host action state between fixed frames:
 
 ~~~csharp
 using System;
@@ -60,7 +61,7 @@ public static class GuideConsumer
     public static NavigationGuideStatus ConsumeCurrentAStarStep(
         NavigationGuideLease guide,
         ref bool actionExecuted,
-        Action<NavigationGuideStep> moveToward,
+        Func<NavigationGuideStep, bool> moveToward,
         Action<NavigationTransitionInstruction> executeAction,
         Action arrive)
     {
@@ -68,6 +69,9 @@ public static class GuideConsumer
             guide.TryGetCurrentStep(out NavigationGuideStep step);
         if (status != NavigationGuideStatus.Success)
             return status;
+
+        if (!moveToward(step))
+            return NavigationGuideStatus.Success;
 
         if (step.HasTransition)
         {
@@ -83,7 +87,6 @@ public static class GuideConsumer
             return status;
         }
 
-        moveToward(step);
         if (guide.CurrentStepIndex == guide.StepCount - 1)
         {
             arrive();
@@ -96,9 +99,12 @@ public static class GuideConsumer
 ~~~
 
 Treat `Stale` as a reacquisition boundary. Treat `CapacityExceeded` as a retry
-boundary. Other non-success statuses follow the host's failure policy.
+boundary. `actionExecuted` belongs to this exact lease acquisition: keep it
+`true` only while retrying `CapacityExceeded`, and reset it when disposing a
+stale or otherwise terminal acquisition. Never carry it into a replacement
+lease. Other non-success statuses follow the host's failure policy.
 
-## 3. Flow Samples
+## Flow Samples
 
 `NavigationFlowFieldLease.TrySample(...)` takes the agent's actual foot
 position plus a finite `GuideSampleWorkBudget`. This C# fragment assumes an
@@ -120,7 +126,7 @@ Flow owns a guide-local source/medium cursor. It can rejoin ordinary selected
 edges within its budget, but it never skips or samples through an action
 barrier.
 
-## 4. Transition Barrier
+## Transition Barrier
 
 Both lease types follow the same contract:
 
@@ -134,7 +140,7 @@ Both lease types follow the same contract:
 The completion stamp is private. Stable public action identity is still exposed
 through kind, owner/ID, type, addresses, media, positions, and locomotion hints.
 
-## 5. Status And Retry
+## Status And Retry
 
 `NavigationGuideStatus` distinguishes semantic failure, transient bounded work,
 and stale proof. In particular:
@@ -148,7 +154,7 @@ A controller should retain a held action through transient capacity pressure but
 release/reacquire on stale publication. A direct consumer decides its own retry
 policy.
 
-## 6. Lifetime
+## Lifetime
 
 Leases hold payload-cache ownership. Always use `using` or call `Dispose()`.
 Disposal is generation checked, so a copied stale struct cannot release a later
@@ -158,7 +164,7 @@ Do not cache `NavigationGuideStep`, `NavigationFlowSample`, or a transition
 instruction as a replacement for the lease. Their completion authority is only
 valid while the producing lease/acquisition remains current.
 
-## 7. Dependency Invalidation
+## Dependency Invalidation
 
 Payloads record only the map pages, structural components, rules, area policy,
 and raw-world evidence they actually used, including blocked alternatives.
@@ -168,7 +174,7 @@ rule change stales it.
 Status and sampling revalidate dependencies before exposing guidance and again
 around resumable work where publication could race.
 
-## 8. Internal Direct-Path Simplification
+## Internal Direct-Path Simplification
 
 Trailblazer uses one internal navigation-ray work path for endpoint proof, A*
 route simplification, Flow rejoin, and controller direct heading. It is not a
@@ -177,7 +183,7 @@ medium, bounded workspaces/meters, dependency ownership, endpoint allowances,
 and consumer-specific chain constraints. Public callers should use a query or
 guide so those invariants remain hidden.
 
-## 9. Related References
+## Related guides
 
 - [Pathing](Pathing.md)
 - [Transitions](Transitions.md)

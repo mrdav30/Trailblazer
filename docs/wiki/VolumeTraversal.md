@@ -1,10 +1,10 @@
-# Volume Traversal Reference
+# Volume Traversal
 
 In Trailblazer, Volume means free-form deterministic travel through Gas or
 Liquid matter. It is a medium-state property, not a terrain category, special
 request type, or separate search system.
 
-## 1. Core Model
+## Core Model
 
 A Gas or Liquid search state exists when all of these agree:
 
@@ -18,7 +18,7 @@ A Gas or Liquid search state exists when all of these agree:
 The same `PathQuery`, A*, Flow, dependency, cache, and guide machinery used for
 Solid traversal is used for Gas and Liquid.
 
-## 2. Free-Form Geometry
+## Free-Form Geometry
 
 Gas/Liquid movement uses a profile-resolved body anchor centered vertically in
 the cell prism. It does not reuse Solid foot-anchor step/drop semantics.
@@ -40,7 +40,7 @@ Movement cost is the conservative ceiling of exact world-space centered-anchor
 distance plus destination enter costs. There are no unit-grid straight/diagonal
 constants and no floating-point distance path.
 
-## 3. State Of Matter, Not Terrain
+## State Of Matter, Not Terrain
 
 Trailblazer does not ask whether an address is cave, ocean, sky, room, or biome.
 The host may use those facts while authoring, but it publishes a complete cell:
@@ -61,7 +61,7 @@ Terrain remains optional. A flight simulation can publish Gas without terrain;
 a submarine map can publish Liquid; a mixed cell can support more than one
 medium when that is physically meaningful.
 
-## 4. Map Defaults
+## Map Defaults
 
 Map defaults make large uniform volumes cheap. A Gas-default map needs entries
 only for exceptions. A flooded replacement can use a Liquid default without
@@ -94,7 +94,7 @@ Important details:
 - a default replacement is immutable map publication, not a query toggle;
 - drain/flood overlays remain appropriate when only addressed cells change.
 
-## 5. Queries
+## Queries
 
 A free-flight query is ordinary `PathQuery` intent. This C# fragment assumes
 published map/policy truth, endpoints, profile, and budget:
@@ -115,7 +115,7 @@ Use Liquid as the exact start medium for swimming. To permit a Liquid-to-Gas
 takeoff, include Gas in `TargetMedia`, give the agent the required capabilities,
 set `AllowTransitions` to true, and author a transition definition or rule.
 
-## 6. Large Bodies And Cross-Grid Travel
+## Large Bodies And Cross-Grid Travel
 
 When a body fits one directed portal, Trailblazer uses GridForge's fast path. A
 larger body falls back to bounded swept-union coverage. Missing output capacity,
@@ -127,7 +127,7 @@ misaligned geometry fails closed when GridForge cannot issue an exact directed
 proof. Semantic actions do not substitute for missing physical movement unless
 the host explicitly authors that action.
 
-## 7. Dynamic Fluids
+## Dynamic Fluids
 
 For an addressed flood or drain, publish complete cell overlay operations:
 
@@ -138,7 +138,7 @@ For an addressed flood or drain, publish complete cell overlay operations:
 Materialize any fluid simulation result before publication and preserve stable
 operation order. Search never calls the fluid simulation as a predicate.
 
-## 8. Relationship To Transitions
+## Relationship To Transitions
 
 Volume movement keeps the current medium. A transition is a semantic action that
 may change it. Examples:
@@ -152,7 +152,7 @@ may change it. Examples:
 Media contact alone never generates these actions. See
 [Transitions](Transitions.md).
 
-## 9. Related References
+## Related guides
 
 - [Navigation maps](NavigationMaps.md)
 - [Map authoring](MapAuthoring.md)

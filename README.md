@@ -107,6 +107,7 @@ dependencies, and action-completion contract.
 
 ## Documentation
 
+- [Getting started](docs/wiki/GettingStarted.md)
 - [Overview](docs/wiki/Overview.md)
 - [Navigation maps](docs/wiki/NavigationMaps.md)
 - [Map authoring](docs/wiki/MapAuthoring.md)
@@ -117,7 +118,8 @@ dependencies, and action-completion contract.
 - [Gas and Liquid travel](docs/wiki/VolumeTraversal.md)
 - [Navigator](docs/wiki/Navigator.md)
 - [Serialization](docs/wiki/Serialization.md)
-- [Major-version migration](docs/wiki/Migration.md)
+- [Troubleshooting](docs/wiki/Troubleshooting.md)
+- [v1 to v2 migration](docs/MIGRATION.md)
 
 ## Build And Test
 

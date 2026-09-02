@@ -5,7 +5,7 @@ grid. Hosts may build maps directly, import tokens, or materialize the output of
 their own terrain/fluid systems. Runtime search never calls host classification
 delegates.
 
-## 1. Direct Builder
+## Direct Builder
 
 This C# fragment assumes a normalized GridForge binding, area IDs, cell indices,
 and transition rule have already been created:
@@ -30,7 +30,7 @@ The builder copies and canonically sorts its input. Duplicate cell indices,
 connection IDs, definition IDs within one owner, or globally duplicate rule IDs
 reject during validation/publication.
 
-## 2. Dense And Hex Imports
+## Dense And Hex Imports
 
 `NavigationMapBuilder.ImportDenseRectangular(...)` and
 `ImportAxialHex(...)` adapt topology-local authored data into the same map
@@ -41,7 +41,7 @@ The built-in token importer can author cell semantics and paired shoreline
 transitions. Custom legends remain explicit data: a token resolves to one
 complete `NavigationTokenLegendEntry`, not a search-time callback.
 
-## 3. Host Materialization
+## Host Materialization
 
 If a host already has terrain or matter predicates, evaluate them outside the
 pathing hot path and publish the result:
@@ -63,7 +63,7 @@ Materialize in deterministic address order and assign explicit operation
 sequences/effective frames. Avoid wall-clock state, nondeterministic collection
 iteration, or callbacks whose results can change without publication.
 
-## 4. Choosing A Default
+## Choosing A Default
 
 - Use no default for sparse fail-closed authoring.
 - Use a Solid default only when every physically present unlisted cell really
@@ -76,7 +76,7 @@ iteration, or callbacks whose results can change without publication.
 Changing a default is a new map bake, not a query option. Explicit cells still
 win over the new default.
 
-## 5. Authoring Actions
+## Authoring Actions
 
 Use `AddTransition(...)` for an object-anchored action such as one ladder,
 door, lift, jump, or teleporter. Add both directed definitions when travel must
@@ -90,7 +90,7 @@ not create retained per-cell transition objects.
 Do not infer an action from media contact alone. Matter says where a state can
 exist; a definition or rule says which semantic action the environment allows.
 
-## 6. Prepare And Publish
+## Prepare And Publish
 
 This C# fragment assumes the map, deterministic operation sequence, and
 effective frame are available:
@@ -112,7 +112,7 @@ if (!context.Pathing.Admit(operation))
 The operation receipt is pending until fixed-step maintenance publishes or
 rejects it. Do not assume `Admit(...)` means the map is already visible.
 
-## 7. Related References
+## Related guides
 
 - [Navigation maps](NavigationMaps.md)
 - [Map publication](MapPublication.md)

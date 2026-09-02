@@ -1,426 +1,169 @@
-# Trailblazer Gravity Model
+# Gravity, Jumping, and Vertical Motion
 
-This document explains how vertical motion is currently handled in Trailblazer's
-navigation motor.
+Trailblazer's vertical model is deterministic and gameplay oriented. Grounded
+bodies receive a small downward stick bias, airborne bodies accelerate toward a
+terminal fall speed, Liquid bodies use buoyancy, and jumps combine an initial
+impulse with an optional held-jump extension.
 
-The source of truth for the behavior described here is the code in:
+The host still owns collision detection and the authoritative body. `NavMotor`
+computes motion from the exact `TrekCondition` and fixed timestep supplied for
+the frame.
 
-- `src/Trailblazer/Navigation/Motor/NavMotor.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/MoveLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/JumpLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/FallLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/WaterLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/Forces/LocomotionForces.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/Forces/GlobalEnvironmentForces.cs`
+## Configure global defaults
 
-C# blocks below are source excerpts or host-tuning fragments, not complete
-standalone programs. They illustrate the current deterministic formulas and
-public tuning members.
-
-## 1. Where Gravity Lives
-
-Gravity is configured through a two-level system in `LocomotionHandler.Forces`:
-a simulation-wide global and an optional per-instance override.
-
-Each `Navigator` owns a `NavMotor`, and each `NavMotor` owns its own
-`LocomotionHandler`, including its own `Forces` instance.
-
-### 1.1 Global Gravity
-
-`LocomotionForces` exposes a single static settings instance:
+`LocomotionForces.GlobalForces` holds the simulation-wide gravity and terminal
+velocity used by motors without local overrides:
 
 ```csharp
-LocomotionForces.GlobalForces
-```
+LocomotionForces.GlobalForces.GravityForce = Fixed64.FromDecimal(1.6m);
+LocomotionForces.GlobalForces.TerminalVelocity = new Fixed64(20);
 
-It holds two fields:
-
-- `LocomotionForces.GlobalForces.GravityForce` — the gravity magnitude applied to all navigators
-  that do not carry a per-instance override.
-- `LocomotionForces.GlobalForces.TerminalVelocity` — the terminal fall speed cap applied to all
-  such navigators.
-
-Both are initialized to the `GlobalEnvironmentForces` defaults. Call
-`LocomotionForces.GlobalForces.Reset()` to restore them.
-
-Changing either field takes effect for every unoverridden navigator on the very
-next frame:
-
-```csharp
-// Shift the entire simulation to moon gravity
-LocomotionForces.GlobalForces.GravityForce = (Fixed64)1.6d;
-
-// Restore both to defaults
+// Restore the built-in values.
 LocomotionForces.GlobalForces.Reset();
 ```
 
-### 1.2 Per-Instance Override
+The built-in defaults are:
 
-`LocomotionForces.GravityForce` and `LocomotionForces.TerminalVelocity` are
-properties that store a
-per-instance override. Reading them returns that override when one is present,
-or the current global value otherwise.
+- gravity magnitude: `9.8`;
+- terminal fall speed: `53`;
+- base jump height: `1`;
+- extra held-jump height: `2`;
+- neutral buoyancy factor: `1`;
+- passive water drag factor: `0.0625`.
+
+Changing a global value affects every motor that is still following the global
+on its next fixed frame.
+
+## Override one motor
+
+Each motor can pin its own gravity or terminal velocity:
 
 ```csharp
-NavMotor motor = scout.Motor
-    ?? throw new InvalidOperationException("Navigator must be initialized first.");
+motor.Handler.Forces.GravityForce = new Fixed64(20);
+motor.Handler.Forces.TerminalVelocity = new Fixed64(10);
 
-// Pin one navigator to heavy gravity (for example, inside a gravity well).
-motor.Handler.Forces.GravityForce = (Fixed64)20.0d;
-motor.Handler.Forces.TerminalVelocity = (Fixed64)10.0d;
-
-bool pinned = motor.Handler.Forces.HasGravityForceOverride;
-
-// Remove both overrides so this navigator tracks the global settings again.
 motor.Handler.Forces.ClearGravityForceOverride();
 motor.Handler.Forces.ClearTerminalVelocityOverride();
 ```
 
-### 1.3 Priority and Serialization
+An override wins over the global setting until it is cleared. This makes it
+possible to model local gravity wells, lightweight actors, or special movement
+profiles without changing every Navigator.
 
-The per-instance override always wins over the global. The global is only
-consulted when no override is set.
+## Fixed-step timing
 
-Serializing a `LocomotionHandler.Forces` instance records whether an override
-was active at save time. On load, the override is restored if it was present, so
-a navigator that was pinned stays pinned. A navigator that was tracking the
-global continues to track whatever the global is at runtime — the saved global
-value is not baked into the snapshot.
+The owning `TrailblazerWorldContext` supplies `DeltaTime`, `InvDeltaTime`, and
+`TotalTime`. Gravity, jump extension, cooldowns, and terminal-velocity checks
+all use that deterministic clock.
 
-### 1.4 Defaults
+Call `context.Simulate()` exactly once for each authoritative fixed frame.
+Do not derive motor time from wall-clock time or a rendering frame.
 
-- `GlobalEnvironmentForces.DefaultGravityForce = 9.8`
-- `GlobalEnvironmentForces.DefaultTerminalVelocity = 53`
-- `JumpLocomotion.DefaultBaseJumpHeight = 1`
-- `JumpLocomotion.DefaultExtraJumpHeight = 2`
-- `WaterLocomotion.DefaultBuoyancyFactor = 1`
-- `MoveLocomotion.DefaultWaterDragFactor = 0.0625`
+## Grounded motion
 
-The owning `TrailblazerWorldContext` provides the fixed simulation timing:
+Grounded does not mean gravity is disabled. The motor suppresses upward output
+and applies a small downward bias so the body stays attached across uneven
+surfaces.
 
-- `context.DeltaTime`
-- `context.InvDeltaTime`
-- `context.TotalTime`
+The host's refreshed ground contact is what keeps the next frame classified as
+Solid. If ground probing is stale or missing, the motor cannot invent that
+contact.
 
-Those values are what make gravity and jumping deterministic from frame to
-frame.
+## Airborne motion
 
-## 2. Frame Order
+While the current medium is Gas, gravity reduces vertical velocity until the
+configured terminal fall speed is reached.
 
-Vertical motion is not handled in isolation. It is part of the
-`NavMotor.TryTraversal(...)` pipeline:
+Jumping, falling, controlled flight, and climbing are separate locomotion states
+that can change this behavior:
 
-1. Cache the current frame request.
-2. Start `_forceOutput` from `Handler.Move.FrameVelocity`.
-3. Compute movement intent and horizontal acceleration.
-4. Apply environmental forces through `ApplyEnvironmentalForces()`.
-5. Apply jump force through `ApplyJumpForce()`.
-6. Apply platform movement if needed.
-7. Convert the final frame output into a velocity delta.
+- an active jump may temporarily offset gravity while input is held;
+- a fall records start, stop, landing, and maximum-height lifecycle;
+- controlled flight can compensate for gravity;
+- climbing owns its attachment motion while active.
 
-That ordering matters:
+Gas is the traversal medium; those are controller states within it.
 
-- gravity and buoyancy are applied before jump impulse
-- jump can clear existing downward vertical output before injecting upward force
-- grounded and airborne state are determined from the current `TransitState`,
-  not inferred ad hoc from velocity alone
+## Jump height and held input
 
-## 3. Grounded Behavior
+Base jump speed is derived from configured gravity and
+`JumpLocomotion.BaseJumpHeight`. Before applying the jump, the motor clears
+existing downward output so a valid jump is not weakened by leftover descent in
+the same frame.
 
-When the navigator is grounded, Trailblazer does not simply "turn gravity off."
+While jump input remains held and the extra-height window is active, the motor
+partially offsets gravity along the latched jump direction. Releasing input
+earlier lets gravity take over sooner.
 
-The current code does this:
+The main tuning values are:
 
-```csharp
-_forceOutput.Y = FixedMath.Min(Fixed64.Zero, _forceOutput.Y) - gravityStep;
-```
+- `BaseJumpHeight`;
+- `ExtraJumpHeight`;
+- `JumpControlMultiplier`;
+- `PerpendicularJumpAmount` and `SteepPerpendicularJumpAmount`;
+- jump count and cooldown;
+- `WaterLocomotion.BreachJumpMultiplier` for water exits.
 
-Implications:
+Ground jumps can lean with the surface normal. Water-breach jumps use the
+Liquid-specific multiplier.
 
-- downward vertical output is preserved if already negative
-- a small downward bias is still applied every grounded frame
-- upward vertical output is suppressed while grounded
+## Liquid and buoyancy
 
-This acts more like a ground-stick force than a textbook "normal force cancels
-gravity" explanation.
+Liquid motion combines gravity-relative buoyancy, water drag, swim input, and
+optional breach jumping.
 
-Why it exists:
+Interpret `WaterLocomotion.BuoyancyFactor` as:
 
-- it helps keep the navigator pressed against the ground
-- it reduces hover-like behavior when stepping across uneven surfaces
-- it keeps vertical state transitions stable in a deterministic motor
+- `1`: neutral relative to gravity;
+- greater than `1`: upward acceleration;
+- less than `1`: downward acceleration.
 
-So if you are looking for the mental model, use this one:
+Water drag is configured separately on `MoveLocomotion`. Buoyancy does not
+replace explicit vertical swim input.
 
-- grounded units are still biased downward each frame
-- the environment and surface state keep them grounded
-- the motor is intentionally sticky rather than physically pure
+## Ceilings, falls, and platforms
 
-## 4. Airborne Behavior
+During finalization, a ceiling hit stops upward frame velocity and ends the
+active jump extension.
 
-When `CurrentState.Medium == TraversalMedium.Gas`, the motor applies gravity
-directly to the vertical component.
+Fall classification is separate from raw gravity. Entering water clears a fall;
+landing ends it; ordinary downhill movement should not become a fall solely
+because vertical position decreased.
 
-Current flow:
+Moving platforms can contribute inherited velocity when a body leaves them and
+landing correction when it arrives. Airborne vertical motion therefore starts
+from the complete prior frame state, not always from rest.
 
-```csharp
-_forceOutput.Y = Handler.Move.FrameVelocity.Y - gravityStep;
-```
+## Serialization
 
-Then the motor clamps against terminal fall speed:
+Per-motor gravity and terminal-velocity override state is serialized. A motor
+that followed the global before saving continues to follow the current runtime
+global after loading; the global value itself is not copied into each Navigator
+record.
 
-```csharp
-Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.Y
-    + (_forceOutput.Y * DeltaTime);
+## Common mistakes
 
-if (terminalFallSpeed < -Handler.Forces.TerminalVelocity)
-    _forceOutput.Y = -Handler.Forces.TerminalVelocity - Handler.Move.FrameVelocity.Y;
-```
+### Looking for gravity on `TrailblazerWorldContext`
 
-What this means in practice:
+The context owns deterministic time. Gravity settings live on
+`LocomotionForces.GlobalForces` and each motor's `Handler.Forces`.
 
-- air state is where full gravity application happens
-- fall speed is bounded by `scout.Motor.Handler.Forces.TerminalVelocity`
-- once falling fast enough, further downward acceleration is capped
+### Treating grounded gravity as physically canceled
 
-This is also where jump-hold behavior can partially offset gravity for a short
-time; that is covered below.
+Trailblazer uses a ground-stick model. Grounded frames still bias motion
+downward intentionally.
 
-## 5. Water Behavior
+### Treating Liquid as “gravity off”
 
-Water does not use the same vertical rule as ground or air.
+Liquid uses gravity-relative buoyancy plus drag and swim input.
 
-When `CurrentState.Medium == TraversalMedium.Liquid`, Trailblazer applies
-buoyancy relative to gravity:
+### Changing global settings for one actor
 
-```csharp
-_forceOutput.Y += gravityStep * (Handler.Water!.BuoyancyFactor - Fixed64.One);
-```
+Use a per-motor override when only one controller should differ.
 
-Interpretation of `BuoyancyFactor`:
+## Related guides
 
-- `1`: neutral relative to gravity, no additional vertical push from buoyancy
-- `> 1`: net upward acceleration
-- `< 1`: net downward acceleration
-
-Important distinction:
-
-- vertical buoyancy is handled in `ApplyEnvironmentalForces()`
-- swim drag is handled in the desired-velocity path
-- optional vertical swimming input is handled in `GetDesiredVelocity()`
-
-So water motion is a combination of:
-
-- buoyancy
-- drag
-- explicit swim input
-- optional breach jumping
-
-## 6. Jumping and Gravity
-
-Jumping is not just "set velocity upward once."
-
-### 6.1 Initial Jump Speed
-
-The current jump-speed formula is:
-
-```csharp
-Fixed64 jumpSpeed = FixedMath.Sqrt(
-    2 * Handler.Jump!.BaseJumpHeight * Handler.Forces.GravityForce);
-```
-
-That is the base vertical speed used for:
-
-- normal jumps
-- slope-influenced jumps
-- water breach jumps, after multiplying by `BreachJumpMultiplier`
-
-### 6.2 Jump Direction
-
-On land, the jump direction is not always straight up.
-
-Trailblazer computes it by interpolating between:
-
-- `Vector3d.Up`
-- `CurrentState.SurfaceNormal`
-
-using:
-
-- `JumpLocomotion.PerpendicularJumpAmount`
-- `JumpLocomotion.SteepPerpendicularJumpAmount`
-
-This lets jumps lean away from slopes instead of always being perfectly
-vertical.
-
-### 6.3 Held Jump
-
-While a jump is active and the jump input is still held, Trailblazer partially
-counteracts gravity for a limited window:
-
-```csharp
-if (TotalTime <= extraJumpLimit)
-    _forceOutput += jumpModule.FrameJumpDirection * gravityStep;
-```
-
-This is the system that produces variable jump height.
-
-Current behavior:
-
-- pressing jump injects the initial jump force
-- holding jump can extend the upward phase for a short period
-- releasing jump early allows gravity to take over sooner
-
-### 6.4 Clearing Existing Downward Motion
-
-Before jump force is added, the motor clears existing downward vertical output:
-
-```csharp
-_forceOutput.Y = FixedMath.Max(Fixed64.Zero, _forceOutput.Y);
-_forceOutput += jumpForce;
-```
-
-This prevents a jump from being reduced by leftover downward momentum in the
-same frame.
-
-## 7. Ceiling Interaction
-
-Ceiling handling is finalized after traversal.
-
-If the motor detects upward velocity and the navigator has crossed
-`CurrentState.CeilingLevel`, it:
-
-- zeroes the upward `FrameVelocity.Y`
-- clears `Jump.IsJumping`
-- clears `Jump.IsHoldingJump`
-
-This stops the current ascent immediately and ends the held-jump extension.
-
-## 8. Falling State
-
-Falling is tracked separately from raw gravity application.
-
-`FallLocomotion` is responsible for:
-
-- whether the navigator is currently falling
-- where the fall started
-- where the fall ended
-- the total fall height
-
-`NavMotor.HandleFallState(...)` uses both traversal state and vertical output to
-decide when a fall begins.
-
-The main rules are:
-
-- entering water clears fall state
-- landing ends the fall and records `FallEnd`
-- falling can start when the unit is in air or sliding too steeply and vertical
-  output is downward
-- downhill ground travel should not be treated as a fall
-
-Related events:
-
-- `OnStartFall`
-- `OnStopFall`
-- `OnLandedFall`
-- `OnMaxFallHeightReached`
-
-This means gravity affects both motion and state transitions, but those concerns
-are intentionally split:
-
-- `ApplyEnvironmentalForces()` changes vertical movement
-- `HandleFallState(...)` classifies the current movement as a fall
-
-## 9. Platform Interaction
-
-Moving platforms affect vertical motion indirectly.
-
-The platform system can:
-
-- inject inherited platform velocity when leaving a platform
-- subtract platform velocity on landing to avoid double-applying motion
-- move the navigator through platform transforms while grounded or locked
-
-This matters for gravity because vertical motion after stepping off a moving
-platform is not purely "gravity from rest." The inherited platform motion
-becomes part of the airborne state before gravity continues to act on it.
-
-## 10. Practical Tuning Knobs
-
-If you want to change how gravity feels, these are the main fields to tune:
-
-### Heavier or lighter gravity
-
-- `scout.Motor.Handler.Forces.GravityForce`
-
-Higher values:
-
-- increase downward acceleration
-- require more jump speed for the same jump height
-- make falls reach terminal velocity sooner
-
-### Faster or slower maximum falling
-
-- `scout.Motor.Handler.Forces.TerminalVelocity`
-
-### Shorter or taller jumps
-
-- `JumpLocomotion.BaseJumpHeight`
-- `JumpLocomotion.ExtraJumpHeight`
-
-### More or less mid-air control
-
-- `JumpLocomotion.JumpControlMultiplier`
-- `FallLocomotion.FallControlMultiplier`
-
-### More floating or more sinking in water
-
-- `WaterLocomotion.BuoyancyFactor`
-- `MoveLocomotion.WaterDragFactor`
-- `WaterLocomotion.BreachJumpMultiplier`
-
-## 11. Common Misconceptions
-
-### "Gravity is configured on TrailblazerWorldContext"
-
-It is not. `TrailblazerWorldContext` owns the fixed timestep. Gravity lives on
-each handler's `LocomotionForces` instance.
-
-The simulation-wide defaults are on `LocomotionForces.GlobalForces`.
-Per-instance overrides are stored directly on each locomotion instance. When an
-override is set it wins; when it is not, the instance reads from `GlobalForces`.
-This keeps per-navigator tuning intact while letting one assignment propagate to
-every unoverridden navigator at once.
-
-### "Grounded means gravity is canceled"
-
-Not exactly. Grounded frames still receive a downward bias. The current
-implementation is a grounded-stick model, not a pure equal-and-opposite-force
-simulation.
-
-### "Water just disables gravity"
-
-No. Water uses buoyancy relative to gravity, plus swim drag and optional swim
-input.
-
-### "Jump height is only determined by one impulse"
-
-Not in the current motor. Jump height is affected by:
-
-- base jump speed
-- held-jump gravity cancellation window
-- jump direction relative to the surface normal
-- water breach multipliers
-
-## 12. Summary
-
-Trailblazer's vertical model is deterministic and gameplay-oriented:
-
-- ground applies a persistent downward stick force
-- air applies gravity with a terminal velocity cap
-- water applies buoyancy relative to gravity
-- jump injects upward motion and can temporarily offset gravity while held
-- fall state, landing, ceilings, and water transitions are handled as explicit
-  locomotion states
-
-If you need the execution order for the full motor, read `NavMotor.md` alongside
-this file.
+- [NavMotor](NavMotor.md)
+- [Navigator](Navigator.md)
+- [Heightmaps](HeightMaps.md)
+- [Serialization](Serialization.md)

@@ -1,4 +1,4 @@
-# NavSteering Reference
+# NavSteering
 
 `NavSteering` is the Navigator-owned controller that converts one active
 `PathQuery` into a deterministic heading or one pending semantic action. It
@@ -9,7 +9,7 @@ Hosts normally start guided travel through
 `Navigator.ApplyGuidedTrekRequest(...)`; the steering query-start method is
 internal so Navigator can enforce profile and medium ownership.
 
-## 1. Core State
+## Core State
 
 Useful public observations include:
 
@@ -26,7 +26,7 @@ Useful public observations include:
 An active session owns at most one A* lease or one Flow lease. Direct travel can
 remain guide-free while the exact same-medium route is certified.
 
-## 2. Per-Frame Heading
+## Per-Frame Heading
 
 This C# fragment assumes a configured steering instance and `ISteer` host:
 
@@ -50,7 +50,7 @@ The returned nullable instruction is transient output. `NavSteering` does not
 own a second public pending-action queue. Navigator copies it into its sole
 `PendingTransition` field while the lease remains the cursor/action authority.
 
-## 3. Direct Travel
+## Direct Travel
 
 Direct heading uses Trailblazer's internal graph navigation ray with the query's
 exact start medium, profile, policy, and work budget. It is skipped when reaching
@@ -61,7 +61,7 @@ If direct proof is blocked, stale, or not semantically cost neutral, steering
 acquires normal guidance. Internal ray capacity and dependency details are not
 part of the public steering contract.
 
-## 4. A* Guidance
+## A* Guidance
 
 For A*, steering reads `NavigationGuideStep` values. It heads toward an ordinary
 step's position and advances only after reaching it. For a transition step, it
@@ -71,7 +71,7 @@ surface the instruction and hold zero guidance.
 This preserves explicit in-cell point overrides. A transition is not published
 early merely because its source cell has been reached.
 
-## 5. Flow Guidance
+## Flow Guidance
 
 For Flow, steering samples with a finite `GuideSampleWorkBudget`. Ordinary
 samples provide selected-edge headings and exact medium. A transition sample
@@ -81,7 +81,7 @@ then holds the exact instruction.
 Flow never rebinds across a selected transition or treats a zero heading action
 as arrival.
 
-## 6. Completion And Cancellation
+## Completion And Cancellation
 
 Completion delegates to the active producing lease. Only the exact current
 instruction can advance it.
@@ -98,7 +98,7 @@ While a pending action is current:
 - `Stale` cancels the old guidance so ordinary repath logic can run;
 - mismatch or duplicate completion does not move the cursor.
 
-## 7. Repath And Publication
+## Repath And Publication
 
 Steering does not mutate the caller's original intent arbitrarily. An ordinary
 repath updates the session start position while retaining the query's existing
@@ -109,14 +109,14 @@ its physical `TrekCondition` synchronized with that completed action.
 Map, overlay, policy, seam, or GridForge changes can stale the active proof.
 Relevant changes reacquire; unrelated changes can reuse the cached payload.
 
-## 8. Movement Groups
+## Movement Groups
 
 Movement groups shape ordinary destinations/headings after path selection. They
 do not modify medium-state graph connectivity and do not merge semantic action
 ownership. `PrewarmMovementGroup(...)` can restore coordinator membership after
 loading; otherwise it rebuilds lazily.
 
-## 9. Common Mistakes
+## Common Mistakes
 
 - Starting a guided query whose profile differs from the Navigator profile.
 - Supplying a start medium that differs from the host's current frame medium.
@@ -127,7 +127,7 @@ loading; otherwise it rebuilds lazily.
 - Forgetting that `StopMove()` is cancellation, while `Arrive()` also emits
   arrival semantics.
 
-## 10. Related References
+## Related guides
 
 - [Pathing](Pathing.md)
 - [Path guides](PathGuides.md)

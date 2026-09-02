@@ -1,34 +1,63 @@
 # Trailblazer Wiki
 
-Trailblazer publishes deterministic navigation truth, resolves one immutable
-query, and returns an A* or Flow lease whose semantic actions require explicit
-host completion.
+Welcome. Trailblazer is deterministic, engine-agnostic navigation for lockstep
+games and simulations. It combines GridForge-backed navigation maps, A* and
+flow fields, explicit traversal actions, steering, turning, locomotion, and
+serialization without taking ownership of your engine or gameplay systems.
 
-## Start Here
+Use this wiki when you want to understand how the pieces behave together. The
+public API defines individual signatures; its XML documentation supplies
+member-level guidance.
 
-1. [Overview](Overview.md)
-2. [Navigation maps](NavigationMaps.md)
-3. [Map authoring](MapAuthoring.md)
-4. [Map publication](MapPublication.md)
-5. [Pathing](Pathing.md)
-6. [Path guides](PathGuides.md)
+## Start here
 
-## Reference Index
+New to Trailblazer? Follow this path:
 
-| Topic | Page |
+1. [Getting Started](GettingStarted.md) — install a package, publish a tiny
+   world, and request your first route.
+2. [Technical Overview](Overview.md) — learn what Trailblazer owns and what the
+   host still controls.
+3. [Navigation Maps](NavigationMaps.md) — understand physical cells, navigation
+   meaning, defaults, and overlays.
+4. [Pathing](Pathing.md) and [Path Guides](PathGuides.md) — build queries and
+   consume A* or Flow results safely.
+
+## Find the right guide
+
+| I want to... | Read... |
 | --- | --- |
-| Map defaults, effective cells, and media | [Navigation maps](NavigationMaps.md) |
-| Builders, token imports, and host materialization | [Map authoring](MapAuthoring.md) |
-| Map, overlay, removal, and policy operations | [Map publication](MapPublication.md) |
-| A*/Flow queries, endpoints, profiles, and budgets | [Pathing](Pathing.md) |
-| Gas and Liquid geometry | [Volume traversal](VolumeTraversal.md) |
-| Explicit definitions and procedural actions | [Transitions](Transitions.md) |
-| A* steps, Flow samples, and action completion | [Path guides](PathGuides.md) |
-| High-level steering | [NavSteering](NavSteering.md) |
-| Simulation-facing controller | [Navigator](Navigator.md) |
-| Turning, movement, heightmaps, and gravity | [NavTurning](NavTurning.md), [NavMotor](NavMotor.md), [Heightmaps](HeightMaps.md), [Gravity](Gravity.md) |
-| JSON and MemoryPack state | [Serialization](Serialization.md) |
-| Breaking API migration | [Migration](Migration.md) |
+| Build or import navigation data | [Map Authoring](MapAuthoring.md) |
+| Publish maps, policies, or runtime changes | [Map Publication](MapPublication.md) |
+| Route through Gas or Liquid | [Volume Traversal](VolumeTraversal.md) |
+| Add ladders, jumps, takeoff, or teleporters | [Transitions](Transitions.md) |
+| Drive a complete controller | [Navigator](Navigator.md) |
+| Customize steering or facing | [NavSteering](NavSteering.md) and [NavTurning](NavTurning.md) |
+| Configure movement, jumping, water, or platforms | [NavMotor](NavMotor.md) and [Gravity](Gravity.md) |
+| Use deterministic ground-height data | [Heightmaps](HeightMaps.md) |
+| Save and restore runtime state | [Serialization](Serialization.md) |
+| Diagnose a failed query or stuck action | [Troubleshooting](Troubleshooting.md) |
+
+## The mental model
+
+Most Trailblazer integrations follow the same lifecycle:
+
+1. Create a `TrailblazerWorldContext` for one GridForge world.
+2. Publish immutable maps and exact area policies.
+3. Advance publication once per fixed simulation frame.
+4. Request an A* route or Flow field with one immutable `PathQuery`.
+5. Move through ordinary guidance and execute semantic actions explicitly.
+6. Dispose leases, Navigators, and then the context.
+
+Trailblazer owns deterministic navigation meaning. Your host owns terrain
+classification, collision detection, physics, animation, and gameplay actions.
+
+## Project links
+
+- [GitHub repository](https://github.com/mrdav30/Trailblazer)
+- [Trailblazer on NuGet](https://www.nuget.org/packages/Trailblazer)
+- [Trailblazer.Lean on NuGet](https://www.nuget.org/packages/Trailblazer.Lean)
+- [Coverage report](https://mrdav30.github.io/Trailblazer/)
+- [v1 to v2 migration guide](../MIGRATION.md)
 
 For contributor workflow and repository boundaries, see
 [AGENTS.md](../../AGENTS.md).

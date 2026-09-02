@@ -9,7 +9,7 @@ it does not bake terrain, meshes, colliders, or engine-specific scene data.
 Baking belongs in a host or engine module that can produce compressed samples
 for this core library.
 
-## 1. Model
+## Model
 
 A `HeightmapSurface` stores environment ground/contact Y over an X/Z lattice:
 
@@ -23,7 +23,7 @@ The Y value is contact ground Y, not a navigator root/body Y. Navigator root
 projection adds `BodyShape.RootToFootOffsetY` and any configured heightmap
 `groundOffset` after sampling.
 
-## 2. Storage And Compression
+## Storage And Compression
 
 `HeightmapCompression` defines how compact `short` samples convert to `Fixed64`.
 Formula fragment:
@@ -50,7 +50,7 @@ Trailblazer exposes two factories:
 Both factories produce the same runtime shape: a compressed `SwiftShortArray2D`
 sampled through the same deterministic path.
 
-## 3. Registration
+## Registration
 
 Heightmaps are registered on `TrailblazerWorldContext.Heightmaps`. This complete
 C# setup example owns its context and sample storage:
@@ -61,7 +61,7 @@ using SwiftCollections.Dimensions;
 using Trailblazer;
 using Trailblazer.Heightmaps;
 
-TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
 
 var samples = new SwiftShortArray2D(2, 2);
 samples[0, 0] = 0;
@@ -92,7 +92,7 @@ independently in another `TrailblazerWorldContext`.
 `TrailblazerHeightmapService.Reset()` clears only the current context's
 heightmap registry. Disposing the context also clears its heightmaps.
 
-## 4. Sampling
+## Sampling
 
 Use `TrySampleGround(...)` with a world X/Z position and contact-selection Y.
 C# fragment using the context created above:
@@ -126,7 +126,7 @@ When several layers are valid, Trailblazer chooses:
 3. higher `priority`
 4. earlier context-local registration order
 
-## 5. Multi-Level Layers
+## Multi-Level Layers
 
 Multi-level worlds use one heightmap layer per selectable level. A platform
 above a floor can share the same X/Z area with the floor because each
@@ -146,7 +146,7 @@ For agents crossing between levels, keep passing the current active layer name
 when possible. The service will keep that layer while it remains valid and
 abandon it once the query contact Y leaves the layer's vertical band.
 
-## 6. Example: Unity-Style Editor Bake
+## Example: Unity-Style Editor Bake
 
 One reasonable Unity workflow is to bake compact height samples in an editor
 tool, then feed the result to Trailblazer at runtime. The Unity-specific part is
@@ -222,7 +222,7 @@ Do not bake body/root offsets into the stored height samples. The heightmap
 should represent the environment contact Y while each navigator decides how its
 root sits above that contact.
 
-## 7. Navigator Grounding
+## Navigator Grounding
 
 `Navigator` does not perform hidden heightmap probes. Concrete navigators or
 host adapters opt in by calling the protected `TryApplyHeightmapGrounding(...)`
@@ -284,7 +284,7 @@ grounding and uses it as the preferred layer on later calls. These settings are
 serialized with the navigator, but heightmap surface data and context
 registrations are not.
 
-## 8. Host Responsibilities
+## Host Responsibilities
 
 Hosts own:
 

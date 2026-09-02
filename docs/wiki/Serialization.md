@@ -1,10 +1,11 @@
-# Serialization Reference
+# Serialization
 
-Trailblazer serializes explicit runtime records through Chronicler. The active
-transports are JSON and MemoryPack, and the load model is
-populate-existing-instance only.
+Trailblazer serializes explicit runtime records through Chronicler. The
+standard `Trailblazer` package supports JSON and MemoryPack;
+`Trailblazer.Lean` omits the MemoryPack transport. Both package families use a
+populate-existing-instance-only load model.
 
-## 1. Load Model
+## Load Model
 
 The host must:
 
@@ -19,7 +20,7 @@ The host must:
 Trailblazer does not construct arbitrary runtime/controller graphs from save data
 and does not serialize context bindings.
 
-## 2. Standalone PathQuery
+## Standalone PathQuery
 
 `PathQueryRecord` is the public standalone record for one complete immutable
 query. This C# fragment assumes a validated query and a chosen Chronicler
@@ -44,7 +45,7 @@ A standalone query retains its exact recorded start position and start medium.
 The record has a required schema and required query; a missing, malformed, or
 unsupported record rejects rather than producing a default query.
 
-## 3. Navigator Path Session
+## Navigator Path Session
 
 Navigator stores a different durable session shape. It preserves destination,
 map filters, endpoint policies, target media, area policy, algorithm, budget,
@@ -70,21 +71,22 @@ Navigator does not serialize or restore:
 - a guide cursor/sample source;
 - a pending transition instruction;
 - private completion stamps;
-- dependency snapshots or cache slots.
+- dependency snapshots or cache slots;
 - `LastCommittedCell` or committed-cell notifications.
 
 The next simulation frame requests fresh guidance from durable intent.
 
-## 4. Transactional Load
+## Transactional Load
 
 Navigator loading stages and validates the top-level schema, exact profile,
 position/frame condition, path session, steering, turning, motor, and locomotion
 records before changing the existing live shell.
 
-Malformed early or late nested data in either JSON or MemoryPack must preserve
-the previous shell, active query, guide lease, and pending instruction. A failed
-load does not partially stop the current session, replace controller tuning, or
-release guidance. It also preserves the shell's existing GridForge occupancy
+Malformed early or late nested data must preserve the previous shell, active
+query, guide lease, and pending instruction. This applies to JSON in both
+package families and to MemoryPack in the standard package. A failed load does
+not partially stop the current session, replace controller tuning, or release
+guidance. It also preserves the shell's existing GridForge occupancy
 registration and committed-cell state.
 
 After all staged data validates, population removes the shell's old occupancy
@@ -96,7 +98,7 @@ Missing or retired schema shapes reject explicitly. Chronicler's missing-field
 defaults are not used as a compatibility path for old navigation request/action
 formats.
 
-## 5. Current Navigator Coverage
+## Current Navigator Coverage
 
 The recorded Navigator branch includes:
 
@@ -112,7 +114,7 @@ The recorded Navigator branch includes:
 
 Context-owned world data is separate.
 
-## 6. Maps And Overlays
+## Maps And Overlays
 
 `NavigationMap` bakes and runtime overlay events are host/world assets, not
 embedded inside Navigator records. Persist them in the host's deterministic world
@@ -127,7 +129,7 @@ snapshot/event log:
 Replay these before guided controller restoration. Otherwise a durable query may
 correctly reject with `NoMap`, invalid policy, or stale dependencies.
 
-## 7. Pending Actions
+## Pending Actions
 
 Pending transition instructions are deliberately transient and lease-specific.
 Saving during a held action records durable query/controller state but not the
@@ -141,7 +143,7 @@ action token. On load:
 The host should separately persist its own gameplay/animation state if an action
 must resume at an application level.
 
-## 8. Canonical Defaults
+## Canonical Defaults
 
 `RecordValues.Look(...)` defaults are canonical field defaults, not whatever
 value happens to be in the target shell. Omitted values load as those defaults.
@@ -151,7 +153,7 @@ Reference records use `RecordDeep`; non-nullable structs use
 This behavior is one reason schema validation is mandatory at the navigation
 boundary.
 
-## 9. What Is Not Serialized
+## What Is Not Serialized
 
 - `TrailblazerWorldContext` and `GridWorld` ownership;
 - navigation map/overlay/policy publication;
@@ -163,7 +165,7 @@ boundary.
 - heightmap sample data/layer registration;
 - engine objects, physics state, animation state, or host callbacks.
 
-## 10. Related References
+## Related guides
 
 - [Overview](Overview.md)
 - [Map publication](MapPublication.md)

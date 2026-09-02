@@ -1,10 +1,10 @@
-# Pathing Reference
+# Pathing
 
 Trailblazer uses one immutable `PathQuery` for both A* and flow-field search.
 The query is complete caller intent: no algorithm branch infers a medium,
 geometry, policy, or unbounded work limit later.
 
-## 1. Query Contract
+## Query Contract
 
 This C# fragment assumes the endpoints, profile, policy key, and finite budget
 have already been created:
@@ -40,7 +40,7 @@ The fields are:
 `TargetMedia` must be a subset of `Agent.AllowedMedia`. `Unknown` is a
 runtime sentinel and is invalid query intent.
 
-## 2. Endpoints
+## Endpoints
 
 `NavigationEndpoint` supports:
 
@@ -57,7 +57,7 @@ When transitions are enabled, the winning target address may admit every
 qualifying medium in `TargetMedia`. When disabled, only the start medium is
 eligible; if the target mask excludes it, the valid query returns `NoPath`.
 
-## 3. Agent Profile
+## Agent Profile
 
 `NavigationAgentProfile` is immutable and includes:
 
@@ -71,7 +71,7 @@ Grid metrics never substitute for agent geometry. A map cell or transition can
 require capabilities, but possession of a capability does not invent an action;
 the map must still author the corresponding edge or rule.
 
-## 4. Work Budget
+## Work Budget
 
 `NavigationWorkBudget` bounds lookup probes, endpoint candidates, expanded
 nodes, evaluated edges, connection legs, transition candidates and pairs, trace
@@ -82,7 +82,7 @@ Budget exhaustion returns `BudgetExceeded`; fixed retained-capacity exhaustion
 returns `CapacityExceeded`. Neither silently expands storage or falls back to
 an unbounded algorithm.
 
-## 5. A* Versus Flow
+## A* Versus Flow
 
 Choose A* when one agent needs an ordered route. This C# fragment assumes a
 valid A* query:
@@ -107,7 +107,7 @@ The query's `Algorithm` must match the request method. Both algorithms use the
 same medium-state graph, edge evaluator, costs, dependencies, and transition
 completion semantics.
 
-## 6. Traversal Families Inside The Graph
+## Traversal Families Inside The Graph
 
 - Solid native movement uses topology contacts plus surface step/drop rules.
 - Solid explicit connections can carry certified witnesses or guide points.
@@ -119,7 +119,7 @@ completion semantics.
 The public query does not select one of these families. The exact start medium,
 target mask, agent, policy, and map publication determine which edges are legal.
 
-## 7. Status And Staleness
+## Status And Staleness
 
 Guide acquisition can report:
 
@@ -134,7 +134,7 @@ Leases revalidate their exact dependencies. Dispose every successful lease.
 After a relevant map, overlay, policy, seam, or GridForge publication, reacquire
 instead of continuing a stale result.
 
-## 8. Determinism Notes
+## Determinism Notes
 
 - Costs use `Fixed64`.
 - Candidate and tie order is canonical.
@@ -144,7 +144,7 @@ instead of continuing a stale result.
 - Cached payloads are immutable; cursor and pending-action state belong to one
   lease acquisition.
 
-## 9. Related References
+## Related guides
 
 - [Navigation maps](NavigationMaps.md)
 - [Volume traversal](VolumeTraversal.md)

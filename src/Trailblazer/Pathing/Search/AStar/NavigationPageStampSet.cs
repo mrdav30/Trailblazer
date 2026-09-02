@@ -17,14 +17,11 @@ internal sealed class NavigationPageStampSet
     private readonly int[] _pageIndices;
     private readonly long[] _stamps;
     private readonly int _mask;
-    private readonly int _capacity;
     private int _count;
     private long _generation = 1;
 
     internal NavigationPageStampSet(int capacity)
     {
-        if (capacity <= 0)
-            throw new ArgumentOutOfRangeException(nameof(capacity));
         int required = checked(capacity * 2);
         int tableSize = 1;
         while (tableSize < required)
@@ -33,14 +30,14 @@ internal sealed class NavigationPageStampSet
         _pageIndices = new int[tableSize];
         _stamps = new long[tableSize];
         _mask = tableSize - 1;
-        _capacity = capacity;
     }
 
     internal void Reset()
     {
-        if (_generation == long.MaxValue)
-            throw new InvalidOperationException("Page stamp generation capacity is exhausted.");
-        _generation++;
+        unchecked
+        {
+            _generation++;
+        }
         _count = 0;
     }
 
@@ -51,8 +48,6 @@ internal sealed class NavigationPageStampSet
     {
         if (Find(mapId, pageIndex, out int index))
             return false;
-        if (_count == _capacity)
-            throw new InvalidOperationException("Page stamp set capacity is exhausted.");
         _mapIds[index] = mapId;
         _pageIndices[index] = pageIndex;
         _stamps[index] = _generation;
@@ -62,8 +57,6 @@ internal sealed class NavigationPageStampSet
 
     private bool Find(string mapId, int pageIndex, out int index)
     {
-        if (mapId == null)
-            throw new ArgumentNullException(nameof(mapId));
         int mapHash = SwiftHashTools.GetDeterministicStringEqualityComparer().GetHashCode(mapId);
         index = SwiftHashTools.CombineHashCodes(mapHash, pageIndex) & _mask;
         while (_stamps[index] == _generation)

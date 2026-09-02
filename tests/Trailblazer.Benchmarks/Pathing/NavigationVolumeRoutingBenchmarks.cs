@@ -640,7 +640,7 @@ public class NavigationVolumeRoutingBenchmarks
                 _referenceClosed[selected] = true;
                 settled++;
                 NavigationMediumStateRef source = _referenceStates[selected];
-                if (source == target)
+                if (source.Equals(target))
                 {
                     resultCost = _referenceCosts[selected];
                     break;
@@ -748,7 +748,7 @@ public class NavigationVolumeRoutingBenchmarks
         private int FindReferenceState(NavigationMediumStateRef state, int count)
         {
             for (int i = 0; i < count; i++)
-                if (_referenceStates[i] == state)
+                if (_referenceStates[i].Equals(state))
                     return i;
             return -1;
         }

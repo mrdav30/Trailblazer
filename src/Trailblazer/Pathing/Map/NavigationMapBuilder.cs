@@ -227,21 +227,15 @@ public sealed class NavigationMapBuilder
         {
             NavigationCellEntry entry = cells[i];
             if (!GridBinding.IsValidIndex(entry.Index))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(cells),
-                    $"Cell index {entry.Index} is outside the normalized grid address space.");
-            }
+                throw new ArgumentException(
+                    $"Cell index {entry.Index} is outside the normalized grid address space.",
+                    nameof(cells));
             ValidateCellPayload(entry.Cell, nameof(cells));
 
             if (i > 0 && cells[i - 1].Index.Equals(entry.Index))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(cells),
-                    $"Duplicate authored cell index {entry.Index}.");
-            }
+                throw new ArgumentException(
+                    $"Duplicate authored cell index {entry.Index}.",
+                    nameof(cells));
         }
     }
 
@@ -263,20 +257,14 @@ public sealed class NavigationMapBuilder
         {
             NavigationConnection connection = connections[i];
             if (i > 0 && string.Equals(connections[i - 1].Id, connection.Id, StringComparison.Ordinal))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(connections),
-                    $"Duplicate map-local connection ID '{connection.Id}'.");
-            }
+                throw new ArgumentException(
+                    $"Duplicate map-local connection ID '{connection.Id}'.",
+                    nameof(connections));
 
             if (!TryGetAuthoredCell(cells, connection.SourceIndex, out NavigationCell sourceCell))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(connections),
-                    $"Connection '{connection.Id}' references missing local source {connection.SourceIndex}.");
-            }
+                throw new ArgumentException(
+                    $"Connection '{connection.Id}' references missing local source {connection.SourceIndex}.",
+                    nameof(connections));
             ValidateLocalAnchor(
                 connection.EntryAnchor,
                 connection.SourceIndex,
@@ -296,12 +284,9 @@ public sealed class NavigationMapBuilder
                         cells,
                         connection.Destination.Index,
                         out NavigationCell destinationCell))
-                {
-                    SwiftThrowHelper.ThrowIfArgument(
-                        true,
-                        nameof(connections),
-                        $"Connection '{connection.Id}' references missing local destination {connection.Destination.Index}.");
-                }
+                    throw new ArgumentException(
+                        $"Connection '{connection.Id}' references missing local destination {connection.Destination.Index}.",
+                        nameof(connections));
                 ValidateLocalAnchor(
                     connection.ExitAnchor,
                     connection.Destination.Index,
@@ -328,20 +313,14 @@ public sealed class NavigationMapBuilder
         {
             TraversalTransitionDefinition transition = transitions[i];
             if (i > 0 && string.Equals(transitions[i - 1].Id, transition.Id, StringComparison.Ordinal))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(transitions),
-                    $"Duplicate map-local transition ID '{transition.Id}'.");
-            }
+                throw new ArgumentException(
+                    $"Duplicate map-local transition ID '{transition.Id}'.",
+                    nameof(transitions));
 
             if (!TryGetAuthoredCell(cells, transition.SourceIndex, out NavigationCell sourceCell))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(transitions),
-                    $"Transition '{transition.Id}' references missing local source {transition.SourceIndex}.");
-            }
+                throw new ArgumentException(
+                    $"Transition '{transition.Id}' references missing local source {transition.SourceIndex}.",
+                    nameof(transitions));
             SwiftThrowHelper.ThrowIfArgument(
                 !SupportsMedium(sourceCell, transition.SourceMedium),
                 nameof(transitions),
@@ -363,12 +342,9 @@ public sealed class NavigationMapBuilder
                     cells,
                     transition.Destination.Index,
                     out NavigationCell destinationCell))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(transitions),
-                    $"Transition '{transition.Id}' references missing local destination {transition.Destination.Index}.");
-            }
+                throw new ArgumentException(
+                    $"Transition '{transition.Id}' references missing local destination {transition.Destination.Index}.",
+                    nameof(transitions));
             SwiftThrowHelper.ThrowIfArgument(
                 !SupportsMedium(destinationCell, transition.DestinationMedium),
                 nameof(transitions),
@@ -392,12 +368,9 @@ public sealed class NavigationMapBuilder
             TraversalTransitionRule rule = rules[i];
             rule.Validate();
             if (i > 0 && string.Equals(rules[i - 1].Id, rule.Id, StringComparison.Ordinal))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(rules),
-                    $"Duplicate map-local transition rule ID '{rule.Id}'.");
-            }
+                throw new ArgumentException(
+                    $"Duplicate map-local transition rule ID '{rule.Id}'.",
+                    nameof(rules));
         }
     }
 
@@ -411,23 +384,17 @@ public sealed class NavigationMapBuilder
         {
             NavigationCellAddress witness = connection.Witnesses[i];
             if (!witnessSet.Add(witness))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(connection),
-                    $"Connection '{connection.Id}' repeats witness {witness}.");
-            }
+                throw new ArgumentException(
+                    $"Connection '{connection.Id}' repeats witness {witness}.",
+                    nameof(connection));
 
             if (!string.Equals(witness.MapId, MapId, StringComparison.Ordinal))
                 continue;
 
             if (!TryGetAuthoredCell(cells, witness.Index, out NavigationCell witnessCell))
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(connection),
-                    $"Connection '{connection.Id}' references missing local witness {witness.Index}.");
-            }
+                throw new ArgumentException(
+                    $"Connection '{connection.Id}' references missing local witness {witness.Index}.",
+                    nameof(connection));
             ValidateClearance(
                 witnessCell,
                 connection.PortalRadiusClearance,
@@ -493,12 +460,9 @@ public sealed class NavigationMapBuilder
             out _,
             out Fixed64 corridorCost);
         if (!validCorridor)
-        {
-            SwiftThrowHelper.ThrowIfArgument(
-                true,
-                nameof(connection),
-                $"Connection '{connection.Id}' does not define a valid clearance-bearing prism corridor.");
-        }
+            throw new ArgumentException(
+                $"Connection '{connection.Id}' does not define a valid clearance-bearing prism corridor.",
+                nameof(connection));
 
         if (!connection.IsLowerBoundCertified)
             return;
@@ -511,12 +475,9 @@ public sealed class NavigationMapBuilder
             corridorCost,
             destinationCell.EnterCost);
         if (!certified)
-        {
-            SwiftThrowHelper.ThrowIfArgument(
-                true,
-                nameof(connection),
-                $"Connection '{connection.Id}' lower-bound declaration cannot be proven by its canonical fixed-point cost.");
-        }
+            throw new ArgumentException(
+                $"Connection '{connection.Id}' lower-bound declaration cannot be proven by its canonical fixed-point cost.",
+                nameof(connection));
     }
 
     private bool IsCompleteLocalChain(NavigationConnection connection)
@@ -592,9 +553,9 @@ public sealed class NavigationMapBuilder
         string parameterName,
         string message)
     {
-        bool contains = GridBinding.TryGetCellPrism(index, out GridCellPrism prism)
-            && prism.Contains(anchor);
-        SwiftThrowHelper.ThrowIfArgument(!contains, parameterName, message);
+        bool representable = GridBinding.TryGetCellPrism(index, out GridCellPrism prism);
+        System.Diagnostics.Debug.Assert(representable);
+        SwiftThrowHelper.ThrowIfArgument(!prism.Contains(anchor), parameterName, message);
     }
 
     private static void ValidateClearance(
@@ -610,33 +571,29 @@ public sealed class NavigationMapBuilder
 
     private static void ValidateCellPayload(NavigationCell cell, string parameterName)
     {
-        SwiftThrowHelper.ThrowIfArgument(
-            cell.Media == TraversalMedia.None || (cell.Media & ~NavigationCell.KnownMedia) != 0,
-            parameterName,
-            "Cell media must contain at least one known traversal-medium bit.");
-        SwiftThrowHelper.ThrowIfArgument(
-            (cell.RequiredCapabilities & ~NavigationCell.KnownCapabilities) != 0,
-            parameterName,
-            "Cell required capabilities contain an unknown bit.");
-        SwiftThrowHelper.ThrowIfArgument(
-            cell.EnterCost < Fixed64.Zero
-            || cell.RadiusClearance < Fixed64.Zero
-            || cell.HeightClearance < Fixed64.Zero,
-            parameterName,
-            "Cell costs and clearances must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
-            (cell.Flags & ~NavigationCell.KnownFlags) != 0,
-            parameterName,
-            "Cell flags contain an unknown bit.");
+        if (cell.Media == TraversalMedia.None)
+            throw new ArgumentException(
+                "Cell media must contain at least one known traversal-medium bit.",
+                parameterName);
+
+        System.Diagnostics.Debug.Assert((cell.Media & ~NavigationCell.KnownMedia) == 0);
+        System.Diagnostics.Debug.Assert((cell.RequiredCapabilities & ~NavigationCell.KnownCapabilities) == 0);
+        System.Diagnostics.Debug.Assert(cell.EnterCost >= Fixed64.Zero);
+        System.Diagnostics.Debug.Assert(cell.RadiusClearance >= Fixed64.Zero);
+        System.Diagnostics.Debug.Assert(cell.HeightClearance >= Fixed64.Zero);
+        System.Diagnostics.Debug.Assert((cell.Flags & ~NavigationCell.KnownFlags) == 0);
     }
 
-    private static bool SupportsMedium(NavigationCell cell, TraversalMedium medium) => medium switch
+    private static bool SupportsMedium(NavigationCell cell, TraversalMedium medium)
     {
-        TraversalMedium.Solid => (cell.Media & TraversalMedia.Solid) != 0,
-        TraversalMedium.Gas => (cell.Media & TraversalMedia.Gas) != 0,
-        TraversalMedium.Liquid => (cell.Media & TraversalMedia.Liquid) != 0,
-        _ => false
-    };
+        System.Diagnostics.Debug.Assert(NavigationCell.IsKnownMedium(medium));
+        TraversalMedia requested = medium == TraversalMedium.Solid
+            ? TraversalMedia.Solid
+            : medium == TraversalMedium.Gas
+                ? TraversalMedia.Gas
+                : TraversalMedia.Liquid;
+        return (cell.Media & requested) != 0;
+    }
 
     private bool TryGetAuthoredCell(
         NavigationCellEntry[] cells,
@@ -691,7 +648,7 @@ public sealed class NavigationMapBuilder
         internal static readonly NavigationConnectionComparer Instance = new();
 
         public int Compare(NavigationConnection? left, NavigationConnection? right) =>
-            StringComparer.Ordinal.Compare(left?.Id, right?.Id);
+            StringComparer.Ordinal.Compare(left!.Id, right!.Id);
     }
 
     private sealed class TraversalTransitionDefinitionComparer : IComparer<TraversalTransitionDefinition>

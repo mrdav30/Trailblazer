@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using System.Diagnostics;
 using System.Threading;
 using GridForge.Grids;
 
@@ -86,12 +87,7 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
         if (!reservation.HasLeaseSlot)
             throw new ArgumentException("A batch query requires one payload reservation.", nameof(reservation));
-        if (_admissionActive
-            || _search != null
-            || _pendingLease != null
-            || _result != null
-            || IsReadyToPublish
-            || _payloadReservation.HasLeaseSlot)
+        if (_started)
             throw new InvalidOperationException("The A* query work is already active.");
         _started = true;
         Volatile.Write(ref _readyToPublish, false);
@@ -99,14 +95,6 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         Status = NavigationAStarQueryStatus.Pending;
         _payloadReservation = reservation;
         reservation = default;
-        if (!NavigationQueryAdmissionWork.CanProjectPublicQuery(
-                query,
-                PathAlgorithm.AStar))
-        {
-            lease.Dispose();
-            MarkReady(NavigationAStarQueryStatus.Unsupported);
-            return;
-        }
         _admission.Begin(
             lease,
             query,
@@ -140,14 +128,6 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         }
 
         NavigationResolvedPathQuery resolved = _admission.Result;
-        if (resolved.RequiresWorldStamp
-            && _cache.World.ChangeSequence != resolved.WorldChangeSequence)
-        {
-            resolved.Dispose();
-            DisposeAdmission();
-            MarkReady(NavigationAStarQueryStatus.Stale);
-            return Status;
-        }
         var key = new NavigationAStarPayloadKey(
             resolved.Query,
             resolved.Start.Address,
@@ -220,29 +200,17 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         }
         if (_search == null)
             return Finish(_readyStatus);
-
-        NavigationAStarPayload payload = _search.Result;
-        if (!_store.Current.IsDependencyCurrent(payload.Dependencies)
-            || !_cache.IsWorldCurrent(payload))
-            return Finish(NavigationAStarQueryStatus.Stale);
+        NavigationAStarPayload payload = _search!.Result;
         if (!_cache.TryPublish(
                 payload,
                 _store,
                 ref _payloadReservation,
                 out NavigationAStarPayloadLease published))
         {
-            if (!_store.Current.IsDependencyCurrent(payload.Dependencies)
-                || !_cache.IsWorldCurrent(payload))
-                return Finish(NavigationAStarQueryStatus.Stale);
-            return _readyStatus == NavigationAStarQueryStatus.Success
-                ? Finish(NavigationAStarQueryStatus.CapacityExceeded)
-                : Finish(_readyStatus);
-        }
-        if (!_store.Current.IsDependencyCurrent(published.Payload.Dependencies)
-            || !_cache.IsWorldCurrent(published.Payload))
-        {
-            _cache.RemoveExact(published.Payload);
-            published.Dispose();
+            Debug.Assert(
+                !_store.Current.IsDependencyCurrent(payload.Dependencies)
+                || !_cache.IsWorldCurrent(payload),
+                "A gate-owned reservation must cover its worker's maximum payload.");
             return Finish(NavigationAStarQueryStatus.Stale);
         }
         return _readyStatus == NavigationAStarQueryStatus.Success
@@ -270,6 +238,7 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         _result = null;
         _cache.ReleasePayloadReservation(ref _payloadReservation);
         Volatile.Write(ref _readyToPublish, false);
+        _started = false;
     }
 
     private void MarkReady(NavigationAStarQueryStatus status)
@@ -329,31 +298,10 @@ internal sealed class NavigationAStarQueryWork : IDisposable
     }
 
     private static NavigationAStarQueryStatus MapAdmissionStatus(
-        NavigationQueryAdmissionStatus status) => status switch
-        {
-            NavigationQueryAdmissionStatus.Success => NavigationAStarQueryStatus.Success,
-            NavigationQueryAdmissionStatus.Unsupported => NavigationAStarQueryStatus.Unsupported,
-            NavigationQueryAdmissionStatus.NoMap => NavigationAStarQueryStatus.NoMap,
-            NavigationQueryAdmissionStatus.InvalidProfile => NavigationAStarQueryStatus.InvalidProfile,
-            NavigationQueryAdmissionStatus.InvalidStart => NavigationAStarQueryStatus.InvalidStart,
-            NavigationQueryAdmissionStatus.InvalidEnd => NavigationAStarQueryStatus.InvalidEnd,
-            NavigationQueryAdmissionStatus.NoPath => NavigationAStarQueryStatus.NoPath,
-            NavigationQueryAdmissionStatus.BudgetExceeded => NavigationAStarQueryStatus.BudgetExceeded,
-            NavigationQueryAdmissionStatus.CostOverflow => NavigationAStarQueryStatus.CostOverflow,
-            NavigationQueryAdmissionStatus.CapacityExceeded => NavigationAStarQueryStatus.CapacityExceeded,
-            NavigationQueryAdmissionStatus.Stale => NavigationAStarQueryStatus.Stale,
-            _ => NavigationAStarQueryStatus.Pending
-        };
+        NavigationQueryAdmissionStatus status) => (NavigationAStarQueryStatus)status;
 
     private static NavigationAStarQueryStatus MapSearchStatus(
-        NavigationSurfaceAStarStatus status) => status switch
-        {
-            NavigationSurfaceAStarStatus.Success => NavigationAStarQueryStatus.Success,
-            NavigationSurfaceAStarStatus.NoPath => NavigationAStarQueryStatus.NoPath,
-            NavigationSurfaceAStarStatus.BudgetExceeded => NavigationAStarQueryStatus.BudgetExceeded,
-            NavigationSurfaceAStarStatus.CostOverflow => NavigationAStarQueryStatus.CostOverflow,
-            NavigationSurfaceAStarStatus.CapacityExceeded => NavigationAStarQueryStatus.CapacityExceeded,
-            NavigationSurfaceAStarStatus.Stale => NavigationAStarQueryStatus.Stale,
-            _ => NavigationAStarQueryStatus.Pending
-        };
+        NavigationSurfaceAStarStatus status) => status <= NavigationSurfaceAStarStatus.Success
+            ? (NavigationAStarQueryStatus)status
+            : (NavigationAStarQueryStatus)((byte)status + 5);
 }

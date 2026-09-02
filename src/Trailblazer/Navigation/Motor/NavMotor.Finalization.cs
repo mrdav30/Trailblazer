@@ -123,9 +123,7 @@ public partial class NavMotor
     {
         if (IsJumping)
         {
-            JumpLocomotion? jumpModule = JumpModule;
-            if (jumpModule == null)
-                return;
+            JumpLocomotion jumpModule = JumpModule!;
 
             // Reset cooldown on landing.
             jumpModule.ResetJumpCounter();
@@ -251,8 +249,9 @@ public partial class NavMotor
             return;
         }
 
-        if (FlyModule.IsFlying && IsFalling)
-            Handler.ClearTransientState<FallLocomotion>();
+        System.Diagnostics.Debug.Assert(
+            !(FlyModule.IsFlying && IsFalling),
+            "UpdateFlightState owns fall-state cleanup before traversal finalization.");
     }
 
     private void HandleFallState(Vector3d position)
@@ -261,7 +260,9 @@ public partial class NavMotor
 
         if (ShouldClearActiveFallState())
         {
-            ClearFallState();
+            System.Diagnostics.Debug.Assert(
+                !IsFalling,
+                "Swim, flight, and climb transitions own fall-state cleanup before fall finalization.");
             return;
         }
 
@@ -276,12 +277,6 @@ public partial class NavMotor
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool ShouldClearActiveFallState() => IsInLiquid || IsFlying || IsClimbing;
-
-    private void ClearFallState()
-    {
-        if (IsFalling)
-            Handler.ClearTransientState<FallLocomotion>();
-    }
 
     private void UpdateActiveFallState(Vector3d position)
     {
@@ -302,7 +297,7 @@ public partial class NavMotor
 
         Fixed64 currentFallHeight = (Handler.Fall.FallStart - position.Y).Abs();
         if (currentFallHeight > Handler.Fall.MaxFallHeight)
-            Events?.OnMaxFallHeightReached?.Invoke();
+            Events.OnMaxFallHeightReached?.Invoke();
     }
 
     private void TryStartFall(Vector3d position)
@@ -317,7 +312,7 @@ public partial class NavMotor
         if (JumpModule != null && JumpModule.JumpCount > 0 && !JumpModule.IsCoolingDown)
             JumpModule.StartCooldown();
 
-        Events?.OnStartFall?.Invoke();
+        Events.OnStartFall?.Invoke();
     }
 
     private Fixed64 GetScaledFlightSpeedMultiplier(TrekRate rate, Fixed64 maxFastSpeed) => rate switch
@@ -330,9 +325,6 @@ public partial class NavMotor
 
     private void StopClimb(bool wasForced)
     {
-        if (ClimbModule?.IsClimbing != true)
-            return;
-
         Handler.ClearTransientState<ClimbLocomotion>();
 
         if (wasForced)
@@ -343,8 +335,8 @@ public partial class NavMotor
 
     private bool CanContinueActiveMantle()
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null || !climbModule.ValidateActiveMantleWithHost)
+        ClimbLocomotion climbModule = ClimbModule!;
+        if (!climbModule.ValidateActiveMantleWithHost)
             return true;
 
         if (climbModule.ClimbResolver is not IActiveMantleValidator validator)
@@ -359,8 +351,8 @@ public partial class NavMotor
 
     private bool HasReachedMantleTarget(Vector3d position)
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule?.MantleTargetPosition.HasValue != true)
+        ClimbLocomotion climbModule = ClimbModule!;
+        if (!climbModule.MantleTargetPosition.HasValue)
             return false;
 
         Fixed64 tolerance = climbModule.ClimbStartTolerance;

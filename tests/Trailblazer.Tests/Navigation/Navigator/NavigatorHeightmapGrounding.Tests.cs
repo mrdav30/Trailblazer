@@ -2,6 +2,7 @@ using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
+using GridForge.Grids;
 using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
@@ -13,6 +14,9 @@ namespace Trailblazer.Tests.Navigation;
 [Collection("PathingCollection")]
 public sealed class NavigatorHeightmapGroundingTests : IDisposable
 {
+    private static readonly Guid SharedOccupancyId =
+        new("20000000-0000-0000-0000-000000000001");
+
     public NavigatorHeightmapGroundingTests()
     {
         TestWorld.Setup();
@@ -38,6 +42,47 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)7);
         navigator.Position.Should().Be(new Vector3d(0, 1, 0));
         navigator.HeightmapGrounding.ActiveLayerName.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryApplyHeightmapGrounding_InactiveShell_ShouldRemainANoOp()
+    {
+        var navigator = new HeightmapTestNavigator(TestWorld.Context);
+
+        navigator.ApplyHeightmapGrounding().Should().BeFalse();
+
+        navigator.IsActive.Should().BeFalse();
+        navigator.Position.Should().Be(Vector3d.Zero);
+        navigator.HeightmapGrounding.ActiveLayerName.Should().BeNull();
+    }
+
+    [Fact]
+    public void ConfigureHeightmapGrounding_ShouldValidateAndNormalizeDeterministicSettings()
+    {
+        HeightmapTestNavigator navigator = CreateNavigator(new Vector3d(0, 1, 0));
+
+        navigator.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelOnly,
+            layerName: "  ",
+            groundOffset: Fixed64.One,
+            snapTolerance: Fixed64.Half);
+
+        navigator.HeightmapGrounding.LayerName.Should().BeNull();
+        navigator.HeightmapGrounding.ActiveLayerName.Should().BeNull();
+        navigator.HeightmapGrounding.GroundOffset.Should().Be(Fixed64.One);
+        navigator.HeightmapGrounding.SnapTolerance.Should().Be(Fixed64.Half);
+
+        Action negativeTolerance = () => navigator.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelAndPosition,
+            snapTolerance: -Fixed64.One);
+        Action unknownMode = () => navigator.ConfigureHeightmapGrounding((HeightmapGroundingMode)99);
+
+        negativeTolerance.Should().Throw<ArgumentOutOfRangeException>();
+        unknownMode.Should().Throw<ArgumentOutOfRangeException>();
+
+        navigator.ConfigureHeightmapGrounding(HeightmapGroundingMode.Disabled);
+        navigator.HeightmapGrounding.ActiveLayerName.Should().BeNull();
+        navigator.HeightmapGrounding.SnapTolerance.Should().BeNull();
     }
 
     [Fact]
@@ -87,6 +132,108 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         Fixed64 expectedRootY = (Fixed64)5 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY;
         navigator.Position.Y.Should().Be(expectedRootY);
         navigator.LastPosition.Y.Should().Be(expectedRootY);
+    }
+
+    [Fact]
+    public void TryApplyHeightmapGrounding_WithinSameVoxel_ShouldPreserveSingleOccupancy()
+    {
+        Fixed64 footOffset = PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY;
+        RegisterSurface("Ground", height: 0, -Fixed64.One, Fixed64.One);
+        HeightmapTestNavigator navigator = CreateNavigator(
+            new Vector3d(Fixed64.Zero, footOffset, Fixed64.Zero),
+            surfaceLevel: Fixed64.Zero);
+        (_, Voxel occupiedVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, navigator.Position);
+        occupiedVoxel.OccupantCount.Should().Be(1);
+
+        navigator.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelAndPosition,
+            groundOffset: Fixed64.Quarter);
+        navigator.ApplyHeightmapGrounding().Should().BeTrue();
+
+        navigator.Position.Y.Should().Be(Fixed64.Quarter + footOffset);
+        occupiedVoxel.OccupantCount.Should().Be(1);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, navigator)
+            .Should().Equal(occupiedVoxel.WorldIndex);
+    }
+
+    [Fact]
+    public void TryApplyHeightmapGrounding_RootProjection_ShouldTransferVoxelOccupancy()
+    {
+        RegisterSurface("Ground", height: 3, (Fixed64)(-4), (Fixed64)4);
+        Vector3d oldPosition = new(0, -3, 0);
+        HeightmapTestNavigator navigator = CreateNavigator(oldPosition, surfaceLevel: Fixed64.Zero);
+        (_, Voxel oldVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, oldPosition);
+        oldVoxel.OccupantCount.Should().Be(1);
+
+        navigator.ApplyHeightmapGroundingAfterConfig(HeightmapGroundingMode.SurfaceLevelAndPosition)
+            .Should().BeTrue();
+
+        (_, Voxel projectedVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, navigator.Position);
+        projectedVoxel.Should().NotBeSameAs(oldVoxel);
+        oldVoxel.OccupantCount.Should().Be(0);
+        projectedVoxel.OccupantCount.Should().Be(1);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, navigator)
+            .Should().Equal(projectedVoxel.WorldIndex);
+    }
+
+    [Fact]
+    public void TryApplyHeightmapGrounding_RootProjectionOutsideWorld_ShouldRemoveOldOccupancy()
+    {
+        RegisterSurface("HighGround", height: 10, -Fixed64.One, Fixed64.One);
+        Vector3d oldPosition = Vector3d.Zero;
+        HeightmapTestNavigator navigator = CreateNavigator(oldPosition);
+        (_, Voxel oldVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, oldPosition);
+        oldVoxel.OccupantCount.Should().Be(1);
+
+        navigator.ApplyHeightmapGroundingAfterConfig(HeightmapGroundingMode.SurfaceLevelAndPosition)
+            .Should().BeTrue();
+
+        navigator.Position.Y.Should().Be(
+            (Fixed64)10 + PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY);
+        oldVoxel.OccupantCount.Should().Be(0);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, navigator).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TryApplyHeightmapGrounding_RootProjectionIntoWorld_ShouldRegisterNewOccupancy()
+    {
+        RegisterSurface("Ground", height: 0, (Fixed64)9, (Fixed64)11);
+        Vector3d outsidePosition = new(Fixed64.Zero, (Fixed64)10, Fixed64.Zero);
+        HeightmapTestNavigator navigator = CreateNavigator(outsidePosition);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, navigator).Should().BeEmpty();
+
+        navigator.ApplyHeightmapGroundingAfterConfig(HeightmapGroundingMode.SurfaceLevelAndPosition)
+            .Should().BeTrue();
+
+        (_, Voxel newVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, navigator.Position);
+        navigator.Position.Y.Should().Be(
+            PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY);
+        newVoxel.OccupantCount.Should().Be(1);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, navigator)
+            .Should().Equal(newVoxel.WorldIndex);
+    }
+
+    [Fact]
+    public void TryApplyHeightmapGrounding_DuplicateStableId_ShouldPreserveExistingOccupancy()
+    {
+        RegisterSurface("Ground", height: 0, (Fixed64)(-4), (Fixed64)4);
+        Guid sharedId = SharedOccupancyId;
+        Fixed64 footOffset = PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY;
+        HeightmapTestNavigator incumbent = CreateNavigator(
+            new Vector3d(Fixed64.Zero, footOffset, Fixed64.Zero),
+            globalId: sharedId);
+        HeightmapTestNavigator duplicate = CreateNavigator(
+            new Vector3d(Fixed64.Zero, (Fixed64)3 + footOffset, Fixed64.Zero),
+            globalId: sharedId);
+        (_, Voxel incumbentVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, incumbent.Position);
+
+        duplicate.ApplyHeightmapGroundingAfterConfig(HeightmapGroundingMode.SurfaceLevelAndPosition)
+            .Should().BeTrue();
+
+        incumbentVoxel.OccupantCount.Should().Be(1);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, incumbent)
+            .Should().Equal(incumbentVoxel.WorldIndex);
+        GridOccupantManager.GetOccupiedIndices(TestWorld.World, duplicate).Should().BeEmpty();
     }
 
     [Fact]
@@ -185,7 +332,8 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         Vector3d position,
         TraversalMedium medium = TraversalMedium.Solid,
         Fixed64? surfaceLevel = null,
-        Fixed64? rootToFootOffsetY = null)
+        Fixed64? rootToFootOffsetY = null,
+        Guid? globalId = null)
     {
         NavigationAgentProfile defaultProfile = PathTestFactory.DefaultNavigationProfile;
         var profile = new NavigationAgentProfile(
@@ -206,7 +354,8 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
                 SurfaceLevel = surfaceLevel ?? Fixed64.Zero
             },
             position,
-            profile);
+            profile,
+            globalId: globalId);
 
         return navigator;
     }

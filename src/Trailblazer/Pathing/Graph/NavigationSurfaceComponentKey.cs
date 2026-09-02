@@ -39,18 +39,8 @@ internal readonly struct NavigationSurfaceComponentKey :
     public bool Equals(NavigationSurfaceComponentKey other) =>
         Representative.Equals(other.Representative) && Medium == other.Medium;
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationSurfaceComponentKey other && Equals(other);
-
     public override int GetHashCode() => SwiftCollections.Utility.SwiftHashTools.CombineHashCodes(
         Representative.GetHashCode(),
         (int)Medium);
 
-    public static bool operator ==(
-        NavigationSurfaceComponentKey left,
-        NavigationSurfaceComponentKey right) => left.Equals(right);
-
-    public static bool operator !=(
-        NavigationSurfaceComponentKey left,
-        NavigationSurfaceComponentKey right) => !left.Equals(right);
 }

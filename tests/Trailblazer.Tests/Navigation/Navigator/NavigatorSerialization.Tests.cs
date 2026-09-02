@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Text.Json;
 using Chronicler;
 using FixedMathSharp;
@@ -88,12 +87,14 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(false, 2)]
     [InlineData(false, 3)]
     [InlineData(false, 4)]
+    [InlineData(false, 5)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true, 0)]
     [InlineData(true, 1)]
     [InlineData(true, 2)]
     [InlineData(true, 3)]
     [InlineData(true, 4)]
+    [InlineData(true, 5)]
 #endif
     public void RoundTrip_ShouldRejectMissingOrInvalidFinalSchemaTransactionally(
         bool useMemoryPack,
@@ -117,6 +118,12 @@ public class NavigatorSerializationTests : IDisposable
                 "FrameCondition",
                 "Medium"),
             4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 2, "SchemaVersion"),
+            5 => SerializationUtility.SetPayloadValue(
+                payload,
+                useMemoryPack,
+                -Fixed64.One,
+                "NavigationProfile",
+                "Radius"),
             _ => throw new InvalidOperationException()
         };
 
@@ -131,22 +138,6 @@ public class NavigatorSerializationTests : IDisposable
             new NavigationWorkBudget(8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1),
             allowTransitions: true);
         target.ApplyGuidedTrekRequest(shellQuery);
-        var sentinel = new NavigationTransitionInstruction(
-            NavigationTransitionIdentityKind.Definition,
-            "shell-map",
-            "shell-transition",
-            TraversalTransitionType.Jump,
-            default,
-            default,
-            TraversalMedium.Solid,
-            TraversalMedium.Gas,
-            target.FootPosition,
-            target.FootPosition,
-            TraversalTransitionLocomotionHints.None);
-        FieldInfo pendingField = TestRequire.NotNull(typeof(Navigator).GetField(
-            "_pendingTransition",
-            BindingFlags.Instance | BindingFlags.NonPublic));
-        pendingField.SetValue(target, sentinel);
         Vector3d shellPosition = target.Position;
 
         Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
@@ -154,8 +145,145 @@ public class NavigatorSerializationTests : IDisposable
         populate.Should().Throw<InvalidOperationException>();
         target.Position.Should().Be(shellPosition);
         TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
-        target.PendingTransition.Should().NotBeNull();
-        target.PendingTransition!.Value.Id.Should().Be("shell-transition");
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldRejectNegativePathBudgetWithoutChangingShellIntent(
+        bool useMemoryPack)
+    {
+        var source = CreateNavigator(Vector3d.Zero);
+        ApplyGuidedRequest(source);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.SetPayloadValue(
+            payload,
+            useMemoryPack,
+            -1,
+            "PathSession",
+            "MaxLookupProbes");
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        ApplyGuidedRequest(target);
+        PathQuery shellQuery = TestRequire.NotNull(target.Steering).CurrentQuery!.Value;
+        Vector3d shellPosition = target.Position;
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.Position.Should().Be(shellPosition);
+        TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(false, 2)]
+    [InlineData(false, 3)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, 0)]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+    [InlineData(true, 3)]
+#endif
+    public void RoundTrip_ShouldRejectEachInvalidPathSessionDiscriminatorTransactionally(
+        bool useMemoryPack,
+        int invalidKind)
+    {
+        var source = CreateNavigator(Vector3d.Zero);
+        ApplyGuidedRequest(source);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = invalidKind switch
+        {
+            0 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 99, "PathSession", "Algorithm"),
+            1 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 0, "PathSession", "TargetMedia"),
+            2 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 8, "PathSession", "TargetMedia"),
+            3 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, " ", "PathSession", "AreaPolicyId"),
+            _ => throw new InvalidOperationException()
+        };
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        PathQuery shellQuery = new(
+            new NavigationEndpoint(target.FootPosition),
+            new NavigationEndpoint(new Vector3d(2, 0, 0)),
+            target.NavigationProfile,
+            new NavigationAreaPolicyKey("serialization-shell", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1),
+            allowTransitions: true);
+        target.ApplyGuidedTrekRequest(shellQuery);
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
+    }
+
+    [Theory]
+    [InlineData("Steering", "BrakingPower")]
+    [InlineData("Steering", "WaypointTolerance")]
+    [InlineData("Steering", "GroupFactor")]
+    [InlineData("Steering", "AvoidFactor")]
+    [InlineData("Turning", "TurnRate")]
+    [InlineData("Motor", "MaxSlowSpeed")]
+    [InlineData("Motor", "MaxModerateSpeed")]
+    [InlineData("Motor", "MaxSidewaysSpeed")]
+    [InlineData("Motor", "MaxBackwardsSpeed")]
+    [InlineData("Motor", "MaxGroundAcceleration")]
+    [InlineData("Motor", "MaxAirAcceleration")]
+    public void JsonPopulate_ShouldRejectNegativeNestedControllerLimitsTransactionally(
+        string component,
+        string member)
+    {
+        var source = CreateNavigator(new Vector3d(4, 0, 4));
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack: false);
+        string[] path = component == "Motor"
+            ? new[] { "Motor", "Handler", "Move", member }
+            : new[] { component, member };
+        payload = SerializationUtility.SetPayloadValue(
+            payload,
+            useMemoryPack: false,
+            -Fixed64.One,
+            path);
+        var target = CreateNavigator(
+            new Vector3d(-3, 0, -3),
+            profile: source.NavigationProfile);
+        Vector3d shellPosition = target.Position;
+        NavSteering shellSteering = TestRequire.NotNull(target.Steering);
+        NavTurning shellTurning = TestRequire.NotNull(target.Turning);
+        NavMotor shellMotor = TestRequire.NotNull(target.Motor);
+        Fixed64 brakingPower = shellSteering.BrakingPower;
+        Fixed64 waypointTolerance = shellSteering.WaypointTolerance;
+        Fixed64 groupFactor = shellSteering.GroupFactor;
+        Fixed64 avoidFactor = shellSteering.AvoidFactor;
+        Fixed64 turnRate = shellTurning.TurnRate;
+        MoveLocomotion move = shellMotor.Handler.Move;
+        Fixed64 maxSlowSpeed = move.MaxSlowSpeed;
+        Fixed64 maxModerateSpeed = move.MaxModerateSpeed;
+        Fixed64 maxSidewaysSpeed = move.MaxSidewaysSpeed;
+        Fixed64 maxBackwardsSpeed = move.MaxBackwardsSpeed;
+        Fixed64 maxGroundAcceleration = move.MaxGroundAcceleration;
+        Fixed64 maxAirAcceleration = move.MaxAirAcceleration;
+
+        Action populate = () => SerializationUtility.PopulateRecord(
+            target,
+            payload,
+            useMemoryPack: false);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.Position.Should().Be(shellPosition);
+        shellSteering.BrakingPower.Should().Be(brakingPower);
+        shellSteering.WaypointTolerance.Should().Be(waypointTolerance);
+        shellSteering.GroupFactor.Should().Be(groupFactor);
+        shellSteering.AvoidFactor.Should().Be(avoidFactor);
+        shellTurning.TurnRate.Should().Be(turnRate);
+        move.MaxSlowSpeed.Should().Be(maxSlowSpeed);
+        move.MaxModerateSpeed.Should().Be(maxModerateSpeed);
+        move.MaxSidewaysSpeed.Should().Be(maxSidewaysSpeed);
+        move.MaxBackwardsSpeed.Should().Be(maxBackwardsSpeed);
+        move.MaxGroundAcceleration.Should().Be(maxGroundAcceleration);
+        move.MaxAirAcceleration.Should().Be(maxAirAcceleration);
     }
 
     [Theory]
@@ -317,6 +445,42 @@ public class NavigatorSerializationTests : IDisposable
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
 #endif
+    public void RoundTrip_ShouldRejectNegativeHeightmapSnapToleranceWithoutChangingShell(
+        bool useMemoryPack)
+    {
+        var source = CreateNavigator(new Vector3d(2, 0, 2));
+        source.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelAndPosition,
+            layerName: "Source",
+            snapTolerance: Fixed64.One);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.SetPayloadValue(
+            payload,
+            useMemoryPack,
+            -Fixed64.One,
+            "HeightmapGrounding",
+            "SnapTolerance");
+        var target = CreateNavigator(new Vector3d(-4, 0, -4), profile: source.NavigationProfile);
+        target.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelOnly,
+            layerName: "Shell",
+            snapTolerance: Fixed64.Half);
+        Vector3d shellPosition = target.Position;
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<ArgumentOutOfRangeException>();
+        target.Position.Should().Be(shellPosition);
+        target.HeightmapGrounding.Mode.Should().Be(HeightmapGroundingMode.SurfaceLevelOnly);
+        target.HeightmapGrounding.LayerName.Should().Be("Shell");
+        target.HeightmapGrounding.SnapTolerance.Should().Be(Fixed64.Half);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreHeightmapGroundingSettingsWithoutCreatingHeightmapData(bool useMemoryPack)
     {
         RegisterHeightmapSurface("MissingAfterLoad", height: 4, minSelectionY: Fixed64.Zero, maxSelectionY: (Fixed64)8);
@@ -384,6 +548,62 @@ public class NavigatorSerializationTests : IDisposable
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
 #endif
+    public void RoundTrip_ShouldPopulateDerivedNavigatorShellWithoutOptionalControllers(bool useMemoryPack)
+    {
+        var source = CreateNavigator(new Vector3d(3, 1, 2));
+        source.ConfigurePartialControllerShell(
+            includeSteering: false,
+            includeTurning: false,
+            includeMotor: false);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = CreateNavigator(new Vector3d(-3, 0, -2), profile: source.NavigationProfile);
+        target.ConfigurePartialControllerShell(
+            includeSteering: false,
+            includeTurning: false,
+            includeMotor: false);
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.Position.Should().Be(source.Position);
+        target.LastPosition.Should().Be(source.LastPosition);
+        target.NavigationProfile.Should().Be(source.NavigationProfile);
+        target.Steering.Should().BeNull();
+        target.Turning.Should().BeNull();
+        target.Motor.Should().BeNull();
+        target.IsActive.Should().BeFalse();
+        target.Invoking(navigator => navigator.Reset()).Should().NotThrow();
+    }
+
+    [Fact]
+    public void JsonPopulate_ShouldRestoreDefaultHeightmapGroundingWhenNestedSettingsAreNull()
+    {
+        var source = CreateNavigator(new Vector3d(2, 0, 2));
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack: false);
+        payload = SerializationUtility.SetPayloadValue<object?>(
+            payload,
+            useMemoryPack: false,
+            value: null,
+            "HeightmapGrounding");
+        var target = CreateNavigator(new Vector3d(-2, 0, -2), profile: source.NavigationProfile);
+        target.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelAndPosition,
+            layerName: "BeforeLoad",
+            groundOffset: Fixed64.One,
+            snapTolerance: Fixed64.One);
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack: false);
+
+        target.HeightmapGrounding.Mode.Should().Be(HeightmapGroundingMode.Disabled);
+        target.HeightmapGrounding.ActiveLayerName.Should().BeNull();
+        target.HeightmapGrounding.GroundOffset.Should().Be(Fixed64.Zero);
+        target.HeightmapGrounding.SnapTolerance.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
     public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsFacingDirection(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
@@ -431,6 +651,7 @@ public class NavigatorSerializationTests : IDisposable
         payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Fall", "IsEnabled");
         payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Slide", "IsEnabled");
         payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Water", "IsEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Climb", "IsEnabled");
 
         var target = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: new Vector3d(-2, 0, -2),
@@ -443,6 +664,7 @@ public class NavigatorSerializationTests : IDisposable
         var targetFall = TestRequire.NotNull(targetMotor.Handler.Fall);
         var targetSlide = TestRequire.NotNull(targetMotor.Handler.Slide);
         var targetWater = TestRequire.NotNull(targetMotor.Handler.Water);
+        var targetClimb = TestRequire.NotNull(targetMotor.Handler.Climb);
 
         targetMotor.Handler.Move.IsEnabled.Should().BeFalse();
         targetMotor.Handler.Move.FrameVelocity.Should().Be(Vector3d.Zero);
@@ -477,6 +699,11 @@ public class NavigatorSerializationTests : IDisposable
         targetWater.IsSwimming.Should().BeFalse();
         targetWater.IsDiving.Should().BeFalse();
         targetWater.UnderwaterTimer.Should().Be(Fixed64.Zero);
+
+        targetClimb.IsEnabled.Should().BeFalse();
+        targetClimb.IsClimbing.Should().BeFalse();
+        targetClimb.IsMantling.Should().BeFalse();
+        targetClimb.AttachmentId.Should().BeNull();
     }
 
     private static TestNavigator CreateNavigator(

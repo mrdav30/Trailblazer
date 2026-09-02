@@ -37,8 +37,6 @@ internal sealed class NavigationAStarNodeTable
 
     internal NavigationAStarNodeTable(int capacity)
     {
-        if (capacity < 0)
-            throw new ArgumentOutOfRangeException(nameof(capacity));
         int tableSize = 1;
         int required = checked(Math.Max(1, capacity * 2));
         while (tableSize < required)
@@ -52,9 +50,10 @@ internal sealed class NavigationAStarNodeTable
 
     internal void Reset()
     {
-        if (_generation == long.MaxValue)
-            throw new InvalidOperationException("A* node-table generation capacity is exhausted.");
-        _generation++;
+        unchecked
+        {
+            _generation++;
+        }
         _count = 0;
     }
 
@@ -63,7 +62,7 @@ internal sealed class NavigationAStarNodeTable
         slot = node.GetHashCode() & _mask;
         while (_stamps[slot] == _generation)
         {
-            if (_keys[slot] == node)
+            if (_keys[slot].Equals(node))
                 return true;
             slot = (slot + 1) & _mask;
         }

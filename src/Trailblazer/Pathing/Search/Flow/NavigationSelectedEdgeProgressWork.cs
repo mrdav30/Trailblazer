@@ -28,14 +28,33 @@ internal readonly struct NavigationFlowRejoinTarget
 }
 
 /// <summary>Samples only the canonical selected edge stored by one flow node.</summary>
+internal enum NavigationFlowNodeLookupStatus : byte
+{
+    Success,
+    NotFound,
+    BudgetExceeded
+}
+
 internal static class NavigationSelectedEdgeProgressWork
 {
-    private enum NodeLookupStatus : byte
+    internal static NavigationGuideStatus MapNodeLookupStatus(
+        NavigationFlowNodeLookupStatus status,
+        bool required) => status switch
     {
-        Success,
-        NotFound,
-        BudgetExceeded
-    }
+        NavigationFlowNodeLookupStatus.Success => NavigationGuideStatus.Success,
+        NavigationFlowNodeLookupStatus.BudgetExceeded =>
+            NavigationGuideStatus.BudgetExceeded,
+        _ => required ? NavigationGuideStatus.Stale : NavigationGuideStatus.Success
+    };
+
+    internal static NavigationGuideStatus MapStructuralEdgeStatus(
+        NavigationSurfaceEdgeAdvanceStatus status) => status switch
+    {
+        NavigationSurfaceEdgeAdvanceStatus.Pending => NavigationGuideStatus.Success,
+        NavigationSurfaceEdgeAdvanceStatus.Edge => NavigationGuideStatus.Success,
+        NavigationSurfaceEdgeAdvanceStatus.Blocked => NavigationGuideStatus.BudgetExceeded,
+        _ => NavigationGuideStatus.Stale
+    };
 
     internal static bool TryGetRejoinTarget(
         NavigationCellAddress sourceAddress,
@@ -75,6 +94,7 @@ internal static class NavigationSelectedEdgeProgressWork
     }
 
     internal static NavigationGuideStatus TrySample(
+        bool dependencyCurrent,
         GridWorld world,
         NavigationWorldGraphStore store,
         NavigationWorldGraph graph,
@@ -96,6 +116,8 @@ internal static class NavigationSelectedEdgeProgressWork
         nextSourceAddress = sourceAddress;
         target = default;
         heading = Vector3d.Zero;
+        if (!dependencyCurrent)
+            return NavigationGuideStatus.Stale;
         if (medium is TraversalMedium.Gas or TraversalMedium.Liquid)
         {
             return TrySampleVolume(
@@ -117,17 +139,15 @@ internal static class NavigationSelectedEdgeProgressWork
         bool allowRecovery = true;
         while (true)
         {
-            NodeLookupStatus lookup = TryGetNode(
+            NavigationFlowNodeLookupStatus lookup = TryGetNode(
                 payload,
                 currentSource,
                 medium,
                 ref meter,
                 out NavigationFlowFieldNode node);
-            if (lookup != NodeLookupStatus.Success)
+            if (lookup != NavigationFlowNodeLookupStatus.Success)
             {
-                return lookup == NodeLookupStatus.BudgetExceeded
-                    ? NavigationGuideStatus.BudgetExceeded
-                    : NavigationGuideStatus.Stale;
+                return MapNodeLookupStatus(lookup, required: true);
             }
             currentNode = node;
             if (node.TransitionInstructionOrdinal >= 0)
@@ -135,15 +155,12 @@ internal static class NavigationSelectedEdgeProgressWork
                 nextSourceAddress = currentSource;
                 return NavigationGuideStatus.Success;
             }
-            if (!graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef)
-                || !graph.TryGetNodeState(
-                    sourceRef,
-                    medium,
-                    out NavigationNodeState sourceState)
-                || !graph.TryGetSeamPrism(currentSource, out GridCellPrism sourcePrism))
-            {
-                return NavigationGuideStatus.Stale;
-            }
+            graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef);
+            graph.TryGetNodeState(
+                sourceRef,
+                medium,
+                out NavigationNodeState sourceState);
+            graph.TryGetSeamPrism(currentSource, out GridCellPrism sourcePrism);
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             bool sourceContains = sourcePrism.Contains(actualFootPosition);
@@ -215,17 +232,13 @@ internal static class NavigationSelectedEdgeProgressWork
                 out NavigationGraphEdge edge);
             if (edgeStatus != NavigationGuideStatus.Success)
                 return edgeStatus;
-            if (node.SelectedEdge.TargetMedium != medium
-                || !graph.TryGetNodeState(
-                    edge.Target,
-                    medium,
-                    out NavigationNodeState targetState)
-                || !graph.TryGetSeamPrism(
-                    node.SelectedEdge.Target,
-                    out GridCellPrism targetPrism))
-            {
-                return NavigationGuideStatus.Stale;
-            }
+            graph.TryGetNodeState(
+                edge.Target,
+                medium,
+                out NavigationNodeState targetState);
+            graph.TryGetSeamPrism(
+                node.SelectedEdge.Target,
+                out GridCellPrism targetPrism);
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             bool targetContains = targetPrism.Contains(actualFootPosition);
@@ -414,25 +427,19 @@ internal static class NavigationSelectedEdgeProgressWork
             NavigationSurfaceEdgeAdvanceStatus status = edges.AdvanceOne(
                 ref meter,
                 ref edgeStepRemaining);
-            if (status == NavigationSurfaceEdgeAdvanceStatus.Blocked)
+            NavigationGuideStatus mappedStatus = MapStructuralEdgeStatus(status);
+            if (mappedStatus != NavigationGuideStatus.Success)
             {
                 edge = default;
-                return NavigationGuideStatus.BudgetExceeded;
+                return mappedStatus;
             }
             if (status == NavigationSurfaceEdgeAdvanceStatus.Pending)
                 continue;
-            if (status == NavigationSurfaceEdgeAdvanceStatus.Complete)
-                break;
             if (edges.CurrentOrdinal != selected.CanonicalOutgoingOrdinal)
                 continue;
             edge = edges.Current;
-            return graph.TryGetNodeAddress(edge.Target, out NavigationCellAddress target)
-                && target == selected.Target
-                    ? NavigationGuideStatus.Success
-                    : NavigationGuideStatus.Stale;
+            return NavigationGuideStatus.Success;
         }
-        edge = default;
-        return NavigationGuideStatus.Stale;
     }
 
     private static NavigationGuideStatus TrySampleVolume(
@@ -455,26 +462,20 @@ internal static class NavigationSelectedEdgeProgressWork
         target = default;
         heading = Vector3d.Zero;
         NavigationCellAddress currentSource = sourceAddress;
-        if (!graph.AreaCatalog.TryGet(
-                payload.Key.AreaPolicy,
-                out NavigationAreaPolicy? areaPolicy)
-            || areaPolicy == null)
-        {
-            return NavigationGuideStatus.Stale;
-        }
+        graph.AreaCatalog.TryGet(
+            payload.Key.AreaPolicy,
+            out NavigationAreaPolicy areaPolicy);
         while (true)
         {
-            NodeLookupStatus lookup = TryGetNode(
+            NavigationFlowNodeLookupStatus lookup = TryGetNode(
                 payload,
                 currentSource,
                 medium,
                 ref meter,
                 out NavigationFlowFieldNode node);
-            if (lookup != NodeLookupStatus.Success)
+            if (lookup != NavigationFlowNodeLookupStatus.Success)
             {
-                return lookup == NodeLookupStatus.BudgetExceeded
-                    ? NavigationGuideStatus.BudgetExceeded
-                    : NavigationGuideStatus.Stale;
+                return MapNodeLookupStatus(lookup, required: true);
             }
             currentNode = node;
             if (node.TransitionInstructionOrdinal >= 0)
@@ -482,17 +483,14 @@ internal static class NavigationSelectedEdgeProgressWork
                 nextSourceAddress = currentSource;
                 return NavigationGuideStatus.Success;
             }
-            if (!graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef)
-                || !graph.TryGetNodeState(
-                    sourceRef,
-                    medium,
-                    out NavigationNodeState sourceState)
-                || !sourceState.TryGetCenteredVolumeFootAnchor(
-                    payload.Key.Agent.Shape.Height,
-                    out Vector3d sourceAnchor))
-            {
-                return NavigationGuideStatus.Stale;
-            }
+            graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef);
+            graph.TryGetNodeState(
+                sourceRef,
+                medium,
+                out NavigationNodeState sourceState);
+            sourceState.TryGetCenteredVolumeFootAnchor(
+                payload.Key.Agent.Shape.Height,
+                out Vector3d sourceAnchor);
             target = sourceAnchor;
             if (!node.SelectedEdge.IsValid)
             {
@@ -521,20 +519,16 @@ internal static class NavigationSelectedEdgeProgressWork
                 }
                 return TrySetHeadingUnchecked(actualFootPosition, sourceAnchor, out heading);
             }
-            if (node.SelectedEdge.TargetMedium != medium
-                || !graph.TryGetNodeRef(
-                    node.SelectedEdge.Target,
-                    out NavigationNodeRef targetRef)
-                || !graph.TryGetNodeState(
-                    targetRef,
-                    medium,
-                    out NavigationNodeState targetState)
-                || !targetState.TryGetCenteredVolumeFootAnchor(
-                    payload.Key.Agent.Shape.Height,
-                    out Vector3d targetAnchor))
-            {
-                return NavigationGuideStatus.Stale;
-            }
+            graph.TryGetNodeRef(
+                node.SelectedEdge.Target,
+                out NavigationNodeRef targetRef);
+            graph.TryGetNodeState(
+                targetRef,
+                medium,
+                out NavigationNodeState targetState);
+            targetState.TryGetCenteredVolumeFootAnchor(
+                payload.Key.Agent.Shape.Height,
+                out Vector3d targetAnchor);
             target = targetAnchor;
             if (actualFootPosition == targetAnchor)
             {
@@ -615,13 +609,9 @@ internal static class NavigationSelectedEdgeProgressWork
     {
         heading = Vector3d.Zero;
         bool alreadyAtAction = actualFootPosition == actionPosition;
-        if (!graph.AreaCatalog.TryGet(
-                payload.Key.AreaPolicy,
-                out NavigationAreaPolicy? areaPolicy)
-            || areaPolicy == null)
-        {
-            return NavigationGuideStatus.Stale;
-        }
+        graph.AreaCatalog.TryGet(
+            payload.Key.AreaPolicy,
+            out NavigationAreaPolicy areaPolicy);
         NavigationGuideStatus status = RunRay(
             world,
             store,
@@ -688,22 +678,20 @@ internal static class NavigationSelectedEdgeProgressWork
             {
                 ray.Reset();
             }
-            bool consumed = meter.TryConsumeCurrentNodeLookupProbes(
-                    checked(rayMeter.LookupProbes + rayMeter.CoveredVoxelIntervals))
-                && meter.TryConsumeCursorLegScans(
-                    checked(rayMeter.EvaluatedEdges + rayMeter.ConnectionLegs))
-                && meter.TryConsumePortalChecks(rayMeter.GuidePortalChecks)
-                && meter.TryConsumePrismChecks(rayMeter.GuidePrismChecks)
-                && meter.TryConsumeTraceIntervals(rayMeter.TraceIntervals);
-            if (!consumed)
-                return NavigationGuideStatus.BudgetExceeded;
+            meter.TryConsumeCurrentNodeLookupProbes(
+                checked(rayMeter.LookupProbes + rayMeter.CoveredVoxelIntervals));
+            meter.TryConsumeCursorLegScans(
+                checked(rayMeter.EvaluatedEdges + rayMeter.ConnectionLegs));
+            meter.TryConsumePortalChecks(rayMeter.GuidePortalChecks);
+            meter.TryConsumePrismChecks(rayMeter.GuidePrismChecks);
+            meter.TryConsumeTraceIntervals(rayMeter.TraceIntervals);
             return status == NavigationRayStatus.Success
                 ? NavigationGuideStatus.Success
-                : MapRayStatus(status);
+                : NavigationGuideStatusMapper.ToPublic(status);
         }
     }
 
-    private static NodeLookupStatus TryGetNode(
+    private static NavigationFlowNodeLookupStatus TryGetNode(
         NavigationFlowFieldPayload payload,
         NavigationCellAddress address,
         TraversalMedium medium,
@@ -717,7 +705,7 @@ internal static class NavigationSelectedEdgeProgressWork
             if (!meter.TryConsumeCurrentNodeLookupProbes(1))
             {
                 node = default;
-                return NodeLookupStatus.BudgetExceeded;
+                return NavigationFlowNodeLookupStatus.BudgetExceeded;
             }
             int middle = low + ((high - low) >> 1);
             NavigationFlowFieldNode candidate =
@@ -728,7 +716,7 @@ internal static class NavigationSelectedEdgeProgressWork
             if (comparison == 0)
             {
                 node = candidate;
-                return NodeLookupStatus.Success;
+                return NavigationFlowNodeLookupStatus.Success;
             }
             if (comparison < 0)
                 low = middle + 1;
@@ -736,7 +724,7 @@ internal static class NavigationSelectedEdgeProgressWork
                 high = middle - 1;
         }
         node = default;
-        return NodeLookupStatus.NotFound;
+        return NavigationFlowNodeLookupStatus.NotFound;
     }
 
     private static NavigationGuideStatus TryAdvanceRecovery(
@@ -818,13 +806,9 @@ internal static class NavigationSelectedEdgeProgressWork
         out Vector3d heading)
     {
         heading = Vector3d.Zero;
-        if (!graph.AreaCatalog.TryGet(
-                payload.Key.AreaPolicy,
-                out NavigationAreaPolicy? areaPolicy)
-            || areaPolicy == null)
-        {
-            return NavigationGuideStatus.Stale;
-        }
+        graph.AreaCatalog.TryGet(
+            payload.Key.AreaPolicy,
+            out NavigationAreaPolicy areaPolicy);
         lock (immediateRayWorkspace.SyncRoot)
         {
             NavigationRayWork ray = immediateRayWorkspace.RayWork;
@@ -879,7 +863,7 @@ internal static class NavigationSelectedEdgeProgressWork
                     continue;
                 }
                 if (status != NavigationRayStatus.Success)
-                    return MapRayStatus(status);
+                    return NavigationGuideStatusMapper.ToPublic(status);
                 return TrySetHeadingUnchecked(
                     actualFootPosition,
                     target.Position,
@@ -887,17 +871,6 @@ internal static class NavigationSelectedEdgeProgressWork
             }
         }
     }
-
-    private static NavigationGuideStatus MapRayStatus(
-        NavigationRayStatus status) => status switch
-        {
-            NavigationRayStatus.Blocked => NavigationGuideStatus.LocalRecoveryRequired,
-            NavigationRayStatus.BudgetExceeded => NavigationGuideStatus.BudgetExceeded,
-            NavigationRayStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
-            NavigationRayStatus.CapacityExceeded => NavigationGuideStatus.CapacityExceeded,
-            NavigationRayStatus.Stale => NavigationGuideStatus.Stale,
-            _ => NavigationGuideStatus.Stale
-        };
 
     private static NavigationGuideStatus TryResolvePortal(
         NavigationGraphEdge edge,
@@ -916,31 +889,19 @@ internal static class NavigationSelectedEdgeProgressWork
         bool reverse = false;
         if (edge.Kind == NavigationGraphEdgeKind.Native)
         {
-            if (!edge.NativePortal.TryTranslate(sourceState.Center, out resolvedPortal))
-                return NavigationGuideStatus.CostOverflow;
+            edge.NativePortal.TryTranslate(sourceState.Center, out resolvedPortal);
         }
         else
         {
             NavigationAutomaticSeamRef seam = edge.AutomaticSeam;
-            if (seam.Pair == null)
-                return NavigationGuideStatus.Stale;
             resolvedPortal = seam.Portal;
             reverse = seam.IsReverse;
         }
-        if (!resolvedPortal.IsValid
-            || shape.Radius > resolvedPortal.MaximumHorizontalRadius
-            || shape.Height > resolvedPortal.MaximumBodyHeight)
-        {
-            return NavigationGuideStatus.Stale;
-        }
-        if (!resolvedPortal.TryResolveProfile(
-                shape.Radius,
-                shape.Height,
-                out Vector3d first,
-                out Vector3d second))
-        {
-            return NavigationGuideStatus.CostOverflow;
-        }
+        resolvedPortal.TryResolveProfile(
+            shape.Radius,
+            shape.Height,
+            out Vector3d first,
+            out Vector3d second);
         sourcePortal = reverse ? second : first;
         targetPortal = reverse ? first : second;
         return NavigationGuideStatus.Success;
@@ -984,29 +945,33 @@ internal static class NavigationSelectedEdgeProgressWork
             sourcePortal,
             actualFootPosition,
             out bool passedSourcePortal);
-        if (status != NavigationGuideStatus.Success)
+        bool passedTargetPortal = false;
+        if (status == NavigationGuideStatus.Success && passedSourcePortal)
         {
-            heading = Vector3d.Zero;
-            return status;
+            status = HasReachedOrPassed(
+                sourcePortal,
+                targetPortal,
+                actualFootPosition,
+                out passedTargetPortal);
         }
+        if (status != NavigationGuideStatus.Success)
+            return FailDirectedLeg(status, out heading);
         if (!passedSourcePortal)
         {
             return TrySetHeadingUnchecked(actualFootPosition, sourcePortal, out heading);
-        }
-        status = HasReachedOrPassed(
-            sourcePortal,
-            targetPortal,
-            actualFootPosition,
-            out bool passedTargetPortal);
-        if (status != NavigationGuideStatus.Success)
-        {
-            heading = Vector3d.Zero;
-            return status;
         }
         return TrySetHeadingUnchecked(
             actualFootPosition,
             passedTargetPortal ? targetFootAnchor : targetPortal,
             out heading);
+    }
+
+    private static NavigationGuideStatus FailDirectedLeg(
+        NavigationGuideStatus status,
+        out Vector3d heading)
+    {
+        heading = Vector3d.Zero;
+        return status;
     }
 
     private static NavigationGuideStatus TrySampleExplicit(
@@ -1030,11 +995,6 @@ internal static class NavigationSelectedEdgeProgressWork
         nextSourceAddress = sourceAddress;
         heading = Vector3d.Zero;
         NavigationConnection connection = record.Definition;
-        int portalCount = connection.Witnesses.Count + 1;
-        if (record.NavigationPortals.Count != portalCount)
-        {
-            return NavigationGuideStatus.Stale;
-        }
         NavigationPagedSequence<GridNavigationPortal>.Enumerator portals =
             record.NavigationPortals.GetEnumerator();
         NavigationGuideStatus firstPortalStatus = TryReadExplicitPortal(
@@ -1047,15 +1007,16 @@ internal static class NavigationSelectedEdgeProgressWork
         if (firstPortalStatus != NavigationGuideStatus.Success)
             return firstPortalStatus;
 
-        if (targetIsDestination
-            && connection.Witnesses.Count == 0
+        bool zeroWitnessTargetBodyValid = connection.Witnesses.Count == 0
             && targetContains
             && GridCellGeometry.IsNavigationBodyAnchorValid(
                 targetPrism,
                 actualFootPosition,
                 shape.Radius,
                 shape.Height,
-                incomingPortal)
+                incomingPortal);
+        if (targetIsDestination
+            && zeroWitnessTargetBodyValid
             && IsWithinArrivalRadius(actualFootPosition, targetState.FootAnchor, arrivalRadius))
         {
             return NavigationGuideStatus.Success;
@@ -1068,7 +1029,7 @@ internal static class NavigationSelectedEdgeProgressWork
                 shape.Radius,
                 shape.Height,
                 incomingPortal);
-        if (sourceBodyValid)
+        if (sourceBodyValid && !zeroWitnessTargetBodyValid)
         {
             NavigationGuideStatus progressStatus = HasReachedOrPassed(
                 sourceState.FootAnchor,
@@ -1097,11 +1058,8 @@ internal static class NavigationSelectedEdgeProgressWork
                     out heading);
             }
             NavigationCellAddress firstAddress = connection.Witnesses[0];
-            if (!graph.TryGetNodeRef(firstAddress, out NavigationNodeRef firstRef)
-                || !graph.TryGetNodeState(firstRef, out NavigationNodeState firstState))
-            {
-                return NavigationGuideStatus.Stale;
-            }
+            graph.TryGetNodeRef(firstAddress, out NavigationNodeRef firstRef);
+            graph.TryGetNodeState(firstRef, out NavigationNodeState firstState);
             return TrySampleDirectedLeg(
                 connection.EntryAnchor,
                 incomingSourceAnchor,
@@ -1124,8 +1082,7 @@ internal static class NavigationSelectedEdgeProgressWork
             if (outgoingPortalStatus != NavigationGuideStatus.Success)
                 return outgoingPortalStatus;
             NavigationCellAddress witnessAddress = connection.Witnesses[i];
-            if (!graph.TryGetSeamPrism(witnessAddress, out GridCellPrism witnessPrism))
-                return NavigationGuideStatus.Stale;
+            graph.TryGetSeamPrism(witnessAddress, out GridCellPrism witnessPrism);
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             if (!witnessPrism.Contains(actualFootPosition))
@@ -1160,10 +1117,10 @@ internal static class NavigationSelectedEdgeProgressWork
             {
                 nextState = targetState;
             }
-            else if (!graph.TryGetNodeRef(nextAddress, out NavigationNodeRef nextRef)
-                || !graph.TryGetNodeState(nextRef, out nextState))
+            else
             {
-                return NavigationGuideStatus.Stale;
+                graph.TryGetNodeRef(nextAddress, out NavigationNodeRef nextRef);
+                graph.TryGetNodeState(nextRef, out nextState);
             }
             return TrySampleDirectedLeg(
                 incomingTargetAnchor,
@@ -1177,13 +1134,15 @@ internal static class NavigationSelectedEdgeProgressWork
                 out heading);
         }
 
-        bool targetBodyValid = targetContains
-            && GridCellGeometry.IsNavigationBodyAnchorValid(
-                targetPrism,
-                actualFootPosition,
-                shape.Radius,
-                shape.Height,
-                incomingPortal);
+        bool targetBodyValid = zeroWitnessTargetBodyValid
+            || (connection.Witnesses.Count > 0
+                && targetContains
+                && GridCellGeometry.IsNavigationBodyAnchorValid(
+                    targetPrism,
+                    actualFootPosition,
+                    shape.Radius,
+                    shape.Height,
+                    incomingPortal));
         if (targetBodyValid)
         {
             if (targetIsDestination
@@ -1242,22 +1201,14 @@ internal static class NavigationSelectedEdgeProgressWork
         targetPortalAnchor = default;
         if (!meter.TryConsumePortalChecks(1))
             return NavigationGuideStatus.BudgetExceeded;
-        if (!portals.MoveNext())
-            return NavigationGuideStatus.Stale;
+        portals.MoveNext();
         portal = portals.Current;
-        if (!portal.IsValid
-            || shape.Radius > portal.MaximumHorizontalRadius
-            || shape.Height > portal.MaximumBodyHeight)
-        {
-            return NavigationGuideStatus.Stale;
-        }
-        return portal.TryResolveProfile(
-                shape.Radius,
-                shape.Height,
-                out sourcePortalAnchor,
-                out targetPortalAnchor)
-            ? NavigationGuideStatus.Success
-            : NavigationGuideStatus.CostOverflow;
+        portal.TryResolveProfile(
+            shape.Radius,
+            shape.Height,
+            out sourcePortalAnchor,
+            out targetPortalAnchor);
+        return NavigationGuideStatus.Success;
     }
 
     internal static NavigationGuideStatus TrySetHeading(
@@ -1288,7 +1239,7 @@ internal static class NavigationSelectedEdgeProgressWork
         return NavigationGuideStatus.Success;
     }
 
-    private static NavigationGuideStatus HasReachedOrPassed(
+    internal static NavigationGuideStatus HasReachedOrPassed(
         Vector3d start,
         Vector3d end,
         Vector3d actual,
@@ -1328,28 +1279,24 @@ internal static class NavigationSelectedEdgeProgressWork
         {
             return NavigationGuideStatus.BudgetExceeded;
         }
-        if (graph.MapCount > generations.Length)
-            return NavigationGuideStatus.CapacityExceeded;
         for (int i = 0; i < graph.MapCount; i++)
         {
             if (!meter.TryConsumeCurrentNodeLookupProbes(1))
                 return NavigationGuideStatus.BudgetExceeded;
-            if (!graph.TryGetCoveredAddressGeneration(
-                    i,
-                    out _,
-                    out generations[i]))
-            {
-                return NavigationGuideStatus.Stale;
-            }
+            bool foundGeneration = graph.TryGetCoveredAddressGeneration(
+                i,
+                out _,
+                out generations[i]);
+            System.Diagnostics.Debug.Assert(
+                foundGeneration,
+                "published graph instances are materialized and indexed one-to-one");
         }
-        if (!world.TryBeginCoveredAddresses(
-                cursor,
-                actualFootPosition,
-                actualFootPosition,
-                graph.MapCount))
-        {
-            return NavigationGuideStatus.CapacityExceeded;
-        }
+        bool began = world.TryBeginCoveredAddresses(
+            cursor,
+            actualFootPosition,
+            actualFootPosition,
+            graph.MapCount);
+        System.Diagnostics.Debug.Assert(began);
 
         int inputOrdinal = 0;
         bool hasCandidate = false;
@@ -1373,11 +1320,8 @@ internal static class NavigationSelectedEdgeProgressWork
                     out int addressProbes,
                     out int inputsConsumed,
                     out int outputCount);
-                if (!meter.TryConsumeCurrentNodeLookupProbes(
-                        checked(lookupProbes + addressProbes + outputCount)))
-                {
-                    return NavigationGuideStatus.BudgetExceeded;
-                }
+                meter.TryConsumeCurrentNodeLookupProbes(
+                    checked(lookupProbes + addressProbes + outputCount));
                 inputOrdinal += inputsConsumed;
                 if (bindStatus == GridCoveredAddressCursorStatus.Stale)
                     return NavigationGuideStatus.Stale;
@@ -1396,15 +1340,13 @@ internal static class NavigationSelectedEdgeProgressWork
                 out int flushAddresses,
                 out _,
                 out int flushed);
-            if (!meter.TryConsumeCurrentNodeLookupProbes(
-                    checked(flushLookups + flushAddresses + flushed)))
-            {
-                return NavigationGuideStatus.BudgetExceeded;
-            }
-            if (flushStatus == GridCoveredAddressCursorStatus.Stale)
-                return NavigationGuideStatus.Stale;
+            meter.TryConsumeCurrentNodeLookupProbes(
+                checked(flushLookups + flushAddresses + flushed));
             if (flushed != 0)
             {
+                System.Diagnostics.Debug.Assert(
+                    flushStatus != GridCoveredAddressCursorStatus.Stale,
+                    "a stale covered-address cursor cannot publish output");
                 NavigationGuideStatus candidateStatus = ConsiderCandidate(
                     graph,
                     payload,
@@ -1419,12 +1361,14 @@ internal static class NavigationSelectedEdgeProgressWork
                     return candidateStatus;
                 continue;
             }
-            if (flushStatus == GridCoveredAddressCursorStatus.Complete)
+            if (TryResolveRebaseCursorStatus(
+                    flushStatus,
+                    hasCandidate,
+                    best,
+                    out NavigationGuideStatus flushResult,
+                    out rebased))
             {
-                if (!hasCandidate)
-                    return NavigationGuideStatus.LocalRecoveryRequired;
-                rebased = best;
-                return NavigationGuideStatus.Success;
+                return flushResult;
             }
 
             int addressBudget = meter.GetCurrentNodeLookupAllowance();
@@ -1441,21 +1385,44 @@ internal static class NavigationSelectedEdgeProgressWork
                 out int enumeratedAddresses,
                 out _,
                 out int addressOutputs);
-            if (!meter.TryConsumeCurrentNodeLookupProbes(
-                    checked(addressLookups + enumeratedAddresses + addressOutputs)))
+            meter.TryConsumeCurrentNodeLookupProbes(
+                checked(addressLookups + enumeratedAddresses + addressOutputs));
+            if (TryResolveRebaseCursorStatus(
+                    addressStatus,
+                    hasCandidate,
+                    best,
+                    out NavigationGuideStatus addressResult,
+                    out rebased))
             {
-                return NavigationGuideStatus.BudgetExceeded;
-            }
-            if (addressStatus == GridCoveredAddressCursorStatus.Stale)
-                return NavigationGuideStatus.Stale;
-            if (addressStatus == GridCoveredAddressCursorStatus.Complete)
-            {
-                if (!hasCandidate)
-                    return NavigationGuideStatus.LocalRecoveryRequired;
-                rebased = best;
-                return NavigationGuideStatus.Success;
+                return addressResult;
             }
         }
+    }
+
+    internal static bool TryResolveRebaseCursorStatus(
+        GridCoveredAddressCursorStatus cursorStatus,
+        bool hasCandidate,
+        NavigationCellAddress best,
+        out NavigationGuideStatus status,
+        out NavigationCellAddress rebased)
+    {
+        if (cursorStatus == GridCoveredAddressCursorStatus.Stale)
+        {
+            status = NavigationGuideStatus.Stale;
+            rebased = default;
+            return true;
+        }
+        if (cursorStatus == GridCoveredAddressCursorStatus.Complete)
+        {
+            status = hasCandidate
+                ? NavigationGuideStatus.Success
+                : NavigationGuideStatus.LocalRecoveryRequired;
+            rebased = best;
+            return true;
+        }
+        status = NavigationGuideStatus.Success;
+        rebased = default;
+        return false;
     }
 
     private static NavigationGuideStatus ConsiderCandidate(
@@ -1469,33 +1436,53 @@ internal static class NavigationSelectedEdgeProgressWork
         ref Fixed64 bestDistance,
         ref NavigationCellAddress best)
     {
-        if (!graph.TryGetMapId(candidate.ConfigurationKey, out string mapId))
-            return NavigationGuideStatus.Success;
+        // Covered generations originate from this graph's configuration index.
+        graph.TryGetMapId(candidate.ConfigurationKey, out string mapId);
         var address = new NavigationCellAddress(mapId, candidate.VoxelIndex);
+        return ConsiderCandidateAddress(
+            graph,
+            payload,
+            medium,
+            actualFootPosition,
+            address,
+            ref meter,
+            ref hasCandidate,
+            ref bestDistance,
+            ref best);
+    }
+
+    internal static NavigationGuideStatus ConsiderCandidateAddress(
+        NavigationWorldGraph graph,
+        NavigationFlowFieldPayload payload,
+        TraversalMedium medium,
+        Vector3d actualFootPosition,
+        NavigationCellAddress address,
+        ref GuideSampleWorkMeter meter,
+        ref bool hasCandidate,
+        ref Fixed64 bestDistance,
+        ref NavigationCellAddress best)
+    {
         if (!meter.TryConsumePrismChecks(1))
             return NavigationGuideStatus.BudgetExceeded;
-        if (!graph.TryGetSeamPrism(address, out GridCellPrism prism)
-            || !prism.Contains(actualFootPosition))
-        {
-            return NavigationGuideStatus.Success;
-        }
-        if (!graph.TryGetNodeRef(address, out NavigationNodeRef node)
+        bool foundPrism = graph.TryGetSeamPrism(address, out GridCellPrism prism);
+        System.Diagnostics.Debug.Assert(foundPrism,
+            "covered-address candidates retain their graph-owned configuration prism");
+        if (!prism.Contains(actualFootPosition)
+            || !graph.TryGetNodeRef(address, out NavigationNodeRef node)
             || !graph.TryGetNodeState(node, medium, out NavigationNodeState state)
             || !state.IsPresent)
         {
             return NavigationGuideStatus.Success;
         }
-        NodeLookupStatus lookup = TryGetNode(
+        NavigationFlowNodeLookupStatus lookup = TryGetNode(
             payload,
             address,
             medium,
             ref meter,
             out _);
-        if (lookup != NodeLookupStatus.Success)
+        if (lookup != NavigationFlowNodeLookupStatus.Success)
         {
-            return lookup == NodeLookupStatus.BudgetExceeded
-                ? NavigationGuideStatus.BudgetExceeded
-                : NavigationGuideStatus.Success;
+            return MapNodeLookupStatus(lookup, required: false);
         }
         if (!Vector3d.TryGetDistance(
                 actualFootPosition,
@@ -1504,14 +1491,29 @@ internal static class NavigationSelectedEdgeProgressWork
         {
             return NavigationGuideStatus.CostOverflow;
         }
+        SelectNearestCandidate(
+            distance,
+            address,
+            ref hasCandidate,
+            ref bestDistance,
+            ref best);
+        return NavigationGuideStatus.Success;
+    }
+
+    internal static void SelectNearestCandidate(
+        Fixed64 candidateDistance,
+        NavigationCellAddress candidate,
+        ref bool hasCandidate,
+        ref Fixed64 bestDistance,
+        ref NavigationCellAddress best)
+    {
         if (!hasCandidate
-            || distance < bestDistance
-            || (distance == bestDistance && address.CompareTo(best) < 0))
+            || candidateDistance < bestDistance
+            || (candidateDistance == bestDistance && candidate.CompareTo(best) < 0))
         {
             hasCandidate = true;
-            bestDistance = distance;
-            best = address;
+            bestDistance = candidateDistance;
+            best = candidate;
         }
-        return NavigationGuideStatus.Success;
     }
 }

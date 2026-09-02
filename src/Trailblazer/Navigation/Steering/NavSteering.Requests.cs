@@ -86,7 +86,7 @@ public partial class NavSteering
     {
         RemoveMovementGroupSession();
         MovementGroupID = -1;
-        GroupIndex = -1;
+        _movementGroupSession.GroupIndex = -1;
         _movementGroupMode = MovementGroupTravelMode.None;
         _destination = _requestedDestination;
     }
@@ -104,7 +104,7 @@ public partial class NavSteering
     {
         SwiftThrowHelper.ThrowIfNull(vessel, nameof(vessel));
 
-        if (!ShouldMove || !IsInGroup || !_currentQuery.HasValue)
+        if (!ShouldMove || !IsInGroup)
             return;
 
         MovementGroups.Prewarm(

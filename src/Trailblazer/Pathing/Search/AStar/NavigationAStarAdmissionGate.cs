@@ -140,8 +140,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     private bool CanBegin() =>
         !_disposed
-        && !_active
-        && _generation != ulong.MaxValue;
+        && !_active;
 
     private bool FitsBatchEnvelope(PathQueryBatch batch) =>
         batch.Count > 0
@@ -196,7 +195,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 ref _reservations[i]);
             _leases[i] = null;
         }
-        _generation = checked(_generation + 1UL);
+        _generation = unchecked(_generation + 1UL);
         _activeGeneration = _generation;
         _activeCount = count;
         _activeAdmittedCount = admitted;
@@ -213,12 +212,10 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             inputIndex < 0 || inputIndex >= _activeCount,
             inputIndex,
             nameof(inputIndex));
-        for (int i = 0; i < _activeCount; i++)
-        {
-            if (_descriptors[i].InputIndex == inputIndex)
-                return _descriptors[i];
-        }
-        throw new InvalidOperationException("The A* batch descriptor set is inconsistent.");
+        int descriptorOrdinal = 0;
+        while (_descriptors[descriptorOrdinal].InputIndex != inputIndex)
+            descriptorOrdinal++;
+        return _descriptors[descriptorOrdinal];
     }
 
     internal int GetAdmittedCount(NavigationAStarBatchWork work)

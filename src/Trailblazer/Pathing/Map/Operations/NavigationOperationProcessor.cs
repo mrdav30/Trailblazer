@@ -126,7 +126,8 @@ internal sealed class NavigationOperationProcessor
     internal void RejectDeferredCapacity()
     {
         int count = Math.Min(_deferredPrefixCount, _pending.Count);
-        _candidate = _sourceCandidateForDeferred ?? _candidate;
+        System.Diagnostics.Debug.Assert(_sourceCandidateForDeferred != null);
+        _candidate = _sourceCandidateForDeferred!;
         for (int i = 0; i < count; i++)
             _pending[i].Receipt.CompleteRejected(NavigationOperationRejection.CapacityExceeded);
         RemovePrefix(count);
@@ -234,8 +235,7 @@ internal sealed class NavigationOperationProcessor
             _candidate = _overlayFoldWork.Candidate;
         for (int i = foldStart; i < eligibleCount; i++)
         {
-            if (maintenanceMeter != null
-                && _pending[i].Kind is PendingOperationKind.MapCommit or PendingOperationKind.MapRemove)
+            if (_pending[i].Kind is PendingOperationKind.MapCommit or PendingOperationKind.MapRemove)
             {
                 _mapFoldWork ??= _pending[i].Kind == PendingOperationKind.MapCommit
                     ? new NavigationMapFoldWork(
@@ -293,8 +293,7 @@ internal sealed class NavigationOperationProcessor
                 _activeFoldSourceCandidate = null;
                 _foldOperationIndex = i + 1;
             }
-            else if (_pending[i].Kind == PendingOperationKind.Overlay
-                && maintenanceMeter != null)
+            else
             {
                 _overlayFoldWork ??= new NavigationOverlayFoldWork(
                     _candidate,
@@ -344,16 +343,11 @@ internal sealed class NavigationOperationProcessor
                 _activeFoldSourceCandidate = null;
                 _foldOperationIndex = i + 1;
             }
-            else
-            {
-                _outcomes[i] = NavigationOperationRejection.InvalidOperation;
-            }
             _foldOperationIndex = i + 1;
             _superseded[i] = false;
         }
 
-        if (maintenanceMeter != null
-            && retainedWorkGuard != null
+        if (retainedWorkGuard != null
             && !retainedWorkGuard(
                 checked(GetPositiveRetainedDelta(_candidate, published) + _coverageScratchBytes),
                 GetPositivePersistentPageDelta(_candidate, published)))
@@ -366,8 +360,7 @@ internal sealed class NavigationOperationProcessor
             }
             ResetSupersedence();
         }
-        else if (maintenanceMeter != null
-            && !AdvanceSupersedence(eligibleCount, maintenanceMeter))
+        else if (!AdvanceSupersedence(eligibleCount, maintenanceMeter))
         {
             _sourceCandidateForDeferred ??= published;
             _deferredCandidate = _candidate;
@@ -518,8 +511,7 @@ internal sealed class NavigationOperationProcessor
                     return false;
                 _superseded[_supersedenceIndex] = _mapOverwriters.Contains(operation.MapId!);
                 if (operation.Kind == PendingOperationKind.MapRemove
-                    || (operation.Kind == PendingOperationKind.MapCommit
-                        && operation.ReplacementPolicy == OverlayReplacementPolicy.Clear))
+                    || operation.ReplacementPolicy == OverlayReplacementPolicy.Clear)
                 {
                     _mapOverwriters.Add(operation.MapId!);
                 }
@@ -776,9 +768,7 @@ internal sealed class NavigationOperationProcessor
 
         public bool Equals(OverlayIdKey other) =>
             string.Equals(MapId, other.MapId, StringComparison.Ordinal)
-            && string.Equals(Id, other.Id, StringComparison.Ordinal);
-
-        public override bool Equals(object? obj) => obj is OverlayIdKey other && Equals(other);
+            & string.Equals(Id, other.Id, StringComparison.Ordinal);
 
         public override int GetHashCode()
         {
@@ -887,9 +877,7 @@ internal sealed class NavigationOperationProcessor
                 coalescingScratchBytes: GetOverlayCoverageScratchBytes(operation.PreparedOverlay));
 
         private static long GetOverlayCoverageScratchBytes(PreparedNavigationOverlay overlay) =>
-            overlay.DescriptorBytes > long.MaxValue / 2
-                ? long.MaxValue
-                : overlay.DescriptorBytes * 2;
+            NavigationByteCount.SaturatingAdd(overlay.DescriptorBytes, overlay.DescriptorBytes);
 
     }
 }

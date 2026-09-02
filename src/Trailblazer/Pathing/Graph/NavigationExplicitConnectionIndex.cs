@@ -163,13 +163,18 @@ internal sealed class NavigationExplicitConnectionIndex
             while (endpoints.MoveNext())
             {
                 NavigationConnectionOwnerKey owner = endpoints.Current;
-                if (string.Equals(owner.MapId, mapId, StringComparison.Ordinal)
-                    || !TryGet(owner, out NavigationExplicitConnectionRecord record)
-                    || !record.IsActive
-                    || !string.Equals(record.Destination.MapId, mapId, StringComparison.Ordinal))
-                {
+                if (string.Equals(owner.MapId, mapId, StringComparison.Ordinal))
                     continue;
-                }
+                bool found = TryGet(owner, out NavigationExplicitConnectionRecord record);
+                System.Diagnostics.Debug.Assert(
+                    found
+                    && string.Equals(
+                        record.Destination.MapId,
+                        mapId,
+                        StringComparison.Ordinal),
+                    "Published endpoint rows retain their exact owner and destination.");
+                if (!record.IsActive)
+                    continue;
                 count = checked(count + 1);
             }
         }
@@ -434,12 +439,7 @@ internal sealed class NavigationExplicitConnectionIndex
         if (comparison != 0)
             return comparison;
         comparison = string.CompareOrdinal(left.ConnectionId, right.ConnectionId);
-        if (comparison != 0)
-            return comparison;
-        comparison = CompareAnchor(leftRecord.Definition.EntryAnchor, rightRecord.Definition.EntryAnchor);
-        return comparison != 0
-            ? comparison
-            : CompareAnchor(leftRecord.Definition.ExitAnchor, rightRecord.Definition.ExitAnchor);
+        return comparison;
     }
 
     internal int CompareOwners(
@@ -462,14 +462,4 @@ internal sealed class NavigationExplicitConnectionIndex
         return false;
     }
 
-    private static int CompareAnchor(FixedMathSharp.Vector3d left, FixedMathSharp.Vector3d right)
-    {
-        int comparison = left.X.CompareTo(right.X);
-        if (comparison != 0)
-            return comparison;
-        comparison = left.Y.CompareTo(right.Y);
-        return comparison != 0
-            ? comparison
-            : left.Z.CompareTo(right.Z);
-    }
 }

@@ -822,7 +822,7 @@ public class NavigationFlowFieldArticulationBenchmarks
             {
                 throw new InvalidOperationException("The split articulation components were unavailable.");
             }
-            _afterComponentCount = leftComponent.Key == rightComponent.Key ? 1 : 2;
+            _afterComponentCount = leftComponent.Key.Equals(rightComponent.Key) ? 1 : 2;
             _afterComponentNodes = checked(leftComponent.Members.Count + rightComponent.Members.Count);
             NavigationFlowFieldPayloadCache cache = _gate.PayloadCache;
             _detachedPeakBytes = Math.Max(_detachedPeakBytes, cache.DetachedBytes);

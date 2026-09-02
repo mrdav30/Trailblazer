@@ -21,6 +21,292 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationFlowFieldCacheTests
 {
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void DependencySubset_ShouldRequireEveryConsumedTransitionRuleProof(
+        bool shorterHasTransitionDependency,
+        bool longerHasTransitionDependency,
+        bool expected)
+    {
+        var shorter = new GraphDependencyStamp(
+            default,
+            Array.Empty<GraphComponentDependency>(),
+            Array.Empty<GraphPageDependency>(),
+            shorterHasTransitionDependency,
+            transitionRuleVersion: 1);
+        var longer = new GraphDependencyStamp(
+            default,
+            Array.Empty<GraphComponentDependency>(),
+            Array.Empty<GraphPageDependency>(),
+            longerHasTransitionDependency,
+            transitionRuleVersion: 1);
+
+        NavigationFlowFieldPayloadCache.DependenciesAreSubset(shorter, longer)
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData((int)NavigationFlowFieldStatus.Stale, false, false)]
+    [InlineData((int)NavigationFlowFieldStatus.Stale, true, false)]
+    [InlineData((int)NavigationFlowFieldStatus.Success, false, false)]
+    [InlineData((int)NavigationFlowFieldStatus.Success, true, true)]
+    public void BoundGuideCurrentness_ShouldRequireLeaseAndPayloadOwnership(
+        int leaseStatusValue,
+        bool payloadCurrent,
+        bool expected)
+    {
+        NavigationFlowFieldPayloadCache.IsBoundGuideCurrent(
+                (NavigationFlowFieldStatus)leaseStatusValue,
+                payloadCurrent)
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BoundGuideValidation_ShouldRetainOrReleaseExactPayloadOwnership(
+        bool current)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(
+                extraIntegrationCost: Fixed64.Zero);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: fixture.Far.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 1,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        NavigationFlowFieldPayloadLease payloadLease = Publish(
+            cache,
+            fixture,
+            fixture.Far,
+            fixture.FarOrigin);
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+
+        NavigationFlowFieldPayloadCache.ResolveBoundGuideValidation(
+                current,
+                ref guide)
+            .Should().Be(current
+                ? NavigationGuideStatus.Success
+                : NavigationGuideStatus.Stale);
+
+        cache.ActiveLeaseCount.Should().Be(current ? 1 : 0);
+        cache.LeasedBytes.Should().Be(current ? fixture.Far.RetainedBytes : 0);
+        guide.Status.Should().Be(current
+            ? NavigationGuideStatus.Success
+            : NavigationGuideStatus.Stale);
+        guide.Dispose();
+    }
+
+    [Theory]
+    [InlineData((int)NavigationFlowFieldStatus.Success, true)]
+    [InlineData((int)NavigationFlowFieldStatus.NoPath, true)]
+    [InlineData((int)NavigationFlowFieldStatus.CostOverflow, true)]
+    [InlineData((int)NavigationFlowFieldStatus.Stale, false)]
+    public void ValidatedProof_ShouldBeRetainedUnlessFinalValidationIsStale(
+        int statusValue,
+        bool expectedRetained)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(
+                extraIntegrationCost: Fixed64.Zero);
+
+        NavigationFlowFieldPayload? proof =
+            NavigationFlowFieldPayloadCache.ResolveValidatedProof(
+                (NavigationFlowFieldStatus)statusValue,
+                fixture.Far);
+
+        if (expectedRetained)
+            proof.Should().BeSameAs(fixture.Far);
+        else
+            proof.Should().BeNull();
+    }
+
+    [Fact]
+    public void DefaultPayloadLease_ShouldFailClosedWithoutReturningAPayload()
+    {
+        NavigationFlowFieldPayloadLease lease = default;
+
+        lease.TryGetPayload(out NavigationFlowFieldPayload payload)
+            .Should().Be(NavigationFlowFieldStatus.Stale);
+        payload.Should().BeNull();
+        lease.Dispose();
+    }
+
+    [Fact]
+    public void DisposedCache_ShouldKeepResetAndDisposeIdempotent()
+    {
+        using var world = new GridWorld();
+        var cache = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 0,
+            maxReusableBytes: 0,
+            maxSinglePayloadBytes: 0,
+            maxActivePayloadBytes: 0,
+            maxActiveLeases: 0,
+            guideMapCapacity: 0,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+
+        cache.Dispose();
+
+        cache.Reset();
+        cache.Dispose();
+        cache.Count.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void PayloadCache_ShouldRejectNegativeByteCeilings(int ceiling)
+    {
+        using var world = new GridWorld();
+        long maxReusableBytes = ceiling == 0 ? -1 : 0;
+        long maxSinglePayloadBytes = ceiling == 1 ? -1 : 0;
+        long maxActivePayloadBytes = ceiling == 2 ? -1 : 0;
+
+        Action construct = () => _ = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 0,
+            maxReusableBytes,
+            maxSinglePayloadBytes,
+            maxActivePayloadBytes,
+            maxActiveLeases: 0,
+            guideMapCapacity: 0,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+
+        construct.Should().ThrowExactly<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void PayloadReservation_ShouldRejectNegativeByteCeiling()
+    {
+        using var world = new GridWorld();
+        using var cache = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 0,
+            maxReusableBytes: 0,
+            maxSinglePayloadBytes: 0,
+            maxActivePayloadBytes: 0,
+            maxActiveLeases: 0,
+            guideMapCapacity: 0,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+
+        Action reserve = () => cache.TryReservePayload(-1, out _);
+
+        reserve.Should().ThrowExactly<ArgumentOutOfRangeException>();
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void GuideCreation_MapTableOneBelowRequiredCapacity_ShouldReleasePayloadLease()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        NavigationFlowFieldPayloadLease payloadLease = Publish(
+            cache,
+            fixture,
+            fixture.Far,
+            fixture.FarOrigin);
+
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.CapacityExceeded);
+
+        guide.Should().Be(default(NavigationFlowFieldLease));
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void GuideCreation_OriginOutsidePublishedPrefix_ShouldFailStaleAndReleaseLease()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: fixture.Far.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 1,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        NavigationFlowFieldPayloadLease payloadLease = Publish(
+            cache,
+            fixture,
+            fixture.Far,
+            fixture.FarOrigin);
+        var uncoveredOrigin = new NavigationCellAddress(
+            fixture.Far.Key.DestinationAddress.MapId,
+            new VoxelIndex(4, 0, 0));
+        fixture.Graph.TryGetNodeRef(uncoveredOrigin, out _).Should().BeTrue();
+        fixture.Far.TryGetNode(uncoveredOrigin, TraversalMedium.Solid, out _)
+            .Should().BeFalse();
+
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(uncoveredOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Stale);
+
+        guide.Should().Be(default(NavigationFlowFieldLease));
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void GuideCreation_DependencyChangedAfterPayloadCheckout_ShouldFailStale()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: fixture.Far.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 1,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        NavigationFlowFieldPayloadLease payloadLease = Publish(
+            cache,
+            fixture,
+            fixture.Far,
+            fixture.FarOrigin);
+        NavigationWorldGraph changed = fixture.Graph
+            .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+            .WithGraphVersion(fixture.Graph.GraphVersion + 1);
+        fixture.Store.TryPublish(changed)
+            .Should().Be(NavigationCandidatePublication.Published);
+
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Stale);
+
+        guide.Should().Be(default(NavigationFlowFieldLease));
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+    }
+
     [Fact]
     public void Checkout_ShouldRejectNewerPayloadForOlderLeasedGraphWithoutEviction()
     {
@@ -93,6 +379,62 @@ public sealed class NavigationFlowFieldCacheTests
     }
 
     [Fact]
+    public void Publication_ShouldReplaceAStaleIncumbentWithTheCurrentProof()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        NavigationWorldGraph newerBase = fixture.Graph.WithGraphVersion(
+            fixture.Graph.GraphVersion + 1);
+        NavigationWorldGraph newer = newerBase.WithSurfaceComponents(
+            NavigationSurfaceComponentTestFactory.Build(newerBase));
+        using NavigationWorldGraphStore newerStore =
+            NavigationAStarExitTestHarness.CreateStore(newer);
+        NavigationFlowFieldPayload newerPayload =
+            NavigationFlowFieldCacheTestHarness.RunFlow(
+                fixture.World,
+                newerStore,
+                newer,
+                fixture.FarQuery,
+                fixture.FarOrigin,
+                fixture.Far.Key.DestinationAddress,
+                NavigationFlowFieldStatus.Success);
+        long maximumBytes = Math.Max(fixture.Far.RetainedBytes, newerPayload.RetainedBytes);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: maximumBytes,
+            maxSinglePayloadBytes: maximumBytes,
+            maxActivePayloadBytes: maximumBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
+        fixture.Store.TryPublish(newer)
+            .Should().Be(NavigationCandidatePublication.Published);
+        cache.TryReservePayload(
+                newerPayload.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                newerPayload,
+                fixture.FarOrigin,
+                ref reservation,
+                out NavigationFlowFieldPayloadLease lease)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+
+        lease.TryGetPayload(out NavigationFlowFieldPayload canonical)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        canonical.Should().BeSameAs(newerPayload,
+            "a dependency-stale incumbent must not suppress a current proof with the same key");
+        cache.Count.Should().Be(1);
+        cache.CachedBytes.Should().Be(newerPayload.RetainedBytes);
+        lease.Dispose();
+    }
+
+    [Fact]
     public void NearThenFar_ShouldPromoteAndDetachTheActiveSmallerPrefix()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
@@ -137,6 +479,116 @@ public sealed class NavigationFlowFieldCacheTests
         cache.DetachedBytes.Should().Be(0);
         farLease.Dispose();
         cache.LeasedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void ExistingLongerPrefix_ShouldNotActivateAgainstAShorterReservation()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        NavigationFlowFieldPayload other =
+            NavigationFlowFieldCacheTestHarness.CloneWithExpandedNodeBudget(
+                fixture.Far,
+                fixture.FarQuery,
+                1);
+        long activeBytes = checked(other.RetainedBytes + fixture.Near.RetainedBytes);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 2,
+            maxReusableBytes: checked(fixture.Far.RetainedBytes + other.RetainedBytes),
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: activeBytes,
+            maxActiveLeases: 2,
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
+        NavigationFlowFieldPayloadLease otherLease = Publish(
+            cache,
+            fixture,
+            other,
+            fixture.FarOrigin);
+        cache.TryReservePayload(
+                fixture.Near.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                fixture.Near,
+                fixture.NearOrigin,
+                ref reservation,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.CapacityExceeded,
+                "the longer canonical payload, not the shorter candidate, owns the activation bytes");
+
+        reservation.Should().NotBe(default(NavigationFlowFieldReservation));
+        cache.ActiveLeaseCount.Should().Be(1);
+        cache.LeasedBytes.Should().Be(other.RetainedBytes);
+        cache.ReservedPayloadBytes.Should().Be(fixture.Near.RetainedBytes);
+        cache.ReleasePayloadReservation(ref reservation);
+        otherLease.Dispose();
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                fixture.Far.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease canonical,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        canonical.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void Promotion_WhenIncumbentIsLru_ShouldEvictTheUnrelatedEntry()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        NavigationFlowFieldPayload unrelated =
+            NavigationFlowFieldCacheTestHarness.CloneWithExpandedNodeBudget(
+                fixture.Far,
+                fixture.FarQuery,
+                1);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 2,
+            maxReusableBytes: checked(fixture.Near.RetainedBytes + unrelated.RetainedBytes),
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        Publish(cache, fixture, fixture.Near, fixture.NearOrigin).Dispose();
+        Publish(cache, fixture, unrelated, fixture.FarOrigin).Dispose();
+
+        Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
+
+        cache.Count.Should().Be(1);
+        cache.CachedBytes.Should().Be(fixture.Far.RetainedBytes);
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                unrelated.Key,
+                fixture.FarOrigin,
+                out _,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Pending,
+                "promotion replaces the incumbent in place and evicts the unrelated LRU entry");
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                fixture.Far.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease promoted,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        promoted.TryGetPayload(out NavigationFlowFieldPayload canonical)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        canonical.Should().BeSameAs(fixture.Far);
+        promoted.Dispose();
     }
 
     [Fact]
@@ -333,9 +785,167 @@ public sealed class NavigationFlowFieldCacheTests
                 fixture.Complete.Key,
                 unreachable,
                 out NavigationFlowFieldPayloadLease checkout,
-                out _)
+                out NavigationFlowFieldPayload? proof)
             .Should().Be(NavigationFlowFieldStatus.NoPath);
         checkout.Should().Be(default(NavigationFlowFieldPayloadLease));
+        proof.Should().BeSameAs(fixture.Complete);
+        cache.IsExactProofCurrent(
+                fixture.Store,
+                proof!,
+                unreachable,
+                NavigationFlowFieldStatus.NoPath)
+            .Should().BeTrue(
+                "the canonical complete field remains the exact reusable negative proof");
+        cache.Count.Should().Be(1);
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void DuplicateCompleteNoPathPublication_ShouldReleaseTheSecondReservation()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        var unreachable = new NavigationCellAddress(
+            fixture.FarOrigin.MapId,
+            new VoxelIndex(99, 0, 0));
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: fixture.Complete.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Complete.RetainedBytes,
+            maxActivePayloadBytes: fixture.Complete.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+
+        for (int publication = 0; publication < 2; publication++)
+        {
+            cache.TryReservePayload(
+                    fixture.Complete.RetainedBytes,
+                    out NavigationFlowFieldReservation reservation)
+                .Should().BeTrue();
+
+            cache.TryPublishOrPromote(
+                    fixture.Store,
+                    fixture.Complete,
+                    unreachable,
+                    ref reservation,
+                    out NavigationFlowFieldPayloadLease lease)
+                .Should().Be(NavigationFlowFieldStatus.NoPath);
+
+            lease.Should().Be(default(NavigationFlowFieldPayloadLease));
+            reservation.Should().Be(default(NavigationFlowFieldReservation));
+            cache.ReservedLeaseCount.Should().Be(0);
+            cache.ReservedPayloadBytes.Should().Be(0);
+        }
+
+        cache.Count.Should().Be(1,
+            "the second proof must reuse rather than replace the canonical complete field");
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.CachedBytes.Should().Be(fixture.Complete.RetainedBytes);
+    }
+
+    [Fact]
+    public void CompleteFieldMissingOrigin_ShouldReleaseANonReusableProofImmediately()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        var unreachable = new NavigationCellAddress(
+            fixture.FarOrigin.MapId,
+            new VoxelIndex(99, 0, 0));
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 0,
+            maxReusableBytes: 0,
+            maxSinglePayloadBytes: fixture.Complete.RetainedBytes,
+            maxActivePayloadBytes: fixture.Complete.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                fixture.Complete.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                fixture.Complete,
+                unreachable,
+                ref reservation,
+                out NavigationFlowFieldPayloadLease published)
+            .Should().Be(NavigationFlowFieldStatus.NoPath);
+
+        published.Should().Be(default(NavigationFlowFieldPayloadLease));
+        reservation.Should().Be(default(NavigationFlowFieldReservation));
+        cache.Count.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.CachedBytes.Should().Be(0);
+        cache.DetachedBytes.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void CompleteCachedField_ShouldReportOverflowForAFartherCoveredOrigin()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        NavigationCellAddress destination = fixture.Complete.Key.DestinationAddress;
+        PathQuery seedQuery = new(
+            fixture.FarQuery.End,
+            fixture.FarQuery.End,
+            fixture.FarQuery.Agent,
+            fixture.FarQuery.AreaPolicy,
+            fixture.FarQuery.Traversal,
+            PathAlgorithm.FlowField,
+            fixture.FarQuery.Budget,
+            fixture.FarQuery.AllowTransitions,
+            new FlowFieldQueryOptions(Fixed64.MaxValue));
+        NavigationFlowFieldPayload complete = NavigationFlowFieldCacheTestHarness.RunFlow(
+            fixture.World,
+            fixture.Store,
+            fixture.Graph,
+            seedQuery,
+            destination,
+            destination,
+            NavigationFlowFieldStatus.Success);
+        complete.IsComplete.Should().BeTrue();
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: complete.RetainedBytes,
+            maxSinglePayloadBytes: complete.RetainedBytes,
+            maxActivePayloadBytes: complete.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                complete.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                complete,
+                destination,
+                ref reservation,
+                out NavigationFlowFieldPayloadLease published)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        published.Dispose();
+
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                complete.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease checkout,
+                out NavigationFlowFieldPayload? proof)
+            .Should().Be(NavigationFlowFieldStatus.CostOverflow);
+
+        checkout.Should().Be(default(NavigationFlowFieldPayloadLease));
+        proof.Should().BeSameAs(complete);
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.Count.Should().Be(1);
     }
 
     [Fact]
@@ -646,6 +1256,38 @@ public sealed class NavigationFlowFieldCacheTests
         cache.Count.Should().Be(0);
     }
 
+    [Fact]
+    public void PostLockValidation_StaleDependencyShouldReleaseTheExactLeaseAccounting()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        using var cache = CreateCache(fixture);
+        NavigationFlowFieldPayloadLease lease = Publish(
+            cache,
+            fixture,
+            fixture.Far,
+            fixture.FarOrigin);
+        NavigationWorldGraph changed = fixture.Graph
+            .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+            .WithGraphVersion(fixture.Graph.GraphVersion + 1);
+        fixture.Store.TryPublish(changed)
+            .Should().Be(NavigationCandidatePublication.Published);
+
+        cache.CompletePostLockValidation(
+                fixture.Store,
+                fixture.Far,
+                NavigationFlowFieldStatus.Success,
+                ref lease)
+            .Should().Be(NavigationFlowFieldStatus.Stale);
+
+        lease.Should().Be(default(NavigationFlowFieldPayloadLease));
+        cache.Count.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.CachedBytes.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.DetachedBytes.Should().Be(0);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -889,6 +1531,92 @@ public sealed class NavigationFlowFieldCacheTests
     }
 
     [Fact]
+    public void Lru_ShouldRetainATouchedMiddleEntryWhenTheNextPayloadIsPublished()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        NavigationFlowFieldPayload second =
+            NavigationFlowFieldCacheTestHarness.CloneWithExpandedNodeBudget(
+                fixture.Far,
+                fixture.FarQuery,
+                1);
+        NavigationFlowFieldPayload third =
+            NavigationFlowFieldCacheTestHarness.CloneWithExpandedNodeBudget(
+                fixture.Far,
+                fixture.FarQuery,
+                2);
+        NavigationFlowFieldPayload fourth =
+            NavigationFlowFieldCacheTestHarness.CloneWithExpandedNodeBudget(
+                fixture.Far,
+                fixture.FarQuery,
+                3);
+        long threePayloadBytes = checked(fixture.Far.RetainedBytes * 3);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 3,
+            maxReusableBytes: threePayloadBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
+        Publish(cache, fixture, second, fixture.FarOrigin).Dispose();
+        Publish(cache, fixture, third, fixture.FarOrigin).Dispose();
+
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                second.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease touchedMiddle,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        touchedMiddle.Dispose();
+        Publish(cache, fixture, fourth, fixture.FarOrigin).Dispose();
+
+        cache.Count.Should().Be(3);
+        cache.CachedBytes.Should().Be(threePayloadBytes);
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                fixture.Far.Key,
+                fixture.FarOrigin,
+                out _,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Pending,
+                "the untouched oldest entry owns the eviction slot");
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                second.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease retainedMiddle,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Success,
+                "touching a middle entry makes it the most recent entry");
+        retainedMiddle.Dispose();
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                third.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease retainedThird,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        retainedThird.Dispose();
+        cache.TryCheckout(
+                fixture.Store,
+                fixture.Store.Current,
+                fourth.Key,
+                fixture.FarOrigin,
+                out NavigationFlowFieldPayloadLease retainedFourth,
+                out _)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        retainedFourth.Dispose();
+    }
+
+    [Fact]
     public void Reset_ShouldInvalidateActiveHandlesCancelReservationsAndReleaseReferences()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
@@ -1114,7 +1842,311 @@ public sealed class NavigationFlowFieldCacheTests
     }
 
     [Fact]
-    public void LongerPrefixMissingShorterDependencies_ShouldFailTheInvariant()
+    public void StrictPrefixPromotion_ShouldPreserveAnEarlierCanonicalPageDependency()
+    {
+        using var world = new GridWorld();
+        const int CellCount = 129;
+        var cells = new VoxelIndex[CellCount];
+        for (int i = 0; i < cells.Length; i++)
+            cells[i] = new VoxelIndex(i, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(CellCount),
+                cells,
+                "multi-page-prefix");
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
+        VoxelIndex destinationIndex = cells[^1];
+        VoxelIndex nearIndex = cells[^2];
+        VoxelIndex farIndex = cells[0];
+        NavigationWorkBudget budget = new(
+            32_768, 32, 256, 2_048, 2_048, 0, 0, 0, 0, 0, 0);
+
+        PathQuery CreateFlowQuery(VoxelIndex origin)
+        {
+            PathQuery query = fixture.CreateQuery(
+                origin,
+                destinationIndex,
+                fixture.DefaultProfile);
+            return NavigationFlowFieldCacheTestHarness.ToFlowField(
+                new PathQuery(
+                    query.Start,
+                    query.End,
+                    query.Agent,
+                    query.AreaPolicy,
+                    query.Traversal,
+                    query.Algorithm,
+                    budget,
+                    query.AllowTransitions),
+                Fixed64.One);
+        }
+
+        var destination = new NavigationCellAddress(fixture.MapId, destinationIndex);
+        var nearOrigin = new NavigationCellAddress(fixture.MapId, nearIndex);
+        var farOrigin = new NavigationCellAddress(fixture.MapId, farIndex);
+        NavigationFlowFieldPayload near = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
+            store,
+            fixture.Graph,
+            CreateFlowQuery(nearIndex),
+            nearOrigin,
+            destination,
+            NavigationFlowFieldStatus.Success,
+            nodeCapacity: 256);
+        NavigationFlowFieldPayload far = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
+            store,
+            fixture.Graph,
+            CreateFlowQuery(farIndex),
+            farOrigin,
+            destination,
+            NavigationFlowFieldStatus.Success,
+            nodeCapacity: 256);
+        near.Key.Should().Be(far.Key);
+        near.Nodes.Length.Should().BeLessThan(far.Nodes.Length);
+        far.Dependencies.Pages[0].PageIndex.Should().BeLessThan(
+            near.Dependencies.Pages[0].PageIndex,
+            "the longer proof owns one earlier sorted page before the shorter proof pages");
+        foreach (GraphPageDependency dependency in near.Dependencies.Pages)
+        {
+            Array.Exists(far.Dependencies.Pages, candidate => candidate.Equals(dependency))
+                .Should().BeTrue();
+        }
+        using var cache = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: far.RetainedBytes,
+            maxSinglePayloadBytes: far.RetainedBytes,
+            maxActivePayloadBytes: far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: fixture.Graph.MapCount,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                near.RetainedBytes,
+                out NavigationFlowFieldReservation nearReservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                store,
+                near,
+                nearOrigin,
+                ref nearReservation,
+                out NavigationFlowFieldPayloadLease nearLease)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        nearLease.Dispose();
+        cache.TryReservePayload(
+                far.RetainedBytes,
+                out NavigationFlowFieldReservation farReservation)
+            .Should().BeTrue();
+
+        cache.TryPublishOrPromote(
+                store,
+                far,
+                farOrigin,
+                ref farReservation,
+                out NavigationFlowFieldPayloadLease promoted)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+
+        promoted.TryGetPayload(out NavigationFlowFieldPayload canonical)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        canonical.Should().BeSameAs(far);
+        cache.Count.Should().Be(1);
+        promoted.Dispose();
+    }
+
+    [Fact]
+    public void StrictPrefixPromotion_ShouldPreserveAnEarlierCanonicalComponentDependency()
+    {
+        using var world = new GridWorld();
+        NavigationAStarExitTestHarness.GraphFixture earlierFixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                new GridConfiguration(
+                    new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+                    new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
+                    topologyKind: GridTopologyKind.RectangularPrism,
+                    topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+                    storageKind: GridStorageKind.Sparse),
+                new[] { default(VoxelIndex) },
+                "a-earlier-component");
+        VoxelIndex[] cells =
+        {
+            new(0, 0, 0),
+            new(1, 0, 0),
+            new(2, 0, 0),
+            new(3, 0, 0),
+            new(4, 0, 0)
+        };
+        NavigationAStarExitTestHarness.GraphFixture routeFixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "z-component-prefix");
+        var baseGraph = new NavigationWorldGraph(
+            1,
+            new[]
+            {
+                earlierFixture.Graph.GetInstance(0),
+                routeFixture.Graph.GetInstance(0)
+            },
+            areaCatalog: routeFixture.Graph.AreaCatalog);
+        NavigationWorldGraph graph = baseGraph.WithSurfaceComponents(
+            NavigationSurfaceComponentTestFactory.Build(baseGraph));
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(graph, 4);
+        PathQuery nearQuery = NavigationFlowFieldCacheTestHarness.ToFlowField(
+            routeFixture.CreateQuery(cells[1], cells[0], routeFixture.DefaultProfile),
+            Fixed64.One);
+        PathQuery farQuery = NavigationFlowFieldCacheTestHarness.ToFlowField(
+            routeFixture.CreateQuery(cells[3], cells[0], routeFixture.DefaultProfile),
+            Fixed64.One);
+        var destination = new NavigationCellAddress(routeFixture.MapId, cells[0]);
+        var nearOrigin = new NavigationCellAddress(routeFixture.MapId, cells[1]);
+        var farOrigin = new NavigationCellAddress(routeFixture.MapId, cells[3]);
+        NavigationFlowFieldPayload near = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
+            store,
+            graph,
+            nearQuery,
+            nearOrigin,
+            destination,
+            NavigationFlowFieldStatus.Success);
+        NavigationFlowFieldPayload far = NavigationFlowFieldCacheTestHarness.RunFlow(
+            world,
+            store,
+            graph,
+            farQuery,
+            farOrigin,
+            destination,
+            NavigationFlowFieldStatus.Success);
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress(earlierFixture.MapId, default),
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey earlierKey,
+                out _)
+            .Should().BeTrue();
+        graph.TryGetComponentDependency(earlierKey, out GraphComponentDependency earlier)
+            .Should().BeTrue();
+        graph.TryGetPageDependency(
+                new GraphPageDependencyAddress(earlierFixture.MapId, pageIndex: 0),
+                out GraphPageDependency earlierPage)
+            .Should().BeTrue();
+        earlier.Key.CompareTo(far.Dependencies.Components[0].Key).Should().BeNegative();
+        string.CompareOrdinal(earlierPage.MapId, far.Dependencies.Pages[0].MapId)
+            .Should().BeNegative();
+        var components = new GraphComponentDependency[
+            far.Dependencies.Components.Length + 1];
+        components[0] = earlier;
+        Array.Copy(
+            far.Dependencies.Components,
+            0,
+            components,
+            1,
+            far.Dependencies.Components.Length);
+        var pages = new GraphPageDependency[far.Dependencies.Pages.Length + 1];
+        pages[0] = earlierPage;
+        Array.Copy(
+            far.Dependencies.Pages,
+            0,
+            pages,
+            1,
+            far.Dependencies.Pages.Length);
+        var promotedDependencies = new GraphDependencyStamp(
+            far.Dependencies.AreaPolicy,
+            components,
+            pages,
+            far.Dependencies.HasTransitionRuleDependency,
+            far.Dependencies.TransitionRuleVersion);
+        var longer = new NavigationFlowFieldPayload(
+            far.Key,
+            (NavigationFlowFieldNode[])far.Nodes.Clone(),
+            (int[])far.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])far.TransitionInstructions.Clone(),
+            promotedDependencies,
+            far.IsComplete,
+            far.WorldChangeSequence);
+        graph.IsDependencyCurrent(longer.Dependencies).Should().BeTrue();
+        using var cache = new NavigationFlowFieldPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: longer.RetainedBytes,
+            maxSinglePayloadBytes: longer.RetainedBytes,
+            maxActivePayloadBytes: longer.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: graph.MapCount,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                near.RetainedBytes,
+                out NavigationFlowFieldReservation nearReservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                store,
+                near,
+                nearOrigin,
+                ref nearReservation,
+                out NavigationFlowFieldPayloadLease nearLease)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        nearLease.Dispose();
+        cache.TryReservePayload(
+                longer.RetainedBytes,
+                out NavigationFlowFieldReservation farReservation)
+            .Should().BeTrue();
+
+        cache.TryPublishOrPromote(
+                store,
+                longer,
+                farOrigin,
+                ref farReservation,
+                out NavigationFlowFieldPayloadLease promoted)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+
+        promoted.TryGetPayload(out NavigationFlowFieldPayload canonical)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        canonical.Should().BeSameAs(longer);
+        cache.Count.Should().Be(1);
+        promoted.Dispose();
+    }
+
+    [Fact]
+    public void EqualNodePrefixWithConflictingCompletion_ShouldFailTheInvariant()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
+        using var cache = CreateCache(fixture);
+        Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
+        var conflicting = new NavigationFlowFieldPayload(
+            fixture.Far.Key,
+            (NavigationFlowFieldNode[])fixture.Far.Nodes.Clone(),
+            (int[])fixture.Far.AddressLookupOrdinals.Clone(),
+            (NavigationTransitionInstruction[])fixture.Far.TransitionInstructions.Clone(),
+            fixture.Far.Dependencies,
+            !fixture.Far.IsComplete,
+            fixture.Far.WorldChangeSequence);
+        cache.TryReservePayload(
+                conflicting.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+
+        FluentActions.Invoking(() => cache.TryPublishOrPromote(
+                fixture.Store,
+                conflicting,
+                fixture.FarOrigin,
+                ref reservation,
+                out _))
+            .Should().Throw<InvalidOperationException>();
+
+        cache.Count.Should().Be(1);
+        cache.ReleasePayloadReservation(ref reservation);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LongerPrefixMissingShorterDependencies_ShouldFailTheInvariant(
+        bool omitPages)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
@@ -1122,8 +2154,12 @@ public sealed class NavigationFlowFieldCacheTests
         Publish(cache, fixture, fixture.Near, fixture.NearOrigin).Dispose();
         var missingDependencies = new GraphDependencyStamp(
             fixture.Far.Dependencies.AreaPolicy,
-            Array.Empty<GraphComponentDependency>(),
-            Array.Empty<GraphPageDependency>());
+            omitPages
+                ? fixture.Far.Dependencies.Components
+                : Array.Empty<GraphComponentDependency>(),
+            omitPages
+                ? Array.Empty<GraphPageDependency>()
+                : fixture.Far.Dependencies.Pages);
         var malformed = new NavigationFlowFieldPayload(
             fixture.Far.Key,
             (NavigationFlowFieldNode[])fixture.Far.Nodes.Clone(),
@@ -1167,24 +2203,6 @@ public sealed class NavigationFlowFieldCacheTests
         owner.ReservedLeaseCount.Should().Be(1);
         owner.ReleasePayloadReservation(ref reservation);
         owner.ReservedLeaseCount.Should().Be(0);
-    }
-
-    [Fact]
-    public void Reservation_ShouldExposeOnlyReadonlyStructState()
-    {
-        Type type = typeof(NavigationFlowFieldReservation);
-        type.IsValueType.Should().BeTrue();
-        type.IsDefined(
-                typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute),
-                inherit: false)
-            .Should().BeTrue();
-        System.Reflection.FieldInfo[] fields = type.GetFields(
-            System.Reflection.BindingFlags.Instance
-            | System.Reflection.BindingFlags.Public
-            | System.Reflection.BindingFlags.NonPublic);
-        fields.Should().HaveCount(3);
-        for (int i = 0; i < fields.Length; i++)
-            fields[i].IsInitOnly.Should().BeTrue();
     }
 
     [Fact]
@@ -1486,7 +2504,8 @@ internal static class NavigationFlowFieldCacheTestHarness
         PathQuery query,
         NavigationCellAddress origin,
         NavigationCellAddress destination,
-        NavigationFlowFieldStatus expectedStatus)
+        NavigationFlowFieldStatus expectedStatus,
+        int nodeCapacity = 128)
     {
         NavigationWorldGraphLease lease = store.TryAcquire()!;
         graph.TryGetNodeRef(origin, out NavigationNodeRef originNode).Should().BeTrue();
@@ -1518,7 +2537,13 @@ internal static class NavigationFlowFieldCacheTestHarness
             new NavigationWorkMeter(query.Budget),
             world.ChangeSequence,
             requiresWorldStamp: false);
-        var workspace = new NavigationFlowFieldWorkspace(0, 128, 128, 128, 128, 128);
+        var workspace = new NavigationFlowFieldWorkspace(
+            0,
+            128,
+            128,
+            nodeCapacity,
+            128,
+            128);
         using var work = new NavigationFlowFieldWork(world, resolved, workspace);
         for (int step = 0;
             step < 4_096 && work.Status == NavigationFlowFieldStatus.Pending;

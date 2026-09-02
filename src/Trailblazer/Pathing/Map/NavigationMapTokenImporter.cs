@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using System.Globalization;
 using FixedMathSharp;
 using GridForge.Configuration;
@@ -82,21 +83,15 @@ public static class NavigationMapTokenImporter
         if (markerIndex >= 0)
         {
             if (markerIndex != token.Length - 1 || token.LastIndexOf('!') != markerIndex)
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(rawToken),
-                    $"Invalid token '{token}' at [{x}, {y}, {z}]. Only one trailing '!' marker is supported.");
-            }
+                throw new ArgumentException(
+                    $"Invalid token '{token}' at [{x}, {y}, {z}]. Only one trailing '!' marker is supported.",
+                    nameof(rawToken));
             hasMarker = true;
             token = token[..^1].TrimEnd();
             if (token.Length == 0)
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(rawToken),
-                    $"Invalid token '{rawToken}' at [{x}, {y}, {z}]. A marker requires a base token.");
-            }
+                throw new ArgumentException(
+                    $"Invalid token '{rawToken}' at [{x}, {y}, {z}]. A marker requires a base token.",
+                    nameof(rawToken));
         }
 
         bool hasInlineCost = false;
@@ -107,33 +102,26 @@ public static class NavigationMapTokenImporter
             string costText = token[(costSeparatorIndex + 1)..];
             bool parsed = Fixed64.TryParse(costText, CultureInfo.InvariantCulture, out inlineCost);
             if (!parsed || inlineCost < Fixed64.Zero || costSeparatorIndex == 0)
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(rawToken),
-                    $"Invalid non-negative fixed-point cost in token '{rawToken}' at [{x}, {y}, {z}].");
-            }
+                throw new ArgumentException(
+                    $"Invalid non-negative fixed-point cost in token '{rawToken}' at [{x}, {y}, {z}].",
+                    nameof(rawToken));
             hasInlineCost = true;
             token = token[..costSeparatorIndex].TrimEnd();
         }
 
         bool known = legend.TryGetEntry(token, out NavigationTokenLegendEntry entry);
         if (!known)
-        {
-            SwiftThrowHelper.ThrowIfArgument(
-                true,
-                nameof(rawToken),
-                $"Unknown navigation token '{rawToken}' at [{x}, {y}, {z}].");
-        }
+            throw new ArgumentException(
+                $"Unknown navigation token '{rawToken}' at [{x}, {y}, {z}].",
+                nameof(rawToken));
         if (hasMarker
             && (!entry.EmitsCell
                 || (entry.TransitionMedia == TraversalMedia.None
                     && (entry.Cell.Flags & NavigationCellFlags.ClimbSurfaceHint) == 0)))
         {
-            SwiftThrowHelper.ThrowIfArgument(
-                true,
-                nameof(rawToken),
-                $"Token '{rawToken}' at [{x}, {y}, {z}] cannot generate transitions.");
+            throw new ArgumentException(
+                $"Token '{rawToken}' at [{x}, {y}, {z}] cannot generate transitions.",
+                nameof(rawToken));
         }
 
         if (!entry.EmitsCell)

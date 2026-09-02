@@ -141,8 +141,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
 
     private bool CanBegin() =>
         !_disposed
-        && !_active
-        && _generation != ulong.MaxValue;
+        && !_active;
 
     private bool FitsBatchEnvelope(PathQueryBatch batch) =>
         batch.Count > 0
@@ -169,7 +168,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
             _queries[i].Begin(_descriptors[i].Query, _leases[i]!);
             _leases[i] = null;
         }
-        _generation = checked(_generation + 1UL);
+        _generation = unchecked(_generation + 1UL);
         _activeGeneration = _generation;
         _activeCount = count;
         _activeAdmittedCount = leased;
@@ -186,12 +185,10 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
             inputIndex < 0 || inputIndex >= _activeCount,
             inputIndex,
             nameof(inputIndex));
-        for (int i = 0; i < _activeCount; i++)
-        {
-            if (_descriptors[i].InputIndex == inputIndex)
-                return _descriptors[i];
-        }
-        throw new InvalidOperationException("The flow batch descriptor set is inconsistent.");
+        int descriptorOrdinal = 0;
+        while (_descriptors[descriptorOrdinal].InputIndex != inputIndex)
+            descriptorOrdinal++;
+        return _descriptors[descriptorOrdinal];
     }
 
     internal int GetAdmittedCount(NavigationFlowBatchWork work)

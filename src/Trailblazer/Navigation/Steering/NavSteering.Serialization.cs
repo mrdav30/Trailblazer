@@ -55,7 +55,7 @@ public partial class NavSteering
             _pendingCommittedAreaPolicy = null;
             _shouldRequestPathThisFrame = false;
             MovementGroupID = movementGroupId;
-            GroupIndex = -1;
+            _movementGroupSession.GroupIndex = -1;
             if (movementGroupId < 0)
                 _movementGroupMode = MovementGroupTravelMode.None;
         }
@@ -70,7 +70,7 @@ public partial class NavSteering
             return;
 
         _requestedDestination = query.Value.End.Position;
-        if (ShouldMove && !HasLineOfSightPath)
+        if (!HasLineOfSightPath)
             _shouldRequestPathThisFrame = true;
     }
 

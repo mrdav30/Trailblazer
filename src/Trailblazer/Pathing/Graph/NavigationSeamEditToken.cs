@@ -22,6 +22,11 @@ internal readonly struct NavigationSeamEditToken
     internal static NavigationSeamEditToken Create()
     {
         long value = Interlocked.Increment(ref _highWater);
+        return FromIncrementedValue(value);
+    }
+
+    internal static NavigationSeamEditToken FromIncrementedValue(long value)
+    {
         if (value <= 0)
             throw new InvalidOperationException("The seam edit ownership token space was exhausted.");
         return new NavigationSeamEditToken(value);

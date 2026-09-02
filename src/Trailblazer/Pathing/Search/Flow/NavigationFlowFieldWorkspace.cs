@@ -107,9 +107,6 @@ internal sealed class NavigationFlowFieldWorkspace
 
     internal void ResetSearch()
     {
-        if (_generation == long.MaxValue)
-            throw new InvalidOperationException(
-                "Flow node-table generation capacity is exhausted.");
         for (int i = 0; i < _nodeCount; i++)
         {
             int slot = _activeSlots[i];
@@ -117,7 +114,10 @@ internal sealed class NavigationFlowFieldWorkspace
             _records[slot] = default;
             _activeSlots[i] = 0;
         }
-        _generation++;
+        unchecked
+        {
+            _generation++;
+        }
         _nodeCount = 0;
         HeapCount = 0;
         SettledCount = 0;
@@ -128,7 +128,7 @@ internal sealed class NavigationFlowFieldWorkspace
         slot = node.GetHashCode() & _mask;
         while (_stamps[slot] == _generation)
         {
-            if (_keys[slot] == node)
+            if (_keys[slot].Equals(node))
                 return true;
             slot = (slot + 1) & _mask;
         }

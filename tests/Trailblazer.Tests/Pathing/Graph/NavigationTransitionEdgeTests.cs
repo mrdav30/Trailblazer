@@ -159,6 +159,1196 @@ public sealed class NavigationTransitionEdgeTests
     }
 
     [Fact]
+    public void DefinitionEvaluator_ShouldDistinguishStaleCapabilityAndDependencyStates()
+    {
+        var definition = new TraversalTransitionDefinition(
+            "climb",
+            TraversalTransitionType.Climb,
+            default,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("b-target", default),
+            TraversalMedium.Gas,
+            requiredCapabilities: TraversalCapability.Climb,
+            actionCost: (Fixed64)5);
+        using TrailblazerWorldContext context = CreateCrossMapContext(
+            TraversalMedia.Solid,
+            TraversalMedia.Gas,
+            new[] { definition },
+            System.Array.Empty<TraversalTransitionRule>());
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("a-source", default),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        NavigationTransitionPage.Enumerator candidates =
+            lease.Graph.EnumerateOutgoingTransitionCandidates(source);
+        candidates.MoveNext().Should().BeTrue();
+        NavigationPublishedTransition published = candidates.Current;
+        candidates.MoveNext().Should().BeFalse();
+        var workspace = new NavigationRayWorkspace(2, 8, 8, 16, 0);
+        var meter = new NavigationWorkMeter(Budget());
+        var evaluatorWithoutClimb = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            workspace);
+
+        var staleDependencies = new NavigationDependencyWorkspace(2, 0);
+        evaluatorWithoutClimb.EvaluateDefinition(
+                new NavigationMediumStateRef(source.Node, TraversalMedium.Gas),
+                published,
+                meter,
+                staleDependencies,
+                out NavigationMediumStateRef staleTarget,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.Stale);
+        staleTarget.IsValid.Should().BeFalse();
+        staleDependencies.PageCount.Should().Be(0);
+
+        var capabilityDependencies = new NavigationDependencyWorkspace(2, 0);
+        evaluatorWithoutClimb.EvaluateDefinition(
+                source,
+                published,
+                meter,
+                capabilityDependencies,
+                out NavigationMediumStateRef capabilityTarget,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.Impassable);
+        capabilityTarget.Medium.Should().Be(TraversalMedium.Gas);
+        capabilityDependencies.PageCount.Should().Be(2,
+            "both endpoint pages must invalidate a capability rejection");
+        capabilityDependencies.Pages[0].Should().Be(
+            new GraphPageDependencyAddress("a-source", 0));
+        capabilityDependencies.Pages[1].Should().Be(
+            new GraphPageDependencyAddress("b-target", 0));
+
+        var evaluatorWithClimb = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(capabilities: TraversalCapability.Climb),
+            Policy,
+            workspace);
+        var emptyDependencies = new NavigationDependencyWorkspace(0, 0);
+        evaluatorWithClimb.EvaluateDefinition(
+                source,
+                published,
+                meter,
+                emptyDependencies,
+                out NavigationMediumStateRef emptyCapacityTarget,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.CapacityExceeded);
+        emptyCapacityTarget.Medium.Should().Be(TraversalMedium.Gas,
+            "the target resolves before endpoint dependency ownership is attempted");
+        emptyDependencies.PageCount.Should().Be(0);
+
+        var constrainedDependencies = new NavigationDependencyWorkspace(1, 0);
+        evaluatorWithClimb.EvaluateDefinition(
+                source,
+                published,
+                meter,
+                constrainedDependencies,
+                out _,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.CapacityExceeded);
+        constrainedDependencies.PageCount.Should().Be(1);
+        constrainedDependencies.Pages[0].Should().Be(
+            new GraphPageDependencyAddress("a-source", 0));
+
+        var completeDependencies = new NavigationDependencyWorkspace(2, 0);
+        evaluatorWithClimb.EvaluateDefinition(
+                source,
+                published,
+                meter,
+                completeDependencies,
+                out NavigationMediumStateRef target,
+                out NavigationTransitionEdgeEvidence evidence)
+            .Should().Be(NavigationTraversalEvaluationStatus.Passable);
+        target.Should().Be(capabilityTarget);
+        evidence.Cost.Should().Be((Fixed64)5);
+        completeDependencies.PageCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void DefinitionEvaluator_ShouldRejectReplayFromAnotherPublishedSourceNode()
+    {
+        var sourceIndex = new VoxelIndex(0, 0, 0);
+        var otherIndex = new VoxelIndex(1, 0, 0);
+        var definition = new TraversalTransitionDefinition(
+            "source-owned",
+            TraversalTransitionType.Jump,
+            sourceIndex,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("map", otherIndex),
+            TraversalMedium.Solid);
+        using TrailblazerWorldContext context = CreateContext(
+            sourceIndex,
+            Cell(TraversalMedia.Solid),
+            otherIndex,
+            Cell(TraversalMedia.Solid),
+            definition);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationPublishedTransition published = GetPublishedDefinition(
+            lease.Graph,
+            sourceIndex,
+            out _);
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", otherIndex),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef otherSource)
+            .Should().BeTrue();
+        var dependencies = new NavigationDependencyWorkspace(2, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(TraversalMedia.Solid),
+            Policy,
+            new NavigationRayWorkspace(1, 8, 8, 16, 0));
+
+        evaluator.EvaluateDefinition(
+                otherSource,
+                published,
+                new NavigationWorkMeter(Budget()),
+                dependencies,
+                out NavigationMediumStateRef target,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.Stale);
+
+        target.IsValid.Should().BeFalse();
+        dependencies.PageCount.Should().Be(0,
+            "a source-owned candidate must be rejected before acquiring dependencies");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DefinitionEvaluator_ShouldRejectEitherImpassablePublishedEndpoint(
+        bool blockSource)
+    {
+        VoxelIndex sourceIndex = default;
+        var targetIndex = new VoxelIndex(2, 0, 0);
+        var definition = new TraversalTransitionDefinition(
+            "endpoint-admission",
+            TraversalTransitionType.Jump,
+            sourceIndex,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("map", targetIndex),
+            TraversalMedium.Gas);
+        TraversalCapability sourceRequirement = blockSource
+            ? TraversalCapability.Climb
+            : TraversalCapability.None;
+        TraversalCapability targetRequirement = blockSource
+            ? TraversalCapability.None
+            : TraversalCapability.Climb;
+        using TrailblazerWorldContext context = CreateContext(
+            sourceIndex,
+            Cell(TraversalMedia.Solid, requiredCapabilities: sourceRequirement),
+            targetIndex,
+            Cell(TraversalMedia.Gas, requiredCapabilities: targetRequirement),
+            definition);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationPublishedTransition published = GetPublishedDefinition(
+            lease.Graph,
+            sourceIndex,
+            out NavigationMediumStateRef source);
+        lease.Graph.TryGetMediumStateRef(
+                definition.Destination,
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef expectedTarget)
+            .Should().BeTrue();
+        var dependencies = new NavigationDependencyWorkspace(2, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            new NavigationRayWorkspace(1, 8, 8, 16, 0));
+
+        evaluator.EvaluateDefinition(
+                source,
+                published,
+                new NavigationWorkMeter(Budget()),
+                dependencies,
+                out NavigationMediumStateRef target,
+                out NavigationTransitionEdgeEvidence evidence)
+            .Should().Be(NavigationTraversalEvaluationStatus.Impassable,
+                blockSource
+                    ? "the source cell requires a capability the agent does not own"
+                    : "the destination cell requires a capability the agent does not own");
+
+        target.Should().Be(expectedTarget);
+        evidence.Should().Be(default(NavigationTransitionEdgeEvidence));
+        dependencies.PageCount.Should().Be(1,
+            "both same-page endpoints are retained before deterministic admission fails");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RuleEvaluator_ShouldRejectEitherImpassablePublishedEndpoint(
+        bool blockSource)
+    {
+        VoxelIndex sourceIndex = default;
+        var targetIndex = new VoxelIndex(1, 0, 0);
+        var rule = new TraversalTransitionRule(
+            "endpoint-admission",
+            TraversalTransitionType.Takeoff,
+            TraversalMedium.Solid,
+            TraversalMedium.Gas,
+            TraversalTransitionRuleScope.PositiveFaceContact,
+            TraversalCapability.None,
+            Fixed64.One,
+            TraversalTransitionLocomotionHints.None);
+        TraversalCapability sourceRequirement = blockSource
+            ? TraversalCapability.Climb
+            : TraversalCapability.None;
+        TraversalCapability targetRequirement = blockSource
+            ? TraversalCapability.None
+            : TraversalCapability.Climb;
+        using TrailblazerWorldContext context = CreateContext(
+            sourceIndex,
+            Cell(TraversalMedia.Solid, requiredCapabilities: sourceRequirement),
+            targetIndex,
+            Cell(TraversalMedia.Gas, requiredCapabilities: targetRequirement),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", sourceIndex),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", targetIndex),
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef target)
+            .Should().BeTrue();
+        var dependencies = new NavigationDependencyWorkspace(2, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            new NavigationRayWorkspace(1, 8, 8, 16, 0));
+
+        evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                new NavigationWorkMeter(Budget()),
+                dependencies,
+                out NavigationTransitionEdgeEvidence evidence)
+            .Should().Be(NavigationTraversalEvaluationStatus.Impassable,
+                blockSource
+                    ? "the source cell requires a capability the agent does not own"
+                    : "the destination cell requires a capability the agent does not own");
+
+        evidence.Should().Be(default(NavigationTransitionEdgeEvidence));
+        dependencies.PageCount.Should().Be(1,
+            "both same-page endpoints are retained before deterministic admission fails");
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public void TransitionEndpointAnchorAdmission_ShouldRejectEitherUnrepresentableVolumeAnchor(
+        bool definitionIdentity,
+        bool failSource)
+    {
+        VoxelIndex sourceIndex = default;
+        var targetIndex = new VoxelIndex(1, 0, 0);
+        TraversalMedium sourceMedium = failSource
+            ? TraversalMedium.Gas
+            : TraversalMedium.Solid;
+        TraversalMedium targetMedium = failSource
+            ? TraversalMedium.Solid
+            : TraversalMedium.Gas;
+        TraversalMedia sourceMedia = failSource
+            ? TraversalMedia.Gas
+            : TraversalMedia.Solid;
+        TraversalMedia targetMedia = failSource
+            ? TraversalMedia.Solid
+            : TraversalMedia.Gas;
+        Fixed64 vertical = Fixed64.MinValue + Fixed64.One;
+        GridConfiguration configuration = new(
+            new Vector3d(Fixed64.Zero, vertical, Fixed64.Zero),
+            new Vector3d(Fixed64.One, vertical, Fixed64.Zero),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        NavigationCell sourceCell = new(
+            sourceMedia,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.MaxValue,
+            Fixed64.MaxValue);
+        NavigationCell targetCell = new(
+            targetMedia,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.MaxValue,
+            Fixed64.MaxValue);
+        var definition = new TraversalTransitionDefinition(
+            "anchor-admission",
+            TraversalTransitionType.Jump,
+            sourceIndex,
+            sourceMedium,
+            new NavigationCellAddress("map", targetIndex),
+            targetMedium);
+        var rule = new TraversalTransitionRule(
+            "anchor-admission",
+            TraversalTransitionType.Jump,
+            sourceMedium,
+            targetMedium,
+            TraversalTransitionRuleScope.PositiveFaceContact,
+            TraversalCapability.None,
+            Fixed64.Zero,
+            TraversalTransitionLocomotionHints.None);
+        using TrailblazerWorldContext context = CreateContext(
+            configuration,
+            sourceIndex,
+            sourceCell,
+            targetIndex,
+            targetCell,
+            definitionIdentity ? new[] { definition } : System.Array.Empty<TraversalTransitionDefinition>(),
+            definitionIdentity ? System.Array.Empty<TraversalTransitionRule>() : new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", sourceIndex),
+                sourceMedium,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", targetIndex),
+                targetMedium,
+                out NavigationMediumStateRef target)
+            .Should().BeTrue();
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.MaxValue, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid | TraversalMedia.Gas,
+            TraversalCapability.None);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            profile,
+            Policy,
+            new NavigationRayWorkspace(1, 8, 8, 16, 0));
+        var dependencies = new NavigationDependencyWorkspace(2, 0);
+        NavigationTraversalEvaluationStatus status;
+        NavigationTransitionEdgeEvidence evidence;
+        if (definitionIdentity)
+        {
+            NavigationTransitionPage.Enumerator candidates =
+                lease.Graph.EnumerateOutgoingTransitionCandidates(source);
+            candidates.MoveNext().Should().BeTrue();
+            status = evaluator.EvaluateDefinition(
+                source,
+                candidates.Current,
+                new NavigationWorkMeter(Budget()),
+                dependencies,
+                out _,
+                out evidence);
+        }
+        else
+        {
+            status = evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                new NavigationWorkMeter(Budget()),
+                dependencies,
+                out evidence);
+        }
+
+        status.Should().Be(NavigationTraversalEvaluationStatus.Impassable);
+        evidence.Should().Be(default(NavigationTransitionEdgeEvidence));
+        dependencies.PageCount.Should().Be(1,
+            "both same-page endpoints are retained before anchor admission fails");
+    }
+
+    [Theory]
+    [InlineData(
+        0,
+        8,
+        64,
+        64,
+        (int)NavigationTraversalEvaluationStatus.BudgetExceeded,
+        (int)NavigationTraversalEdgeAdvanceStatus.BudgetExceeded)]
+    [InlineData(
+        64,
+        8,
+        0,
+        64,
+        (int)NavigationTraversalEvaluationStatus.CapacityExceeded,
+        (int)NavigationTraversalEdgeAdvanceStatus.CapacityExceeded)]
+    public void DefinitionTargetVolumeLeg_ShouldPreserveBudgetVersusWorkspaceCapacity(
+        int lookupBudget,
+        int coveredBudget,
+        int mapCapacity,
+        int addressCapacity,
+        int expectedStatus,
+        int expectedDispatcherStatus)
+    {
+        var sourceIndex = new VoxelIndex(0, 0, 0);
+        var targetIndex = new VoxelIndex(2, 0, 0);
+        TransitionConfiguration().TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(targetIndex, out GridCellPrism targetPrism)
+            .Should().BeTrue();
+        var definition = new TraversalTransitionDefinition(
+            "bounded-target-leg",
+            TraversalTransitionType.Jump,
+            sourceIndex,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("map", targetIndex),
+            TraversalMedium.Gas,
+            destinationPointOverride: targetPrism.Center,
+            hasDestinationPointOverride: true);
+        using TrailblazerWorldContext context = CreateContext(
+            sourceIndex,
+            Cell(TraversalMedia.Solid),
+            targetIndex,
+            Cell(TraversalMedia.Gas),
+            definition);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationPublishedTransition published = GetPublishedDefinition(
+            lease.Graph,
+            sourceIndex,
+            out NavigationMediumStateRef source);
+        var workspace = new NavigationRayWorkspace(
+            mapCapacity,
+            8,
+            8,
+            addressCapacity,
+            0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            workspace);
+
+        evaluator.EvaluateDefinition(
+                source,
+                published,
+                new NavigationWorkMeter(VolumeBudget(lookupBudget, coveredBudget)),
+                new NavigationDependencyWorkspace(8, 0),
+                out _,
+                out _)
+            .Should().Be((NavigationTraversalEvaluationStatus)expectedStatus,
+                "the failed destination action leg must retain the exact limiting resource");
+
+        workspace.Reset();
+        var dispatcher = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            source,
+            Profile(),
+            Policy,
+            workspace,
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
+        var dispatcherMeter = new NavigationWorkMeter(
+            VolumeBudget(lookupBudget, coveredBudget));
+        int remaining = 64;
+        int connectionRemaining = int.MaxValue;
+        NavigationTraversalEdgeAdvanceStatus dispatcherStatus;
+        do
+        {
+            dispatcherStatus = dispatcher.AdvanceOne(
+                dispatcherMeter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+        while (dispatcherStatus == NavigationTraversalEdgeAdvanceStatus.Pending);
+
+        dispatcherStatus.Should().Be(
+            (NavigationTraversalEdgeAdvanceStatus)expectedDispatcherStatus);
+        dispatcher.CurrentTarget.IsValid.Should().BeFalse();
+        dispatcherMeter.TransitionPairs.Should().Be(1);
+
+        workspace.Reset();
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", targetIndex),
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef destination)
+            .Should().BeTrue();
+        var incoming = new NavigationIncomingTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            destination,
+            Profile(),
+            Policy,
+            workspace,
+            allowTransitions: true);
+        var incomingMeter = new NavigationWorkMeter(
+            VolumeBudget(lookupBudget, coveredBudget));
+        remaining = 64;
+        do
+        {
+            dispatcherStatus = incoming.AdvanceOne(
+                incomingMeter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+        while (dispatcherStatus == NavigationTraversalEdgeAdvanceStatus.Pending);
+
+        dispatcherStatus.Should().Be(
+            (NavigationTraversalEdgeAdvanceStatus)expectedDispatcherStatus,
+            "incoming replay must preserve the same target-leg limiting resource");
+        incoming.CurrentPredecessor.IsValid.Should().BeFalse();
+        incomingMeter.TransitionPairs.Should().Be(1);
+    }
+
+    [Fact]
+    public void DefinitionTargetVolumeLeg_ShouldPreserveBodyTraceArithmeticOverflow()
+    {
+        var sourceIndex = new VoxelIndex(0, 0, 0);
+        var targetIndex = new VoxelIndex(2, 0, 0);
+        var definition = new TraversalTransitionDefinition(
+            "overflowing-volume-leg",
+            TraversalTransitionType.Jump,
+            sourceIndex,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("map", targetIndex),
+            TraversalMedium.Gas);
+        var permissiveSolid = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.MaxValue,
+            Fixed64.One);
+        var permissiveGas = new NavigationCell(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.MaxValue,
+            Fixed64.One);
+        using TrailblazerWorldContext context = CreateContext(
+            sourceIndex,
+            permissiveSolid,
+            targetIndex,
+            permissiveGas,
+            definition);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationPublishedTransition published = GetPublishedDefinition(
+            lease.Graph,
+            sourceIndex,
+            out NavigationMediumStateRef source);
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 64, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(radius: Fixed64.MaxValue),
+            Policy,
+            workspace);
+
+        NavigationTraversalEvaluationStatus status = evaluator.EvaluateDefinition(
+            source,
+            published,
+            new NavigationWorkMeter(VolumeBudget(64, 64)),
+            workspace.Dependencies,
+            out _,
+            out _);
+
+        status.Should().Be(NavigationTraversalEvaluationStatus.CostOverflow,
+            "an unrepresentable destination volume body is arithmetic failure, not blockage");
+        workspace.Dependencies.PageCount.Should().BePositive();
+    }
+
+    [Fact]
+    public void RuleEvaluator_ShouldEnforcePageCapacityBeforeCostAndCheckOverflowExactly()
+    {
+        var address = new NavigationCellAddress("map", default);
+        var rule = new TraversalTransitionRule(
+            "takeoff",
+            TraversalTransitionType.Takeoff,
+            TraversalMedium.Solid,
+            TraversalMedium.Gas,
+            TraversalTransitionRuleScope.SameCell,
+            TraversalCapability.None,
+            Fixed64.MaxValue,
+            TraversalTransitionLocomotionHints.None);
+        using TrailblazerWorldContext context = CreateContext(
+            default,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas, enterCost: Fixed64.One),
+            default,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(address, TraversalMedium.Solid, out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        lease.Graph.TryGetMediumStateRef(address, TraversalMedium.Gas, out NavigationMediumStateRef target)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            workspace);
+        var meter = new NavigationWorkMeter(Budget());
+
+        evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                meter,
+                new NavigationDependencyWorkspace(0, 0),
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.CapacityExceeded);
+        evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                meter,
+                new NavigationDependencyWorkspace(1, 0),
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.CostOverflow);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void TransitionCostPolicy_ShouldPreserveEveryCheckedStageAndExactSum(int stage)
+    {
+        Vector3d sourceAnchor = Vector3d.Zero;
+        Vector3d sourceAction = Vector3d.Zero;
+        Vector3d targetAction = Vector3d.Zero;
+        Vector3d targetAnchor = Vector3d.Zero;
+        Fixed64 actionCost = Fixed64.Zero;
+        Fixed64 targetEnterCost = Fixed64.Zero;
+        Fixed64 additionalEnterCost = Fixed64.Zero;
+        var minimum = new Vector3d(
+            Fixed64.MinValue,
+            Fixed64.MinValue,
+            Fixed64.MinValue);
+        var maximum = new Vector3d(
+            Fixed64.MaxValue,
+            Fixed64.MaxValue,
+            Fixed64.MaxValue);
+
+        switch (stage)
+        {
+            case 0:
+                sourceAnchor = minimum;
+                sourceAction = maximum;
+                break;
+            case 1:
+                sourceAction = Vector3d.Right;
+                actionCost = Fixed64.MaxValue;
+                break;
+            case 2:
+                targetAction = minimum;
+                targetAnchor = maximum;
+                break;
+            case 3:
+                actionCost = Fixed64.MaxValue;
+                targetAnchor = Vector3d.Right;
+                break;
+            case 4:
+                actionCost = Fixed64.MaxValue;
+                targetEnterCost = Fixed64.One;
+                break;
+            case 5:
+                actionCost = Fixed64.MaxValue;
+                additionalEnterCost = Fixed64.One;
+                break;
+            default:
+                sourceAction = Vector3d.Right;
+                actionCost = (Fixed64)2;
+                targetAnchor = Vector3d.Right;
+                targetEnterCost = (Fixed64)3;
+                additionalEnterCost = (Fixed64)4;
+                break;
+        }
+
+        bool succeeded = NavigationTransitionEdgeEvaluator.TryGetCost(
+            sourceAnchor,
+            sourceAction,
+            actionCost,
+            targetAction,
+            targetAnchor,
+            targetEnterCost,
+            additionalEnterCost,
+            out Fixed64 total);
+
+        succeeded.Should().Be(stage == 6);
+        if (succeeded)
+            total.Should().Be((Fixed64)11);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void DefinitionEvaluator_ShouldReportTheExactRemainingCheckedAccumulationOverflow(
+        int overflowStage)
+    {
+        GridConfiguration configuration = TransitionConfiguration();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism)
+            .Should().BeTrue();
+        var anchor = new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        Fixed64 quarter = Fixed64.FromFraction(1, 4);
+        Vector3d sourceAction = overflowStage == 0
+            ? anchor + new Vector3d(quarter, Fixed64.Zero, Fixed64.Zero)
+            : anchor;
+        Vector3d targetAction = overflowStage == 1
+            ? anchor - new Vector3d(quarter, Fixed64.Zero, Fixed64.Zero)
+            : anchor;
+        var definition = new TraversalTransitionDefinition(
+            $"definition-overflow-{overflowStage}",
+            TraversalTransitionType.Jump,
+            default,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("map", default),
+            TraversalMedium.Solid,
+            actionCost: Fixed64.MaxValue,
+            sourcePointOverride: sourceAction,
+            hasSourcePointOverride: true,
+            destinationPointOverride: targetAction,
+            hasDestinationPointOverride: true);
+        using TrailblazerWorldContext context = CreateContext(
+            default,
+            Cell(TraversalMedia.Solid),
+            default,
+            Cell(TraversalMedia.Solid),
+            definition);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationPublishedTransition published = GetPublishedDefinition(
+            lease.Graph,
+            default,
+            out NavigationMediumStateRef source);
+        NavigationAreaPolicy policy = overflowStage == 2
+            ? new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey("definition-overflow", 1),
+                new[] { new NavigationAreaRule(true, Fixed64.One) })
+            : Policy;
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(TraversalMedia.Solid),
+            policy,
+            workspace);
+
+        evaluator.EvaluateDefinition(
+                source,
+                published,
+                new NavigationWorkMeter(Budget()),
+                workspace.Dependencies,
+                out _,
+                out _)
+            .Should().Be(
+                NavigationTraversalEvaluationStatus.CostOverflow,
+                overflowStage switch
+                {
+                    0 => "the positive source leg must overflow when the maximum action cost is added",
+                    1 => "the positive target leg must overflow after a maximum representable action total",
+                    _ => "the policy surcharge must overflow after a maximum representable transition total"
+                });
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void RuleEvaluator_ShouldReportTheExactRemainingCheckedAccumulationOverflow(
+        int overflowStage)
+    {
+        var sourceIndex = new VoxelIndex(0, 0, 0);
+        var targetIndex = new VoxelIndex(1, 0, 0);
+        GridConfiguration configuration = TransitionConfiguration();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(sourceIndex, out GridCellPrism sourcePrism)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(targetIndex, out GridCellPrism targetPrism)
+            .Should().BeTrue();
+        var sourceAnchor = new Vector3d(
+            sourcePrism.Center.X,
+            sourcePrism.Center.Y - Fixed64.Half,
+            sourcePrism.Center.Z);
+        var targetAnchor = new Vector3d(
+            targetPrism.Center.X,
+            targetPrism.Center.Y - Fixed64.Half,
+            targetPrism.Center.Z);
+        GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                targetPrism,
+                out GridNavigationPortal portal)
+            .Should().BeTrue();
+        GridCellGeometry.TryGetNavigationPortalTraversalParameters(
+                sourcePrism,
+                targetPrism,
+                portal,
+                sourceAnchor,
+                targetAnchor,
+                Fixed64.Half,
+                Fixed64.One,
+                out Fixed64 sourceParameter,
+                out Fixed64 targetParameter)
+            .Should().BeTrue();
+        NavigationDistanceMath.TryCeiling(
+                sourceAnchor,
+                Vector3d.Lerp(sourceAnchor, targetAnchor, sourceParameter),
+                out Fixed64 sourceDistance)
+            .Should().BeTrue();
+        NavigationDistanceMath.TryCeiling(
+                Vector3d.Lerp(sourceAnchor, targetAnchor, targetParameter),
+                targetAnchor,
+                out Fixed64 targetDistance)
+            .Should().BeTrue();
+        Fixed64 actionCost = Fixed64.MaxValue;
+        if (overflowStage > 0)
+        {
+            Fixed64.TrySubtract(actionCost, sourceDistance, out actionCost)
+                .Should().BeTrue();
+        }
+        if (overflowStage > 1)
+        {
+            Fixed64.TrySubtract(actionCost, targetDistance, out actionCost)
+                .Should().BeTrue();
+        }
+        var rule = new TraversalTransitionRule(
+            $"rule-overflow-{overflowStage}",
+            TraversalTransitionType.Takeoff,
+            TraversalMedium.Liquid,
+            TraversalMedium.Gas,
+            TraversalTransitionRuleScope.PositiveFaceContact,
+            TraversalCapability.None,
+            actionCost,
+            TraversalTransitionLocomotionHints.None);
+        using TrailblazerWorldContext context = CreateContext(
+            sourceIndex,
+            Cell(TraversalMedia.Liquid),
+            targetIndex,
+            Cell(
+                TraversalMedia.Gas,
+                enterCost: overflowStage == 2 ? Fixed64.One : Fixed64.Zero),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", sourceIndex),
+                TraversalMedium.Liquid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", targetIndex),
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef target)
+            .Should().BeTrue();
+        NavigationAreaPolicy policy = overflowStage == 3
+            ? new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey("rule-overflow", 1),
+                new[] { new NavigationAreaRule(true, Fixed64.One) })
+            : Policy;
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
+            policy,
+            workspace);
+
+        evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                new NavigationWorkMeter(Budget()),
+                workspace.Dependencies,
+                out _)
+            .Should().Be(
+                NavigationTraversalEvaluationStatus.CostOverflow,
+                overflowStage switch
+                {
+                    0 => "the positive source leg must overflow when the maximum action cost is added",
+                    1 => "the positive target leg must overflow after a maximum representable action total",
+                    2 => "the target enter cost must overflow after a maximum representable transition total",
+                    _ => "the policy surcharge must overflow after a maximum representable transition total"
+                });
+    }
+
+    [Theory]
+    [InlineData(0, 1, (int)TraversalMedium.Solid, (int)TraversalMedium.Gas,
+        (int)TraversalCapability.None)]
+    [InlineData(0, 0, (int)TraversalMedium.Gas, (int)TraversalMedium.Gas,
+        (int)TraversalCapability.None)]
+    [InlineData(0, 0, (int)TraversalMedium.Solid, (int)TraversalMedium.Solid,
+        (int)TraversalCapability.None)]
+    [InlineData(0, 0, (int)TraversalMedium.Solid, (int)TraversalMedium.Gas,
+        (int)TraversalCapability.Climb)]
+    public void SameCellRule_ShouldRejectTopologyMediumAndCapabilityMismatchesBeforeDependencies(
+        int sourceX,
+        int targetX,
+        int sourceMediumValue,
+        int targetMediumValue,
+        int requiredCapabilitiesValue)
+    {
+        var sourceIndex = new VoxelIndex(sourceX, 0, 0);
+        var targetIndex = new VoxelIndex(targetX, 0, 0);
+        var sourceMedium = (TraversalMedium)sourceMediumValue;
+        var targetMedium = (TraversalMedium)targetMediumValue;
+        var rule = new TraversalTransitionRule(
+            "guarded",
+            TraversalTransitionType.Takeoff,
+            TraversalMedium.Solid,
+            TraversalMedium.Gas,
+            TraversalTransitionRuleScope.SameCell,
+            (TraversalCapability)requiredCapabilitiesValue,
+            Fixed64.One,
+            TraversalTransitionLocomotionHints.None);
+        NavigationCell allMedia = Cell(
+            TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid);
+        using TrailblazerWorldContext context = CreateContext(
+            default,
+            allMedia,
+            new VoxelIndex(1, 0, 0),
+            allMedia,
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", sourceIndex),
+                sourceMedium,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", targetIndex),
+                targetMedium,
+                out NavigationMediumStateRef target)
+            .Should().BeTrue();
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            new NavigationRayWorkspace(1, 8, 8, 16, 0));
+        var dependencies = new NavigationDependencyWorkspace(2, 0);
+
+        evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                new NavigationWorkMeter(Budget()),
+                dependencies,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.Impassable);
+        dependencies.PageCount.Should().Be(0,
+            "rule identity and capability rejection precedes endpoint dependency ownership");
+    }
+
+    [Theory]
+    [InlineData((int)TraversalMedium.Gas, (int)TraversalMedium.Solid)]
+    [InlineData((int)TraversalMedium.Solid, (int)TraversalMedium.Gas)]
+    public void SameCellRule_ShouldPropagateBudgetFailureFromTheExactVolumeLeg(
+        int sourceMediumValue,
+        int targetMediumValue)
+    {
+        var sourceMedium = (TraversalMedium)sourceMediumValue;
+        var targetMedium = (TraversalMedium)targetMediumValue;
+        var address = new NavigationCellAddress("map", default);
+        var rule = new TraversalTransitionRule(
+            "bounded-takeoff",
+            TraversalTransitionType.Takeoff,
+            sourceMedium,
+            targetMedium,
+            TraversalTransitionRuleScope.SameCell,
+            TraversalCapability.None,
+            Fixed64.One,
+            TraversalTransitionLocomotionHints.None);
+        using TrailblazerWorldContext context = CreateContext(
+            default,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            default,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(address, sourceMedium, out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        lease.Graph.TryGetMediumStateRef(address, targetMedium, out NavigationMediumStateRef target)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            workspace);
+
+        evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                new NavigationWorkMeter(VolumeBudget(0, 16)),
+                new NavigationDependencyWorkspace(1, 0),
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.BudgetExceeded,
+                "the zero-length volume placement still requires bounded physical certification");
+    }
+
+    [Fact]
+    public void SameCellRule_WhenRetainedGraphTrailsRawGridMutation_ShouldReturnStale()
+    {
+        var address = new NavigationCellAddress("map", default);
+        var rule = new TraversalTransitionRule(
+            "stale-takeoff",
+            TraversalTransitionType.Takeoff,
+            TraversalMedium.Solid,
+            TraversalMedium.Gas,
+            TraversalTransitionRuleScope.SameCell,
+            TraversalCapability.None,
+            Fixed64.One,
+            TraversalTransitionLocomotionHints.None);
+        using TrailblazerWorldContext context = CreateContext(
+            default,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            default,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                address,
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        lease.Graph.TryGetMediumStateRef(
+                address,
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef target)
+            .Should().BeTrue();
+        context.World.ActiveGrids[0].TryRemoveVoxel(default).Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            workspace);
+
+        evaluator.EvaluateRule(
+                source,
+                target,
+                rule,
+                new NavigationWorkMeter(VolumeBudget(64, 64)),
+                workspace.Dependencies,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.Stale);
+
+        workspace.Dependencies.PageCount.Should().Be(1,
+            "the transition endpoint page is retained before the stale physical trace is rejected");
+
+        workspace.Reset();
+        var dispatcher = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            source,
+            Profile(),
+            Policy,
+            workspace,
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
+        var meter = new NavigationWorkMeter(VolumeBudget(64, 64));
+        int edgeRemaining = 64;
+        int connectionRemaining = int.MaxValue;
+        NavigationTraversalEdgeAdvanceStatus dispatcherStatus;
+        do
+        {
+            dispatcherStatus = dispatcher.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref edgeRemaining,
+                ref connectionRemaining);
+        }
+        while (dispatcherStatus == NavigationTraversalEdgeAdvanceStatus.Pending);
+
+        dispatcherStatus.Should().Be(NavigationTraversalEdgeAdvanceStatus.Stale);
+        dispatcher.CurrentTarget.IsValid.Should().BeFalse();
+        meter.TransitionPairs.Should().Be(1);
+    }
+
+    [Fact]
+    public void DefinitionEvaluator_ShouldKeepRemovedDestinationAsImpassableCandidate()
+    {
+        var definition = new TraversalTransitionDefinition(
+            "dormant-target",
+            TraversalTransitionType.Jump,
+            default,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("b-target", default),
+            TraversalMedium.Gas,
+            actionCost: Fixed64.One);
+        using TrailblazerWorldContext context = CreateCrossMapContext(
+            TraversalMedia.Solid,
+            TraversalMedia.Gas,
+            new[] { definition },
+            System.Array.Empty<TraversalTransitionRule>());
+        var remove = new NavigationMapRemoveOperation(
+            "b-target",
+            operationSequence: 3,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(remove).Should().BeTrue();
+        while (remove.Receipt.Status == NavigationOperationStatus.Pending)
+            context.Simulate();
+        remove.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("a-source", default),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        NavigationTransitionPage.Enumerator candidates =
+            lease.Graph.EnumerateOutgoingTransitionCandidates(source);
+        candidates.MoveNext().Should().BeTrue(
+            "the source-owned candidate must survive for deterministic target reactivation");
+        NavigationPublishedTransition published = candidates.Current;
+        var workspace = new NavigationRayWorkspace(2, 8, 8, 16, 0);
+        var dependencies = new NavigationDependencyWorkspace(2, 0);
+        var evaluator = new NavigationTransitionEdgeEvaluator(
+            context.World,
+            lease.Graph,
+            Profile(),
+            Policy,
+            workspace);
+
+        evaluator.EvaluateDefinition(
+                source,
+                published,
+                new NavigationWorkMeter(Budget()),
+                dependencies,
+                out NavigationMediumStateRef target,
+                out _)
+            .Should().Be(NavigationTraversalEvaluationStatus.Impassable);
+        target.IsValid.Should().BeFalse();
+        dependencies.PageCount.Should().Be(0,
+            "there is no target page to retain until that map is republished");
+    }
+
+    [Fact]
     public void Dispatcher_ShouldOrderDefinitionAndRulesByTypeThenTaggedIdentity()
     {
         var index = new VoxelIndex(0, 0, 0);
@@ -243,6 +1433,81 @@ public sealed class NavigationTransitionEdgeTests
             NavigationTransitionIdentityKind.Definition,
             NavigationTransitionIdentityKind.Rule);
         ordinals.Should().Equal(0, 1, 2);
+    }
+
+    [Fact]
+    public void Dispatcher_ShouldOrderSameAddressRulesByDestinationMediumBeforeType()
+    {
+        var index = new VoxelIndex(0, 0, 0);
+        TraversalTransitionRule[] rules =
+        {
+            new(
+                "gas-jump",
+                TraversalTransitionType.Jump,
+                TraversalMedium.Solid,
+                TraversalMedium.Gas,
+                TraversalTransitionRuleScope.SameCell,
+                TraversalCapability.None,
+                Fixed64.One,
+                TraversalTransitionLocomotionHints.None),
+            new(
+                "liquid-climb",
+                TraversalTransitionType.Climb,
+                TraversalMedium.Solid,
+                TraversalMedium.Liquid,
+                TraversalTransitionRuleScope.SameCell,
+                TraversalCapability.None,
+                Fixed64.One,
+                TraversalTransitionLocomotionHints.None)
+        };
+        TraversalMedia media = TraversalMedia.Solid
+            | TraversalMedia.Gas
+            | TraversalMedia.Liquid;
+        using TrailblazerWorldContext context = CreateContext(
+            index,
+            Cell(media),
+            index,
+            Cell(media),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            rules);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", index),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var dispatcher = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            source,
+            Profile(media),
+            Policy,
+            workspace,
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
+        var meter = new NavigationWorkMeter(Budget());
+        int remaining = 64;
+        int connectionRemaining = int.MaxValue;
+        var emittedMedia = new SwiftList<TraversalMedium>(2);
+
+        while (true)
+        {
+            NavigationTraversalEdgeAdvanceStatus status = dispatcher.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+            if (status == NavigationTraversalEdgeAdvanceStatus.Complete)
+                break;
+            status.Should().BeOneOf(
+                NavigationTraversalEdgeAdvanceStatus.Pending,
+                NavigationTraversalEdgeAdvanceStatus.Edge);
+            if (status == NavigationTraversalEdgeAdvanceStatus.Edge)
+                emittedMedia.Add(dispatcher.CurrentTarget.Medium);
+        }
+
+        emittedMedia.Should().Equal(TraversalMedium.Gas, TraversalMedium.Liquid);
     }
 
     [Fact]
@@ -1023,9 +2288,48 @@ public sealed class NavigationTransitionEdgeTests
             workspace,
             allowTransitions: true,
             emittedSurfaceOrdinal: -1);
+        int candidatesBeforeFirstSeam = 1 + graph.GetPrimaryDirectionCount(source.Node);
+        var sliceMeter = new NavigationWorkMeter(Budget());
+        NavigationTraversalEdgeAdvanceStatus status =
+            NavigationTraversalEdgeAdvanceStatus.Pending;
+        while (sliceMeter.TransitionCandidates < candidatesBeforeFirstSeam)
+        {
+            int oneStep = 1;
+            int connectionRemaining = int.MaxValue;
+            status = dispatcher.AdvanceOne(
+                sliceMeter,
+                workspace.Dependencies,
+                ref oneStep,
+                ref connectionRemaining);
+            status.Should().BeOneOf(
+                NavigationTraversalEdgeAdvanceStatus.Pending,
+                NavigationTraversalEdgeAdvanceStatus.Blocked);
+        }
+        int noSteps = 0;
+        int sliceConnections = int.MaxValue;
+        dispatcher.AdvanceOne(
+                sliceMeter,
+                workspace.Dependencies,
+                ref noSteps,
+                ref sliceConnections)
+            .Should().Be(NavigationTraversalEdgeAdvanceStatus.Blocked,
+                "automatic seam lookahead cannot consume a caller-owned zero-step slice");
+        sliceMeter.TransitionCandidates.Should().Be(candidatesBeforeFirstSeam,
+            "the unconsumed first seam remains pending for the next slice");
+
+        workspace.Reset();
+        dispatcher = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            graph,
+            source,
+            Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
+            Policy,
+            workspace,
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
         const int exactCandidates = 40;
         var meter = new NavigationWorkMeter(Budget(exactCandidates));
-        NavigationTraversalEdgeAdvanceStatus status = NavigationTraversalEdgeAdvanceStatus.Pending;
+        status = NavigationTraversalEdgeAdvanceStatus.Pending;
 
         for (int call = 0; call < 512 && status != NavigationTraversalEdgeAdvanceStatus.Complete; call++)
         {
@@ -1070,6 +2374,76 @@ public sealed class NavigationTransitionEdgeTests
     }
 
     [Fact]
+    public void IncomingDefinition_ShouldPreserveHostSliceAndTransitionBudgetOwnership()
+    {
+        VoxelIndex index = default;
+        var address = new NavigationCellAddress("map", index);
+        var definition = new TraversalTransitionDefinition(
+            "same-cell-action",
+            TraversalTransitionType.Jump,
+            index,
+            TraversalMedium.Solid,
+            address,
+            TraversalMedium.Gas,
+            actionCost: Fixed64.One);
+        NavigationCell cell = Cell(TraversalMedia.Solid | TraversalMedia.Gas);
+        using TrailblazerWorldContext context = CreateContext(
+            index,
+            cell,
+            index,
+            cell,
+            definition);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                address,
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef destination)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var meter = new NavigationWorkMeter(Budget());
+        var incoming = new NavigationIncomingTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            destination,
+            Profile(),
+            Policy,
+            workspace,
+            allowTransitions: true);
+        int edgeSteps = 0;
+        int connectionSteps = int.MaxValue;
+
+        incoming.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref edgeSteps,
+                ref connectionSteps)
+            .Should().Be(NavigationTraversalEdgeAdvanceStatus.Blocked);
+        meter.TransitionCandidates.Should().Be(0,
+            "host slicing must stop before the published definition is charged");
+
+        workspace.Reset();
+        meter = new NavigationWorkMeter(Budget(maxTransitionCandidates: 0));
+        incoming = new NavigationIncomingTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            destination,
+            Profile(),
+            Policy,
+            workspace,
+            allowTransitions: true);
+        edgeSteps = 1;
+
+        incoming.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref edgeSteps,
+                ref connectionSteps)
+            .Should().Be(NavigationTraversalEdgeAdvanceStatus.BudgetExceeded);
+        edgeSteps.Should().Be(1,
+            "failed transition metering cannot consume the caller-owned edge slice");
+    }
+
+    [Fact]
     public void PositiveFaceRuleIncomingSeams_ShouldResumeAndHonorExactCandidateLimit()
     {
         using TrailblazerWorldContext context = CreateSyntheticMultiSeamContext(
@@ -1091,9 +2465,47 @@ public sealed class NavigationTransitionEdgeTests
             Policy,
             workspace,
             allowTransitions: true);
+        int candidatesBeforeFirstSeam = 1 + graph.GetPrimaryDirectionCount(target.Node);
+        var sliceMeter = new NavigationWorkMeter(Budget());
+        NavigationTraversalEdgeAdvanceStatus status =
+            NavigationTraversalEdgeAdvanceStatus.Pending;
+        while (sliceMeter.TransitionCandidates < candidatesBeforeFirstSeam)
+        {
+            int oneStep = 1;
+            int connectionRemaining = int.MaxValue;
+            status = incoming.AdvanceOne(
+                sliceMeter,
+                workspace.Dependencies,
+                ref oneStep,
+                ref connectionRemaining);
+            status.Should().BeOneOf(
+                NavigationTraversalEdgeAdvanceStatus.Pending,
+                NavigationTraversalEdgeAdvanceStatus.Blocked);
+        }
+        int noSteps = 0;
+        int sliceConnections = int.MaxValue;
+        incoming.AdvanceOne(
+                sliceMeter,
+                workspace.Dependencies,
+                ref noSteps,
+                ref sliceConnections)
+            .Should().Be(NavigationTraversalEdgeAdvanceStatus.Blocked,
+                "incoming automatic seam lookahead cannot consume a zero-step host slice");
+        sliceMeter.TransitionCandidates.Should().Be(candidatesBeforeFirstSeam,
+            "the unconsumed incoming seam remains pending for the next slice");
+
+        workspace.Reset();
+        incoming = new NavigationIncomingTraversalEdgeEnumerator(
+            context.World,
+            graph,
+            target,
+            Profile(TraversalMedia.Liquid | TraversalMedia.Gas),
+            Policy,
+            workspace,
+            allowTransitions: true);
         const int exactCandidates = 163;
         var meter = new NavigationWorkMeter(Budget(exactCandidates));
-        NavigationTraversalEdgeAdvanceStatus status = NavigationTraversalEdgeAdvanceStatus.Pending;
+        status = NavigationTraversalEdgeAdvanceStatus.Pending;
 
         for (int call = 0; call < 1_024 && status != NavigationTraversalEdgeAdvanceStatus.Complete; call++)
         {
@@ -1356,6 +2768,457 @@ public sealed class NavigationTransitionEdgeTests
     }
 
     [Fact]
+    public void TransitionDispatchers_ShouldRequireTheEndpointPageBeforeScanning()
+    {
+        var index = new VoxelIndex(0, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            index,
+            Cell(TraversalMedia.Solid),
+            index,
+            Cell(TraversalMedia.Solid),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            System.Array.Empty<TraversalTransitionRule>());
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", index),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef state)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var meter = new NavigationWorkMeter(Budget());
+        var outgoingDependencies = new NavigationDependencyWorkspace(0, 0);
+        var outgoing = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            state,
+            Profile(TraversalMedia.Solid),
+            Policy,
+            workspace,
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
+        int remaining = 64;
+        int connectionRemaining = int.MaxValue;
+
+        outgoing.AdvanceOne(
+                meter,
+                outgoingDependencies,
+                ref remaining,
+                ref connectionRemaining)
+            .Should().Be(NavigationTraversalEdgeAdvanceStatus.CapacityExceeded);
+        outgoingDependencies.HasTransitionDependency.Should().BeTrue();
+        outgoingDependencies.PageCount.Should().Be(0);
+        meter.EvaluatedEdges.Should().Be(0);
+        meter.TransitionCandidates.Should().Be(0);
+        meter.TransitionPairs.Should().Be(0);
+
+        var incomingDependencies = new NavigationDependencyWorkspace(0, 0);
+        var incoming = new NavigationIncomingTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            state,
+            Profile(TraversalMedia.Solid),
+            Policy,
+            workspace,
+            allowTransitions: true);
+
+        incoming.AdvanceOne(
+                meter,
+                incomingDependencies,
+                ref remaining,
+                ref connectionRemaining)
+            .Should().Be(NavigationTraversalEdgeAdvanceStatus.CapacityExceeded);
+        incomingDependencies.HasTransitionDependency.Should().BeTrue();
+        incomingDependencies.PageCount.Should().Be(0);
+        meter.EvaluatedEdges.Should().Be(0);
+        meter.TransitionCandidates.Should().Be(0);
+        meter.TransitionPairs.Should().Be(0);
+    }
+
+    [Fact]
+    public void TransitionDispatcher_ShouldStopBeforeEvaluatingWhenPairBudgetIsEmpty()
+    {
+        var index = new VoxelIndex(0, 0, 0);
+        var rule = new TraversalTransitionRule(
+            "bounded-takeoff",
+            TraversalTransitionType.Takeoff,
+            TraversalMedium.Solid,
+            TraversalMedium.Gas,
+            TraversalTransitionRuleScope.SameCell,
+            TraversalCapability.None,
+            Fixed64.One,
+            TraversalTransitionLocomotionHints.None);
+        using TrailblazerWorldContext context = CreateContext(
+            index,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            index,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", index),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var meter = new NavigationWorkMeter(Budget(maxTransitionPairs: 0));
+        var dispatcher = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            source,
+            Profile(),
+            Policy,
+            workspace,
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
+        int remaining = 64;
+        int connectionRemaining = int.MaxValue;
+        NavigationTraversalEdgeAdvanceStatus status;
+
+        do
+        {
+            status = dispatcher.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+        while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
+
+        status.Should().Be(NavigationTraversalEdgeAdvanceStatus.BudgetExceeded);
+        dispatcher.CurrentTarget.IsValid.Should().BeFalse();
+        meter.TransitionCandidates.Should().BeGreaterThan(0,
+            "candidate discovery precedes the independently bounded pair evaluation");
+        meter.TransitionPairs.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(0, (int)NavigationTraversalEdgeAdvanceStatus.BudgetExceeded)]
+    [InlineData(1, (int)NavigationTraversalEdgeAdvanceStatus.Blocked)]
+    public void TransitionDispatcher_ShouldClassifyAPendingPairAgainstBothLimits(
+        int transitionPairBudget,
+        int expectedBlockedStatus)
+    {
+        var index = new VoxelIndex(0, 0, 0);
+        var rule = new TraversalTransitionRule(
+            "resumable-takeoff",
+            TraversalTransitionType.Takeoff,
+            TraversalMedium.Solid,
+            TraversalMedium.Gas,
+            TraversalTransitionRuleScope.SameCell,
+            TraversalCapability.None,
+            Fixed64.One,
+            TraversalTransitionLocomotionHints.None);
+        using TrailblazerWorldContext context = CreateContext(
+            index,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            index,
+            Cell(TraversalMedia.Solid | TraversalMedia.Gas),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            new[] { rule });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", index),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var meter = new NavigationWorkMeter(Budget(maxTransitionPairs: transitionPairBudget));
+        var dispatcher = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            source,
+            Profile(),
+            Policy,
+            workspace,
+            allowTransitions: true,
+            emittedSurfaceOrdinal: -1);
+        int connectionRemaining = int.MaxValue;
+        int remaining = 64;
+        NavigationTraversalEdgeAdvanceStatus status;
+        do
+        {
+            status = dispatcher.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+        while (status == NavigationTraversalEdgeAdvanceStatus.Pending
+            && meter.TransitionCandidates == 0);
+        status.Should().Be(NavigationTraversalEdgeAdvanceStatus.Pending);
+        meter.TransitionPairs.Should().Be(0);
+
+        remaining = 0;
+        dispatcher.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining)
+            .Should().Be((NavigationTraversalEdgeAdvanceStatus)expectedBlockedStatus);
+        meter.TransitionPairs.Should().Be(0,
+            "neither host slicing nor an exhausted pair budget can consume retained work");
+
+        if (transitionPairBudget == 0)
+            return;
+        remaining = 1;
+        dispatcher.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining)
+            .Should().Be(NavigationTraversalEdgeAdvanceStatus.Edge);
+        meter.TransitionPairs.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(0, (int)NavigationTraversalEdgeAdvanceStatus.BudgetExceeded)]
+    [InlineData(1, (int)NavigationTraversalEdgeAdvanceStatus.Blocked)]
+    public void TransitionCandidateDebit_ShouldDistinguishBudgetFromHostStepLimit(
+        int candidateBudget,
+        int expectedStatus)
+    {
+        var meter = new NavigationWorkMeter(Budget(maxTransitionCandidates: candidateBudget));
+        int remaining = 0;
+
+        NavigationTraversalEdgeEnumerator.TryConsumeTransitionCandidate(
+                meter,
+                ref remaining,
+                out NavigationTraversalEdgeAdvanceStatus blocked)
+            .Should().BeFalse();
+
+        blocked.Should().Be((NavigationTraversalEdgeAdvanceStatus)expectedStatus);
+        remaining.Should().Be(0);
+        meter.TransitionCandidates.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(false, 1, (int)NavigationTraversalEdgeAdvanceStatus.Blocked)]
+    [InlineData(false, 0, (int)NavigationTraversalEdgeAdvanceStatus.BudgetExceeded)]
+    [InlineData(true, 1, (int)NavigationTraversalEdgeAdvanceStatus.Blocked)]
+    [InlineData(true, 0, (int)NavigationTraversalEdgeAdvanceStatus.BudgetExceeded)]
+    public void SurfaceEnumeration_ShouldDistinguishBudgetFromHostStepLimit(
+        bool incoming,
+        int evaluatedEdgeBudget,
+        int expectedStatus)
+    {
+        var targetIndex = new VoxelIndex(1, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            default,
+            Cell(TraversalMedia.Solid),
+            targetIndex,
+            Cell(TraversalMedia.Solid),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            System.Array.Empty<TraversalTransitionRule>());
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", incoming ? targetIndex : default),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef state)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var meter = new NavigationWorkMeter(Budget(maxEvaluatedEdges: evaluatedEdgeBudget));
+        int remaining = 0;
+        int connectionRemaining = int.MaxValue;
+
+        NavigationTraversalEdgeAdvanceStatus status;
+        if (incoming)
+        {
+            var edges = new NavigationIncomingTraversalEdgeEnumerator(
+                context.World,
+                lease.Graph,
+                state,
+                Profile(),
+                Policy,
+                workspace,
+                allowTransitions: false);
+            status = edges.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+        else
+        {
+            var edges = new NavigationTraversalEdgeEnumerator(
+                context.World,
+                lease.Graph,
+                state,
+                Profile(),
+                Policy,
+                workspace,
+                allowTransitions: false,
+                emittedSurfaceOrdinal: -1);
+            status = edges.AdvanceOne(
+                meter,
+                workspace.Dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+
+        status.Should().Be((NavigationTraversalEdgeAdvanceStatus)expectedStatus);
+        remaining.Should().Be(0);
+        meter.EvaluatedEdges.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public void SurfaceCandidateGuideDebit_ShouldHonorExactCursorLegAllowance(
+        int cursorLegAllowance,
+        bool expected)
+    {
+        var meter = new GuideSampleWorkMeter(new GuideSampleWorkBudget(
+            maxCurrentNodeLookupProbes: 0,
+            maxCursorLegScans: cursorLegAllowance,
+            maxCursorRebases: 0,
+            maxPortalChecks: 0,
+            maxPrismChecks: 0,
+            maxTraceIntervals: 0,
+            maxLocalRecoveryAttempts: 0));
+        int remaining = 1;
+
+        NavigationSurfaceEdgeEnumerator.TryConsumeCandidate(
+                queryMeter: null,
+                maintenanceMeter: null,
+                guideMeter: ref meter,
+                useGuideMeter: true,
+                edgeStepRemaining: ref remaining)
+            .Should().Be(expected);
+
+        remaining.Should().Be(expected ? 0 : 1,
+            "failed guide metering must preserve the caller-owned edge slice");
+        meter.GetCursorLegScanAllowance().Should().Be(0);
+    }
+
+    [Fact]
+    public void SurfaceCandidateDebit_ShouldHonorEachValidMeterSourceAndHostSlice()
+    {
+        GuideSampleWorkMeter guideMeter = default;
+        int remaining = 0;
+        NavigationSurfaceEdgeEnumerator.TryConsumeCandidate(
+                queryMeter: null,
+                maintenanceMeter: null,
+                guideMeter: ref guideMeter,
+                useGuideMeter: false,
+                edgeStepRemaining: ref remaining)
+            .Should().BeTrue("unmetered structural enumeration has no host-owned slice");
+        remaining.Should().Be(0);
+
+        var queryMeter = new NavigationWorkMeter(Budget(maxEvaluatedEdges: 1));
+        remaining = 1;
+        NavigationSurfaceEdgeEnumerator.TryConsumeCandidate(
+                queryMeter,
+                maintenanceMeter: null,
+                guideMeter: ref guideMeter,
+                useGuideMeter: false,
+                edgeStepRemaining: ref remaining)
+            .Should().BeTrue();
+        queryMeter.EvaluatedEdges.Should().Be(1);
+        remaining.Should().Be(0);
+
+        queryMeter = new NavigationWorkMeter(Budget(maxEvaluatedEdges: 0));
+        remaining = 1;
+        NavigationSurfaceEdgeEnumerator.TryConsumeCandidate(
+                queryMeter,
+                maintenanceMeter: null,
+                guideMeter: ref guideMeter,
+                useGuideMeter: false,
+                edgeStepRemaining: ref remaining)
+            .Should().BeFalse();
+        queryMeter.EvaluatedEdges.Should().Be(0);
+        remaining.Should().Be(1);
+
+        var maintenanceMeter = new MaintenanceWorkMeter(
+            new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1, 1));
+        remaining = 1;
+        NavigationSurfaceEdgeEnumerator.TryConsumeCandidate(
+                queryMeter: null,
+                maintenanceMeter,
+                guideMeter: ref guideMeter,
+                useGuideMeter: false,
+                edgeStepRemaining: ref remaining)
+            .Should().BeTrue();
+        maintenanceMeter.SurfaceComponentEdges.Should().Be(1);
+        remaining.Should().Be(0);
+
+        remaining = 1;
+        NavigationSurfaceEdgeEnumerator.TryConsumeCandidate(
+                queryMeter: null,
+                maintenanceMeter,
+                guideMeter: ref guideMeter,
+                useGuideMeter: false,
+                edgeStepRemaining: ref remaining)
+            .Should().BeFalse();
+        maintenanceMeter.SurfaceComponentEdges.Should().Be(1);
+        remaining.Should().Be(1);
+
+        queryMeter = new NavigationWorkMeter(Budget(maxEvaluatedEdges: 1));
+        remaining = 0;
+        NavigationSurfaceEdgeEnumerator.TryConsumeCandidate(
+                queryMeter,
+                maintenanceMeter: null,
+                guideMeter: ref guideMeter,
+                useGuideMeter: false,
+                edgeStepRemaining: ref remaining)
+            .Should().BeFalse();
+        queryMeter.EvaluatedEdges.Should().Be(0,
+            "an exhausted host slice is checked before the selected work meter");
+    }
+
+    [Fact]
+    public void SurfaceDispatcher_ShouldRequireTheTargetPageBeforeRouteEvaluation()
+    {
+        var sourceIndex = new VoxelIndex(0, 0, 0);
+        var targetIndex = new VoxelIndex(1, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            sourceIndex,
+            Cell(TraversalMedia.Solid),
+            targetIndex,
+            Cell(TraversalMedia.Solid),
+            System.Array.Empty<TraversalTransitionDefinition>(),
+            System.Array.Empty<TraversalTransitionRule>());
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", sourceIndex),
+                TraversalMedium.Solid,
+                out NavigationMediumStateRef source)
+            .Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
+        var dependencies = new NavigationDependencyWorkspace(0, 0);
+        var meter = new NavigationWorkMeter(Budget());
+        var dispatcher = new NavigationTraversalEdgeEnumerator(
+            context.World,
+            lease.Graph,
+            source,
+            Profile(TraversalMedia.Solid),
+            Policy,
+            workspace,
+            allowTransitions: false,
+            emittedSurfaceOrdinal: -1);
+        int remaining = 64;
+        int connectionRemaining = int.MaxValue;
+
+        NavigationTraversalEdgeAdvanceStatus status;
+        do
+        {
+            status = dispatcher.AdvanceOne(
+                meter,
+                dependencies,
+                ref remaining,
+                ref connectionRemaining);
+        }
+        while (status == NavigationTraversalEdgeAdvanceStatus.Pending);
+
+        status.Should().Be(NavigationTraversalEdgeAdvanceStatus.CapacityExceeded);
+        dispatcher.CurrentTarget.IsValid.Should().BeFalse();
+        dependencies.PageCount.Should().Be(0);
+        meter.EvaluatedEdges.Should().Be(1,
+            "the discovered edge is charged before its semantic dependency is retained");
+        remaining.Should().Be(63);
+    }
+
+    [Fact]
     public void WarmedTransitionDispatcher_ShouldAllocateZeroBytes()
     {
         var index = new VoxelIndex(0, 0, 0);
@@ -1437,20 +3300,27 @@ public sealed class NavigationTransitionEdgeTests
         VoxelIndex targetIndex,
         NavigationCell target,
         TraversalTransitionDefinition[] transitions,
+        TraversalTransitionRule[] rules) => CreateContext(
+        TransitionConfiguration(),
+        sourceIndex,
+        source,
+        targetIndex,
+        target,
+        transitions,
+        rules);
+
+    private static TrailblazerWorldContext CreateContext(
+        GridConfiguration configuration,
+        VoxelIndex sourceIndex,
+        NavigationCell source,
+        VoxelIndex targetIndex,
+        NavigationCell target,
+        TraversalTransitionDefinition[] transitions,
         TraversalTransitionRule[] rules)
     {
         TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
         try
         {
-            GridConfiguration configuration = new(
-                Vector3d.Zero,
-                new Vector3d(8, 2, 4),
-                topologyKind: GridTopologyKind.RectangularPrism,
-                topologyMetrics: GridTopologyMetrics.Rectangular(
-                    (Fixed64)2,
-                    (Fixed64)2,
-                    (Fixed64)4),
-                storageKind: GridStorageKind.Sparse);
             context.World.TryAddGrid(
                     configuration,
                     sourceIndex == targetIndex
@@ -1771,13 +3641,42 @@ public sealed class NavigationTransitionEdgeTests
 
     private static NavigationCell Cell(
         TraversalMedia media,
-        Fixed64 enterCost = default) => new(
+        Fixed64 enterCost = default,
+        TraversalCapability requiredCapabilities = TraversalCapability.None) => new(
         media,
-        TraversalCapability.None,
+        requiredCapabilities,
         default,
         enterCost,
         (Fixed64)4,
         (Fixed64)4);
+
+    private static GridConfiguration TransitionConfiguration() => new(
+        Vector3d.Zero,
+        new Vector3d(8, 2, 4),
+        topologyKind: GridTopologyKind.RectangularPrism,
+        topologyMetrics: GridTopologyMetrics.Rectangular(
+            (Fixed64)2,
+            (Fixed64)2,
+            (Fixed64)4),
+        storageKind: GridStorageKind.Sparse);
+
+    private static NavigationPublishedTransition GetPublishedDefinition(
+        NavigationWorldGraph graph,
+        VoxelIndex sourceIndex,
+        out NavigationMediumStateRef source)
+    {
+        graph.TryGetMediumStateRef(
+                new NavigationCellAddress("map", sourceIndex),
+                TraversalMedium.Solid,
+                out source)
+            .Should().BeTrue();
+        NavigationTransitionPage.Enumerator candidates =
+            graph.EnumerateOutgoingTransitionCandidates(source);
+        candidates.MoveNext().Should().BeTrue();
+        NavigationPublishedTransition transition = candidates.Current;
+        candidates.MoveNext().Should().BeFalse();
+        return transition;
+    }
 
     private static NavigationAgentProfile Profile(
         TraversalMedia media = TraversalMedia.Solid | TraversalMedia.Gas,
@@ -1793,17 +3692,35 @@ public sealed class NavigationTransitionEdgeTests
         media,
         capabilities);
 
-    private static NavigationWorkBudget Budget(int maxTransitionCandidates = 64) => new(
+    private static NavigationWorkBudget Budget(
+        int maxTransitionCandidates = 64,
+        int maxTransitionPairs = 64,
+        int maxEvaluatedEdges = 64) => new(
         maxLookupProbes: 64,
+        maxEndpointCandidates: 0,
+        maxExpandedNodes: 0,
+        maxEvaluatedEdges,
+        maxConnectionLegs: 64,
+        maxTransitionCandidates: maxTransitionCandidates,
+        maxTransitionPairs,
+        maxStagedLegAttempts: 0,
+        maxTraceIntervals: 0,
+        maxCoveredVoxelIntervals: 64,
+        maxSimplificationRays: 0);
+
+    private static NavigationWorkBudget VolumeBudget(
+        int maxLookupProbes,
+        int maxCoveredVoxelIntervals) => new(
+        maxLookupProbes,
         maxEndpointCandidates: 0,
         maxExpandedNodes: 0,
         maxEvaluatedEdges: 64,
         maxConnectionLegs: 64,
-        maxTransitionCandidates: maxTransitionCandidates,
+        maxTransitionCandidates: 64,
         maxTransitionPairs: 64,
         maxStagedLegAttempts: 0,
         maxTraceIntervals: 0,
-        maxCoveredVoxelIntervals: 64,
+        maxCoveredVoxelIntervals,
         maxSimplificationRays: 0);
 
     private static NavigationWorkBudget LargeBudget() => new(

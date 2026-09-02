@@ -48,6 +48,39 @@ public sealed class TrailblazerGuideServiceTests
     }
 
     [Fact]
+    public void TryGetDirectHeading_SamePoint_ShouldSucceedWithoutManufacturingAHeading()
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
+        NavigationWorldGraph graph = context.Pathing.NavigationGraphStore.Current;
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("guide-allocation", new VoxelIndex(4, 4, 4)),
+                out NavigationNodeRef startRef)
+            .Should().BeTrue();
+        graph.TryGetNodeState(startRef, out NavigationNodeState start)
+            .Should().BeTrue();
+        query = WithRayBudget(query, start.FootAnchor, start.FootAnchor);
+
+        NavigationRayStatus status = context.Guides.TryGetDirectHeading(
+            query,
+            query.Start.Position,
+            out Vector3d heading);
+
+        status.Should().Be(NavigationRayStatus.Success);
+        heading.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void ResolveDirectHeading_UnrepresentableDelta_ShouldReportCostOverflow()
+    {
+        TrailblazerGuideService.ResolveDirectHeading(
+                new Vector3d(Fixed64.MaxValue, Fixed64.Zero, Fixed64.Zero),
+                new Vector3d(Fixed64.MinValue, Fixed64.Zero, Fixed64.Zero),
+                out Vector3d heading)
+            .Should().Be(NavigationRayStatus.CostOverflow);
+        heading.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
     public void TryGetDirectHeading_ZeroTraceBudget_ShouldNotExposeAHeading()
     {
         using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
@@ -59,6 +92,60 @@ public sealed class TrailblazerGuideServiceTests
 
         status.Should().Be(NavigationRayStatus.BudgetExceeded);
         heading.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void TryGetDirectHeading_ExhaustedGraphLeaseCapacity_ShouldFailWithoutAHeading()
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
+        query = ResolveDirectRoute(context, query);
+        NavigationWorldGraphStore store = context.Pathing.NavigationGraphStore;
+        var leases = new NavigationWorldGraphLease?[context.Settings.MaxConcurrentSnapshotLeases];
+        try
+        {
+            for (int i = 0; i < leases.Length; i++)
+                leases[i] = TestRequire.NotNull(store.TryAcquire());
+
+            context.Guides.TryGetDirectHeading(query, query.Start.Position, out Vector3d heading)
+                .Should().Be(NavigationRayStatus.CapacityExceeded);
+            heading.Should().Be(Vector3d.Zero);
+        }
+        finally
+        {
+            for (int i = 0; i < leases.Length; i++)
+                leases[i]?.Dispose();
+        }
+
+        context.Guides.TryGetDirectHeading(query, query.Start.Position, out Vector3d retryHeading)
+            .Should().Be(NavigationRayStatus.Success);
+        retryHeading.Should().Be(Vector3d.Right);
+    }
+
+    [Fact]
+    public void RequestGuide_DisposedContext_ShouldRejectTheRetainedService()
+    {
+        TrailblazerWorldContext context = CreateThreeCellContext(out _);
+        TrailblazerGuideService service = context.Guides;
+        context.Dispose();
+
+        Action request = () => service.RequestGuide(default, out _);
+
+        request.Should().ThrowExactly<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public void RequestGuide_InactiveExternalWorld_ShouldRejectTheRetainedService()
+    {
+        using var world = new GridWorld();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(
+            world,
+            takeOwnership: false);
+        TrailblazerGuideService service = context.Guides;
+        world.Dispose();
+
+        Action request = () => service.RequestGuide(default, out _);
+
+        request.Should().ThrowExactly<InvalidOperationException>();
     }
 
     [Fact]
@@ -542,7 +629,30 @@ public sealed class TrailblazerGuideServiceTests
         cache.ActiveLeaseCount.Should().Be(1);
 
         lease.Dispose();
+        lease.Dispose();
 
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void RequestFlowField_GraphBeyondGuideMapCapacity_ShouldReleaseThePublishedPayload()
+    {
+        TrailblazerWorldContextSettings settings = WithFlowMapCapacity(1);
+        using TrailblazerWorldContext context = CreateThreeCellContext(settings, out PathQuery aStarQuery);
+        PublishUnrelatedMap(context);
+        PathQuery query = WithAlgorithm(aStarQuery, PathAlgorithm.FlowField);
+        NavigationFlowFieldPayloadCache cache =
+            context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
+
+        NavigationGuideStatus status = context.Guides.RequestFlowField(
+            query,
+            out NavigationFlowFieldLease? result);
+
+        status.Should().Be(NavigationGuideStatus.CapacityExceeded);
+        result.Should().BeNull();
+        context.Pathing.NavigationGraphStore.Current.MapCount.Should().Be(2);
         cache.ActiveLeaseCount.Should().Be(0);
         cache.ReservedLeaseCount.Should().Be(0);
         cache.ReservedPayloadBytes.Should().Be(0);
@@ -551,6 +661,7 @@ public sealed class TrailblazerGuideServiceTests
     [Theory]
     [InlineData("algorithm", NavigationGuideStatus.Unsupported)]
     [InlineData("start", NavigationGuideStatus.InvalidStart)]
+    [InlineData("end", NavigationGuideStatus.InvalidEnd)]
     [InlineData("volume", NavigationGuideStatus.BudgetExceeded)]
     public void RequestFlowField_ShouldRejectUnsupportedOrUnresolvableQueryShape(
         string mismatch,
@@ -572,6 +683,16 @@ public sealed class TrailblazerGuideServiceTests
             "start" => flowQuery.WithStartState(
                 new Vector3d(100, 0, 0),
                 flowQuery.Traversal.StartMedium),
+            "end" => new PathQuery(
+                flowQuery.Start,
+                new NavigationEndpoint(new Vector3d(100, 0, 0)),
+                flowQuery.Agent,
+                flowQuery.AreaPolicy,
+                flowQuery.Traversal,
+                flowQuery.Algorithm,
+                flowQuery.Budget,
+                allowTransitions: false,
+                flowQuery.FlowField),
             "volume" => new PathQuery(
                 flowQuery.Start,
                 flowQuery.End,
@@ -796,7 +917,12 @@ public sealed class TrailblazerGuideServiceTests
             allowTransitions: false);
     }
 
-    private static TrailblazerWorldContext CreateThreeCellContext(out PathQuery query)
+    private static TrailblazerWorldContext CreateThreeCellContext(out PathQuery query) =>
+        CreateThreeCellContext(null, out query);
+
+    private static TrailblazerWorldContext CreateThreeCellContext(
+        TrailblazerWorldContextSettings? settings,
+        out PathQuery query)
     {
         var configuration = new GridConfiguration(
             new Vector3d(-4, -4, -4),
@@ -805,9 +931,90 @@ public sealed class TrailblazerGuideServiceTests
         world.TryAddGrid(configuration, out _).Should().BeTrue();
         TrailblazerWorldContext context = TrailblazerWorldContext.Attach(
             world,
-            takeOwnership: true);
+            takeOwnership: true,
+            settings: settings);
         query = PublishThreeCellRoute(context, configuration);
         return context;
+    }
+
+    private static void PublishUnrelatedMap(TrailblazerWorldContext context)
+    {
+        var configuration = new GridConfiguration(
+            new Vector3d(20, 0, 0),
+            new Vector3d(21, 1, 1));
+        context.World.TryAddGrid(configuration, out _).Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        var cell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMap map = new NavigationMapBuilder("guide-capacity-unrelated", binding)
+            .AddCell(default, cell)
+            .Build();
+        var operation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(map, bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 3,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(operation).Should().BeTrue();
+        while (operation.Receipt.Status == NavigationOperationStatus.Pending)
+            context.Simulate();
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+    }
+
+    private static TrailblazerWorldContextSettings WithFlowMapCapacity(int capacity)
+    {
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        NavigationQueryLimits limits = settings.QueryLimits;
+        var queryLimits = new NavigationQueryLimits(
+            limits.MaxBatchItems,
+            limits.MaxBatchDescriptorBytes,
+            limits.MaxConcurrentNavigationQueries,
+            limits.AStarWorkspaceMapCapacity,
+            limits.AStarWorkspaceEndpointPageCapacity,
+            limits.AStarWorkspaceComponentCapacity,
+            limits.AStarWorkspaceNodeCapacity,
+            limits.MaxAStarCacheEntries,
+            limits.MaxAStarReusablePayloadBytes,
+            limits.MaxAStarSinglePayloadBytes,
+            limits.MaxAStarActivePayloadBytes,
+            limits.MaxAStarActivePayloadLeases,
+            capacity,
+            limits.FlowWorkspaceEndpointPageCapacity,
+            limits.FlowWorkspaceComponentCapacity,
+            limits.FlowWorkspaceNodeCapacity,
+            limits.RayWorkspaceCoveredAddressCapacity,
+            limits.RayWorkspaceTraceIntervalCapacity,
+            limits.AStarWorkspaceGuidePointCapacity,
+            limits.MaxFlowCacheEntries,
+            limits.MaxFlowReusablePayloadBytes,
+            limits.MaxFlowSinglePayloadBytes,
+            limits.MaxFlowActivePayloadBytes,
+            limits.MaxFlowActivePayloadLeases);
+        return new TrailblazerWorldContextSettings(
+            settings.OperationLimits,
+            settings.MaintenanceBudget,
+            settings.GuideSampleBudget,
+            settings.MovementGroupPadding,
+            settings.MaxIngressEntries,
+            settings.MaxIngressBytes,
+            settings.MaxActiveSnapshots,
+            settings.MaxActiveSnapshotBytes,
+            settings.MaxRetiredSnapshots,
+            settings.MaxRetiredSnapshotBytes,
+            settings.MaxPersistentGraphPages,
+            settings.MaxDynamicCellSlotsPerMap,
+            settings.MaxDynamicCellSlots,
+            settings.NavigationAreaCount,
+            settings.MaxAreaPolicies,
+            settings.MaxAreaRulesPerPolicy,
+            settings.MaxAreaRules,
+            settings.MaxConcurrentSnapshotLeases,
+            queryLimits);
     }
 
     private static TrailblazerWorldContext CreateOverflowContext(out PathQuery query)

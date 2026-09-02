@@ -254,6 +254,18 @@ public sealed class TrailblazerWorldContextSettingsTests
         Action dynamicAggregate = () => _ = CreateSettings(
             maxDynamicCellSlotsPerMap: 2,
             maxDynamicCellSlots: 1);
+        Action dynamicPerMapBelowOperationCoverage = () => _ = CreateSettings(
+            operationLimits: CreateOperationLimits(
+                maxOverlayCellsPerMap: 2,
+                maxOverlayCells: 2),
+            maxDynamicCellSlotsPerMap: 1,
+            maxDynamicCellSlots: 2);
+        Action dynamicTotalBelowOperationCoverage = () => _ = CreateSettings(
+            operationLimits: CreateOperationLimits(
+                maxOverlayCellsPerMap: 0,
+                maxOverlayCells: 2),
+            maxDynamicCellSlotsPerMap: 0,
+            maxDynamicCellSlots: 1);
         Action areaAggregate = () => _ = CreateSettings(
             maxAreaRulesPerPolicy: 2,
             maxAreaRules: 1);
@@ -263,6 +275,9 @@ public sealed class TrailblazerWorldContextSettingsTests
         dynamicPerMap.Should().Throw<ArgumentOutOfRangeException>();
         dynamicTotal.Should().Throw<ArgumentOutOfRangeException>();
         dynamicAggregate.Should().Throw<ArgumentException>();
+        dynamicPerMapBelowOperationCoverage.Should().Throw<ArgumentException>()
+            .WithParameterName("maxDynamicCellSlotsPerMap");
+        dynamicTotalBelowOperationCoverage.Should().Throw<ArgumentException>();
         areaAggregate.Should().Throw<ArgumentException>();
     }
 
@@ -278,6 +293,26 @@ public sealed class TrailblazerWorldContextSettingsTests
 
         aStar.Should().Throw<ArgumentOutOfRangeException>();
         flow.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void QueryLimits_ShouldAcceptExactBatchMaximumAndRejectOneAboveIt()
+    {
+        NavigationQueryLimits exact = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            maxBatchItems: NavigationQueryLimits.MaximumBatchItems);
+        Action oneAbove = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            maxBatchItems: NavigationQueryLimits.MaximumBatchItems + 1);
+        Action zero = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            maxBatchItems: 0);
+
+        exact.MaxBatchItems.Should().Be(NavigationQueryLimits.MaximumBatchItems);
+        oneAbove.Should().Throw<ArgumentOutOfRangeException>()
+            .WithParameterName("maxBatchItems");
+        zero.Should().Throw<ArgumentOutOfRangeException>()
+            .WithParameterName("maxBatchItems");
     }
 
     [Fact]
@@ -343,7 +378,9 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxConcurrentSnapshotLeases,
             queryLimits ?? CreateQueryLimits(maxConcurrentSnapshotLeases));
 
-    private static NavigationOperationLimits CreateOperationLimits() => new(
+    private static NavigationOperationLimits CreateOperationLimits(
+        int maxOverlayCellsPerMap = 0,
+        int maxOverlayCells = 0) => new(
         maxPendingOperations: 1,
         maxPendingDescriptorBytes: 1,
         maxPreparedMapBytes: 1,
@@ -353,10 +390,10 @@ public sealed class TrailblazerWorldContextSettingsTests
         maxCorridorCells: 2,
         maxMaps: 1,
         maxRetainedMapIdentities: 1,
-        maxOverlayCellsPerMap: 0,
+        maxOverlayCellsPerMap: maxOverlayCellsPerMap,
         maxOverlayConnectionsPerMap: 0,
         maxOverlayTransitionsPerMap: 0,
-        maxOverlayCells: 0,
+        maxOverlayCells: maxOverlayCells,
         maxOverlayConnections: 0,
         maxOverlayTransitions: 0,
         maxTransitionRulesPerMap: 1,
@@ -368,8 +405,9 @@ public sealed class TrailblazerWorldContextSettingsTests
         int flowComponentCapacity = 1,
         int rayCoveredAddressCapacity = 1,
         int rayTraceIntervalCapacity = 1,
-        int aStarGuidePointCapacity = 1) => new(
-            maxBatchItems: 1,
+        int aStarGuidePointCapacity = 1,
+        int maxBatchItems = 1) => new(
+            maxBatchItems: maxBatchItems,
             maxBatchDescriptorBytes: 264,
             maxConcurrentNavigationQueries: maxConcurrentQueries,
             aStarWorkspaceMapCapacity: 1,

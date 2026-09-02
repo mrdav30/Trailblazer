@@ -26,7 +26,7 @@ public sealed class TrailblazerWorldContext : IDisposable
 {
     private static readonly object _worldOwnershipLock = new();
 
-    private static readonly SwiftDictionary<GridWorld, WeakReference<TrailblazerWorldContext>> _worldOwners = new();
+    private static readonly SwiftHashSet<GridWorld> _ownedWorlds = new();
 
     private readonly TrailblazerClock _clock = new();
 
@@ -336,37 +336,20 @@ public sealed class TrailblazerWorldContext : IDisposable
         {
             ThrowIfWorldOwned(world);
             TrailblazerWorldContext context = new(world, ownsWorld, settings);
-            _worldOwners[world] = new WeakReference<TrailblazerWorldContext>(context);
+            _ownedWorlds.Add(world);
             return context;
         }
     }
 
     private static void ThrowIfWorldOwned(GridWorld world)
     {
-        if (!_worldOwners.TryGetValue(world, out WeakReference<TrailblazerWorldContext> weakOwner))
+        if (!_ownedWorlds.Contains(world))
             return;
-
-        if (weakOwner.TryGetTarget(out TrailblazerWorldContext? owner)
-            && !owner.IsDisposed
-            && owner.World.IsActive)
-        {
-            throw new InvalidOperationException("GridWorld is already attached to an active TrailblazerWorldContext.");
-        }
-
-        _worldOwners.Remove(world);
+        throw new InvalidOperationException("GridWorld is already attached to an active TrailblazerWorldContext.");
     }
 
-    private static void ReleaseWorldOwnership(TrailblazerWorldContext context)
-    {
-        if (!_worldOwners.TryGetValue(context.World, out WeakReference<TrailblazerWorldContext> weakOwner))
-            return;
-
-        if (!weakOwner.TryGetTarget(out TrailblazerWorldContext? owner)
-            || ReferenceEquals(owner, context))
-        {
-            _worldOwners.Remove(context.World);
-        }
-    }
+    private static void ReleaseWorldOwnership(TrailblazerWorldContext context) =>
+        _ownedWorlds.Remove(context.World);
 
     internal static void ThrowIfUnusable(TrailblazerWorldContext? context)
     {

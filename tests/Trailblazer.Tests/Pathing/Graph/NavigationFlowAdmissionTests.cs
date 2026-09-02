@@ -18,6 +18,45 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationFlowAdmissionTests
 {
     [Fact]
+    public void GateDispose_ShouldCancelActiveWorkAndRemainIdempotent()
+    {
+        using var world = new GridWorld();
+        VoxelIndex origin = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { origin, destination },
+                "flow-gate-dispose");
+        PathQuery query = ToFlowField(
+            fixture.CreateQuery(origin, destination, fixture.DefaultProfile));
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        var coordinator = new NavigationQueryAdmissionCoordinator(1);
+        NavigationFlowAdmissionGate gate = new(
+            world,
+            store,
+            CreateLimits(maxBatchItems: 1, maxConcurrentQueries: 1),
+            coordinator,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        gate.Begin(query, out NavigationFlowBatchWork work)
+            .Should().Be(NavigationFlowQueryStatus.Pending);
+        store.ActiveLeaseCount.Should().Be(1);
+
+        gate.Dispose();
+        gate.Dispose();
+
+        store.ActiveLeaseCount.Should().Be(0);
+        coordinator.ActiveCount.Should().Be(0);
+        FluentActions.Invoking(() => work.GetStatus(0))
+            .Should().Throw<ObjectDisposedException>();
+        gate.Begin(query, out NavigationFlowBatchWork rejected)
+            .Should().Be(NavigationFlowQueryStatus.CapacityExceeded);
+        rejected.Should().Be(default(NavigationFlowBatchWork));
+    }
+
+    [Fact]
     public void DefaultLimits_ShouldCoverTheExactTransitionEnabledFlowEnvelope()
     {
         NavigationQueryLimits limits = NavigationQueryLimits.Default;
@@ -323,6 +362,11 @@ public sealed class NavigationFlowAdmissionTests
             .Should().Be(NavigationFlowQueryStatus.Pending);
         flowWork.AdmittedCount.Should().Be(0);
         flowWork.GetStatus(0).Should().Be(NavigationFlowQueryStatus.CapacityExceeded);
+        flowWork.IsReadyToPublish(0).Should().BeTrue();
+        flowWork.AdvanceSearch(0, 0, 0, 0, 0)
+            .Should().Be(NavigationFlowQueryStatus.CapacityExceeded);
+        FluentActions.Invoking(() => flowWork.TakeResult(0))
+            .Should().Throw<InvalidOperationException>();
         flowWork.Dispose();
         aStarWork.Dispose();
         coordinator.ActiveCount.Should().Be(0);
@@ -433,6 +477,11 @@ public sealed class NavigationFlowAdmissionTests
             workspace,
             cache);
         work.Begin(query, store.TryAcquire()!);
+        work.AdvanceSearch(8, 4, 8, 0)
+            .Should().Be(NavigationFlowQueryStatus.Pending);
+        cache.ReservedLeaseCount.Should().Be(0,
+            "search cannot reserve payload storage before endpoint preparation");
+        store.ActiveLeaseCount.Should().Be(1);
 
         for (int step = 0; step < 32 && !work.IsPrepared; step++)
             work.PrepareSearchOrCheckout(lookupStepLimit: 4, endpointCandidateStepLimit: 2);
@@ -450,6 +499,13 @@ public sealed class NavigationFlowAdmissionTests
 
         work.Publish().Should().Be(NavigationFlowQueryStatus.Success);
         using NavigationFlowQueryResult result = work.TakeResult();
+        work.PrepareSearchOrCheckout(4, 2)
+            .Should().Be(NavigationFlowQueryStatus.Success);
+        work.AdvanceSearch(8, 4, 8, 0)
+            .Should().Be(NavigationFlowQueryStatus.Success);
+        work.Publish().Should().Be(NavigationFlowQueryStatus.Success);
+        store.ActiveLeaseCount.Should().Be(0,
+            "terminal query phases must not reacquire the graph snapshot");
         result.ResolvedOrigin.Should().Be(
             new NavigationCellAddress(fixture.MapId, origin));
         result.PayloadLease.TryGetPayload(out NavigationFlowFieldPayload payload)
@@ -478,6 +534,51 @@ public sealed class NavigationFlowAdmissionTests
         warm.Publish().Should().Be(NavigationFlowQueryStatus.Success);
         using NavigationFlowQueryResult warmResult = warm.TakeResult();
         warmResult.ResolvedOrigin.Should().Be(result.ResolvedOrigin);
+    }
+
+    [Fact]
+    public void QueryWork_DisposeAfterSuccessfulPublish_ShouldReleaseUntakenResultLease()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: fixture.Far.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace:
+                NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                fixture.Far.RetainedBytes,
+                out NavigationFlowFieldReservation reservation)
+            .Should().BeTrue();
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                fixture.Far,
+                fixture.FarOrigin,
+                ref reservation,
+                out NavigationFlowFieldPayloadLease seeded)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        seeded.Dispose();
+        var work = new NavigationFlowQueryWork(
+            fixture.Store,
+            new NavigationFlowFieldWorkspace(1, 1, 1, 8, 8, 8),
+            cache);
+        work.Begin(fixture.FarQuery, fixture.Store.TryAcquire()!);
+        for (int step = 0; step < 64 && !work.IsReadyToPublish; step++)
+            work.PrepareSearchOrCheckout(lookupStepLimit: 8, endpointCandidateStepLimit: 4);
+
+        work.Publish().Should().Be(NavigationFlowQueryStatus.Success);
+        cache.ActiveLeaseCount.Should().Be(1);
+
+        work.Dispose();
+
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        fixture.Store.ActiveLeaseCount.Should().Be(0);
     }
 
     [Fact]
@@ -704,6 +805,9 @@ public sealed class NavigationFlowAdmissionTests
 
         secondBegin.Should().Throw<InvalidOperationException>();
         work.Publish().Should().Be(NavigationFlowQueryStatus.Unsupported);
+        FluentActions.Invoking(() => work.TakeResult())
+            .Should().Throw<InvalidOperationException>(
+                "only a successful published query owns a payload result");
         store.ActiveLeaseCount.Should().Be(1);
     }
 

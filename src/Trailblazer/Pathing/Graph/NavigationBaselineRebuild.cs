@@ -123,12 +123,59 @@ internal sealed class NavigationBaselineRebuild
         }
     }
 
+    internal static int CountCapacityBlocked(
+        PersistentStringMap<NavigationBaselineRebuild> rebuilds)
+    {
+        int count = 0;
+        for (int i = 0; i < rebuilds.Count; i++)
+        {
+            if (rebuilds.GetValueAt(i).IsCapacityBlocked)
+                count++;
+        }
+        return count;
+    }
+
     internal bool Matches(NavigationMapInstance instance) =>
         ReferenceEquals(_map, instance.Map)
         && _bakeVersion == instance.BakeVersion
         && _overlayHighWater == instance.Overlay.HighWaterSequence
         && _dynamicSlotGeneration == instance.DynamicSlotGeneration
         && _dynamicSlotCount == instance.DynamicSlotCount;
+
+    internal static bool MatchesCapturedGridIdentity(
+        long capturedWorldSpawnToken,
+        ushort capturedGridIndex,
+        long capturedGridSpawnToken,
+        ulong capturedGridLastChangeSequence,
+        long expectedWorldSpawnToken,
+        ushort expectedGridIndex,
+        long expectedGridSpawnToken,
+        ulong expectedGridLastChangeSequence) =>
+        capturedWorldSpawnToken == expectedWorldSpawnToken
+        && capturedGridIndex == expectedGridIndex
+        && capturedGridSpawnToken == expectedGridSpawnToken
+        && capturedGridLastChangeSequence == expectedGridLastChangeSequence;
+
+    internal static bool IsCoveredBaselineCurrent(
+        bool captured,
+        GridNavigationBaseline? baseline,
+        ulong expectedCapturedChangeSequence,
+        long expectedWorldSpawnToken,
+        ushort expectedGridIndex,
+        long expectedGridSpawnToken,
+        ulong expectedGridLastChangeSequence) =>
+        captured
+        && baseline != null
+        && baseline.CapturedChangeSequence == expectedCapturedChangeSequence
+        && MatchesCapturedGridIdentity(
+            baseline.WorldSpawnToken,
+            baseline.GridIndex,
+            baseline.GridSpawnToken,
+            baseline.GridLastChangeSequence,
+            expectedWorldSpawnToken,
+            expectedGridIndex,
+            expectedGridSpawnToken,
+            expectedGridLastChangeSequence);
 
     internal int Advance(
         GridWorld world,
@@ -184,11 +231,15 @@ internal sealed class NavigationBaselineRebuild
         }
 
         if (_hasIdentity
-            && (baseline.WorldSpawnToken != _worldSpawnToken
-                || baseline.GridIndex != _gridIndex
-                || baseline.GridSpawnToken != _gridSpawnToken
-                || baseline.GridLastChangeSequence != _gridLastChangeSequence
-                || !baseline.ConfigurationKey.Equals(_map.GridBinding.Key)))
+            && !MatchesCapturedGridIdentity(
+                baseline.WorldSpawnToken,
+                baseline.GridIndex,
+                baseline.GridSpawnToken,
+                baseline.GridLastChangeSequence,
+                _worldSpawnToken,
+                _gridIndex,
+                _gridSpawnToken,
+                _gridLastChangeSequence))
         {
             ResetProgress();
             return count;
@@ -319,16 +370,14 @@ internal sealed class NavigationBaselineRebuild
                 identity.GridIndex,
                 identity.GridSpawnToken,
                 identity.GridLastChangeSequence);
-            if (!world.TryBeginCoveredAddresses(
-                    cursor,
-                    identity.ConfigurationKey.BoundsMin,
-                    identity.ConfigurationKey.BoundsMax,
-                    eligibleGenerationCount: 1,
-                    identity.ConfigurationKey))
-            {
-                ResetProgress();
-                return 0;
-            }
+            bool began = world.TryBeginCoveredAddresses(
+                cursor,
+                identity.ConfigurationKey.BoundsMin,
+                identity.ConfigurationKey.BoundsMax,
+                eligibleGenerationCount: 1,
+                identity.ConfigurationKey);
+            System.Diagnostics.Debug.Assert(began,
+                "The one-generation baseline cursor is constructed with exact capacity one.");
         }
 
         ReadOnlySpan<GridCoveredAddressGeneration> input = _coveredGenerationBound
@@ -349,83 +398,122 @@ internal sealed class NavigationBaselineRebuild
             out int inputsConsumed,
             out int outputCount);
         _coveredGenerationBound |= inputsConsumed != 0;
-        if (status == GridCoveredAddressCursorStatus.Stale)
-        {
-            ResetProgress();
-            return addressProbes;
-        }
+        bool invalidated = status == GridCoveredAddressCursorStatus.Stale;
+        System.Diagnostics.Debug.Assert(!invalidated || outputCount == 0,
+            "A stale covered-address cursor discards the run without emitting output.");
 
         for (int i = 0; i < outputCount; i++)
             addressScratch[i] = coveredAddressScratch[i].VoxelIndex;
+        bool captured = false;
+        GridNavigationBaseline? baseline = null;
         if (outputCount > 0)
         {
-            if (!world.TryCaptureNavigationBaseline(
+            captured = world.TryCaptureNavigationBaseline(
                     _map.GridBinding.Key,
                     addressScratch.Slice(0, outputCount),
-                    out GridNavigationBaseline? baseline)
-                || baseline == null
-                || baseline.CapturedChangeSequence != cursor.RunStamp.ChangeSequence
-                || baseline.WorldSpawnToken != cursor.RunStamp.WorldSpawnToken
-                || baseline.GridIndex != _gridIndex
-                || baseline.GridSpawnToken != _gridSpawnToken
-                || baseline.GridLastChangeSequence != _gridLastChangeSequence)
-            {
-                ResetProgress();
-                return addressProbes;
-            }
-
-            NavigationMapInstance next = _defaultCandidate!.AppendDefaultBaselineStates(
-                _source,
-                baseline.VoxelStates,
-                baseline.CapturedChangeSequence,
-                _pageVersion);
-            for (int i = 0; i < baseline.VoxelStates.Length; i++)
-            {
-                VoxelIndex index = baseline.VoxelStates[i].VoxelIndex;
-                bool sourcePresent = _source.IsPhysicallyPresent(index);
-                bool nextPresent = next.IsPhysicallyPresent(index);
-                _defaultPhysicalAddressSetChanged |= sourcePresent != nextPresent;
-                bool sourceHasDynamic = _source.TryGetDynamicSlot(
-                    index,
-                    out NavigationDynamicCellSlot sourceSlot);
-                bool nextHasDynamic = next.TryGetDynamicSlot(
-                    index,
-                    out NavigationDynamicCellSlot nextSlot);
-                bool rediscoveredOmittedSlot = sourceHasDynamic
-                    && nextHasDynamic
-                    && sourceSlot.Slot == nextSlot.Slot
-                    && !_defaultSeedSlots.TryGetValue(index, out _);
-                if (rediscoveredOmittedSlot && _omittedDefaultSeedSlotCount > 0)
-                {
-                    _omittedDefaultSeedSlotCount--;
-                    UpdateStructuralStates(
-                        index,
-                        _source.GetEffectiveMedia(index),
-                        add: false);
-                }
-                if (sourcePresent
-                    && nextPresent
-                    && rediscoveredOmittedSlot
-                    && _omittedPhysicalDefaultSlotCount > 0)
-                {
-                    _omittedPhysicalDefaultSlotCount--;
-                }
-                if (!sourceHasDynamic && nextHasDynamic)
-                {
-                    _hasNewDefaultSlot = true;
-                    UpdateStructuralStates(index, next.GetEffectiveMedia(index), add: true);
-                }
-            }
-            if (EstimateDefaultRetainedBytes(next) > maximumRetainedBytes
-                || EstimateDefaultPersistentPages(next) > maximumPersistentPages)
-            {
-                _capacityBlocked = true;
-                return addressProbes;
-            }
-            _defaultCandidate = next;
-            _cursor = checked(_cursor + outputCount);
-            _capturedChangeSequence = baseline.CapturedChangeSequence;
+                    out baseline);
         }
+        return FinalizeCoveredAddressAdvance(
+            status,
+            addressProbes,
+            outputCount,
+            invalidated,
+            captured,
+            baseline,
+            cursor.RunStamp.ChangeSequence,
+            cursor.RunStamp.WorldSpawnToken,
+            maximumRetainedBytes,
+            maximumPersistentPages,
+            out capture,
+            out completed);
+    }
+
+    internal int FinalizeCoveredAddressAdvance(
+        GridCoveredAddressCursorStatus status,
+        int addressProbes,
+        int outputCount,
+        bool invalidated,
+        bool captured,
+        GridNavigationBaseline? baseline,
+        ulong expectedCapturedChangeSequence,
+        long expectedWorldSpawnToken,
+        long maximumRetainedBytes,
+        int maximumPersistentPages,
+        out NavigationGridBaselineCapture capture,
+        out bool completed)
+    {
+        capture = default;
+        completed = false;
+        if (outputCount > 0)
+        {
+            invalidated |= !IsCoveredBaselineCurrent(
+                captured,
+                baseline,
+                expectedCapturedChangeSequence,
+                expectedWorldSpawnToken,
+                _gridIndex,
+                _gridSpawnToken,
+                _gridLastChangeSequence);
+            if (!invalidated)
+            {
+                NavigationMapInstance next = _defaultCandidate!.AppendDefaultBaselineStates(
+                    _source,
+                    baseline!.VoxelStates,
+                    baseline.CapturedChangeSequence,
+                    _pageVersion);
+                for (int i = 0; i < baseline.VoxelStates.Length; i++)
+                {
+                    VoxelIndex index = baseline.VoxelStates[i].VoxelIndex;
+                    bool sourcePresent = _source.IsPhysicallyPresent(index);
+                    bool nextPresent = next.IsPhysicallyPresent(index);
+                    _defaultPhysicalAddressSetChanged |= sourcePresent != nextPresent;
+                    bool sourceHasDynamic = _source.TryGetDynamicSlot(
+                        index,
+                        out NavigationDynamicCellSlot sourceSlot);
+                    bool nextHasDynamic = next.TryGetDynamicSlot(
+                        index,
+                        out NavigationDynamicCellSlot nextSlot);
+                    bool rediscoveredOmittedSlot = sourceHasDynamic
+                        && nextHasDynamic
+                        && sourceSlot.Slot == nextSlot.Slot
+                        && !_defaultSeedSlots.TryGetValue(index, out _);
+                    if (rediscoveredOmittedSlot)
+                    {
+                        System.Diagnostics.Debug.Assert(_omittedDefaultSeedSlotCount > 0,
+                            "Each unique rediscovered omitted seed owns one pending seed count.");
+                        _omittedDefaultSeedSlotCount--;
+                        UpdateStructuralStates(
+                            index,
+                            _source.GetEffectiveMedia(index),
+                            add: false);
+                    }
+                    if (sourcePresent
+                        && nextPresent
+                        && rediscoveredOmittedSlot)
+                    {
+                        System.Diagnostics.Debug.Assert(_omittedPhysicalDefaultSlotCount > 0,
+                            "Each physically present rediscovered omitted seed owns one pending physical count.");
+                        _omittedPhysicalDefaultSlotCount--;
+                    }
+                    if (!sourceHasDynamic && nextHasDynamic)
+                    {
+                        _hasNewDefaultSlot = true;
+                        UpdateStructuralStates(index, next.GetEffectiveMedia(index), add: true);
+                    }
+                }
+                if (EstimateDefaultRetainedBytes(next) > maximumRetainedBytes
+                    || EstimateDefaultPersistentPages(next) > maximumPersistentPages)
+                {
+                    _capacityBlocked = true;
+                    return addressProbes;
+                }
+                _defaultCandidate = next;
+                _cursor = checked(_cursor + outputCount);
+                _capturedChangeSequence = baseline.CapturedChangeSequence;
+            }
+        }
+        if (invalidated)
+            return ResetAfterDefaultDiscoveryInvalidation(addressProbes);
 
         if (status != GridCoveredAddressCursorStatus.Complete)
             return addressProbes;
@@ -447,6 +535,12 @@ internal sealed class NavigationBaselineRebuild
             _gridLastChangeSequence,
             _map.GridBinding.Key);
         _completedCapture = capture;
+        return addressProbes;
+    }
+
+    private int ResetAfterDefaultDiscoveryInvalidation(int addressProbes)
+    {
+        ResetProgress();
         return addressProbes;
     }
 

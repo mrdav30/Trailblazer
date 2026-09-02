@@ -19,7 +19,7 @@ public sealed class TrailblazerHeightmapService
 
     internal TrailblazerHeightmapService(TrailblazerWorldContext context)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _context = context;
         State = new HeightmapWorldState();
     }
 

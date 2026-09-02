@@ -9,7 +9,7 @@ using Xunit;
 namespace Trailblazer.Tests.Navigation.Motor;
 
 [Collection("TrailblazerCollection")]
-public sealed class LocomotionHandlerCoverageTests : IDisposable
+public sealed class LocomotionHandlerCompositionTests : IDisposable
 {
     public void Dispose()
     {
@@ -235,6 +235,20 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     }
 
     [Fact]
+    public void GetLocomotions_ShouldEnumerateOnlyCoreModulesForCoreOnlyProfile()
+    {
+        var handler = new LocomotionHandler(LocomotionProfile.CreateCoreOnly());
+
+        handler.GetLocomotions()
+            .Select(locomotion => locomotion.GetType())
+            .Should()
+            .Equal(
+                typeof(MoveLocomotion),
+                typeof(PlatformLocomotion),
+                typeof(FallLocomotion));
+    }
+
+    [Fact]
     public void SyncTransientState_ShouldCopyEnabledInstalledLocomotionsOnly()
     {
         var target = TestWorld.Bind(new LocomotionHandler());
@@ -290,6 +304,21 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Fall.IsFalling.Should().BeFalse();
         handler.Water.IsSwimming.Should().BeFalse();
         handler.Water.UnderwaterTimer.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void ClearTransientState_ShouldIgnoreAbsentAndDisabledModules()
+    {
+        var coreOnly = new LocomotionHandler(LocomotionProfile.CreateCoreOnly());
+        coreOnly.Invoking(handler => handler.ClearTransientState<WaterLocomotion>())
+            .Should().NotThrow();
+
+        coreOnly.Move.IsEnabled = false;
+        coreOnly.Move.FrameVelocity = Vector3d.Right;
+
+        coreOnly.ClearTransientState<MoveLocomotion>();
+
+        coreOnly.Move.FrameVelocity.Should().Be(Vector3d.Right);
     }
 
     private sealed class CustomLocomotion : ILocomotion

@@ -18,6 +18,31 @@ public sealed class NavigationMediumGraphTests
     private static readonly NavigationCell SolidLiquidCell = Cell(
         TraversalMedia.Solid | TraversalMedia.Liquid);
 
+    [Theory]
+    [InlineData(false, null, false, null, null, false)]
+    [InlineData(true, false, true, null, null, false)]
+    [InlineData(true, null, true, null, null, true)]
+    [InlineData(true, true, false, false, true, false)]
+    [InlineData(true, true, false, null, null, false)]
+    [InlineData(true, true, false, true, false, false)]
+    [InlineData(true, true, false, true, true, true)]
+    public void MaterializedCompletionPolicy_ShouldReflectOptionalRefreshAndRequiredBuildStages(
+        bool frontComplete,
+        bool? transitionRefreshComplete,
+        bool hasNoChanges,
+        bool? seamRefreshComplete,
+        bool? buildComplete,
+        bool expected)
+    {
+        NavigationMaterializedComponentWork.IsLifecycleComplete(
+                frontComplete,
+                transitionRefreshComplete,
+                hasNoChanges,
+                seamRefreshComplete,
+                buildComplete)
+            .Should().Be(expected);
+    }
+
     [Fact]
     public void DefaultComposition_ShouldCreateOnlyPhysicalNodesWithExactMediumStates()
     {
@@ -326,6 +351,13 @@ public sealed class NavigationMediumGraphTests
             graph.GraphVersion + 1);
         gasClosed.TryGetMediumStateRef(address, TraversalMedium.Gas, out _)
             .Should().BeFalse();
+        gasClosed.TryGetStructuralMediumStateRef(
+                address,
+                TraversalMedium.Gas,
+                out NavigationMediumStateRef structuralGas)
+            .Should().BeTrue(
+                "structural composition still needs the closed medium's authored semantics");
+        structuralGas.Medium.Should().Be(TraversalMedium.Gas);
         gasClosed.TryGetMediumStateRef(address, TraversalMedium.Liquid, out _)
             .Should().BeTrue("an unrelated medium closure cannot hide Liquid");
         graph.TryGetNodeRef(address, out NavigationNodeRef node).Should().BeTrue();
@@ -339,6 +371,12 @@ public sealed class NavigationMediumGraphTests
         solidClosed.TryGetMediumStateRef(address, TraversalMedium.Gas, out _)
             .Should().BeTrue("an unrelated Solid closure cannot hide Gas");
         solidClosed.TryGetNodeState(node, out _).Should().BeFalse();
+
+        graph.TryGetMediumStateRef(address, TraversalMedium.Unknown, out _)
+            .Should().BeFalse();
+        graph.TryGetStructuralMediumStateRef(address, TraversalMedium.Unknown, out _)
+            .Should().BeFalse(
+                "runtime and structural resolution share the exact known-medium contract");
     }
 
     [Fact]
@@ -1377,82 +1415,24 @@ public sealed class NavigationMediumGraphTests
         SimulateUntilTerminal(below, rejected);
         rejected.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
         rejected.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        below.RetainedCompositionWorkCount.Should().Be(0,
+            "terminal publication must release the rejected operation's runtime work immediately");
+        below.RetainedOperationWorkCount.Should().Be(0);
         for (int frame = 0;
-             frame < 128 && below.RetainedCompositionWorkCount != 0;
+             frame < 128
+                 && (below.RetainedCompositionWorkBytes != 0
+                     || below.RetainedCompositionWorkPageCount != 0
+                     || below.Current.HasClosedStructuralScope);
              frame++)
         {
             below.Maintain(frame + 2049);
         }
-        below.RetainedCompositionWorkCount.Should().Be(0);
-        below.RetainedOperationWorkCount.Should().Be(0);
-    }
-
-    [Fact]
-    public void CapacityAbandon_ShouldRequeueDetachedUnrelatedGridPrefix()
-    {
-        using var world = new GridWorld();
-        GridConfiguration configuration = new(
-            Vector3d.Zero,
-            Vector3d.Zero,
-            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One));
-        world.TryAddGrid(configuration, out ushort gridIndex).Should().BeTrue();
-        configuration.TryNormalize(out NormalizedGridConfiguration binding)
-            .Should().BeTrue();
-        NavigationWorldGraph candidate = BuildComponentGraph(
-            world,
-            new NavigationMapBuilder("map", binding)
-                .AddCell(default, GasCell)
-                .Build());
-        var changedState = new NavigationSurfaceComponentKey(
-            new NavigationCellAddress("map", default),
-            TraversalMedium.Gas);
-        var work = new NavigationMaterializedComponentWork(
-            candidate,
-            NavigationSurfaceComponentKeySet.Empty.Add(changedState),
-            NavigationSurfaceComponentKeySet.Empty,
-            NavigationCellAddressSet.Empty,
-            affectedMemberCount: 0,
-            world: null,
-            baselineCaptures: null,
-            affectedMapOrdinals: null,
-            affectedMapCount: 0,
-            events: new GridEventInfo[1],
-            eventCount: 1);
-        long initialWorkBytes = work.RetainedBytes;
-        long exactInitialRetention = checked(candidate.RetainedBytes + initialWorkBytes);
-        using var runtime = new NavigationGraphRuntime(
-            world,
-            CreateSettings(
-                TrailblazerWorldContextSettings.Default.MaintenanceBudget,
-                maximumActiveBytes: exactInitialRetention));
-        runtime.Store.TryPublish(candidate).Should().Be(NavigationCandidatePublication.Published);
-        System.Reflection.FieldInfo eventsField = typeof(NavigationGraphRuntime).GetField(
-            "_maintenanceEvents",
-            System.Reflection.BindingFlags.Instance
-            | System.Reflection.BindingFlags.NonPublic)!;
-        var retainedEvents = (GridEventInfo[])eventsField.GetValue(runtime)!;
-        VoxelGrid grid = world.ActiveGrids[gridIndex];
-        retainedEvents[0] = new GridEventInfo(
-            world.SpawnToken,
-            grid.GridIndex,
-            grid.SpawnToken,
-            configuration,
-            grid.Version,
-            GridEventKind.GridChanged,
-            changeStamp: new GridChangeStamp(1, 1));
-        typeof(NavigationGraphRuntime).GetField(
-                "_materializedComponentWork",
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)!
-            .SetValue(runtime, work);
-
-        runtime.Maintain(frame: 1);
-
-        work.RetainedBytes.Should().BeGreaterThan(initialWorkBytes,
-            "the retained work must exceed its exact admitted ceiling only after advancing");
-        runtime.RetainedCompositionWorkCount.Should().Be(0);
-        HasPendingGridChangeIngress(runtime).Should().BeTrue(
-            "capacity abandonment cannot discard the prefix retained by materialized work");
+        below.RetainedCompositionWorkBytes.Should().Be(0,
+            "the owned closure baseline remains charged until terminal rollback reopens it");
+        below.RetainedCompositionWorkPageCount.Should().Be(0);
+        below.RetainedOperationWorkBytes.Should().Be(0);
+        below.RetainedOperationWorkPageCount.Should().Be(0);
+        below.Current.HasClosedStructuralScope.Should().BeFalse();
     }
 
     [Fact]
@@ -1508,6 +1488,273 @@ public sealed class NavigationMediumGraphTests
             "the affected-map inspection is part of resumable component work");
         meter.DependencyEntries.Should().Be(1,
             "the exact structural state is consumed directly and charged once");
+
+        var blockedWork = new NavigationMaterializedComponentWork(
+            candidate,
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationCellAddressSet.Empty,
+            affectedMemberCount: 0,
+            world,
+            captures,
+            new[] { 0 },
+            affectedMapCount: 1,
+            events: Array.Empty<GridEventInfo>(),
+            eventCount: 0);
+        var blockedMeter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
+            maxConsumedEnvelopes: 1,
+            maxBaselineAddresses: 1,
+            maxOverlaySlots: 1,
+            maxComponentNodes: 1,
+            maxSeamCandidateProbes: 1,
+            maxExplicitEdges: 1,
+            maxDependencyEntries: 1,
+            maxSurfaceComponentEdges: 1));
+        blockedMeter.TryConsumeDependencyEntries(1).Should().BeTrue();
+
+        blockedWork.Advance(blockedMeter).Should().BeFalse();
+        blockedMeter.ComponentNodes.Should().Be(1,
+            "map inspection remains charged while its unconsumed state waits for retry");
+        blockedMeter.DependencyEntries.Should().Be(1);
+    }
+
+    [Fact]
+    public void MaterializedPriorComponentCapture_ShouldRetryAfterSeedConsumesFrameBudget()
+    {
+        GridConfiguration configuration = RectangularConfiguration(GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        using var world = new GridWorld();
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        NavigationWorldGraph candidate = BuildComponentGraph(
+            world,
+            new NavigationMapBuilder("map", binding)
+                .AddCell(default, Cell(TraversalMedia.Solid))
+                .Build());
+        var changedState = new NavigationSurfaceComponentKey(
+            new NavigationCellAddress("map", default),
+            TraversalMedium.Solid);
+        var work = new NavigationMaterializedComponentWork(
+            candidate,
+            NavigationSurfaceComponentKeySet.Empty.Add(changedState),
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationCellAddressSet.Empty,
+            affectedMemberCount: 0,
+            world: null,
+            baselineCaptures: null,
+            affectedMapOrdinals: null,
+            affectedMapCount: 0,
+            events: null,
+            eventCount: 0);
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
+            maxConsumedEnvelopes: 1,
+            maxBaselineAddresses: 1,
+            maxOverlaySlots: 1,
+            maxComponentNodes: 1,
+            maxSeamCandidateProbes: 1,
+            maxExplicitEdges: 1,
+            maxDependencyEntries: 1,
+            maxSurfaceComponentEdges: 1));
+
+        work.Advance(meter).Should().BeFalse(
+            "the seed consumes the sole dependency entry before prior-component capture");
+        meter.ComponentNodes.Should().Be(1);
+        meter.DependencyEntries.Should().Be(1);
+        work.IsComplete.Should().BeFalse();
+
+        for (int frame = 0; frame < 64 && !work.IsComplete; frame++)
+        {
+            meter.Reset();
+            work.Advance(meter);
+        }
+        work.IsComplete.Should().BeTrue();
+        work.Result.TryGetSurfaceComponent(
+                changedState.Representative,
+                TraversalMedium.Solid,
+                out _,
+                out _)
+            .Should().BeTrue("retry must retain and rebuild the captured prior component");
+    }
+
+    [Fact]
+    public void MaterializedSolidAdjacency_ShouldResumeOutgoingAndIncomingScansAtOneEdgePerFrame()
+    {
+        GridConfiguration configuration = RectangularConfiguration(GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        using var world = new GridWorld();
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        NavigationWorldGraph candidate = BuildComponentGraph(
+            world,
+            new NavigationMapBuilder("map", binding)
+                .AddCell(default, Cell(TraversalMedia.Solid))
+                .AddCell(new VoxelIndex(1, 0, 0), Cell(TraversalMedia.Solid))
+                .Build());
+        NavigationMapInstance instance = candidate.GetInstance(0);
+        var changedState = new NavigationSurfaceComponentKey(
+            new NavigationCellAddress("map", default),
+            TraversalMedium.Solid);
+        var captures = new NavigationGridBaselineCapture[1];
+        captures[0] = new NavigationGridBaselineCapture(
+            instance,
+            NavigationSurfaceComponentKeySet.Empty.Add(changedState),
+            defaultPhysicalAddressSetChanged: false,
+            addressCount: 2,
+            instance.GridLastChangeSequence,
+            instance.GridIdentity.WorldSpawnToken,
+            instance.GridIdentity.GridIndex,
+            instance.GridIdentity.GridSpawnToken,
+            instance.GridLastChangeSequence,
+            instance.Map.GridBinding.Key);
+        var work = new NavigationMaterializedComponentWork(
+            candidate,
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationCellAddressSet.Empty,
+            affectedMemberCount: 0,
+            world,
+            captures,
+            new[] { 0 },
+            affectedMapCount: 1,
+            events: Array.Empty<GridEventInfo>(),
+            eventCount: 0);
+        MaintenanceWorkBudget sourceBudget =
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
+            sourceBudget.MaxConsumedEnvelopes,
+            sourceBudget.MaxBaselineAddresses,
+            sourceBudget.MaxOverlaySlots,
+            sourceBudget.MaxComponentNodes,
+            sourceBudget.MaxSeamCandidateProbes,
+            sourceBudget.MaxExplicitEdges,
+            sourceBudget.MaxDependencyEntries,
+            maxSurfaceComponentEdges: 1));
+        int blockedFrames = 0;
+        for (int frame = 0; frame < 128 && !work.IsComplete; frame++)
+        {
+            if (!work.Advance(meter))
+                blockedFrames++;
+            meter.SurfaceComponentEdges.Should().BeLessThanOrEqualTo(1);
+            meter.Reset();
+        }
+
+        work.IsComplete.Should().BeTrue();
+        blockedFrames.Should().BeGreaterThan(1,
+            "outgoing and incoming directions must both carry across bounded frames");
+        work.Result.AreInSameSurfaceComponent(
+                new NavigationCellAddress("map", default),
+                TraversalMedium.Solid,
+                new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                TraversalMedium.Solid)
+            .Should().BeTrue(
+                "pausing either incident scan must not lose the adjacent member");
+    }
+
+    [Fact]
+    public void MaterializedComponentPublication_ShouldRestartAfterSeamCursorBecomesStale()
+    {
+        GridConfiguration configuration = RectangularConfiguration(GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        using var world = new GridWorld();
+        world.TryAddGrid(configuration, out _).Should().BeTrue();
+        NavigationWorldGraph candidate = BuildComponentGraph(
+            world,
+            new NavigationMapBuilder("map", binding).AddCell(default, GasCell).Build());
+        NavigationMapInstance instance = candidate.GetInstance(0);
+        var changedState = new NavigationSurfaceComponentKey(
+            new NavigationCellAddress("map", default),
+            TraversalMedium.Gas);
+        var captures = new NavigationGridBaselineCapture[1];
+        captures[0] = new NavigationGridBaselineCapture(
+            instance,
+            NavigationSurfaceComponentKeySet.Empty.Add(changedState),
+            defaultPhysicalAddressSetChanged: true,
+            addressCount: 1,
+            capturedChangeSequence: instance.GridLastChangeSequence,
+            instance.GridIdentity.WorldSpawnToken,
+            instance.GridIdentity.GridIndex,
+            instance.GridIdentity.GridSpawnToken,
+            instance.GridLastChangeSequence,
+            instance.Map.GridBinding.Key);
+        var work = new NavigationMaterializedComponentWork(
+            candidate,
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationCellAddressSet.Empty,
+            affectedMemberCount: 0,
+            world,
+            captures,
+            new[] { 0 },
+            affectedMapCount: 1,
+            events: Array.Empty<GridEventInfo>(),
+            eventCount: 0);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        for (int frame = 0; frame < 4096 && !work.IsComplete; frame++)
+        {
+            work.Advance(meter);
+            meter.Reset();
+        }
+        work.IsComplete.Should().BeTrue();
+        work.RevalidateForPublication().Should().BeTrue();
+
+        var unrelated = new GridConfiguration(
+            new Vector3d(100, 0, 0),
+            new Vector3d(101, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        world.TryAddGrid(unrelated, out _).Should().BeTrue();
+
+        work.RevalidateForPublication().Should().BeFalse(
+            "a topology mutation after seam discovery invalidates the completed contact cursor");
+        work.RequiresSnapshotRestart.Should().BeTrue();
+        work.IsComplete.Should().BeFalse(
+            "the stale component root cannot escape before a fresh physical snapshot");
+    }
+
+    [Fact]
+    public void RemovedMaterializedState_ShouldRetryItsSeedAndCompleteWithoutStaleAdjacency()
+    {
+        var removedAddress = new NavigationCellAddress("removed", default);
+        var removedState = new NavigationSurfaceComponentKey(
+            removedAddress,
+            TraversalMedium.Solid);
+        var work = new NavigationMaterializedComponentWork(
+            NavigationWorldGraph.Empty,
+            NavigationSurfaceComponentKeySet.Empty.Add(removedState),
+            NavigationSurfaceComponentKeySet.Empty,
+            NavigationCellAddressSet.Empty,
+            affectedMemberCount: 0,
+            world: null,
+            baselineCaptures: null,
+            affectedMapOrdinals: null,
+            affectedMapCount: 0,
+            events: null,
+            eventCount: 0);
+        MaintenanceWorkBudget budget = TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        var meter = new MaintenanceWorkMeter(budget);
+        meter.TryConsumeDependencyEntries(budget.MaxDependencyEntries).Should().BeTrue();
+        long initialBytes = work.RetainedBytes;
+
+        work.Advance(meter).Should().BeFalse();
+        meter.ComponentNodes.Should().Be(1);
+        work.RetainedBytes.Should().Be(initialBytes,
+            "a seed that cannot debit dependency work must remain uncommitted for retry");
+
+        meter.Reset();
+        for (int frame = 0; frame < 64 && !work.IsComplete; frame++)
+        {
+            work.Advance(meter);
+            meter.Reset();
+        }
+
+        work.IsComplete.Should().BeTrue();
+        work.Result.TryGetSurfaceComponent(
+                removedAddress,
+                TraversalMedium.Solid,
+                out _,
+                out _)
+            .Should().BeFalse(
+                "a removed state contributes an exact rebuild seed but no stale outgoing adjacency");
     }
 
     [Theory]
@@ -1870,27 +2117,6 @@ public sealed class NavigationMediumGraphTests
         {
             runtime.Maintain(frame + 1);
         }
-    }
-
-    private static bool HasPendingGridChangeIngress(NavigationGraphRuntime runtime)
-    {
-        object ingress = typeof(NavigationGraphRuntime).GetField(
-                "_ingress",
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)!
-            .GetValue(runtime)!;
-        System.Type type = ingress.GetType();
-        int count = (int)type.GetField(
-                "_count",
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)!
-            .GetValue(ingress)!;
-        bool overflowed = (bool)type.GetField(
-                "_overflowed",
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)!
-            .GetValue(ingress)!;
-        return count != 0 || overflowed;
     }
 
     private static bool HasMediumState(

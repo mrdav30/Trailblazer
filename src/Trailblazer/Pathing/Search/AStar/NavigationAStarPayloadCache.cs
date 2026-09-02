@@ -12,8 +12,31 @@ namespace Trailblazer.Pathing;
 
 internal struct NavigationAStarPayloadReservation
 {
+    internal NavigationAStarPayloadReservation(
+        NavigationAStarPayloadCache owner,
+        NavigationAStarPayloadReservationSlot slot,
+        ulong generation,
+        long maximumBytes)
+    {
+        Owner = owner;
+        Slot = slot;
+        Generation = generation;
+        MaximumBytes = maximumBytes;
+    }
+
+    internal readonly NavigationAStarPayloadCache? Owner;
+    internal readonly NavigationAStarPayloadReservationSlot? Slot;
+    internal readonly ulong Generation;
+    internal readonly long MaximumBytes;
+    internal readonly bool HasLeaseSlot => Owner != null;
+}
+
+internal sealed class NavigationAStarPayloadReservationSlot
+{
+    internal ulong Generation;
     internal long MaximumBytes;
-    internal bool HasLeaseSlot;
+    internal bool IsReserved;
+    internal NavigationAStarPayloadReservationSlot? NextPooled;
 }
 
 /// <summary>Stores a bounded concrete set of dependency-validated A* payloads.</summary>
@@ -43,6 +66,7 @@ internal sealed class NavigationAStarPayloadCache
     private long _reservedPayloadBytes;
     private NavigationAStarPayloadLease? _freeLeases;
     private NavigationAStarGuideLease? _freeGuides;
+    private NavigationAStarPayloadReservationSlot? _freeReservationSlots;
 
     internal NavigationAStarPayloadCache(
         GridWorld world,
@@ -162,17 +186,11 @@ internal sealed class NavigationAStarPayloadCache
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(payloadLease, nameof(payloadLease));
         NavigationAStarPayload payload = payloadLease.Payload;
-        NavigationAStarQueryStatus status = payload.Status switch
-        {
-            NavigationSurfaceAStarStatus.Success => NavigationAStarQueryStatus.Success,
-            NavigationSurfaceAStarStatus.NoPath => NavigationAStarQueryStatus.NoPath,
-            _ => NavigationAStarQueryStatus.CapacityExceeded
-        };
-        if (status != NavigationAStarQueryStatus.Success || !payload.HasPath)
+        if (!payload.HasPath)
         {
             payloadLease.Dispose();
             guide = null;
-            return status;
+            return NavigationAStarQueryStatus.NoPath;
         }
         NavigationWorldGraphLease? graphLease = store.TryAcquire();
         if (graphLease == null)
@@ -207,6 +225,24 @@ internal sealed class NavigationAStarPayloadCache
         return NavigationAStarQueryStatus.Success;
     }
 
+    internal NavigationGuideStatus TryCreatePublicGuide(
+        NavigationWorldGraphStore store,
+        NavigationAStarPayloadLease payloadLease,
+        out NavigationGuideLease? guide)
+    {
+        NavigationAStarQueryStatus status = TryCreateGuide(
+            store,
+            payloadLease,
+            out NavigationAStarGuideLease? inner);
+        if (status != NavigationAStarQueryStatus.Success)
+        {
+            guide = null;
+            return NavigationGuideStatusMapper.ToPublic(status);
+        }
+        guide = new NavigationGuideLease(inner!);
+        return NavigationGuideStatus.Success;
+    }
+
     internal bool TryReservePayload(
         long maximumBytes,
         out NavigationAStarPayloadReservation reservation)
@@ -227,8 +263,24 @@ internal sealed class NavigationAStarPayloadCache
             }
             _reservedPayloadBytes = checked(_reservedPayloadBytes + maximumBytes);
             _reservedLeaseCount++;
-            reservation.MaximumBytes = maximumBytes;
-            reservation.HasLeaseSlot = true;
+            NavigationAStarPayloadReservationSlot? slot = _freeReservationSlots;
+            if (slot == null)
+            {
+                slot = new NavigationAStarPayloadReservationSlot();
+            }
+            else
+            {
+                _freeReservationSlots = slot.NextPooled;
+                slot.NextPooled = null;
+            }
+            slot.Generation = unchecked(slot.Generation + 1UL);
+            slot.MaximumBytes = maximumBytes;
+            slot.IsReserved = true;
+            reservation = new NavigationAStarPayloadReservation(
+                this,
+                slot,
+                slot.Generation,
+                maximumBytes);
             return true;
         }
     }
@@ -236,10 +288,20 @@ internal sealed class NavigationAStarPayloadCache
     internal void ReleasePayloadReservation(
         ref NavigationAStarPayloadReservation reservation)
     {
-        if (!reservation.HasLeaseSlot)
+        if (reservation.Owner == null)
+        {
+            reservation = default;
             return;
+        }
+        if (!ReferenceEquals(reservation.Owner, this))
+            return;
+        NavigationAStarPayloadReservation released = reservation;
+        reservation = default;
         lock (_sync)
-            ReleasePayloadReservationUnderLock(ref reservation);
+        {
+            if (IsReservationCurrentUnderLock(released))
+                ReleasePayloadReservationUnderLock(released);
+        }
     }
 
     internal bool TryCheckoutReserved(
@@ -252,7 +314,8 @@ internal sealed class NavigationAStarPayloadCache
         lease = null!;
         lock (_sync)
         {
-            ValidateReservationUnderLock(reservation);
+            if (!IsReservationCurrentUnderLock(reservation))
+                return false;
             FindSlot(key, out int slot, out bool found);
             if (!found)
                 return false;
@@ -265,8 +328,7 @@ internal sealed class NavigationAStarPayloadCache
             }
             long otherReservations =
                 _reservedPayloadBytes - reservation.MaximumBytes;
-            if (_activeLeaseCount + _reservedLeaseCount - 1 >= _maximumActiveLeases
-                || current.Payload.RetainedBytes > reservation.MaximumBytes
+            if (current.Payload.RetainedBytes > reservation.MaximumBytes
                 || (current.LeaseCount == 0
                     && current.Payload.RetainedBytes > _maximumActivePayloadBytes
                         - _leasedBytes
@@ -274,7 +336,8 @@ internal sealed class NavigationAStarPayloadCache
             {
                 return false;
             }
-            ReleasePayloadReservationUnderLock(ref reservation);
+            ReleasePayloadReservationUnderLock(reservation);
+            reservation = default;
             lease = Checkout(current);
             Touch(slot);
             return true;
@@ -291,19 +354,15 @@ internal sealed class NavigationAStarPayloadCache
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         lease = null!;
         long retainedBytes = payload.RetainedBytes;
-        if (!NavigationAStarPayload.IsReusableResult(
-                payload.Status,
-                payload.GuidePoints.Length)
-            || !reservation.HasLeaseSlot
-            || retainedBytes > reservation.MaximumBytes
-            || !store.Current.IsDependencyCurrent(payload.Dependencies)
-            || !IsWorldCurrent(payload))
+        if (!ReferenceEquals(reservation.Owner, this)
+            || retainedBytes > reservation.MaximumBytes)
         {
             return false;
         }
         lock (_sync)
         {
-            ValidateReservationUnderLock(reservation);
+            if (!IsReservationCurrentUnderLock(reservation))
+                return false;
             NavigationWorldGraph graph = store.Current;
             if (!graph.IsDependencyCurrent(payload.Dependencies)
                 || !IsWorldCurrent(payload))
@@ -317,16 +376,15 @@ internal sealed class NavigationAStarPayloadCache
                 if (graph.IsDependencyCurrent(current.Payload.Dependencies)
                     && IsWorldCurrent(current.Payload))
                 {
-                    if (_activeLeaseCount + _reservedLeaseCount - 1
-                            >= _maximumActiveLeases
-                        || (current.LeaseCount == 0
+                    if (current.LeaseCount == 0
                             && current.Payload.RetainedBytes > _maximumActivePayloadBytes
                                 - _leasedBytes
-                                - otherReservations))
+                                - otherReservations)
                     {
                         return false;
                     }
-                    ReleasePayloadReservationUnderLock(ref reservation);
+                    ReleasePayloadReservationUnderLock(reservation);
+                    reservation = default;
                     lease = Checkout(current);
                     Touch(slot);
                     return true;
@@ -334,32 +392,21 @@ internal sealed class NavigationAStarPayloadCache
                 RemoveAt(slot);
             }
 
-            if (_activeLeaseCount + _reservedLeaseCount - 1
-                    >= _maximumActiveLeases
-                || retainedBytes > _maximumActivePayloadBytes
-                    - _leasedBytes
-                    - otherReservations)
-                return false;
             if (_maximumEntries == 0 || retainedBytes > _maximumReusableBytes)
             {
                 var detached = new CacheEntry(payload, isCached: false);
                 _detachedBytes = checked(_detachedBytes + retainedBytes);
-                ReleasePayloadReservationUnderLock(ref reservation);
+                ReleasePayloadReservationUnderLock(reservation);
+                reservation = default;
                 lease = Checkout(detached);
                 return true;
             }
 
             while (_count >= _maximumEntries
                 || retainedBytes > _maximumReusableBytes - _cachedBytes)
-            {
-                if (_leastRecent < 0)
-                    return false;
                 RemoveAt(_leastRecent);
-            }
 
             FindSlot(payload.Key, out slot, out found);
-            if (slot < 0 || found)
-                throw new InvalidOperationException("The A* payload cache table is inconsistent.");
             var entry = new CacheEntry(payload, isCached: true);
             _states[slot] = 1;
             _keys[slot] = payload.Key;
@@ -367,7 +414,8 @@ internal sealed class NavigationAStarPayloadCache
             LinkMostRecent(slot);
             _count++;
             _cachedBytes = checked(_cachedBytes + retainedBytes);
-            ReleasePayloadReservationUnderLock(ref reservation);
+            ReleasePayloadReservationUnderLock(reservation);
+            reservation = default;
             lease = Checkout(entry);
             return true;
         }
@@ -391,8 +439,6 @@ internal sealed class NavigationAStarPayloadCache
             return;
         lock (_sync)
         {
-            if (entry.LeaseCount <= 0)
-                throw new InvalidOperationException("The A* payload lease has already returned.");
             entry.LeaseCount--;
             _activeLeaseCount--;
             if (entry.LeaseCount == 0)
@@ -409,33 +455,22 @@ internal sealed class NavigationAStarPayloadCache
     {
         if (!guide.TryDetach(
                 generation,
-                out NavigationAStarPayloadLease? payloadLease))
+                out NavigationAStarPayloadLease payloadLease))
             return;
-        payloadLease?.Dispose();
-        if (!guide.CanReuse)
-            return;
+        payloadLease.Dispose();
         lock (_sync)
-        {
-            guide.NextPooled = _freeGuides;
-            _freeGuides = guide;
-        }
+            RetainGuideIfReusable(generation, guide, ref _freeGuides);
     }
 
-    private bool TryCheckout(
-        CacheEntry entry,
-        out NavigationAStarPayloadLease lease)
+    internal static void RetainGuideIfReusable(
+        long generation,
+        NavigationAStarGuideLease guide,
+        ref NavigationAStarGuideLease? freeGuides)
     {
-        if (_activeLeaseCount + _reservedLeaseCount >= _maximumActiveLeases
-            || (entry.LeaseCount == 0
-                && entry.Payload.RetainedBytes > _maximumActivePayloadBytes
-                    - _leasedBytes
-                    - _reservedPayloadBytes))
-        {
-            lease = null!;
-            return false;
-        }
-        lease = Checkout(entry);
-        return true;
+        if (!NavigationGenerationCounter.CanAdvance(generation))
+            return;
+        guide.NextPooled = freeGuides;
+        freeGuides = guide;
     }
 
     private NavigationAStarPayloadLease Checkout(CacheEntry entry)
@@ -462,24 +497,23 @@ internal sealed class NavigationAStarPayloadCache
         _freeLeases = lease;
     }
 
-    private void ValidateReservationUnderLock(
-        NavigationAStarPayloadReservation reservation)
-    {
-        if (!reservation.HasLeaseSlot
-            || _reservedLeaseCount <= 0
-            || reservation.MaximumBytes > _reservedPayloadBytes)
-        {
-            throw new InvalidOperationException("The A* payload reservation is inconsistent.");
-        }
-    }
+    private bool IsReservationCurrentUnderLock(
+        NavigationAStarPayloadReservation reservation) =>
+        ReferenceEquals(reservation.Owner, this)
+        && reservation.Slot != null
+        && reservation.Slot.Generation == reservation.Generation
+        && reservation.Slot.IsReserved;
 
     private void ReleasePayloadReservationUnderLock(
-        ref NavigationAStarPayloadReservation reservation)
+        NavigationAStarPayloadReservation reservation)
     {
-        ValidateReservationUnderLock(reservation);
-        _reservedPayloadBytes -= reservation.MaximumBytes;
+        NavigationAStarPayloadReservationSlot slot = reservation.Slot!;
+        _reservedPayloadBytes -= slot.MaximumBytes;
         _reservedLeaseCount--;
-        reservation = default;
+        slot.MaximumBytes = 0;
+        slot.IsReserved = false;
+        slot.NextPooled = _freeReservationSlots;
+        _freeReservationSlots = slot;
     }
 
     private void FindSlot(
@@ -499,7 +533,7 @@ internal sealed class NavigationAStarPayloadCache
                     slot = firstRemoved;
                 return;
             }
-            if (state == 1 && _keys[slot] == key)
+            if (state == 1 && _keys[slot].Equals(key))
             {
                 found = true;
                 return;

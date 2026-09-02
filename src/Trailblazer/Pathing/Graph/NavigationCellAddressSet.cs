@@ -68,7 +68,7 @@ internal sealed class NavigationCellAddressSet
             ordinal,
             nameof(ordinal));
         int remaining = ordinal;
-        for (int map = 0; map < _maps.Count; map++)
+        for (int map = 0; ; map++)
         {
             PersistentVoxelIndexMap<byte> values = _maps.GetValueAt(map);
             if (remaining < values.Count)
@@ -79,6 +79,5 @@ internal sealed class NavigationCellAddressSet
             }
             remaining -= values.Count;
         }
-        return default;
     }
 }

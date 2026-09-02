@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
@@ -36,24 +37,25 @@ public readonly struct NavigationTokenLegendEntry
         NavigationCell cell,
         TraversalMedia transitionMedia = TraversalMedia.None)
     {
-        SwiftThrowHelper.ThrowIfArgument(
-            cell.Media == TraversalMedia.None || (cell.Media & ~NavigationCell.KnownMedia) != 0,
-            nameof(cell),
-            "The emitted cell must contain at least one known traversal-medium bit.");
-        SwiftThrowHelper.ThrowIfArgument(
-            (cell.RequiredCapabilities & ~NavigationCell.KnownCapabilities) != 0
-            || (cell.Flags & ~NavigationCell.KnownFlags) != 0
-            || cell.EnterCost < Fixed64.Zero
-            || cell.RadiusClearance < Fixed64.Zero
-            || cell.HeightClearance < Fixed64.Zero,
-            nameof(cell),
-            "The emitted cell must contain a complete valid navigation payload.");
-        SwiftThrowHelper.ThrowIfArgument(
-            transitionMedia != TraversalMedia.None
-            && ((transitionMedia & ~NavigationCell.KnownMedia) != 0
-                || (transitionMedia & ~cell.Media) != 0),
-            nameof(transitionMedia),
-            "Transition media must be a known subset of the emitted cell media.");
+        if (cell.Media == TraversalMedia.None)
+            throw new ArgumentException(
+                "The emitted cell must contain at least one known traversal-medium bit.",
+                nameof(cell));
+
+        System.Diagnostics.Debug.Assert((cell.Media & ~NavigationCell.KnownMedia) == 0);
+        System.Diagnostics.Debug.Assert((cell.RequiredCapabilities & ~NavigationCell.KnownCapabilities) == 0);
+        System.Diagnostics.Debug.Assert((cell.Flags & ~NavigationCell.KnownFlags) == 0);
+        System.Diagnostics.Debug.Assert(cell.EnterCost >= Fixed64.Zero);
+        System.Diagnostics.Debug.Assert(cell.RadiusClearance >= Fixed64.Zero);
+        System.Diagnostics.Debug.Assert(cell.HeightClearance >= Fixed64.Zero);
+
+        if ((transitionMedia & ~NavigationCell.KnownMedia) != 0
+            || (transitionMedia & ~cell.Media) != 0)
+        {
+            throw new ArgumentException(
+                "Transition media must be a known subset of the emitted cell media.",
+                nameof(transitionMedia));
+        }
 
         EmitsCell = true;
         Cell = cell;

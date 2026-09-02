@@ -1059,7 +1059,6 @@ public abstract partial class Navigator : INavigate, IRecordable
     {
         if (query.Agent != NavigationProfile
             || query.Start.Position != FootPosition
-            || query.Algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField
             || query.Traversal.StartMedium != _frameCondition.Medium)
         {
             throw new ArgumentException(

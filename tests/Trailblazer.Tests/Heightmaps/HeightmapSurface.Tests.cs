@@ -21,6 +21,12 @@ public sealed class HeightmapSurfaceTests
             Vector3d.Zero,
             Fixed64.One,
             compression);
+        Action emptySamples = () => HeightmapSurface.FromCompressed(
+            "EmptySamples",
+            new SwiftShortArray2D(),
+            Vector3d.Zero,
+            Fixed64.One,
+            compression);
         Action zeroInterval = () => HeightmapSurface.FromCompressed(
             "ZeroInterval",
             samples,
@@ -35,6 +41,7 @@ public sealed class HeightmapSurfaceTests
             compression);
 
         nullSamples.Should().Throw<ArgumentNullException>().WithParameterName("samples");
+        emptySamples.Should().Throw<ArgumentException>().WithParameterName("samples");
         zeroInterval.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("interval");
         negativeInterval.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("interval");
     }
@@ -56,9 +63,30 @@ public sealed class HeightmapSurfaceTests
             Vector3d.Zero,
             Fixed64.Zero,
             compression);
+        Action blankName = () => HeightmapSurface.FromHeights(
+            " ",
+            new Fixed64[1, 1],
+            Vector3d.Zero,
+            Fixed64.One,
+            compression);
+        Action emptySamples = () => HeightmapSurface.FromHeights(
+            "Empty",
+            new Fixed64[0, 1],
+            Vector3d.Zero,
+            Fixed64.One,
+            compression);
+        Action invalidCompression = () => HeightmapSurface.FromHeights(
+            "InvalidCompression",
+            new Fixed64[1, 1],
+            Vector3d.Zero,
+            Fixed64.One,
+            default);
 
         nullHeights.Should().Throw<ArgumentNullException>().WithParameterName("heights");
         zeroInterval.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("interval");
+        blankName.Should().Throw<ArgumentException>().WithParameterName("name");
+        emptySamples.Should().Throw<ArgumentException>().WithParameterName("heights");
+        invalidCompression.Should().Throw<ArgumentException>().WithParameterName("compression");
     }
 
     [Fact]
@@ -107,6 +135,23 @@ public sealed class HeightmapSurfaceTests
 
         surface.TrySampleGround(new Vector3d(-Fixed64.Half, Fixed64.Zero, Fixed64.Half), out _).Should().BeFalse();
         surface.TrySampleGround(new Vector3d(Fixed64.Half, Fixed64.Zero, -Fixed64.Half), out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(2, 0)]
+    [InlineData(0, 2)]
+    public void TrySampleGround_ShouldFailForPositionAboveMaxBounds(int x, int z)
+    {
+        HeightmapSurface surface = CreateSurface(
+            new short[2, 2]
+            {
+                { 1, 2 },
+                { 3, 4 }
+            });
+
+        surface.TrySampleGround(new Vector3d(x, 0, z), out Fixed64 groundY)
+            .Should().BeFalse();
+        groundY.Should().Be(Fixed64.Zero);
     }
 
     [Fact]

@@ -62,17 +62,7 @@ public sealed class NavigationMapOverlayDelta
         _cellView = Array.AsReadOnly(_cells);
         _connectionView = Array.AsReadOnly(_connections);
         _transitionView = Array.AsReadOnly(_transitions);
-        try
-        {
-            EstimatedDescriptorBytes = EstimateDescriptorBytes();
-        }
-        catch (OverflowException)
-        {
-            SwiftThrowHelper.ThrowIfArgument(
-                true,
-                nameof(cells),
-                "Overlay descriptor-byte accounting overflowed.");
-        }
+        EstimatedDescriptorBytes = EstimateDescriptorBytes();
     }
 
     /// <summary>Gets the stable source map identifier.</summary>
@@ -103,7 +93,6 @@ public sealed class NavigationMapOverlayDelta
     {
         for (int i = 0; i < operations.Length; i++)
         {
-            NavigationCellOverlayOperation.ValidateKind(operations[i].Kind);
             NavigationCell cell = operations[i].Cell;
             SwiftThrowHelper.ThrowIfArgument(
                 operations[i].Kind == NavigationCellOverlayOperationKind.Set
@@ -128,22 +117,12 @@ public sealed class NavigationMapOverlayDelta
         for (int i = 0; i < operations.Length; i++)
         {
             NavigationConnectionOverlayOperation operation = operations[i];
-            NavigationConnectionOverlayOperation.ValidateKind(operation.Kind);
             SwiftThrowHelper.ThrowIfArgument(
                 string.IsNullOrWhiteSpace(operation.Id),
                 nameof(operations),
                 "Connection overlay ids cannot be empty.");
-            SwiftThrowHelper.ThrowIfArgument(
-                operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
-                && !string.Equals(operation.Id, operation.Connection?.Id, StringComparison.Ordinal),
-                nameof(operations),
-                "Connection Upsert key must match the complete definition id.");
             if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert)
             {
-                SwiftThrowHelper.ThrowIfArgument(
-                    string.IsNullOrWhiteSpace(operation.Connection!.Destination.MapId),
-                    nameof(operations),
-                    "Connection Upsert destination map id cannot be empty.");
                 ValidateConnectionWitnesses(operation.Connection!, operations);
             }
             SwiftThrowHelper.ThrowIfArgument(
@@ -175,21 +154,10 @@ public sealed class NavigationMapOverlayDelta
     {
         for (int i = 0; i < operations.Length; i++)
         {
-            TraversalTransitionOverlayOperation.ValidateKind(operations[i].Kind);
             SwiftThrowHelper.ThrowIfArgument(
                 string.IsNullOrWhiteSpace(operations[i].Id),
                 nameof(operations),
                 "Transition overlay ids cannot be empty.");
-            SwiftThrowHelper.ThrowIfArgument(
-                operations[i].Kind == TraversalTransitionOverlayOperationKind.Upsert
-                && !string.Equals(operations[i].Id, operations[i].Transition.Id, StringComparison.Ordinal),
-                nameof(operations),
-                "Transition Upsert key must match the complete definition id.");
-            SwiftThrowHelper.ThrowIfArgument(
-                operations[i].Kind == TraversalTransitionOverlayOperationKind.Upsert
-                && string.IsNullOrWhiteSpace(operations[i].Transition.Destination.MapId),
-                nameof(operations),
-                "Transition Upsert destination map id cannot be empty.");
             SwiftThrowHelper.ThrowIfArgument(
                 i > 0 && string.Equals(operations[i - 1].Id, operations[i].Id, StringComparison.Ordinal),
                 nameof(operations),
@@ -199,12 +167,12 @@ public sealed class NavigationMapOverlayDelta
 
     private long EstimateDescriptorBytes()
     {
-        return checked(
-            32L
-            + (MapId.Length * sizeof(char))
-            + ((long)_cells.Length * 64L)
-            + EstimateIdOperations(_connections)
-            + EstimateIdOperations(_transitions));
+        long bytes = NavigationByteCount.SaturatingAdd(
+            32L,
+            (long)MapId.Length * sizeof(char));
+        bytes = NavigationByteCount.SaturatingAdd(bytes, (long)_cells.Length * 64L);
+        bytes = NavigationByteCount.SaturatingAdd(bytes, EstimateIdOperations(_connections));
+        return NavigationByteCount.SaturatingAdd(bytes, EstimateIdOperations(_transitions));
     }
 
     internal static long EstimateRetainedPayload(NavigationCellOverlayOperation operation) => 64L;
@@ -213,7 +181,7 @@ public sealed class NavigationMapOverlayDelta
     {
         long bytes = 0;
         for (int i = 0; i < operations.Length; i++)
-            bytes = checked(bytes + EstimateRetainedPayload(operations[i]));
+            bytes = NavigationByteCount.SaturatingAdd(bytes, EstimateRetainedPayload(operations[i]));
         return bytes;
     }
 
@@ -221,37 +189,44 @@ public sealed class NavigationMapOverlayDelta
     {
         long bytes = 0;
         for (int i = 0; i < operations.Length; i++)
-            bytes = checked(bytes + EstimateRetainedPayload(operations[i]));
+            bytes = NavigationByteCount.SaturatingAdd(bytes, EstimateRetainedPayload(operations[i]));
         return bytes;
     }
 
     internal static long EstimateRetainedPayload(NavigationConnectionOverlayOperation operation)
     {
-        long bytes = checked(96L + (operation.Id.Length * sizeof(char)));
+        long bytes = NavigationByteCount.SaturatingAdd(
+            96L,
+            (long)operation.Id.Length * sizeof(char));
         if (operation.Kind != NavigationConnectionOverlayOperationKind.Upsert)
             return bytes;
 
         NavigationConnection connection = operation.Connection!;
-        bytes = checked(bytes + 96L + (connection.Destination.MapId.Length * sizeof(char)));
+        bytes = NavigationByteCount.SaturatingAdd(bytes, 96L);
+        bytes = NavigationByteCount.SaturatingAdd(
+            bytes,
+            (long)connection.Destination.MapId.Length * sizeof(char));
         for (int witness = 0; witness < connection.Witnesses.Count; witness++)
         {
-            bytes = checked(
-                bytes
-                + 32L
-                + (connection.Witnesses[witness].MapId.Length * sizeof(char)));
+            bytes = NavigationByteCount.SaturatingAdd(bytes, 32L);
+            bytes = NavigationByteCount.SaturatingAdd(
+                bytes,
+                (long)connection.Witnesses[witness].MapId.Length * sizeof(char));
         }
         return bytes;
     }
 
     internal static long EstimateRetainedPayload(TraversalTransitionOverlayOperation operation)
     {
-        long bytes = checked(96L + (operation.Id.Length * sizeof(char)));
+        long bytes = NavigationByteCount.SaturatingAdd(
+            96L,
+            (long)operation.Id.Length * sizeof(char));
         if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert)
         {
-            bytes = checked(
-                bytes
-                + 64L
-                + (operation.Transition.Destination.MapId.Length * sizeof(char)));
+            bytes = NavigationByteCount.SaturatingAdd(bytes, 64L);
+            bytes = NavigationByteCount.SaturatingAdd(
+                bytes,
+                (long)operation.Transition.Destination.MapId.Length * sizeof(char));
         }
         return bytes;
     }

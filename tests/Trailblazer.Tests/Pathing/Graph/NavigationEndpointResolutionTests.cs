@@ -5,7 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System.Reflection;
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -21,6 +21,54 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationEndpointResolutionTests
 {
+    [Theory]
+    [InlineData(false, 1, "current", 2, "candidate", true)]
+    [InlineData(true, 2, "current", 1, "candidate", true)]
+    [InlineData(true, 1, "current", 2, "candidate", false)]
+    [InlineData(true, 1, "b", 1, "a", true)]
+    [InlineData(true, 1, "b", 1, "b", false)]
+    [InlineData(true, 1, "b", 1, "c", false)]
+    public void CandidateSelection_ShouldPreferNearestThenCanonicalAddress(
+        bool hasCurrent,
+        int currentDistance,
+        string currentMapId,
+        int candidateDistance,
+        string candidateMapId,
+        bool expected)
+    {
+        var current = new NavigationResolvedEndpoint(
+            default,
+            new NavigationCellAddress(currentMapId, default),
+            TraversalMedia.Solid,
+            TraversalMedium.Solid,
+            Vector3d.Left,
+            (Fixed64)currentDistance);
+        var candidate = new NavigationResolvedEndpoint(
+            default,
+            new NavigationCellAddress(candidateMapId, default),
+            TraversalMedia.Gas,
+            TraversalMedium.Gas,
+            Vector3d.Right,
+            (Fixed64)candidateDistance);
+
+        NavigationEndpointResolutionWork.SelectPreferredCandidate(
+                hasCurrent,
+                current,
+                candidate,
+                out NavigationResolvedEndpoint preferred)
+            .Should().Be(expected);
+
+        preferred.Address.Should().Be(expected ? candidate.Address : current.Address);
+        preferred.ResolutionDistance.Should().Be(expected
+            ? candidate.ResolutionDistance
+            : current.ResolutionDistance);
+        preferred.Media.Should().Be(expected ? TraversalMedia.Gas : TraversalMedia.Solid);
+        preferred.ResolutionMedium.Should().Be(expected
+            ? TraversalMedium.Gas
+            : TraversalMedium.Solid);
+        preferred.FootAnchor.Should().Be(expected ? Vector3d.Right : Vector3d.Left);
+    }
+
     [Fact]
     public void ComponentDependencyCapacity_ShouldBeIndependentFromEndpointPages()
     {
@@ -151,6 +199,40 @@ public sealed class NavigationEndpointResolutionTests
         graph.TryGetNodeState(filtered.Result.Node, out NavigationNodeState filteredState)
             .Should().BeTrue();
         filteredState.FootAnchor.X.Should().Be(selectedPrism.Center.X);
+        int terminalLookupProbes = meter.LookupProbes;
+        int terminalCandidates = meter.EndpointCandidates;
+        filtered.Advance(lookupStepLimit: 64, endpointCandidateStepLimit: 64)
+            .Should().Be(NavigationEndpointResolutionStatus.Success);
+        meter.LookupProbes.Should().Be(terminalLookupProbes);
+        meter.EndpointCandidates.Should().Be(terminalCandidates,
+            "a terminal endpoint resolution must not consume deterministic work twice");
+
+        workspace.Reset();
+        meter.Reset(CreateRayBudget(64));
+        var outsideAnchorLimit = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            outsideAnchorLimit,
+            graph,
+            new NavigationEndpoint(
+                requested,
+                "selected",
+                EndpointResolutionPolicy.NearestNavigable,
+                Fixed64.Half),
+            NavigationEndpointRole.Start,
+            PointProfile());
+        Drain(outsideAnchorLimit);
+
+        outsideAnchorLimit.Status.Should().Be(
+            NavigationEndpointResolutionStatus.InvalidEndpoint,
+            "prism overlap cannot admit a foot anchor beyond the exact resolution radius");
+        meter.EndpointCandidates.Should().Be(4,
+            "the half-unit bounds deterministically scan four covered voxels before rejecting the sole mapped anchor");
     }
 
     [Theory]
@@ -281,6 +363,337 @@ public sealed class NavigationEndpointResolutionTests
     }
 
     [Theory]
+    [InlineData(1, 4, (int)NavigationEndpointResolutionStatus.CapacityExceeded, 1)]
+    [InlineData(2, 4, (int)NavigationEndpointResolutionStatus.Success, 12)]
+    [InlineData(4, 1, (int)NavigationEndpointResolutionStatus.CapacityExceeded, 1)]
+    [InlineData(4, 2, (int)NavigationEndpointResolutionStatus.Success, 12)]
+    public void NearestNavigable_ShouldRejectCandidateWhenItsRayProofDependencyDoesNotFit(
+        int pageCapacity,
+        int componentCapacity,
+        int expectedStatusValue,
+        int expectedCandidateCount)
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance overlap = CreateInstance(
+            world,
+            "a-overlap",
+            CreateAlternateOverlapConfiguration(),
+            physicallyPresent: true);
+        GridConfiguration candidateConfiguration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(
+            world,
+            "z-candidate",
+            candidateConfiguration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(overlap, candidate);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        candidateConfiguration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        Vector3d requested = new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 2,
+            endpointPageCapacity: pageCapacity,
+            componentCapacity: componentCapacity,
+            nodeCapacity: 2,
+            rayCoveredAddressCapacity: 64,
+            rayTraceIntervalCapacity: 32,
+            guidePointCapacity: 2);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(
+                requested,
+                "z-candidate",
+                resolution: EndpointResolutionPolicy.NearestNavigable,
+                maxResolutionDistance: (Fixed64)4),
+            NavigationEndpointRole.Start,
+            PointProfile());
+
+        Drain(work);
+
+        work.Status.Should().Be((NavigationEndpointResolutionStatus)expectedStatusValue,
+            "each independently captured ray dependency must fit before the blocked proof is accepted");
+        if (work.Status == NavigationEndpointResolutionStatus.Success)
+        {
+            work.Result.Address.Should().Be(
+                new NavigationCellAddress("z-candidate", default));
+        }
+        else
+        {
+            work.Result.Should().Be(default(NavigationResolvedEndpoint));
+        }
+        meter.EndpointCandidates.Should().Be(expectedCandidateCount,
+            "capacity failure terminates on the first proof, while success completes the deterministic nearest scan");
+    }
+
+    [Fact]
+    public void NearestNavigable_ShouldRejectAFormerlyOverlappingRayPageAfterCandidateAcceptance()
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance overlap = CreateInstance(
+            world,
+            "a-overlap",
+            CreateAlternateOverlapConfiguration(),
+            physicallyPresent: true);
+        GridConfiguration candidateConfiguration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(
+            world,
+            "z-candidate",
+            candidateConfiguration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(overlap, candidate);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        candidateConfiguration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        Vector3d requested = new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 2,
+            endpointPageCapacity: 4,
+            componentCapacity: 4,
+            nodeCapacity: 2,
+            rayCoveredAddressCapacity: 64,
+            rayTraceIntervalCapacity: 32,
+            guidePointCapacity: 2);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(
+                requested,
+                "z-candidate",
+                resolution: EndpointResolutionPolicy.NearestNavigable,
+                maxResolutionDistance: (Fixed64)4),
+            NavigationEndpointRole.Start,
+            PointProfile());
+
+        for (int step = 0;
+             step < 64 && work.Result.Address.MapId != "z-candidate";
+             step++)
+        {
+            work.Advance(lookupStepLimit: 64, endpointCandidateStepLimit: 1)
+                .Should().Be(NavigationEndpointResolutionStatus.Pending);
+        }
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Pending,
+            "candidate-ray acceptance yields before endpoint finalization");
+        work.Result.Address.Should().Be(new NavigationCellAddress("z-candidate", default));
+        workspace.EndpointWorkspace.Dependencies.Pages.Should().Contain(
+            page => page.MapId == "a-overlap");
+        var candidateAddress = new NavigationCellAddress("z-candidate", default);
+        var overlapAddress = new NavigationCellAddress("a-overlap", default);
+        graph.TryGetSurfaceComponent(
+                candidateAddress,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey candidateComponent,
+                out _)
+            .Should().BeTrue();
+        graph.TryGetSurfaceComponent(
+                overlapAddress,
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey overlapComponent,
+                out _)
+            .Should().BeTrue();
+        graph.TryGetComponentDependency(
+                candidateComponent,
+                out GraphComponentDependency priorCandidateComponent)
+            .Should().BeTrue();
+        graph.TryGetComponentDependency(
+                overlapComponent,
+                out GraphComponentDependency priorOverlapComponent)
+            .Should().BeTrue();
+        var revised = new NavigationWorldGraph(
+            graph.GraphVersion + 1,
+            new[] { candidate },
+            areaCatalog: graph.AreaCatalog,
+            surfaceComponents: graph.SurfaceComponents);
+        revised.TryGetComponentDependency(
+                candidateComponent,
+                out GraphComponentDependency currentCandidateComponent)
+            .Should().BeTrue();
+        currentCandidateComponent.Should().Be(priorCandidateComponent);
+        revised.TryGetComponentDependency(
+                overlapComponent,
+                out GraphComponentDependency currentOverlapComponent)
+            .Should().BeTrue();
+        currentOverlapComponent.Should().Be(priorOverlapComponent,
+            "this snapshot changes only the overlap page dependency under validation");
+        revised.TryGetPageDependency(
+                new GraphPageDependencyAddress("a-overlap", pageIndex: 0),
+                out _)
+            .Should().BeFalse();
+        store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Stale);
+        work.Result.Should().Be(default(NavigationResolvedEndpoint),
+            "a stale page proof must not expose the provisionally accepted candidate");
+    }
+
+    [Fact]
+    public void SecondEndpoint_ShouldRejectRayPageUnionOneOverRetainedProofCapacity()
+    {
+        using var world = new GridWorld();
+        GridConfiguration firstConfiguration = CreateDenseCellConfiguration(
+            new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero));
+        NavigationMapInstance first = CreateInstance(
+            world,
+            "a-first",
+            firstConfiguration,
+            physicallyPresent: true);
+        NavigationMapInstance overlap = CreateInstance(
+            world,
+            "m-overlap",
+            CreateAlternateOverlapConfiguration(),
+            physicallyPresent: true);
+        GridConfiguration candidateConfiguration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(
+            world,
+            "z-candidate",
+            candidateConfiguration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(first, overlap, candidate);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        firstConfiguration.TryNormalize(out NormalizedGridConfiguration firstBinding)
+            .Should().BeTrue();
+        firstBinding.TryGetCellPrism(default, out GridCellPrism firstPrism)
+            .Should().BeTrue();
+        candidateConfiguration.TryNormalize(out NormalizedGridConfiguration candidateBinding)
+            .Should().BeTrue();
+        candidateBinding.TryGetCellPrism(default, out GridCellPrism candidatePrism)
+            .Should().BeTrue();
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 3,
+            endpointPageCapacity: 2,
+            componentCapacity: 4,
+            nodeCapacity: 3,
+            rayCoveredAddressCapacity: 64,
+            rayTraceIntervalCapacity: 32,
+            guidePointCapacity: 3);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        Vector3d firstFoot = new(
+            firstPrism.Center.X,
+            firstPrism.VerticalMin,
+            firstPrism.Center.Z);
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(firstFoot, "a-first"),
+            NavigationEndpointRole.Start,
+            PointProfile());
+        Drain(work);
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Success);
+        workspace.EndpointWorkspace.PageCount.Should().Be(1);
+
+        Vector3d requested = new(
+            candidatePrism.Center.X,
+            candidatePrism.VerticalMin,
+            candidatePrism.Center.Z);
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(
+                requested,
+                "z-candidate",
+                EndpointResolutionPolicy.NearestNavigable,
+                (Fixed64)4),
+            NavigationEndpointRole.Destination,
+            PointProfile());
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CapacityExceeded,
+            "the retained first-endpoint page and candidate page leave no slot for the independently valid overlap-ray proof");
+        work.Result.Should().Be(default(NavigationResolvedEndpoint));
+        workspace.EndpointWorkspace.PageCount.Should().Be(2,
+            "the rejected ray-page union must not partially mutate the retained endpoint proof");
+    }
+
+    [Fact]
+    public void NearestNavigable_ShouldRejectNearerCandidateWhenItsComponentProofDoesNotFit()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration =
+            NavigationAStarExitTestHarness.RectangularLine(3);
+        VoxelIndex[] candidates = { default, new VoxelIndex(2, 0, 0) };
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            candidates,
+            candidates,
+            Cell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(new VoxelIndex(1, 0, 0), out GridCellPrism emptyPrism)
+            .Should().BeTrue();
+        Vector3d requested = new(
+            emptyPrism.Center.X + (Fixed64.One / (Fixed64)4),
+            emptyPrism.VerticalMin,
+            emptyPrism.Center.Z);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 1,
+            componentCapacity: 1,
+            nodeCapacity: 2,
+            rayCoveredAddressCapacity: 8,
+            rayTraceIntervalCapacity: 8,
+            guidePointCapacity: 2);
+        var meter = new NavigationWorkMeter(CreateRayBudget(16));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(
+                requested,
+                "map",
+                EndpointResolutionPolicy.NearestNavigable,
+                (Fixed64)2),
+            NavigationEndpointRole.Start,
+            PointProfile());
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CapacityExceeded,
+            "the nearer cell's independently valid component proof cannot replace an earlier proof atomically when the union is over capacity");
+        work.Result.Should().Be(default(NavigationResolvedEndpoint));
+        meter.EndpointCandidates.Should().BeGreaterThan(1,
+            "the resolver must reject only after considering multiple independently valid candidates");
+        workspace.EndpointWorkspace.ComponentCount.Should().Be(1,
+            "the rejected component must not partially mutate the accumulated endpoint proof");
+    }
+
+    [Theory]
     [InlineData((int)NavigationEndpointRole.Start, false)]
     [InlineData((int)NavigationEndpointRole.Start, true)]
     [InlineData((int)NavigationEndpointRole.Destination, false)]
@@ -397,15 +810,24 @@ public sealed class NavigationEndpointResolutionTests
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
-    public void NearestNavigable_WhenSolidProofIsBlocked_ShouldRetainGasAtTheSameAddress(
-        int requestedHeight)
+    [InlineData(0, (int)TraversalMedium.Gas)]
+    [InlineData(1, (int)TraversalMedium.Gas)]
+    [InlineData(2, (int)TraversalMedium.Gas)]
+    [InlineData(0, (int)TraversalMedium.Liquid)]
+    [InlineData(0, (int)TraversalMedium.Unknown)]
+    public void NearestNavigable_WhenFinalSolidProofIsBlocked_ShouldUseVolumeFallbackOrReject(
+        int requestedHeight,
+        int volumeMediumValue)
     {
+        var volumeMedium = (TraversalMedium)volumeMediumValue;
+        bool hasVolumeFallback = volumeMedium != TraversalMedium.Unknown;
+        TraversalMedia volumeMedia = hasVolumeFallback
+            ? NavigationCell.ToMedia(volumeMedium)
+            : TraversalMedia.None;
+        TraversalMedia requestedMedia = TraversalMedia.Solid | volumeMedia;
         using var world = new GridWorld();
         NavigationCell mixedCell = new(
-            TraversalMedia.Solid | TraversalMedia.Gas,
+            requestedMedia,
             TraversalCapability.None,
             default,
             Fixed64.Zero,
@@ -434,7 +856,7 @@ public sealed class NavigationEndpointResolutionTests
             Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
-            TraversalMedia.Solid | TraversalMedia.Gas,
+            requestedMedia,
             TraversalCapability.None);
         var workspace = new NavigationAStarWorkspace(2, 4, 4, 2, 64, 32, 2);
         var meter = new NavigationWorkMeter(CreateRayBudget(64));
@@ -463,14 +885,23 @@ public sealed class NavigationEndpointResolutionTests
             NavigationEndpointRole.Start,
             profile,
             Policy,
-            TraversalMedia.Solid | TraversalMedia.Gas);
+            requestedMedia);
 
         Drain(work);
 
-        work.Status.Should().Be(NavigationEndpointResolutionStatus.Success);
-        work.Result.Address.Should().Be(new NavigationCellAddress("a-candidate", default));
-        work.Result.Media.Should().Be(TraversalMedia.Gas);
-        work.Result.ResolutionMedium.Should().Be(TraversalMedium.Gas);
+        work.Status.Should().Be(hasVolumeFallback
+            ? NavigationEndpointResolutionStatus.Success
+            : NavigationEndpointResolutionStatus.InvalidEndpoint);
+        if (hasVolumeFallback)
+        {
+            work.Result.Address.Should().Be(new NavigationCellAddress("a-candidate", default));
+            work.Result.Media.Should().Be(volumeMedia);
+            work.Result.ResolutionMedium.Should().Be(volumeMedium);
+        }
+        else
+        {
+            work.Result.Should().Be(default(NavigationResolvedEndpoint));
+        }
     }
 
     [Fact]
@@ -610,6 +1041,55 @@ public sealed class NavigationEndpointResolutionTests
         work.Status.Should().Be(NavigationEndpointResolutionStatus.InvalidEndpoint);
         meter.EndpointCandidates.Should().Be(1,
             "the topology address is charged before graph-authored physical filtering");
+    }
+
+    [Fact]
+    public void Strict_OneBelowEndpointPageCapacity_ShouldFailBeforeAcceptingTheCell()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = WithSurfaceComponents(
+            new NavigationWorldGraph(1, new[] { instance }));
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 0,
+            componentCapacity: 4,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
+        var meter = new NavigationWorkMeter(CreateBudget(16, 2));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(
+                new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z),
+                resolution: EndpointResolutionPolicy.Strict),
+            NavigationEndpointRole.Start,
+            Profile());
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CapacityExceeded);
+        work.Result.Should().Be(default(NavigationResolvedEndpoint));
+        meter.EndpointCandidates.Should().Be(1);
+        workspace.EndpointWorkspace.PageCount.Should().Be(0,
+            "the rejected page dependency must not partially mutate the proof");
     }
 
     [Fact]
@@ -1066,97 +1546,69 @@ public sealed class NavigationEndpointResolutionTests
     }
 
     [Theory]
-    [InlineData((int)PathAlgorithm.AStar)]
-    [InlineData((int)PathAlgorithm.FlowField)]
-    public void QueryAdmission_UnitChunks_ShouldYieldAfterAtomicCandidateRay(
-        int algorithmValue)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NearestVolumeTie_ShouldSelectCanonicalAddressIndependentOfGridOrder(
+        bool canonicalOnLeft)
     {
-        var algorithm = (PathAlgorithm)algorithmValue;
         using var world = new GridWorld();
-        GridConfiguration configuration = CreateCandidateOverlapConfiguration();
-        NavigationMapInstance instance = CreateInstance(
+        NavigationCell gasCell = new(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationMapInstance left = CreateInstance(
             world,
-            "candidate",
-            configuration,
-            physicallyPresent: true);
-        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+            canonicalOnLeft ? "a-map" : "z-map",
+            CreateDenseCellConfiguration(
+                new Vector3d((Fixed64)(-2), Fixed64.Zero, Fixed64.Zero)),
+            physicallyPresent: true,
+            gasCell);
+        NavigationMapInstance right = CreateInstance(
+            world,
+            canonicalOnLeft ? "z-map" : "a-map",
+            CreateDenseCellConfiguration(
+                new Vector3d((Fixed64)2, Fixed64.Zero, Fixed64.Zero)),
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(left, right);
         using NavigationWorldGraphStore store = CreateStore(graph);
-        configuration.TryNormalize(out NormalizedGridConfiguration binding)
-            .Should().BeTrue();
-        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
-        Vector3d start = new(
-            prism.Center.X - (Fixed64)2,
-            prism.VerticalMin,
-            prism.Center.Z);
-        Vector3d end = new(
-            prism.Center.X + (Fixed64)2,
-            prism.VerticalMin,
-            prism.Center.Z);
-        var query = new PathQuery(
-            new NavigationEndpoint(
-                start,
-                "candidate",
-                EndpointResolutionPolicy.NearestNavigable,
-                (Fixed64)4),
-            new NavigationEndpoint(
-                end,
-                "candidate",
-                EndpointResolutionPolicy.NearestNavigable,
-                (Fixed64)4),
-            Profile(),
-            Policy.Key,
-            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
-            algorithm,
-            CreateRayBudget(64),
-            allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(1, 8, 8, 2, 16, 8, 2);
-        using var work = new NavigationQueryAdmissionWork(
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        var workspace = new NavigationAStarWorkspace(2, 2, 4, 2, 8, 0, 2);
+        var meter = new NavigationWorkMeter(CreateRayBudget(16));
+        var work = new NavigationEndpointResolutionWork(
             world,
             store,
+            meter,
             workspace.EndpointWorkspace,
             workspace.RayWorkspace,
-            algorithm);
+            new NavigationRayWork(workspace.RayWorkspace));
         work.Begin(
-            store.TryAcquire()!,
-            query,
-            TraversalMedium.Solid,
-            TraversalMedia.Solid);
+            graph,
+            new NavigationEndpoint(
+                new Vector3d(Fixed64.Zero, -Fixed64.Half, Fixed64.Zero),
+                resolution: EndpointResolutionPolicy.NearestNavigable,
+                maxResolutionDistance: (Fixed64)3),
+            NavigationEndpointRole.Start,
+            profile,
+            Policy,
+            TraversalMedia.Gas);
 
-        FieldInfo endpointWorkField = typeof(NavigationQueryAdmissionWork).GetField(
-            "_endpointWork",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var endpointWork = (NavigationEndpointResolutionWork)endpointWorkField.GetValue(work)!;
-        FieldInfo pendingCandidateField = typeof(NavigationEndpointResolutionWork).GetField(
-            "_pendingCandidate",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
-        for (int step = 0; step < 64; step++)
-        {
-            work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
-            var pending = (NavigationResolvedEndpoint)pendingCandidateField.GetValue(
-                endpointWork)!;
-            if (pending.Node.IsValid)
-                break;
-        }
-        ((NavigationResolvedEndpoint)pendingCandidateField.GetValue(endpointWork)!).Node.IsValid
-            .Should().BeTrue();
-        typeof(NavigationEndpointResolutionWork).GetField(
-                "_cursorComplete",
-                BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(endpointWork, true);
-
-        int lookupBefore = work.Meter.LookupProbes;
-        work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
-        (work.Meter.LookupProbes - lookupBefore).Should().BeGreaterThan(1);
-        work.Status.Should().Be(NavigationQueryAdmissionStatus.Pending);
-        work.Result.Start.Should().Be(default(NavigationResolvedEndpoint));
-
-        work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
-        ((NavigationResolvedEndpoint)typeof(NavigationQueryAdmissionWork).GetField(
-                "_start",
-                BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(work)!).Node.IsValid.Should().BeTrue();
         Drain(work);
-        work.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Success);
+        work.Result.Address.MapId.Should().Be("a-map");
+        work.Result.ResolutionDistance.Should().Be((Fixed64)2);
+        work.Result.ResolutionMedium.Should().Be(TraversalMedium.Gas);
+        meter.EndpointCandidates.Should().Be(2);
     }
 
     [Fact]
@@ -1221,6 +1673,11 @@ public sealed class NavigationEndpointResolutionTests
     [InlineData(
         (int)TraversalMedium.Solid,
         (int)TraversalMedia.Gas,
+        (int)TraversalMedia.Gas,
+        (int)NavigationQueryAdmissionStatus.InvalidProfile)]
+    [InlineData(
+        (int)TraversalMedium.Solid,
+        (int)TraversalMedia.Gas,
         (int)(TraversalMedia.Solid | TraversalMedia.Gas),
         (int)NavigationQueryAdmissionStatus.NoPath)]
     public void ExactMediumAdmission_ShouldRejectMalformedOrUnreachableIntent(
@@ -1245,6 +1702,9 @@ public sealed class NavigationEndpointResolutionTests
             workspace.RayWorkspace,
             PathAlgorithm.AStar);
         PathQuery query = CreateSurfaceQuery(Vector3d.Zero, CreateBudget(1, 1));
+        TraversalIntent publicIntent = allowedMediaValue == (int)TraversalMedia.Gas
+            ? new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas)
+            : query.Traversal;
         query = new PathQuery(
             query.Start,
             query.End,
@@ -1256,7 +1716,7 @@ public sealed class NavigationEndpointResolutionTests
                 (TraversalMedia)allowedMediaValue,
                 query.Agent.Capabilities),
             query.AreaPolicy,
-            query.Traversal,
+            publicIntent,
             query.Algorithm,
             query.Budget,
             query.AllowTransitions);
@@ -1269,6 +1729,10 @@ public sealed class NavigationEndpointResolutionTests
 
         work.Status.Should().Be((NavigationQueryAdmissionStatus)expectedStatusValue);
         store.ActiveLeaseCount.Should().Be(0);
+        work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1)
+            .Should().Be((NavigationQueryAdmissionStatus)expectedStatusValue);
+        work.Meter.LookupProbes.Should().Be(0);
+        work.Meter.EndpointCandidates.Should().Be(0);
     }
 
     [Fact]
@@ -2081,6 +2545,265 @@ public sealed class NavigationEndpointResolutionTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void DependencyStampWork_ShouldRejectDuplicateOrUnknownCanonicalAddresses(
+        bool usePages,
+        bool useUnknownAddress)
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateConfiguration(Fixed64.Zero),
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress("map", default),
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey component,
+                out _)
+            .Should().BeTrue();
+        NavigationSurfaceComponentKey[] components = usePages
+            ? Array.Empty<NavigationSurfaceComponentKey>()
+            : useUnknownAddress
+                ? new[]
+                {
+                    new NavigationSurfaceComponentKey(
+                        new NavigationCellAddress("unknown", default),
+                        TraversalMedium.Solid)
+                }
+                : new[] { component, component };
+        GraphPageDependencyAddress[] pages = !usePages
+            ? Array.Empty<GraphPageDependencyAddress>()
+            : useUnknownAddress
+                ? new[] { new GraphPageDependencyAddress("unknown", 0) }
+                : new[]
+                {
+                    new GraphPageDependencyAddress("map", 0),
+                    new GraphPageDependencyAddress("map", 0)
+                };
+        var meter = new NavigationWorkMeter(CreateBudget(4, 0));
+        var work = new NavigationDependencyStampWork(
+            graph,
+            Policy,
+            components,
+            components.Length,
+            pages,
+            pages.Length);
+
+        work.Advance(meter, lookupStepLimit: 4).Should().BeTrue();
+
+        work.IsComplete.Should().BeTrue();
+        work.IsValid.Should().BeFalse();
+        work.Result.Should().BeNull();
+    }
+
+    [Fact]
+    public void NearestNavigable_ShouldReportOverflowBeforeEnumeratingCandidates()
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateConfiguration(Fixed64.Zero),
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 1,
+            componentCapacity: 1,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
+        var meter = new NavigationWorkMeter(CreateRayBudget(1));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        var endpoint = new NavigationEndpoint(
+            new Vector3d(Fixed64.MaxValue, Fixed64.Zero, Fixed64.Zero),
+            resolution: EndpointResolutionPolicy.NearestNavigable,
+            maxResolutionDistance: Fixed64.One);
+
+        BeginEndpoint(work, graph, endpoint, NavigationEndpointRole.Start, PointProfile());
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CostOverflow);
+        meter.EndpointCandidates.Should().Be(0);
+    }
+
+    [Fact]
+    public void StrictEndpoint_MaximumRectangularPrismCorner_ShouldReportCandidateDistanceOverflow()
+    {
+        using var world = new GridWorld();
+        Fixed64 maximumEvenMetric = Fixed64.FromRaw(long.MaxValue - 1L);
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(
+                maximumEvenMetric,
+                maximumEvenMetric,
+                maximumEvenMetric),
+            storageKind: GridStorageKind.Sparse);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism)
+            .Should().BeTrue();
+        Vector2d oppositePlanarCorner = prism.GetFootprintVertex(2);
+        Fixed64 interiorOffset = Fixed64.FromRaw(1);
+        var endpointPosition = new Vector3d(
+            oppositePlanarCorner.X > prism.Center.X
+                ? oppositePlanarCorner.X - interiorOffset
+                : oppositePlanarCorner.X + interiorOffset,
+            prism.VerticalMax - interiorOffset,
+            oppositePlanarCorner.Y > prism.Center.Z
+                ? oppositePlanarCorner.Y - interiorOffset
+                : oppositePlanarCorner.Y + interiorOffset);
+        Vector3d footAnchor = new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        prism.Contains(endpointPosition).Should().BeTrue();
+        Vector3d.TryGetDistance(endpointPosition, footAnchor, out Fixed64 distance)
+            .Should().BeFalse();
+        distance.Should().Be(Fixed64.MaxValue);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 1,
+            componentCapacity: 1,
+            nodeCapacity: 1,
+            rayCoveredAddressCapacity: 1,
+            rayTraceIntervalCapacity: 1,
+            guidePointCapacity: 1);
+        var meter = new NavigationWorkMeter(CreateRayBudget(16));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(endpointPosition, "map"),
+            NavigationEndpointRole.Start,
+            PointProfile());
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CostOverflow);
+        work.Result.Should().Be(default(NavigationResolvedEndpoint));
+        meter.EndpointCandidates.Should().Be(1,
+            "the overflow is discovered while qualifying the exact mapped candidate");
+        workspace.EndpointWorkspace.PageCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void NearestVolumeEndpoint_DistantDiagonalCandidate_ShouldReportDistanceOverflowAfterAnchorCertification()
+    {
+        using var world = new GridWorld();
+        Fixed64 diagonal = Fixed64.FromRaw((long.MaxValue / 4L) * 3L);
+        GridConfiguration configuration = CreateDenseCellConfiguration(
+            new Vector3d(diagonal, diagonal, diagonal));
+        var gasCell = new NavigationCell(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true,
+            gasCell);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Gas,
+            TraversalCapability.None);
+        graph.TryGetNodeRef(
+                new NavigationCellAddress("map", default),
+                out NavigationNodeRef node)
+            .Should().BeTrue();
+        graph.TryGetNodeState(node, out NavigationNodeState state)
+            .Should().BeTrue();
+        state.TryGetCenteredVolumeFootAnchor(
+                profile.Shape.Height,
+                out Vector3d volumeFoot)
+            .Should().BeTrue();
+        Vector3d.TryGetDistance(Vector3d.Zero, volumeFoot, out Fixed64 distance)
+            .Should().BeFalse();
+        distance.Should().Be(Fixed64.MaxValue);
+        var certificationWorkspace = new NavigationRayWorkspace(1, 4, 4, 64, 0);
+        var certificationMeter = new NavigationWorkMeter(CreateRayBudget(64));
+        var evaluator = new NavigationVolumeAnchorEvaluator(
+            world,
+            graph,
+            profile,
+            Policy,
+            certificationWorkspace);
+        evaluator.Evaluate(
+                node,
+                TraversalMedia.Gas,
+                certificationMeter,
+                certificationWorkspace.Dependencies,
+                out Vector3d certifiedFoot,
+                out TraversalMedia certifiedMedia)
+            .Should().Be(NavigationVolumeAnchorStatus.Success);
+        certifiedFoot.Should().Be(volumeFoot);
+        certifiedMedia.Should().Be(TraversalMedia.Gas);
+        var workspace = new NavigationAStarWorkspace(1, 4, 4, 1, 64, 0, 1);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        work.Begin(
+            graph,
+            new NavigationEndpoint(
+                Vector3d.Zero,
+                mapId: "map",
+                resolution: EndpointResolutionPolicy.NearestNavigable,
+                maxResolutionDistance: Fixed64.MaxValue),
+            NavigationEndpointRole.Start,
+            profile,
+            Policy,
+            TraversalMedia.Gas);
+
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CostOverflow);
+        work.Result.Should().Be(default(NavigationResolvedEndpoint));
+        meter.EndpointCandidates.Should().Be(1);
+        meter.VolumeUnionChecks.Should().Be(1,
+            "the centered volume placement succeeds before its diagonal resolution distance overflows");
+        workspace.EndpointWorkspace.PageCount.Should().Be(1);
+    }
+
+    [Theory]
     [InlineData(7, (int)NavigationQueryAdmissionStatus.Success, 7, 2, 1)]
     [InlineData(6, (int)NavigationQueryAdmissionStatus.BudgetExceeded, 6, 1, 0)]
     public void QueryAdmission_ShouldEnforceExactSharedLookupBudget(
@@ -2123,6 +2846,12 @@ public sealed class NavigationEndpointResolutionTests
             TraversalMedium.Solid,
             TraversalMedia.Solid);
 
+        work.Advance(lookupStepLimit: 0, endpointCandidateStepLimit: 0)
+            .Should().Be(NavigationQueryAdmissionStatus.Pending);
+        work.Meter.LookupProbes.Should().Be(0,
+            "a zero scheduler chunk must yield without spending the query budget");
+        work.Meter.EndpointCandidates.Should().Be(0);
+
         Drain(work);
 
         work.Status.Should().Be((NavigationQueryAdmissionStatus)expectedStatusValue);
@@ -2131,6 +2860,260 @@ public sealed class NavigationEndpointResolutionTests
         store.ActiveLeaseCount.Should().Be(expectedActiveLeases);
         if (work.Status == NavigationQueryAdmissionStatus.Success)
             work.Result.Dispose();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EndpointResolution_ZeroMapWorkspaceShouldRejectFilteredAndUnfilteredGraphs(
+        bool filtered)
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateConfiguration(Fixed64.Zero),
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var workspace = new NavigationAStarWorkspace(0, 1, 1, 1, 1, 1, 1);
+        var meter = new NavigationWorkMeter(CreateBudget(4, 1));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        var endpoint = new NavigationEndpoint(
+            Vector3d.Zero,
+            mapId: filtered ? "map" : null);
+
+        BeginEndpoint(work, graph, endpoint, NavigationEndpointRole.Start, Profile());
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CapacityExceeded);
+        work.Advance(4, 1).Should().Be(NavigationEndpointResolutionStatus.CapacityExceeded);
+        meter.LookupProbes.Should().Be(0);
+        meter.EndpointCandidates.Should().Be(0);
+    }
+
+    [Fact]
+    public void EndpointResolution_MissingMapFilterShouldFinishAsNoMapWithoutScanningWorld()
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            CreateConfiguration(Fixed64.Zero),
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        var workspace = new NavigationAStarWorkspace(1, 1, 1, 1, 1, 1, 1);
+        var meter = new NavigationWorkMeter(CreateBudget(4, 1));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(Vector3d.Zero, mapId: "missing"),
+            NavigationEndpointRole.Start,
+            Profile());
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.NoMap);
+        meter.EndpointCandidates.Should().Be(0);
+    }
+
+    [Fact]
+    public void EndpointResolution_ShouldRejectAResolvedSolidWhenComponentCapacityIsZero()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        Vector3d foot = new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        var workspace = new NavigationAStarWorkspace(1, 1, 0, 1, 1, 1, 1);
+        var meter = new NavigationWorkMeter(CreateBudget(8, 1));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(foot),
+            NavigationEndpointRole.Start,
+            Profile());
+        Drain(work);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.CapacityExceeded);
+        workspace.EndpointPageCount.Should().Be(1,
+            "the candidate page fits before exact component stamping exhausts capacity");
+        workspace.EndpointComponentCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void NearestNavigableSingleCandidate_ShouldPublishAcceptedRayResultOnNextAdvance()
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        Vector3d foot = new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        var workspace = new NavigationAStarWorkspace(1, 2, 2, 1, 64, 32, 1);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(
+                foot,
+                mapId: "map",
+                resolution: EndpointResolutionPolicy.NearestNavigable,
+                maxResolutionDistance: Fixed64.Zero),
+            NavigationEndpointRole.Start,
+            Profile());
+
+        for (int step = 0; step < 64 && !work.Result.Node.IsValid; step++)
+            work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
+
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Pending,
+            "the completed candidate ray yields before the cursor publishes its final status");
+        work.Result.Address.Should().Be(new NavigationCellAddress("map", default));
+        int candidates = meter.EndpointCandidates;
+
+        work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1)
+            .Should().Be(NavigationEndpointResolutionStatus.Success);
+
+        work.Result.Address.Should().Be(new NavigationCellAddress("map", default));
+        meter.EndpointCandidates.Should().Be(candidates,
+            "cursor completion must not rediscover the accepted candidate");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NearestNavigableSingleCandidate_ShouldRejectAcceptedRayAfterDependencyRevision(
+        bool revisePolicy)
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = CreateConfiguration(Fixed64.Zero);
+        NavigationMapInstance instance = CreateInstance(
+            world,
+            "map",
+            configuration,
+            physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(instance);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
+        Vector3d foot = new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+        var workspace = new NavigationAStarWorkspace(1, 2, 2, 1, 64, 32, 1);
+        var meter = new NavigationWorkMeter(CreateRayBudget(64));
+        var work = new NavigationEndpointResolutionWork(
+            world,
+            store,
+            meter,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            new NavigationRayWork(workspace.RayWorkspace));
+        BeginEndpoint(
+            work,
+            graph,
+            new NavigationEndpoint(
+                foot,
+                mapId: "map",
+                resolution: EndpointResolutionPolicy.NearestNavigable,
+                maxResolutionDistance: Fixed64.Zero),
+            NavigationEndpointRole.Start,
+            Profile());
+
+        for (int step = 0; step < 64 && !work.Result.Node.IsValid; step++)
+            work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
+        work.Status.Should().Be(NavigationEndpointResolutionStatus.Pending);
+        work.Result.Address.Should().Be(new NavigationCellAddress("map", default));
+
+        NavigationWorldGraph revised;
+        if (revisePolicy)
+        {
+            var replacement = new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey(Policy.Key.PolicyId, Policy.Key.Revision + 1),
+                new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+            NavigationAreaCatalog.Empty.TryPublish(
+                    replacement,
+                    maxPolicies: 1,
+                    requiredRuleCount: 1,
+                    maxRulesPerPolicy: 1,
+                    maxRules: 1,
+                    out NavigationAreaCatalog revisedCatalog)
+                .Should().Be(NavigationOperationRejection.None);
+            revised = graph.WithAreaCatalog(
+                revisedCatalog,
+                graph.GraphVersion + 1);
+        }
+        else
+        {
+            NavigationGridGenerationIdentity identity = instance.GridIdentity;
+            ulong nextGridLastChangeSequence = instance.GridLastChangeSequence + 1;
+            var removed = new GridEventInfo(
+                identity.WorldSpawnToken,
+                identity.GridIndex,
+                identity.GridSpawnToken,
+                configuration,
+                gridVersion: 2,
+                changeKind: GridEventKind.SparseVoxelRemoved,
+                voxelIndex: default,
+                changeStamp: new GridChangeStamp(
+                    nextGridLastChangeSequence,
+                    nextGridLastChangeSequence),
+                hasVoxelState: true,
+                isVoxelPresent: false);
+            NavigationMapInstance revisedInstance = instance.Apply(
+                identity.WorldSpawnToken,
+                removed,
+                instanceVersion: 2);
+            revised = new NavigationWorldGraph(
+                graph.GraphVersion + 1,
+                new[] { revisedInstance },
+                areaCatalog: graph.AreaCatalog,
+                surfaceComponents: graph.SurfaceComponents);
+        }
+        store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+
+        work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1)
+            .Should().Be(NavigationEndpointResolutionStatus.Stale,
+                "an accepted ray must be revalidated before its final endpoint is published");
+        work.Result.Should().Be(default(NavigationResolvedEndpoint));
     }
 
     private static void Drain(NavigationEndpointResolutionWork work)

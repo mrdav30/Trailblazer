@@ -40,17 +40,9 @@ public sealed class NavigationOverlayTransaction
                 i > 0 && string.Equals(_maps[i - 1].MapId, _maps[i].MapId, StringComparison.Ordinal),
                 nameof(maps),
                 "Map overlay ids must be unique within one transaction.");
-            try
-            {
-                descriptorBytes = checked(descriptorBytes + _maps[i].EstimatedDescriptorBytes);
-            }
-            catch (OverflowException)
-            {
-                SwiftThrowHelper.ThrowIfArgument(
-                    true,
-                    nameof(maps),
-                    "Overlay transaction descriptor-byte accounting overflowed.");
-            }
+            descriptorBytes = NavigationByteCount.SaturatingAdd(
+                descriptorBytes,
+                _maps[i].EstimatedDescriptorBytes);
         }
 
         _mapView = Array.AsReadOnly(_maps);
@@ -68,6 +60,6 @@ public sealed class NavigationOverlayTransaction
     private sealed class MapDeltaComparer : IComparer<NavigationMapOverlayDelta>
     {
         public int Compare(NavigationMapOverlayDelta? left, NavigationMapOverlayDelta? right) =>
-            string.CompareOrdinal(left?.MapId, right?.MapId);
+            string.CompareOrdinal(left!.MapId, right!.MapId);
     }
 }

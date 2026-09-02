@@ -217,9 +217,10 @@ public partial class NavMotor
     /// </summary>
     private Vector3d GetFlightVelocity(TrekRequest frameRequest)
     {
-        if (FlyModule?.IsEnabled != true || !FlyModule.CanFly || frameRequest.Rate == TrekRate.Stationary)
+        if (frameRequest.Rate == TrekRate.Stationary)
             return Vector3d.Zero;
 
+        FlyLocomotion flyModule = FlyModule!;
         Fixed64 speedMultiplier = GetFlightSpeedMultiplier(frameRequest.Rate);
         if (speedMultiplier <= Fixed64.Zero)
             return Vector3d.Zero;
@@ -231,31 +232,28 @@ public partial class NavMotor
         Vector3d horizontalInput = new(desiredLocalDirection.X, Fixed64.Zero, desiredLocalDirection.Z);
         Fixed64 horizontalMagnitude = FixedMath.Clamp01(horizontalInput.Magnitude);
         if (horizontalMagnitude > Fixed64.Zero)
-            desiredLocalVelocity += horizontalInput.Normalized * (FlyModule.MaxFlySpeed * speedMultiplier * horizontalMagnitude);
+            desiredLocalVelocity += horizontalInput.Normalized * (flyModule.MaxFlySpeed * speedMultiplier * horizontalMagnitude);
 
         Fixed64 verticalInput = FixedMath.Clamp(desiredLocalDirection.Y, -Fixed64.One, Fixed64.One);
         if (verticalInput > Fixed64.Zero)
-            desiredLocalVelocity.Y = verticalInput * FlyModule.MaxAscendSpeed * speedMultiplier;
+            desiredLocalVelocity.Y = verticalInput * flyModule.MaxAscendSpeed * speedMultiplier;
         else if (verticalInput < Fixed64.Zero)
-            desiredLocalVelocity.Y = verticalInput.Abs() * -FlyModule.MaxDescendSpeed * speedMultiplier;
+            desiredLocalVelocity.Y = verticalInput.Abs() * -flyModule.MaxDescendSpeed * speedMultiplier;
 
         return Fixed3x3.TransformDirection(transposedMatrix, desiredLocalVelocity);
     }
 
     private Vector3d GetClimbVelocity(TrekRequest frameRequest)
     {
-        if (ClimbModule?.IsEnabled != true
-            || !ClimbModule.CanClimb
-            || frameRequest.Rate == TrekRate.Stationary)
-        {
+        if (frameRequest.Rate == TrekRate.Stationary)
             return Vector3d.Zero;
-        }
 
-        Vector3d upAxis = ClimbModule.AttachedUpDirection != Vector3d.Zero
-            ? ClimbModule.AttachedUpDirection.Normalized
+        ClimbLocomotion climbModule = ClimbModule!;
+        Vector3d upAxis = climbModule.AttachedUpDirection != Vector3d.Zero
+            ? climbModule.AttachedUpDirection.Normalized
             : Vector3d.Up;
-        Vector3d outwardNormal = ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
-            ? ClimbModule.AttachedSurfaceNormal.Normalized
+        Vector3d outwardNormal = climbModule.AttachedSurfaceNormal != Vector3d.Zero
+            ? climbModule.AttachedSurfaceNormal.Normalized
             : Vector3d.Backward;
         Vector3d lateralAxis = Vector3d.Cross(upAxis, outwardNormal);
         if (lateralAxis == Vector3d.Zero)
@@ -265,10 +263,10 @@ public partial class NavMotor
         lateralAxis = lateralAxis.Normalized;
 
         Fixed64 verticalAmount = Vector3d.Dot(frameRequest.Direction, upAxis);
-        if (!ClimbModule.ActiveAllowDescent && verticalAmount < Fixed64.Zero)
+        if (!climbModule.ActiveAllowDescent && verticalAmount < Fixed64.Zero)
             verticalAmount = Fixed64.Zero;
 
-        Fixed64 lateralAmount = ClimbModule.ActiveAllowLateralTraverse
+        Fixed64 lateralAmount = climbModule.ActiveAllowLateralTraverse
             ? Vector3d.Dot(frameRequest.Direction, lateralAxis)
             : Fixed64.Zero;
 
@@ -277,13 +275,13 @@ public partial class NavMotor
         if (inputMagnitude <= Fixed64.Zero)
             return Vector3d.Zero;
 
-        return climbDirection.Normalized * (ClimbModule.MaxClimbSpeed * inputMagnitude);
+        return climbDirection.Normalized * (climbModule.MaxClimbSpeed * inputMagnitude);
     }
 
     private Vector3d GetMantleVelocity(Vector3d origin)
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule?.MantleTargetPosition.HasValue != true)
+        ClimbLocomotion climbModule = ClimbModule!;
+        if (!climbModule.MantleTargetPosition.HasValue)
             return Vector3d.Zero;
 
         Vector3d mantleTargetPosition = climbModule.MantleTargetPosition.GetValueOrDefault();
@@ -310,9 +308,7 @@ public partial class NavMotor
 
     private Vector3d GetSlidingVelocity(TrekRequest frameRequest)
     {
-        SlideLocomotion? slideModule = SlideModule;
-        if (slideModule == null)
-            return Vector3d.Zero;
+        SlideLocomotion slideModule = SlideModule!;
 
         Vector3d slideDirection = new Vector3d(
             CurrentState.SurfaceNormal.X,
@@ -361,14 +357,15 @@ public partial class NavMotor
 
     private Fixed64 GetFlightHorizontalSpeed(Vector3d desiredMovementDirection, TrekRate rate)
     {
-        if (FlyModule?.IsEnabled != true || !FlyModule.CanFly)
+        FlyLocomotion flyModule = FlyModule!;
+        if (!flyModule.IsEnabled || !flyModule.CanFly)
             return Fixed64.Zero;
 
         Fixed64 horizontalMagnitude = FixedMath.Clamp01(new Vector3d(
             desiredMovementDirection.X,
             Fixed64.Zero,
             desiredMovementDirection.Z).Magnitude);
-        return horizontalMagnitude * FlyModule.MaxFlySpeed * GetFlightSpeedMultiplier(rate);
+        return horizontalMagnitude * flyModule.MaxFlySpeed * GetFlightSpeedMultiplier(rate);
     }
 
     private Fixed64 GetFlightSpeedMultiplier(TrekRate rate)
@@ -423,7 +420,7 @@ public partial class NavMotor
             return Fixed64.One;
 
         if (IsJumping)
-            return JumpModule?.JumpControlMultiplier ?? Fixed64.One;
+            return JumpModule!.JumpControlMultiplier;
 
         if (IsFalling)
             return Handler.Fall.FallControlMultiplier;
@@ -483,8 +480,7 @@ public partial class NavMotor
     private Vector3d ApplyPlatformTransferVelocity(Vector3d desiredVelocity)
     {
         PlatformLocomotion platformModule = PlatformModule;
-        if (platformModule.IsEnabled
-            && platformModule.MovementTransfer == MotionTransfer.PermaTransfer)
+        if (platformModule.MovementTransfer == MotionTransfer.PermaTransfer)
         {
             desiredVelocity += platformModule.FramePlatformVelocity;
             desiredVelocity.Y = Fixed64.Zero;
@@ -538,8 +534,9 @@ public partial class NavMotor
 
         Fixed64 maxVelocityChange = GetMaxAcceleration() * DeltaTime;
         Vector3d velocityChange = (desiredVelocity - _forceOutput).ClampMagnitude(maxVelocityChange);
-        if (!IsOnSolid && !Handler.IsInControl)
-            return;
+        System.Diagnostics.Debug.Assert(
+            IsOnSolid || Handler.IsInControl,
+            "UpdateControlState rejects limbo before desired velocity can be applied.");
 
         _forceOutput += velocityChange;
         if (IsOnSolid && !IsFlying)
@@ -563,12 +560,12 @@ public partial class NavMotor
                 : Handler.Move.MaxAirAcceleration;
 
         if (IsClimbing)
-            return ClimbModule?.IsEnabled == true && ClimbModule.CanClimb
+            return ClimbModule!.IsEnabled && ClimbModule.CanClimb
                 ? ClimbModule.MaxClimbAcceleration
                 : Handler.Move.MaxAirAcceleration;
 
         if (IsFlying)
-            return FlyModule?.IsEnabled == true && FlyModule.CanFly
+            return FlyModule!.IsEnabled && FlyModule.CanFly
                 ? FlyModule.MaxFlyAcceleration
                 : Handler.Move.MaxAirAcceleration;
 
@@ -588,7 +585,7 @@ public partial class NavMotor
         if (IsFlying)
         {
             Fixed64 gravityCompensation = FixedMath.Clamp(
-                FlyModule?.GravityCompensation ?? Fixed64.Zero,
+                FlyModule!.GravityCompensation,
                 Fixed64.Zero,
                 Fixed64.One);
             _forceOutput.Y -= gravityStep * (Fixed64.One - gravityCompensation);
@@ -598,7 +595,7 @@ public partial class NavMotor
         if (IsClimbing)
         {
             Fixed64 gravityCompensation = FixedMath.Clamp(
-                ClimbModule?.GravityCompensationWhileClimbing ?? Fixed64.Zero,
+                ClimbModule!.GravityCompensationWhileClimbing,
                 Fixed64.Zero,
                 Fixed64.One);
             _forceOutput.Y -= gravityStep * (Fixed64.One - gravityCompensation);
@@ -636,7 +633,7 @@ public partial class NavMotor
         // When jumping up we don't apply gravity for some time when the user is holding the jump button.
         // This allows for more control over jump height by pressing the button longer.
         JumpLocomotion? jumpModule = JumpModule;
-        if (IsJumping && jumpModule?.IsHoldingJump == true)
+        if (IsJumping && jumpModule!.IsHoldingJump)
         {
             // Calculate the duration that the extra jump force should have effect.
             // If we're still less than that duration after the jumping time, apply the force.
@@ -673,7 +670,7 @@ public partial class NavMotor
         if (IsFlying || IsFalling)
             return false;
 
-        if (IsClimbing && !(ClimbModule?.ActiveAllowDetachJump ?? false))
+        if (IsClimbing && !ClimbModule!.ActiveAllowDetachJump)
             return false;
 
         if (IsInLiquid && !(WaterModule?.CanBreachWater ?? false))
@@ -687,10 +684,8 @@ public partial class NavMotor
 
     private Vector3d GetWaterBreachJumpForce()
     {
-        JumpLocomotion? jumpModule = JumpModule;
-        WaterLocomotion? waterModule = WaterModule;
-        if (jumpModule == null || waterModule == null)
-            return Vector3d.Zero;
+        JumpLocomotion jumpModule = JumpModule!;
+        WaterLocomotion waterModule = WaterModule!;
 
         jumpModule.FrameJumpDirection = Vector3d.Up;
         Events.OnStartWaterBreach?.Invoke();
@@ -699,9 +694,7 @@ public partial class NavMotor
 
     private Vector3d GetGroundJumpForce()
     {
-        JumpLocomotion? jumpModule = JumpModule;
-        if (jumpModule == null)
-            return Vector3d.Zero;
+        JumpLocomotion jumpModule = JumpModule!;
 
         EnsureJumpDirectionInitialized();
         Events.OnStartJump?.Invoke(jumpModule.AvoidGroundingTimer);
@@ -710,10 +703,8 @@ public partial class NavMotor
 
     private Vector3d GetClimbDetachJumpForce()
     {
-        JumpLocomotion? jumpModule = JumpModule;
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (jumpModule == null || climbModule == null)
-            return Vector3d.Zero;
+        JumpLocomotion jumpModule = JumpModule!;
+        ClimbLocomotion climbModule = ClimbModule!;
 
         Vector3d upward = climbModule.AttachedUpDirection != Vector3d.Zero
             ? climbModule.AttachedUpDirection.Normalized
@@ -728,18 +719,18 @@ public partial class NavMotor
 
     private void EnsureJumpDirectionInitialized()
     {
-        JumpLocomotion? jumpModule = JumpModule;
-        if (jumpModule == null || jumpModule.IsJumping)
+        JumpLocomotion jumpModule = JumpModule!;
+        if (jumpModule.IsJumping)
             return;
 
-        Fixed64 slerpAmount = IsTooSteep(FrameSlopeAngle)
-            ? jumpModule.SteepPerpendicularJumpAmount
-            : jumpModule.PerpendicularJumpAmount;
+        System.Diagnostics.Debug.Assert(
+            !IsTooSteep(FrameSlopeAngle),
+            "Ground-jump admission requires control, which rejects surfaces above the slope limit.");
 
         jumpModule.FrameJumpDirection = Vector3d.Slerp(
             Vector3d.Up,
             CurrentState.SurfaceNormal,
-            slerpAmount);
+            jumpModule.PerpendicularJumpAmount);
     }
 
     private void CommitJumpForce(Vector3d jumpForce)
@@ -747,9 +738,7 @@ public partial class NavMotor
         if (IsClimbing)
             StopClimb(wasForced: false);
 
-        JumpLocomotion? jumpModule = JumpModule;
-        if (jumpModule == null)
-            return;
+        JumpLocomotion jumpModule = JumpModule!;
 
         jumpModule.RegisterJump();
 
@@ -814,9 +803,7 @@ public partial class NavMotor
 
     private bool IsCompatibleClimbAffordance(ClimbAffordanceSnapshot snapshot)
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return false;
+        ClimbLocomotion climbModule = ClimbModule!;
 
         if (climbModule.AttachmentId.HasValue && snapshot.AffordanceId.HasValue)
             return climbModule.AttachmentId.Value == snapshot.AffordanceId.Value;
@@ -833,9 +820,7 @@ public partial class NavMotor
 
     private bool HasCompatibleClimbAxes(ClimbAffordanceSnapshot snapshot)
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return false;
+        ClimbLocomotion climbModule = ClimbModule!;
 
         if (climbModule.AttachedSurfaceNormal != Vector3d.Zero
             && snapshot.SurfaceNormal != Vector3d.Zero
@@ -856,9 +841,7 @@ public partial class NavMotor
 
     private Fixed64 GetClimbContinuityTolerance()
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return Fixed64.Zero;
+        ClimbLocomotion climbModule = ClimbModule!;
 
         Fixed64 frameTravelAllowance = climbModule.MaxClimbSpeed * DeltaTime;
         return climbModule.ClimbStartTolerance + frameTravelAllowance;
@@ -866,9 +849,7 @@ public partial class NavMotor
 
     private void StartClimb(ClimbAffordanceSnapshot snapshot)
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return;
+        ClimbLocomotion climbModule = ClimbModule!;
 
         climbModule.ApplyClimbSnapshot(snapshot);
         climbModule.IsClimbing = true;
@@ -894,13 +875,10 @@ public partial class NavMotor
 
     private bool ShouldStartMantle(TrekRequest request, ClimbAffordanceSnapshot snapshot)
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return false;
+        ClimbLocomotion climbModule = ClimbModule!;
 
         if (snapshot.Kind != ClimbAffordanceKind.Ledge
             || !climbModule.ActiveAllowMantle
-            || !climbModule.MantleTargetPosition.HasValue
             || request.Rate == TrekRate.Stationary)
         {
             return false;
@@ -914,9 +892,7 @@ public partial class NavMotor
 
     private void StartMantle(ClimbAffordanceSnapshot snapshot)
     {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return;
+        ClimbLocomotion climbModule = ClimbModule!;
 
         climbModule.ApplyClimbSnapshot(snapshot);
         climbModule.IsMantling = true;

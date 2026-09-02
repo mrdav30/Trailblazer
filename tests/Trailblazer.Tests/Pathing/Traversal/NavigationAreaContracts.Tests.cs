@@ -70,6 +70,57 @@ public sealed class NavigationAreaContractsTests
     }
 
     [Fact]
+    public void NavigationAreaPolicy_ContentIdentity_ShouldCompareKeyLengthAndEveryRule()
+    {
+        var key = new NavigationAreaPolicyKey("ground", 1);
+        NavigationAreaRule allowed = new(true, Fixed64.One);
+        var policy = new NavigationAreaPolicy(key, new[] { allowed });
+        var same = new NavigationAreaPolicy(key, new[] { allowed });
+        var differentKey = new NavigationAreaPolicy(
+            new NavigationAreaPolicyKey("ground", 2),
+            new[] { allowed });
+        var differentLength = new NavigationAreaPolicy(
+            key,
+            new[] { allowed, allowed });
+        var differentRule = new NavigationAreaPolicy(
+            key,
+            new[] { new NavigationAreaRule(false, Fixed64.One) });
+
+        policy.ContentEquals(policy).Should().BeTrue();
+        policy.ContentEquals(same).Should().BeTrue();
+        policy.ContentEquals(differentKey).Should().BeFalse();
+        policy.ContentEquals(differentLength).Should().BeFalse();
+        policy.ContentEquals(differentRule).Should().BeFalse();
+    }
+
+    [Fact]
+    public void NavigationAreaValues_ShouldPreserveOrderingFormattingAndExactIdentity()
+    {
+        var lower = new NavigationAreaId(7);
+        var higher = new NavigationAreaId(12);
+        var key = new NavigationAreaPolicyKey("safe-route", 4);
+        var sameKey = new NavigationAreaPolicyKey("safe-route", 4);
+        var newerKey = new NavigationAreaPolicyKey("safe-route", 5);
+        var rule = new NavigationAreaRule(isAllowed: true, additionalEnterCost: (Fixed64)3);
+        var sameRule = new NavigationAreaRule(isAllowed: true, additionalEnterCost: (Fixed64)3);
+        var deniedRule = new NavigationAreaRule(isAllowed: false, additionalEnterCost: (Fixed64)3);
+
+        lower.CompareTo(higher).Should().BeLessThan(0);
+        higher.ToString().Should().Be("12");
+        (lower == new NavigationAreaId(7)).Should().BeTrue();
+        (lower != higher).Should().BeTrue();
+        (key == sameKey).Should().BeTrue();
+        (key != newerKey).Should().BeTrue();
+        rule.Equals((object)sameRule).Should().BeTrue();
+        rule.GetHashCode().Should().Be(sameRule.GetHashCode());
+        (rule == sameRule).Should().BeTrue();
+        (rule != deniedRule).Should().BeTrue();
+        lower.Equals((object)7).Should().BeFalse();
+        key.Equals((object)"safe-route:4").Should().BeFalse();
+        rule.Equals((object)"allowed:3").Should().BeFalse();
+    }
+
+    [Fact]
     public void NavigationAreaContracts_ShouldRejectInvalidIdentityCostAndEmptyPolicy()
     {
         Action emptyId = () => _ = new NavigationAreaPolicyKey(" ", revision: 1);

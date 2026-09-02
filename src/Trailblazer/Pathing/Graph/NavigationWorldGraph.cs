@@ -33,17 +33,15 @@ internal sealed partial class NavigationWorldGraph
         long graphVersion,
         NavigationMapInstance[] instances,
         NavigationAreaCatalog? areaCatalog = null,
-        PersistentGridConfigurationMap<string>? mapIndex = null,
         NavigationExplicitConnectionIndex? explicitConnections = null,
-        NavigationAutomaticSeamIndex? automaticSeams = null,
         NavigationSurfaceComponentIndex? surfaceComponents = null)
     {
         GraphVersion = graphVersion;
         _instances = NavigationInstanceDirectory.Create(instances);
         AreaCatalog = areaCatalog ?? NavigationAreaCatalog.Empty;
-        _mapIndex = mapIndex ?? BuildMapIndex(instances);
+        _mapIndex = BuildMapIndex(instances);
         _explicitConnections = explicitConnections ?? NavigationExplicitConnectionIndex.Empty;
-        _automaticSeams = automaticSeams ?? NavigationAutomaticSeamIndex.Empty;
+        _automaticSeams = NavigationAutomaticSeamIndex.Empty;
         SurfaceComponents = surfaceComponents ?? NavigationSurfaceComponentIndex.Empty;
         _transitionPages = NavigationTransitionPageRoot.Empty;
         TransitionRules = NavigationTransitionRuleTable.Empty;
@@ -173,8 +171,9 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationTransitionPage.Enumerator EnumerateOutgoingTransitions(
         NavigationMediumStateRef source)
     {
-        if (!source.IsValid)
-            return default;
+        System.Diagnostics.Debug.Assert(
+            TryGetNodeLocation(source.Node, out _, out _),
+            "transition enumeration receives a state owned by this immutable graph");
         NavigationMapInstance instance = _instances.Get(source.Node.MapOrdinal);
         _transitionPages.TryGet(
             new NavigationTransitionPageAddress(
@@ -187,8 +186,9 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationTransitionPage.Enumerator EnumerateOutgoingTransitionCandidates(
         NavigationMediumStateRef source)
     {
-        if (!source.IsValid)
-            return default;
+        System.Diagnostics.Debug.Assert(
+            TryGetNodeLocation(source.Node, out _, out _),
+            "transition enumeration receives a state owned by this immutable graph");
         NavigationMapInstance instance = _instances.Get(source.Node.MapOrdinal);
         _transitionPages.TryGet(
             new NavigationTransitionPageAddress(
@@ -201,8 +201,9 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationTransitionPage.Enumerator EnumerateIncomingTransitions(
         NavigationMediumStateRef destination)
     {
-        if (!destination.IsValid)
-            return default;
+        System.Diagnostics.Debug.Assert(
+            TryGetNodeLocation(destination.Node, out _, out _),
+            "transition enumeration receives a state owned by this immutable graph");
         NavigationMapInstance instance = _instances.Get(destination.Node.MapOrdinal);
         _transitionPages.TryGet(
             new NavigationTransitionPageAddress(
@@ -215,8 +216,9 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationTransitionPage.Enumerator EnumerateIncomingTransitionCandidates(
         NavigationMediumStateRef destination)
     {
-        if (!destination.IsValid)
-            return default;
+        System.Diagnostics.Debug.Assert(
+            TryGetNodeLocation(destination.Node, out _, out _),
+            "transition enumeration receives a state owned by this immutable graph");
         NavigationMapInstance instance = _instances.Get(destination.Node.MapOrdinal);
         _transitionPages.TryGet(
             new NavigationTransitionPageAddress(
@@ -226,19 +228,19 @@ internal sealed partial class NavigationWorldGraph
         return page?.GetIncomingCandidateEnumerator(this, destination) ?? default;
     }
 
-    internal bool TryGetPublishedTransition(
-        NavigationIncomingTransitionRef incoming,
-        out NavigationPublishedTransition transition)
+    internal NavigationPublishedTransition GetPublishedTransition(
+        NavigationIncomingTransitionRef incoming)
     {
-        if (_transitionPages.TryGet(
-                incoming.SourcePage,
-                out NavigationTransitionPage page)
-            && page.TryGetOutgoing(incoming.Owner, out transition))
-        {
-            return true;
-        }
-        transition = default;
-        return false;
+        bool pageFound = _transitionPages.TryGet(
+            incoming.SourcePage,
+            out NavigationTransitionPage page);
+        System.Diagnostics.Debug.Assert(pageFound,
+            "incoming transition references retain their exact immutable source page");
+        NavigationPublishedTransition transition = default;
+        bool transitionFound = page.TryGetOutgoing(incoming.Owner, out transition);
+        System.Diagnostics.Debug.Assert(transitionFound,
+            "incoming transition references retain their exact immutable owner");
+        return transition;
     }
 
     internal bool IsTransitionActive(
@@ -265,8 +267,9 @@ internal sealed partial class NavigationWorldGraph
         NavigationMediumStateRef state,
         bool outgoing)
     {
-        if (!TryGetNodeAddress(state.Node, out NavigationCellAddress address))
-            return false;
+        bool addressFound = TryGetNodeAddress(state.Node, out NavigationCellAddress address);
+        System.Diagnostics.Debug.Assert(addressFound,
+            "transition endpoint checks receive a state owned by this immutable graph");
         return outgoing
             ? state.Medium == transition.Definition.SourceMedium
                 && address.Equals(transition.SourceAddress)
@@ -334,7 +337,7 @@ internal sealed partial class NavigationWorldGraph
         TraversalMedium rightMedium) =>
         SurfaceComponents.TryGet(left, leftMedium, out NavigationSurfaceComponent leftComponent)
         && SurfaceComponents.TryGet(right, rightMedium, out NavigationSurfaceComponent rightComponent)
-        && leftComponent.Key == rightComponent.Key;
+        && leftComponent.Key.Equals(rightComponent.Key);
 
     internal long RetainedBytes { get; }
 
@@ -372,12 +375,8 @@ internal sealed partial class NavigationWorldGraph
 
     internal void Return() => Interlocked.Decrement(ref _leaseCount);
 
-    internal bool TryGetMap(string mapId, out NavigationMapInstance? instance)
-    {
-        bool found = _instances.TryGet(mapId, out NavigationMapInstance foundInstance);
-        instance = found ? foundInstance : null;
-        return found;
-    }
+    internal bool TryGetMap(string mapId, out NavigationMapInstance instance) =>
+        _instances.TryGet(mapId, out instance);
 
     internal bool IsSurfaceAddressClosed(
         NavigationCellAddress address,
@@ -479,34 +478,6 @@ internal sealed partial class NavigationWorldGraph
             PersistentPageCount - priorPages + nextPages);
     }
 
-    internal static bool HasStructuralChanges(
-        NavigationOperationFrameChange[] changes,
-        int changeCount,
-        NavigationOperationCandidate candidate,
-        NavigationWorldGraph current)
-    {
-        if (!ReferenceEquals(candidate.ExplicitConnections, current._explicitConnections))
-            return true;
-        for (int i = 0; i < changeCount; i++)
-        {
-            NavigationOperationFrameChange change = changes[i];
-            if (change.Kind != NavigationOperationFrameChangeKind.Overlay)
-                return true;
-            ReadOnlySpan<NavigationMapOverlayDelta> maps =
-                change.PreparedOverlay!.Transaction.MapSpan;
-            for (int mapIndex = 0; mapIndex < maps.Length; mapIndex++)
-            {
-                if (!maps[mapIndex].CellSpan.IsEmpty
-                    || !maps[mapIndex].ConnectionSpan.IsEmpty
-                    || !maps[mapIndex].TransitionSpan.IsEmpty)
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     internal NavigationWorldGraph WithClosedStructuralComponents(
         NavigationSurfaceComponentKeySet closed,
         bool closeAllStructuralComponents,
@@ -576,6 +547,33 @@ internal sealed partial class NavigationWorldGraph
                 + baseline.PersistentPageCount
                 + GetAdditionalClosedRootPersistentPages(baseline, additional));
     }
+
+    internal NavigationWorldGraph WithStructuralClosureFrom(
+        NavigationWorldGraph owner,
+        long graphVersion) =>
+        new(
+            graphVersion,
+            _instances,
+            AreaCatalog,
+            _mapIndex,
+            SurfaceComponents,
+            _explicitConnections,
+            _automaticSeams,
+            _transitionPages,
+            TransitionRules,
+            owner._closedStructuralComponents,
+            owner._additionalClosedStructuralComponents,
+            owner._allStructuralComponentsClosed,
+            checked(RetainedBytes - GetClosedRootRetainedBytes()
+                + owner._closedStructuralComponents.RetainedBytes
+                + GetAdditionalClosedRootRetainedBytes(
+                    owner._closedStructuralComponents,
+                    owner._additionalClosedStructuralComponents)),
+            PersistentPageCount - GetClosedRootPersistentPages()
+                + owner._closedStructuralComponents.PersistentPageCount
+                + GetAdditionalClosedRootPersistentPages(
+                    owner._closedStructuralComponents,
+                    owner._additionalClosedStructuralComponents));
 
     internal bool HasClosedStructuralScope =>
         _allStructuralComponentsClosed
@@ -719,7 +717,6 @@ internal sealed partial class NavigationWorldGraph
             bool isDelta = !requiresRecoveryBaseline
                 && IsCellOverlayOnlyChanged(changes, changeCount, current.MapId)
                 && previousGraph.TryGetMap(current.MapId, out prior)
-                && prior != null
                 && prior.IsMaterialized;
             baselineRebuilds.TryGetValue(
                 current.MapId,
@@ -741,23 +738,20 @@ internal sealed partial class NavigationWorldGraph
                 baselineCaptures[mapIndex] = readyCapture;
                 continue;
             }
+            if (rebuild != null)
+                isDelta = false;
             int addressCount;
             bool requiresDefaultDiscovery = !isDelta && current.Map.DefaultCell.HasValue;
             if (isDelta)
             {
-                if (rebuild != null)
+                if (!current.TryCopyNewCanonicalAddresses(
+                        prior!,
+                        baselineAddressScratch,
+                        out addressCount))
                 {
-                    RemoveBaselineRebuild(
-                        ref baselineRebuilds,
-                        current.MapId,
-                        rebuild,
-                        ref rebuildRetainedBytes,
-                        ref rebuildPersistentPages);
-                    rebuild = null;
+                    isDelta = false;
+                    addressCount = 0;
                 }
-                addressCount = current.CopyNewCanonicalAddresses(
-                    prior!,
-                    baselineAddressScratch);
             }
             else if (rebuild == null && !requiresDefaultDiscovery)
             {
@@ -776,17 +770,16 @@ internal sealed partial class NavigationWorldGraph
                     || current.AddressCount > remainingBaselineAddresses);
             if (!requiresChunkedBaseline && addressCount <= remainingBaselineAddresses)
             {
-                if (!maintenanceMeter.TryConsumeBaselineAddresses(addressCount))
-                    continue;
+                bool consumed = maintenanceMeter.TryConsumeBaselineAddresses(addressCount);
+                System.Diagnostics.Debug.Assert(consumed,
+                    "The capture is bounded by the meter's remaining baseline addresses.");
                 remainingBaselineAddresses -= addressCount;
-                GridNavigationBaseline? baseline = null;
-                if (addressCount > 0 || !isDelta)
-                {
-                    world.TryCaptureNavigationBaseline(
-                        configurationKey,
-                        baselineAddressScratch.Slice(0, addressCount),
-                        out baseline);
-                }
+                System.Diagnostics.Debug.Assert(addressCount > 0 || !isDelta,
+                    "a nonmaterialized cell-only delta owns at least one new canonical address");
+                world.TryCaptureNavigationBaseline(
+                    configurationKey,
+                    baselineAddressScratch.Slice(0, addressCount),
+                    out GridNavigationBaseline? baseline);
                 baselineCaptures[mapIndex] = new NavigationGridBaselineCapture(
                     addressCount,
                     baseline,
@@ -849,8 +842,7 @@ internal sealed partial class NavigationWorldGraph
                 }
                 NavigationGridGenerationIdentity deferredIdentity = current.GridIdentity;
                 if (!deferredIdentity.IsValid
-                    && previousGraph.TryGetMap(current.MapId, out NavigationMapInstance? deferredPrior)
-                    && deferredPrior != null)
+                    && previousGraph.TryGetMap(current.MapId, out NavigationMapInstance deferredPrior))
                 {
                     deferredIdentity = deferredPrior.GridIdentity;
                 }
@@ -919,13 +911,15 @@ internal sealed partial class NavigationWorldGraph
         ref long rebuildRetainedBytes,
         ref int rebuildPersistentPages)
     {
-        long priorRegistryBytes = rebuilds.RetainedBytes;
-        int priorRegistryPages = 1 + rebuilds.PersistentNodeCount;
-        PersistentStringMap<NavigationBaselineRebuild> next = rebuilds.Remove(mapId, out bool removed);
-        if (!removed)
-            return;
-        long nextRegistryBytes = next.Count == 0 ? 0 : next.RetainedBytes;
-        int nextRegistryPages = next.Count == 0 ? 0 : 1 + next.PersistentNodeCount;
+        GetBaselineRebuildRegistryFootprint(
+            rebuilds,
+            out long priorRegistryBytes,
+            out int priorRegistryPages);
+        PersistentStringMap<NavigationBaselineRebuild> next = rebuilds.Remove(mapId, out _);
+        GetBaselineRebuildRegistryFootprint(
+            next,
+            out long nextRegistryBytes,
+            out int nextRegistryPages);
         rebuildRetainedBytes = checked(
             rebuildRetainedBytes
             - priorRegistryBytes
@@ -937,6 +931,16 @@ internal sealed partial class NavigationWorldGraph
             - rebuild.PersistentPageCount
             + nextRegistryPages);
         rebuilds = next;
+    }
+
+    internal static void GetBaselineRebuildRegistryFootprint(
+        PersistentStringMap<NavigationBaselineRebuild> rebuilds,
+        out long retainedBytes,
+        out int persistentPages)
+    {
+        bool hasRebuilds = rebuilds.Count != 0;
+        retainedBytes = hasRebuilds ? rebuilds.RetainedBytes : 0;
+        persistentPages = hasRebuilds ? 1 + rebuilds.PersistentNodeCount : 0;
     }
 
     internal NavigationWorldGraph ApplyMaintenanceSnapshot(
@@ -982,8 +986,7 @@ internal sealed partial class NavigationWorldGraph
             }
             else if (!requiresRecoveryBaseline
                 && IsCellOverlayOnlyChanged(changes, changeCount, current.MapId)
-                && previousGraph.TryGetMap(current.MapId, out NavigationMapInstance? prior)
-                && prior != null)
+                && previousGraph.TryGetMap(current.MapId, out NavigationMapInstance prior))
             {
                 next = current.MaterializeDelta(
                     prior,
@@ -1144,9 +1147,10 @@ internal sealed partial class NavigationWorldGraph
         out GraphComponentDependency dependency)
     {
         if (!IsSurfaceComponentClosed(key)
-            && SurfaceComponents.TryGet(key, out NavigationSurfaceComponent component)
-            && component.Key == key)
+            && SurfaceComponents.TryGet(key, out NavigationSurfaceComponent component))
         {
+            System.Diagnostics.Debug.Assert(component.Key.Equals(key),
+                "Surface component records are indexed by their exact immutable key.");
             dependency = new GraphComponentDependency(
                 key,
                 component.Version);
@@ -1170,8 +1174,7 @@ internal sealed partial class NavigationWorldGraph
     {
         if (!string.IsNullOrEmpty(address.MapId)
             && address.PageIndex >= 0
-            && TryGetMap(address.MapId, out NavigationMapInstance? instance)
-            && instance != null)
+            && TryGetMap(address.MapId, out NavigationMapInstance instance))
         {
             long transitionVersion = includeTransitionPage && _transitionPages.TryGet(
                 new NavigationTransitionPageAddress(address.MapId, address.PageIndex),
@@ -1187,8 +1190,7 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool IsDependencyCurrent(GraphDependencyStamp stamp)
     {
-        if (stamp == null
-            || !AreaCatalog.TryGet(stamp.AreaPolicy, out _))
+        if (!AreaCatalog.TryGet(stamp.AreaPolicy, out _))
             return false;
         if (stamp.HasTransitionRuleDependency
             && stamp.TransitionRuleVersion != TransitionRules.Version)
@@ -1201,17 +1203,17 @@ internal sealed partial class NavigationWorldGraph
             if (IsSurfaceComponentClosed(dependency.Key)
                 || !SurfaceComponents.TryGet(
                     dependency.Key,
-                    out NavigationSurfaceComponent current)
-                || current.Key != dependency.Key
-                || current.Version != dependency.Version)
+                    out NavigationSurfaceComponent current))
+                return false;
+            System.Diagnostics.Debug.Assert(current.Key.Equals(dependency.Key),
+                "Surface component records are indexed by their exact immutable key.");
+            if (current.Version != dependency.Version)
                 return false;
         }
         for (int page = 0; page < stamp.Pages.Length; page++)
         {
             GraphPageDependency dependency = stamp.Pages[page];
-            if (!TryGetMap(dependency.MapId, out NavigationMapInstance? instance)
-                || instance == null
-                || !TryGetPageDependency(
+            if (!TryGetPageDependency(
                     new GraphPageDependencyAddress(dependency.MapId, dependency.PageIndex),
                     stamp.HasTransitionRuleDependency,
                     out GraphPageDependency current)
@@ -1327,7 +1329,7 @@ internal sealed partial class NavigationWorldGraph
         int stamp)
     {
         int ordinal = FindMapOrdinal(mapId);
-        MarkOrdinal(ordinal, ordinals, ref count, stamps, stamp);
+        TryMarkOrdinal(ordinal, ordinals, ref count, stamps, stamp);
     }
 
     private void MarkConfiguration(
@@ -1340,11 +1342,11 @@ internal sealed partial class NavigationWorldGraph
         if (_mapIndex.TryGetValue(key, out string mapId))
         {
             int ordinal = FindMapOrdinal(mapId);
-            MarkOrdinal(ordinal, ordinals, ref count, stamps, stamp);
+            TryMarkOrdinal(ordinal, ordinals, ref count, stamps, stamp);
         }
     }
 
-    private static void MarkOrdinal(
+    internal static bool TryMarkOrdinal(
         int ordinal,
         int[] ordinals,
         ref int count,
@@ -1352,9 +1354,10 @@ internal sealed partial class NavigationWorldGraph
         int stamp)
     {
         if (ordinal < 0 || stamps[ordinal] == stamp)
-            return;
+            return false;
         stamps[ordinal] = stamp;
         ordinals[count++] = ordinal;
+        return true;
     }
 
     private static bool ContainsScope(

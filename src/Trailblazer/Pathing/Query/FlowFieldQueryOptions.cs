@@ -50,11 +50,4 @@ public readonly struct FlowFieldQueryOptions : IEquatable<FlowFieldQueryOptions>
     /// <summary>Returns whether two option values differ.</summary>
     public static bool operator !=(FlowFieldQueryOptions left, FlowFieldQueryOptions right) => !left.Equals(right);
 
-    internal void Validate(string parameterName)
-    {
-        SwiftThrowHelper.ThrowIfArgument(
-            ExtraIntegrationCost < Fixed64.Zero,
-            parameterName,
-            "Flow field options contain a negative integration cost.");
-    }
 }

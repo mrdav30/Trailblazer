@@ -16,6 +16,16 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationSeamEditTreeTests
 {
     [Fact]
+    public void EditToken_ShouldRejectAnExhaustedIncrementWithoutMutatingProcessIdentity()
+    {
+        Action create = () => NavigationSeamEditToken.FromIncrementedValue(long.MinValue);
+
+        create.Should().Throw<InvalidOperationException>()
+            .WithMessage("The seam edit ownership token space was exhausted.");
+        NavigationSeamEditToken.FromIncrementedValue(1).Value.Should().Be(1);
+    }
+
+    [Fact]
     public void LayoutConstants_ShouldMatchEverySeamRootSpecialization()
     {
         Unsafe.SizeOf<NavigationAutomaticSeamPairKey>().Should().Be(48);
@@ -81,6 +91,36 @@ public sealed class NavigationSeamEditTreeTests
         editor.OwnedNodeCount.Should().Be(0);
         editor.IsChanged.Should().BeFalse();
         editor.Seal().Should().BeSameAs(source);
+    }
+
+    [Fact]
+    public void RemovingRootWithOneChild_ShouldPreserveEitherChildSubtree()
+    {
+        NavigationSeamEditTree<int, Box> Build(int child)
+        {
+            var empty = new NavigationSeamEditTree<int, Box>(nodeBytes: 64);
+            NavigationSeamEditTree<int, Box>.Editor seed = empty.Edit(
+                NavigationSeamEditToken.Create());
+            seed.Set(2, new Box(2));
+            seed.Set(child, new Box(child));
+            return seed.Seal();
+        }
+
+        NavigationSeamEditTree<int, Box>.Editor left = Build(1).Edit(
+            NavigationSeamEditToken.Create());
+        left.Remove(2).Should().BeTrue();
+        NavigationSeamEditTree<int, Box> leftResult = left.Seal();
+        leftResult.Count.Should().Be(1);
+        leftResult.TryGetValue(1, out Box leftChild).Should().BeTrue();
+        leftChild.Value.Should().Be(1);
+
+        NavigationSeamEditTree<int, Box>.Editor right = Build(3).Edit(
+            NavigationSeamEditToken.Create());
+        right.Remove(2).Should().BeTrue();
+        NavigationSeamEditTree<int, Box> rightResult = right.Seal();
+        rightResult.Count.Should().Be(1);
+        rightResult.TryGetValue(3, out Box rightChild).Should().BeTrue();
+        rightChild.Value.Should().Be(3);
     }
 
     [Fact]

@@ -15,11 +15,8 @@ namespace Trailblazer.Navigation;
 /// </summary>
 internal sealed class TrailblazerNavigationService
 {
-    private readonly TrailblazerWorldContext _context;
-
     internal TrailblazerNavigationService(TrailblazerWorldContext context)
     {
-        _context = context;
         MovementGroups = new MovementGroupCoordinatorState(context);
         NavigatorIds = new NavigatorGlobalIdAllocatorState();
     }
@@ -28,22 +25,11 @@ internal sealed class TrailblazerNavigationService
 
     internal NavigatorGlobalIdAllocatorState NavigatorIds { get; }
 
-    internal Guid CreateNavigatorId()
-    {
-        EnsureUsable();
-        return NavigatorIds.Create();
-    }
+    internal Guid CreateNavigatorId() => NavigatorIds.Create();
 
     internal void Reset()
     {
         MovementGroups.Reset();
         NavigatorIds.Reset();
-    }
-
-    private void EnsureUsable()
-    {
-        SwiftThrowHelper.ThrowIfDisposed(_context.IsDisposed, nameof(TrailblazerWorldContext));
-        if (!_context.World.IsActive)
-            throw new InvalidOperationException("TrailblazerNavigationService is bound to an inactive GridWorld.");
     }
 }

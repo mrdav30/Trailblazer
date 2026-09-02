@@ -74,11 +74,12 @@ internal struct NavigationSurfaceEdgeEnumerator
         _seamEndpoint = default;
         _currentOrdinal = -1;
         Current = default;
-        if (!graph.TryGetNodeAddress(origin, out _origin)
-            || (structural
-                ? !graph.HasEffectiveCell(_origin)
-                : !graph.TryGetNodeState(origin, out NavigationNodeState state)
-                    || !state.IsPresent))
+        bool found = graph.TryGetNodeAddress(origin, out _origin);
+        System.Diagnostics.Debug.Assert(found);
+        if (structural
+            ? !graph.HasEffectiveCell(_origin)
+            : !graph.TryGetNodeState(origin, out NavigationNodeState state)
+                || !state.IsPresent)
         {
             _graph = null;
             _origin = default;
@@ -275,9 +276,13 @@ internal struct NavigationSurfaceEdgeEnumerator
 
     private NavigationSurfaceEdgeAdvanceStatus TrySelectReadyEdge()
     {
-        if ((!_hasNative && !_nativeComplete)
-            || (!_hasExplicit && !_explicitComplete)
-            || (!_hasSeam && !_seamComplete))
+        if (!IsSelectionReady(
+                _hasNative,
+                _nativeComplete,
+                _hasExplicit,
+                _explicitComplete,
+                _hasSeam,
+                _seamComplete))
         {
             return NavigationSurfaceEdgeAdvanceStatus.Pending;
         }
@@ -329,6 +334,16 @@ internal struct NavigationSurfaceEdgeEnumerator
         return NavigationSurfaceEdgeAdvanceStatus.Edge;
     }
 
+    internal static bool IsSelectionReady(
+        bool hasNative,
+        bool nativeComplete,
+        bool hasExplicit,
+        bool explicitComplete,
+        bool hasSeam,
+        bool seamComplete) => (hasNative || nativeComplete)
+        && (hasExplicit || explicitComplete)
+        && (hasSeam || seamComplete);
+
     private void FillExplicit(NavigationConnectionOwnerKey owner)
     {
         if (!_graph!.ExplicitConnections.TryGet(
@@ -351,8 +366,9 @@ internal struct NavigationSurfaceEdgeEnumerator
                 return;
             endpoint = record.Destination;
         }
-        if (!_graph.TryGetNodeRef(endpoint, out NavigationNodeRef target))
-            return;
+        bool found = _graph.TryGetNodeRef(endpoint, out NavigationNodeRef target);
+        System.Diagnostics.Debug.Assert(found,
+            "Active explicit endpoints belong to published graph nodes.");
         _explicitEndpoint = endpoint;
         _explicitEdge = new NavigationGraphEdge(target, record);
         _hasExplicit = true;
@@ -361,11 +377,21 @@ internal struct NavigationSurfaceEdgeEnumerator
     private void FillSeam(NavigationAutomaticSeamRef seam)
     {
         NavigationCellAddress endpoint = seam.Destination;
-        if (!_graph!.TryGetNodeRef(endpoint, out NavigationNodeRef target)
-            || (_structural
-                ? !_graph.HasEffectiveCell(endpoint)
-                : !_graph.TryGetNodeState(target, out NavigationNodeState state)
-                    || !state.IsPresent))
+        bool found = _graph!.TryGetNodeRef(endpoint, out NavigationNodeRef target);
+        System.Diagnostics.Debug.Assert(found,
+            "Active automatic-seam rows reference published graph nodes.");
+        bool hasEffectiveCell = false;
+        bool hasNodeState = false;
+        NavigationNodeState state = default;
+        if (_structural)
+            hasEffectiveCell = _graph.HasEffectiveCell(endpoint);
+        else
+            hasNodeState = _graph.TryGetNodeState(target, out state);
+        if (!IsSeamEndpointEligible(
+                _structural,
+                hasEffectiveCell,
+                hasNodeState,
+                state.IsPresent))
         {
             return;
         }
@@ -374,7 +400,15 @@ internal struct NavigationSurfaceEdgeEnumerator
         _hasSeam = true;
     }
 
-    private static bool TryConsumeCandidate(
+    internal static bool IsSeamEndpointEligible(
+        bool structural,
+        bool hasEffectiveCell,
+        bool hasNodeState,
+        bool isPresent) => structural
+        ? hasEffectiveCell
+        : hasNodeState && isPresent;
+
+    internal static bool TryConsumeCandidate(
         NavigationWorkMeter? queryMeter,
         MaintenanceWorkMeter? maintenanceMeter,
         ref GuideSampleWorkMeter guideMeter,

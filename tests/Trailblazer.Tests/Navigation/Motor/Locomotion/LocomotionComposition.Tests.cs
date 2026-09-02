@@ -35,6 +35,24 @@ public class LocomotionCompositionTests : IDisposable
     }
 
     [Fact]
+    public void ReaffirmingEnabledLocomotions_ShouldPreserveTheirActiveTransientState()
+    {
+        var fall = new FallLocomotion { IsFalling = true, FallStart = (Fixed64)3 };
+        var jump = new JumpLocomotion { IsJumping = true, IsHoldingJump = true };
+        var slide = new SlideLocomotion { IsSliding = true };
+
+        fall.IsEnabled = true;
+        jump.IsEnabled = true;
+        slide.IsEnabled = true;
+
+        fall.IsFalling.Should().BeTrue();
+        fall.FallStart.Should().Be((Fixed64)3);
+        jump.IsJumping.Should().BeTrue();
+        jump.IsHoldingJump.Should().BeTrue();
+        slide.IsSliding.Should().BeTrue();
+    }
+
+    [Fact]
     public void Given_NavigatorOverride_When_Initialized_Then_CustomProfileIsUsed()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();

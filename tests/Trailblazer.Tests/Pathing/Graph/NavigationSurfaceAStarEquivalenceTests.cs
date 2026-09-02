@@ -845,7 +845,7 @@ internal static class NavigationAStarExitTestHarness
                 if (current < 0)
                     break;
                 closed[current] = true;
-                if (nodes[current] == resolved.End.Node)
+                if (nodes[current].Equals(resolved.End.Node))
                 {
                     endSlot = current;
                     break;
@@ -1179,7 +1179,7 @@ internal static class NavigationAStarExitTestHarness
     {
         for (int i = 0; i < count; i++)
         {
-            if (nodes[i] == target)
+            if (nodes[i].Equals(target))
                 return i;
         }
         return -1;

@@ -252,7 +252,7 @@ public class PlatformLocomotion : ILocomotion
         if (HoldPlatformFrames >= MaxHoldPlatformFrames)
         {
             HoldPlatformFrames = 0;
-            if (HoldPlatform != ActivePlatform)
+            if (!ActivePlatform.HasValue || HoldPlatform!.Value != ActivePlatform.Value)
                 return true;
         }
 
@@ -325,8 +325,7 @@ public class PlatformLocomotion : ILocomotion
             return false;
 
         bool hasTransformRefresh = ActivePlatform?.SupportsKinematicMotion == true
-            && refreshedPlatform?.SupportsKinematicMotion == true
-            && !ActivePlatform.Value.Transform.Equals(refreshedPlatform.Value.Transform);
+            && !ActivePlatform.Value.Transform.Equals(refreshedPlatform!.Value.Transform);
 
         if (hasTransformRefresh)
             PreviousPlatform = ActivePlatform;
@@ -367,8 +366,8 @@ public class PlatformLocomotion : ILocomotion
 
     private Fixed4x4 GetAttachmentTransform()
     {
-        if (_preservePreviousTransformForAttachment && PreviousPlatform?.SupportsKinematicMotion == true)
-            return PreviousPlatform.Value.Transform;
+        if (_preservePreviousTransformForAttachment)
+            return PreviousPlatform!.Value.Transform;
 
         return ActivePlatform?.Transform ?? Fixed4x4.Identity;
     }

@@ -86,6 +86,7 @@ public class LocomotionForcesTests
             TerminalVelocity = (Fixed64)10.0d
         };
         loco.HasTerminalVelocityOverride.Should().BeTrue();
+        loco.TerminalVelocity.Should().Be((Fixed64)10.0d);
 
         loco.ClearTerminalVelocityOverride();
 
@@ -102,5 +103,28 @@ public class LocomotionForcesTests
 
         LocomotionForces loco = new();
         loco.GravityForce.Should().Be(GlobalEnvironmentForces.DefaultGravityForce);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void Serialization_ShouldPreservePerInstanceForceOverrides(bool useMemoryPack)
+    {
+        var source = new LocomotionForces
+        {
+            GravityForce = (Fixed64)2,
+            TerminalVelocity = (Fixed64)17
+        };
+        var target = new LocomotionForces();
+
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.HasGravityForceOverride.Should().BeTrue();
+        target.GravityForce.Should().Be((Fixed64)2);
+        target.HasTerminalVelocityOverride.Should().BeTrue();
+        target.TerminalVelocity.Should().Be((Fixed64)17);
     }
 }

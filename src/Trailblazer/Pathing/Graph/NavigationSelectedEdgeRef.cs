@@ -18,6 +18,7 @@ internal readonly struct NavigationSelectedEdgeRef : IEquatable<NavigationSelect
         TraversalMedium targetMedium,
         int canonicalOutgoingOrdinal)
     {
+        System.Diagnostics.Debug.Assert(NavigationCell.IsKnownMedium(targetMedium));
         Target = target;
         TargetMedium = targetMedium;
         CanonicalOutgoingOrdinal = canonicalOutgoingOrdinal;
@@ -30,7 +31,6 @@ internal readonly struct NavigationSelectedEdgeRef : IEquatable<NavigationSelect
     internal int CanonicalOutgoingOrdinal { get; }
 
     internal bool IsValid => !string.IsNullOrEmpty(Target.MapId)
-        && NavigationCell.IsKnownMedium(TargetMedium)
         && CanonicalOutgoingOrdinal >= 0;
 
     public bool Equals(NavigationSelectedEdgeRef other) =>
@@ -38,18 +38,8 @@ internal readonly struct NavigationSelectedEdgeRef : IEquatable<NavigationSelect
         && TargetMedium == other.TargetMedium
         && CanonicalOutgoingOrdinal == other.CanonicalOutgoingOrdinal;
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationSelectedEdgeRef other && Equals(other);
-
     public override int GetHashCode() => SwiftHashTools.CombineHashCodes(
         SwiftHashTools.CombineHashCodes(Target.GetHashCode(), (int)TargetMedium),
         CanonicalOutgoingOrdinal);
 
-    public static bool operator ==(
-        NavigationSelectedEdgeRef left,
-        NavigationSelectedEdgeRef right) => left.Equals(right);
-
-    public static bool operator !=(
-        NavigationSelectedEdgeRef left,
-        NavigationSelectedEdgeRef right) => !left.Equals(right);
 }

@@ -67,7 +67,7 @@ internal struct GuideSampleWorkMeter
 
     private static bool TryConsume(ref int remaining, int count)
     {
-        if (count < 0 || count > remaining)
+        if (count > remaining)
             return false;
         remaining -= count;
         return true;

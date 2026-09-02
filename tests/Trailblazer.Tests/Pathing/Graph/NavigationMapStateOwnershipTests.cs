@@ -62,6 +62,192 @@ public sealed class NavigationMapStateOwnershipTests
     }
 
     [Fact]
+    public void RemovingOneOfTwoIncomingSources_ShouldPreserveTheRemainingDependency()
+    {
+        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
+        candidate.UpdateIncomingSourceForWork("destination", "source-b", remove: false);
+        candidate.UpdateIncomingSourceForWork("destination", "source-a", remove: false);
+
+        candidate.UpdateIncomingSourceForWork("destination", "source-a", remove: true);
+
+        candidate.GetIncomingSourceCount("destination").Should().Be(1);
+        candidate.GetIncomingSource("destination", 0).Should().Be("source-b");
+    }
+
+    [Fact]
+    public void MapFold_ShouldResumeDefaultCellValidationAfterSharedOverlayBudgetResets()
+    {
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        PreparedNavigationMap prepared = new(
+            new NavigationMapBuilder("map", binding).SetDefaultCell(Cell).Build(),
+            bakeVersion: 1);
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        int corridorCapacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationMapFoldWork(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            prepared,
+            OverlayReplacementPolicy.Clear,
+            settings.OperationLimits,
+            new GridCellPrism[corridorCapacity],
+            new Vector3d[(corridorCapacity * 2) - 2],
+            new NavigationCellAddress[corridorCapacity],
+            new NavigationAddressStampSet(corridorCapacity));
+        var meter = new MaintenanceWorkMeter(settings.MaintenanceBudget);
+        meter.TryConsumeOverlaySlots(settings.MaintenanceBudget.MaxOverlaySlots)
+            .Should().BeTrue();
+
+        work.Advance(meter, out NavigationOperationRejection blockedRejection)
+            .Should().BeFalse();
+
+        blockedRejection.Should().Be(NavigationOperationRejection.None);
+        work.Candidate.MapCount.Should().Be(0,
+            "default-cell validation must finish before the folded map becomes visible");
+        meter.Reset();
+        for (int frame = 0; frame < 32; frame++)
+        {
+            if (work.Advance(meter, out NavigationOperationRejection rejection))
+            {
+                rejection.Should().Be(NavigationOperationRejection.None);
+                break;
+            }
+            meter.Reset();
+        }
+        work.Candidate.TryGetMap("map", out NavigationMap result).Should().BeTrue();
+        result.DefaultCell.Should().Be(Cell);
+    }
+
+    [Fact]
+    public void OverlayFold_ShouldNotRewriteTransitionDependenciesAfterSharedBudgetIsSpent()
+    {
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, Cell)
+            .AddCell(new VoxelIndex(1, 0, 0), Cell)
+            .AddTransition(new TraversalTransitionDefinition(
+                "step",
+                TraversalTransitionType.Custom,
+                default,
+                TraversalMedium.Solid,
+                new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                TraversalMedium.Solid))
+            .Build();
+        NavigationOperationCandidate source = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, 1)).Candidate;
+        NavigationCell changed = new(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.One,
+            Fixed64.Zero,
+            Fixed64.One);
+        var transaction = new NavigationOverlayTransaction(new[]
+        {
+            new NavigationMapOverlayDelta(
+                "map",
+                new[] { NavigationCellOverlayOperation.Set(default, changed) })
+        });
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        int corridorCapacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationOverlayFoldWork(
+            source,
+            transaction,
+            operationSequence: 2,
+            settings.OperationLimits,
+            new GridCellPrism[corridorCapacity],
+            new Vector3d[(corridorCapacity * 2) - 2],
+            new NavigationCellAddress[corridorCapacity],
+            new NavigationAddressStampSet(corridorCapacity));
+        var meter = new MaintenanceWorkMeter(settings.MaintenanceBudget);
+        meter.TryConsumeDependencyEntries(settings.MaintenanceBudget.MaxDependencyEntries)
+            .Should().BeTrue();
+
+        work.Advance(meter, out NavigationOperationRejection blockedRejection)
+            .Should().BeFalse();
+
+        blockedRejection.Should().Be(NavigationOperationRejection.None);
+        source.GetIncomingSourceCount("map").Should().Be(1);
+        source.TryGetOverlay("map", out NavigationMapOverlayState published).Should().BeTrue();
+        published.CellCount.Should().Be(0,
+            "the source candidate must remain immutable while dependency work is deferred");
+        meter.Reset();
+        for (int frame = 0; frame < 64; frame++)
+        {
+            if (work.Advance(meter, out NavigationOperationRejection rejection))
+            {
+                rejection.Should().Be(NavigationOperationRejection.None);
+                break;
+            }
+            meter.Reset();
+        }
+        work.Candidate.GetIncomingSourceCount("map").Should().Be(1);
+        work.Candidate.TryGetOverlay("map", out NavigationMapOverlayState folded).Should().BeTrue();
+        folded.TryGetCell(default, out NavigationCellOverlayOperation operation).Should().BeTrue();
+        operation.Cell.Should().Be(changed);
+    }
+
+    [Fact]
+    public void PreservedOverlayOutsideReplacementBinding_ShouldRejectWithoutMutatingSource()
+    {
+        PreparedNavigationMap original = PrepareMap("map", cellCount: 2, bakeVersion: 1);
+        PreparedNavigationMap replacement = PrepareMap("map", cellCount: 1, bakeVersion: 2);
+        NavigationOperationCandidate published = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            original).Candidate;
+        var retainedIndex = new VoxelIndex(1, 0, 0);
+        NavigationOperationCandidate source = FoldOverlay(
+            published,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "map",
+                    new[] { NavigationCellOverlayOperation.Set(retainedIndex, Cell) })
+            }),
+            operationSequence: 2).Candidate;
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        int corridorCapacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationMapFoldWork(
+            source,
+            replacement,
+            OverlayReplacementPolicy.PreserveAndRevalidate,
+            settings.OperationLimits,
+            new GridCellPrism[corridorCapacity],
+            new Vector3d[(corridorCapacity * 2) - 2],
+            new NavigationCellAddress[corridorCapacity],
+            new NavigationAddressStampSet(corridorCapacity));
+        var meter = new MaintenanceWorkMeter(settings.MaintenanceBudget);
+        NavigationOperationRejection rejection = NavigationOperationRejection.None;
+        bool complete = false;
+
+        for (int frame = 0; frame < 64 && !complete; frame++)
+        {
+            complete = work.Advance(meter, out rejection);
+            meter.Reset();
+        }
+
+        complete.Should().BeTrue();
+        rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+        source.TryGetState("map", out NavigationOperationCandidate.MapState? sourceState)
+            .Should().BeTrue();
+        sourceState!.Map.CellSpan.Length.Should().Be(2);
+        sourceState.Overlay.TryGetCell(retainedIndex, out NavigationCellOverlayOperation retained)
+            .Should().BeTrue();
+        retained.Kind.Should().Be(NavigationCellOverlayOperationKind.Set);
+    }
+
+    [Fact]
     public void ShrinkingReplacementPreflight_ShouldChargeTheFullPendingPayload()
     {
         PreparedNavigationMap large = PrepareMap("map", cellCount: 32, bakeVersion: 1);
@@ -209,8 +395,365 @@ public sealed class NavigationMapStateOwnershipTests
         work.AdditionalExclusivePersistentPages.Should().Be(6 + 1 + 1);
     }
 
+    [Theory]
+    [InlineData(NavigationCellOverlayOperationKind.Set, false, true)]
+    [InlineData(NavigationCellOverlayOperationKind.Set, true, true)]
+    [InlineData(NavigationCellOverlayOperationKind.Suppress, false, false)]
+    [InlineData(NavigationCellOverlayOperationKind.Suppress, true, true)]
+    [InlineData(NavigationCellOverlayOperationKind.RevertToBake, false, false)]
+    [InlineData(NavigationCellOverlayOperationKind.RevertToBake, true, false)]
+    public void DynamicSlotAllocationPolicy_ShouldMatchOverlayAndDefaultSemantics(
+        NavigationCellOverlayOperationKind kind,
+        bool hasDefaultCell,
+        bool expected)
+    {
+        NavigationMapInstance.ComposeWork.ShouldAllocateDynamicSlot(kind, hasDefaultCell)
+            .Should().Be(expected);
+    }
+
     [Fact]
-    public void OverlaySequenceCompose_ShouldMeterEveryChangeAndCanonicalLookup()
+    public void OverlayCompose_ShouldTreatCleanRevertsAsStableNoOps()
+    {
+        PreparedNavigationMap prepared = PrepareMap("map", cellCount: 1, bakeVersion: 1);
+        var sourceState = new NavigationOperationCandidate.MapState(
+            prepared.Map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            NavigationMapOverlayState.Empty,
+            dynamicSlotGeneration: 0,
+            bakedCellLookup: prepared.BakedCellLookup);
+        NavigationMapInstance previous = NavigationMapInstanceTestFactory.ComposeDetached(
+            sourceState,
+            previous: null,
+            instanceVersion: 1);
+        var delta = new NavigationMapOverlayDelta(
+            "map",
+            new[]
+            {
+                NavigationCellOverlayOperation.RevertToBake(default),
+                NavigationCellOverlayOperation.RevertToBake(new VoxelIndex(10, 0, 0))
+            });
+        var work = new NavigationMapInstance.ComposeWork(
+            sourceState,
+            previous,
+            delta,
+            version: 2);
+        var meter = new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+
+        work.Advance(meter).Should().BeTrue();
+        NavigationMapInstance result = work.Result!;
+        work.Advance(meter).Should().BeTrue("completed work is idempotent");
+
+        result.DynamicSlotCount.Should().Be(0,
+            "reverting an unauthored address must not allocate a dynamic slot");
+        result.AddressCount.Should().Be(previous.AddressCount);
+        result.PersistentPageCount.Should().Be(previous.PersistentPageCount);
+        result.TryGetSemanticState(
+                default,
+                out NavigationCellSemanticSource source,
+                out bool hasCell,
+                out NavigationCell effective)
+            .Should().BeTrue();
+        source.Should().Be(NavigationCellSemanticSource.Baked);
+        hasCell.Should().BeTrue();
+        effective.Should().Be(Cell);
+    }
+
+    [Fact]
+    public void OverlayCompose_ShouldIgnoreSuppressionWithoutBakedOrDefaultSemantic()
+    {
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, Cell)
+            .Build();
+        var prepared = new PreparedNavigationMap(map, bakeVersion: 1);
+        var sourceState = new NavigationOperationCandidate.MapState(
+            map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            NavigationMapOverlayState.Empty,
+            dynamicSlotGeneration: 0,
+            bakedCellLookup: prepared.BakedCellLookup);
+        NavigationMapInstance previous = NavigationMapInstanceTestFactory.ComposeDetached(
+            sourceState,
+            previous: null,
+            instanceVersion: 1);
+        var unauthored = new VoxelIndex(1, 0, 0);
+        var delta = new NavigationMapOverlayDelta(
+            map.MapId,
+            new[] { NavigationCellOverlayOperation.Suppress(unauthored) });
+        NavigationMapOverlayState overlay = NavigationMapOverlayState.Empty.Apply(
+            delta,
+            operationSequence: 2);
+        var targetState = new NavigationOperationCandidate.MapState(
+            map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            overlay,
+            dynamicSlotGeneration: 1,
+            PersistentVoxelIndexMap<byte>.Empty,
+            prepared.BakedCellLookup);
+        var work = new NavigationMapInstance.ComposeWork(
+            targetState,
+            previous,
+            delta,
+            version: 2);
+
+        work.Advance(new MaintenanceWorkMeter(
+                TrailblazerWorldContextSettings.Default.MaintenanceBudget))
+            .Should().BeTrue();
+
+        NavigationMapInstance result = work.Result;
+        result.DynamicSlotCount.Should().Be(0,
+            "without inherited default semantics there is nothing for suppression to mask");
+        result.AddressCount.Should().Be(previous.AddressCount);
+        result.LastCopiedSemanticPages.Should().Be(0);
+        result.TryGetSemanticState(unauthored, out _, out _, out _).Should().BeFalse(
+            "the no-op suppression must not publish a phantom semantic address");
+    }
+
+    [Fact]
+    public void DefaultCellSuppression_ShouldAllocateOnceAndRevertToInheritedSemantic()
+    {
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .SetDefaultCell(Cell)
+            .Build();
+        var prepared = new PreparedNavigationMap(map, bakeVersion: 1);
+        var sourceState = new NavigationOperationCandidate.MapState(
+            map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            NavigationMapOverlayState.Empty,
+            dynamicSlotGeneration: 0,
+            bakedCellLookup: prepared.BakedCellLookup);
+        NavigationMapInstance source = NavigationMapInstanceTestFactory.ComposeDetached(
+            sourceState,
+            previous: null,
+            instanceVersion: 1);
+        var dynamic = new VoxelIndex(1, 0, 0);
+        PersistentVoxelIndexMap<byte> dynamicAddresses =
+            PersistentVoxelIndexMap<byte>.Empty.Set(dynamic, 0);
+        var overrideDelta = new NavigationMapOverlayDelta(
+            "map",
+            new[] { NavigationCellOverlayOperation.Set(dynamic, Cell) });
+        NavigationMapOverlayState overrideOverlay = NavigationMapOverlayState.Empty.Apply(
+            overrideDelta,
+            operationSequence: 2);
+        var overrideState = new NavigationOperationCandidate.MapState(
+            map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            overrideOverlay,
+            dynamicSlotGeneration: 1,
+            dynamicAddresses,
+            prepared.BakedCellLookup);
+        var overrideWork = new NavigationMapInstance.ComposeWork(
+            overrideState,
+            source,
+            overrideDelta,
+            version: 2);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+
+        overrideWork.Advance(meter).Should().BeTrue();
+        overrideWork.Result.TryGetDefaultBaselineSeedSlot(
+                ordinal: 0,
+                out NavigationDynamicCellSlot overrideSeed,
+                out bool retainOverrideSeed)
+            .Should().BeTrue();
+        overrideSeed.Index.Should().Be(dynamic);
+        retainOverrideSeed.Should().BeTrue(
+            "an explicit override owns the dynamic semantic slot independently of the default cell");
+
+        var suppressDelta = new NavigationMapOverlayDelta(
+            "map",
+            new[] { NavigationCellOverlayOperation.Suppress(dynamic) });
+        NavigationMapOverlayState suppressedOverlay = NavigationMapOverlayState.Empty.Apply(
+            suppressDelta,
+            operationSequence: 2);
+        var suppressedState = new NavigationOperationCandidate.MapState(
+            map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            suppressedOverlay,
+            dynamicSlotGeneration: 1,
+            dynamicAddresses,
+            prepared.BakedCellLookup);
+        var suppress = new NavigationMapInstance.ComposeWork(
+            suppressedState,
+            source,
+            suppressDelta,
+            version: 2);
+        meter.Reset();
+        suppress.Advance(meter).Should().BeTrue();
+        NavigationMapInstance suppressed = suppress.Result;
+        suppressed.DynamicSlotCount.Should().Be(1);
+        suppressed.TryGetSemanticState(
+                dynamic,
+                out NavigationCellSemanticSource suppressedSource,
+                out bool suppressedHasCell,
+                out _)
+            .Should().BeTrue();
+        suppressedSource.Should().Be(NavigationCellSemanticSource.OverlaySuppressed);
+        suppressedHasCell.Should().BeFalse();
+        suppressed.TryGetDefaultBaselineSeedSlot(
+                ordinal: 0,
+                out NavigationDynamicCellSlot suppressedSeed,
+                out bool retainSuppressedSeed)
+            .Should().BeTrue();
+        suppressed.TryGetDynamicSlot(dynamic, out NavigationDynamicCellSlot dynamicSlot)
+            .Should().BeTrue();
+        suppressedSeed.Should().Be(dynamicSlot);
+        retainSuppressedSeed.Should().BeTrue(
+            "a suppression still owns the dynamic semantic slot needed to mask the inherited default");
+
+        var repeated = new NavigationMapInstance.ComposeWork(
+            suppressedState,
+            suppressed,
+            suppressDelta,
+            version: 3);
+        meter.Reset();
+        repeated.Advance(meter).Should().BeTrue();
+        repeated.Result.LastCopiedSemanticPages.Should().Be(0,
+            "repeating an exact suppression must not rewrite its semantic page");
+
+        var revertDelta = new NavigationMapOverlayDelta(
+            "map",
+            new[] { NavigationCellOverlayOperation.RevertToBake(dynamic) });
+        NavigationMapOverlayState revertedOverlay = suppressedOverlay.Apply(
+            revertDelta,
+            operationSequence: 3);
+        var revertedState = new NavigationOperationCandidate.MapState(
+            map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            revertedOverlay,
+            dynamicSlotGeneration: 2,
+            PersistentVoxelIndexMap<byte>.Empty,
+            prepared.BakedCellLookup);
+        var revert = new NavigationMapInstance.ComposeWork(
+            revertedState,
+            repeated.Result,
+            revertDelta,
+            version: 4);
+        meter.Reset();
+
+        revert.Advance(meter).Should().BeTrue();
+        revert.Result.TryGetSemanticState(
+                dynamic,
+                out NavigationCellSemanticSource revertedSource,
+                out bool revertedHasCell,
+                out NavigationCell revertedCell)
+            .Should().BeTrue();
+        revertedSource.Should().Be(NavigationCellSemanticSource.Baked);
+        revertedHasCell.Should().BeTrue();
+        revertedCell.Should().Be(Cell);
+        revert.Result.TryGetDefaultBaselineSeedSlot(
+                ordinal: 0,
+                out NavigationDynamicCellSlot revertedSlot,
+                out bool retainRevertedSlot)
+            .Should().BeTrue();
+        revertedSlot.Index.Should().Be(dynamic);
+        retainRevertedSlot.Should().BeFalse(
+            "a clean revert must not keep an unauthored dynamic slot in the next default baseline");
+    }
+
+    [Fact]
+    public void OverlayFold_ShouldReserveEveryDynamicallyAuthoredAddressPermanently()
+    {
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap defaultMap = new NavigationMapBuilder("default-map", binding)
+            .SetDefaultCell(Cell)
+            .Build();
+        NavigationOperationCandidate installed = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(defaultMap, bakeVersion: 1)).Candidate;
+        var dynamic = new VoxelIndex(1, 0, 0);
+
+        NavigationOperationCandidate suppressed = FoldOverlay(
+            installed,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "default-map",
+                    new[] { NavigationCellOverlayOperation.Suppress(dynamic) })
+            }),
+            operationSequence: 2).Candidate;
+        suppressed.TryGetState(
+                "default-map",
+                out NavigationOperationCandidate.MapState? suppressedState)
+            .Should().BeTrue();
+        suppressedState!.DynamicAddresses.TryGetValue(dynamic, out _).Should().BeTrue(
+            "a tombstone must own the dynamic address that masks inherited default semantics");
+
+        NavigationOperationCandidate reverted = FoldOverlay(
+            suppressed,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "default-map",
+                    new[] { NavigationCellOverlayOperation.RevertToBake(dynamic) })
+            }),
+            operationSequence: 3).Candidate;
+        reverted.TryGetState(
+                "default-map",
+                out NavigationOperationCandidate.MapState? revertedState)
+            .Should().BeTrue();
+        revertedState!.DynamicAddresses.TryGetValue(dynamic, out _).Should().BeTrue(
+            "reversion must not release a stable dynamic slot identity once assigned");
+
+        NavigationMap explicitOnlyMap = new NavigationMapBuilder("explicit-map", binding)
+            .Build();
+        NavigationOperationCandidate explicitInstalled = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(explicitOnlyMap, bakeVersion: 1)).Candidate;
+        NavigationOperationCandidate set = FoldOverlay(
+            explicitInstalled,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "explicit-map",
+                    new[] { NavigationCellOverlayOperation.Set(dynamic, Cell) })
+            }),
+            operationSequence: 2).Candidate;
+        NavigationOperationCandidate removed = FoldOverlay(
+            set,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "explicit-map",
+                    new[] { NavigationCellOverlayOperation.Suppress(dynamic) })
+            }),
+            operationSequence: 3).Candidate;
+        removed.TryGetState(
+                "explicit-map",
+                out NavigationOperationCandidate.MapState? removedState)
+            .Should().BeTrue();
+        removedState!.DynamicAddresses.TryGetValue(dynamic, out _).Should().BeTrue(
+            "later suppression must not release a stable dynamic slot identity once assigned");
+    }
+
+    [Fact]
+    public void MixedOperationSequenceCompose_ShouldMeterEveryChangeAndOnlyOverlayLookups()
     {
         PreparedNavigationMap prepared = PrepareMap("map", cellCount: 1, bakeVersion: 1);
         var sourceState = new NavigationOperationCandidate.MapState(
@@ -238,7 +781,12 @@ public sealed class NavigationMapStateOwnershipTests
             dynamicSlotGeneration: 0,
             bakedCellLookup: prepared.BakedCellLookup);
         var changes = new NavigationOperationFrameChange[5];
-        for (int changeIndex = 0; changeIndex < changes.Length - 1; changeIndex++)
+        PreparedNavigationMap unrelated = PrepareMap("unrelated", cellCount: 1, bakeVersion: 1);
+        changes[0] = NavigationOperationFrameChange.MapCommit(
+            unrelated,
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 1);
+        for (int changeIndex = 1; changeIndex < changes.Length - 1; changeIndex++)
         {
             var maps = new NavigationMapOverlayDelta[8];
             for (int mapIndex = 0; mapIndex < maps.Length; mapIndex++)
@@ -279,7 +827,8 @@ public sealed class NavigationMapStateOwnershipTests
 
         work.Result.Should().NotBeNull();
         componentUnits.Should().Be(changes.Length);
-        dependencyUnits.Should().Be(changes.Length);
+        dependencyUnits.Should().Be(changes.Length - 1,
+            "map commits advance the shared batch cursor without an overlay map lookup");
         overlayUnits.Should().Be(1);
     }
 
@@ -360,6 +909,62 @@ public sealed class NavigationMapStateOwnershipTests
         work.Result.TryGetMap("map", out NavigationMapInstance? result).Should().BeTrue();
         result.Should().BeSameAs(instance);
         result!.InstanceVersion.Should().Be(1);
+    }
+
+    [Fact]
+    public void StructuralRemoval_ShouldWaitForItsDirectoryNodeBudget()
+    {
+        PreparedNavigationMap prepared = PrepareMap("map", cellCount: 1, bakeVersion: 1);
+        NavigationOperationCandidate published = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            prepared).Candidate;
+        published.ResetWorkCopiedPersistentOwnership();
+        published.TryGetState("map", out NavigationOperationCandidate.MapState? state)
+            .Should().BeTrue();
+        NavigationMapInstance instance = NavigationMapInstanceTestFactory.ComposeDetached(
+            state!,
+            previous: null,
+            instanceVersion: 1);
+        var source = new NavigationWorldGraph(1, new[] { instance });
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        int corridorCapacity = settings.OperationLimits.MaxCorridorCells;
+        var removal = new NavigationMapFoldWork(
+            published,
+            "map",
+            new GridCellPrism[corridorCapacity],
+            new Vector3d[(corridorCapacity * 2) - 2],
+            new NavigationCellAddress[corridorCapacity],
+            new NavigationAddressStampSet(corridorCapacity));
+        var meter = new MaintenanceWorkMeter(settings.MaintenanceBudget);
+        while (!removal.Advance(meter, out NavigationOperationRejection rejection))
+        {
+            rejection.Should().Be(NavigationOperationRejection.None);
+            meter.Reset();
+        }
+        var changes = new[]
+        {
+            NavigationOperationFrameChange.MapRemove("map", operationSequence: 2)
+        };
+        var preparation = new NavigationWorldGraph.StructuralPreparationWork(
+            source,
+            removal.Candidate,
+            changes,
+            changeCount: 1,
+            PersistentStringMap<bool>.Empty.Set("map", true),
+            version: 2);
+        meter.Reset();
+        meter.TryConsumeComponentNodes(settings.MaintenanceBudget.MaxComponentNodes)
+            .Should().BeTrue();
+
+        preparation.Advance(meter).Should().BeFalse();
+
+        preparation.IsComplete.Should().BeFalse();
+        source.TryGetMap("map", out _).Should().BeTrue(
+            "a deferred removal must not publish a partially updated directory");
+        meter.Reset();
+        while (!preparation.Advance(meter))
+            meter.Reset();
+        preparation.Result.TryGetMap("map", out _).Should().BeFalse();
     }
 
     [Fact]

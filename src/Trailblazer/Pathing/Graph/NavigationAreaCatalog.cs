@@ -31,8 +31,6 @@ internal sealed class NavigationAreaCatalog
         totalRuleCount: 0,
         version: 0);
 
-    internal int PolicyCount => _policies.Length;
-
     internal int TotalRuleCount { get; }
 
     internal long Version { get; }
@@ -57,7 +55,7 @@ internal sealed class NavigationAreaCatalog
             1 + Math.Max(policy.RuleCount, 2 * copiedPolicyReferences));
     }
 
-    internal bool TryGet(NavigationAreaPolicyKey key, out NavigationAreaPolicy? policy)
+    internal bool TryGet(NavigationAreaPolicyKey key, out NavigationAreaPolicy policy)
     {
         int index = FindPolicy(key.PolicyId);
         if (index >= 0 && _policies[index].Key.Equals(key))
@@ -65,7 +63,7 @@ internal sealed class NavigationAreaCatalog
             policy = _policies[index];
             return true;
         }
-        policy = null;
+        policy = null!;
         return false;
     }
 

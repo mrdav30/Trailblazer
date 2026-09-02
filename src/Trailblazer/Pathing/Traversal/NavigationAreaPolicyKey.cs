@@ -64,7 +64,11 @@ public readonly struct NavigationAreaPolicyKey : IEquatable<NavigationAreaPolicy
     internal void Validate(string parameterName)
     {
         SwiftThrowHelper.ThrowIfArgument(
-            string.IsNullOrWhiteSpace(PolicyId) || Revision <= 0,
+            string.IsNullOrWhiteSpace(PolicyId),
+            parameterName,
+            "Area policy key must contain a stable ID and positive revision.");
+        SwiftThrowHelper.ThrowIfArgument(
+            Revision <= 0,
             parameterName,
             "Area policy key must contain a stable ID and positive revision.");
     }

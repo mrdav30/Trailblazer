@@ -15,8 +15,7 @@ internal enum TraversalEvaluationStatus : byte
 {
     Passable = 0,
     Impassable = 1,
-    CostOverflow = 2,
-    Stale = 3
+    CostOverflow = 2
 }
 
 /// <summary>Reports progress through one bounded explicit-connection evaluation.</summary>
@@ -25,8 +24,7 @@ internal enum TraversalExplicitEdgeStatus : byte
     Pending = 0,
     Passable = 1,
     Impassable = 2,
-    CostOverflow = 3,
-    Stale = 4
+    CostOverflow = 3
 }
 
 /// <summary>Returns one evaluated edge's exact cost and resolved portal evidence.</summary>
@@ -171,21 +169,25 @@ internal readonly struct TraversalEvaluator
     {
         work = default;
         NavigationExplicitConnectionRecord record = edge.ExplicitConnection;
-        if (record == null
-            || !record.IsActive
-            || edge.Kind != NavigationGraphEdgeKind.Explicit
-            || !_graph.TryGetNodeAddress(source, out NavigationCellAddress sourceAddress)
-            || !_graph.TryGetNodeAddress(edge.Target, out NavigationCellAddress targetAddress)
-            || record.NavigationPortals.Count != record.Definition.Witnesses.Count + 1
-            || !_graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism))
-        {
-            return TraversalExplicitEdgeStatus.Stale;
-        }
-        if (!sourceAddress.Equals(record.Source)
-            || !targetAddress.Equals(record.Destination))
-        {
-            return TraversalExplicitEdgeStatus.Stale;
-        }
+        bool hasSourceAddress = _graph.TryGetNodeAddress(
+            source,
+            out NavigationCellAddress sourceAddress);
+        bool hasTargetAddress = _graph.TryGetNodeAddress(
+            edge.Target,
+            out NavigationCellAddress targetAddress);
+        bool hasSourcePrism = _graph.TryGetSeamPrism(
+            sourceAddress,
+            out GridCellPrism sourcePrism);
+        System.Diagnostics.Debug.Assert(
+            record != null
+            && record.IsActive
+            && edge.Kind == NavigationGraphEdgeKind.Explicit
+            && hasSourceAddress
+            && hasTargetAddress
+            && record.NavigationPortals.Count == record.Definition.Witnesses.Count + 1
+            && hasSourcePrism
+            && sourceAddress.Equals(record.Source)
+            && targetAddress.Equals(record.Destination));
         if (!TryGetPassableNode(source, out NavigationNodeState sourceState, out _)
             || !TryGetPassableNode(
                 edge.Target,
@@ -240,8 +242,8 @@ internal readonly struct TraversalEvaluator
         }
         else
         {
-            if (!_graph.TryGetNodeRef(nextAddress, out dependencyNode))
-                return TraversalExplicitEdgeStatus.Stale;
+            bool hasDependencyNode = _graph.TryGetNodeRef(nextAddress, out dependencyNode);
+            System.Diagnostics.Debug.Assert(hasDependencyNode);
             evidence = new TraversalEdgeEvidence(dependencyNode);
             if (!TryGetPassableNode(
                     dependencyNode,
@@ -253,76 +255,54 @@ internal readonly struct TraversalEvaluator
             nextFootAnchor = nextState.FootAnchor;
         }
 
-        if (!_graph.TryGetSeamPrism(nextAddress, out GridCellPrism nextPrism)
-            || !work.Portals.MoveNext())
-        {
-            return TraversalExplicitEdgeStatus.Stale;
-        }
-        GridNavigationPortal retainedPortal = work.Portals.Current;
+        bool hasNextPrism = _graph.TryGetSeamPrism(nextAddress, out GridCellPrism nextPrism);
+        bool hasPortal = work.Portals.MoveNext();
+        System.Diagnostics.Debug.Assert(hasNextPrism && hasPortal);
+        GridNavigationPortal portal = work.Portals.Current;
         KinematicBodyShape shape = _profile.Shape;
-        if (!retainedPortal.IsValid
-            || !GridCellGeometry.TryCreateNavigationPortal(
-                work.PreviousPrism,
-                nextPrism,
-                out GridNavigationPortal portal)
-            || !IsSamePortal(retainedPortal, portal))
-        {
-            return TraversalExplicitEdgeStatus.Stale;
-        }
-        if (shape.Radius > portal.MaximumHorizontalRadius
-            || shape.Height > portal.MaximumBodyHeight)
-        {
-            return TraversalExplicitEdgeStatus.Impassable;
-        }
-        if (!portal.TryResolveProfile(
-                shape.Radius,
-                shape.Height,
-                out Vector3d sourcePortalAnchor,
-                out Vector3d targetPortalAnchor))
-        {
-            return TraversalExplicitEdgeStatus.CostOverflow;
-        }
-        if (!IsPortalTransitionValid(
-                work.PreviousPrism,
-                nextPrism,
-                portal,
-                sourcePortalAnchor,
-                targetPortalAnchor,
-                shape))
-        {
-            return TraversalExplicitEdgeStatus.Impassable;
-        }
+        System.Diagnostics.Debug.Assert(portal.IsValid);
+        bool resolvedProfile = portal.TryResolveProfile(
+            shape.Radius,
+            shape.Height,
+            out Vector3d sourcePortalAnchor,
+            out Vector3d targetPortalAnchor);
+        System.Diagnostics.Debug.Assert(resolvedProfile);
+        System.Diagnostics.Debug.Assert(
+            portal.FaceKind != VoxelContactFaceKind.Horizontal
+            || (GridCellGeometry.TryGetNavigationPortalTraversalParameters(
+                    work.PreviousPrism,
+                    nextPrism,
+                    portal,
+                    sourcePortalAnchor,
+                    targetPortalAnchor,
+                    shape.Radius,
+                    shape.Height,
+                    out Fixed64 sourceParameter,
+                    out Fixed64 targetParameter)
+                && sourceParameter == Fixed64.Zero
+                && targetParameter == Fixed64.One),
+            "published explicit corridors retain the exact validated profile crossing");
 
         TraversalEvaluationStatus vertical = EvaluateVerticalDelta(
             work.PreviousFootAnchor,
             nextFootAnchor);
         if (vertical != TraversalEvaluationStatus.Passable)
-            return ToExplicitStatus(vertical);
+            return TraversalExplicitEdgeStatus.Impassable;
 
         Fixed64 cost = Fixed64.Zero;
-        Fixed64 total = Fixed64.Zero;
         if (final
-            && (!Vector3d.TryGetDistance(
+            && !TryGetExplicitConnectionCost(
                 work.SourceFootAnchor,
                 connection.EntryAnchor,
-                out Fixed64 sourceDistance)
-            || !Vector3d.TryGetDistance(
+                record.CorridorCost,
                 connection.ExitAnchor,
                 work.TargetFootAnchor,
-                out Fixed64 targetDistance)
-            || !Fixed64.TryAdd(sourceDistance, record.CorridorCost, out total)
-            || !Fixed64.TryAdd(total, targetDistance, out total)
-            || !Fixed64.TryAdd(total, connection.AdditionalCost, out total)
-            || !Fixed64.TryAdd(total, work.TargetEnterCost, out total)
-            || !Fixed64.TryAdd(total, work.TargetAreaEnterCost, out total)))
+                connection.AdditionalCost,
+                work.TargetEnterCost,
+                work.TargetAreaEnterCost,
+                out cost))
         {
             return TraversalExplicitEdgeStatus.CostOverflow;
-        }
-        if (final)
-        {
-            cost = total;
-            if (work.Portals.MoveNext())
-                return TraversalExplicitEdgeStatus.Stale;
         }
 
         evidence = new TraversalEdgeEvidence(
@@ -353,8 +333,7 @@ internal readonly struct TraversalEvaluator
         out TraversalEdgeEvidence evidence)
     {
         evidence = default;
-        if (edge.Kind != NavigationGraphEdgeKind.Native
-            || !TryGetPassableNode(source, out NavigationNodeState sourceState, out _)
+        if (!TryGetPassableNode(source, out NavigationNodeState sourceState, out _)
             || !TryGetPassableNode(
                 edge.Target,
                 out NavigationNodeState targetState,
@@ -365,56 +344,52 @@ internal readonly struct TraversalEvaluator
 
         KinematicBodyShape shape = _profile.Shape;
         GridNavigationPortal template = edge.NativePortal;
-        if (!template.IsValid)
-            return TraversalEvaluationStatus.Stale;
+        System.Diagnostics.Debug.Assert(template.IsValid);
         if (shape.Radius > template.MaximumHorizontalRadius
             || shape.Height > template.MaximumBodyHeight)
         {
             return TraversalEvaluationStatus.Impassable;
         }
 
-        if (!_graph.TryGetNodeAddress(source, out NavigationCellAddress sourceAddress)
-            || !_graph.TryGetNodeAddress(edge.Target, out NavigationCellAddress targetAddress)
-            || !_graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
-            || !_graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism))
-        {
-            return TraversalEvaluationStatus.Stale;
-        }
-        if (!template.TryTranslate(sourceState.Center, out GridNavigationPortal retainedPortal))
-            return TraversalEvaluationStatus.CostOverflow;
-        if (!GridCellGeometry.TryCreateNavigationPortal(
-                sourcePrism,
-                targetPrism,
-                out GridNavigationPortal portal)
-            || !IsSamePortal(retainedPortal, portal))
-        {
-            return TraversalEvaluationStatus.Stale;
-        }
-        if (!portal.TryResolveProfile(
-                shape.Radius,
-                shape.Height,
-                out Vector3d sourcePortalFoot,
-                out Vector3d targetPortalFoot))
-        {
-            return TraversalEvaluationStatus.CostOverflow;
-        }
-        TraversalEvaluationStatus vertical = EvaluateVerticalDelta(
-            sourceState.FootAnchor,
-            targetState.FootAnchor);
-        if (vertical != TraversalEvaluationStatus.Passable)
-            return vertical;
+        bool hasSourceAddress = _graph.TryGetNodeAddress(
+            source,
+            out NavigationCellAddress sourceAddress);
+        bool hasTargetAddress = _graph.TryGetNodeAddress(
+            edge.Target,
+            out NavigationCellAddress targetAddress);
+        bool hasSourcePrism = _graph.TryGetSeamPrism(
+            sourceAddress,
+            out GridCellPrism sourcePrism);
+        bool hasTargetPrism = _graph.TryGetSeamPrism(
+            targetAddress,
+            out GridCellPrism targetPrism);
+        System.Diagnostics.Debug.Assert(
+            hasSourceAddress && hasTargetAddress && hasSourcePrism && hasTargetPrism);
+        bool translated = template.TryTranslate(
+            sourceState.Center,
+            out GridNavigationPortal retainedPortal);
+        System.Diagnostics.Debug.Assert(translated);
+        bool createdPortal = GridCellGeometry.TryCreateNavigationPortal(
+            sourcePrism,
+            targetPrism,
+            out GridNavigationPortal portal);
+        System.Diagnostics.Debug.Assert(createdPortal && retainedPortal.IsValid);
+        bool resolvedProfile = portal.TryResolveProfile(
+            shape.Radius,
+            shape.Height,
+            out Vector3d sourcePortalFoot,
+            out Vector3d targetPortalFoot);
+        System.Diagnostics.Debug.Assert(resolvedProfile);
 
-        if (!NavigationDistanceMath.TryCeiling(
+        if (!TryGetPortalTraversalCost(
+                useCeilingDistance: true,
                 sourceState.FootAnchor,
                 sourcePortalFoot,
-                out Fixed64 sourceDistance)
-            || !NavigationDistanceMath.TryCeiling(
                 targetPortalFoot,
                 targetState.FootAnchor,
-                out Fixed64 targetDistance)
-            || !Fixed64.TryAdd(sourceDistance, targetDistance, out Fixed64 total)
-            || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
-            || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
+                targetState.Cell.EnterCost,
+                targetRule.AdditionalEnterCost,
+                out Fixed64 total))
         {
             return TraversalEvaluationStatus.CostOverflow;
         }
@@ -451,7 +426,6 @@ internal readonly struct TraversalEvaluator
         {
             TraversalExplicitEdgeStatus.Passable => TraversalEvaluationStatus.Passable,
             TraversalExplicitEdgeStatus.CostOverflow => TraversalEvaluationStatus.CostOverflow,
-            TraversalExplicitEdgeStatus.Stale => TraversalEvaluationStatus.Stale,
             _ => TraversalEvaluationStatus.Impassable
         };
         if (result == TraversalEvaluationStatus.Passable)
@@ -470,14 +444,6 @@ internal readonly struct TraversalEvaluator
         return result;
     }
 
-    private static TraversalExplicitEdgeStatus ToExplicitStatus(
-        TraversalEvaluationStatus status) => status switch
-        {
-            TraversalEvaluationStatus.CostOverflow => TraversalExplicitEdgeStatus.CostOverflow,
-            TraversalEvaluationStatus.Stale => TraversalExplicitEdgeStatus.Stale,
-            _ => TraversalExplicitEdgeStatus.Impassable
-        };
-
     private TraversalEvaluationStatus EvaluateAutomaticSeam(
         NavigationNodeRef source,
         in NavigationGraphEdge edge,
@@ -485,16 +451,20 @@ internal readonly struct TraversalEvaluator
     {
         evidence = default;
         NavigationAutomaticSeamRef seam = edge.AutomaticSeam;
-        if (edge.Kind != NavigationGraphEdgeKind.Seam
-            || seam.Pair == null
-            || !_graph.AutomaticSeams.IsActive(seam)
-            || !_graph.TryGetNodeAddress(source, out NavigationCellAddress sourceAddress)
-            || !sourceAddress.Equals(seam.Source)
-            || !_graph.TryGetNodeAddress(edge.Target, out NavigationCellAddress targetAddress)
-            || !targetAddress.Equals(seam.Destination))
-        {
-            return TraversalEvaluationStatus.Stale;
-        }
+        bool hasSourceAddress = _graph.TryGetNodeAddress(
+            source,
+            out NavigationCellAddress sourceAddress);
+        bool hasTargetAddress = _graph.TryGetNodeAddress(
+            edge.Target,
+            out NavigationCellAddress targetAddress);
+        System.Diagnostics.Debug.Assert(
+            edge.Kind == NavigationGraphEdgeKind.Seam
+            && seam.Pair != null
+            && _graph.AutomaticSeams.IsActive(seam)
+            && hasSourceAddress
+            && sourceAddress.Equals(seam.Source)
+            && hasTargetAddress
+            && targetAddress.Equals(seam.Destination));
         if (!TryGetPassableNode(source, out NavigationNodeState sourceState, out _)
             || !TryGetPassableNode(
                 edge.Target,
@@ -506,61 +476,47 @@ internal readonly struct TraversalEvaluator
 
         KinematicBodyShape shape = _profile.Shape;
         GridNavigationPortal retainedPortal = seam.Portal;
-        if (!retainedPortal.IsValid)
-            return TraversalEvaluationStatus.Stale;
+        System.Diagnostics.Debug.Assert(retainedPortal.IsValid);
         if (shape.Radius > retainedPortal.MaximumHorizontalRadius
             || shape.Height > retainedPortal.MaximumBodyHeight)
         {
             return TraversalEvaluationStatus.Impassable;
         }
-        if (!_graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
-            || !_graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism)
-            || !GridCellGeometry.TryCreateNavigationPortal(
-                sourcePrism,
-                targetPrism,
-                out GridNavigationPortal portal)
-            || !IsSamePortal(
-                retainedPortal,
-                portal,
-                seam.IsReverse))
-        {
-            return TraversalEvaluationStatus.Stale;
-        }
-        if (!portal.TryResolveProfile(
-                shape.Radius,
-                shape.Height,
-                out Vector3d sourcePortalFoot,
-                out Vector3d targetPortalFoot))
-        {
-            return TraversalEvaluationStatus.CostOverflow;
-        }
+        bool hasSourcePrism = _graph.TryGetSeamPrism(
+            sourceAddress,
+            out GridCellPrism sourcePrism);
+        bool hasTargetPrism = _graph.TryGetSeamPrism(
+            targetAddress,
+            out GridCellPrism targetPrism);
+        bool createdPortal = GridCellGeometry.TryCreateNavigationPortal(
+            sourcePrism,
+            targetPrism,
+            out GridNavigationPortal portal);
+        System.Diagnostics.Debug.Assert(
+            hasSourcePrism
+            && hasTargetPrism
+            && createdPortal
+            && retainedPortal.IsValid);
+        bool resolvedProfile = portal.TryResolveProfile(
+            shape.Radius,
+            shape.Height,
+            out Vector3d sourcePortalFoot,
+            out Vector3d targetPortalFoot);
+        System.Diagnostics.Debug.Assert(resolvedProfile);
         TraversalEvaluationStatus vertical = EvaluateVerticalDelta(
             sourceState.FootAnchor,
             targetState.FootAnchor);
         if (vertical != TraversalEvaluationStatus.Passable)
             return vertical;
-        bool verticalPortal = portal.FaceKind == VoxelContactFaceKind.Vertical;
-        if (!(verticalPortal
-                ? NavigationDistanceMath.TryCeiling(
-                    sourceState.FootAnchor,
-                    sourcePortalFoot,
-                    out Fixed64 sourceDistance)
-                : Vector3d.TryGetDistance(
-                    sourceState.FootAnchor,
-                    sourcePortalFoot,
-                    out sourceDistance))
-            || !(verticalPortal
-                ? NavigationDistanceMath.TryCeiling(
-                    targetPortalFoot,
-                    targetState.FootAnchor,
-                    out Fixed64 targetDistance)
-                : Vector3d.TryGetDistance(
-                    targetPortalFoot,
-                    targetState.FootAnchor,
-                    out targetDistance))
-            || !Fixed64.TryAdd(sourceDistance, targetDistance, out Fixed64 total)
-            || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
-            || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
+        if (!TryGetPortalTraversalCost(
+                portal.FaceKind == VoxelContactFaceKind.Vertical,
+                sourceState.FootAnchor,
+                sourcePortalFoot,
+                targetPortalFoot,
+                targetState.FootAnchor,
+                targetState.Cell.EnterCost,
+                targetRule.AdditionalEnterCost,
+                out Fixed64 total))
         {
             return TraversalEvaluationStatus.CostOverflow;
         }
@@ -580,55 +536,72 @@ internal readonly struct TraversalEvaluator
         return TraversalEvaluationStatus.Passable;
     }
 
-    internal static bool IsPortalTransitionValid(
-        in GridCellPrism sourcePrism,
-        in GridCellPrism targetPrism,
-        in GridNavigationPortal portal,
-        Vector3d sourceAnchor,
-        Vector3d targetAnchor,
-        in KinematicBodyShape shape)
+    internal static bool TryGetExplicitConnectionCost(
+        Vector3d sourceFootAnchor,
+        Vector3d entryAnchor,
+        Fixed64 corridorCost,
+        Vector3d exitAnchor,
+        Vector3d targetFootAnchor,
+        Fixed64 additionalCost,
+        Fixed64 targetEnterCost,
+        Fixed64 targetAreaEnterCost,
+        out Fixed64 total)
     {
-        if (portal.FaceKind != VoxelContactFaceKind.Horizontal)
-            return true;
-        return GridCellGeometry.TryGetNavigationPortalTraversalParameters(
-                sourcePrism,
-                targetPrism,
-                portal,
-                sourceAnchor,
-                targetAnchor,
-                shape.Radius,
-                shape.Height,
-                out Fixed64 sourceParameter,
-                out Fixed64 targetParameter)
-            && sourceParameter == Fixed64.Zero
-            && targetParameter == Fixed64.One;
+        total = Fixed64.Zero;
+        return Vector3d.TryGetDistance(sourceFootAnchor, entryAnchor, out Fixed64 sourceDistance)
+            && Vector3d.TryGetDistance(exitAnchor, targetFootAnchor, out Fixed64 targetDistance)
+            && Fixed64.TryAdd(sourceDistance, corridorCost, out total)
+            && Fixed64.TryAdd(total, targetDistance, out total)
+            && Fixed64.TryAdd(total, additionalCost, out total)
+            && Fixed64.TryAdd(total, targetEnterCost, out total)
+            && Fixed64.TryAdd(total, targetAreaEnterCost, out total);
     }
 
-    internal static bool IsSamePortal(
-        in GridNavigationPortal expected,
-        in GridNavigationPortal actual,
-        bool reverseSourceToTarget = false) =>
-        expected.FaceKind == actual.FaceKind
-        && (reverseSourceToTarget
-            ? -expected.SourceToTarget == actual.SourceToTarget
-            : expected.SourceToTarget == actual.SourceToTarget)
-        && expected.CanonicalFacePoint == actual.CanonicalFacePoint
-        && expected.MaximumHorizontalRadius == actual.MaximumHorizontalRadius
-        && expected.MaximumBodyHeight == actual.MaximumBodyHeight
-        && expected.VerticalFaceSegmentStart == actual.VerticalFaceSegmentStart
-        && expected.VerticalFaceSegmentEnd == actual.VerticalFaceSegmentEnd;
+    internal static bool TryGetPortalTraversalCost(
+        bool useCeilingDistance,
+        Vector3d sourceFootAnchor,
+        Vector3d sourcePortalFoot,
+        Vector3d targetPortalFoot,
+        Vector3d targetFootAnchor,
+        Fixed64 targetEnterCost,
+        Fixed64 targetAreaEnterCost,
+        out Fixed64 total)
+    {
+        total = Fixed64.Zero;
+        bool hasSourceDistance = useCeilingDistance
+            ? NavigationDistanceMath.TryCeiling(
+                sourceFootAnchor,
+                sourcePortalFoot,
+                out Fixed64 sourceDistance)
+            : Vector3d.TryGetDistance(
+                sourceFootAnchor,
+                sourcePortalFoot,
+                out sourceDistance);
+        bool hasTargetDistance = useCeilingDistance
+            ? NavigationDistanceMath.TryCeiling(
+                targetPortalFoot,
+                targetFootAnchor,
+                out Fixed64 targetDistance)
+            : Vector3d.TryGetDistance(
+                targetPortalFoot,
+                targetFootAnchor,
+                out targetDistance);
+        return hasSourceDistance
+            && hasTargetDistance
+            && Fixed64.TryAdd(sourceDistance, targetDistance, out total)
+            && Fixed64.TryAdd(total, targetEnterCost, out total)
+            && Fixed64.TryAdd(total, targetAreaEnterCost, out total);
+    }
 
     private TraversalEvaluationStatus EvaluateVerticalDelta(
         Vector3d sourceFootAnchor,
         Vector3d targetFootAnchor)
     {
-        if (!Fixed64.TrySubtract(
-                targetFootAnchor.Y,
-                sourceFootAnchor.Y,
-                out Fixed64 verticalDelta))
-        {
-            return TraversalEvaluationStatus.CostOverflow;
-        }
+        bool hasVerticalDelta = Fixed64.TrySubtract(
+            targetFootAnchor.Y,
+            sourceFootAnchor.Y,
+            out Fixed64 verticalDelta);
+        System.Diagnostics.Debug.Assert(hasVerticalDelta);
         if (verticalDelta > Fixed64.Zero)
         {
             return verticalDelta <= _profile.MaxStepUp
@@ -637,8 +610,8 @@ internal readonly struct TraversalEvaluator
         }
         if (verticalDelta >= Fixed64.Zero)
             return TraversalEvaluationStatus.Passable;
-        if (!Fixed64.TrySubtract(Fixed64.Zero, verticalDelta, out Fixed64 drop))
-            return TraversalEvaluationStatus.CostOverflow;
+        bool hasDrop = Fixed64.TrySubtract(Fixed64.Zero, verticalDelta, out Fixed64 drop);
+        System.Diagnostics.Debug.Assert(hasDrop);
         return drop <= _profile.MaxDropDown
             ? TraversalEvaluationStatus.Passable
             : TraversalEvaluationStatus.Impassable;

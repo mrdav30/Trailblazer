@@ -3,6 +3,7 @@ using FixedMathSharp;
 using FixedMathSharp.Assertions;
 using FluentAssertions;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;
@@ -14,6 +15,18 @@ public class WaterLocomotionTests : IDisposable
     {
         TestWorld.Reset();
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public void UpdateDiveTime_ShouldRejectStandaloneDivingStateWithoutWorldContext()
+    {
+        var swim = new WaterLocomotion { IsDiving = true };
+
+        swim.Invoking(value => value.UpdateDiveTime())
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*TrailblazerWorldContext*");
+
+        swim.UnderwaterTimer.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -248,6 +261,39 @@ public class WaterLocomotionTests : IDisposable
         swim.IsDrowning.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(false, 2, false)]
+    [InlineData(true, 0, false)]
+    [InlineData(true, 1, true)]
+    public void IsDrowning_ShouldRequireEnabledLocomotionAndExactBreathThreshold(
+        bool isEnabled,
+        int underwaterTime,
+        bool expected)
+    {
+        var swim = new WaterLocomotion
+        {
+            CanDrown = true,
+            HoldBreathTime = Fixed64.One,
+            IsEnabled = isEnabled,
+            UnderwaterTimer = (Fixed64)underwaterTime
+        };
+
+        swim.IsDrowning.Should().Be(expected);
+    }
+
+    [Fact]
+    public void UpdateDiveTime_ShouldClampShortRemainingBreathRecoveryToZero()
+    {
+        var agent = MockMotorAgentTestFactory.CreateWaterAgent();
+        WaterLocomotion swim = TestRequire.NotNull(agent.Motor.Handler.Water);
+        swim.IsDiving = false;
+        swim.UnderwaterTimer = Fixed64.Epsilon;
+
+        swim.UpdateDiveTime();
+
+        swim.UnderwaterTimer.Should().Be(Fixed64.Zero);
+    }
+
     [Fact]
     public void Given_ScoutDiving_When_MovesUp_Then_ShouldSwimUpward()
     {
@@ -334,6 +380,71 @@ public class WaterLocomotionTests : IDisposable
         jump.IsJumping.Should().BeFalse();
         breached.Should().BeFalse();
         move.FrameVelocity.Y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Given_CoreOnlyLiquidTraversal_When_MovementIsRequested_Then_NoSwimVelocityIsApplied()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: new Vector3d(0, -2, 0),
+            startingMedium: TraversalMedium.Liquid,
+            surfaceLevel: Fixed64.Zero,
+            profile: LocomotionProfile.CreateCoreOnly());
+        agent.FrameRequest.Direction = new Vector3d(1, 1, 0);
+        agent.FrameRequest.Rate = TrekRate.Fast;
+
+        TestWorld.Context.Simulate();
+        agent.Simulate();
+
+        agent.Motor.Handler.Water.Should().BeNull();
+        agent.Position.X.Should().Be(Fixed64.Zero);
+        agent.Position.Z.Should().Be(Fixed64.Zero);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Given_UnavailableWaterLocomotion_When_MovementIsRequested_Then_NoSwimVelocityIsApplied(
+        int unavailableState)
+    {
+        var agent = MockMotorAgentTestFactory.CreateWaterAgent(
+            startPosition: new Vector3d(0, -2, 0),
+            surfaceLevel: Fixed64.Zero);
+        WaterLocomotion water = TestRequire.NotNull(agent.Motor.Handler.Water);
+        water.IsEnabled = unavailableState != 0;
+        water.CanSwim = unavailableState != 1;
+        water.IsSwimming = false;
+        agent.FrameRequest.Direction = Vector3d.Right;
+        agent.FrameRequest.Rate = TrekRate.Fast;
+        agent.FrameRequest.IsRequestingSwim = unavailableState != 2;
+
+        TestWorld.Context.Simulate();
+        agent.Simulate();
+
+        agent.Position.X.Should().Be(Fixed64.Zero);
+        agent.Motor.Handler.Move.FrameVelocity.X.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Given_JumpWithoutWaterLocomotion_When_LiquidBreachIsRequested_Then_JumpIsRejected()
+    {
+        LocomotionProfile profile = new LocomotionProfileBuilder(includeOptionalLocomotions: false)
+            .WithJump()
+            .Build();
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: new Vector3d(0, -2, 0),
+            startingMedium: TraversalMedium.Liquid,
+            surfaceLevel: Fixed64.Zero,
+            profile: profile);
+        JumpLocomotion jump = TestRequire.NotNull(agent.Motor.Handler.Jump);
+        agent.FrameRequest.IsRequestingJump = true;
+
+        TestWorld.Context.Simulate();
+        agent.Simulate();
+
+        agent.Motor.Handler.Water.Should().BeNull();
+        jump.IsJumping.Should().BeFalse();
     }
 
     [Fact]

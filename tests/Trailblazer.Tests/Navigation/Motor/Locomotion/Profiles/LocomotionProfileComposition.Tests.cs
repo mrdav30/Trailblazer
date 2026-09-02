@@ -6,7 +6,7 @@ using Xunit;
 namespace Trailblazer.Tests.Navigation.Motor;
 
 [Collection("TrailblazerCollection")]
-public sealed class LocomotionProfileCoverageTests : IDisposable
+public sealed class LocomotionProfileCompositionTests : IDisposable
 {
     public void Dispose()
     {
@@ -121,6 +121,23 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
             .WithParameterName("move");
         withFall.Should().Throw<ArgumentNullException>()
             .WithParameterName("fall");
+    }
+
+    [Fact]
+    public void Builder_ShouldInstallExactOptionalLocomotionInstances()
+    {
+        var slide = new SlideLocomotion();
+        var water = new WaterLocomotion();
+
+        LocomotionProfile profile = new LocomotionProfileBuilder(includeOptionalLocomotions: false)
+            .WithSlide(slide)
+            .WithWater(water)
+            .Build();
+
+        profile.Slide.Should().BeSameAs(slide);
+        profile.Water.Should().BeSameAs(water);
+        profile.InstalledKinds.Should().Be(
+            LocomotionKind.Core | LocomotionKind.Slide | LocomotionKind.Water);
     }
 
     [Fact]

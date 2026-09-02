@@ -76,9 +76,15 @@ public readonly struct TraversalIntent : IEquatable<TraversalIntent>
     internal void Validate(string parameterName)
     {
         SwiftThrowHelper.ThrowIfArgument(
-            !TraversalTransitionDefinition.IsKnownMedium(StartMedium)
-                || TargetMedia == TraversalMedia.None
-                || (TargetMedia & ~NavigationCell.KnownMedia) != 0,
+            !TraversalTransitionDefinition.IsKnownMedium(StartMedium),
+            parameterName,
+            "Traversal intent must contain an exact known start medium and nonempty known target media.");
+        SwiftThrowHelper.ThrowIfArgument(
+            TargetMedia == TraversalMedia.None,
+            parameterName,
+            "Traversal intent must contain an exact known start medium and nonempty known target media.");
+        SwiftThrowHelper.ThrowIfArgument(
+            (TargetMedia & ~NavigationCell.KnownMedia) != 0,
             parameterName,
             "Traversal intent must contain an exact known start medium and nonempty known target media.");
     }

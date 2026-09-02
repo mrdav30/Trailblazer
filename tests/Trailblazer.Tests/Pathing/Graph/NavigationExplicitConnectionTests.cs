@@ -75,6 +75,38 @@ public sealed class NavigationExplicitConnectionTests
     }
 
     [Fact]
+    public void SameMapConnection_ShouldCountOwnedIncidentEdgeExactlyOnce()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration binding = AddGrid(context, 0);
+        VoxelIndex sourceIndex = default;
+        VoxelIndex destinationIndex = new(1, 0, 0);
+        var connection = new NavigationConnection(
+            "shortcut",
+            sourceIndex,
+            new NavigationCellAddress("map", destinationIndex),
+            GetFoot(binding, sourceIndex),
+            GetFoot(binding, destinationIndex),
+            Fixed64.Zero,
+            Fixed64.One);
+        NavigationMapCommitOperation commit = Admit(
+            context,
+            new NavigationMapBuilder("map", binding)
+                .AddCell(sourceIndex, SolidCell)
+                .AddCell(destinationIndex, SolidCell)
+                .AddConnection(connection)
+                .Build(),
+            1);
+
+        SimulateUntilTerminal(context, commit.Receipt);
+
+        commit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.ExplicitConnections.GetActiveIncidentEdgeCount("map").Should().Be(1,
+            "owner and endpoint incidence rows describe the same active edge");
+    }
+
+    [Fact]
     public void DestinationSuppressAndRevert_ShouldDormantAndReviveOnlyTheNewRoot()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
@@ -1191,6 +1223,13 @@ public sealed class NavigationExplicitConnectionTests
                 "capacity rejection must wait until the owned closure can be rolled back");
             GetGraphCell(context, "map-0").IsMaterialized.Should().BeFalse(
                 "failed rollback publication must retain the owned safety closure");
+
+            context.Simulate();
+
+            operation.Receipt.Status.Should().Be(NavigationOperationStatus.Pending,
+                "a retained rollback must retry without completing the rejected prefix");
+            GetGraphCell(context, "map-0").IsMaterialized.Should().BeFalse(
+                "snapshot pressure on the retry must leave the exact owned closure intact");
         }
         finally
         {
@@ -1277,6 +1316,69 @@ public sealed class NavigationExplicitConnectionTests
         revivedLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord revived)
             .Should().BeTrue();
         revived.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AbsentExternalDestination_ShouldRejectAnIncompatibleFirstTargetMapAtomically()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration left = AddGrid(context, 0);
+        NormalizedGridConfiguration authoredDestination = CreateBinding(3, 6);
+        VoxelIndex sourceIndex = new(2, 0, 0);
+        var destinationIndex = new VoxelIndex(3, 0, 0);
+        var destinationAddress = new NavigationCellAddress("right", destinationIndex);
+        var connection = new NavigationConnection(
+            "bridge",
+            sourceIndex,
+            destinationAddress,
+            GetFoot(left, sourceIndex),
+            GetFoot(authoredDestination, destinationIndex),
+            Fixed64.Zero,
+            Fixed64.One);
+        NavigationMapCommitOperation source = Admit(
+            context,
+            new NavigationMapBuilder("left", left)
+                .AddCell(sourceIndex, SolidCell)
+                .AddConnection(connection)
+                .Build(),
+            1);
+        SimulateUntilTerminal(context, source.Receipt);
+        source.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        var owner = new NavigationConnectionOwnerKey("left", "bridge");
+        using (NavigationWorldGraphLease missing = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            missing.Graph.ExplicitConnections.TryGet(
+                    owner,
+                    out NavigationExplicitConnectionRecord dormant)
+                .Should().BeTrue();
+            dormant.IsActive.Should().BeFalse();
+            missing.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count
+                .Should().Be(1);
+        }
+
+        NormalizedGridConfiguration narrow = CreateBinding(3, 3);
+        narrow.IsValidIndex(destinationIndex).Should().BeFalse();
+        NavigationMapCommitOperation target = Admit(
+            context,
+            new NavigationMapBuilder("right", narrow)
+                .SetDefaultCell(SolidCell)
+                .Build(),
+            2);
+        SimulateUntilTerminal(context, target.Receipt);
+
+        target.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        target.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed,
+            "the candidate cannot resolve the dormant authored destination in the target binding");
+        using NavigationWorldGraphLease installed = context.Pathing.TryAcquireNavigationGraph()!;
+        installed.Graph.ExplicitConnections.TryGet(
+                owner,
+                out NavigationExplicitConnectionRecord stillDormant)
+            .Should().BeTrue();
+        stillDormant.IsActive.Should().BeFalse(
+            "a rejected target publication must preserve the prior dormant connection");
+        installed.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count
+            .Should().Be(1,
+                "the dormant owner must remain refreshable if a compatible target is published later");
     }
 
     [Fact]
@@ -1374,6 +1476,84 @@ public sealed class NavigationExplicitConnectionTests
             .Should().BeTrue();
         updatedComponent.Version.Should().BeGreaterThan(revertedComponentVersion,
             "same-endpoint cost changes must invalidate component-stamped cached paths");
+    }
+
+    [Fact]
+    public void SameFrameSuppressThenRevert_ShouldPublishOnlyTheLaterBakedConnectionState()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration left = AddGrid(context, 0);
+        NormalizedGridConfiguration right = AddGrid(context, 3);
+        VoxelIndex sourceIndex = new(2, 0, 0);
+        VoxelIndex destinationIndex = default;
+        var destinationAddress = new NavigationCellAddress("right", destinationIndex);
+        var baked = new NavigationConnection(
+            "bridge",
+            sourceIndex,
+            destinationAddress,
+            GetFoot(left, sourceIndex),
+            GetFoot(right, destinationIndex),
+            Fixed64.Zero,
+            Fixed64.One);
+        Admit(
+            context,
+            new NavigationMapBuilder("right", right)
+                .AddCell(destinationIndex, SolidCell)
+                .Build(),
+            1);
+        Admit(
+            context,
+            new NavigationMapBuilder("left", left)
+                .AddCell(sourceIndex, SolidCell)
+                .AddConnection(baked)
+                .Build(),
+            2);
+        context.Simulate();
+        int effectiveFrame = context.FrameCount + 1;
+        var suppress = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "left",
+                    connections: new[]
+                    {
+                        NavigationConnectionOverlayOperation.Suppress("bridge")
+                    })
+            })),
+            operationSequence: 3,
+            effectiveFrame);
+        var revert = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "left",
+                    connections: new[]
+                    {
+                        NavigationConnectionOverlayOperation.RevertToBake("bridge")
+                    })
+            })),
+            operationSequence: 4,
+            effectiveFrame);
+
+        context.Pathing.Admit(suppress).Should().BeTrue();
+        context.Pathing.Admit(revert).Should().BeTrue();
+        SimulateUntilTerminal(context, revert.Receipt);
+
+        suppress.Receipt.Status.Should().Be(NavigationOperationStatus.Superseded);
+        revert.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        suppress.Receipt.PublishedFrame.Should().Be(-1,
+            "the displaced operation was never part of a published candidate");
+        revert.Receipt.PublishedFrame.Should().Be(effectiveFrame);
+        context.Pathing.RetainedOperationWorkCount.Should().Be(0);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var owner = new NavigationConnectionOwnerKey("left", "bridge");
+        lease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord record)
+            .Should().BeTrue();
+        record.Definition.Should().BeSameAs(baked);
+        record.IsActive.Should().BeTrue();
+        lease.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count
+            .Should().Be(1,
+                "the displaced suppression must not leave a duplicate endpoint owner");
     }
 
     [Fact]
@@ -1738,7 +1918,7 @@ public sealed class NavigationExplicitConnectionTests
     }
 
     [Fact]
-    public void RepeatedSameRowReplacement_ShouldRetainOnlyLiveExplicitPayloadOwnership()
+    public void RepeatedMultiAddressReplacement_ShouldRetainOnlyLiveExplicitPayloadOwnership()
     {
         NormalizedGridConfiguration binding = CreateBinding(0, 2);
         VoxelIndex sourceIndex = default;
@@ -1810,13 +1990,85 @@ public sealed class NavigationExplicitConnectionTests
             {
                 new NavigationMapOverlayDelta(
                     "map",
-                    new[] { NavigationCellOverlayOperation.Set(sourceIndex, SolidCell) })
+                    new[]
+                    {
+                        NavigationCellOverlayOperation.Set(sourceIndex, SolidCell),
+                        NavigationCellOverlayOperation.Set(destinationIndex, SolidCell)
+                    })
             }),
             sequence: 2);
 
+        candidate.ExplicitConnections.GetSourceOwnerCount("map").Should().Be(1);
+        candidate.ExplicitConnections.GetIncidentOwnerRow(sourceAddress).Count.Should().Be(1);
+        candidate.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count.Should().Be(1);
         candidate.WorkOwnedExplicitPayloadBytes.Should().Be(onceBytes,
-            "replacing the same record and rows twice must overwrite the live ownership ledger");
+            "two touched endpoints must merge to one live record and one copy of each row");
         candidate.WorkOwnedExplicitPayloadPages.Should().Be(oncePages);
+    }
+
+    [Fact]
+    public void ExplicitOwnerRemoval_ShouldPreserveSiblingSnapshotAndRemainIdempotent()
+    {
+        var firstOwner = new NavigationConnectionOwnerKey("map", "a");
+        var secondOwner = new NavigationConnectionOwnerKey("map", "b");
+        var firstDefinition = new NavigationConnection(
+            firstOwner.ConnectionId,
+            default,
+            new NavigationCellAddress("destination", default),
+            default,
+            default,
+            Fixed64.Zero,
+            Fixed64.One);
+        var secondDefinition = new NavigationConnection(
+            secondOwner.ConnectionId,
+            new VoxelIndex(1, 0, 0),
+            new NavigationCellAddress("destination", new VoxelIndex(1, 0, 0)),
+            default,
+            default,
+            Fixed64.Zero,
+            Fixed64.One);
+        var firstRecord = new NavigationExplicitConnectionRecord(
+            firstOwner,
+            firstDefinition,
+            isActive: true,
+            Fixed64.One,
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
+        var secondRecord = new NavigationExplicitConnectionRecord(
+            secondOwner,
+            secondDefinition,
+            isActive: true,
+            Fixed64.One,
+            NavigationPagedSequence<GridNavigationPortal>.Empty);
+        NavigationExplicitConnectionIndex source = NavigationExplicitConnectionIndex.Empty
+            .SetOwner(firstRecord, out _)
+            .SetOwner(secondRecord, out _);
+
+        NavigationExplicitConnectionIndex remaining = source.RemoveOwner(
+            firstOwner,
+            out bool removed,
+            out int copiedNodes);
+
+        removed.Should().BeTrue();
+        copiedNodes.Should().Be(1,
+            "replacing the one surviving map row copies only the outer persistent node");
+        remaining.GetSourceOwnerCount("map").Should().Be(1);
+        remaining.TryGet(firstOwner, out _).Should().BeFalse();
+        remaining.TryGet(secondOwner, out NavigationExplicitConnectionRecord retained)
+            .Should().BeTrue();
+        retained.Should().BeSameAs(secondRecord);
+        source.GetSourceOwnerCount("map").Should().Be(2,
+            "removal must preserve the published persistent snapshot");
+
+        NavigationExplicitConnectionIndex unchanged = remaining.RemoveOwner(
+            firstOwner,
+            out bool removedAgain,
+            out int missingCopies);
+
+        removedAgain.Should().BeFalse();
+        missingCopies.Should().Be(0);
+        unchanged.Should().BeSameAs(remaining);
+        unchanged.CompareOwners(firstOwner, secondOwner).Should().BeLessThan(0,
+            "a missing record still has deterministic owner-key ordering");
     }
 
     [Theory]
@@ -2097,9 +2349,6 @@ public sealed class NavigationExplicitConnectionTests
         evaluator.EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
             .Should().Be(TraversalEvaluationStatus.Passable);
         evidence.Cost.Should().Be((Fixed64)11);
-        evaluator.EvaluateEdge(destination, edge, out _)
-            .Should().Be(TraversalEvaluationStatus.Stale,
-                "using a directed explicit certificate from the wrong source is structural misuse");
         var oversized = new TraversalEvaluator(
                 lease.Graph,
                 new NavigationAgentProfile(

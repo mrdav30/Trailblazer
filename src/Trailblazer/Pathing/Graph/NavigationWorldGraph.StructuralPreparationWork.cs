@@ -29,7 +29,6 @@ internal sealed partial class NavigationWorldGraph
         private string? _mapId;
         private int _changeIndex;
         private bool _directoryConsumed;
-        private bool _indexConsumed;
         private long _retainedBytes;
         private int _persistentPages;
         private long _copiedPersistentBytes;
@@ -172,8 +171,10 @@ internal sealed partial class NavigationWorldGraph
             NavigationOperationCandidate.MapState state,
             MaintenanceWorkMeter meter)
         {
-            if (_compose == null && _next == null)
+            if (_compose == null)
             {
+                System.Diagnostics.Debug.Assert(_next == null,
+                    "A prepared instance is retained together with its compose work.");
                 _mapId = mapId;
                 _directory.TryGet(_mapId, out _prior!);
                 if (_prior != null
@@ -239,30 +240,26 @@ internal sealed partial class NavigationWorldGraph
                 _directory = nextDirectory;
                 _directoryConsumed = true;
             }
-            if (!_indexConsumed)
+            if (!meter.TryConsumeDependencyEntries(1))
+                return false;
+            PersistentGridConfigurationMap<string> before = _mapIndex;
+            if (_prior != null
+                && !_prior.Map.GridBinding.Key.Equals(_next.Map.GridBinding.Key))
             {
-                if (!meter.TryConsumeDependencyEntries(1))
-                    return false;
-                PersistentGridConfigurationMap<string> before = _mapIndex;
-                if (_prior != null
-                    && !_prior.Map.GridBinding.Key.Equals(_next.Map.GridBinding.Key))
-                {
-                    _mapIndex = _mapIndex.Remove(
-                        _prior.Map.GridBinding.Key,
-                        out _,
-                        out int removedCopies);
-                    RecordPersistentCopies(removedCopies, 144L);
-                }
-                _mapIndex = _mapIndex.Set(
-                    _next.Map.GridBinding.Key,
-                    _next.MapId,
-                    out int setCopies);
-                RecordPersistentCopies(setCopies, 144L);
-                _retainedBytes = checked(
-                    _retainedBytes - before.RetainedBytes + _mapIndex.RetainedBytes);
-                _persistentPages += _mapIndex.Count - before.Count;
-                _indexConsumed = true;
+                _mapIndex = _mapIndex.Remove(
+                    _prior.Map.GridBinding.Key,
+                    out _,
+                    out int removedCopies);
+                RecordPersistentCopies(removedCopies, 144L);
             }
+            _mapIndex = _mapIndex.Set(
+                _next.Map.GridBinding.Key,
+                _next.MapId,
+                out int setCopies);
+            RecordPersistentCopies(setCopies, 144L);
+            _retainedBytes = checked(
+                _retainedBytes - before.RetainedBytes + _mapIndex.RetainedBytes);
+            _persistentPages += _mapIndex.Count - before.Count;
             if (_prior == null || !ReferenceEquals(_prior.Map, _next!.Map))
                 _rebuildTransitionRules = true;
             ResetItem();
@@ -274,11 +271,9 @@ internal sealed partial class NavigationWorldGraph
             if (_mapId == null)
             {
                 _mapId = mapId;
-                if (!_directory.TryGet(mapId, out _prior!))
-                {
-                    ResetItem();
-                    return true;
-                }
+                _directory.TryGet(mapId, out _prior!);
+                System.Diagnostics.Debug.Assert(_prior != null,
+                    "The operation fold rejects a removal unless its candidate contains the map.");
             }
             if (!_directoryConsumed)
             {
@@ -286,36 +281,31 @@ internal sealed partial class NavigationWorldGraph
                     return false;
                 NavigationInstanceDirectory nextDirectory =
                     _directory.Remove(mapId, out bool removed, out int copiedNodes);
-                if (removed)
-                {
-                    RecordPersistentCopies(copiedNodes, 64L);
-                    _retainedBytes = checked(
-                        _retainedBytes
-                        - _directory.RetainedBytes
-                        + nextDirectory.RetainedBytes
-                        - _prior!.RetainedBytes);
-                    _persistentPages += nextDirectory.PersistentPageCount
-                        - _directory.PersistentPageCount
-                        - _prior.PersistentPageCount;
-                    _directory = nextDirectory;
-                }
+                System.Diagnostics.Debug.Assert(removed,
+                    "The operation fold emits removals only for maps in its candidate.");
+                RecordPersistentCopies(copiedNodes, 64L);
+                _retainedBytes = checked(
+                    _retainedBytes
+                    - _directory.RetainedBytes
+                    + nextDirectory.RetainedBytes
+                    - _prior!.RetainedBytes);
+                _persistentPages += nextDirectory.PersistentPageCount
+                    - _directory.PersistentPageCount
+                    - _prior.PersistentPageCount;
+                _directory = nextDirectory;
                 _directoryConsumed = true;
             }
-            if (!_indexConsumed)
-            {
-                if (!meter.TryConsumeDependencyEntries(1))
-                    return false;
-                PersistentGridConfigurationMap<string> before = _mapIndex;
-                _mapIndex = _mapIndex.Remove(
-                    _prior!.Map.GridBinding.Key,
-                    out _,
-                    out int copiedNodes);
-                RecordPersistentCopies(copiedNodes, 144L);
-                _retainedBytes = checked(
-                    _retainedBytes - before.RetainedBytes + _mapIndex.RetainedBytes);
-                _persistentPages += _mapIndex.Count - before.Count;
-                _indexConsumed = true;
-            }
+            if (!meter.TryConsumeDependencyEntries(1))
+                return false;
+            PersistentGridConfigurationMap<string> before = _mapIndex;
+            _mapIndex = _mapIndex.Remove(
+                _prior!.Map.GridBinding.Key,
+                out _,
+                out int copiedIndexNodes);
+            RecordPersistentCopies(copiedIndexNodes, 144L);
+            _retainedBytes = checked(
+                _retainedBytes - before.RetainedBytes + _mapIndex.RetainedBytes);
+            _persistentPages += _mapIndex.Count - before.Count;
             _rebuildTransitionRules = true;
             ResetItem();
             return true;
@@ -328,7 +318,6 @@ internal sealed partial class NavigationWorldGraph
             _next = null;
             _mapId = null;
             _directoryConsumed = false;
-            _indexConsumed = false;
             _composeOwnershipTransferred = false;
         }
 

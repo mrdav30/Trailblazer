@@ -16,6 +16,24 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationPublicGuideMatrixTests
 {
     [Fact]
+    public void DefaultGuideLease_ShouldFailClosedForEveryCursorOperation()
+    {
+        NavigationGuideLease lease = default;
+
+        lease.Status.Should().Be(NavigationGuideStatus.Stale);
+        lease.CurrentStepIndex.Should().Be(-1);
+        lease.StepCount.Should().Be(0);
+        lease.TotalCost.Should().Be(Fixed64.Zero);
+        lease.TryGetCurrentStep(out NavigationGuideStep step)
+            .Should().Be(NavigationGuideStatus.Stale);
+        step.Should().Be(default(NavigationGuideStep));
+        lease.TryAdvanceStep().Should().Be(NavigationGuideStatus.Stale);
+        lease.CompletePendingTransition(default)
+            .Should().Be(NavigationGuideStatus.Stale);
+        lease.Dispose();
+    }
+
+    [Fact]
     public void RequestGuide_ShouldPreserveTheCanonicalRectangularTieRouteAcrossDenseAndSparseStorage()
     {
         RouteResult dense = RequestRingRoute(GridStorageKind.Dense, reverseInsertion: false);
@@ -245,13 +263,25 @@ public sealed class NavigationPublicGuideMatrixTests
     private static RouteResult ReadRoute(NavigationGuideLease lease)
     {
         var addresses = new List<NavigationCellAddress>(lease.StepCount);
+        NavigationGuideStep final = default;
         for (int ordinal = 0; ordinal < lease.StepCount; ordinal++)
         {
             lease.TryGetCurrentStep(out NavigationGuideStep step)
                 .Should().Be(NavigationGuideStatus.Success);
             addresses.Add(step.Address);
+            final = step;
             if (ordinal + 1 < lease.StepCount)
                 lease.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
+        }
+
+        if (lease.StepCount > 0)
+        {
+            int finalIndex = lease.CurrentStepIndex;
+            lease.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
+            lease.CurrentStepIndex.Should().Be(finalIndex);
+            lease.TryGetCurrentStep(out NavigationGuideStep repeated)
+                .Should().Be(NavigationGuideStatus.Success);
+            repeated.Should().Be(final);
         }
 
         return new RouteResult(addresses.ToArray(), lease.TotalCost);

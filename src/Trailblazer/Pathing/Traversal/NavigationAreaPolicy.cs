@@ -61,8 +61,6 @@ public sealed class NavigationAreaPolicy
         return false;
     }
 
-    internal ReadOnlySpan<NavigationAreaRule> RuleSpan => _rules;
-
     internal long RetainedBytes => _retainedBytes;
 
     internal bool ContentEquals(NavigationAreaPolicy other)

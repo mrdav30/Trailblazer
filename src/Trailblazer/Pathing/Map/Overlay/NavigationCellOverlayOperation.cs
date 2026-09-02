@@ -59,11 +59,4 @@ public readonly struct NavigationCellOverlayOperation
     public static NavigationCellOverlayOperation RevertToBake(VoxelIndex index) =>
         new(index, NavigationCellOverlayOperationKind.RevertToBake, default);
 
-    internal static void ValidateKind(NavigationCellOverlayOperationKind kind)
-    {
-        SwiftThrowHelper.ThrowIfArgument(
-            kind is < NavigationCellOverlayOperationKind.Set or > NavigationCellOverlayOperationKind.RevertToBake,
-            nameof(kind),
-            "Unknown cell overlay operation kind.");
-    }
 }

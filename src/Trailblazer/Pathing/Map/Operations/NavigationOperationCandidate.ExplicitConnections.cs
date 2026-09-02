@@ -131,9 +131,14 @@ internal sealed partial class NavigationOperationCandidate
             return false;
         }
         if (connection.PortalRadiusClearance > cell.RadiusClearance
-            || connection.PortalHeightClearance > cell.HeightClearance
-            || !target.Map.GridBinding.TryGetCellPrism(address.Index, out prism)
-            || (validateAnchor && !prism.Contains(anchor)))
+            || connection.PortalHeightClearance > cell.HeightClearance)
+        {
+            prism = default;
+            return false;
+        }
+        bool hasPrism = target.Map.GridBinding.TryGetCellPrism(address.Index, out prism);
+        System.Diagnostics.Debug.Assert(hasPrism);
+        if (validateAnchor && !prism.Contains(anchor))
         {
             prism = default;
             return false;
@@ -153,9 +158,16 @@ internal sealed partial class NavigationOperationCandidate
             destination.Center.X,
             destination.VerticalMin,
             destination.Center.Z);
-        return Vector3d.TryGetDistance(sourceFoot, connection.EntryAnchor, out Fixed64 approach)
-            && Vector3d.TryGetDistance(connection.ExitAnchor, destinationFoot, out Fixed64 departure)
-            && Fixed64.TryAdd(approach, corridorCost, out Fixed64 total)
+        bool hasApproach = Vector3d.TryGetDistance(
+            sourceFoot,
+            connection.EntryAnchor,
+            out Fixed64 approach);
+        bool hasDeparture = Vector3d.TryGetDistance(
+            connection.ExitAnchor,
+            destinationFoot,
+            out Fixed64 departure);
+        System.Diagnostics.Debug.Assert(hasApproach && hasDeparture);
+        return Fixed64.TryAdd(approach, corridorCost, out Fixed64 total)
             && Fixed64.TryAdd(total, departure, out total)
             && Fixed64.TryAdd(total, connection.AdditionalCost, out total)
             && Fixed64.TryAdd(total, destinationCell.EnterCost, out total)
@@ -218,7 +230,6 @@ internal sealed partial class NavigationOperationCandidate
         private bool _isDormant;
         private bool _incidenceUnchanged;
         private bool _ownerUpdated;
-        private bool _ownerJournaled;
         private bool _componentOwnerJournaled;
         private bool _corridorStarted;
         private GridNavigationCorridorValidationCursor _corridorCursor;
@@ -349,7 +360,7 @@ internal sealed partial class NavigationOperationCandidate
                             return false;
                         UpdateOwner();
                     }
-                    if (!_incidenceUnchanged && !_ownerJournaled)
+                    if (!_incidenceUnchanged)
                     {
                         if (_preparedRecord != null)
                         {
@@ -359,7 +370,6 @@ internal sealed partial class NavigationOperationCandidate
                                 _currentOwner,
                                 _candidate._explicitConnections);
                         }
-                        _ownerJournaled = true;
                     }
                     _compileOwnerIndex++;
                     ResetCurrent();
@@ -405,12 +415,9 @@ internal sealed partial class NavigationOperationCandidate
             }
 
             int semanticCount = _currentDefinition.Witnesses.Count + 2;
-            if (semanticCount > _corridorPrisms.Length
-                || semanticCount - 1 > _corridorWaypoints.Length / 2)
-            {
-                IsValid = false;
-                return true;
-            }
+            System.Diagnostics.Debug.Assert(
+                _corridorWaypoints.Length / 2 == _corridorPrisms.Length - 1);
+            System.Diagnostics.Debug.Assert(semanticCount <= _corridorPrisms.Length);
             while (_semanticIndex < semanticCount)
             {
                 if (!meter.TryConsumeExplicitEdges(1))
@@ -455,21 +462,27 @@ internal sealed partial class NavigationOperationCandidate
                     _portalCopyIndex++;
                 }
             }
-            if (_corridorCursor.Status != GridNavigationCorridorValidationStatus.Complete
-                || _portalCopyIndex != prismCount - 1
-                || (_currentDefinition.IsLowerBoundCertified
-                    && !ValidateLowerBound(
-                        _corridorPrisms[0],
-                        _corridorPrisms[prismCount - 1],
-                        _destinationCell,
-                        _currentDefinition,
-                        _corridorCursor.GeometricCost)))
+            if (_corridorCursor.Status != GridNavigationCorridorValidationStatus.Complete)
             {
                 IsValid = false;
                 return true;
             }
-            NavigationPagedSequence<GridNavigationPortal> portals = _portalBuilder?.Seal()
-                ?? NavigationPagedSequence<GridNavigationPortal>.Empty;
+            System.Diagnostics.Debug.Assert(_portalCopyIndex == prismCount - 1);
+            if (_currentDefinition.IsLowerBoundCertified
+                && !ValidateLowerBound(
+                    _corridorPrisms[0],
+                    _corridorPrisms[prismCount - 1],
+                    _destinationCell,
+                    _currentDefinition,
+                    _corridorCursor.GeometricCost))
+            {
+                IsValid = false;
+                return true;
+            }
+            // Every valid connection corridor contains source and destination prisms,
+            // so successful validation always emits at least one portal.
+            System.Diagnostics.Debug.Assert(_portalBuilder != null);
+            NavigationPagedSequence<GridNavigationPortal> portals = _portalBuilder!.Seal();
             _portalBuilder = null;
             _preparedRecord = new NavigationExplicitConnectionRecord(
                 _currentOwner,
@@ -500,14 +513,16 @@ internal sealed partial class NavigationOperationCandidate
                     return false;
                 }
                 if (connection.PortalRadiusClearance > sourceCell.RadiusClearance
-                    || connection.PortalHeightClearance > sourceCell.HeightClearance
-                    || !_currentSource!.Map.GridBinding.TryGetCellPrism(
-                        connection.SourceIndex,
-                        out _corridorPrisms[0])
-                    || !_corridorPrisms[0].Contains(connection.EntryAnchor))
+                    || connection.PortalHeightClearance > sourceCell.HeightClearance)
                 {
                     return false;
                 }
+                bool hasPrism = _currentSource!.Map.GridBinding.TryGetCellPrism(
+                    connection.SourceIndex,
+                    out _corridorPrisms[0]);
+                System.Diagnostics.Debug.Assert(hasPrism);
+                if (!_corridorPrisms[0].Contains(connection.EntryAnchor))
+                    return false;
                 return true;
             }
 
@@ -571,8 +586,6 @@ internal sealed partial class NavigationOperationCandidate
 
         private void UpdateOwner()
         {
-            if (_ownerUpdated)
-                return;
             if (_preparedRecord != null)
             {
                 _candidate.RecordExplicitRecordOwnership(
@@ -821,10 +834,11 @@ internal sealed partial class NavigationOperationCandidate
                 _finalRowBuilder ??=
                     new NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder(16);
                 _finalRowBuilder.Append(next);
+                bool hasFinalRecord = _candidate._explicitConnections.TryGet(
+                    next,
+                    out NavigationExplicitConnectionRecord record);
+                System.Diagnostics.Debug.Assert(hasFinalRecord);
                 if (_rowDelta!.EndpointTouched
-                    && _candidate._explicitConnections.TryGet(
-                        next,
-                        out NavigationExplicitConnectionRecord record)
                     && IsEndpoint(_rowAddress, next, record.Definition))
                 {
                     _pendingEndpointOwner = next;
@@ -847,8 +861,8 @@ internal sealed partial class NavigationOperationCandidate
             bool hasFinal = _candidate._explicitConnections.TryGet(
                 owner,
                 out NavigationExplicitConnectionRecord final);
-            return hadPrior != hasFinal
-                || (hadPrior && !ReferenceEquals(prior.Definition, final.Definition));
+            System.Diagnostics.Debug.Assert(hadPrior);
+            return !hasFinal || !ReferenceEquals(prior.Definition, final.Definition);
         }
 
         private IncidenceRowDelta GetOrCreateRowDelta(NavigationCellAddress address)
@@ -935,7 +949,6 @@ internal sealed partial class NavigationOperationCandidate
             _isDormant = false;
             _incidenceUnchanged = false;
             _ownerUpdated = false;
-            _ownerJournaled = false;
             _componentOwnerJournaled = false;
             _corridorStarted = false;
             _corridorCursor = default;
@@ -965,33 +978,30 @@ internal sealed partial class NavigationOperationCandidate
             NavigationPagedSequence<GridNavigationPortal> left,
             NavigationPagedSequence<GridNavigationPortal> right)
         {
-            if (left.Count != right.Count)
-                return false;
+            System.Diagnostics.Debug.Assert(left.Count == right.Count);
             NavigationPagedSequence<GridNavigationPortal>.Enumerator leftValues =
                 left.GetEnumerator();
             NavigationPagedSequence<GridNavigationPortal>.Enumerator rightValues =
                 right.GetEnumerator();
             while (leftValues.MoveNext())
             {
-                if (!rightValues.MoveNext()
-                    || !PortalEquals(leftValues.Current, rightValues.Current))
-                {
+                rightValues.MoveNext();
+                if (!PortalEquals(leftValues.Current, rightValues.Current))
                     return false;
-                }
             }
-            return !rightValues.MoveNext();
+            return true;
         }
 
         private static bool PortalEquals(
             GridNavigationPortal left,
             GridNavigationPortal right) =>
             left.FaceKind == right.FaceKind
-            && left.SourceToTarget == right.SourceToTarget
-            && left.CanonicalFacePoint == right.CanonicalFacePoint
-            && left.MaximumHorizontalRadius == right.MaximumHorizontalRadius
-            && left.MaximumBodyHeight == right.MaximumBodyHeight
-            && left.VerticalFaceSegmentStart == right.VerticalFaceSegmentStart
-            && left.VerticalFaceSegmentEnd == right.VerticalFaceSegmentEnd;
+            & left.SourceToTarget == right.SourceToTarget
+            & left.CanonicalFacePoint == right.CanonicalFacePoint
+            & left.MaximumHorizontalRadius == right.MaximumHorizontalRadius
+            & left.MaximumBodyHeight == right.MaximumBodyHeight
+            & left.VerticalFaceSegmentStart == right.VerticalFaceSegmentStart
+            & left.VerticalFaceSegmentEnd == right.VerticalFaceSegmentEnd;
 
         private bool AdvanceGather(MaintenanceWorkMeter meter)
         {
@@ -1163,8 +1173,6 @@ internal sealed partial class NavigationOperationCandidate
 
             internal NavigationPagedSequence<NavigationConnectionOwnerKey> SealAdditions()
             {
-                if (_additions != null)
-                    return _additions;
                 _additions = _additionBuilder?.Seal()
                     ?? NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty;
                 _additionBuilder = null;
@@ -1201,8 +1209,7 @@ internal sealed partial class NavigationOperationCandidate
                 while (true)
                 {
                     int comparison = index.CompareOwners(owner, current.Owner);
-                    if (comparison == 0)
-                        return;
+                    System.Diagnostics.Debug.Assert(comparison != 0);
                     if (comparison < 0)
                     {
                         if (current.Left != null)

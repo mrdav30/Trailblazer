@@ -184,14 +184,18 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
 
     internal void MarkSafetyPending()
     {
-        lock (_sync)
-            _safetyPending = true;
+        SetSafetyPending(true);
     }
 
     internal void ClearSafetyPending()
     {
+        SetSafetyPending(false);
+    }
+
+    internal void SetSafetyPending(bool pending)
+    {
         lock (_sync)
-            _safetyPending = false;
+            _safetyPending = pending;
     }
 
     public void Dispose()

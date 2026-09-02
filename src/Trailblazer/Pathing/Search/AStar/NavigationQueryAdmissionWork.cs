@@ -20,11 +20,11 @@ internal enum NavigationQueryAdmissionStatus : byte
     InvalidProfile = 4,
     InvalidStart = 5,
     InvalidEnd = 6,
-    BudgetExceeded = 7,
-    CostOverflow = 8,
-    CapacityExceeded = 9,
-    Stale = 10,
-    NoPath = 11
+    NoPath = 7,
+    BudgetExceeded = 8,
+    CostOverflow = 9,
+    CapacityExceeded = 10,
+    Stale = 11
 }
 
 /// <summary>Resolves one surface A* query against an exact leased graph generation.</summary>
@@ -109,8 +109,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         Status = NavigationQueryAdmissionStatus.Pending;
         if (!query.Agent.IsValid)
             Finish(NavigationQueryAdmissionStatus.InvalidProfile);
-        else if (query.Algorithm != _expectedAlgorithm
-            || _expectedAlgorithm is not (PathAlgorithm.AStar or PathAlgorithm.FlowField))
+        else if (query.Algorithm != _expectedAlgorithm)
             Finish(NavigationQueryAdmissionStatus.Unsupported);
         else if (!NavigationCell.IsKnownMedium(startMedium))
             Finish(NavigationQueryAdmissionStatus.InvalidStart);
@@ -138,12 +137,6 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
     internal NavigationWorkMeter Meter => _meter;
 
     internal NavigationRayWork RayWork => _rayWork;
-
-    internal static bool CanProjectPublicQuery(
-        PathQuery query,
-        PathAlgorithm expectedAlgorithm) =>
-        query.Algorithm == expectedAlgorithm
-        && expectedAlgorithm is PathAlgorithm.AStar or PathAlgorithm.FlowField;
 
     internal NavigationQueryAdmissionStatus Advance(
         int lookupStepLimit,
@@ -173,8 +166,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                 lookupRemaining--;
                 if (!_lease!.Graph.AreaCatalog.TryGet(
                         _query.AreaPolicy,
-                        out NavigationAreaPolicy? policy)
-                    || policy == null)
+                        out NavigationAreaPolicy policy))
                 {
                     return Finish(NavigationQueryAdmissionStatus.Stale);
                 }
@@ -183,63 +175,63 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                 continue;
             }
 
-            if (_stage is Stage.ResolveStart or Stage.ResolveEnd)
+            // ResolvePolicy always continues after selecting ResolveStart. Those are the only
+            // remaining stages while status is pending, so endpoint work is unconditional here.
+            if (!_endpointActive)
             {
-                if (!_endpointActive)
-                {
-                    BeginEndpointWork(
-                        _stage == Stage.ResolveStart ? _query.Start : _query.End,
-                        _stage == Stage.ResolveStart
-                            ? NavigationEndpointRole.Start
-                            : NavigationEndpointRole.Destination);
-                    _endpointActive = true;
-                }
-                int lookupBefore = _meter.LookupProbes;
-                int candidatesBefore = _meter.EndpointCandidates;
-                NavigationEndpointResolutionStatus endpointStatus = _endpointWork.Advance(
-                    lookupRemaining,
-                    candidateRemaining);
-                lookupRemaining = Math.Max(
-                    0,
-                    lookupRemaining - (_meter.LookupProbes - lookupBefore));
-                candidateRemaining = Math.Max(
-                    0,
-                    candidateRemaining - (_meter.EndpointCandidates - candidatesBefore));
-                if (endpointStatus == NavigationEndpointResolutionStatus.Pending)
-                    return Status;
-                if (endpointStatus != NavigationEndpointResolutionStatus.Success)
-                {
-                    return Finish(MapEndpointFailure(endpointStatus, _stage));
-                }
-                _requiresWorldStamp |= _endpointWork.RequiresWorldStamp;
-                if (_stage == Stage.ResolveStart)
-                {
-                    _start = _endpointWork.Result;
-                    _stage = Stage.ResolveEnd;
-                    _endpointActive = false;
-                }
-                else
-                {
-                    if (_world.ChangeSequence != _worldChangeSequence)
-                        return Finish(NavigationQueryAdmissionStatus.Stale);
-                    _end = _endpointWork.Result;
-                    _endpointWork.Reset();
-                    NavigationWorldGraphLease lease = _lease!;
-                    _result.Bind(
-                        lease,
-                        _query,
-                        _start,
-                        _end,
-                        _areaPolicy!,
-                        _startMedium,
-                        _targetMedia,
-                        _meter,
-                        _worldChangeSequence,
-                        _requiresWorldStamp);
-                    _lease = null;
-                    Status = NavigationQueryAdmissionStatus.Success;
-                    _endpointActive = false;
-                }
+                BeginEndpointWork(
+                    _stage == Stage.ResolveStart ? _query.Start : _query.End,
+                    _stage == Stage.ResolveStart
+                        ? NavigationEndpointRole.Start
+                        : NavigationEndpointRole.Destination);
+                _endpointActive = true;
+            }
+            int lookupBefore = _meter.LookupProbes;
+            int candidatesBefore = _meter.EndpointCandidates;
+            NavigationEndpointResolutionStatus endpointStatus = _endpointWork.Advance(
+                lookupRemaining,
+                candidateRemaining);
+            lookupRemaining = Math.Max(
+                0,
+                lookupRemaining - (_meter.LookupProbes - lookupBefore));
+            candidateRemaining = Math.Max(
+                0,
+                candidateRemaining - (_meter.EndpointCandidates - candidatesBefore));
+            if (endpointStatus == NavigationEndpointResolutionStatus.Pending)
+                return Status;
+            if (endpointStatus != NavigationEndpointResolutionStatus.Success)
+            {
+                return Finish(MapEndpointFailure(endpointStatus, _stage));
+            }
+            _requiresWorldStamp = _requiresWorldStamp
+                || _endpointWork.RequiresWorldStamp;
+            if (_stage == Stage.ResolveStart)
+            {
+                _start = _endpointWork.Result;
+                _stage = Stage.ResolveEnd;
+                _endpointActive = false;
+            }
+            else
+            {
+                if (_world.ChangeSequence != _worldChangeSequence)
+                    return Finish(NavigationQueryAdmissionStatus.Stale);
+                _end = _endpointWork.Result;
+                _endpointWork.Reset();
+                NavigationWorldGraphLease lease = _lease!;
+                _result.Bind(
+                    lease,
+                    _query,
+                    _start,
+                    _end,
+                    _areaPolicy!,
+                    _startMedium,
+                    _targetMedia,
+                    _meter,
+                    _worldChangeSequence,
+                    _requiresWorldStamp);
+                _lease = null;
+                Status = NavigationQueryAdmissionStatus.Success;
+                _endpointActive = false;
             }
         }
         return Status;
@@ -286,27 +278,22 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         NavigationQueryAdmissionStatus status)
     {
         Status = status;
-        if (status != NavigationQueryAdmissionStatus.Success)
-            Dispose();
+        Dispose();
         return Status;
     }
 
     private static NavigationQueryAdmissionStatus MapEndpointFailure(
         NavigationEndpointResolutionStatus endpointStatus,
-        Stage stage) => endpointStatus switch
+        Stage stage)
+    {
+        if (endpointStatus == NavigationEndpointResolutionStatus.InvalidEndpoint)
         {
-            NavigationEndpointResolutionStatus.NoMap => NavigationQueryAdmissionStatus.NoMap,
-            NavigationEndpointResolutionStatus.InvalidEndpoint =>
-                stage == Stage.ResolveStart
-                    ? NavigationQueryAdmissionStatus.InvalidStart
-                    : NavigationQueryAdmissionStatus.InvalidEnd,
-            NavigationEndpointResolutionStatus.BudgetExceeded =>
-                NavigationQueryAdmissionStatus.BudgetExceeded,
-            NavigationEndpointResolutionStatus.CostOverflow =>
-                NavigationQueryAdmissionStatus.CostOverflow,
-            NavigationEndpointResolutionStatus.CapacityExceeded =>
-                NavigationQueryAdmissionStatus.CapacityExceeded,
-            _ => NavigationQueryAdmissionStatus.Stale
-        };
+            return stage == Stage.ResolveStart
+                ? NavigationQueryAdmissionStatus.InvalidStart
+                : NavigationQueryAdmissionStatus.InvalidEnd;
+        }
+        int offset = endpointStatus == NavigationEndpointResolutionStatus.NoMap ? 1 : 4;
+        return (NavigationQueryAdmissionStatus)((byte)endpointStatus + offset);
+    }
 
 }

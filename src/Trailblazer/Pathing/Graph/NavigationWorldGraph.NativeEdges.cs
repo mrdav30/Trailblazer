@@ -66,8 +66,9 @@ internal sealed partial class NavigationWorldGraph
         TraversalMedium medium,
         out NavigationNodeState state)
     {
+        System.Diagnostics.Debug.Assert(NavigationCell.IsKnownMedium(medium),
+            "graph node-state callers retain one validated exact traversal medium");
         if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out VoxelIndex index)
-            || !NavigationCell.IsKnownMedium(medium)
             || IsSurfaceAddressClosed(
                 new NavigationCellAddress(instance!.MapId, index),
                 medium)
@@ -84,14 +85,13 @@ internal sealed partial class NavigationWorldGraph
         NavigationNodeRef node,
         out NavigationNodeState state)
     {
-        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out VoxelIndex index)
-            || !TryGetRawNodeState(node, instance!, index, out state))
-        {
-            state = default;
-            return false;
-        }
-
-        return true;
+        bool found = TryGetNodeLocation(
+            node,
+            out NavigationMapInstance? instance,
+            out VoxelIndex index);
+        System.Diagnostics.Debug.Assert(found,
+            "raw node-state lookup receives a node owned by this immutable graph");
+        return TryGetRawNodeState(node, instance!, index, out state);
     }
 
     private static bool TryGetRawNodeState(
@@ -119,31 +119,13 @@ internal sealed partial class NavigationWorldGraph
 
     internal int GetCompleteDirectionCount(NavigationNodeRef node)
     {
-        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out _))
-            return 0;
+        bool found = TryGetNodeLocation(node, out NavigationMapInstance? instance, out _);
+        System.Diagnostics.Debug.Assert(found,
+            "direction lookup receives a node owned by this immutable graph");
         return instance!.Map.GridBinding.Configuration.TopologyKind
             == GridTopologyKind.HexPrism
                 ? HexDirectionUtility.Offsets.Length
                 : RectangularDirectionUtility.Offsets.Length;
-    }
-
-    internal bool TryGetStructuralCompleteMediumNeighbor(
-        NavigationMediumStateRef source,
-        int directionOrdinal,
-        out NavigationMediumStateRef neighbor,
-        out bool isPrimary)
-    {
-        if (!TryGetCompleteNeighbor(
-                source.Node,
-                directionOrdinal,
-                out NavigationNodeRef neighborNode,
-                out isPrimary)
-            || !TryGetNodeAddress(neighborNode, out NavigationCellAddress address))
-        {
-            neighbor = default;
-            return false;
-        }
-        return TryGetStructuralMediumStateRef(address, source.Medium, out neighbor);
     }
 
     internal bool TryGetCompleteNeighbor(
@@ -152,15 +134,12 @@ internal sealed partial class NavigationWorldGraph
         out NavigationNodeRef neighbor,
         out bool isPrimary)
     {
-        if (!TryGetNodeLocation(
-                source,
-                out NavigationMapInstance? instance,
-                out VoxelIndex index))
-        {
-            neighbor = default;
-            isPrimary = false;
-            return false;
-        }
+        bool found = TryGetNodeLocation(
+            source,
+            out NavigationMapInstance? instance,
+            out VoxelIndex index);
+        System.Diagnostics.Debug.Assert(found,
+            "neighbor lookup receives a source node owned by this immutable graph");
 
         bool hex = instance!.Map.GridBinding.Configuration.TopologyKind
             == GridTopologyKind.HexPrism;
@@ -203,20 +182,20 @@ internal sealed partial class NavigationWorldGraph
         TraversalMedium medium,
         out NavigationMediumStateRef state)
     {
-        if (!NavigationCell.IsKnownMedium(medium)
-            || !TryGetNodeRef(address, out NavigationNodeRef node)
-            || IsSurfaceAddressClosed(address, medium)
-            || !TryGetNodeLocation(node, out NavigationMapInstance? instance, out _)
-            || !instance!.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell)
-            || !instance.TryGetPhysicalState(node.CellSlot, out bool isPresent, out _)
-            || !isPresent
-            || !cell.SupportsMedium(medium))
+        if (!TryGetStructuralMediumStateRef(address, medium, out state)
+            || IsSurfaceAddressClosed(address, medium))
         {
             state = default;
             return false;
         }
-
-        state = new NavigationMediumStateRef(node, medium);
+        NavigationNodeRef node = state.Node;
+        NavigationMapInstance instance = _instances.Get(node.MapOrdinal);
+        if (!instance.TryGetPhysicalState(node.CellSlot, out bool isPresent, out _)
+            || !isPresent)
+        {
+            state = default;
+            return false;
+        }
         return true;
     }
 
@@ -242,8 +221,9 @@ internal sealed partial class NavigationWorldGraph
 
     internal int GetPrimaryDirectionCount(NavigationNodeRef node)
     {
-        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out _))
-            return 0;
+        bool found = TryGetNodeLocation(node, out NavigationMapInstance? instance, out _);
+        System.Diagnostics.Debug.Assert(found,
+            "direction lookup receives a node owned by this immutable graph");
         return instance!.Map.GridBinding.Configuration.TopologyKind
             == GridTopologyKind.HexPrism
                 ? HexDirectionUtility.Primary.Length
@@ -272,14 +252,12 @@ internal sealed partial class NavigationWorldGraph
         int directionOrdinal,
         out NavigationNodeRef neighbor)
     {
-        if (!TryGetNodeLocation(
-                source,
-                out NavigationMapInstance? instance,
-                out VoxelIndex index))
-        {
-            neighbor = default;
-            return false;
-        }
+        bool found = TryGetNodeLocation(
+            source,
+            out NavigationMapInstance? instance,
+            out VoxelIndex index);
+        System.Diagnostics.Debug.Assert(found,
+            "neighbor lookup receives a source node owned by this immutable graph");
         bool hex = instance!.Map.GridBinding.Configuration.TopologyKind
             == GridTopologyKind.HexPrism;
         int count = hex
@@ -331,18 +309,20 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationNativeSurfaceEdgeEnumerator EnumerateStructuralNativeSurfaceEdges(
         NavigationNodeRef source)
     {
-        if (!TryGetNodeLocation(
-                source,
-                out NavigationMapInstance? instance,
-                out VoxelIndex sourceIndex)
-            || !instance!.TryGetEffectiveCell(source.CellSlot, out _))
+        bool foundSource = TryGetNodeLocation(
+            source,
+            out NavigationMapInstance? instance,
+            out VoxelIndex sourceIndex);
+        System.Diagnostics.Debug.Assert(foundSource,
+            "structural enumeration retains its exact graph-owned source node");
+        if (!instance!.TryGetEffectiveCell(source.CellSlot, out _))
         {
             return default;
         }
         return new NavigationNativeSurfaceEdgeEnumerator(
             this,
             source.MapOrdinal,
-            instance,
+            instance!,
             sourceIndex,
             structural: true);
     }

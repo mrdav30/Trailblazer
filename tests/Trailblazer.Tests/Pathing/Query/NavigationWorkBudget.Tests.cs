@@ -26,8 +26,28 @@ public sealed class NavigationWorkBudgetTests
         first.MaxCoveredVoxelIntervals.Should().Be(10);
         first.MaxSimplificationRays.Should().Be(11);
         first.Should().Be(same);
+        (first == same).Should().BeTrue();
         first.GetHashCode().Should().Be(same.GetHashCode());
         first.Should().NotBe(different);
+        (first != different).Should().BeTrue();
+    }
+
+    [Fact]
+    public void NavigationWorkBudget_Equality_ShouldCompareEveryCounter()
+    {
+        int[] baseline = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
+        NavigationWorkBudget expected = CreateNavigationBudget(baseline);
+
+        for (int changedIndex = 0; changedIndex < baseline.Length; changedIndex++)
+        {
+            int[] changed = (int[])baseline.Clone();
+            changed[changedIndex]++;
+
+            expected.Equals(CreateNavigationBudget(changed)).Should().BeFalse(
+                $"counter {changedIndex} is part of budget identity");
+        }
+
+        expected.Equals((object)"not a budget").Should().BeFalse();
     }
 
     [Fact]
@@ -67,6 +87,84 @@ public sealed class NavigationWorkBudgetTests
     }
 
     [Fact]
+    public void NavigationWorkMeter_ShouldRejectInvalidOrExhaustedCountersWithoutMutation()
+    {
+        var meter = new NavigationWorkMeter(CreateNavigationBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1));
+
+        meter.TryConsumeEndpointCandidates(-1).Should().BeFalse();
+        meter.EndpointCandidates.Should().Be(0);
+        meter.TryConsumeEndpointCandidates(1).Should().BeTrue();
+        meter.TryConsumeEndpointCandidates(1).Should().BeFalse();
+        meter.EndpointCandidates.Should().Be(1);
+
+        meter.TryConsumeTransitionPairs(-1).Should().BeFalse();
+        meter.TransitionPairs.Should().Be(0);
+        meter.TryConsumeTransitionPairs(1).Should().BeTrue();
+        meter.TryConsumeTransitionPairs(1).Should().BeFalse();
+        meter.TransitionPairs.Should().Be(1);
+
+        meter.TryConsumeGuidePortalChecks(1).Should().BeFalse();
+        meter.TryConsumeGuidePrismChecks(1).Should().BeFalse();
+
+        meter.ResetForGuideSample(
+            lookupAndCoveredLimit: 1,
+            edgeAndConnectionLimit: 1,
+            portalLimit: 1,
+            prismLimit: 1,
+            traceIntervalLimit: 1);
+        meter.TryConsumeGuidePortalChecks(-1).Should().BeFalse();
+        meter.TryConsumeGuidePortalChecks(1).Should().BeTrue();
+        meter.TryConsumeGuidePortalChecks(1).Should().BeFalse();
+        meter.GuidePortalChecks.Should().Be(1);
+        meter.TryConsumeGuidePrismChecks(-1).Should().BeFalse();
+        meter.TryConsumeGuidePrismChecks(1).Should().BeTrue();
+        meter.TryConsumeGuidePrismChecks(1).Should().BeFalse();
+        meter.GuidePrismChecks.Should().Be(1);
+    }
+
+    [Fact]
+    public void NavigationWorkMeter_ShouldEnforceEveryCounterAtItsExactBoundary()
+    {
+        var meter = new NavigationWorkMeter(CreateNavigationBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1));
+
+        meter.TrySetLookupReservationFloor(-1).Should().BeFalse();
+        meter.TrySetLookupReservationFloor(1).Should().BeTrue();
+        meter.TryConsumeLookupProbes(1).Should().BeFalse();
+        meter.ReleaseLookupReservationFloor();
+        meter.TryConsumeLookupProbes(-1).Should().BeFalse();
+        meter.TryConsumeLookupProbes(1).Should().BeTrue();
+        meter.TryConsumeLookupProbes(1).Should().BeFalse();
+
+        meter.TryConsumeExpandedNodes(-1).Should().BeFalse();
+        meter.TryConsumeExpandedNodes(1).Should().BeTrue();
+        meter.TryConsumeExpandedNodes(1).Should().BeFalse();
+        meter.TryConsumeEvaluatedEdges(-1).Should().BeFalse();
+        meter.TryConsumeEvaluatedEdges(1).Should().BeTrue();
+        meter.TryConsumeEvaluatedEdges(1).Should().BeFalse();
+        meter.TryConsumeConnectionLegs(-1).Should().BeFalse();
+        meter.TryConsumeConnectionLegs(1).Should().BeTrue();
+        meter.TryConsumeConnectionLegs(1).Should().BeFalse();
+        meter.TryConsumeTransitionCandidates(-1).Should().BeFalse();
+        meter.TryConsumeTransitionCandidates(1).Should().BeTrue();
+        meter.TryConsumeTransitionCandidates(1).Should().BeFalse();
+        meter.TryConsumeTraceIntervals(-1).Should().BeFalse();
+        meter.TryConsumeTraceIntervals(1).Should().BeTrue();
+        meter.TryConsumeTraceIntervals(1).Should().BeFalse();
+        meter.TryConsumeCoveredVoxelIntervals(-1).Should().BeFalse();
+        meter.TryConsumeCoveredVoxelIntervals(1).Should().BeTrue();
+        meter.TryConsumeCoveredVoxelIntervals(1).Should().BeFalse();
+        meter.TryConsumeSimplificationRays(-1).Should().BeFalse();
+        meter.TryConsumeSimplificationRays(1).Should().BeTrue();
+        meter.TryConsumeSimplificationRays(1).Should().BeFalse();
+
+        meter.ResetForGuideSample(1, 1, 1, 1, 1);
+        meter.RemainingConnectionLegs.Should().Be(1);
+        meter.TryConsumeEvaluatedEdges(1).Should().BeTrue();
+        meter.RemainingConnectionLegs.Should().Be(0,
+            "guide edge and connection work share one deterministic allowance");
+    }
+
+    [Fact]
     public void GuideSampleWorkBudget_ShouldPreserveEveryCounterInExactIdentity()
     {
         GuideSampleWorkBudget first = CreateGuideBudget(1, 2, 3, 4, 5, 6, 7);
@@ -81,8 +179,28 @@ public sealed class NavigationWorkBudgetTests
         first.MaxTraceIntervals.Should().Be(6);
         first.MaxLocalRecoveryAttempts.Should().Be(7);
         first.Should().Be(same);
+        (first == same).Should().BeTrue();
         first.GetHashCode().Should().Be(same.GetHashCode());
         first.Should().NotBe(different);
+        (first != different).Should().BeTrue();
+    }
+
+    [Fact]
+    public void GuideSampleWorkBudget_Equality_ShouldCompareEveryCounter()
+    {
+        int[] baseline = { 1, 2, 3, 4, 5, 6, 7 };
+        GuideSampleWorkBudget expected = CreateGuideBudget(baseline);
+
+        for (int changedIndex = 0; changedIndex < baseline.Length; changedIndex++)
+        {
+            int[] changed = (int[])baseline.Clone();
+            changed[changedIndex]++;
+
+            expected.Equals(CreateGuideBudget(changed)).Should().BeFalse(
+                $"counter {changedIndex} is part of guide-sample budget identity");
+        }
+
+        expected.Equals((object)"not a budget").Should().BeFalse();
     }
 
     [Fact]

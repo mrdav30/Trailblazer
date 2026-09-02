@@ -3,6 +3,7 @@ using FixedMathSharp;
 using FixedMathSharp.Assertions;
 using FluentAssertions;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;
@@ -14,6 +15,21 @@ public class JumpLocomotionTests : IDisposable
     {
         TestWorld.Reset();
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public void RegisterJump_ShouldRejectStandaloneLocomotionWithoutWorldContext()
+    {
+        var jump = new JumpLocomotion();
+
+        jump.Invoking(value => value.RegisterJump())
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*TrailblazerWorldContext*");
+
+        jump.JumpCount.Should().Be(0);
+        jump.IsJumping.Should().BeFalse();
+        jump.IsHoldingJump.Should().BeFalse();
+        jump.JumpStartTime.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -152,6 +168,28 @@ public class JumpLocomotionTests : IDisposable
         // Assert
         var expected = previousVelocity.Y - (scout.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime * 3);
         scout.Motor.Handler.Move.FrameVelocity.Y.Should().BeGreaterThan(expected);
+    }
+
+    [Fact]
+    public void Given_HeldJumpWithNoExtraHeight_When_NextFrameSimulates_Then_GravityReducesVelocity()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        JumpLocomotion jump = TestRequire.NotNull(scout.Motor.Handler.Jump);
+        jump.MaxJumpCount = 2;
+        jump.ExtraJumpHeight = Fixed64.Zero;
+
+        TestWorld.Context.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+        Fixed64 initialVelocity = scout.Motor.Handler.Move.FrameVelocity.Y;
+
+        TestWorld.Context.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.FrameRequest.CanAffordJump = false;
+        scout.Simulate();
+
+        jump.IsHoldingJump.Should().BeTrue();
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().BeLessThan(initialVelocity);
     }
 
     [Fact]
@@ -513,5 +551,17 @@ public class JumpLocomotionTests : IDisposable
         // IsCoolingDown should still be true (the false branch of CooldownTimer >= CooldownTime)
         jump.IsCoolingDown.Should().BeTrue();
         jump.CooldownTimer.Should().BeGreaterThan(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void UpdateCooldown_ShouldLeaveTimerUnchangedWhenCooldownIsInactive()
+    {
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
+        JumpLocomotion jump = TestRequire.NotNull(scout.Motor.Handler.Jump);
+
+        jump.UpdateCooldown();
+
+        jump.IsCoolingDown.Should().BeFalse();
+        jump.CooldownTimer.Should().Be(Fixed64.Zero);
     }
 }

@@ -101,13 +101,4 @@ public readonly struct NavigationEndpoint : IEquatable<NavigationEndpoint>
     /// </summary>
     public static bool operator !=(NavigationEndpoint left, NavigationEndpoint right) => !left.Equals(right);
 
-    internal void Validate(string parameterName)
-    {
-        SwiftThrowHelper.ThrowIfArgument(
-            (MapId != null && string.IsNullOrWhiteSpace(MapId))
-                || Resolution is not EndpointResolutionPolicy.Strict and not EndpointResolutionPolicy.NearestNavigable
-                || MaxResolutionDistance < Fixed64.Zero,
-            parameterName,
-            "Navigation endpoint contains an invalid map identifier, policy, or distance.");
-    }
 }

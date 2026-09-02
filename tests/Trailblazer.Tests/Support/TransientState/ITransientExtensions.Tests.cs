@@ -81,6 +81,16 @@ public sealed class ITransientExtensionsTests
     }
 
     [Fact]
+    public void ClearTransientState_ShouldUseTypeDefault_WhenConfiguredMemberNameIsNull()
+    {
+        var instance = new PartialDefaultTransient { Value = 7 };
+
+        instance.ClearTransientState();
+
+        instance.Value.Should().Be(0);
+    }
+
+    [Fact]
     public void SyncTransientState_ShouldThrowArgumentNullException_WhenOtherIsNull()
     {
         var target = new TestTransient();
@@ -100,6 +110,16 @@ public sealed class ITransientExtensionsTests
             .Should().Throw<ArgumentException>()
             .WithParameterName("other")
             .WithMessage("*Type mismatch*");
+    }
+
+    [Fact]
+    public void ClearTransientState_ShouldRejectMissingConfiguredDefaultMember()
+    {
+        var instance = new MissingDefaultTransient { Value = 7 };
+
+        instance.Invoking(static value => value.ClearTransientState())
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*MissingDefaultTransient.DoesNotExist*");
     }
 
     private sealed class TestTransient : ITransient
@@ -133,5 +153,19 @@ public sealed class ITransientExtensionsTests
 
         [Transient(typeof(PropDefaultTransient), nameof(ForwardDefault))]
         public Vector3d Direction { get; set; }
+    }
+
+    private sealed class MissingDefaultTransient : ITransient
+    {
+        [Transient(typeof(MissingDefaultTransient), "DoesNotExist")]
+        public int Value { get; set; }
+    }
+
+    private sealed class PartialDefaultTransient : ITransient
+    {
+#pragma warning disable CS8625
+        [Transient(typeof(PartialDefaultTransient), null)]
+#pragma warning restore CS8625
+        public int Value { get; set; }
     }
 }

@@ -147,7 +147,6 @@ public abstract partial class Navigator
             _positionDelta = Vector3d.Zero;
             _velocityDelta = Vector3d.Zero;
             _rotationDelta = FixedQuaternion.Identity;
-            _heightmapGrounding ??= new NavigatorHeightmapGroundingSettings();
             _isSet = true;
             _isInitialized = Motor != null;
 

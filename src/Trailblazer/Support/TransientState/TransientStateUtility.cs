@@ -92,8 +92,8 @@ internal static class TransientStateUtility
 
     private static Expression GetDefaultExpression(PropertyInfo property)
     {
-        TransientAttribute? attr = property.GetCustomAttribute<TransientAttribute>();
-        if (attr?.DefaultValueSource != null && attr.DefaultValueMember != null)
+        TransientAttribute attr = property.GetCustomAttribute<TransientAttribute>()!;
+        if (attr.DefaultValueSource != null && attr.DefaultValueMember != null)
             return GetStaticMemberExpression(attr.DefaultValueSource, attr.DefaultValueMember);
 
         return Expression.Default(property.PropertyType);

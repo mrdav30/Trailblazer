@@ -84,10 +84,13 @@ public sealed class TrailblazerWorldContextSettings
             nameof(maxDynamicCellSlots),
             "Context dynamic-cell capacity cannot be smaller than the per-map capacity.");
         SwiftThrowHelper.ThrowIfArgument(
-            maxDynamicCellSlotsPerMap < operationLimits.MaxOverlayCellsPerMap
-            || maxDynamicCellSlots < operationLimits.MaxOverlayCells,
+            maxDynamicCellSlotsPerMap < operationLimits.MaxOverlayCellsPerMap,
+            nameof(maxDynamicCellSlotsPerMap),
+            "Per-map dynamic-cell capacity must cover every cell overlay admitted by the operation limits.");
+        SwiftThrowHelper.ThrowIfArgument(
+            maxDynamicCellSlots < operationLimits.MaxOverlayCells,
             nameof(maxDynamicCellSlots),
-            "Dynamic-cell capacity must cover every cell overlay admitted by the operation limits.");
+            "Context dynamic-cell capacity must cover every cell overlay admitted by the operation limits.");
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             navigationAreaCount <= 0 || navigationAreaCount > ushort.MaxValue + 1,
             navigationAreaCount,

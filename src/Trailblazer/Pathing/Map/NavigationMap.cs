@@ -22,6 +22,24 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public sealed class NavigationMap : IEquatable<NavigationMap>
 {
+    private static readonly HexDirection[] NativeHexDirections =
+    {
+        HexDirection.QNegative,
+        HexDirection.QNegativeRPositive,
+        HexDirection.RNegative,
+        HexDirection.RPositive,
+        HexDirection.QPositiveRNegative,
+        HexDirection.QPositive
+    };
+
+    private static readonly RectangularDirection[] NativeRectangularDirections =
+    {
+        RectangularDirection.West,
+        RectangularDirection.South,
+        RectangularDirection.North,
+        RectangularDirection.East
+    };
+
     private readonly NavigationCellEntry[] _cells;
     private readonly NavigationConnection[] _connections;
     private readonly TraversalTransitionDefinition[] _transitions;
@@ -112,9 +130,6 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         if (other is null
             || !string.Equals(MapId, other.MapId, StringComparison.Ordinal)
             || GridBinding.Key != other.GridBinding.Key
-            || GridBinding.Width != other.GridBinding.Width
-            || GridBinding.Height != other.GridBinding.Height
-            || GridBinding.Length != other.GridBinding.Length
             || !_defaultCell.Equals(other._defaultCell)
             || _cells.Length != other._cells.Length
             || _connections.Length != other._connections.Length
@@ -198,44 +213,21 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal GridNavigationPortal GetNativePortalTemplate(int directionIndex) =>
-        (uint)directionIndex < (uint)_nativePortalTemplates.Length
-            ? _nativePortalTemplates[directionIndex]
-            : default;
+        _nativePortalTemplates[directionIndex];
 
-    internal static int GetNativeSurfaceDirectionCount(GridTopologyKind topology) => topology switch
-    {
-        GridTopologyKind.RectangularPrism => 4,
-        GridTopologyKind.HexPrism => 6,
-        _ => 0
-    };
+    internal static int GetNativeSurfaceDirectionCount(GridTopologyKind topology) =>
+        topology == GridTopologyKind.HexPrism
+            ? NativeHexDirections.Length
+            : NativeRectangularDirections.Length;
 
     internal static VoxelIndex GetNativeSurfaceOffset(
         GridTopologyKind topology,
         int directionIndex)
     {
         if (topology == GridTopologyKind.HexPrism)
-        {
-            HexDirection direction = directionIndex switch
-            {
-                0 => HexDirection.QNegative,
-                1 => HexDirection.QNegativeRPositive,
-                2 => HexDirection.RNegative,
-                3 => HexDirection.RPositive,
-                4 => HexDirection.QPositiveRNegative,
-                5 => HexDirection.QPositive,
-                _ => default
-            };
-            return HexDirectionUtility.GetOffset(direction);
-        }
+            return HexDirectionUtility.GetOffset(NativeHexDirections[directionIndex]);
 
-        RectangularDirection rectangular = directionIndex switch
-        {
-            0 => RectangularDirection.West,
-            1 => RectangularDirection.South,
-            2 => RectangularDirection.North,
-            3 => RectangularDirection.East,
-            _ => default
-        };
+        RectangularDirection rectangular = NativeRectangularDirections[directionIndex];
         (int x, int y, int z) offset = RectangularDirectionUtility.Offsets[(int)rectangular];
         return new VoxelIndex(offset.x, offset.y, offset.z);
     }
@@ -260,15 +252,19 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
             if (!binding.IsValidIndex(sourceIndex) || !binding.IsValidIndex(targetIndex))
                 continue;
 
-            bool compiled = binding.TryGetCellPrism(sourceIndex, out GridCellPrism source)
-                && binding.TryGetCellPrism(targetIndex, out GridCellPrism target)
-                && GridCellGeometry.TryCreateNavigationPortal(source, target, out GridNavigationPortal portal)
-                && Vector3d.TrySubtract(Vector3d.Zero, source.Center, out Vector3d translation)
-                && portal.TryTranslate(translation, out templates[directionIndex]);
-            SwiftThrowHelper.ThrowIfArgument(
-                !compiled,
-                nameof(binding),
-                "Grid binding could not compile an exact native surface portal template.");
+            bool hasSource = binding.TryGetCellPrism(sourceIndex, out GridCellPrism source);
+            bool hasTarget = binding.TryGetCellPrism(targetIndex, out GridCellPrism target);
+            bool hasPortal = GridCellGeometry.TryCreateNavigationPortal(
+                source,
+                target,
+                out GridNavigationPortal portal);
+            bool hasTranslation = Vector3d.TrySubtract(
+                Vector3d.Zero,
+                source.Center,
+                out Vector3d translation);
+            bool translated = portal.TryTranslate(translation, out templates[directionIndex]);
+            System.Diagnostics.Debug.Assert(
+                hasSource && hasTarget && hasPortal && hasTranslation && translated);
         }
         return templates;
     }

@@ -33,9 +33,6 @@ internal readonly struct NavigationConnectionOwnerKey : IEquatable<NavigationCon
         string.Equals(MapId, other.MapId, StringComparison.Ordinal)
         && string.Equals(ConnectionId, other.ConnectionId, StringComparison.Ordinal);
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationConnectionOwnerKey other && Equals(other);
-
     public override int GetHashCode()
     {
         var comparer = SwiftHashTools.GetDeterministicStringEqualityComparer();

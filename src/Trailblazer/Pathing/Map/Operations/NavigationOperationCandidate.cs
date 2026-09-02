@@ -57,8 +57,6 @@ internal sealed partial class NavigationOperationCandidate
 
     internal long OverlayConnectionCount => _overlayConnectionCount;
 
-    internal long OverlayTransitionCount => _overlayTransitionCount;
-
     internal long TransitionRuleCount => _transitionRuleCount;
 
     internal int NavigationAreaCount => _navigationAreaCount;
@@ -151,7 +149,6 @@ internal sealed partial class NavigationOperationCandidate
             ref _workOwnedExplicitPayloadBytes,
             ref _workOwnedExplicitPayloadPages);
         ReplaceDisplacedPayloadOwnership(
-            prior,
             next,
             published,
             source,
@@ -179,7 +176,6 @@ internal sealed partial class NavigationOperationCandidate
             ref _workOwnedExplicitPayloadBytes,
             ref _workOwnedExplicitPayloadPages);
         ReplaceDisplacedPayloadOwnership(
-            prior,
             next,
             published,
             source,
@@ -207,7 +203,6 @@ internal sealed partial class NavigationOperationCandidate
             ref _workOwnedExplicitPayloadBytes,
             ref _workOwnedExplicitPayloadPages);
         ReplaceDisplacedPayloadOwnership(
-            prior,
             next,
             published,
             source,
@@ -230,7 +225,6 @@ internal sealed partial class NavigationOperationCandidate
     }
 
     private static void ReplaceDisplacedPayloadOwnership<T>(
-        T? prior,
         T? next,
         T? published,
         T? source,
@@ -238,20 +232,14 @@ internal sealed partial class NavigationOperationCandidate
         ref int pages)
         where T : class
     {
+        // A fold commits each canonical key once, so its prior payload is the fold source.
         if (source == null || ReferenceEquals(source, published))
             return;
-        if (ReferenceEquals(prior, source) && !ReferenceEquals(next, source))
-        {
-            GetPayloadSize(source, out long sourceBytes, out int sourcePages);
-            bytes = checked(bytes + sourceBytes);
-            pages = checked(pages + sourcePages);
-        }
-        else if (!ReferenceEquals(prior, source) && ReferenceEquals(next, source))
-        {
-            GetPayloadSize(source, out long sourceBytes, out int sourcePages);
-            bytes = checked(bytes - sourceBytes);
-            pages = checked(pages - sourcePages);
-        }
+        // Owner and row folds materialize a replacement payload before committing a key.
+        System.Diagnostics.Debug.Assert(!ReferenceEquals(next, source));
+        GetPayloadSize(source, out long sourceBytes, out int sourcePages);
+        bytes = checked(bytes + sourceBytes);
+        pages = checked(pages + sourcePages);
     }
 
     private static void GetPayloadOwnership<T>(
@@ -301,7 +289,6 @@ internal sealed partial class NavigationOperationCandidate
         _workOwnedMapStatePayloadPages = checked(
             _workOwnedMapStatePayloadPages - priorPages + nextPages);
         ReplaceDisplacedMapStateOwnership(
-            prior,
             next,
             published,
             source,
@@ -339,17 +326,16 @@ internal sealed partial class NavigationOperationCandidate
     }
 
     private static void ReplaceDisplacedMapStateOwnership(
-        MapState? prior,
         MapState? next,
         MapState? published,
         MapState? source,
         ref long bytes,
         ref int pages)
     {
+        // Map ids are canonical within a fold; each source component is displaced at most once.
         if (source == null)
             return;
         ReplaceDisplacedMapStateComponent(
-            prior?.Map,
             next?.Map,
             published?.Map,
             source.Map,
@@ -358,7 +344,6 @@ internal sealed partial class NavigationOperationCandidate
             ref bytes,
             ref pages);
         ReplaceDisplacedMapStateComponent(
-            prior?.BakedCellLookup,
             next?.BakedCellLookup,
             published?.BakedCellLookup,
             source.BakedCellLookup,
@@ -367,7 +352,6 @@ internal sealed partial class NavigationOperationCandidate
             ref bytes,
             ref pages);
         ReplaceDisplacedMapStateComponent(
-            prior?.Overlay,
             next?.Overlay,
             published?.Overlay,
             source.Overlay,
@@ -376,7 +360,6 @@ internal sealed partial class NavigationOperationCandidate
             ref bytes,
             ref pages);
         ReplaceDisplacedMapStateComponent(
-            prior?.DynamicAddresses,
             next?.DynamicAddresses,
             published?.DynamicAddresses,
             source.DynamicAddresses,
@@ -387,7 +370,6 @@ internal sealed partial class NavigationOperationCandidate
     }
 
     private static void ReplaceDisplacedMapStateComponent(
-        object? prior,
         object? next,
         object? published,
         object source,
@@ -398,15 +380,10 @@ internal sealed partial class NavigationOperationCandidate
     {
         if (ReferenceEquals(source, published))
             return;
-        if (ReferenceEquals(prior, source) && !ReferenceEquals(next, source))
+        if (!ReferenceEquals(next, source))
         {
             bytes = checked(bytes + sourceBytes);
             pages = checked(pages + sourcePages);
-        }
-        else if (!ReferenceEquals(prior, source) && ReferenceEquals(next, source))
-        {
-            bytes = checked(bytes - sourceBytes);
-            pages = checked(pages - sourcePages);
         }
     }
 
@@ -492,8 +469,7 @@ internal sealed partial class NavigationOperationCandidate
         bool overlay,
         int index,
         string[] changedMapIds,
-        MapState[] changedStates,
-        bool allowDormantEndpoints)
+        MapState[] changedStates)
     {
         if (!overlay)
         {
@@ -503,8 +479,7 @@ internal sealed partial class NavigationOperationCandidate
                     state,
                     transition,
                     changedMapIds,
-                    changedStates,
-                    allowDormantEndpoints);
+                    changedStates);
         }
         TraversalTransitionOverlayOperation operation = state.Overlay.GetTransitionAt(index);
         return operation.Kind != TraversalTransitionOverlayOperationKind.Upsert
@@ -512,13 +487,7 @@ internal sealed partial class NavigationOperationCandidate
                 state,
                 operation.Transition,
                 changedMapIds,
-                changedStates,
-                allowDormantEndpoints);
-    }
-
-    internal int GetTotalDynamicCellCandidateCount()
-    {
-        return _dynamicCellCount;
+                changedStates);
     }
 
     internal bool TryGetMap(string mapId, out NavigationMap map)
@@ -729,44 +698,45 @@ internal sealed partial class NavigationOperationCandidate
         MapState source,
         TraversalTransitionDefinition transition,
         string[] changedMapIds,
-        MapState[] changedStates,
-        bool allowDormantEndpoints)
+        MapState[] changedStates)
     {
-        if (!source.Map.GridBinding.IsValidIndex(transition.SourceIndex)
-            || (!HasDefinitionMedium(
-                    source,
-                    transition.SourceIndex,
-                    transition.SourceMedium)
-                && !(allowDormantEndpoints
-                    && _bakeVersionHighWater.ContainsKey(source.Map.MapId))))
-        {
+        if (!source.Map.GridBinding.IsValidIndex(transition.SourceIndex))
             return false;
-        }
 
-        if (transition.HasSourcePointOverride
-            && (!source.Map.GridBinding.TryGetCellPrism(transition.SourceIndex, out GridForge.Grids.Topology.GridCellPrism sourcePrism)
-                || !sourcePrism.Contains(transition.SourcePointOverride)))
+        // NavigationMapBuilder validates authored source media. Once a map identity is
+        // admitted, overlay and cross-map endpoints may deliberately remain dormant
+        // until later publication supplies their requested medium.
+
+        if (transition.HasSourcePointOverride)
         {
-            return false;
+            bool hasSourcePrism = source.Map.GridBinding.TryGetCellPrism(
+                transition.SourceIndex,
+                out GridForge.Grids.Topology.GridCellPrism sourcePrism);
+            System.Diagnostics.Debug.Assert(hasSourcePrism);
+            if (!sourcePrism.Contains(transition.SourcePointOverride))
+                return false;
         }
 
         MapState? destination = FindChangedState(transition.Destination.MapId, changedMapIds, changedStates);
         if (destination == null && !_maps.TryGetValue(transition.Destination.MapId, out destination))
             return true;
-        if (!destination.Map.GridBinding.IsValidIndex(transition.Destination.Index)
-            || (!HasDefinitionMedium(
-                    destination,
-                    transition.Destination.Index,
-                    transition.DestinationMedium)
-                && !(allowDormantEndpoints
-                    && _bakeVersionHighWater.ContainsKey(destination.Map.MapId))))
-        {
+        if (!destination.Map.GridBinding.IsValidIndex(transition.Destination.Index))
             return false;
-        }
+        if (!HasDefinitionMedium(
+                destination,
+                transition.Destination.Index,
+                transition.DestinationMedium)
+            && !_bakeVersionHighWater.ContainsKey(destination.Map.MapId))
+            return false;
 
-        return !transition.HasDestinationPointOverride
-            || (destination.Map.GridBinding.TryGetCellPrism(transition.Destination.Index, out GridForge.Grids.Topology.GridCellPrism destinationPrism)
-                && destinationPrism.Contains(transition.DestinationPointOverride));
+        if (!transition.HasDestinationPointOverride)
+            return true;
+
+        bool hasDestinationPrism = destination.Map.GridBinding.TryGetCellPrism(
+            transition.Destination.Index,
+            out GridForge.Grids.Topology.GridCellPrism destinationPrism);
+        System.Diagnostics.Debug.Assert(hasDestinationPrism);
+        return destinationPrism.Contains(transition.DestinationPointOverride);
     }
 
     private static bool TryGetEffectiveCell(
@@ -810,17 +780,19 @@ internal sealed partial class NavigationOperationCandidate
         if (baked >= 0)
             return SupportsMedium(state.Map.CellSpan[baked].Cell, medium);
         return state.Map.DefaultCell.HasValue
-            && state.Map.GridBinding.IsValidIndex(index)
             && SupportsMedium(state.Map.DefaultCell.Value, medium);
     }
 
-    private static bool SupportsMedium(NavigationCell cell, TraversalMedium medium) => medium switch
+    private static bool SupportsMedium(NavigationCell cell, TraversalMedium medium)
     {
-        TraversalMedium.Solid => (cell.Media & TraversalMedia.Solid) != 0,
-        TraversalMedium.Gas => (cell.Media & TraversalMedia.Gas) != 0,
-        TraversalMedium.Liquid => (cell.Media & TraversalMedia.Liquid) != 0,
-        _ => false
-    };
+        System.Diagnostics.Debug.Assert(TraversalTransitionDefinition.IsKnownMedium(medium));
+        TraversalMedia requested = medium == TraversalMedium.Solid
+            ? TraversalMedia.Solid
+            : medium == TraversalMedium.Gas
+                ? TraversalMedia.Gas
+                : TraversalMedia.Liquid;
+        return (cell.Media & requested) != 0;
+    }
 
     private static MapState? FindChangedState(
         string mapId,

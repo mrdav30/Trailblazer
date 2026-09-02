@@ -206,7 +206,7 @@ internal sealed class NavigationTransitionRefreshWork
                 GetOrAddPage(_pendingTransition.SourcePage);
                 _pendingPlacementStage = 1;
             }
-            if (_pendingPlacementStage == 1 && _pendingTransition.DestinationPage.HasValue)
+            if (_pendingTransition.DestinationPage.HasValue)
             {
                 if (!meter.TryConsumeDependencyEntries(1))
                     return false;
@@ -227,15 +227,10 @@ internal sealed class NavigationTransitionRefreshWork
                     return !_definitionCursorActive
                         && _definitionSourceOrdinal >= _affectedSources.Count;
                 }
-                if (!TryCreatePublished(
-                        _candidate,
-                        _pendingOwnerMapId!,
-                        _pendingDefinition,
-                        out _pendingTransition))
-                {
-                    ClearPendingDefinition();
-                    continue;
-                }
+                _pendingTransition = CreatePublished(
+                    _candidate,
+                    _pendingOwnerMapId!,
+                    _pendingDefinition);
                 _pendingPlacementStage = 0;
             }
             if (_pendingPlacementStage == 0)
@@ -245,7 +240,7 @@ internal sealed class NavigationTransitionRefreshWork
                 GetOrAddPage(_pendingTransition.SourcePage).NewOutgoingCount++;
                 _pendingPlacementStage = 1;
             }
-            if (_pendingPlacementStage == 1 && _pendingTransition.DestinationPage.HasValue)
+            if (_pendingTransition.DestinationPage.HasValue)
             {
                 if (!meter.TryConsumeDependencyEntries(1))
                     return false;
@@ -283,15 +278,10 @@ internal sealed class NavigationTransitionRefreshWork
                     return !_definitionCursorActive
                         && _definitionSourceOrdinal >= _affectedSources.Count;
                 }
-                if (!TryCreatePublished(
-                        _candidate,
-                        _pendingOwnerMapId!,
-                        _pendingDefinition,
-                        out _pendingTransition))
-                {
-                    ClearPendingDefinition();
-                    continue;
-                }
+                _pendingTransition = CreatePublished(
+                    _candidate,
+                    _pendingOwnerMapId!,
+                    _pendingDefinition);
                 _pendingPlacementStage = 0;
             }
             if (_pendingPlacementStage == 0)
@@ -301,7 +291,7 @@ internal sealed class NavigationTransitionRefreshWork
                 GetPage(_pendingTransition.SourcePage).AppendOutgoing(_pendingTransition);
                 _pendingPlacementStage = 1;
             }
-            if (_pendingPlacementStage == 1 && _pendingTransition.DestinationPage.HasValue)
+            if (_pendingTransition.DestinationPage.HasValue)
             {
                 if (!meter.TryConsumeExplicitEdges(1))
                     return false;
@@ -380,8 +370,11 @@ internal sealed class NavigationTransitionRefreshWork
         TraversalTransitionDefinition definition,
         out NavigationPublishedTransition transition)
     {
-        if (TryCreatePublished(_source, ownerMapId, definition, out NavigationPublishedTransition located)
-            && _pages.TryGet(located.SourcePage, out NavigationTransitionPage page)
+        NavigationPublishedTransition located = CreatePublished(
+            _source,
+            ownerMapId,
+            definition);
+        if (_pages.TryGet(located.SourcePage, out NavigationTransitionPage page)
             && page.TryGetOutgoing(located.Owner, out transition))
         {
             return true;
@@ -554,8 +547,8 @@ internal sealed class NavigationTransitionRefreshWork
                     _candidate.GetInstance(_ruleBestMapOrdinal).Map.TransitionRuleSpan;
                 TraversalTransitionRule best = bestRules[_ruleOrdinals[_ruleBestMapOrdinal]];
                 int comparison = string.CompareOrdinal(candidate.Id, best.Id);
-                if (comparison == 0)
-                    throw new InvalidOperationException("Duplicate transition rule ID reached publication.");
+                System.Diagnostics.Debug.Assert(comparison != 0,
+                    "Map folding rejects duplicate global transition-rule ownership.");
                 if (comparison < 0)
                     _ruleBestMapOrdinal = mapOrdinal;
             }
@@ -588,37 +581,33 @@ internal sealed class NavigationTransitionRefreshWork
         return true;
     }
 
-    private static bool TryCreatePublished(
+    private static NavigationPublishedTransition CreatePublished(
         NavigationWorldGraph graph,
         string ownerMapId,
-        TraversalTransitionDefinition definition,
-        out NavigationPublishedTransition transition)
+        TraversalTransitionDefinition definition)
     {
-        if (!graph.TryGetMap(ownerMapId, out NavigationMapInstance? source)
-            || source == null
-            || !source.TryGetSlot(definition.SourceIndex, out int sourceSlot))
-        {
-            transition = default;
-            return false;
-        }
+        bool foundOwner = graph.TryGetMap(ownerMapId, out NavigationMapInstance source);
+        System.Diagnostics.Debug.Assert(foundOwner,
+            "Effective transition cursors enumerate definitions from an owned map.");
+        bool foundSource = source.TryGetSlot(definition.SourceIndex, out int sourceSlot);
+        System.Diagnostics.Debug.Assert(foundSource,
+            "Published transition definitions retain their validated local source cell.");
         var sourcePage = new NavigationTransitionPageAddress(
             ownerMapId,
             sourceSlot / NavigationSemanticPage.SlotCount);
         NavigationTransitionPageAddress? destinationPage = null;
-        if (graph.TryGetMap(definition.Destination.MapId, out NavigationMapInstance? destination)
-            && destination != null
+        if (graph.TryGetMap(definition.Destination.MapId, out NavigationMapInstance destination)
             && destination.TryGetSlot(definition.Destination.Index, out int destinationSlot))
         {
             destinationPage = new NavigationTransitionPageAddress(
                 definition.Destination.MapId,
                 destinationSlot / NavigationSemanticPage.SlotCount);
         }
-        transition = new NavigationPublishedTransition(
+        return new NavigationPublishedTransition(
             ownerMapId,
             definition,
             sourcePage,
             destinationPage);
-        return true;
     }
 
     private static long GetArrayBytes(int count, long elementBytes) => count == 0
@@ -646,8 +635,6 @@ internal sealed class NavigationTransitionRefreshWork
         private int _sealStage;
         private int _compareOrdinal;
         private bool _sameContent;
-        private bool _sortBuffersReleased;
-        private bool _finalBuffersReleased;
 
         internal PageBuildState(
             NavigationTransitionPageAddress address,
@@ -781,16 +768,12 @@ internal sealed class NavigationTransitionRefreshWork
             {
                 if (!_outgoingSort.Advance(meter) || !_incomingSort.Advance(meter))
                     return false;
-                if (!_sortBuffersReleased)
-                {
-                    releasedWorkingBytes = SortScratchBytes;
-                    releasedWorkingPages = SortScratchPages;
-                    _outgoingScratch = null;
-                    _incomingScratch = null;
-                    _outgoingSort.Release();
-                    _incomingSort.Release();
-                    _sortBuffersReleased = true;
-                }
+                releasedWorkingBytes = SortScratchBytes;
+                releasedWorkingPages = SortScratchPages;
+                _outgoingScratch = null;
+                _incomingScratch = null;
+                _outgoingSort.Release();
+                _incomingSort.Release();
                 _sameContent = _prior != null
                     && _prior.OutgoingCount == _outgoing.Length
                     && _prior.IncomingCount == _incoming.Length;
@@ -828,17 +811,10 @@ internal sealed class NavigationTransitionRefreshWork
 
         internal void ReleaseFinalBuffers(out long bytes, out int pages)
         {
-            if (_finalBuffersReleased)
-            {
-                bytes = 0;
-                pages = 0;
-                return;
-            }
             bytes = FinalArrayBytes;
             pages = FinalArrayPages;
             _outgoing = Array.Empty<NavigationPublishedTransition>();
             _incoming = Array.Empty<NavigationIncomingTransitionRef>();
-            _finalBuffersReleased = true;
         }
 
         private long WorkingBufferBytes => checked(FinalArrayBytes + SortScratchBytes);
@@ -915,7 +891,9 @@ internal sealed class NavigationTransitionRefreshWork
 
         internal bool Advance(MaintenanceWorkMeter meter)
         {
-            if (_values == null || _values.Length < 2)
+            System.Diagnostics.Debug.Assert(_values != null,
+                "Transition page sorting is initialized during page preparation.");
+            if (_values!.Length < 2)
                 return true;
             var comparer = default(TComparer);
             while (_width < _values.Length)

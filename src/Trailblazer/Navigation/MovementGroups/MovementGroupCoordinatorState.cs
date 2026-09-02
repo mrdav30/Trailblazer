@@ -29,7 +29,7 @@ internal sealed class MovementGroupCoordinatorState
 
     internal MovementGroupCoordinatorState(TrailblazerWorldContext context)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _context = context;
     }
 
     private int FrameCount => _context.FrameCount;

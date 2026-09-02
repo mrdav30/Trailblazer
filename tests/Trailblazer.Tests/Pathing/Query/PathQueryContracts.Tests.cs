@@ -9,6 +9,23 @@ namespace Trailblazer.Tests.Pathing.Query;
 public sealed class PathQueryContractsTests
 {
     [Fact]
+    public void PathQueryBatch_ShouldValidateCallerOwnedPrefixBounds()
+    {
+        Action nullStorage = () => _ = new PathQueryBatch(null!, count: 0);
+        var storage = new PathQueryBatchItem[1];
+        Action negativeCount = () => _ = new PathQueryBatch(storage, count: -1);
+        Action countBeyondStorage = () => _ = new PathQueryBatch(storage, count: 2);
+
+        var exact = new PathQueryBatch(storage, count: 1);
+
+        nullStorage.Should().Throw<ArgumentNullException>().WithParameterName("items");
+        negativeCount.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("count");
+        countBeyondStorage.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("count");
+        exact.Items.Should().BeSameAs(storage);
+        exact.Count.Should().Be(1);
+    }
+
+    [Fact]
     public void NavigationEndpoint_ShouldPreserveExactSelectionIntent()
     {
         Vector3d position = new(Fixed64.One, (Fixed64)2, (Fixed64)3);
@@ -21,8 +38,21 @@ public sealed class PathQueryContractsTests
         first.Resolution.Should().Be(EndpointResolutionPolicy.NearestNavigable);
         first.MaxResolutionDistance.Should().Be((Fixed64)4);
         first.Should().Be(same);
+        (first == same).Should().BeTrue();
         first.GetHashCode().Should().Be(same.GetHashCode());
         first.Should().NotBe(different, "map identity is ordinal and case-sensitive");
+        (first != different).Should().BeTrue();
+
+        NavigationEndpoint[] fieldMutations =
+        {
+            new(new Vector3d((Fixed64)2, (Fixed64)2, (Fixed64)3), "Caves", EndpointResolutionPolicy.NearestNavigable, (Fixed64)4),
+            new(position, "Depths", EndpointResolutionPolicy.NearestNavigable, (Fixed64)4),
+            new(position, "Caves", EndpointResolutionPolicy.Strict, (Fixed64)4),
+            new(position, "Caves", EndpointResolutionPolicy.NearestNavigable, (Fixed64)5)
+        };
+        foreach (NavigationEndpoint mutation in fieldMutations)
+            first.Equals(mutation).Should().BeFalse("every endpoint field is part of exact identity");
+        first.Equals((object)"not an endpoint").Should().BeFalse();
     }
 
     [Fact]
@@ -53,8 +83,12 @@ public sealed class PathQueryContractsTests
         explicitIntent.StartMedium.Should().Be(TraversalMedium.Liquid);
         explicitIntent.TargetMedia.Should().Be(TraversalMedia.Liquid | TraversalMedia.Gas);
         explicitIntent.Should().Be(same);
+        (explicitIntent == same).Should().BeTrue();
         explicitIntent.GetHashCode().Should().Be(same.GetHashCode());
         explicitIntent.Should().NotBe(different);
+        (explicitIntent != different).Should().BeTrue();
+        explicitIntent.Equals(new TraversalIntent(TraversalMedium.Liquid, TraversalMedia.Liquid)).Should().BeFalse();
+        explicitIntent.Equals((object)"not a traversal intent").Should().BeFalse();
     }
 
     [Fact]
@@ -88,6 +122,7 @@ public sealed class PathQueryContractsTests
         first.ExtraIntegrationCost.Should().Be(Fixed64.Half);
         first.Should().Be(same);
         first.GetHashCode().Should().Be(same.GetHashCode());
+        first.Equals((object)"not flow options").Should().BeFalse();
         ((Action)(() => _ = new FlowFieldQueryOptions(-Fixed64.One)))
             .Should().Throw<ArgumentOutOfRangeException>();
     }
@@ -103,8 +138,11 @@ public sealed class PathQueryContractsTests
         first.AllowTransitions.Should().BeTrue();
         first.FlowField.ExtraIntegrationCost.Should().Be(Fixed64.Half);
         first.Should().Be(same);
+        (first == same).Should().BeTrue();
         first.GetHashCode().Should().Be(same.GetHashCode());
         first.Should().NotBe(different);
+        (first != different).Should().BeTrue();
+        first.Equals((object)"not a path query").Should().BeFalse();
     }
 
     [Fact]
@@ -189,6 +227,92 @@ public sealed class PathQueryContractsTests
         payload = removeSchema
             ? SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "SchemaVersion")
             : SerializationUtility.SetPayloadValue(payload, useMemoryPack, 0, "SchemaVersion");
+        PathQuery shellQuery = CreateQuery(allowTransitions: false);
+        var target = new PathQueryRecord(shellQuery);
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.Query.Should().Be(shellQuery);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void PathQueryRecord_ShouldRejectSerializationBeforeQueryCapture(bool useMemoryPack)
+    {
+        var record = new PathQueryRecord();
+
+        Action serialize = () => SerializationUtility.SerializeRecord(record, useMemoryPack);
+
+        serialize.Should().Throw<InvalidOperationException>()
+            .WithMessage("*must contain a query*");
+        record.Query.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void PathQueryRecord_ShouldRejectNegativeLoadedBudgetWithoutChangingQuery(
+        bool useMemoryPack)
+    {
+        var source = new PathQueryRecord(CreateQuery());
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.SetPayloadValue(
+            payload,
+            useMemoryPack,
+            -1,
+            "MaxLookupProbes");
+        PathQuery shellQuery = CreateQuery(allowTransitions: false);
+        var target = new PathQueryRecord(shellQuery);
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.Query.Should().Be(shellQuery);
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(false, 2)]
+    [InlineData(false, 3)]
+    [InlineData(false, 4)]
+    [InlineData(false, 5)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, 0)]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+    [InlineData(true, 3)]
+    [InlineData(true, 4)]
+    [InlineData(true, 5)]
+#endif
+    public void PathQueryRecord_ShouldRejectEachInvalidIntentDiscriminatorTransactionally(
+        bool useMemoryPack,
+        int invalidKind)
+    {
+        object payload = SerializationUtility.SerializeRecord(
+            new PathQueryRecord(CreateQuery()),
+            useMemoryPack);
+        payload = invalidKind switch
+        {
+            0 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 99, "Algorithm"),
+            1 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 0, "StartMedium"),
+            2 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 0, "TargetMedia"),
+            3 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 8, "TargetMedia"),
+            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, " ", "AreaPolicyId"),
+            5 => SerializationUtility.SetPayloadValue(
+                payload,
+                useMemoryPack,
+                -Fixed64.One,
+                "Agent",
+                "Radius"),
+            _ => throw new InvalidOperationException()
+        };
         PathQuery shellQuery = CreateQuery(allowTransitions: false);
         var target = new PathQueryRecord(shellQuery);
 

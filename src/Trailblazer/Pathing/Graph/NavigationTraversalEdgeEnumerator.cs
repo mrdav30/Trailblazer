@@ -91,7 +91,13 @@ internal struct NavigationTraversalEdgeEnumerator
         SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
-        _graph = source.IsValid ? graph : null;
+        bool foundSourceAddress = graph.TryGetNodeAddress(
+            source.Node,
+            out NavigationCellAddress sourceAddress);
+        System.Diagnostics.Debug.Assert(
+            source.IsValid && foundSourceAddress,
+            "Traversal enumerators own a valid source from their immutable graph.");
+        _graph = graph;
         _source = source;
         _surfaceEdges = source.Medium == TraversalMedium.Solid
             ? graph.EnumerateSurfaceEdges(source.Node)
@@ -113,8 +119,7 @@ internal struct NavigationTraversalEdgeEnumerator
                 : default;
         _volumeSeams = (source.Medium == TraversalMedium.Gas
                 || source.Medium == TraversalMedium.Liquid)
-            && graph.TryGetNodeAddress(source.Node, out NavigationCellAddress volumeAddress)
-                ? graph.AutomaticSeams.GetActiveEndpointEnumerator(volumeAddress)
+                ? graph.AutomaticSeams.GetActiveEndpointEnumerator(sourceAddress)
                 : default;
         _volumeSeamLookahead = default;
         _transitions = allowTransitions
@@ -228,8 +233,8 @@ internal struct NavigationTraversalEdgeEnumerator
         SwiftThrowHelper.ThrowIfNegative(
             connectionStepRemaining,
             nameof(connectionStepRemaining));
-        if (_graph == null)
-            return Complete();
+        System.Diagnostics.Debug.Assert(_graph != null,
+            "Traversal enumerators must be initialized with an immutable graph source.");
         if (_baseComplete)
             return AdvanceTransition(meter, dependencies, ref edgeStepRemaining);
         if (_source.Medium == TraversalMedium.Gas
@@ -237,9 +242,6 @@ internal struct NavigationTraversalEdgeEnumerator
         {
             return AdvanceVolume(meter, dependencies, ref edgeStepRemaining);
         }
-        if (_source.Medium != TraversalMedium.Solid)
-            return Complete();
-
         if (_surfaceRouteActive)
         {
             return AdvanceSurfaceRoute(
@@ -267,10 +269,10 @@ internal struct NavigationTraversalEdgeEnumerator
 
         _surfaceOrdinal = _surfaceEdges.CurrentOrdinal;
         _surfaceEdge = _surfaceEdges.Current;
-        if (!_graph!.TryGetNodeAddress(
-                _surfaceEdge.Target,
-                out NavigationCellAddress targetAddress)
-            || !dependencies.TryRecordPage(
+        _graph!.TryGetNodeAddress(
+            _surfaceEdge.Target,
+            out NavigationCellAddress targetAddress);
+        if (!dependencies.TryRecordPage(
                 targetAddress.MapId,
                 _surfaceEdge.Target.CellSlot / NavigationSemanticPage.SlotCount))
         {
@@ -280,8 +282,6 @@ internal struct NavigationTraversalEdgeEnumerator
         {
             if (_surfaceOrdinal < _emittedSurfaceOrdinal)
                 return NavigationTraversalEdgeAdvanceStatus.Pending;
-            if (_surfaceOrdinal > _emittedSurfaceOrdinal)
-                return NavigationTraversalEdgeAdvanceStatus.Stale;
         }
         NavigationSurfaceEdgeRouteStatus begin = _surfaceRouteWork.Begin(
             _surfaceEvaluator,
@@ -373,10 +373,10 @@ internal struct NavigationTraversalEdgeEnumerator
         if (!_transitionStarted)
         {
             dependencies.RecordTransitionDependency();
-            if (!_graph!.TryGetNodeAddress(
-                    _source.Node,
-                    out NavigationCellAddress sourceAddress)
-                || !dependencies.TryRecordPage(
+            _graph!.TryGetNodeAddress(
+                _source.Node,
+                out NavigationCellAddress sourceAddress);
+            if (!dependencies.TryRecordPage(
                     sourceAddress.MapId,
                     _source.Node.CellSlot / NavigationSemanticPage.SlotCount))
             {
@@ -553,21 +553,21 @@ internal struct NavigationTraversalEdgeEnumerator
                 {
                     return blocked;
                 }
-                if (_graph.TryGetNodeAddress(
+                bool foundCandidateAddress = _graph.TryGetNodeAddress(
+                    _source.Node,
+                    out NavigationCellAddress candidateAddress);
+                System.Diagnostics.Debug.Assert(foundCandidateAddress,
+                    "Same-cell rules retain their immutable graph source address.");
+                ConsiderRuleCandidate(
+                    candidate,
+                    new NavigationMediumStateRef(
                         _source.Node,
-                        out NavigationCellAddress candidateAddress))
-                {
-                    ConsiderRuleCandidate(
-                        candidate,
-                        new NavigationMediumStateRef(
-                            _source.Node,
-                            candidate.DestinationMedium),
-                        candidateAddress,
-                        ref _hasScannedRule,
-                        ref _scannedRule,
-                        ref _scannedRuleTarget,
-                        ref _scannedRuleAddress);
-                }
+                        candidate.DestinationMedium),
+                    candidateAddress,
+                    ref _hasScannedRule,
+                    ref _scannedRule,
+                    ref _scannedRuleTarget,
+                    ref _scannedRuleAddress);
                 CompleteRuleContactScan();
                 continue;
             }
@@ -585,11 +585,13 @@ internal struct NavigationTraversalEdgeEnumerator
                 if (_graph.TryGetPrimaryNeighbor(
                         _source.Node,
                         direction,
-                        out NavigationNodeRef candidateNode)
-                    && _graph.TryGetNodeAddress(
-                        candidateNode,
-                        out NavigationCellAddress candidateAddress))
+                        out NavigationNodeRef candidateNode))
                 {
+                    bool foundCandidateAddress = _graph.TryGetNodeAddress(
+                        candidateNode,
+                        out NavigationCellAddress candidateAddress);
+                    System.Diagnostics.Debug.Assert(foundCandidateAddress,
+                        "Primary neighbors retain an address in their immutable graph.");
                     ConsiderRuleCandidate(
                         candidate,
                         new NavigationMediumStateRef(
@@ -605,33 +607,25 @@ internal struct NavigationTraversalEdgeEnumerator
             }
             if (_ruleContactDirection == primaryCount)
             {
-                _volumeSeams = _graph.TryGetNodeAddress(
-                        _source.Node,
-                        out NavigationCellAddress seamSourceAddress)
-                    ? _graph.AutomaticSeams.GetActiveEndpointEnumerator(
-                        seamSourceAddress)
-                    : default;
+                bool foundSeamSource = _graph.TryGetNodeAddress(
+                    _source.Node,
+                    out NavigationCellAddress seamSourceAddress);
+                System.Diagnostics.Debug.Assert(foundSeamSource,
+                    "Volume rule scans retain their immutable graph source address.");
+                _volumeSeams = _graph.AutomaticSeams.GetActiveEndpointEnumerator(
+                    seamSourceAddress);
                 _volumeSeamLookahead = default;
                 _hasVolumeSeamLookahead = false;
                 _volumeSeamsComplete = false;
                 _ruleContactDirection++;
             }
-            if (!_hasVolumeSeamLookahead && !_volumeSeamsComplete)
+            System.Diagnostics.Debug.Assert(!_volumeSeamsComplete,
+                "Completed volume-seam contact scans advance to the next transition rule immediately.");
+            if (edgeStepRemaining == 0)
+                return NavigationTraversalEdgeAdvanceStatus.Blocked;
+            if (!_volumeSeams.MoveNext())
             {
-                if (edgeStepRemaining == 0)
-                    return NavigationTraversalEdgeAdvanceStatus.Blocked;
-                if (_volumeSeams.MoveNext())
-                {
-                    _volumeSeamLookahead = _volumeSeams.Current;
-                    _hasVolumeSeamLookahead = true;
-                }
-                else
-                {
-                    _volumeSeamsComplete = true;
-                }
-            }
-            if (!_hasVolumeSeamLookahead)
-            {
+                _volumeSeamsComplete = true;
                 CompleteRuleContactScan();
                 continue;
             }
@@ -642,24 +636,22 @@ internal struct NavigationTraversalEdgeEnumerator
             {
                 return seamBlocked;
             }
-            NavigationAutomaticSeamRef seam = _volumeSeamLookahead;
-            _volumeSeamLookahead = default;
-            _hasVolumeSeamLookahead = false;
-            if (_graph.TryGetNodeRef(
-                    seam.Destination,
-                    out NavigationNodeRef seamTarget))
-            {
-                ConsiderRuleCandidate(
-                    candidate,
-                    new NavigationMediumStateRef(
-                        seamTarget,
-                        candidate.DestinationMedium),
-                    seam.Destination,
-                    ref _hasScannedRule,
-                    ref _scannedRule,
-                    ref _scannedRuleTarget,
-                    ref _scannedRuleAddress);
-            }
+            NavigationAutomaticSeamRef seam = _volumeSeams.Current;
+            bool foundSeamTarget = _graph.TryGetNodeRef(
+                seam.Destination,
+                out NavigationNodeRef seamTarget);
+            System.Diagnostics.Debug.Assert(foundSeamTarget,
+                "Active seam rows reference published graph nodes.");
+            ConsiderRuleCandidate(
+                candidate,
+                new NavigationMediumStateRef(
+                    seamTarget,
+                    candidate.DestinationMedium),
+                seam.Destination,
+                ref _hasScannedRule,
+                ref _scannedRule,
+                ref _scannedRuleTarget,
+                ref _scannedRuleAddress);
         }
 
         bool hasRule = _hasScannedRule;
@@ -823,12 +815,17 @@ internal struct NavigationTraversalEdgeEnumerator
                     _source.Node,
                     candidateOrdinal,
                     out NavigationNodeRef candidateNode,
-                    out bool candidateIsPrimary)
-                || !_graph.TryGetNodeAddress(
-                    candidateNode,
-                    out NavigationCellAddress candidateAddress)
-                || (directionOrdinal >= 0
-                    && selectedAddress.CompareTo(candidateAddress) <= 0))
+                    out bool candidateIsPrimary))
+            {
+                continue;
+            }
+            bool foundCandidateAddress = _graph.TryGetNodeAddress(
+                candidateNode,
+                out NavigationCellAddress candidateAddress);
+            System.Diagnostics.Debug.Assert(foundCandidateAddress,
+                "Complete neighbors retain an address in their immutable graph.");
+            if (directionOrdinal >= 0
+                && selectedAddress.CompareTo(candidateAddress) <= 0)
             {
                 continue;
             }
@@ -851,18 +848,22 @@ internal struct NavigationTraversalEdgeEnumerator
                 _volumeSeamsComplete = true;
             }
         }
-        if (_hasVolumeSeamLookahead
-            && _graph.TryGetNodeRef(
-                _volumeSeamLookahead.Destination,
-                out NavigationNodeRef seamTarget)
-            && (directionOrdinal < 0
-                || _volumeSeamLookahead.Destination.CompareTo(selectedAddress) < 0))
+        if (_hasVolumeSeamLookahead)
         {
-            directionOrdinal = 0;
-            target = new NavigationMediumStateRef(seamTarget, _source.Medium);
-            isPrimary = true;
-            seam = _volumeSeamLookahead;
-            hasSeam = true;
+            bool foundSeamTarget = _graph.TryGetNodeRef(
+                _volumeSeamLookahead.Destination,
+                out NavigationNodeRef seamTarget);
+            System.Diagnostics.Debug.Assert(foundSeamTarget,
+                "Active seam rows reference published graph nodes.");
+            if (directionOrdinal < 0
+                || _volumeSeamLookahead.Destination.CompareTo(selectedAddress) < 0)
+            {
+                directionOrdinal = 0;
+                target = new NavigationMediumStateRef(seamTarget, _source.Medium);
+                isPrimary = true;
+                seam = _volumeSeamLookahead;
+                hasSeam = true;
+            }
         }
         return directionOrdinal >= 0;
     }
@@ -875,11 +876,14 @@ internal struct NavigationTraversalEdgeEnumerator
         NavigationSurfaceEdgeRouteStatus status = _surfaceRouteWork.Advance(
             meter,
             ref connectionStepRemaining);
-        if (_surfaceRouteWork.TryTakeDependencyNode(out NavigationNodeRef dependencyNode)
-            && (!_graph!.TryGetNodeAddress(
-                    dependencyNode,
-                    out NavigationCellAddress dependencyAddress)
-                || (dependencyNode != _surfaceEdge.Target
+        if (_surfaceRouteWork.TryTakeDependencyNode(out NavigationNodeRef dependencyNode))
+        {
+            bool foundDependencyAddress = _graph!.TryGetNodeAddress(
+                dependencyNode,
+                out NavigationCellAddress dependencyAddress);
+            System.Diagnostics.Debug.Assert(foundDependencyAddress,
+                "Explicit route dependencies are nodes in their immutable graph.");
+            if ((!dependencyNode.Equals(_surfaceEdge.Target)
                     && _graph.TryGetSurfaceComponent(
                         dependencyAddress,
                         TraversalMedium.Solid,
@@ -888,10 +892,11 @@ internal struct NavigationTraversalEdgeEnumerator
                     && !dependencies.TryRecordComponent(dependencyComponent))
                 || !dependencies.TryRecordPage(
                     dependencyAddress.MapId,
-                    dependencyNode.CellSlot / NavigationSemanticPage.SlotCount)))
-        {
-            _surfaceRouteActive = false;
-            return NavigationTraversalEdgeAdvanceStatus.CapacityExceeded;
+                    dependencyNode.CellSlot / NavigationSemanticPage.SlotCount))
+            {
+                _surfaceRouteActive = false;
+                return NavigationTraversalEdgeAdvanceStatus.CapacityExceeded;
+            }
         }
         if (status == NavigationSurfaceEdgeRouteStatus.Point)
             return NavigationTraversalEdgeAdvanceStatus.Pending;
@@ -911,14 +916,10 @@ internal struct NavigationTraversalEdgeEnumerator
     private static NavigationTraversalEdgeAdvanceStatus MapSurfaceRoute(
         NavigationSurfaceEdgeRouteStatus status) => status switch
         {
-            NavigationSurfaceEdgeRouteStatus.Passable =>
-                NavigationTraversalEdgeAdvanceStatus.Edge,
             NavigationSurfaceEdgeRouteStatus.BudgetExceeded =>
                 NavigationTraversalEdgeAdvanceStatus.BudgetExceeded,
             NavigationSurfaceEdgeRouteStatus.CostOverflow =>
                 NavigationTraversalEdgeAdvanceStatus.CostOverflow,
-            NavigationSurfaceEdgeRouteStatus.Stale =>
-                NavigationTraversalEdgeAdvanceStatus.Stale,
             _ => NavigationTraversalEdgeAdvanceStatus.Pending
         };
 

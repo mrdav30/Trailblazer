@@ -185,8 +185,6 @@ internal struct NavigationDependencySortWork
 
     private void Swap(int left, int right)
     {
-        if (left == right)
-            return;
         if (_collection == Collection.Components)
         {
             (_components[left], _components[right]) =

@@ -66,11 +66,4 @@ public readonly struct NavigationConnectionOverlayOperation
     public static NavigationConnectionOverlayOperation RevertToBake(string id) =>
         new(id, NavigationConnectionOverlayOperationKind.RevertToBake, default);
 
-    internal static void ValidateKind(NavigationConnectionOverlayOperationKind kind)
-    {
-        SwiftThrowHelper.ThrowIfArgument(
-            kind is < NavigationConnectionOverlayOperationKind.Upsert or > NavigationConnectionOverlayOperationKind.RevertToBake,
-            nameof(kind),
-            "Unknown connection overlay operation kind.");
-    }
 }

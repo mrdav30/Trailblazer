@@ -87,9 +87,6 @@ internal sealed class NavigationMapOverlayState
         out TraversalTransitionOverlayOperation operation) =>
         _transitions.TryGetValue(id, out operation);
 
-    internal bool HasSameCellRoot(NavigationMapOverlayState other) =>
-        ReferenceEquals(_cells, other._cells);
-
     internal NavigationMapOverlayState Apply(NavigationMapOverlayDelta delta, long operationSequence)
     {
         PersistentVoxelIndexMap<NavigationCellOverlayOperation> cells = _cells;

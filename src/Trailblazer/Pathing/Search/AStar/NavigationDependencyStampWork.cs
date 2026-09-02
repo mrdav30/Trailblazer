@@ -63,10 +63,6 @@ internal sealed class NavigationDependencyStampWork
     {
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        if (IsComplete)
-            return true;
-        if (!IsValid)
-            return CompleteInvalid();
         int remaining = Math.Min(lookupStepLimit, meter.RemainingLookupProbes);
         while (_componentOrdinal < _components.Length)
         {

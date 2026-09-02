@@ -68,8 +68,14 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
         SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
         SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
+        bool foundDestinationAddress = graph.TryGetNodeAddress(
+            destination.Node,
+            out NavigationCellAddress destinationAddress);
+        System.Diagnostics.Debug.Assert(
+            destination.IsValid && foundDestinationAddress,
+            "Incoming traversal enumerators own a valid destination from their immutable graph.");
         _world = world;
-        _graph = destination.IsValid ? graph : null;
+        _graph = graph;
         _destination = destination;
         _profile = profile;
         _areaPolicy = areaPolicy;
@@ -80,10 +86,7 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
             : default;
         _volumeSeams = (destination.Medium == TraversalMedium.Gas
                 || destination.Medium == TraversalMedium.Liquid)
-            && graph.TryGetNodeAddress(
-                destination.Node,
-                out NavigationCellAddress volumeAddress)
-                ? graph.AutomaticSeams.GetActiveEndpointEnumerator(volumeAddress)
+                ? graph.AutomaticSeams.GetActiveEndpointEnumerator(destinationAddress)
                 : default;
         _volumeSeamLookahead = default;
         _definitions = allowTransitions
@@ -175,15 +178,17 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         SwiftThrowHelper.ThrowIfNegative(
             connectionStepRemaining,
             nameof(connectionStepRemaining));
-        if (_graph == null)
-            return Complete();
+        System.Diagnostics.Debug.Assert(_graph != null,
+            "Incoming traversal enumerators must be initialized with an immutable graph destination.");
         if (!_started && _allowTransitions)
         {
             dependencies.RecordTransitionDependency();
-            if (!_graph.TryGetNodeAddress(
-                    _destination.Node,
-                    out NavigationCellAddress address)
-                || !dependencies.TryRecordPage(
+            bool found = _graph.TryGetNodeAddress(
+                _destination.Node,
+                out NavigationCellAddress address);
+            System.Diagnostics.Debug.Assert(found,
+                "Incoming traversal starts from a published destination state.");
+            if (!dependencies.TryRecordPage(
                     address.MapId,
                     _destination.Node.CellSlot / NavigationSemanticPage.SlotCount))
             {
@@ -279,32 +284,28 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
             BeginOutgoingRescan();
             return NavigationTraversalEdgeAdvanceStatus.Pending;
         }
-        if (_destination.Medium != TraversalMedium.Gas
-            && _destination.Medium != TraversalMedium.Liquid)
-        {
-            return NavigationTraversalEdgeAdvanceStatus.Complete;
-        }
-
         int selectedDirection = -1;
         NavigationMediumStateRef selected = default;
         NavigationCellAddress selectedAddress = default;
         int count = _graph!.GetCompleteDirectionCount(_destination.Node);
         for (int direction = 0; direction < count; direction++)
         {
-            if ((_visitedVolumeDirections & (1U << direction)) != 0
-                || !_graph.TryGetCompleteNeighbor(
+            if ((_visitedVolumeDirections & (1U << direction)) != 0)
+                continue;
+            if (!_graph.TryGetCompleteNeighbor(
                     _destination.Node,
                     direction,
                     out NavigationNodeRef candidateNode,
-                    out _)
-                || !_graph.TryGetNodeAddress(
-                    candidateNode,
-                    out NavigationCellAddress candidateAddress)
-                || (selectedDirection >= 0
-                    && selectedAddress.CompareTo(candidateAddress) <= 0))
-            {
+                    out _))
                 continue;
-            }
+            bool found = _graph.TryGetNodeAddress(
+                candidateNode,
+                out NavigationCellAddress candidateAddress);
+            System.Diagnostics.Debug.Assert(found,
+                "Topology neighbors belong to the same published graph.");
+            if (selectedDirection >= 0
+                && selectedAddress.CompareTo(candidateAddress) <= 0)
+                continue;
             selectedDirection = direction;
             selected = new NavigationMediumStateRef(
                 candidateNode,
@@ -324,19 +325,23 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
                 _volumeSeamsComplete = true;
             }
         }
-        if (_hasVolumeSeamLookahead
-            && _graph.TryGetNodeRef(
-                _volumeSeamLookahead.Destination,
-                out NavigationNodeRef seamSource)
-            && (selectedDirection < 0
-                || _volumeSeamLookahead.Destination.CompareTo(selectedAddress) < 0))
+        if (_hasVolumeSeamLookahead)
         {
-            selectedDirection = 0;
-            selected = new NavigationMediumStateRef(
-                seamSource,
-                _destination.Medium);
-            selectedAddress = _volumeSeamLookahead.Destination;
-            selectedSeam = true;
+            bool found = _graph.TryGetNodeRef(
+                _volumeSeamLookahead.Destination,
+                out NavigationNodeRef seamSource);
+            System.Diagnostics.Debug.Assert(found,
+                "Active seam rows reference published graph nodes.");
+            if (selectedDirection < 0
+                || _volumeSeamLookahead.Destination.CompareTo(selectedAddress) < 0)
+            {
+                selectedDirection = 0;
+                selected = new NavigationMediumStateRef(
+                    seamSource,
+                    _destination.Medium);
+                selectedAddress = _volumeSeamLookahead.Destination;
+                selectedSeam = true;
+            }
         }
         if (selectedDirection < 0)
             return NavigationTraversalEdgeAdvanceStatus.Complete;
@@ -413,7 +418,7 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         NavigationGraphEdge candidate,
         NavigationGraphEdge forward)
     {
-        if (candidate.Kind != forward.Kind || candidate.Target != forward.Target)
+        if (candidate.Kind != forward.Kind || !candidate.Target.Equals(forward.Target))
             return false;
         return candidate.Kind switch
         {
@@ -462,20 +467,14 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         }
         if (hasDefinition)
         {
-            hasDefinition = _graph!.TryGetNodeRef(
+            bool foundDefinitionSource = _graph!.TryGetNodeRef(
                 definition.SourceAddress,
                 out NavigationNodeRef definitionSourceNode);
-            if (!hasDefinition)
-            {
-                _definitionLookahead = default;
-                _hasDefinitionLookahead = false;
-            }
-            else
-            {
-                definitionSource = new NavigationMediumStateRef(
-                    definitionSourceNode,
-                    definition.Definition.SourceMedium);
-            }
+            System.Diagnostics.Debug.Assert(foundDefinitionSource,
+                "Published incoming transition definitions retain their source map node.");
+            definitionSource = new NavigationMediumStateRef(
+                definitionSourceNode,
+                definition.Definition.SourceMedium);
         }
 
         if (!_ruleScanActive)
@@ -516,21 +515,21 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
                 {
                     return blocked;
                 }
-                if (_graph.TryGetNodeAddress(
+                bool foundSource = _graph.TryGetNodeAddress(
+                    _destination.Node,
+                    out NavigationCellAddress sourceAddress);
+                System.Diagnostics.Debug.Assert(foundSource,
+                    "Same-cell rules reuse the published destination node.");
+                ConsiderRule(
+                    rule,
+                    new NavigationMediumStateRef(
                         _destination.Node,
-                        out NavigationCellAddress sourceAddress))
-                {
-                    ConsiderRule(
-                        rule,
-                        new NavigationMediumStateRef(
-                            _destination.Node,
-                            rule.SourceMedium),
-                        sourceAddress,
-                        ref _hasScannedRule,
-                        ref _scannedRule,
-                        ref _scannedRuleSource,
-                        ref _scannedRuleAddress);
-                }
+                        rule.SourceMedium),
+                    sourceAddress,
+                    ref _hasScannedRule,
+                    ref _scannedRule,
+                    ref _scannedRuleSource,
+                    ref _scannedRuleAddress);
                 CompleteRuleContactScan();
                 continue;
             }
@@ -548,11 +547,13 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
                 if (_graph.TryGetPrimaryNeighbor(
                         _destination.Node,
                         direction,
-                        out NavigationNodeRef sourceNode)
-                    && _graph.TryGetNodeAddress(
-                        sourceNode,
-                        out NavigationCellAddress sourceAddress))
+                        out NavigationNodeRef sourceNode))
                 {
+                    bool foundSource = _graph.TryGetNodeAddress(
+                        sourceNode,
+                        out NavigationCellAddress sourceAddress);
+                    System.Diagnostics.Debug.Assert(foundSource,
+                        "Topology neighbors belong to the same published graph.");
                     ConsiderRule(
                         rule,
                         new NavigationMediumStateRef(
@@ -568,33 +569,25 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
             }
             if (_ruleContactDirection == primaryCount)
             {
-                _volumeSeams = _graph.TryGetNodeAddress(
-                        _destination.Node,
-                        out NavigationCellAddress seamDestinationAddress)
-                    ? _graph.AutomaticSeams.GetActiveEndpointEnumerator(
-                        seamDestinationAddress)
-                    : default;
+                bool foundDestination = _graph.TryGetNodeAddress(
+                    _destination.Node,
+                    out NavigationCellAddress seamDestinationAddress);
+                System.Diagnostics.Debug.Assert(foundDestination,
+                    "Volume rule scans start from a published destination node.");
+                _volumeSeams = _graph.AutomaticSeams.GetActiveEndpointEnumerator(
+                    seamDestinationAddress);
                 _volumeSeamLookahead = default;
                 _hasVolumeSeamLookahead = false;
                 _volumeSeamsComplete = false;
                 _ruleContactDirection++;
             }
-            if (!_hasVolumeSeamLookahead && !_volumeSeamsComplete)
+            System.Diagnostics.Debug.Assert(!_volumeSeamsComplete,
+                "Completed volume-seam contact scans advance to the next transition rule immediately.");
+            if (edgeStepRemaining == 0)
+                return NavigationTraversalEdgeAdvanceStatus.Blocked;
+            if (!_volumeSeams.MoveNext())
             {
-                if (edgeStepRemaining == 0)
-                    return NavigationTraversalEdgeAdvanceStatus.Blocked;
-                if (_volumeSeams.MoveNext())
-                {
-                    _volumeSeamLookahead = _volumeSeams.Current;
-                    _hasVolumeSeamLookahead = true;
-                }
-                else
-                {
-                    _volumeSeamsComplete = true;
-                }
-            }
-            if (!_hasVolumeSeamLookahead)
-            {
+                _volumeSeamsComplete = true;
                 CompleteRuleContactScan();
                 continue;
             }
@@ -605,24 +598,22 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
             {
                 return seamBlocked;
             }
-            NavigationAutomaticSeamRef seam = _volumeSeamLookahead;
-            _volumeSeamLookahead = default;
-            _hasVolumeSeamLookahead = false;
-            if (_graph.TryGetNodeRef(
-                    seam.Destination,
-                    out NavigationNodeRef seamSource))
-            {
-                ConsiderRule(
-                    rule,
-                    new NavigationMediumStateRef(
-                        seamSource,
-                        rule.SourceMedium),
-                    seam.Destination,
-                    ref _hasScannedRule,
-                    ref _scannedRule,
-                    ref _scannedRuleSource,
-                    ref _scannedRuleAddress);
-            }
+            NavigationAutomaticSeamRef seam = _volumeSeams.Current;
+            bool found = _graph.TryGetNodeRef(
+                seam.Destination,
+                out NavigationNodeRef seamSource);
+            System.Diagnostics.Debug.Assert(found,
+                "Active seam rows reference published graph nodes.");
+            ConsiderRule(
+                rule,
+                new NavigationMediumStateRef(
+                    seamSource,
+                    rule.SourceMedium),
+                seam.Destination,
+                ref _hasScannedRule,
+                ref _scannedRule,
+                ref _scannedRuleSource,
+                ref _scannedRuleAddress);
         }
 
         bool hasRule = _hasScannedRule;

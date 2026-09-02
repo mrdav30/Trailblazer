@@ -89,4 +89,61 @@ internal static class NavigationGuideStatusMapper
         NavigationAStarQueryStatus.Stale => NavigationGuideStatus.Stale,
         _ => NavigationGuideStatus.Stale
     };
+
+    internal static NavigationGuideStatus ToPublic(NavigationFlowQueryStatus status) => status switch
+    {
+        NavigationFlowQueryStatus.Success => NavigationGuideStatus.Success,
+        NavigationFlowQueryStatus.Unsupported => NavigationGuideStatus.Unsupported,
+        NavigationFlowQueryStatus.NoMap => NavigationGuideStatus.NoMap,
+        NavigationFlowQueryStatus.InvalidProfile => NavigationGuideStatus.InvalidProfile,
+        NavigationFlowQueryStatus.InvalidStart => NavigationGuideStatus.InvalidStart,
+        NavigationFlowQueryStatus.InvalidEnd => NavigationGuideStatus.InvalidEnd,
+        NavigationFlowQueryStatus.NoPath => NavigationGuideStatus.NoPath,
+        NavigationFlowQueryStatus.BudgetExceeded => NavigationGuideStatus.BudgetExceeded,
+        NavigationFlowQueryStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
+        NavigationFlowQueryStatus.CapacityExceeded => NavigationGuideStatus.CapacityExceeded,
+        NavigationFlowQueryStatus.Stale => NavigationGuideStatus.Stale,
+        _ => NavigationGuideStatus.Stale
+    };
+
+    internal static NavigationGuideStatus ToPublic(NavigationRayStatus status)
+    {
+        System.Diagnostics.Debug.Assert(status is
+            NavigationRayStatus.Blocked or
+            NavigationRayStatus.BudgetExceeded or
+            NavigationRayStatus.CostOverflow or
+            NavigationRayStatus.CapacityExceeded or
+            NavigationRayStatus.Stale,
+            "Ray recovery maps only terminal statuses not handled by its caller.");
+        return status switch
+        {
+            NavigationRayStatus.Blocked => NavigationGuideStatus.LocalRecoveryRequired,
+            NavigationRayStatus.BudgetExceeded => NavigationGuideStatus.BudgetExceeded,
+            NavigationRayStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
+            NavigationRayStatus.CapacityExceeded => NavigationGuideStatus.CapacityExceeded,
+            _ => NavigationGuideStatus.Stale
+        };
+    }
+
+    internal static NavigationFlowFieldStatus ToFlowField(
+        NavigationTraversalEdgeAdvanceStatus status)
+    {
+        System.Diagnostics.Debug.Assert(status is
+            NavigationTraversalEdgeAdvanceStatus.Complete or
+            NavigationTraversalEdgeAdvanceStatus.BudgetExceeded or
+            NavigationTraversalEdgeAdvanceStatus.CostOverflow or
+            NavigationTraversalEdgeAdvanceStatus.CapacityExceeded or
+            NavigationTraversalEdgeAdvanceStatus.Stale,
+            "Flow traversal maps only terminal statuses not handled by its caller.");
+        return status switch
+        {
+            NavigationTraversalEdgeAdvanceStatus.BudgetExceeded =>
+                NavigationFlowFieldStatus.BudgetExceeded,
+            NavigationTraversalEdgeAdvanceStatus.CostOverflow =>
+                NavigationFlowFieldStatus.CostOverflow,
+            NavigationTraversalEdgeAdvanceStatus.CapacityExceeded =>
+                NavigationFlowFieldStatus.CapacityExceeded,
+            _ => NavigationFlowFieldStatus.Stale
+        };
+    }
 }

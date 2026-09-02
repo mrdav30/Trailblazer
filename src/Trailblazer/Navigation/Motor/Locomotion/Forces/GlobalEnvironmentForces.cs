@@ -46,10 +46,10 @@ public sealed class GlobalEnvironmentForces
     /// </summary>
     public Fixed64 TerminalVelocity;
 
-    internal GlobalEnvironmentForces(Fixed64? gravityForce = null, Fixed64? terminalVelocity = null)
+    internal GlobalEnvironmentForces()
     {
-        GravityForce = gravityForce ?? DefaultGravityForce;
-        TerminalVelocity = terminalVelocity ?? DefaultTerminalVelocity;
+        GravityForce = DefaultGravityForce;
+        TerminalVelocity = DefaultTerminalVelocity;
     }
 
     /// <summary>

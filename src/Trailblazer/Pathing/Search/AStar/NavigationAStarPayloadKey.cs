@@ -48,9 +48,6 @@ internal readonly struct NavigationAStarPayloadKey : IEquatable<NavigationAStarP
         && StartMedium == other.StartMedium
         && TargetMedia == other.TargetMedia;
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationAStarPayloadKey other && Equals(other);
-
     public override int GetHashCode()
     {
         int hash = SwiftHashTools.CombineHashCodes(Query.GetHashCode(), Start.GetHashCode());
@@ -59,11 +56,4 @@ internal readonly struct NavigationAStarPayloadKey : IEquatable<NavigationAStarP
         return SwiftHashTools.CombineHashCodes(hash, (int)TargetMedia);
     }
 
-    public static bool operator ==(
-        NavigationAStarPayloadKey left,
-        NavigationAStarPayloadKey right) => left.Equals(right);
-
-    public static bool operator !=(
-        NavigationAStarPayloadKey left,
-        NavigationAStarPayloadKey right) => !left.Equals(right);
 }

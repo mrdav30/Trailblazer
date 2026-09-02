@@ -138,31 +138,6 @@ internal sealed class TraversalTransitionRuleComparer : IComparer<TraversalTrans
 {
     internal static readonly TraversalTransitionRuleComparer Instance = new();
 
-    public int Compare(TraversalTransitionRule left, TraversalTransitionRule right)
-    {
-        int comparison = string.CompareOrdinal(left.Id, right.Id);
-        if (comparison != 0)
-            return comparison;
-        comparison = ((int)left.Type).CompareTo((int)right.Type);
-        if (comparison != 0)
-            return comparison;
-        comparison = ((int)left.SourceMedium).CompareTo((int)right.SourceMedium);
-        if (comparison != 0)
-            return comparison;
-        comparison = ((int)left.DestinationMedium).CompareTo((int)right.DestinationMedium);
-        if (comparison != 0)
-            return comparison;
-        comparison = ((int)left.Scope).CompareTo((int)right.Scope);
-        if (comparison != 0)
-            return comparison;
-        comparison = ((int)left.RequiredCapabilities).CompareTo((int)right.RequiredCapabilities);
-        if (comparison != 0)
-            return comparison;
-        comparison = left.ActionCost < right.ActionCost
-            ? -1
-            : left.ActionCost > right.ActionCost ? 1 : 0;
-        return comparison != 0
-            ? comparison
-            : ((int)left.LocomotionHints).CompareTo((int)right.LocomotionHints);
-    }
+    public int Compare(TraversalTransitionRule left, TraversalTransitionRule right) =>
+        string.CompareOrdinal(left.Id, right.Id);
 }

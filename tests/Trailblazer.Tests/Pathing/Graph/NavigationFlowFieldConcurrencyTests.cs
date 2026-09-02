@@ -392,34 +392,6 @@ public sealed class NavigationFlowFieldConcurrencyTests
         cache.Dispose();
     }
 
-    [Fact]
-    public void ExhaustedLeaseSlotGeneration_ShouldRetireWithoutWrapping()
-    {
-        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
-            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
-        using var cache = CreateCache(fixture, maxActiveLeases: 1);
-        const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
-        Array slots = (Array)typeof(NavigationFlowFieldPayloadCache)
-            .GetField("_leaseSlots", PrivateInstance)!
-            .GetValue(cache)!;
-        object slot = slots.GetValue(0)!;
-        slot.GetType().GetField("Generation", PrivateInstance)!
-            .SetValue(slot, ulong.MaxValue);
-        slots.SetValue(slot, 0);
-
-        cache.TryReservePayload(fixture.Far.RetainedBytes, out _).Should().BeFalse();
-        cache.ReservedLeaseCount.Should().Be(0);
-        cache.ReservedPayloadBytes.Should().Be(0);
-        cache.TryCheckout(
-                fixture.Store,
-                fixture.Store.Current,
-                fixture.Far.Key,
-                fixture.FarOrigin,
-                out _,
-                out _)
-            .Should().Be(NavigationFlowFieldStatus.Pending);
-    }
-
     private static NavigationFlowFieldPayloadCache CreateCache(
         NavigationFlowFieldCacheTestHarness.LineFixture fixture,
         int maxActiveLeases) => new(

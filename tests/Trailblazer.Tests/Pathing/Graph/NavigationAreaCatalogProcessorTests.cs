@@ -16,6 +16,58 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationAreaCatalogProcessorTests
 {
     [Fact]
+    public void PolicyPublicationLimits_ShouldRejectInvalidCountsWithoutChangingCatalog()
+    {
+        NavigationAreaPolicy twoRules = CreatePolicy("ground", 1, 2);
+
+        NavigationAreaCatalog.Empty.TryPublish(
+                twoRules,
+                maxPolicies: 1,
+                requiredRuleCount: 1,
+                maxRulesPerPolicy: 2,
+                maxRules: 2,
+                out NavigationAreaCatalog invalidShape)
+            .Should().Be(NavigationOperationRejection.ValidationFailed);
+        invalidShape.Should().BeSameAs(NavigationAreaCatalog.Empty);
+
+        NavigationAreaCatalog.Empty.TryPublish(
+                twoRules,
+                maxPolicies: 1,
+                requiredRuleCount: 2,
+                maxRulesPerPolicy: 1,
+                maxRules: 2,
+                out NavigationAreaCatalog oversizedPolicy)
+            .Should().Be(NavigationOperationRejection.CapacityExceeded);
+        oversizedPolicy.Should().BeSameAs(NavigationAreaCatalog.Empty);
+
+        NavigationAreaPolicy oneRule = CreatePolicy("ground", 1, 1);
+        NavigationAreaCatalog.Empty.TryPublish(
+                oneRule,
+                maxPolicies: 1,
+                requiredRuleCount: 1,
+                maxRulesPerPolicy: 2,
+                maxRules: 1,
+                out NavigationAreaCatalog current)
+            .Should().Be(NavigationOperationRejection.None);
+        NavigationAreaPolicy replacement = CreatePolicy("ground", 2, 2);
+
+        current.TryPublish(
+                replacement,
+                maxPolicies: 1,
+                requiredRuleCount: 2,
+                maxRulesPerPolicy: 2,
+                maxRules: 1,
+                out NavigationAreaCatalog overTotal)
+            .Should().Be(NavigationOperationRejection.CapacityExceeded);
+
+        overTotal.Should().BeSameAs(current);
+        current.Version.Should().Be(1);
+        current.TotalRuleCount.Should().Be(1);
+        current.TryGet(oneRule.Key, out NavigationAreaPolicy? retained).Should().BeTrue();
+        retained.Should().BeSameAs(oneRule);
+    }
+
+    [Fact]
     public void Prepare_ShouldMeterOneDeterministicEligiblePrefix()
     {
         TrailblazerWorldContextSettings settings = CreateSettings(
@@ -59,6 +111,37 @@ public sealed class NavigationAreaCatalogProcessorTests
         processor.PendingCount.Should().Be(0);
         processor.PendingRuleCount.Should().Be(0);
         processor.PendingRetainedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void Prepare_ShouldPublishAtMostTheConfiguredBatchPrefix()
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            navigationAreaCount: 1,
+            maxAreaPolicies: 2,
+            maxAreaRules: 2,
+            maxDependencyEntries: 8,
+            maxBatchItems: 1);
+        var processor = new NavigationAreaCatalogProcessor(settings);
+        var first = new NavigationAreaPolicyCommitOperation(CreatePolicy("a", 1, 1), 1, 1);
+        var second = new NavigationAreaPolicyCommitOperation(CreatePolicy("b", 1, 1), 2, 1);
+        processor.Admit(first).Should().BeTrue();
+        processor.Admit(second).Should().BeTrue();
+
+        NavigationAreaCatalogProcessor.PreparedFrame frame = processor.Prepare(
+            1,
+            NavigationAreaCatalog.Empty,
+            new MaintenanceWorkMeter(settings.MaintenanceBudget),
+            long.MaxValue,
+            int.MaxValue);
+
+        frame.Count.Should().Be(1,
+            "the configured publication prefix is an exact deterministic frame bound");
+        frame.Candidate.TryGet(first.Policy.Key, out _).Should().BeTrue();
+        frame.Candidate.TryGet(second.Policy.Key, out _).Should().BeFalse();
+        frame.Complete(1);
+        first.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        second.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
     }
 
     [Fact]
@@ -148,6 +231,58 @@ public sealed class NavigationAreaCatalogProcessorTests
         byteProcessor.Admit(overByteLimit).Should().BeFalse();
         overByteLimit.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
         byteProcessor.PendingRetainedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void AdmissionDescriptorCeiling_ShouldSaturateWithoutArithmeticOverflow()
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            navigationAreaCount: 1,
+            maxAreaPolicies: 1,
+            maxAreaRules: 1,
+            maxDependencyEntries: 3,
+            maxPendingDescriptorBytes: long.MaxValue);
+        var processor = new NavigationAreaCatalogProcessor(settings);
+        var operation = new NavigationAreaPolicyCommitOperation(
+            CreatePolicy("ground", 1, 1),
+            1,
+            1);
+
+        processor.Admit(operation).Should().BeTrue(
+            "adding the maximum rule allowance to an unbounded descriptor ceiling must saturate");
+        processor.PendingRetainedBytes.Should().Be(operation.Policy.RetainedBytes);
+    }
+
+    [Fact]
+    public void Prepare_ShouldRejectAPolicyThatFitsBytesButExceedsThePageCeiling()
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            navigationAreaCount: 1,
+            maxAreaPolicies: 1,
+            maxAreaRules: 1,
+            maxDependencyEntries: 3);
+        var processor = new NavigationAreaCatalogProcessor(settings);
+        var operation = new NavigationAreaPolicyCommitOperation(
+            CreatePolicy("ground", 1, 1),
+            1,
+            1);
+        processor.Admit(operation).Should().BeTrue();
+        NavigationAreaCatalog current = NavigationAreaCatalog.Empty;
+
+        NavigationAreaCatalogProcessor.PreparedFrame frame = processor.Prepare(
+            1,
+            current,
+            new MaintenanceWorkMeter(settings.MaintenanceBudget),
+            maxCatalogBytes: long.MaxValue,
+            maxCatalogPages: current.PersistentPageCount);
+
+        frame.Count.Should().Be(1);
+        frame.Candidate.Should().BeSameAs(current,
+            "an over-page candidate must not escape the prepared publication prefix");
+        frame.Complete(1);
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        processor.PendingCount.Should().Be(0);
     }
 
     [Fact]
@@ -312,7 +447,75 @@ public sealed class NavigationAreaCatalogProcessorTests
     }
 
     [Fact]
-    public void PermanentCapacity_ShouldTerminallyRejectPreparedPrefixAndReleaseAccounting()
+    public void Runtime_ShouldRetainAreaPolicyUntilLeasePressureClears()
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            navigationAreaCount: 1,
+            maxAreaPolicies: 1,
+            maxAreaRules: 1,
+            maxDependencyEntries: 3,
+            maxRetiredSnapshots: 0);
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
+            settings: settings);
+        using NavigationWorldGraphLease pressure =
+            context.Pathing.TryAcquireNavigationGraph()!;
+        var operation = new NavigationAreaPolicyCommitOperation(
+            CreatePolicy("leased", 1, 1),
+            publicationSequence: 1,
+            effectiveFrame: context.FrameCount + 1);
+
+        context.Pathing.Admit(operation).Should().BeTrue();
+        context.Simulate();
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Pending,
+            "transient snapshot pressure must not terminally reject prepared policy work");
+        context.Pathing.TryResolveNavigationAreaPolicy(operation.Policy.Key, out _)
+            .Should().BeFalse();
+        context.Pathing.GetNavigationGraphDiagnostics().PendingAreaPolicyCount.Should().Be(1);
+
+        pressure.Dispose();
+        context.Simulate();
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        context.Pathing.TryResolveNavigationAreaPolicy(
+                operation.Policy.Key,
+                out NavigationAreaPolicy? published)
+            .Should().BeTrue();
+        published.Should().BeSameAs(operation.Policy);
+        context.Pathing.GetNavigationGraphDiagnostics().PendingAreaPolicyCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(
+        (int)NavigationCandidatePublication.Published,
+        true,
+        (int)NavigationOperationStatus.Applied,
+        (int)NavigationOperationRejection.None,
+        0)]
+    [InlineData(
+        (int)NavigationCandidatePublication.PermanentCapacity,
+        true,
+        (int)NavigationOperationStatus.Rejected,
+        (int)NavigationOperationRejection.CapacityExceeded,
+        0)]
+    [InlineData(
+        (int)NavigationCandidatePublication.Deferred,
+        true,
+        (int)NavigationOperationStatus.Pending,
+        (int)NavigationOperationRejection.None,
+        1)]
+    [InlineData(
+        (int)NavigationCandidatePublication.Published,
+        false,
+        (int)NavigationOperationStatus.Pending,
+        (int)NavigationOperationRejection.None,
+        1)]
+    public void RuntimePolicyFrameCompletion_ShouldFollowPublicationDisposition(
+        int publicationValue,
+        bool policyPrepared,
+        int expectedStatusValue,
+        int expectedRejectionValue,
+        int expectedPendingCount)
     {
         TrailblazerWorldContextSettings settings = CreateSettings(
             navigationAreaCount: 1,
@@ -330,13 +533,61 @@ public sealed class NavigationAreaCatalogProcessorTests
             long.MaxValue,
             int.MaxValue);
 
+        NavigationGraphRuntime.CompletePolicyFrame(
+            frame,
+            1,
+            policyPrepared,
+            (NavigationCandidatePublication)publicationValue);
+
+        operation.Receipt.Status.Should().Be((NavigationOperationStatus)expectedStatusValue);
+        operation.Receipt.Rejection.Should().Be(
+            (NavigationOperationRejection)expectedRejectionValue);
+        processor.PendingCount.Should().Be(expectedPendingCount);
+        if (expectedPendingCount == 0)
+        {
+            processor.PendingRuleCount.Should().Be(0);
+            processor.PendingRetainedBytes.Should().Be(0);
+        }
+    }
+
+    [Fact]
+    public void PermanentCapacity_ShouldPreserveAnEarlierSemanticRejection()
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            navigationAreaCount: 1,
+            maxAreaPolicies: 1,
+            maxAreaRules: 1,
+            maxDependencyEntries: 3);
+        NavigationAreaPolicy existing = CreatePolicy("ground", 1, 1);
+        NavigationAreaCatalog.Empty.TryPublish(
+                existing,
+                1,
+                1,
+                1,
+                1,
+                out NavigationAreaCatalog current)
+            .Should().Be(NavigationOperationRejection.None);
+        var conflictingRules = new[] { new NavigationAreaRule(false, Fixed64.One) };
+        var conflict = new NavigationAreaPolicyCommitOperation(
+            new NavigationAreaPolicy(existing.Key, conflictingRules),
+            1,
+            1);
+        var processor = new NavigationAreaCatalogProcessor(settings);
+        processor.Admit(conflict).Should().BeTrue();
+        NavigationAreaCatalogProcessor.PreparedFrame frame = processor.Prepare(
+            1,
+            current,
+            new MaintenanceWorkMeter(settings.MaintenanceBudget),
+            long.MaxValue,
+            int.MaxValue);
+
+        frame.Count.Should().Be(1);
+        frame.Candidate.Should().BeSameAs(current);
         frame.CompleteCapacityRejected();
 
-        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
-        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
-        processor.PendingCount.Should().Be(0);
-        processor.PendingRuleCount.Should().Be(0);
-        processor.PendingRetainedBytes.Should().Be(0);
+        conflict.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        conflict.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed,
+            "a later runtime capacity decision must not erase the prepared semantic failure");
     }
 
     [Fact]
@@ -358,6 +609,73 @@ public sealed class NavigationAreaCatalogProcessorTests
             NavigationWorldGraph.Empty.RetainedBytes + operation.Policy.RetainedBytes);
     }
 
+    [Fact]
+    public void AdmissionStateMachine_ShouldRejectEachInvalidOrderingWithoutRetainingIt()
+    {
+        TrailblazerWorldContextSettings settings = CreateSettings(
+            navigationAreaCount: 1,
+            maxAreaPolicies: 2,
+            maxAreaRules: 2,
+            maxDependencyEntries: 5,
+            maxPendingOperations: 1);
+        var processor = new NavigationAreaCatalogProcessor(settings);
+        var accepted = new NavigationAreaPolicyCommitOperation(CreatePolicy("accepted", 1, 1), 10, 5);
+        processor.Admit(accepted).Should().BeTrue();
+
+        processor.Admit(accepted).Should().BeFalse(
+            "an already-claimed receipt cannot be admitted twice");
+
+        AssertRejected(
+            processor,
+            new NavigationAreaPolicyCommitOperation(CreatePolicy("duplicate", 1, 1), 10, 5),
+            NavigationOperationRejection.DuplicateSequence);
+        AssertRejected(
+            processor,
+            new NavigationAreaPolicyCommitOperation(CreatePolicy("regressing", 1, 1), 9, 5),
+            NavigationOperationRejection.RegressingSequence);
+        AssertRejected(
+            processor,
+            new NavigationAreaPolicyCommitOperation(CreatePolicy("old-frame", 1, 1), 11, 4),
+            NavigationOperationRejection.RegressingEffectiveFrame);
+
+        NavigationAreaCatalogProcessor.PreparedFrame frame = processor.Prepare(
+            5,
+            NavigationAreaCatalog.Empty,
+            new MaintenanceWorkMeter(settings.MaintenanceBudget),
+            long.MaxValue,
+            int.MaxValue);
+        frame.Complete(5);
+        AssertRejected(
+            processor,
+            new NavigationAreaPolicyCommitOperation(CreatePolicy("late", 1, 1), 12, 5),
+            NavigationOperationRejection.LateEffectiveFrame);
+        AssertRejected(
+            processor,
+            new NavigationAreaPolicyCommitOperation(CreatePolicy("wrong-shape", 1, 2), 13, 6),
+            NavigationOperationRejection.ValidationFailed);
+
+        var retained = new NavigationAreaPolicyCommitOperation(CreatePolicy("retained", 1, 1), 14, 7);
+        processor.Admit(retained).Should().BeTrue();
+        AssertRejected(
+            processor,
+            new NavigationAreaPolicyCommitOperation(CreatePolicy("queue-full", 1, 1), 15, 7),
+            NavigationOperationRejection.CapacityExceeded);
+
+        processor.PendingCount.Should().Be(1);
+        processor.PendingRuleCount.Should().Be(1);
+        processor.PendingRetainedBytes.Should().Be(retained.Policy.RetainedBytes);
+    }
+
+    private static void AssertRejected(
+        NavigationAreaCatalogProcessor processor,
+        NavigationAreaPolicyCommitOperation operation,
+        NavigationOperationRejection expected)
+    {
+        processor.Admit(operation).Should().BeFalse();
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(expected);
+    }
+
     private static NavigationAreaPolicy CreatePolicy(string id, long revision, int ruleCount)
     {
         var rules = new NavigationAreaRule[ruleCount];
@@ -372,15 +690,18 @@ public sealed class NavigationAreaCatalogProcessorTests
         int maxAreaRules,
         int maxDependencyEntries,
         long maxPendingDescriptorBytes = 1_048_576,
-        long? maxActiveSnapshotBytes = null)
+        long? maxActiveSnapshotBytes = null,
+        int? maxRetiredSnapshots = null,
+        int? maxPendingOperations = null,
+        int? maxBatchItems = null)
     {
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         NavigationOperationLimits limits = defaults.OperationLimits;
         var operationLimits = new NavigationOperationLimits(
-            limits.MaxPendingOperations,
+            maxPendingOperations ?? limits.MaxPendingOperations,
             maxPendingDescriptorBytes,
             limits.MaxPreparedMapBytes,
-            limits.MaxBatchItems,
+            maxBatchItems ?? limits.MaxBatchItems,
             limits.MaxBatchDescriptorBytes,
             limits.MaxBatchSortScratchBytes,
             limits.MaxCorridorCells,
@@ -412,7 +733,7 @@ public sealed class NavigationAreaCatalogProcessorTests
             defaults.MaxIngressBytes,
             defaults.MaxActiveSnapshots,
             maxActiveSnapshotBytes ?? defaults.MaxActiveSnapshotBytes,
-            defaults.MaxRetiredSnapshots,
+            maxRetiredSnapshots ?? defaults.MaxRetiredSnapshots,
             defaults.MaxRetiredSnapshotBytes,
             defaults.MaxPersistentGraphPages,
             defaults.MaxDynamicCellSlotsPerMap,

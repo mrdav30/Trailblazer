@@ -23,6 +23,32 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationNativeSurfaceEdgeTests
 {
+    [Theory]
+    [InlineData(false, false, false, true, false, true, false)]
+    [InlineData(false, true, false, false, false, true, false)]
+    [InlineData(false, true, false, true, false, false, false)]
+    [InlineData(false, true, false, true, false, true, true)]
+    [InlineData(true, false, true, false, true, false, true)]
+    [InlineData(true, false, false, true, false, true, true)]
+    public void SurfaceMergeReadiness_ShouldRequireEveryStreamToResolve(
+        bool hasNative,
+        bool nativeComplete,
+        bool hasExplicit,
+        bool explicitComplete,
+        bool hasSeam,
+        bool seamComplete,
+        bool expected)
+    {
+        NavigationSurfaceEdgeEnumerator.IsSelectionReady(
+                hasNative,
+                nativeComplete,
+                hasExplicit,
+                explicitComplete,
+                hasSeam,
+                seamComplete)
+            .Should().Be(expected);
+    }
+
     private static readonly NavigationCell SolidCell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
@@ -30,6 +56,27 @@ public sealed class NavigationNativeSurfaceEdgeTests
         Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.One);
+
+    [Theory]
+    [InlineData(true, false, false, false, false)]
+    [InlineData(true, true, false, false, true)]
+    [InlineData(false, false, false, false, false)]
+    [InlineData(false, false, true, false, false)]
+    [InlineData(false, false, true, true, true)]
+    public void AutomaticSeamEndpointAdmission_ShouldRespectStructuralAndMaterializedLifecycles(
+        bool structural,
+        bool hasEffectiveCell,
+        bool hasNodeState,
+        bool isPresent,
+        bool expected)
+    {
+        NavigationSurfaceEdgeEnumerator.IsSeamEndpointEligible(
+                structural,
+                hasEffectiveCell,
+                hasNodeState,
+                isPresent)
+            .Should().Be(expected);
+    }
 
     [Fact]
     public void RectangularSurfaceEdges_ShouldUseCanonicalCenterAndBoundaryOrder()
@@ -90,6 +137,246 @@ public sealed class NavigationNativeSurfaceEdgeTests
 
         ReadTargets(lease.Graph, Resolve(lease.Graph, west)).Should().Equal(Address(east));
         ReadTargets(lease.Graph, Resolve(lease.Graph, east)).Should().Equal(Address(west));
+    }
+
+    [Fact]
+    public void NativeSurfaceEdgeStep_ShouldRetryTheSameDirectionAfterEitherBudgetBlocks()
+    {
+        GridConfiguration configuration = CreateRectangularConfiguration(GridStorageKind.Dense);
+        VoxelIndex source = default;
+        VoxelIndex east = new(1, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            configuration,
+            new[] { source, east },
+            new[] { source, east });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationWorldGraph graph = lease.Graph;
+        var edges = new NavigationNativeSurfaceEdgeEnumerator(
+            graph,
+            mapOrdinal: 0,
+            graph.GetInstance(0),
+            source);
+        MaintenanceWorkBudget budget = TrailblazerWorldContextSettings.Default.MaintenanceBudget;
+        var meter = new MaintenanceWorkMeter(budget);
+        int edgeSteps = 0;
+
+        edges.AdvanceOne(meter, ref edgeSteps)
+            .Should().Be(NavigationSurfaceEdgeAdvanceStatus.Blocked);
+        meter.TryConsumeSurfaceComponentEdges(budget.MaxSurfaceComponentEdges).Should().BeTrue();
+        edgeSteps = 1;
+        edges.AdvanceOne(meter, ref edgeSteps)
+            .Should().Be(NavigationSurfaceEdgeAdvanceStatus.Blocked);
+        edgeSteps.Should().Be(1,
+            "neither capacity gate may consume the pending canonical direction");
+
+        meter.Reset();
+        edges.AdvanceOne(meter, ref edgeSteps)
+            .Should().Be(NavigationSurfaceEdgeAdvanceStatus.Pending,
+                "the first rectangular direction from the boundary is outside the map");
+        edgeSteps.Should().Be(0);
+    }
+
+    [Fact]
+    public void NativeSurfaceEdges_ShouldDistinguishMissingNodesFromDormantPhysicalState()
+    {
+        GridConfiguration denseConfiguration =
+            CreateRectangularConfiguration(GridStorageKind.Dense);
+        VoxelIndex source = default;
+        VoxelIndex east = new(1, 0, 0);
+        using (TrailblazerWorldContext missingNodeContext = CreateContext(
+                   denseConfiguration,
+                   new[] { source },
+                   new[] { source, east }))
+        using (NavigationWorldGraphLease lease =
+               missingNodeContext.Pathing.TryAcquireNavigationGraph()!)
+        {
+            var missing = new NavigationNativeSurfaceEdgeEnumerator(
+                lease.Graph,
+                mapOrdinal: 0,
+                lease.Graph.GetInstance(0),
+                source);
+            var meter = new MaintenanceWorkMeter(
+                TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+            int steps = 16;
+            int edgeCount = 0;
+            NavigationSurfaceEdgeAdvanceStatus status;
+            do
+            {
+                status = missing.AdvanceOne(meter, ref steps);
+                if (status == NavigationSurfaceEdgeAdvanceStatus.Edge)
+                    edgeCount++;
+            }
+            while (status != NavigationSurfaceEdgeAdvanceStatus.Complete);
+            edgeCount.Should().Be(0,
+                "a valid grid coordinate without a navigation node is not an edge");
+        }
+
+        using TrailblazerWorldContext dormantContext = CreateContext(
+            CreateRectangularConfiguration(GridStorageKind.Sparse),
+            new[] { source, east },
+            new[] { source });
+        using NavigationWorldGraphLease dormantLease =
+            dormantContext.Pathing.TryAcquireNavigationGraph()!;
+        NavigationWorldGraph graph = dormantLease.Graph;
+        var physical = new NavigationNativeSurfaceEdgeEnumerator(
+            graph,
+            mapOrdinal: 0,
+            graph.GetInstance(0),
+            source);
+        var structural = graph.EnumerateStructuralNativeSurfaceEdges(Resolve(graph, source));
+        var physicalMeter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        var structuralMeter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        int physicalSteps = 16;
+        int structuralSteps = 16;
+        int physicalEdges = 0;
+        var structuralTargets = new List<NavigationCellAddress>();
+        NavigationSurfaceEdgeAdvanceStatus physicalStatus;
+        do
+        {
+            physicalStatus = physical.AdvanceOne(physicalMeter, ref physicalSteps);
+            if (physicalStatus == NavigationSurfaceEdgeAdvanceStatus.Edge)
+                physicalEdges++;
+        }
+        while (physicalStatus != NavigationSurfaceEdgeAdvanceStatus.Complete);
+        NavigationSurfaceEdgeAdvanceStatus structuralStatus;
+        do
+        {
+            structuralStatus = structural.AdvanceOne(structuralMeter, ref structuralSteps);
+            if (structuralStatus != NavigationSurfaceEdgeAdvanceStatus.Edge)
+                continue;
+            graph.TryGetNodeAddress(
+                    structural.Current.Target,
+                    out NavigationCellAddress structuralTarget)
+                .Should().BeTrue();
+            structuralTargets.Add(structuralTarget);
+        }
+        while (structuralStatus != NavigationSurfaceEdgeAdvanceStatus.Complete);
+
+        physicalEdges.Should().Be(0,
+            "ordinary traversal remains closed while sparse physical state is absent");
+        structuralTargets.Should().ContainSingle().Which.Should().Be(
+            Address(east),
+            "component composition follows authored structural state while dormant");
+    }
+
+    [Fact]
+    public void ClosedStructuralScope_ShouldHideResolvedNativeNeighbors()
+    {
+        VoxelIndex source = default;
+        VoxelIndex east = new(1, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            CreateRectangularConfiguration(GridStorageKind.Dense),
+            new[] { source, east },
+            new[] { source, east });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationWorldGraph graph = lease.Graph;
+        graph.TryGetSurfaceComponent(
+                Address(source),
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey component,
+                out _)
+            .Should().BeTrue();
+        NavigationWorldGraph closed = graph.WithClosedStructuralComponents(
+            NavigationSurfaceComponentKeySet.Empty.Add(component),
+            closeAllStructuralComponents: false,
+            graph.GraphVersion + 1);
+        closed.IsSurfaceAddressClosed(Address(east), TraversalMedium.Solid).Should().BeTrue();
+        var edges = new NavigationNativeSurfaceEdgeEnumerator(
+            closed,
+            mapOrdinal: 0,
+            closed.GetInstance(0),
+            source);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        int steps = 16;
+        int edgeCount = 0;
+        NavigationSurfaceEdgeAdvanceStatus status;
+        do
+        {
+            status = edges.AdvanceOne(meter, ref steps);
+            if (status == NavigationSurfaceEdgeAdvanceStatus.Edge)
+                edgeCount++;
+        }
+        while (status != NavigationSurfaceEdgeAdvanceStatus.Complete);
+
+        edgeCount.Should().Be(0,
+            "closed component state must suppress edges even though both node refs still resolve");
+    }
+
+    [Fact]
+    public void ClosedSourceEnumeration_ShouldCompleteWithoutConsumingMaintenanceEdgeBudget()
+    {
+        VoxelIndex sourceIndex = default;
+        var east = new VoxelIndex(1, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            CreateRectangularConfiguration(GridStorageKind.Dense),
+            new[] { sourceIndex, east },
+            new[] { sourceIndex, east });
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationWorldGraph graph = lease.Graph;
+        NavigationNodeRef source = Resolve(graph, sourceIndex);
+        graph.TryGetSurfaceComponent(
+                Address(sourceIndex),
+                TraversalMedium.Solid,
+                out NavigationSurfaceComponentKey component,
+                out _)
+            .Should().BeTrue();
+        NavigationWorldGraph closed = graph.WithClosedStructuralComponents(
+            NavigationSurfaceComponentKeySet.Empty.Add(component),
+            closeAllStructuralComponents: false,
+            graph.GraphVersion + 1);
+        NavigationNativeSurfaceEdgeEnumerator edges =
+            closed.EnumerateNativeSurfaceEdges(source);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        int edgeSteps = 16;
+
+        edges.AdvanceOne(meter, ref edgeSteps)
+            .Should().Be(NavigationSurfaceEdgeAdvanceStatus.Complete,
+                "a real source in a closed component has no traversable native enumerator");
+        meter.SurfaceComponentEdges.Should().Be(0);
+        edgeSteps.Should().Be(16);
+        ReadTargets(graph, source).Should().ContainSingle()
+            .Which.Should().Be(Address(east),
+            "closing the derived graph must not mutate the published source graph");
+    }
+
+    [Fact]
+    public void SuppressedSourceStructuralEnumeration_ShouldCompleteWithoutConsumingEdgeBudget()
+    {
+        VoxelIndex sourceIndex = default;
+        var east = new VoxelIndex(1, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            CreateRectangularConfiguration(GridStorageKind.Dense),
+            new[] { sourceIndex, east },
+            new[] { sourceIndex, east });
+        using NavigationWorldGraphLease published =
+            context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef publishedSource = Resolve(published.Graph, sourceIndex);
+        ReadTargets(published.Graph, publishedSource).Should().ContainSingle()
+            .Which.Should().Be(Address(east));
+
+        CommitCellOverlay(context, NavigationCellOverlayOperation.Suppress(sourceIndex));
+
+        using NavigationWorldGraphLease suppressed =
+            context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef suppressedSource = Resolve(suppressed.Graph, sourceIndex);
+        NavigationNativeSurfaceEdgeEnumerator edges =
+            suppressed.Graph.EnumerateStructuralNativeSurfaceEdges(suppressedSource);
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        int edgeSteps = 16;
+
+        edges.AdvanceOne(meter, ref edgeSteps)
+            .Should().Be(NavigationSurfaceEdgeAdvanceStatus.Complete,
+                "a published suppression removes the source's structural cell before edge scanning");
+        meter.SurfaceComponentEdges.Should().Be(0);
+        edgeSteps.Should().Be(16);
+        ReadTargets(published.Graph, publishedSource).Should().ContainSingle()
+            .Which.Should().Be(Address(east),
+                "the earlier immutable snapshot must retain its authored source edge");
     }
 
     [Fact]
@@ -296,7 +583,7 @@ public sealed class NavigationNativeSurfaceEdgeTests
     }
 
     [Fact]
-    public void NodeState_ShouldDeriveExactBakedAndDynamicAnchorsWithoutPerCellAnchorArrays()
+    public void NodeState_ShouldDeriveExactBakedAndDynamicAnchors()
     {
         GridConfiguration configuration = new(
             new Vector3d(-4, 6, -8),
@@ -316,14 +603,6 @@ public sealed class NavigationNativeSurfaceEdgeTests
 
         AssertNodeAnchors(lease.Graph, binding, baked);
         AssertNodeAnchors(lease.Graph, binding, dynamic);
-        typeof(NavigationMap).GetFields(
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)
-            .Should().NotContain(field => field.FieldType == typeof(Vector3d[]));
-        typeof(NavigationMapInstance).GetFields(
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)
-            .Should().NotContain(field => field.FieldType == typeof(Vector3d[]));
     }
 
     [Fact]

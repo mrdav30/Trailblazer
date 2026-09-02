@@ -35,6 +35,126 @@ public sealed class NavigationAStarAdmissionTests
         Fixed64.One);
 
     [Fact]
+    public void GateDispose_ShouldCancelActiveWorkAndRemainIdempotent()
+    {
+        using var world = new GridWorld();
+        using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
+        NavigationAStarAdmissionGate gate = CreateGate(
+            world,
+            store,
+            CreateLimits(maxBatchItems: 1, maxConcurrentQueries: 1));
+        gate.Begin(Query(maxExpandedNodes: 0), out NavigationAStarBatchWork work)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+        store.ActiveLeaseCount.Should().Be(1);
+
+        gate.Dispose();
+        gate.Dispose();
+
+        store.ActiveLeaseCount.Should().Be(0);
+        FluentActions.Invoking(() => work.GetStatus(0))
+            .Should().Throw<ObjectDisposedException>();
+        gate.Begin(Query(maxExpandedNodes: 0), out NavigationAStarBatchWork rejected)
+            .Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
+        rejected.Should().Be(default(NavigationAStarBatchWork));
+    }
+
+    [Fact]
+    public void AdvanceSearch_BeforeSequentialAdmissionCompletes_ShouldRejectPhaseViolation()
+    {
+        using var world = new GridWorld();
+        using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
+        using NavigationAStarAdmissionGate gate = CreateGate(
+            world,
+            store,
+            CreateLimits(maxBatchItems: 1, maxConcurrentQueries: 1));
+        gate.Begin(Query(maxExpandedNodes: 0), out NavigationAStarBatchWork work)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+        using (work)
+        {
+            Action advance = () => work.AdvanceSearch(
+                inputIndex: 0,
+                lookupStepLimit: 1,
+                nodeStepLimit: 1,
+                edgeStepLimit: 1,
+                connectionStepLimit: 1);
+
+            advance.Should().ThrowExactly<InvalidOperationException>();
+            work.GetStatus(0).Should().Be(NavigationAStarQueryStatus.Pending);
+        }
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void PayloadCache_ShouldRejectNegativeByteCeilings(int ceiling)
+    {
+        using var world = new GridWorld();
+        long maxReusableBytes = ceiling == 0 ? -1 : 0;
+        long maxSinglePayloadBytes = ceiling == 1 ? -1 : 0;
+        long maxActivePayloadBytes = ceiling == 2 ? -1 : 0;
+
+        Action construct = () => _ = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 0,
+            maxReusableBytes,
+            maxSinglePayloadBytes,
+            maxActivePayloadBytes,
+            maxActiveLeases: 0);
+
+        construct.Should().ThrowExactly<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void PayloadReservation_ShouldRejectNegativeByteCeiling()
+    {
+        using var world = new GridWorld();
+        var cache = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 0,
+            maxReusableBytes: 0,
+            maxSinglePayloadBytes: 0,
+            maxActivePayloadBytes: 0,
+            maxActiveLeases: 0);
+
+        Action reserve = () => cache.TryReservePayload(-1, out _);
+
+        reserve.Should().ThrowExactly<ArgumentOutOfRangeException>();
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void QueryWorkBeginReserved_WithoutReservation_ShouldPreserveCallerLease()
+    {
+        using var world = new GridWorld();
+        using NavigationWorldGraphStore store = CreateStore(maxConcurrentLeases: 1);
+        var workspace = new NavigationAStarWorkspace(1, 2, 2, 2, 2, 2, 2);
+        var cache = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 0,
+            maxReusableBytes: 0,
+            maxSinglePayloadBytes: 0,
+            maxActivePayloadBytes: 0,
+            maxActiveLeases: 1);
+        using var work = new NavigationAStarQueryWork(world, store, workspace, cache);
+        using NavigationWorldGraphLease lease = store.TryAcquire()!;
+        NavigationAStarPayloadReservation reservation = default;
+
+        Action begin = () => work.BeginReserved(
+            Query(maxExpandedNodes: 0),
+            lease,
+            ref reservation);
+
+        begin.Should().ThrowExactly<ArgumentException>();
+        store.ActiveLeaseCount.Should().Be(1,
+            "ownership cannot transfer when the required cache reservation is absent");
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Fact]
     public void DefaultLimits_ShouldReserveTheExactCapacityEnvelope()
     {
         using var world = new GridWorld();
@@ -110,6 +230,11 @@ public sealed class NavigationAStarAdmissionTests
             .Should().Be(NavigationAStarQueryStatus.Pending);
         rejected.AdmittedCount.Should().Be(0);
         rejected.GetStatus(0).Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
+        rejected.IsReadyToPublish(0).Should().BeTrue();
+        rejected.AdvanceSearch(0, 0, 0, 0, 0)
+            .Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
+        FluentActions.Invoking(() => rejected.TakeResult(0))
+            .Should().Throw<InvalidOperationException>();
         rejected.Dispose();
         store.ActiveLeaseCount.Should().Be(0);
 
@@ -140,6 +265,55 @@ public sealed class NavigationAStarAdmissionTests
         cache.ReleasePayloadReservation(ref first);
         cache.TryReservePayload(1_024, out second).Should().BeTrue();
         cache.ReleasePayloadReservation(ref second);
+    }
+
+    [Fact]
+    public void CopiedReleasedReservation_ShouldNotReleaseItsReplacement()
+    {
+        using var world = new GridWorld();
+        var cache = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: 1_024,
+            maxSinglePayloadBytes: 1_024,
+            maxActivePayloadBytes: 1_024,
+            maxActiveLeases: 1);
+        var otherCache = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: 1_024,
+            maxSinglePayloadBytes: 1_024,
+            maxActivePayloadBytes: 1_024,
+            maxActiveLeases: 1);
+        cache.TryReservePayload(
+                1_024,
+                out NavigationAStarPayloadReservation first)
+            .Should().BeTrue();
+        NavigationAStarPayloadReservation staleCopy = first;
+        cache.ReleasePayloadReservation(ref first);
+        cache.TryReservePayload(
+                1_024,
+                out NavigationAStarPayloadReservation replacement)
+            .Should().BeTrue();
+
+        otherCache.ReleasePayloadReservation(ref replacement);
+        replacement.HasLeaseSlot.Should().BeTrue(
+            "a different cache cannot consume the live reservation");
+        cache.ReleasePayloadReservation(ref staleCopy);
+        cache.ReservedLeaseCount.Should().Be(1,
+            "the stale generation cannot consume the rebound slot");
+        cache.ReservedPayloadBytes.Should().Be(1_024);
+        cache.TryReservePayload(1, out _).Should().BeFalse(
+            "the live replacement must continue to own the only slot");
+
+        cache.ReleasePayloadReservation(ref replacement);
+        cache.TryReservePayload(
+                1_024,
+                out NavigationAStarPayloadReservation final)
+            .Should().BeTrue();
+        cache.ReleasePayloadReservation(ref final);
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
     }
 
     [Fact]
@@ -623,9 +797,20 @@ public sealed class NavigationAStarAdmissionTests
             workspace,
             cache))
         {
+            seed.AdvanceSearch(1, 1, 1, 1)
+                .Should().Be(NavigationAStarQueryStatus.Pending);
+            cache.ReservedLeaseCount.Should().Be(1,
+                "search cannot publish or consume its reservation before endpoint preparation");
             DrainQuery(seed);
             seed.Status.Should().Be(NavigationAStarQueryStatus.Success);
             seed.TakeResult().Dispose();
+            seed.PrepareSearchOrCheckout(1, 1)
+                .Should().Be(NavigationAStarQueryStatus.Success);
+            seed.AdvanceSearch(1, 1, 1, 1)
+                .Should().Be(NavigationAStarQueryStatus.Success);
+            seed.Publish().Should().Be(NavigationAStarQueryStatus.Success);
+            store.ActiveLeaseCount.Should().Be(0,
+                "terminal query phases must not reacquire the graph snapshot");
         }
         cache.Count.Should().Be(1);
 
@@ -647,6 +832,89 @@ public sealed class NavigationAStarAdmissionTests
         cache.Count.Should().Be(0,
             "the stale exact hit must not survive for another checkout");
         cache.DetachedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void Publication_ShouldReplaceAStaleIncumbentWithTheCurrentPayload()
+    {
+        using var world = new GridWorld();
+        NavigationWorldGraph graph = CreateLineGraph(
+            world,
+            out Vector3d start,
+            out Vector3d end);
+        using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        long maximumPayloadBytes = NavigationAStarPayload.GetMaximumRetainedBytes(
+            workspace.GuidePoints.Length,
+            workspace.PathNodes.Length - 1,
+            workspace.EndpointComponents.Length,
+            workspace.EndpointPages.Length);
+        var cache = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: maximumPayloadBytes,
+            maxSinglePayloadBytes: maximumPayloadBytes,
+            maxActivePayloadBytes: maximumPayloadBytes,
+            maxActiveLeases: 1);
+        PathQuery query = Query(start, end, maxExpandedNodes: 2);
+        using (NavigationAStarQueryWork seed = BeginReservedQuery(
+            world,
+            store,
+            query,
+            workspace,
+            cache))
+        {
+            DrainQuery(seed);
+            seed.Status.Should().Be(NavigationAStarQueryStatus.Success);
+            seed.TakeResult().Dispose();
+        }
+        cache.Count.Should().Be(1);
+
+        NavigationWorldGraph newerBase = graph.WithGraphVersion(graph.GraphVersion + 1);
+        NavigationWorldGraph newer = newerBase.WithSurfaceComponents(
+            NavigationSurfaceComponentTestFactory.Build(newerBase));
+        using NavigationWorldGraphStore newerStore = CreateStore(
+            newer,
+            maxConcurrentLeases: 1);
+        var newerWorkspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        var newerCache = new NavigationAStarPayloadCache(
+            world,
+            maxEntries: 1,
+            maxReusableBytes: maximumPayloadBytes,
+            maxSinglePayloadBytes: maximumPayloadBytes,
+            maxActivePayloadBytes: maximumPayloadBytes,
+            maxActiveLeases: 1);
+        NavigationAStarPayload newerPayload;
+        using (NavigationAStarQueryWork current = BeginReservedQuery(
+            world,
+            newerStore,
+            query,
+            newerWorkspace,
+            newerCache))
+        {
+            DrainQuery(current);
+            current.Status.Should().Be(NavigationAStarQueryStatus.Success);
+            NavigationAStarPayloadLease result = current.TakeResult();
+            newerPayload = result.Payload;
+            result.Dispose();
+        }
+        store.TryPublish(newer).Should().Be(NavigationCandidatePublication.Published);
+        cache.TryReservePayload(
+                maximumPayloadBytes,
+                out NavigationAStarPayloadReservation reservation)
+            .Should().BeTrue();
+
+        cache.TryPublish(
+                newerPayload,
+                store,
+                ref reservation,
+                out NavigationAStarPayloadLease published)
+            .Should().BeTrue();
+
+        published.Payload.Should().BeSameAs(newerPayload,
+            "a dependency-stale incumbent must not suppress the current same-key payload");
+        cache.Count.Should().Be(1);
+        published.Dispose();
     }
 
     [Fact]

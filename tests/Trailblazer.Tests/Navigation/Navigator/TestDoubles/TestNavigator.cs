@@ -33,6 +33,19 @@ internal sealed class TestNavigator : Navigator
         _speed = velocity.Magnitude;
     }
 
+    public void ConfigurePartialControllerShell(
+        bool includeSteering,
+        bool includeTurning,
+        bool includeMotor)
+    {
+        if (!includeSteering)
+            _steering = null;
+        if (!includeTurning)
+            _turning = null;
+        if (!includeMotor)
+            _motor = null;
+    }
+
     public bool ApplyHeightmapGrounding(
         bool updateMotorState = false,
         Fixed64? surfaceFriction = null,

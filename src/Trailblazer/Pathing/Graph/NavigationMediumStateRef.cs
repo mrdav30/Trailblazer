@@ -43,17 +43,7 @@ internal readonly struct NavigationMediumStateRef :
     public bool Equals(NavigationMediumStateRef other) =>
         Node.Equals(other.Node) && Medium == other.Medium;
 
-    public override bool Equals(object? obj) =>
-        obj is NavigationMediumStateRef other && Equals(other);
-
     public override int GetHashCode() =>
         SwiftHashTools.CombineHashCodes(Node.GetHashCode(), (int)Medium);
 
-    public static bool operator ==(
-        NavigationMediumStateRef left,
-        NavigationMediumStateRef right) => left.Equals(right);
-
-    public static bool operator !=(
-        NavigationMediumStateRef left,
-        NavigationMediumStateRef right) => !left.Equals(right);
 }

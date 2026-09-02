@@ -188,9 +188,9 @@ public partial class NavSteering : IRecordable
             || _navigationFlowFieldLease != null);
 
     internal NavigationGuideStatus PendingTransitionGuideStatus =>
-        _navigationGuideLease?.Status
-        ?? _navigationFlowFieldLease?.Status
-        ?? NavigationGuideStatus.Stale;
+        _currentQuery!.Value.Algorithm == PathAlgorithm.AStar
+            ? _navigationGuideLease!.Value.Status
+            : _navigationFlowFieldLease!.Value.Status;
 
     /// <inheritdoc cref="_isAtDestination"/>
     public bool IsAtDestination => _isAtDestination;
@@ -221,9 +221,6 @@ public partial class NavSteering : IRecordable
     /// Whether this agent can currently move.
     /// </summary>
     public bool CanMove = true;
-
-    /// <inheritdoc cref="_stoppedFrameCount"/>
-    public int StoppedFrameCount => _stoppedFrameCount;
 
     /// <summary>
     /// Internal cooldown before the agent can automatically stop again (used for bursty movement).
@@ -307,8 +304,6 @@ public partial class NavSteering : IRecordable
 
     #region Constructors
 
-    private NavSteering() { }
-
     /// <summary>
     /// Initializes a new context-bound <see cref="NavSteering"/> instance.
     /// </summary>
@@ -345,15 +340,6 @@ public partial class NavSteering : IRecordable
     {
         get => _movementGroupSession.GroupId;
         set => _movementGroupSession.GroupId = value;
-    }
-
-    /// <summary>
-    /// Gets the index of the group associated with the current movement session.
-    /// </summary>
-    public int GroupIndex
-    {
-        get => _movementGroupSession.GroupIndex;
-        protected set => _movementGroupSession.GroupIndex = value;
     }
 
     /// <summary>

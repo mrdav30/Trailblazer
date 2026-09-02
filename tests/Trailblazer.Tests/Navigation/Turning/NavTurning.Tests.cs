@@ -1,5 +1,7 @@
 ﻿using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Grids;
+using System;
 using Trailblazer.Navigation.Turning;
 using Xunit;
 
@@ -7,6 +9,25 @@ namespace Trailblazer.Tests.Navigation.Turning;
 
 public class NavTurningTests
 {
+    [Fact]
+    public void Construction_ShouldRejectUnusableContexts()
+    {
+        Action missing = () => _ = new NavTurning(null!, Fixed64.One);
+
+        TrailblazerWorldContext disposedContext = TrailblazerWorldContext.CreateOwned();
+        disposedContext.Dispose();
+        Action disposed = () => _ = new NavTurning(disposedContext, Fixed64.One);
+
+        var inactiveWorld = new GridWorld();
+        using TrailblazerWorldContext inactiveContext = TrailblazerWorldContext.Attach(inactiveWorld);
+        inactiveWorld.Dispose();
+        Action inactive = () => _ = new NavTurning(inactiveContext, Fixed64.One);
+
+        missing.Should().Throw<ArgumentNullException>();
+        disposed.Should().Throw<ObjectDisposedException>();
+        inactive.Should().Throw<InvalidOperationException>();
+    }
+
     [Fact]
     public void SimulateTurn_Should_BufferAutoTurn_After_Collision_And_Movement()
     {
@@ -114,6 +135,41 @@ public class NavTurningTests
 
         turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SimulateTurn_ShouldKeepCollisionArmedUntilMovementPassesThreshold()
+    {
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
+        turning.OnInitialize(Fixed64.One);
+        turning.NotifyCollision();
+        Vector3d belowThreshold = Vector3d.Right * Fixed64.FromFraction(1, 240);
+
+        turning.TrySimulateTurn(
+                belowThreshold,
+                Vector3d.Zero,
+                Vector3d.Forward,
+                FixedQuaternion.Identity,
+                out _)
+            .Should().BeFalse();
+        turning.TargetReached.Should().BeTrue();
+
+        Vector3d beyondThreshold = Vector3d.Right * Fixed64.Quarter;
+        turning.TrySimulateTurn(
+                beyondThreshold,
+                Vector3d.Zero,
+                Vector3d.Forward,
+                FixedQuaternion.Identity,
+                out _)
+            .Should().BeFalse();
+        turning.TrySimulateTurn(
+                beyondThreshold,
+                Vector3d.Zero,
+                Vector3d.Forward,
+                FixedQuaternion.Identity,
+                out _)
+            .Should().BeTrue();
+        turning.TargetReached.Should().BeFalse();
     }
 
     [Fact]

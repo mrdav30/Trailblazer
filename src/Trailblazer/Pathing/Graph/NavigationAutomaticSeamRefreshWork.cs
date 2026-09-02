@@ -208,8 +208,6 @@ internal sealed class NavigationAutomaticSeamRefreshWork
 
     internal int ChangedMapCount => _changedMapIds.Count;
 
-    internal PersistentStringMap<bool> ChangedMapIds => _changedMapIds;
-
     internal string GetChangedMapIdAt(int ordinal) => _changedMapIds.GetKeyAt(ordinal);
 
     internal int ChangedStructuralEndpointCount => _changedStructuralEndpoints.Count;
@@ -259,33 +257,31 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         + (_rowBuilder?.PersistentPageCount ?? 0)
         + (_linkBuilder?.PersistentPageCount ?? 0));
 
-    internal bool Advance(MaintenanceWorkMeter meter)
-    {
-        while (true)
-        {
-            SeamAdvanceStatus status = AdvanceOne(meter);
-            if (status == SeamAdvanceStatus.Complete)
-                return true;
-            if (status == SeamAdvanceStatus.Blocked)
-                return false;
-        }
-    }
-
     internal SeamAdvanceStatus AdvanceOne(MaintenanceWorkMeter meter)
     {
         if (_complete)
             return RevalidateCompletedCursor()
                 ? SeamAdvanceStatus.Complete
                 : SeamAdvanceStatus.Blocked;
-        bool progressed = _phase switch
+        bool progressed = false;
+        switch (_phase)
         {
-            WorkPhase.Gather => AdvanceGather(meter),
-            WorkPhase.ApplyPairs => AdvancePairApplication(meter),
-            WorkPhase.ApplyAddresses => AdvanceAddressApplication(meter),
-            WorkPhase.ApplyLinks => AdvanceLinkApplication(meter),
-            WorkPhase.Seal => SealResult(),
-            _ => false
-        };
+            case WorkPhase.Gather:
+                progressed = AdvanceGather(meter);
+                break;
+            case WorkPhase.ApplyPairs:
+                progressed = AdvancePairApplication(meter);
+                break;
+            case WorkPhase.ApplyAddresses:
+                progressed = AdvanceAddressApplication(meter);
+                break;
+            case WorkPhase.ApplyLinks:
+                progressed = AdvanceLinkApplication(meter);
+                break;
+            case WorkPhase.Seal:
+                progressed = SealResult();
+                break;
+        }
         if (_complete)
             return SeamAdvanceStatus.Complete;
         return progressed ? SeamAdvanceStatus.Progressed : SeamAdvanceStatus.Blocked;
@@ -334,8 +330,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             if (!meter.TryConsumeComponentNodes(1))
                 return false;
             string mapId = _discoveryMapIds.GetKeyAt(_discoveryMapIndex++);
-            if (_preparedGraph.TryGetMap(mapId, out NavigationMapInstance? instance)
-                && instance != null)
+            if (_preparedGraph.TryGetMap(mapId, out NavigationMapInstance instance))
             {
                 _pendingDiscoveryKey = instance.Map.GridBinding.Key;
                 BeginMapMode(mapId, WorkMode.RevalidateMap);
@@ -500,15 +495,6 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             _dependencyRow.MoveNext();
             NavigationAutomaticSeamPair pair = _dependencyRow.Current.Pair;
             _dependencyRowRemaining--;
-            NavigationCellAddress ownerAddress = pair.First.MapId.Equals(
-                _modeMapId,
-                StringComparison.Ordinal)
-                ? pair.First
-                : pair.Second;
-            if (!_dependencyAddress.Equals(ownerAddress))
-            {
-                return true;
-            }
             QueueMutation(
                 pair,
                 _mode == WorkMode.RemoveMap ? MutationKind.Remove : MutationKind.Revalidate);
@@ -519,7 +505,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             FinishMode();
             return true;
         }
-        if (_dependencyCursor == null || !_dependencyCursor.HasNext)
+        if (!_dependencyCursor!.HasNext)
             return CompleteMapMode();
         if (!meter.TryConsumeDependencyEntries(1))
             return false;
@@ -537,10 +523,12 @@ internal sealed class NavigationAutomaticSeamRefreshWork
 
     private bool CompleteMapMode()
     {
-        WorkMode completedMode = _mode;
+        System.Diagnostics.Debug.Assert(
+            _pendingDiscoveryKey.Equals(default(GridConfigurationKey))
+                || _mode is WorkMode.RemoveMap or WorkMode.RevalidateMap,
+            "A queued discovery is owned by the map mode that must complete before it begins.");
         FinishMode();
-        if (completedMode is WorkMode.RemoveMap or WorkMode.RevalidateMap
-            && !_pendingDiscoveryKey.Equals(default(GridConfigurationKey)))
+        if (!_pendingDiscoveryKey.Equals(default(GridConfigurationKey)))
         {
             GridConfigurationKey key = _pendingDiscoveryKey;
             _pendingDiscoveryKey = default;
@@ -555,23 +543,46 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         {
             if (!RevalidateCompletedCursor())
                 return false;
-            if (!_world.TryBeginBoundaryContacts(_pendingDiscoveryKey, _cursor))
-            {
-                if (!RevalidateCompletedCursor())
-                    return false;
-                _pendingDiscoveryKey = default;
-                FinishMode();
-                return true;
-            }
-            if (_hasRunStamp && _cursor.RunStamp != _runStamp)
-            {
-                ResetToSource();
-                return false;
-            }
-            _runStamp = _cursor.RunStamp;
-            _hasRunStamp = true;
-            _cursorBegun = true;
+            bool began = _world.TryBeginBoundaryContacts(_pendingDiscoveryKey, _cursor);
+            bool completedCursorCurrent = true;
+            if (!began)
+                completedCursorCurrent = IsCompletedCursorCurrent();
+            return AdvanceDiscoveryAfterCursorStart(
+                meter,
+                began,
+                completedCursorCurrent,
+                _hasRunStamp,
+                !(_cursor.RunStamp != _runStamp));
         }
+
+        return AdvanceBegunDiscovery(meter);
+    }
+
+    internal bool AdvanceDiscoveryAfterCursorStart(
+        MaintenanceWorkMeter meter,
+        bool began,
+        bool completedCursorCurrent,
+        bool hadRunStamp,
+        bool runStampMatches)
+    {
+        if (!began)
+        {
+            if (!completedCursorCurrent)
+                return RestartDiscoveryAfterInvalidation();
+            _pendingDiscoveryKey = default;
+            FinishMode();
+            return true;
+        }
+        if (hadRunStamp && !runStampMatches)
+            return RestartDiscoveryAfterInvalidation();
+        _runStamp = _cursor.RunStamp;
+        _hasRunStamp = true;
+        _cursorBegun = true;
+        return AdvanceBegunDiscovery(meter);
+    }
+
+    private bool AdvanceBegunDiscovery(MaintenanceWorkMeter meter)
+    {
         GridBoundaryContactCursorStatus status = _world.AdvanceBoundaryContacts(
             _cursor,
             _contact,
@@ -583,12 +594,14 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         if (status == GridBoundaryContactCursorStatus.Stale
             || _cursor.RunStamp != _runStamp)
         {
-            ResetToSource();
-            return false;
+            return RestartDiscoveryAfterInvalidation();
         }
         if (outputCount != 0)
             PrepareDiscoveredPair(_contact[0]);
-        if (status == GridBoundaryContactCursorStatus.Complete && outputCount == 0)
+        System.Diagnostics.Debug.Assert(
+            status != GridBoundaryContactCursorStatus.Complete || outputCount == 0,
+            "A one-output boundary-contact advance returns More as soon as it emits that output.");
+        if (status == GridBoundaryContactCursorStatus.Complete)
         {
             GridBoundaryContactCursor previousValidator = _validatorCursor;
             _validatorCursor = _cursor;
@@ -617,9 +630,15 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             QueueMutation(existing, MutationKind.Revalidate);
             return;
         }
-        if (!_preparedGraph.TryGetSeamPrism(key.First, out GridCellPrism firstPrism)
-            || !_preparedGraph.TryGetSeamPrism(key.Second, out GridCellPrism secondPrism)
-            || !GridCellGeometry.TryCreateNavigationPortal(
+        bool foundFirstPrism = _preparedGraph.TryGetSeamPrism(
+            key.First,
+            out GridCellPrism firstPrism);
+        bool foundSecondPrism = _preparedGraph.TryGetSeamPrism(
+            key.Second,
+            out GridCellPrism secondPrism);
+        System.Diagnostics.Debug.Assert(foundFirstPrism && foundSecondPrism,
+            "Boundary contacts resolved through the same normalized map bindings own both cell prisms.");
+        if (!GridCellGeometry.TryCreateNavigationPortal(
                 firstPrism,
                 secondPrism,
                 out GridNavigationPortal portal))
@@ -641,16 +660,12 @@ internal sealed class NavigationAutomaticSeamRefreshWork
             _mutationStage++;
             return true;
         }
-        if (_mutationStage < 4)
-        {
-            if (!meter.TryConsumeDependencyEntries(1))
-                return false;
-            _mutationStage++;
-            if (_mutationStage == 4)
-                CoalescePendingMutation();
-            return true;
-        }
-        throw new InvalidOperationException("The queued seam mutation stage is invalid.");
+        if (!meter.TryConsumeDependencyEntries(1))
+            return false;
+        _mutationStage++;
+        if (_mutationStage == 4)
+            CoalescePendingMutation();
+        return true;
     }
 
     private void CoalescePendingMutation()
@@ -670,23 +685,23 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         if (_pendingMutation == MutationKind.Remove)
             delta.FinalPair = null;
         else if (_pendingMutation == MutationKind.Add)
-            delta.FinalPair ??= pair;
-        if (_pendingPairOwned && ReferenceEquals(delta.FinalPair, pair))
         {
-            if (!ReferenceEquals(prior, pair))
-            {
-                _pairDeltaPayloadBytes = checked(
-                    _pairDeltaPayloadBytes + NavigationAutomaticSeamPair.RetainedSize);
-                _pairDeltaPayloadPages++;
-                delta.OwnsFinalPair = true;
-            }
+            System.Diagnostics.Debug.Assert(_pendingPairOwned,
+                "Only newly discovered seam geometry enters the add mutation.");
+            System.Diagnostics.Debug.Assert(delta.FinalPair == null,
+                "Discovery queues an add only after the current seam pair is absent.");
+            System.Diagnostics.Debug.Assert(!ReferenceEquals(prior, pair));
+            delta.FinalPair = pair;
+            _pairDeltaPayloadBytes = checked(
+                _pairDeltaPayloadBytes + NavigationAutomaticSeamPair.RetainedSize);
+            _pairDeltaPayloadPages++;
+            delta.OwnsFinalPair = true;
             _pendingPairOwned = false;
         }
-        if (delta.OwnsFinalPair && delta.FinalPair == null)
+        else
         {
-            _pairDeltaPayloadBytes -= NavigationAutomaticSeamPair.RetainedSize;
-            _pairDeltaPayloadPages--;
-            delta.OwnsFinalPair = false;
+            System.Diagnostics.Debug.Assert(_pendingMutation == MutationKind.Revalidate);
+            System.Diagnostics.Debug.Assert(!_pendingPairOwned);
         }
         delta.FinalActive = delta.FinalPair != null
             && _preparedGraph.HasEffectiveCell(delta.FinalPair.First)
@@ -861,18 +876,12 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     private void NormalizeCurrentPairDelta()
     {
         PairDelta delta = _currentPairDelta!;
-        if (delta.FinalPair != null
-            && (!_preparedGraph.TryGetMap(delta.FinalPair.First.MapId, out _)
-                || !_preparedGraph.TryGetMap(delta.FinalPair.Second.MapId, out _)))
+        if (delta.FinalPair != null)
         {
-            if (delta.OwnsFinalPair)
-            {
-                _pairDeltaPayloadBytes -= NavigationAutomaticSeamPair.RetainedSize;
-                _pairDeltaPayloadPages--;
-                delta.OwnsFinalPair = false;
-            }
-            delta.FinalPair = null;
-            delta.FinalActive = false;
+            System.Diagnostics.Debug.Assert(
+                _preparedGraph.TryGetMap(delta.FinalPair.First.MapId, out _)
+                && _preparedGraph.TryGetMap(delta.FinalPair.Second.MapId, out _),
+                "Removed-map modes clear every incident pair before journal normalization.");
         }
         NavigationAutomaticSeamPair? sourcePair = delta.SourceRecord?.Pair;
         _currentGeometryChanged = !ReferenceEquals(sourcePair, delta.FinalPair);
@@ -1143,18 +1152,29 @@ internal sealed class NavigationAutomaticSeamRefreshWork
 
     private bool ShouldFilterSourcePair(NavigationAutomaticSeamPair pair, RowKind kind)
     {
-        if (_pairDeltas == null
-            || !_pairDeltas.TryGetValue(
+        if (!_pairDeltas!.TryGetValue(
                 new NavigationAutomaticSeamPairKey(pair.First, pair.Second),
                 out PairDelta delta))
         {
             return false;
         }
-        bool geometryChanged = !ReferenceEquals(delta.SourceRecord?.Pair, delta.FinalPair);
-        return kind == RowKind.Dependency
-            ? geometryChanged
-            : geometryChanged || (delta.SourceRecord?.IsActive ?? false) != delta.FinalActive;
+        System.Diagnostics.Debug.Assert(delta.SourceRecord != null,
+            "A delta reached through a source row retains that row's indexed pair record.");
+        NavigationAutomaticSeamPairRecord source = delta.SourceRecord!;
+        return ShouldFilterChangedPair(
+            kind == RowKind.Dependency,
+            !ReferenceEquals(source.Pair, delta.FinalPair),
+            source.IsActive,
+            delta.FinalActive);
     }
+
+    internal static bool ShouldFilterChangedPair(
+        bool dependencyRow,
+        bool geometryChanged,
+        bool sourceActive,
+        bool finalActive) => dependencyRow
+        ? geometryChanged
+        : geometryChanged || sourceActive != finalActive;
 
     private bool AdvanceLinkApplication(MaintenanceWorkMeter meter)
     {
@@ -1238,13 +1258,12 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         }
         if (!_sourceLinkReady)
         {
-            if (_currentLinkDelta!.Count > 0)
-            {
-                _pendingLinkOutput = new NavigationStructuralLink(
-                    _currentLinkKey.DestinationMapId,
-                    _currentLinkDelta.Count,
-                    _currentLinkDelta.UncertifiedCount);
-            }
+            System.Diagnostics.Debug.Assert(_currentLinkDelta!.Count > 0,
+                "An unmatched negative link delta requires the source link it removes.");
+            _pendingLinkOutput = new NavigationStructuralLink(
+                _currentLinkKey.DestinationMapId,
+                _currentLinkDelta.Count,
+                _currentLinkDelta.UncertifiedCount);
             ConsumeCurrentLinkDelta();
             return true;
         }
@@ -1266,13 +1285,12 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         }
         if (comparison > 0)
         {
-            if (_currentLinkDelta!.Count > 0)
-            {
-                _pendingLinkOutput = new NavigationStructuralLink(
-                    _currentLinkKey.DestinationMapId,
-                    _currentLinkDelta.Count,
-                    _currentLinkDelta.UncertifiedCount);
-            }
+            System.Diagnostics.Debug.Assert(_currentLinkDelta!.Count > 0,
+                "A negative link delta must sort with the source link it removes.");
+            _pendingLinkOutput = new NavigationStructuralLink(
+                _currentLinkKey.DestinationMapId,
+                _currentLinkDelta.Count,
+                _currentLinkDelta.UncertifiedCount);
             ConsumeCurrentLinkDelta();
             return true;
         }
@@ -1328,6 +1346,14 @@ internal sealed class NavigationAutomaticSeamRefreshWork
 
     private bool RevalidateCompletedCursor()
     {
+        if (IsCompletedCursorCurrent())
+            return true;
+        ResetToSource();
+        return false;
+    }
+
+    private bool IsCompletedCursorCurrent()
+    {
         if (!_hasValidatorCursor)
             return true;
         GridBoundaryContactCursorStatus status = _world.AdvanceBoundaryContacts(
@@ -1342,6 +1368,11 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         {
             return true;
         }
+        return false;
+    }
+
+    private bool RestartDiscoveryAfterInvalidation()
+    {
         ResetToSource();
         return false;
     }

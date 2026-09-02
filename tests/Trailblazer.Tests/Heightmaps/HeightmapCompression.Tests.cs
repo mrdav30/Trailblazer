@@ -19,6 +19,15 @@ public sealed class HeightmapCompressionTests
     }
 
     [Fact]
+    public void DefaultCompression_ShouldRejectConversion()
+    {
+        HeightmapCompression compression = default;
+
+        ((Action)(() => compression.Decompress(0))).Should().Throw<InvalidOperationException>();
+        ((Action)(() => compression.CompressClamped(Fixed64.Zero))).Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
     public void Decompress_ShouldReturnReferenceHeight_ForZeroValue()
     {
         var compression = new HeightmapCompression((Fixed64)(-20), Fixed64.One / 4);

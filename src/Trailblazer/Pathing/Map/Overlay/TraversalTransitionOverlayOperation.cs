@@ -63,11 +63,4 @@ public readonly struct TraversalTransitionOverlayOperation
     public static TraversalTransitionOverlayOperation RevertToBake(string id) =>
         new(id, TraversalTransitionOverlayOperationKind.RevertToBake, default);
 
-    internal static void ValidateKind(TraversalTransitionOverlayOperationKind kind)
-    {
-        SwiftThrowHelper.ThrowIfArgument(
-            kind is < TraversalTransitionOverlayOperationKind.Upsert or > TraversalTransitionOverlayOperationKind.RevertToBake,
-            nameof(kind),
-            "Unknown transition overlay operation kind.");
-    }
 }

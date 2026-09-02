@@ -32,16 +32,21 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
         _hasIncomingCandidate = false;
         _structural = structural;
         Current = default;
-        if (!graph.TryGetNodeAddress(destination, out _destinationAddress)
-            || (structural
-                ? !graph.HasEffectiveCell(_destinationAddress)
-                : !graph.TryGetNodeState(destination, out NavigationNodeState state)
-                    || !state.IsPresent))
+        bool found = graph.TryGetNodeAddress(destination, out _destinationAddress);
+        System.Diagnostics.Debug.Assert(found,
+            "incoming enumeration receives a destination owned by this immutable graph");
+        if (structural)
         {
-            _graph = null;
-            _incomingCandidates = default;
-            _destinationAddress = default;
-            return;
+            System.Diagnostics.Debug.Assert(graph.HasEffectiveCell(_destinationAddress),
+                "structural enumeration receives an effective graph-owned destination");
+        }
+        else
+        {
+            bool hasState = graph.TryGetNodeState(
+                destination,
+                out NavigationNodeState state);
+            System.Diagnostics.Debug.Assert(hasState && state.IsPresent,
+                "runtime incoming enumeration receives a present graph-owned destination");
         }
 
         _graph = graph;
@@ -86,8 +91,8 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
         MaintenanceWorkMeter? maintenanceMeter,
         ref int edgeStepRemaining)
     {
-        if (_graph == null)
-            return NavigationSurfaceEdgeAdvanceStatus.Complete;
+        System.Diagnostics.Debug.Assert(_graph != null,
+            "incoming enumeration advances only after graph-owned initialization");
 
         while (true)
         {
@@ -126,15 +131,11 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
                         : _outgoingEdges.AdvanceOne(
                             (NavigationWorkMeter?)null,
                             ref edgeStepRemaining);
-            if (outgoingStatus == NavigationSurfaceEdgeAdvanceStatus.Blocked
-                || outgoingStatus == NavigationSurfaceEdgeAdvanceStatus.Pending)
+            if (outgoingStatus != NavigationSurfaceEdgeAdvanceStatus.Edge)
             {
+                System.Diagnostics.Debug.Assert(
+                    outgoingStatus != NavigationSurfaceEdgeAdvanceStatus.Complete);
                 return outgoingStatus;
-            }
-            if (outgoingStatus == NavigationSurfaceEdgeAdvanceStatus.Complete)
-            {
-                ClearIncomingCandidate();
-                continue;
             }
 
             NavigationGraphEdge forwardEdge = _outgoingEdges.Current;
@@ -155,7 +156,7 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
 
     private bool MatchesIncomingCandidate(in NavigationGraphEdge forwardEdge)
     {
-        if (forwardEdge.Target != _destination
+        if (!forwardEdge.Target.Equals(_destination)
             || forwardEdge.Kind != _incomingCandidate.Kind)
         {
             return false;

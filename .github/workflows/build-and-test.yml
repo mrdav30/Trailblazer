@@ -62,7 +62,38 @@ jobs:
           dotnet build Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-restore
 
       - name: Run Tests
+        if: matrix.os == 'windows-latest'
         run: dotnet test Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-build --verbosity normal
+
+      - name: Run Tests with coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet test Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-build --verbosity normal --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage
+
+      - name: Install ReportGenerator
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Add ReportGenerator to PATH
+        if: matrix.os == 'ubuntu-latest'
+        run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Generate exact coverage summary
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          reportgenerator \
+            "-reports:artifacts/coverage/**/coverage.cobertura.xml" \
+            "-targetdir:artifacts/coverage-report" \
+            "-reporttypes:JsonSummary"
+
+      - name: Enforce exact coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          jq -e '
+            .summary.coveredlines == .summary.coverablelines and
+            .summary.coveredbranches == .summary.totalbranches and
+            .summary.coveredmethods == .summary.totalmethods and
+            .summary.fullcoveredmethods == .summary.totalmethods
+          ' artifacts/coverage-report/Summary.json
   validate-wiki-sync:
     runs-on: ubuntu-latest
 

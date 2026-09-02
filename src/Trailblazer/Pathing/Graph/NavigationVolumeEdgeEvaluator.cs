@@ -54,14 +54,23 @@ internal readonly struct NavigationVolumeEdgeEvaluator
     {
         cost = default;
         NavigationWorldGraph graph = _nodes.Graph;
-        if (source.Medium != target.Medium
-            || !graph.TryGetNodeAddress(source.Node, out NavigationCellAddress sourceAddress)
-            || !graph.TryGetNodeAddress(target.Node, out NavigationCellAddress targetAddress)
-            || !graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
-            || !graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism))
-        {
+        if (source.Medium != target.Medium)
             return NavigationVolumeEdgeStatus.Stale;
-        }
+        bool foundSourceAddress = graph.TryGetNodeAddress(
+            source.Node,
+            out NavigationCellAddress sourceAddress);
+        bool foundTargetAddress = graph.TryGetNodeAddress(
+            target.Node,
+            out NavigationCellAddress targetAddress);
+        bool foundSourcePrism = graph.TryGetSeamPrism(
+            sourceAddress,
+            out GridCellPrism sourcePrism);
+        bool foundTargetPrism = graph.TryGetSeamPrism(
+            targetAddress,
+            out GridCellPrism targetPrism);
+        System.Diagnostics.Debug.Assert(
+            foundSourceAddress && foundTargetAddress && foundSourcePrism && foundTargetPrism,
+            "Volume edge endpoints retain addresses and prisms in their immutable graph.");
         if (!dependencies.TryRecordPage(
                 sourceAddress.MapId,
                 source.Node.CellSlot / NavigationSemanticPage.SlotCount)
@@ -93,27 +102,19 @@ internal readonly struct NavigationVolumeEdgeEvaluator
         {
             return NavigationVolumeEdgeStatus.CostOverflow;
         }
-        if (hasSeam
-            && (seam.Pair == null
-                || !graph.AutomaticSeams.IsActive(seam)
-                || !sourceAddress.Equals(seam.Source)
-                || !targetAddress.Equals(seam.Destination)
-                || !seam.Portal.IsValid))
-        {
-            return NavigationVolumeEdgeStatus.Stale;
-        }
-        if (hasSeam
-            && (!GridCellGeometry.TryCreateNavigationPortal(
-                    sourcePrism,
-                    targetPrism,
-                    out GridNavigationPortal seamPortal)
-                || !TraversalEvaluator.IsSamePortal(
-                    seam.Portal,
-                    seamPortal,
-                    seam.IsReverse)))
-        {
-            return NavigationVolumeEdgeStatus.Stale;
-        }
+        System.Diagnostics.Debug.Assert(
+            !hasSeam
+            || (seam.Pair != null
+                && graph.AutomaticSeams.IsActive(seam)
+                && sourceAddress.Equals(seam.Source)
+                && targetAddress.Equals(seam.Destination)
+                && seam.Portal.IsValid));
+        System.Diagnostics.Debug.Assert(
+            !hasSeam
+            || GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism,
+                targetPrism,
+                out _));
         NavigationVolumeEdgeStatus segmentStatus = CertifyResolvedSegment(
             source,
             target,
@@ -126,12 +127,12 @@ internal readonly struct NavigationVolumeEdgeEvaluator
             dependencies);
         if (segmentStatus != NavigationVolumeEdgeStatus.Passable)
             return segmentStatus;
-        if (!NavigationDistanceMath.TryCeiling(
+        if (!TryGetCost(
                 sourceAnchor,
                 targetAnchor,
-                out Fixed64 total)
-            || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
-            || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
+                targetState.Cell.EnterCost,
+                targetRule.AdditionalEnterCost,
+                out Fixed64 total))
         {
             return NavigationVolumeEdgeStatus.CostOverflow;
         }
@@ -139,6 +140,18 @@ internal readonly struct NavigationVolumeEdgeEvaluator
         cost = total;
         return NavigationVolumeEdgeStatus.Passable;
     }
+
+    internal static bool TryGetCost(
+        Vector3d sourceAnchor,
+        Vector3d targetAnchor,
+        Fixed64 targetEnterCost,
+        Fixed64 additionalEnterCost,
+        out Fixed64 total) => NavigationDistanceMath.TryCeiling(
+            sourceAnchor,
+            targetAnchor,
+            out total)
+        && Fixed64.TryAdd(total, targetEnterCost, out total)
+        && Fixed64.TryAdd(total, additionalEnterCost, out total);
 
     internal NavigationVolumeEdgeStatus CertifyRaySegment(
         NavigationMediumStateRef source,
@@ -149,14 +162,23 @@ internal readonly struct NavigationVolumeEdgeEvaluator
         NavigationDependencyWorkspace dependencies)
     {
         NavigationWorldGraph graph = _nodes.Graph;
-        if (source.Medium != target.Medium
-            || !graph.TryGetNodeAddress(source.Node, out NavigationCellAddress sourceAddress)
-            || !graph.TryGetNodeAddress(target.Node, out NavigationCellAddress targetAddress)
-            || !graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism)
-            || !graph.TryGetSeamPrism(targetAddress, out GridCellPrism targetPrism))
-        {
+        if (source.Medium != target.Medium)
             return NavigationVolumeEdgeStatus.Stale;
-        }
+        bool foundSourceAddress = graph.TryGetNodeAddress(
+            source.Node,
+            out NavigationCellAddress sourceAddress);
+        bool foundTargetAddress = graph.TryGetNodeAddress(
+            target.Node,
+            out NavigationCellAddress targetAddress);
+        bool foundSourcePrism = graph.TryGetSeamPrism(
+            sourceAddress,
+            out GridCellPrism sourcePrism);
+        bool foundTargetPrism = graph.TryGetSeamPrism(
+            targetAddress,
+            out GridCellPrism targetPrism);
+        System.Diagnostics.Debug.Assert(
+            foundSourceAddress && foundTargetAddress && foundSourcePrism && foundTargetPrism,
+            "Certified volume-ray endpoints retain addresses and prisms in their immutable graph.");
         if (!dependencies.TryRecordPage(
                 sourceAddress.MapId,
                 source.Node.CellSlot / NavigationSemanticPage.SlotCount)
@@ -197,7 +219,7 @@ internal readonly struct NavigationVolumeEdgeEvaluator
     {
         KinematicBodyShape shape = _nodes.Profile.Shape;
         bool fastPath;
-        if (source.Node == target.Node)
+        if (source.Node.Equals(target.Node))
         {
             fastPath = GridCellGeometry.IsNavigationBodySegmentValid(
                 sourcePrism,

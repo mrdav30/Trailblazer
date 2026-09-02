@@ -1,10 +1,10 @@
-# Navigator Reference
+# Navigator
 
 `Navigator` is the simulation-facing coordinator for steering, turning, motor,
 locomotion, traversal state, occupancy, and guided semantic actions. It remains
 abstract so hosts can supply their own traversal-state checks and integrations.
 
-## 1. Setup
+## Setup
 
 A Navigator binds to one `TrailblazerWorldContext` and requires one exact
 `NavigationAgentProfile`. This C# fragment assumes a concrete Navigator shell,
@@ -26,7 +26,7 @@ Navigator-owned turning cannot be independently mutated.
 `Reset()` releases guidance, pending actions, movement-group ownership, and
 occupancy before the object can be rebound/reinitialized.
 
-## 2. Guided Travel
+## Guided Travel
 
 This C# fragment assumes a query whose start/profile/medium match the current
 host-restored Navigator state:
@@ -54,7 +54,7 @@ when they enter that tolerance, or when a heading reversal proves the body
 passed the step within the arrival radius. Neither rule can cross a pending
 transition action.
 
-## 3. Fixed-Step Lifecycle
+## Fixed-Step Lifecycle
 
 The normal order is:
 
@@ -82,7 +82,7 @@ definitive position with no physical/effective navigation cell clears it once.
 This notification reports committed navigation metadata only; hosts own any
 gameplay effects.
 
-## 4. Pending Transition
+## Pending Transition
 
 `PendingTransition` is the single surfaced action owned by Navigator. While it
 has a value:
@@ -117,7 +117,7 @@ the guide and updates durable query start-medium intent from the exact completed
 instruction, but it does not rewrite the host's `TrekCondition`, teleport a
 body, run animation, or change engine physics.
 
-## 5. Failure Semantics
+## Failure Semantics
 
 - A mismatched, copied-from-another-lease, duplicate, or stale instruction does
   not advance the cursor.
@@ -134,7 +134,7 @@ later ordinary repaths: those update start position while retaining the current
 query medium. The host must synchronize `TrekCondition` after an action and
 construct any later query for its real physical medium.
 
-## 6. Locomotion Hints
+## Locomotion Hints
 
 `TraversalTransitionLocomotionHints` are authored on definitions/rules and are
 copied into the instruction.
@@ -146,13 +146,13 @@ copied into the instruction.
 Hints do not perform the action. They only bridge the semantic instruction into
 the built-in locomotion request flags.
 
-## 7. Manual Input
+## Manual Input
 
 `ApplyInputTrekRequest(...)` cancels guided state and applies one ordinary frame
 request. Manual movement can work without a navigation map. Guided map truth and
 semantic actions are relevant only to `ApplyGuidedTrekRequest(...)`.
 
-## 8. Traversal State
+## Traversal State
 
 Hosts report state through methods such as:
 
@@ -166,7 +166,7 @@ The concrete Navigator's `CheckTrekCondition()` remains the host integration
 point. Keep physical state publication deterministic and consistent with any
 completed instruction.
 
-## 9. Heightmaps And Occupancy
+## Heightmaps And Occupancy
 
 Heightmap grounding is opt-in and affects kinematic Y projection, not graph
 connectivity. Occupancy is registered against the bound GridWorld and rebuilt on
@@ -176,7 +176,7 @@ Movement-group formation padding is the single world-unit
 `TrailblazerWorldContextSettings.MovementGroupPadding` value. It is independent
 of rectangular or hex grid metrics.
 
-## 10. Serialization
+## Serialization
 
 Navigator serialization uses populate-existing-instance semantics. It records
 durable query destination/profile/policy/algorithm/budget/target-media intent,
@@ -190,7 +190,7 @@ are runtime-only and have no wire field.
 Restore GridForge grids, maps, area policies, and overlays before loading or
 resuming a guided Navigator. See [Serialization](Serialization.md).
 
-## 11. Related References
+## Related guides
 
 - [NavSteering](NavSteering.md)
 - [Pathing](Pathing.md)

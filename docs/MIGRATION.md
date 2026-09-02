@@ -1,9 +1,35 @@
-# Major-Version Navigation Migration
+# Trailblazer Migration Guide
 
-This release replaces the previous mutable, ambient pathing model with one
-context-owned navigation graph. It is an intentional breaking change: Trailblazer
-does not ship executable compatibility shims or deserialize retired request
-records.
+## Migrating From Trailblazer v1.x To v2.x
+
+Trailblazer v2 replaces the mutable, ambient v1 pathing model with one explicit,
+context-owned navigation graph. The cutover is intentionally breaking:
+Trailblazer does not ship compatibility adapters, forwarding overloads, or
+fallback readers for retired request records.
+
+Use this guide when upgrading from any v1.x package.
+
+### v2 Upgrade Checklist
+
+- Update package references to `Trailblazer` v2.x, or `Trailblazer.Lean` v2.x
+  when the rest of the LSF dependency stack uses Lean packages.
+- Replace ambient pathing ownership with one `TrailblazerWorldContext` per
+  active GridForge `GridWorld`.
+- Replace mutable charts and world-position authoring with immutable
+  `NavigationMap` values bound to normalized GridForge configurations.
+- Publish maps, overlays, removals, and exact area-policy revisions through
+  `context.Pathing`, then advance publication with `context.Simulate()`.
+- Replace every legacy request family with one complete `PathQuery`.
+- Replace old guide factories and pooled guide interfaces with disposable A* or
+  Flow leases from `context.Guides`.
+- Treat every transition as an explicit host-owned action and complete the
+  exact `NavigationTransitionInstruction` supplied by its lease.
+- Restore grids, maps, policies, and overlays before populating guided
+  Navigators.
+- Re-record deterministic replays and serialized fixtures that depended on v1
+  request, guide, map, or controller schemas.
+- Run both `Release` and `ReleaseLean` validation after the source migration
+  compiles.
 
 ## Required Host Changes
 
@@ -98,11 +124,13 @@ The same major version removes misspellings and redundant controller accessors:
 The outer Navigator record is schema version 3. Earlier outer schemas reject
 transactionally; they are not read through renamed-field fallbacks.
 
-## Current References
+## Current v2 Guides
 
-- [Navigation maps](NavigationMaps.md)
-- [Map authoring](MapAuthoring.md)
-- [Map publication](MapPublication.md)
-- [Pathing](Pathing.md)
-- [Path guides](PathGuides.md)
-- [Serialization](Serialization.md)
+- [Getting started](wiki/GettingStarted.md)
+- [Navigation maps](wiki/NavigationMaps.md)
+- [Map authoring](wiki/MapAuthoring.md)
+- [Map publication](wiki/MapPublication.md)
+- [Pathing](wiki/Pathing.md)
+- [Path guides](wiki/PathGuides.md)
+- [Serialization](wiki/Serialization.md)
+- [Troubleshooting](wiki/Troubleshooting.md)

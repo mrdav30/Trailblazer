@@ -1,10 +1,14 @@
-# Trailblazer Overview
+# Technical Overview
 
 Trailblazer turns GridForge world geometry plus host-authored navigation
 semantics into deterministic A* and flow-field guidance. Rendering, physics,
 animation, terrain classification, and action execution remain host owned.
 
-## Runtime Ownership
+The short version is: GridForge says what physically exists, the host says what
+that space means, and Trailblazer turns those two truths into guidance that can
+be replayed exactly.
+
+## One world, one context
 
 Each `TrailblazerWorldContext` owns one active `GridWorld` binding, three public
 context-local services, and its deterministic clock/lifecycle state:
@@ -20,7 +24,7 @@ There is no ambient pathing manager. Hosts create or attach a context, publish
 world navigation truth into that context, simulate it once per fixed frame, and
 dispose it when every lease and controller is released.
 
-## Navigation Truth
+## What gets published
 
 One immutable `NavigationMap` binds a stable map ID to one normalized GridForge
 configuration. Its bake may contain a complete default cell, explicit cells,
@@ -38,7 +42,7 @@ The winner is one complete `NavigationCell`; media, capabilities, area, cost,
 clearance, and flags do not merge field by field. GridForge independently owns
 physical presence, blockage, prisms, and contacts.
 
-## Medium-State Graph
+## How cells become search states
 
 Search keys are:
 
@@ -55,7 +59,7 @@ Gas and Liquid movement uses centered body anchors and exact GridForge swept
 coverage. Rectangular and hex-prism topology both use GridForge-issued direction
 sets and geometry rather than local neighbor formulas.
 
-## Query And Cost Model
+## One query and cost model
 
 `PathQuery` is the only public A*/Flow request. It contains start/end endpoints,
 agent profile, area-policy key, exact start medium, target-media mask, algorithm,
@@ -66,7 +70,7 @@ transition contributes certified source approach, authored `ActionCost`,
 certified destination exit, and destination enter costs. The semantic gap
 between its two action positions has no movement-distance charge.
 
-## Guides And Actions
+## Guidance never performs gameplay
 
 A* returns `NavigationGuideLease` with `NavigationGuideStep` values. Flow returns
 `NavigationFlowFieldLease` with `NavigationFlowSample` values. Each value reports
@@ -78,7 +82,7 @@ The host approaches the source position, performs the action, and calls
 pressure preserves the held action; affected publication makes it stale. No
 guide performs gameplay or physics implicitly.
 
-## Publication Lifecycle
+## Changes publish at fixed-step boundaries
 
 Hosts admit four operation families through `context.Pathing`:
 
@@ -95,7 +99,7 @@ Overlay transactions change addressed cells, connections, and explicit
 transitions. Map replacement changes immutable bake/default/rule truth.
 GridForge committed changes enter the same graph maintenance authority.
 
-## Navigator Lifecycle
+## How Navigator fits in
 
 `Navigator` owns one exact `NavigationAgentProfile`, current host-reported
 `TrekCondition`, one guided session, and at most one surfaced pending action.
@@ -111,7 +115,7 @@ The committed-cell event is not a query callback. It reports the effective cell
 entered after motion. A version-only graph refresh updates metadata without
 repeating a stable entry event.
 
-## Serialization Lifecycle
+## Save durable intent, rebuild transient guidance
 
 Trailblazer uses explicit Chronicler records and populate-existing-instance
 loads. Hosts restore GridForge grids, maps, area policies, and overlays before
@@ -121,6 +125,7 @@ cell metadata. Fresh guidance is acquired only on a later simulation frame.
 
 ## Continue Reading
 
+- [Getting started](GettingStarted.md)
 - [Navigation maps](NavigationMaps.md)
 - [Map authoring](MapAuthoring.md)
 - [Map publication](MapPublication.md)
@@ -130,4 +135,5 @@ cell metadata. Fresh guidance is acquired only on a later simulation frame.
 - [Path guides](PathGuides.md)
 - [Navigator](Navigator.md)
 - [Serialization](Serialization.md)
-- [Migration](Migration.md)
+- [Troubleshooting](Troubleshooting.md)
+- [v1 to v2 migration](../MIGRATION.md)

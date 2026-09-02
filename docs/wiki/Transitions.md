@@ -1,4 +1,4 @@
-# Traversal Transitions Reference
+# Traversal Transitions
 
 Transitions are explicit semantic actions selected by the same medium-state graph
 used for ordinary movement. They model actions such as climbing a ladder,
@@ -8,7 +8,7 @@ teleporting.
 Nothing is inferred solely from touching two media. The environment must author
 either an exact definition or a bounded rule.
 
-## 1. Explicit Definitions
+## Explicit Definitions
 
 `TraversalTransitionDefinition` is one directed, source-map-owned action. It
 contains:
@@ -29,7 +29,7 @@ required medium is not currently active. Publication does not silently delete
 it. When the endpoint later becomes compatible, ordinary graph composition can
 activate it; an incompatible replacement rejects transactionally.
 
-## 2. Procedural Rules
+## Procedural Rules
 
 `TraversalTransitionRule` describes one reusable bounded action:
 
@@ -49,7 +49,7 @@ Use a rule only when the action truly applies uniformly. Use explicit
 definitions for object-specific anchors, unique costs, scripted devices, or
 actions that exist only while one runtime object exists.
 
-## 3. Cost And Action Positions
+## Cost And Action Positions
 
 For an accepted transition, total route cost includes:
 
@@ -66,7 +66,7 @@ SameCell rules use the two resolved medium anchors. Positive-face rules use
 GridForge's directed profile-resolved contact positions. Explicit overrides must
 lie inside their declared endpoint prisms.
 
-## 4. Identity And Ordering
+## Identity And Ordering
 
 Definitions and rules use tagged identities. A public instruction reports:
 
@@ -80,7 +80,7 @@ Definitions reject duplicates within their source owner. Rule IDs are globally
 unique. Forward A* and reverse Flow recover the same canonical action identity
 and ordinal.
 
-## 5. Ladder: Dynamic Explicit Actions
+## Ladder: Dynamic Explicit Actions
 
 A bidirectional ladder is two directed definitions. Dropping it into the world
 publishes both in one overlay transaction. This C# fragment assumes the stable
@@ -120,7 +120,7 @@ Moving the ladder upserts the same IDs with new endpoints. Removing it uses
 `Suppress(id)` or `RevertToBake(id)`. A held instruction from the old
 publication becomes `Stale`; it never retargets to the moved ladder.
 
-## 6. Duck: One Rule, Many Water Surfaces
+## Duck: One Rule, Many Water Surfaces
 
 One rule can allow a swimming/flying duck to take off at any qualifying
 Liquid-to-Gas face. This C# fragment assumes the map binding and cells are
@@ -150,7 +150,7 @@ without Fly capability gets `NoPath`. To replace a rule, publish a higher map
 bake with `PreserveAndRevalidate`; rules do not have a separate overlay API or
 staleness clock.
 
-## 7. Guide Completion
+## Guide Completion
 
 An A* `NavigationGuideStep` or Flow `NavigationFlowSample` with
 `HasTransition == true` includes the exact instruction. The lease remains at
@@ -170,7 +170,7 @@ For `Navigator`, read `PendingTransition`, perform the host action, call
 `CompletePendingTransition(...)`, then update the host's physical
 `TrekCondition`/position to the destination state before continuing.
 
-## 8. Locomotion Hints
+## Locomotion Hints
 
 Hints are authored data, never inferred globally from transition type:
 
@@ -181,7 +181,7 @@ The built-in shoreline importer authors both hints only for a Liquid SwimExit
 whose Solid destination is a climb surface that also supports Liquid. Ordinary
 shore entry/exit remains unhinted.
 
-## 9. Related References
+## Related guides
 
 - [Map authoring](MapAuthoring.md)
 - [Map publication](MapPublication.md)

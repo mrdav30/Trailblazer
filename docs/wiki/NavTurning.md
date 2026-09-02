@@ -1,404 +1,156 @@
-# NavTurning Reference
+# NavTurning
 
-This document is the detailed reference for Trailblazer's deterministic facing
-layer.
+`NavTurning` converts a desired direction into deterministic fixed-step
+rotation. It buffers one requested target, interpolates toward it, detects
+arrival, and can optionally create a turn after a collision.
 
-If you only need the high-level architecture, read `Overview.md`. If you need
-movement execution after a heading is chosen, read `NavMotor.md`.
+Most applications should let `Navigator` drive turning. Use `NavTurning`
+directly only when the host needs facing control without the full Navigator
+lifecycle.
 
-The code referenced here lives primarily in:
+## What the host supplies
 
-- `src/Trailblazer/Navigation/Turning/NavTurning.cs`
-- `src/Trailblazer/Navigation/Turning/NavTurning.Serialization.cs`
+Turning works from snapshots rather than an engine interface. Each update uses:
 
-C# blocks below are source excerpts or host-integration fragments, not complete
-standalone programs. Each uses the current public signature shown in its
-section.
+- current world position;
+- previous world position;
+- current forward direction;
+- current rotation.
 
-`NavTurning` is implemented as a partial class: `NavTurning.cs` contains the
-runtime turning state and simulation behavior, while
-`NavTurning.Serialization.cs` contains the Chronicler `RecordData(...)`
-implementation.
+If `TrySimulateTurn(...)` returns `true`, apply the returned quaternion. A
+`false` result means no rotation should be applied for that frame.
 
-## 1. What NavTurning Is
+## Request, then simulate
 
-`NavTurning` converts a desired facing direction into deterministic rotation
-updates over time.
-
-It is responsible for:
-
-- deciding whether a turn is actually needed
-- buffering requested turns until the next simulation step
-- interpolating from the current rotation toward a target rotation
-- detecting turn completion
-- optionally deriving an auto-turn direction after a collision
-
-It is not responsible for:
-
-- choosing a movement heading
-- applying movement forces
-- pathfinding
-- environment probing
-
-Those responsibilities belong to `NavSteering`, `NavMotor`, and the host
-navigator.
-
-## 2. Core Design Model
-
-`NavTurning` is buffered.
-
-The turning flow is:
-
-1. A caller requests a turn direction through `RequestTurnDirection(...)`, or
-   collision handling buffers one internally.
-2. The request is stored as a pending target rotation.
-3. `TrySimulateTurn(...)` consumes that pending target when the controller is
-   idle.
-4. The controller interpolates rotation toward `TargetRotation` across
-   simulation steps.
-5. If a new rotation was produced, the host applies the returned quaternion.
-6. Once close enough, the controller snaps to the final target and marks the
-   turn complete.
-
-Two details matter here:
-
-- the buffered target is not the same thing as the active `TargetRotation`
-- the controller only tracks one buffered target at a time; it is not a turn
-  queue
-
-## 3. Public Surface
-
-The main entry points are:
-
-- `NavTurning(TrailblazerWorldContext context, Fixed64 radius)`
-- `TrySimulateTurn(Vector3d position, Vector3d lastPosition, Vector3d forward, FixedQuaternion rotation, out FixedQuaternion appliedRotation)`
-- `RequestTurnDirection(Vector3d curDirection, Vector3d targetDirection, Fixed64? interpolation = null)`
-- `NeedsTurn(Vector3d currentForward, Vector3d targetDirection, Fixed64? minAngle = null)`
-- `StopTurn()`
-- `NotifyCollision()`
-
-Important public state includes:
-
-- `CanTurn`
-- `TurnRate`
-- `TargetReached`
-- `TargetRotation`
-- `CanTurnOnCollision`
-
-## 4. Host Contract
-
-`NavTurning` now operates on snapshots instead of a host interface. The host
-must supply:
-
-- the current world position
-- the previous world position
-- the current forward direction
-- the current rotation
-
-If `TrySimulateTurn(...)` returns `true`, the host should apply the returned
-`appliedRotation`.
-
-In normal `Navigator` usage, the turning integration looks like this:
-
-1. `Navigator.Simulate()` asks steering for a heading when guided.
-2. `Navigator.Simulate()` calls
-   `Turning.RequestTurnDirection(Forward, _frameRequest.Direction)`.
-3. `Navigator.Simulate()` calls `Turning.TrySimulateTurn(...)`.
-4. If the call returns `true`, `Navigator` writes the returned rotation into its
-   current frame state.
-
-If you use `NavTurning` directly, the essential rule is:
-
-- request or buffer a turn first
-- then call `TrySimulateTurn(...)` once per fixed step
-- only apply the returned rotation when the method reports success
-
-## 5. Construction and Thresholds
-
-### 5.1 Construction
-
-The public constructor initializes the controller from the supplied radius
-before returning it. The initialization threshold cannot be independently
-reconfigured afterward.
-
-Construction:
-
-- caches the navigator radius used for collision auto-turn thresholds
-- marks the controller as arrived
-- resets `TargetRotation` to identity
-
-### 5.2 Minimum Turn Threshold
-
-`NavTurning` does not rotate for tiny direction changes.
-
-It uses a private minimum angle threshold:
-
-- `_minTurnRequiredAngle`
-
-`NeedsTurn(...)` compares the current forward direction to the requested target
-direction and returns `true` only when the angular difference exceeds that
-threshold.
-
-That keeps steering noise and tiny directional jitter from generating
-meaningless turn requests.
-
-### 5.3 Collision Auto-Turn Threshold
-
-Collision auto-turning uses a movement-distance threshold derived from:
-
-- navigator radius
-- the owning context's `FrameRate`
-
-That threshold is recomputed from the current frame rate instead of being frozen
-once at initialization.
-
-This means collision auto-turning only triggers after the navigator has actually
-moved far enough since the previous frame.
-
-## 6. Request Lifecycle
-
-### 6.1 RequestTurnDirection(...)
-
-This is the normal entry point for a turn request.
-
-It:
-
-- checks `NeedsTurn(...)`
-- ignores requests below the minimum turn threshold
-- stores a buffered target rotation in `_pendingTarget`
-- stores an optional interpolation override in `_pendingInterpolation`
-
-Important detail:
-
-- this does not immediately update `TargetRotation`
-- the request is only promoted to the active target when `TrySimulateTurn(...)`
-  consumes it
-
-### 6.2 NeedsTurn(...)
-
-`NeedsTurn(...)` compares two directions by:
-
-- converting both to quaternions through `FixedQuaternion.FromDirection(...)`
-- measuring the angular difference with `FixedQuaternion.Angle(...)`
-- comparing that angle against the minimum threshold
-
-This is the low-level gate that keeps turn buffering from happening for
-near-identical directions.
-
-## 7. Per-Frame Update: TrySimulateTurn(...)
-
-`TrySimulateTurn(...)` is the central turning update.
-
-### 7.1 Preconditions
-
-The method returns `false` if `CanTurn` is false.
-
-If `CanTurn` is false, any already-buffered turn remains buffered until turning
-is enabled again.
-
-### 7.2 Idle Phase
-
-If `TargetReached` is true, the controller is considered idle.
-
-At that point it does one of two things:
-
-#### Consume a buffered target
-
-If `_pendingTarget` exists:
-
-- `TargetRotation` becomes the buffered target
-- `_pendingTarget` is cleared
-- `TargetReached` becomes `false`
-
-Then the same call continues directly into interpolation.
-
-#### Check collision auto-turn
-
-If there is no buffered target:
-
-- `CheckAutoTurn(...)` runs
-- the method returns `false`
-
-This means collision auto-turning is intentionally staged:
-
-- one call can buffer the turn
-- the next call consumes the buffer and begins the actual rotation
-
-### 7.3 Interpolation Phase
-
-Once the turn is active, `NavTurning` computes an interpolation factor `t`:
-
-- use `_pendingInterpolation` if it is greater than zero
-- otherwise use `TurnRate * DeltaTime` from the owning context
-
-That value is clamped into `[0, 1]` and applied through
-`FixedQuaternion.Slerp(...)`.
-
-The next rotation becomes either:
-
-- the fully arrived target rotation
-- or an intermediate rotation step toward it
-
-### 7.4 Completion Phase
-
-Turn completion is measured by:
-
-- `FixedQuaternion.Angle(next, TargetRotation)`
-
-If the remaining difference is within `_arriveThresholdAngle`:
-
-- `appliedRotation` becomes `TargetRotation`
-- `StopTurn()` marks the turn complete
-- the method returns `true`
-
-Otherwise:
-
-- `appliedRotation` becomes the intermediate quaternion
-- the method returns `true`
-
-If no rotation should be applied this frame, the method returns `false` and
-leaves `appliedRotation` as identity.
-
-## 8. Collision Auto-Turn
-
-Collision auto-turning is a separate pathway from normal steering-driven turns.
-
-### 8.1 NotifyCollision()
-
-`NotifyCollision()` does not rotate immediately.
-
-It only sets an internal `_isColliding` flag so that the next idle
-`TrySimulateTurn(...)` can evaluate whether an auto-turn should happen.
-
-When you are driving turning through `Navigator`, prefer calling
-`navigator.NotifyCollision()` so collision handling stays centralized at the
-host-facing orchestration layer.
-
-### 8.2 CheckAutoTurn(...)
-
-When the controller is idle and collision has been flagged,
-`CheckAutoTurn(...)`:
-
-1. computes the movement delta from `position - lastPosition`
-2. checks whether that movement exceeds the collision threshold
-3. checks whether `CanTurnOnCollision` vetoes the turn
-4. normalizes the movement delta
-5. requests a buffered turn from the current direction toward that delta
-
-Important detail:
-
-- the collision turn uses actual movement delta, not an arbitrary fallback axis
-- if the movement is too small, `_isColliding` stays true and the controller
-  retries next frame
-
-### 8.3 Collision Predicate
-
-`CanTurnOnCollision` is an optional predicate hook.
-
-If it returns `false`, collision auto-turning is skipped even when the movement
-threshold is satisfied.
-
-## 9. Stop and Arrival Semantics
-
-### 9.1 StopTurn()
-
-`StopTurn()` only does one thing:
-
-- set `TargetReached = true`
-
-It does not:
-
-- clear `_pendingTarget`
-- clear `_pendingInterpolation`
-- reset `TargetRotation`
-
-### 9.2 TargetReached
-
-`TargetReached` means:
-
-- there is no currently active interpolation in progress
-
-It does not necessarily mean:
-
-- there is no buffered turn waiting to start
-
-## 10. Common Integration Pattern
-
-With a `Navigator`, do not call steering or turning separately. The normal
-public contract is `navigator.Simulate()` followed by
-`navigator.CommitFrameMotion()`; Navigator owns the ordering shown in section 4.
-
-For lower-level use without Navigator, this C# fragment assumes a context,
-radius, direction, and rotation snapshots supplied by the host:
+A turn request is buffered. It does not rotate the body immediately.
 
 ```csharp
-var turning = new NavTurning(context, radius);
+var turning = new NavTurning(context, bodyRadius);
+
 turning.RequestTurnDirection(currentForward, desiredForward);
 
-if (turning.TrySimulateTurn(position, lastPosition, currentForward, currentRotation, out var appliedRotation))
+if (turning.TrySimulateTurn(
+        position,
+        lastPosition,
+        currentForward,
+        currentRotation,
+        out FixedQuaternion appliedRotation))
 {
     currentRotation = appliedRotation;
 }
 ```
 
-For collision-driven auto-turning, this fragment continues the same lower-level
-example:
+The example variables are host snapshots. In a real integration, call
+`TrySimulateTurn(...)` once per fixed step and apply the returned rotation to
+the authoritative body.
+
+`RequestTurnDirection(...)` accepts an optional interpolation override. When no
+positive override is supplied, turning uses `TurnRate * context.DeltaTime`.
+Interpolation is clamped to the closed range `[0, 1]`.
+
+## Small changes are ignored
+
+`NeedsTurn(...)` compares current and requested facing and ignores differences
+within the minimum angle. This prevents tiny steering changes from producing
+visible jitter or endless turn requests.
+
+You can call the static helper before coordinating your own facing logic:
+
+```csharp
+if (NavTurning.NeedsTurn(currentForward, desiredForward))
+    turning.RequestTurnDirection(currentForward, desiredForward);
+```
+
+`RequestTurnDirection(...)` already performs the same check, so the extra call
+is needed only when the host wants to make another decision from the result.
+
+## Buffered and active state
+
+`TargetReached` means no interpolation is currently active. It does not promise
+that no buffered request is waiting to start.
+
+When an idle update finds a buffered target, that same update promotes it and
+begins interpolation. `TargetRotation` then exposes the active target.
+
+`StopTurn()` marks the active interpolation complete. It does not clear a
+buffered request that has not started yet, so a later update may still consume
+that request.
+
+Only one target is buffered. `NavTurning` is not a queue.
+
+## Collision-driven turning
+
+`NotifyCollision()` records that an automatic turn should be considered. It
+does not rotate immediately.
+
+On a later idle update, turning compares the frame's actual movement with a
+radius- and frame-rate-derived threshold. When the movement is large enough,
+it buffers a turn toward that movement direction. The following update may
+then begin rotation.
 
 ```csharp
 turning.NotifyCollision();
-turning.TrySimulateTurn(position, lastPosition, forward, rotation, out _); // may only buffer
-turning.TrySimulateTurn(position, lastPosition, forward, rotation, out _); // may begin actual rotation
+
+// The first update may only buffer the collision turn.
+turning.TrySimulateTurn(
+    position,
+    lastPosition,
+    forward,
+    rotation,
+    out _);
 ```
 
-With a `Navigator`, the equivalent public calls are:
+Set `CanTurnOnCollision` when host state needs to veto automatic collision
+turning. Returning `false` defers the pending collision turn; a later idle
+update evaluates it again without introducing an engine dependency into
+Trailblazer.
 
-```csharp
-navigator.NotifyCollision();
-navigator.Simulate(); // may only buffer
-navigator.Simulate(); // may begin actual rotation
-```
+When driving a full controller, call `navigator.NotifyCollision()` instead so
+the notification remains at the host-facing orchestration boundary.
 
-## 11. Common Gotchas
+## Navigator integration
 
-### Assuming RequestTurnDirection(...) rotates immediately
+Navigator owns the normal order:
 
-It does not. It only buffers a turn. `TrySimulateTurn(...)` applies it.
+1. steering produces a desired movement direction;
+2. Navigator buffers that direction on `Turning`;
+3. Navigator advances turning once;
+4. `CommitFrameMotion()` applies the frame's rotation state.
 
-### Assuming StopTurn() clears pending turns
+Do not independently simulate `navigator.Turning` in the same frame. Use
+`navigator.Simulate()` and `navigator.CommitFrameMotion()` so steering, motor,
+and turning remain coordinated.
 
-It does not. If a pending turn is already buffered, a later
-`TrySimulateTurn(...)` can still consume it.
+## Serialization
 
-### Assuming collision auto-turn applies on the first collision tick
+Navigator persistence records public turning configuration and state through
+Chronicler. The owning context is restored separately and must already be
+available when the existing Navigator shell is populated.
 
-Not always. The first call may only buffer the turn. The next call may actually
-start rotating.
+## Common mistakes
 
-### Assuming tiny direction changes should always rotate
+### Expecting an immediate turn
 
-They do not. `NeedsTurn(...)` intentionally filters out tiny angle changes.
+`RequestTurnDirection(...)` buffers a target. Rotation happens during
+`TrySimulateTurn(...)` or the owning Navigator's simulation.
 
-### Assuming multiple collision notifications create a queue
+### Using `TargetReached` as “nothing is pending”
 
-They do not. `NavTurning` only tracks one buffered turn state.
+It describes active interpolation only. One buffered target may still exist.
 
-## 12. Testing References
+### Expecting collision turning on the notification frame
 
-Current coverage around turning behavior is concentrated in:
+Collision turning is staged: notify, evaluate and buffer, then simulate the
+turn.
 
-- `tests/Trailblazer.Tests/Navigation/Turning/NavTurning.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Turning/TestDoubles/MockTurnAgent.cs`
+### Simulating Navigator-owned turning twice
 
-Those tests cover:
+Navigator already advances its turning controller. Calling the lower-level
+method again can make frame behavior diverge from the intended lifecycle.
 
-- initialization requirements
-- minimum-angle filtering
-- explicit turn requests
-- interpolation and arrival behavior
-- collision auto-turn buffering
-- collision veto behavior
-- repeated collision notifications
-- manual `StopTurn()` behavior
+## Related guides
 
-If you change turn buffering, completion thresholds, collision auto-turning, or
-interpolation behavior, update those tests in the same pass.
+- [Navigator](Navigator.md)
+- [NavSteering](NavSteering.md)
+- [NavMotor](NavMotor.md)
+- [Gravity](Gravity.md)

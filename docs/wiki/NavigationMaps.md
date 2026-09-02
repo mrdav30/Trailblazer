@@ -4,7 +4,7 @@ Unified graph routing is authored through `NavigationMap`, not through a
 runtime terrain predicate or a separate medium-specific routing system. One map
 binds one stable map ID to one normalized GridForge configuration.
 
-## 1. Map Contents
+## Map Contents
 
 An immutable map contains:
 
@@ -21,7 +21,7 @@ cell payloads, transition identities, and rule payloads before creating the
 immutable bake. Context-wide and per-map transition-rule limits are enforced at
 publication.
 
-## 2. Complete Cell Payloads
+## Complete Cell Payloads
 
 `NavigationCell` stores:
 
@@ -36,7 +36,7 @@ Cell media describes state of matter at that address. Terrain is not a separate
 runtime truth inside Trailblazer. A host can use terrain, scene metadata, fluid
 simulation, or any other source to decide which complete cell to publish.
 
-## 3. Default And Explicit Entries
+## Default And Explicit Entries
 
 The optional map default applies to every physically present, in-bounds
 GridForge cell that has no higher-precedence semantic cell. It does not create a
@@ -49,7 +49,7 @@ authoring cheap:
 - a Liquid-default map can list islands or hazards;
 - a map with no default is fail-closed except at explicit entries.
 
-## 4. Runtime Precedence
+## Runtime Precedence
 
 The effective cell order is:
 
@@ -66,7 +66,7 @@ flags.
 `RevertToBake(index)` removes the overlay decision and reveals the explicit
 bake, then the default, then no cell.
 
-## 5. Physical And Semantic Independence
+## Physical And Semantic Independence
 
 GridForge owns whether an address exists, is blocked, and which exact prism and
 contacts it has. Trailblazer owns the semantic payload admitted at that address.
@@ -74,12 +74,14 @@ contacts it has. Trailblazer owns the semantic payload admitted at that address.
 Consequences:
 
 - a default never materializes absent physical storage;
+- a default-backed map remains fail-closed while its bounded physical baseline
+  is captured across fixed frames;
 - an authored semantic cell at an absent sparse address is dormant;
 - a GridForge add/remove or blockage event can activate or deactivate graph
   state without rewriting the map;
 - map and physical dependencies both participate in guide staleness.
 
-## 6. Medium-State Connectivity
+## Medium-State Connectivity
 
 Structural connectivity uses positive-face contact:
 
@@ -91,7 +93,7 @@ movement retains medium. Volume shortcuts improve route quality but never create
 connectivity on their own. Semantic transitions are the only edges that can
 change medium.
 
-## 7. Publication
+## Publication
 
 A map is prepared with `PreparedNavigationMap` and admitted with
 `NavigationMapCommitOperation`. Replacement requires a higher bake version for
@@ -108,7 +110,12 @@ transactionally.
 Runtime cell/connection/transition changes use one
 `NavigationOverlayCommitOperation`. See [Map publication](MapPublication.md).
 
-## 8. Related References
+An applied commit receipt confirms the authored map was accepted. For a map
+with a default cell, physical baseline materialization can continue afterward
+under the context's maintenance budget. Do not query that map until its
+diagnostic `IsMaterialized` value is `true`.
+
+## Related guides
 
 - [Map authoring](MapAuthoring.md)
 - [Map publication](MapPublication.md)

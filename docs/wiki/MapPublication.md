@@ -4,7 +4,7 @@
 graph state. Maps, overlays, removals, area policies, and GridForge events are
 composed into immutable snapshots at deterministic fixed-step boundaries.
 
-## 1. Operation Types
+## Operation Types
 
 | Operation | Purpose |
 | --- | --- |
@@ -19,7 +19,7 @@ Every operation has a unique host-supplied sequence and earliest eligible
 All four operation kinds expose a receipt that starts pending and becomes
 terminal. Its `PublishedFrame` records the actual publication frame.
 
-## 2. Map Commit
+## Map Commit
 
 This C# fragment assumes a prepared map and deterministic host sequence:
 
@@ -39,6 +39,14 @@ does not mean publication has completed. Observe `commit.Receipt.Status` after
 advancing the context. A rejected or invalid candidate never partially changes
 the live snapshot.
 
+A map with a default cell may need additional fixed frames after its commit is
+applied while Trailblazer captures the matching GridForge cells under the
+configured maintenance budget. The map remains fail-closed during that bounded
+work, so queries can temporarily return `NoMap`. Continue calling
+`context.Simulate()` and retry only after the map reports `IsMaterialized` in
+`context.Pathing.GetNavigationGraphDiagnostics()`. Explicitly authored cells do
+not require a full-grid default baseline.
+
 For a replacement of the same map ID:
 
 - the GridForge binding must remain compatible;
@@ -50,7 +58,7 @@ For a replacement of the same map ID:
 Preservation never prunes invalid entries. If the preserved set is incompatible
 with the replacement bake, the complete operation rejects transactionally.
 
-## 3. Overlay Transaction
+## Overlay Transaction
 
 One `NavigationOverlayTransaction` contains canonically ordered
 `NavigationMapOverlayDelta` values. Each map delta can contain:
@@ -88,7 +96,7 @@ All deltas publish or reject together. This is the correct boundary for a ladder
 whose two directions must appear atomically, or a flood that changes several
 addresses as one simulation event.
 
-## 4. Effective Cell Semantics
+## Effective Cell Semantics
 
 Cell precedence is overlay, explicit bake, map default, then no cell. Set carries
 one complete payload. Suppress hides every lower layer. Revert removes the
@@ -97,7 +105,7 @@ overlay decision and reveals the bake/default.
 Changing a map default requires a map replacement. A default is deliberately
 not an overlay-wide mutable flag because it is immutable authoring truth.
 
-## 5. Host Materialization
+## Host Materialization
 
 Terrain, fluids, doors, damage, construction, and other gameplay systems remain
 host owned. Before admission, the host translates their deterministic result to
@@ -108,7 +116,7 @@ Do not install a search-time predicate for matter or terrain. A delegate can
 change invisibly and would force global invalidation. Materialized cell data
 lets the graph invalidate only affected pages/components when possible.
 
-## 6. GridForge Changes
+## GridForge Changes
 
 The context observes committed changes from its bound `GridWorld` and queues
 them into the same graph-maintenance authority. `context.Simulate()` advances
@@ -122,7 +130,7 @@ An absent sparse cell remains absent even under a map default. If it later
 appears, the effective semantic cell becomes active through the normal physical
 event path.
 
-## 7. Cache And Lease Effects
+## Cache And Lease Effects
 
 Published graph snapshots are immutable. A guide or cached result records the
 exact pages, components, policy revision, transition-rule generation, and world
@@ -133,7 +141,7 @@ Held transition instructions are pull-validated. If their definition moves or
 is removed, completion returns `Stale` and does not advance the cursor. The
 controller can then release/reacquire guidance through its ordinary lifecycle.
 
-## 8. Operation Limits
+## Operation Limits
 
 `NavigationOperationLimits` bounds queued operations, descriptor bytes,
 retained map/overlay state, and resumable maintenance. Admission failure is
@@ -146,17 +154,18 @@ payloads and local duplicates; these public operation limits govern the
 per-map and context-wide candidate-retained or published rule counts during
 fold and publication.
 
-## 9. Lifecycle Checklist
+## Lifecycle Checklist
 
 1. Add or restore GridForge grids.
 2. Attach/create the `TrailblazerWorldContext`.
 3. Publish every referenced map and area policy.
 4. Replay persisted overlay transactions in deterministic order.
-5. Flush/pump fixed-step publication until receipts are terminal.
+5. Pump fixed-step publication until receipts are terminal and default-backed
+   maps are materialized.
 6. Restore or start guided Navigators.
 7. Dispose the context only after leases and host controllers are released.
 
-## 10. Related References
+## Related guides
 
 - [Navigation maps](NavigationMaps.md)
 - [Map authoring](MapAuthoring.md)

@@ -21,40 +21,40 @@ public partial class NavMotor
     /// <remarks>
     /// This method opens a traversal phase for the current frame so duplicate motion accumulation is rejected
     /// until the host calls <see cref="FinalizeTraversal"/> or <see cref="AbortTraversalFrame"/>.
-    /// The velocityDelta output is a displacement: the fixed timestep has already been applied.
+    /// The locomotion displacement already includes the fixed timestep.
     /// Neither displacement output is a physical force or impulse; do not apply another timestep or inverse-mass conversion.
     /// </remarks>
     /// <param name="request">The movement intent and transform snapshots for this fixed frame.</param>
-    /// <param name="velocityDelta">The world-space locomotion displacement, in world units, for this fixed frame.</param>
-    /// <param name="positionDelta">The additional world-space platform displacement, in world units.</param>
-    /// <param name="rotationDelta">The platform rotation delta to apply to the object.</param>
+    /// <param name="locomotionDisplacement">The world-space locomotion displacement, in world units, for this fixed frame.</param>
+    /// <param name="platformDisplacement">The additional world-space platform displacement, in world units.</param>
+    /// <param name="platformRotationDelta">The platform rotation delta to apply to the object.</param>
     public bool TryTraversal(
         TrekRequest request,
-        out Vector3d velocityDelta,
-        out Vector3d positionDelta,
-        out FixedQuaternion rotationDelta)
+        out Vector3d locomotionDisplacement,
+        out Vector3d platformDisplacement,
+        out FixedQuaternion platformRotationDelta)
     {
-        ResetTraversalOutputs(out velocityDelta, out positionDelta, out rotationDelta);
+        ResetTraversalOutputs(out locomotionDisplacement, out platformDisplacement, out platformRotationDelta);
         if (!TryBeginTraversalFrame())
             return false;
 
         PrepareTraversalState(request);
         ResolveTraversalForces(request);
 
-        velocityDelta = ResolveTraversalVelocityDelta();
-        ResolvePlatformTraversal(request, ref positionDelta, ref rotationDelta);
+        locomotionDisplacement = ResolveLocomotionDisplacement();
+        ResolvePlatformTraversal(request, ref platformDisplacement, ref platformRotationDelta);
         return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ResetTraversalOutputs(
-        out Vector3d velocityDelta,
-        out Vector3d positionDelta,
-        out FixedQuaternion rotationDelta)
+        out Vector3d locomotionDisplacement,
+        out Vector3d platformDisplacement,
+        out FixedQuaternion platformRotationDelta)
     {
-        velocityDelta = Vector3d.Zero;
-        positionDelta = Vector3d.Zero;
-        rotationDelta = FixedQuaternion.Identity;
+        locomotionDisplacement = Vector3d.Zero;
+        platformDisplacement = Vector3d.Zero;
+        platformRotationDelta = FixedQuaternion.Identity;
     }
 
     private bool TryBeginTraversalFrame()
@@ -946,7 +946,7 @@ public partial class NavMotor
     #endregion
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private Vector3d ResolveTraversalVelocityDelta()
+    private Vector3d ResolveLocomotionDisplacement()
     {
         return _forceOutput != Vector3d.Zero
             ? _forceOutput * DeltaTime
@@ -955,8 +955,8 @@ public partial class NavMotor
 
     private void ResolvePlatformTraversal(
         TrekRequest request,
-        ref Vector3d positionDelta,
-        ref FixedQuaternion rotationDelta)
+        ref Vector3d platformDisplacement,
+        ref FixedQuaternion platformRotationDelta)
     {
         PlatformLocomotion platformModule = PlatformModule;
 
@@ -971,8 +971,8 @@ public partial class NavMotor
         platformModule.GetPlatformInfluence(
             request.FootPosition ?? request.Origin,
             request.Rotation,
-            out positionDelta,
-            out rotationDelta);
+            out platformDisplacement,
+            out platformRotationDelta);
     }
 
     #endregion

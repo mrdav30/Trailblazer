@@ -2177,10 +2177,10 @@ public class NavigatorTests : IDisposable
 
         navigator.AddPositionDelta(Vector3d.Zero);
         navigator.ApplyRotationDelta(FixedQuaternion.Identity);
-        navigator.AddVelocityDelta(Vector3d.Zero);
+        navigator.AddLocomotionDisplacement(Vector3d.Zero);
         navigator.AddPositionDelta(Vector3d.Right);
         navigator.ApplyRotationDelta(quarterTurn);
-        navigator.AddVelocityDelta(Vector3d.Forward);
+        navigator.AddLocomotionDisplacement(Vector3d.Forward);
 
         navigator.CommitFrameMotion();
 

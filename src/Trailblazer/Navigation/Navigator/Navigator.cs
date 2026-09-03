@@ -96,7 +96,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <summary>
     /// The locomotion displacement accumulated for the current fixed frame, with the timestep already applied.
     /// </summary>
-    protected Vector3d _velocityDelta;
+    protected Vector3d _locomotionDisplacement;
 
     /// <summary>
     /// Indicates whether the Navigator has been set.
@@ -697,11 +697,15 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (TryGetTurnDirection(_frameRequest, out Vector3d turnDirection))
             Turning!.RequestTurnDirection(Forward, turnDirection);
 
-        if (Motor!.TryTraversal(_frameRequest, out Vector3d vDelta, out Vector3d pDelta, out FixedQuaternion rDelta))
+        if (Motor!.TryTraversal(
+                _frameRequest,
+                out Vector3d locomotionDisplacement,
+                out Vector3d platformDisplacement,
+                out FixedQuaternion platformRotationDelta))
         {
-            AddVelocityDelta(vDelta);
-            AddPositionDelta(pDelta);
-            ApplyRotationDelta(rDelta);
+            AddLocomotionDisplacement(locomotionDisplacement);
+            AddPositionDelta(platformDisplacement);
+            ApplyRotationDelta(platformRotationDelta);
         }
 
         if (Turning!.TrySimulateTurn(_position, _lastPosition, Forward, _rotation, out FixedQuaternion appliedRotation))
@@ -724,7 +728,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             message: "Navigator must be Setup and Initialized before CommitFrameMotion().");
 
         _lastPosition = _position;
-        _position += _positionDelta + _velocityDelta;
+        _position += _positionDelta + _locomotionDisplacement;
 
         CheckVoxelOccupancy();
 
@@ -754,7 +758,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             _stuckThresholdSpeed = Fixed64.Zero;
 
         _positionDelta = Vector3d.Zero;
-        _velocityDelta = Vector3d.Zero;
+        _locomotionDisplacement = Vector3d.Zero;
 
         Motor!.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: FootPosition);
 
@@ -911,7 +915,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     #endregion
 
-    #region Deltas - Position / Velocity / Rotation
+    #region Motion - Position / Locomotion / Rotation
 
     /// <summary>
     /// Queues an additional world-space displacement for the next <see cref="CommitFrameMotion"/>.
@@ -950,16 +954,16 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Queues a world-space locomotion displacement for the next <see cref="CommitFrameMotion"/>.
     /// </summary>
     /// <remarks>
-    /// Despite the method name, delta is displacement in world units, not a velocity change, force, or impulse.
+    /// The supplied displacement is in world units, not a velocity change, force, or impulse.
     /// Motor traversal has already applied the fixed timestep; do not apply another timestep or inverse-mass conversion.
     /// </remarks>
-    /// <param name="delta">The locomotion displacement to add. Zero has no effect.</param>
+    /// <param name="displacement">The locomotion displacement to add. Zero has no effect.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual void AddVelocityDelta(Vector3d delta)
+    public virtual void AddLocomotionDisplacement(Vector3d displacement)
     {
-        if (delta == Vector3d.Zero) return;
+        if (displacement == Vector3d.Zero) return;
 
-        _velocityDelta += delta;
+        _locomotionDisplacement += displacement;
     }
 
     #endregion

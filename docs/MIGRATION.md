@@ -109,17 +109,30 @@ names and schema versions are rejected; there is no fallback reader.
 
 ## Final Public Name Cleanup
 
-The same major version removes misspellings and redundant controller accessors:
+The same major version corrects misleading motion names and removes misspellings
+and redundant controller accessors:
 
 | Removed name | Current name or access |
 | --- | --- |
 | `Navigator.IsGuideded` | `Navigator.IsGuided` |
+| `Navigator.AddVelocityDelta(...)` | `Navigator.AddLocomotionDisplacement(...)` |
+| protected `Navigator._velocityDelta` | protected `Navigator._locomotionDisplacement` |
+| `NavMotor.TryTraversal(...)` output `velocityDelta` | `locomotionDisplacement` |
+| `NavMotor.TryTraversal(...)` output `positionDelta` | `platformDisplacement` |
+| `NavMotor.TryTraversal(...)` output `rotationDelta` | `platformRotationDelta` |
 | `PlatformLocomotion.InteriaApplied` | `PlatformLocomotion.InertiaApplied` |
 | `WaterLocomotion.DefaultBouyancyFactor` | `WaterLocomotion.DefaultBuoyancyFactor` |
 | public `TrailblazerWorldContext.Navigation` / `TrailblazerNavigationService` | no host-facing service; bind and drive `Navigator` directly |
 | component `Context` getters | context binding remains constructor/Navigator owned |
 | public NavMotor module aliases | `Handler.Move`, `Handler.Jump`, `Handler.Water`, `Handler.Fly`, and `Handler.Climb` |
 | `LocomotionProfile.CreateBuilder(...)` | `new LocomotionProfileBuilder(...)` |
+
+Update method calls, overrides, protected-field references, and named arguments
+to the corrected motion names. These are naming-only changes: locomotion and
+platform outputs remain displacements in world units, with the fixed timestep
+already applied. Do not multiply them by time again. `TryTraversal(...)` keeps
+its name and its existing finalization/abort lifecycle; no forwarding aliases
+are provided.
 
 The outer Navigator record is schema version 3. Earlier outer schemas reject
 transactionally; they are not read through renamed-field fallbacks.

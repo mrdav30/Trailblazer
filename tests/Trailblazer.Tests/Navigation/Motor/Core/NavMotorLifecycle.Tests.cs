@@ -57,11 +57,15 @@ public sealed class NavMotorLifecycleTests : IDisposable
             Rate = TrekRate.Moderate
         };
 
-        motor.TryTraversal(request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)
+        motor.TryTraversal(
+                request,
+                locomotionDisplacement: out Vector3d locomotionDisplacement,
+                platformDisplacement: out Vector3d platformDisplacement,
+                platformRotationDelta: out FixedQuaternion platformRotationDelta)
             .Should().BeFalse();
-        velocityDelta.Should().Be(Vector3d.Zero);
-        positionDelta.Should().Be(Vector3d.Zero);
-        rotationDelta.Should().Be(FixedQuaternion.Identity);
+        locomotionDisplacement.Should().Be(Vector3d.Zero);
+        platformDisplacement.Should().Be(Vector3d.Zero);
+        platformRotationDelta.Should().Be(FixedQuaternion.Identity);
     }
 
     [Fact]
@@ -601,20 +605,20 @@ public sealed class NavMotorLifecycleTests : IDisposable
 
         withoutGround.Motor.TryTraversal(
                 withoutGround.FrameRequest,
-                out Vector3d withoutGroundVelocity,
-                out Vector3d withoutGroundPosition,
-                out FixedQuaternion withoutGroundRotation)
+                out Vector3d withoutGroundLocomotionDisplacement,
+                out Vector3d withoutGroundPlatformDisplacement,
+                out FixedQuaternion withoutGroundPlatformRotationDelta)
             .Should().BeTrue();
         zeroFriction.Motor.TryTraversal(
                 zeroFriction.FrameRequest,
-                out Vector3d zeroFrictionVelocity,
-                out Vector3d zeroFrictionPosition,
-                out FixedQuaternion zeroFrictionRotation)
+                out Vector3d zeroFrictionLocomotionDisplacement,
+                out Vector3d zeroFrictionPlatformDisplacement,
+                out FixedQuaternion zeroFrictionPlatformRotationDelta)
             .Should().BeTrue();
 
-        withoutGroundVelocity.Should().Be(zeroFrictionVelocity);
-        withoutGroundPosition.Should().Be(zeroFrictionPosition);
-        withoutGroundRotation.Should().Be(zeroFrictionRotation);
+        withoutGroundLocomotionDisplacement.Should().Be(zeroFrictionLocomotionDisplacement);
+        withoutGroundPlatformDisplacement.Should().Be(zeroFrictionPlatformDisplacement);
+        withoutGroundPlatformRotationDelta.Should().Be(zeroFrictionPlatformRotationDelta);
         withoutGround.Motor.AbortTraversalFrame();
         zeroFriction.Motor.AbortTraversalFrame();
     }
@@ -846,20 +850,20 @@ public sealed class NavMotorLifecycleTests : IDisposable
 
         slopedAgent.Motor.TryTraversal(
                 slopedAgent.FrameRequest,
-                out Vector3d slopedVelocity,
+                out Vector3d slopedDisplacement,
                 out _,
                 out _)
             .Should().BeTrue();
         flatAgent.Motor.TryTraversal(
                 flatAgent.FrameRequest,
-                out Vector3d flatVelocity,
+                out Vector3d flatDisplacement,
                 out _,
                 out _)
             .Should().BeTrue();
 
-        slopedVelocity.Z.Should().BeGreaterThan(Fixed64.Zero);
-        flatVelocity.Z.Should().BeGreaterThan(Fixed64.Zero);
-        slopedVelocity.Y.Should().BeLessThan(flatVelocity.Y);
+        slopedDisplacement.Z.Should().BeGreaterThan(Fixed64.Zero);
+        flatDisplacement.Z.Should().BeGreaterThan(Fixed64.Zero);
+        slopedDisplacement.Y.Should().BeLessThan(flatDisplacement.Y);
         slopedAgent.Motor.AbortTraversalFrame();
         flatAgent.Motor.AbortTraversalFrame();
     }
@@ -879,11 +883,11 @@ public sealed class NavMotorLifecycleTests : IDisposable
         agent.FrameRequest.Direction = Vector3d.Right;
         agent.FrameRequest.Rate = TrekRate.Fast;
 
-        agent.Motor.TryTraversal(agent.FrameRequest, out Vector3d velocityDelta, out _, out _)
+        agent.Motor.TryTraversal(agent.FrameRequest, out Vector3d locomotionDisplacement, out _, out _)
             .Should().BeTrue();
 
-        velocityDelta.X.Should().BeGreaterThan(Fixed64.Zero);
-        velocityDelta.Z.Should().Be(Fixed64.Zero);
+        locomotionDisplacement.X.Should().BeGreaterThan(Fixed64.Zero);
+        locomotionDisplacement.Z.Should().Be(Fixed64.Zero);
         agent.Motor.AbortTraversalFrame();
     }
 

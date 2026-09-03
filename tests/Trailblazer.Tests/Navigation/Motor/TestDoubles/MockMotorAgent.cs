@@ -24,7 +24,7 @@ public class MockMotorAgent
 
     private FixedQuaternion _rotationDelta = FixedQuaternion.Identity;
 
-    private Vector3d _velocityDelta;
+    private Vector3d _locomotionDisplacement;
 
     public NavMotor Motor { get; set; }
 
@@ -56,15 +56,19 @@ public class MockMotorAgent
         FrameRequest.FootPosition = GetFootPosition();
         FrameRequest.Rotation = Rotation;
 
-        if (Motor.TryTraversal(FrameRequest, out var velocityDelta, out var positionDelta, out var rotationDelta))
+        if (Motor.TryTraversal(
+                FrameRequest,
+                out var locomotionDisplacement,
+                out var platformDisplacement,
+                out var platformRotationDelta))
         {
-            AddVelocityDelta(velocityDelta);
-            AddPositionDelta(positionDelta);
-            ApplyRotationDelta(rotationDelta);
+            AddLocomotionDisplacement(locomotionDisplacement);
+            AddPositionDelta(platformDisplacement);
+            ApplyRotationDelta(platformRotationDelta);
         }
 
         LastPosition = Position;
-        Position += _positionDelta + _velocityDelta;
+        Position += _positionDelta + _locomotionDisplacement;
 
         if (_rotationDelta != FixedQuaternion.Identity)
         {
@@ -78,7 +82,7 @@ public class MockMotorAgent
         Velocity = (Position - LastPosition) * invDelta;
 
         _positionDelta = Vector3d.Zero;
-        _velocityDelta = Vector3d.Zero;
+        _locomotionDisplacement = Vector3d.Zero;
 
         Motor.FinalizeTraversal(Position, LastPosition, Rotation, FrameCondition, GetFootPosition());
 
@@ -89,10 +93,10 @@ public class MockMotorAgent
     // Update TraversalState based on output from controller
     public void CheckTrekCondition()
     {
-        // If scout is already grounded, maintain state unless velocity pushes it up
+        // If scout is already grounded, maintain state unless locomotion moves it up
         if (FrameCondition.Medium == TraversalMedium.Solid)
         {
-            if (_velocityDelta.Y > Fixed64.Zero)
+            if (_locomotionDisplacement.Y > Fixed64.Zero)
             {
                 // If scout is moving upwards, it should no longer be grounded
                 _previousMedium = FrameCondition.Medium;
@@ -122,8 +126,8 @@ public class MockMotorAgent
             Fixed64 surfaceLevel = FrameCondition.SurfaceLevel;
             Fixed64 scoutHeight = Position.Y;
 
-            // Ensure velocity is downward and scout is within landing range
-            if (_velocityDelta.Y < Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
+            // Ensure locomotion is downward and scout is within landing range
+            if (_locomotionDisplacement.Y < Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
             {
                 // Set state to previous state or assume ground
                 FrameCondition.Medium = _previousMedium ?? TraversalMedium.Solid;
@@ -149,7 +153,7 @@ public class MockMotorAgent
 
             if (scoutHeight > surfaceLevel)
             {
-                if (_velocityDelta.Y > Fixed64.Zero)
+                if (_locomotionDisplacement.Y > Fixed64.Zero)
                 {
                     // If scout is moving upwards, it should no longer be grounded
                     _previousMedium = FrameCondition.Medium;
@@ -168,7 +172,6 @@ public class MockMotorAgent
         if (delta == Vector3d.Zero) return;
 
         _positionDelta += delta;
-        // shift last position so it doesn't alter object's velocity
         LastPosition += delta;
     }
 
@@ -181,12 +184,11 @@ public class MockMotorAgent
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual void AddVelocityDelta(Vector3d delta)
+    public virtual void AddLocomotionDisplacement(Vector3d displacement)
     {
-        if (delta == Vector3d.Zero) return;
+        if (displacement == Vector3d.Zero) return;
 
-        // assume a mass of 1...for now
-        _velocityDelta += delta;
+        _locomotionDisplacement += displacement;
     }
 
     public virtual Vector3d GetFootPosition()

@@ -45,10 +45,10 @@ elapsed simulation seconds. These quantities are related, but not interchangeabl
 The shorthand `velocity = acceleration * time` assumes constant acceleration
 and an initial velocity of zero. It is not the general velocity update.
 
-Despite its name, `TryTraversal(...)` returns `velocityDelta` as the locomotion
-displacement for the current fixed step: the motor has already multiplied its
-resolved velocity by `DeltaTime`. `positionDelta` is additional platform
-displacement, and `rotationDelta` is the platform rotation delta. The built-in
+`TryTraversal(...)` returns `locomotionDisplacement` for the current fixed step:
+the motor has already multiplied its resolved velocity by `DeltaTime`.
+`platformDisplacement` is additional platform displacement, and
+`platformRotationDelta` is the platform rotation delta. The built-in
 Navigator adds both displacement outputs to position during
 `CommitFrameMotion()`. Do not multiply either displacement by time again.
 
@@ -71,11 +71,11 @@ Direct motor integration has two phases in the same simulation frame:
 ```csharp
 if (motor.TryTraversal(
         frameRequest,
-        out Vector3d velocityDelta,
-        out Vector3d positionDelta,
-        out FixedQuaternion rotationDelta))
+        out Vector3d locomotionDisplacement,
+        out Vector3d platformDisplacement,
+        out FixedQuaternion platformRotationDelta))
 {
-    ApplyMotion(velocityDelta, positionDelta, rotationDelta);
+    ApplyMotion(locomotionDisplacement, platformDisplacement, platformRotationDelta);
     TrekCondition refreshed = ProbeTraversalState();
 
     motor.FinalizeTraversal(

@@ -137,7 +137,7 @@ public abstract partial class Navigator
                 : Vector3d.Forward;
 
             _positionDelta = Vector3d.Zero;
-            _velocityDelta = Vector3d.Zero;
+            _locomotionDisplacement = Vector3d.Zero;
             _rotationDelta = FixedQuaternion.Identity;
             _isSet = true;
             _isInitialized = Motor != null;

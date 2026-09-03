@@ -69,6 +69,10 @@ instruction. `CommitFrameMotion()` applies accumulated locomotion/platform
 displacements and rotation deltas; it does not execute semantic actions. Both
 calls belong to the authoritative fixed-step lifecycle, not the render loop.
 
+Custom integrations can queue locomotion with `AddLocomotionDisplacement(...)`
+and additional world-space offsets with `AddPositionDelta(...)`. Both accept
+displacement in world units, with any timestep conversion already performed.
+
 After the frame request and motor state are fully finalized,
 `CommitFrameMotion()` resolves the root position against the current published
 navigation graph. `LastCommittedCell` then exposes the cell address, area,

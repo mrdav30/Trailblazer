@@ -95,13 +95,17 @@ public class PlatformLocomotionTests : IDisposable
         scout.FrameRequest.FootPosition = scout.GetFootPosition();
         scout.FrameRequest.Rotation = scout.Rotation;
 
-        if (scout.Motor.TryTraversal(scout.FrameRequest, out var velocityDelta, out var positionDelta, out var rotationDelta))
+        if (scout.Motor.TryTraversal(
+                scout.FrameRequest,
+                out var locomotionDisplacement,
+                out var platformDisplacement,
+                out var platformRotationDelta))
         {
             scout.LastPosition = scout.Position;
-            scout.Position += positionDelta + velocityDelta;
+            scout.Position += platformDisplacement + locomotionDisplacement;
 
-            if (rotationDelta != FixedQuaternion.Identity)
-                scout.Rotation *= rotationDelta;
+            if (platformRotationDelta != FixedQuaternion.Identity)
+                scout.Rotation *= platformRotationDelta;
         }
 
         scout.FrameCondition = refreshedCondition;

@@ -20,7 +20,7 @@ public interface INavigate : ISteer
     Vector3d LastPosition { get; }
 
     /// <summary>
-    /// The object's visual rotation in world space.
+    /// The object's authoritative simulation rotation in world space, before host presentation smoothing.
     /// </summary>
     FixedQuaternion Rotation { get; }
 

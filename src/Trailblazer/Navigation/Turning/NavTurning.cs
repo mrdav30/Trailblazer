@@ -32,11 +32,12 @@ public partial class NavTurning : IRecordable
         Fixed64.FromRaw(0x68DB9L); // 0.0001M;
 
     /// <summary>
-    /// Represents the default turn rate value used for rotation calculations.
+    /// The default time-scaled rotation interpolation rate, equal to one eighth per second.
     /// </summary>
     /// <remarks>
-    /// This value is typically used as a standard or baseline turn rate in movement or rotation logic.
-    /// The specific value is one eighth of a full rotation, which may correspond to 45 degrees if a full rotation is considered 360 degrees.
+    /// Without a positive interpolation override, the per-step interpolation fraction is
+    /// <see cref="TurnRate"/> multiplied by the fixed timestep and clamped to [0, 1].
+    /// This is not an angle or a fixed angular speed.
     /// </remarks>
     public static readonly Fixed64 DefaultTurnRate = Fixed64.One / 8;
 
@@ -50,7 +51,7 @@ public partial class NavTurning : IRecordable
     public bool CanTurn = true;
 
     /// <summary>
-    /// The base turn rate, controlling how much rotation is applied per simulation step.
+    /// The rotation interpolation rate per second, multiplied by the fixed timestep when no positive override is supplied.
     /// </summary>
     public Fixed64 TurnRate = DefaultTurnRate;
 
@@ -140,8 +141,12 @@ public partial class NavTurning : IRecordable
     }
 
     /// <summary>
-    ///Advances the object’s rotation toward the <see cref="TargetRotation"/>, handling both buffered and auto-turn logic.
+    /// Advances authoritative rotation toward <see cref="TargetRotation"/>, handling buffered and collision turns.
     /// </summary>
+    /// <remarks>
+    /// Call once per fixed simulation step with authoritative transform snapshots.
+    /// Host presentation interpolation is separate and must not be fed back into these inputs.
+    /// </remarks>
     public bool TrySimulateTurn(
         Vector3d position,
         Vector3d lastPosition,

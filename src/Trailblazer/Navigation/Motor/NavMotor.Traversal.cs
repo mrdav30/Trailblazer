@@ -16,17 +16,18 @@ public partial class NavMotor
     #region Request Traversal
 
     /// <summary>
-    /// Processes a movement request and applies necessary forces.
+    /// Resolves one fixed frame's locomotion and platform motion into displacement and rotation outputs.
     /// </summary>
     /// <remarks>
-    /// This method opens a traversal phase for the current frame so duplicate force accumulation is rejected
+    /// This method opens a traversal phase for the current frame so duplicate motion accumulation is rejected
     /// until the host calls <see cref="FinalizeTraversal"/> or <see cref="AbortTraversalFrame"/>.
-    /// Movement forces such as gravity, jump, and platform adjustments are applied.
+    /// The velocityDelta output is a displacement: the fixed timestep has already been applied.
+    /// Neither displacement output is a physical force or impulse; do not apply another timestep or inverse-mass conversion.
     /// </remarks>
-    /// <param name="request">The movement request containing desired movement parameters</param>
-    /// <param name="velocityDelta">The resulting velocity change to apply to the object</param>
-    /// <param name="positionDelta">The resulting position change from platform movement to apply to the object</param>
-    /// <param name="rotationDelta">The resulting rotation change from platform movement to apply to the object</param>
+    /// <param name="request">The movement intent and transform snapshots for this fixed frame.</param>
+    /// <param name="velocityDelta">The world-space locomotion displacement, in world units, for this fixed frame.</param>
+    /// <param name="positionDelta">The additional world-space platform displacement, in world units.</param>
+    /// <param name="rotationDelta">The platform rotation delta to apply to the object.</param>
     public bool TryTraversal(
         TrekRequest request,
         out Vector3d velocityDelta,

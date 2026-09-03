@@ -181,8 +181,12 @@ public class MoveLocomotion : ILocomotion
     }
 
     /// <summary>
-    /// The scout’s current velocity in world space.
+    /// The motor's working locomotion velocity in world units per second.
     /// </summary>
+    /// <remarks>
+    /// Finalization derives this from accepted displacement, then applies platform-transfer and ceiling adjustments.
+    /// It is not an alias for the owning Navigator's committed velocity.
+    /// </remarks>
     [Transient]
     public Vector3d FrameVelocity { get; set; }
 

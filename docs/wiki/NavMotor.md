@@ -1,9 +1,9 @@
 # NavMotor
 
-`NavMotor` turns one fixed frame's movement request into deterministic velocity,
-position, and rotation deltas. It supplies gameplay-oriented locomotion for
-ground movement, jumping, falling, sliding, water, controlled flight, climbing,
-and moving platforms.
+`NavMotor` turns one fixed frame's movement request into deterministic
+locomotion and platform displacements, plus a rotation delta. It supplies
+gameplay-oriented locomotion for ground movement, jumping, falling, sliding,
+water, controlled flight, climbing, and moving platforms.
 
 Most applications should drive it through `Navigator`. Use `NavMotor` directly
 only when the host needs the locomotion stack without Navigator's steering,
@@ -29,12 +29,42 @@ The host still owns:
 
 The motor never performs a raycast or reads an engine object implicitly.
 
+## Motion quantities and units
+
+Use consistent world units for distance and the context's fixed `DeltaTime` for
+elapsed simulation seconds. These quantities are related, but not interchangeable:
+
+| Quantity | Meaning over one fixed step | Units |
+| --- | --- | --- |
+| Displacement | `currentPosition - previousPosition` | world units |
+| Frame-average velocity | `displacement / DeltaTime` | world units per second |
+| Velocity change from constant acceleration | `acceleration * DeltaTime` | world units per second |
+| Next velocity under constant acceleration | `previousVelocity + acceleration * DeltaTime` | world units per second |
+| Frame acceleration | `(currentVelocity - previousVelocity) / DeltaTime` | world units per second squared |
+
+The shorthand `velocity = acceleration * time` assumes constant acceleration
+and an initial velocity of zero. It is not the general velocity update.
+
+Despite its name, `TryTraversal(...)` returns `velocityDelta` as the locomotion
+displacement for the current fixed step: the motor has already multiplied its
+resolved velocity by `DeltaTime`. `positionDelta` is additional platform
+displacement, and `rotationDelta` is the platform rotation delta. The built-in
+Navigator adds both displacement outputs to position during
+`CommitFrameMotion()`. Do not multiply either displacement by time again.
+
+These outputs are not physical forces or impulses. A host using mass-based
+physics must explicitly convert between its body's quantities and Trailblazer's
+motion contract. Inverse mass converts force to acceleration (`a = F / m`) or
+impulse to a velocity change (`deltaVelocity = impulse / m`); it must not be
+applied to an already computed velocity or displacement. The core motor does
+not require a rigid body or an assumed physical mass of one.
+
 ## The two-phase frame contract
 
 Direct motor integration has two phases in the same simulation frame:
 
 1. Call `TryTraversal(...)` with the frame's `TrekRequest`.
-2. Apply its velocity, position, and rotation deltas.
+2. Apply its locomotion/platform displacements and rotation delta.
 3. Refresh contact, medium, surface, ceiling, and platform state.
 4. Call `FinalizeTraversal(...)` with the resulting snapshots.
 
@@ -60,8 +90,14 @@ if (motor.TryTraversal(
 `ApplyMotion(...)` and `ProbeTraversalState()` are host placeholders. They are
 where an engine adapter or simulation body performs its own work.
 
+Pass the actual accepted positions to `FinalizeTraversal(...)`, after the
+host has resolved movement and collisions. The motor derives frame velocity
+from that displacement, not from an unfulfilled requested destination. See
+[Navigator's committed motion](Navigator.md#committed-motion-and-locomotion-state)
+for the distinction between observed controller motion and locomotion state.
+
 Calling `TryTraversal(...)` twice in the same frame returns `false` the second
-time so forces are not accumulated twice. Leaving a traversal open across a
+time so motion is not accumulated twice. Leaving a traversal open across a
 frame boundary is an error: finalize it in the opening frame or call
 `AbortTraversalFrame()` when the host intentionally discards that frame.
 

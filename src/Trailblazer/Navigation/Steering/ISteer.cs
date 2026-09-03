@@ -18,17 +18,17 @@ namespace Trailblazer.Navigation;
 public interface ISteer : IVoxelOccupant
 {
     /// <summary>
-    /// The current velocity of the object in world space.
+    /// The current simulation velocity of the object in world units per second.
     /// </summary>
     Vector3d Velocity { get; }
 
     /// <summary>
-    /// The current movement speed, derived from the magnitude of the velocity.
+    /// The current movement speed in world units per second, derived from the magnitude of the velocity.
     /// </summary>
     Fixed64 Speed { get; }
 
     /// <summary>
-    /// The current acceleration vector of the object, updated each frame based on velocity change.
+    /// The current simulation acceleration in world units per second squared, based on fixed-step velocity change.
     /// </summary>
     Vector3d Acceleration { get; }
 

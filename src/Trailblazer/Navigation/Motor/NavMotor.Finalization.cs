@@ -16,12 +16,18 @@ public partial class NavMotor
     #region Finalize
 
     /// <summary>
-    /// Finalizes traversal state updates and prepares the object for the next simulation frame.
+    /// Reconciles accepted host motion and traversal state for the fixed frame that opened traversal.
     /// </summary>
     /// <remarks>
-    /// This method updates the frame velocity, applies necessary adjustments based on traversal state changes,
-    /// and processes platform movement or environmental effects as needed.
+    /// Pass authoritative positions after host movement and collision resolution, not requested or rendered positions.
+    /// Frame velocity starts from accepted displacement divided by the context's fixed timestep;
+    /// platform-transfer and ceiling adjustments may then change the motor's working velocity.
     /// </remarks>
+    /// <param name="newPosition">The accepted world position at the end of this fixed step.</param>
+    /// <param name="lastPosition">The authoritative world position at the start of the same fixed step.</param>
+    /// <param name="newRotation">The accepted world rotation, without presentation interpolation.</param>
+    /// <param name="conditonRefresh">The host's refreshed traversal and contact snapshot.</param>
+    /// <param name="newFootPosition">The accepted foot position for platform tracking, or newPosition when omitted.</param>
     public void FinalizeTraversal(
         Vector3d newPosition,
         Vector3d lastPosition,

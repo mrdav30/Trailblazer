@@ -94,7 +94,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     protected FixedQuaternion _rotationDelta = FixedQuaternion.Identity;
 
     /// <summary>
-    /// The velocity change computed during the simulation frame.
+    /// The locomotion displacement accumulated for the current fixed frame, with the timestep already applied.
     /// </summary>
     protected Vector3d _velocityDelta;
 
@@ -139,12 +139,14 @@ public abstract partial class Navigator : INavigate, IRecordable
     public Vector3d Forward { get; protected set; }
 
     /// <inheritdoc/>
+    /// <remarks>Derived from committed world displacement divided by the context's fixed timestep.</remarks>
     public Vector3d Velocity => _velocity;
 
     /// <inheritdoc/>
     public Fixed64 Speed => _speed;
 
     /// <inheritdoc/>
+    /// <remarks>Derived from the change in committed velocity divided by the context's fixed timestep.</remarks>
     public Vector3d Acceleration => _acceleration;
 
     /// <summary>
@@ -707,11 +709,13 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Finalizes traversal by updating movement calculations and applying corrections.
+    /// Commits queued motion and finalizes controller and motor state for one authoritative fixed step.
     /// </summary>
     /// <remarks>
-    /// Should be called once every rendering/player interfacing frame,
-    /// after physics bodies apply velocity changes.
+    /// Call once per fixed simulation frame after <see cref="Simulate"/>, not once per rendering frame.
+    /// The queued locomotion and platform values are displacements with the timestep already applied.
+    /// After traversal-state corrections, velocity and acceleration are derived from committed motion
+    /// using the context's fixed timestep. This method does not resolve engine physics or semantic actions.
     /// </remarks>
     public virtual void CommitFrameMotion()
     {
@@ -910,11 +914,11 @@ public abstract partial class Navigator : INavigate, IRecordable
     #region Deltas - Position / Velocity / Rotation
 
     /// <summary>
-    /// Applies a positional delta to the current position and updates the last known position accordingly.
+    /// Queues an additional world-space displacement for the next <see cref="CommitFrameMotion"/>.
     /// </summary>
     /// <remarks>
-    /// This method adjusts both the current and last positions to maintain consistent velocity calculations.
-    /// Use this method to apply external position changes without affecting velocity tracking.
+    /// The base commit implementation includes this displacement when deriving velocity from the resulting position.
+    /// The supplied value is already a displacement; no timestep or inverse-mass conversion is applied here.
     /// </remarks>
     /// <param name="delta">
     /// The vector representing the positional change to apply. If the vector is <see cref="Vector3d.Zero"/>, no change is made.
@@ -925,7 +929,6 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (delta == Vector3d.Zero) return;
 
         _positionDelta += delta;
-        // shift last position so it doesn't alter object's velocity
         _lastPosition += delta;
     }
 
@@ -944,15 +947,18 @@ public abstract partial class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Adds the specified velocity change to the current velocity delta.
+    /// Queues a world-space locomotion displacement for the next <see cref="CommitFrameMotion"/>.
     /// </summary>
-    /// <param name="delta">The velocity change to add. If this value is <see cref="Vector3d.Zero"/>, no change is applied.</param>
+    /// <remarks>
+    /// Despite the method name, delta is displacement in world units, not a velocity change, force, or impulse.
+    /// Motor traversal has already applied the fixed timestep; do not apply another timestep or inverse-mass conversion.
+    /// </remarks>
+    /// <param name="delta">The locomotion displacement to add. Zero has no effect.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddVelocityDelta(Vector3d delta)
     {
         if (delta == Vector3d.Zero) return;
 
-        // assume a mass of 1...for now
         _velocityDelta += delta;
     }
 

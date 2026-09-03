@@ -47,6 +47,25 @@ the authoritative body.
 `RequestTurnDirection(...)` accepts an optional interpolation override. When no
 positive override is supplied, turning uses `TurnRate * context.DeltaTime`.
 Interpolation is clamped to the closed range `[0, 1]`.
+`TurnRate` controls the fraction of the remaining turn applied over time; it is
+not an angular speed in degrees per second.
+
+## Simulation turning versus visual smoothing
+
+Not every interpolation belongs in the renderer. NavTurning's fixed-step
+quaternion interpolation determines authoritative facing, so it is part of the
+deterministic simulation. The same inputs and interpolation settings must be
+used on every peer.
+
+A host may separately interpolate a visual transform between committed
+simulation snapshots to smooth rendering. Keep that presentation state separate:
+do not feed it back as Navigator position/rotation, motor finalization input,
+or collision-turn movement. Render-frame timing must not control simulation
+turning or platform motion.
+
+The distinction is what interpolation changes: smoothing a displayed pose is
+host presentation; changing an authoritative pose is simulation behavior and
+must follow the fixed-step contract.
 
 ## Small changes are ignored
 

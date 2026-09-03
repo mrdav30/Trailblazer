@@ -65,8 +65,9 @@ The normal order is:
 5. publish the resulting state for the next lockstep frame.
 
 `Simulate()` asks `NavSteering` for ordinary heading or one transition
-instruction. `CommitFrameMotion()` applies accumulated position, velocity, and
-rotation deltas; it does not execute semantic actions.
+instruction. `CommitFrameMotion()` applies accumulated locomotion/platform
+displacements and rotation deltas; it does not execute semantic actions. Both
+calls belong to the authoritative fixed-step lifecycle, not the render loop.
 
 After the frame request and motor state are fully finalized,
 `CommitFrameMotion()` resolves the root position against the current published
@@ -81,6 +82,30 @@ An unavailable graph generation preserves the previous value for retry. A
 definitive position with no physical/effective navigation cell clears it once.
 This notification reports committed navigation metadata only; hosts own any
 gameplay effects.
+
+## Committed motion and locomotion state
+
+The base `CommitFrameMotion()` implementation derives `Velocity` from the
+committed position change divided by the context's fixed `DeltaTime`. `Speed`
+is that velocity's magnitude, and `Acceleration` is the change from the previous
+velocity divided by the same timestep. These describe the resulting controller
+motion, not the requested steering heading or desired speed.
+
+`Motor.Handler.Move.FrameVelocity` serves a different purpose: it is the
+motor's working locomotion velocity. Finalization starts it from the accepted
+displacement, then can adjust it for platform velocity transfer or a ceiling
+hit. It is therefore not an interchangeable alias for `Navigator.Velocity`.
+
+Measuring velocity this way is compatible with lockstep when every peer uses
+the same authoritative positions, fixed timestep, and deterministic collision
+results. It does not make a nondeterministic physics engine deterministic.
+Hosts must report accepted simulation motion rather than an interpolated
+render transform or a desired position that collisions prevented.
+
+See [motion quantities and units](NavMotor.md#motion-quantities-and-units) before
+adapting motor outputs to another physics model, and
+[simulation versus visual smoothing](NavTurning.md#simulation-turning-versus-visual-smoothing)
+when presenting fixed-step motion in an engine.
 
 ## Pending Transition
 

@@ -14,11 +14,11 @@ using Trailblazer.Support;
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Handles movement adjustments when the scout is standing on a moving platform or surface.
+/// Tracks moving-platform attachment and departure-velocity transfer for a scout.
 /// </summary>
 /// <remarks>
-/// This locomotion system tracks platform velocity, rotation, and movement transfer behavior.
-/// It allows the scout to inherit motion from platforms and supports different transfer states.
+/// Attached carry uses transform-derived displacement and rotation. Departure transfer uses
+/// velocity sampled at the scout's local attachment point, not a physical force or impulse.
 /// </remarks>
 public class PlatformLocomotion : ILocomotion
 {
@@ -102,13 +102,14 @@ public class PlatformLocomotion : ILocomotion
     public PlatformSnapshot? HoldPlatform { get; set; }
 
     /// <summary>
-    /// Defines how movement is transferred from the platform to the scout.
+    /// Selects departure-velocity transfer or extended attachment. Ordinary grounded carry
+    /// also applies with <see cref="MotionTransfer.None"/>.
     /// </summary>
     [Transient]
     public MotionTransfer MovementTransfer { get; set; }
 
     /// <summary>
-    /// The local position of the scout relative to the platform.
+    /// The attachment point in platform-local coordinates, including <see cref="HeightAdjust"/>.
     /// </summary>
     [Transient]
     public Vector3d ScoutLocalPoint { get; set; }
@@ -120,14 +121,23 @@ public class PlatformLocomotion : ILocomotion
     public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
     /// <summary>
-    /// The velocity of the platform.
+    /// The sampled world-space velocity of <see cref="ScoutLocalPoint"/>, in world units per second.
     /// </summary>
+    /// <remarks>
+    /// Includes motion of that attachment point due to platform translation and rotation.
+    /// It is not necessarily the velocity of the platform's center.
+    /// </remarks>
     [Transient]
     public Vector3d PlatformVelocity { get; set; }
 
     /// <summary>
-    /// The last known platform velocity when the scout is airborne.
+    /// The platform velocity captured for departure transfer on a solid-to-gas transition.
     /// </summary>
+    /// <remarks>
+    /// <see cref="MotionTransfer.PermaTransfer"/> adds its horizontal contribution to ordinary
+    /// desired locomotion velocity. Platform-state refresh clears this value; it is not the
+    /// scout's total airborne velocity.
+    /// </remarks>
     [Transient]
     public Vector3d FramePlatformVelocity { get; set; }
 
@@ -148,7 +158,8 @@ public class PlatformLocomotion : ILocomotion
     public bool IsActive => IsEnabled && ActivePlatform?.SupportsKinematicMotion == true;
 
     /// <summary>
-    /// Gets a value indicating whether the object is permanently locked to the platform.
+    /// Gets whether extended platform attachment is selected by <see cref="MotionTransfer.PermaLocked"/>.
+    /// The motor still checks platform eligibility and jump, flight, and climb state before carrying the scout.
     /// </summary>
     public bool IsLockedToPlatform => MovementTransfer == MotionTransfer.PermaLocked;
 
@@ -158,8 +169,11 @@ public class PlatformLocomotion : ILocomotion
     public bool IsHoldingPlatform => IsEnabled && HoldPlatform?.SupportsKinematicMotion == true;
 
     /// <summary>
-    /// Indicates whether platform inertia (initial velocity transfer) has been applied.
+    /// Gets whether the enabled module's transfer mode permits initial velocity transfer.
     /// </summary>
+    /// <remarks>
+    /// This is a configuration check, not a record that a transfer has already occurred.
+    /// </remarks>
     public bool InertiaApplied => IsEnabled
         && (MovementTransfer == MotionTransfer.InitTransfer || MovementTransfer == MotionTransfer.PermaTransfer);
 
@@ -168,8 +182,14 @@ public class PlatformLocomotion : ILocomotion
     #region Methods
 
     /// <summary>
-    /// Updates the platform velocity based on movement from the last frame.
+    /// Samples the world-space velocity of the local attachment point over the fixed timestep.
     /// </summary>
+    /// <remarks>
+    /// Transforms the same <see cref="ScoutLocalPoint"/> through the current and previous platform
+    /// snapshots, then divides its displacement by the context's timestep. A newly attached platform
+    /// establishes snapshot history before sampling. Disabled modules do not update velocity;
+    /// an enabled module without an active kinematic platform clears it.
+    /// </remarks>
     public void UpdatePlatformVelocity()
     {
         if (!IsEnabled) return;
@@ -186,7 +206,7 @@ public class PlatformLocomotion : ILocomotion
             Vector3d currentPoint = ActivePlatform.Value.Transform.TransformPoint(ScoutLocalPoint);
             Vector3d previousPoint = PreviousPlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
 
-            // Store platform velocity to use as a canceling force
+            // Sample attachment-point velocity for departure and landing transfer accounting.
             PlatformVelocity = (currentPoint - previousPoint) * InvDeltaTime;
         }
 
@@ -202,12 +222,16 @@ public class PlatformLocomotion : ILocomotion
     }
 
     /// <summary>
-    /// Applies movement adjustments due to platform motion, ensuring the object inherits platform movement correctly.
+    /// Calculates the displacement and rotation delta for the stored platform attachment.
     /// </summary>
     /// <remarks>
-    /// This method updates the object’s position and rotation based on the platform’s transform,
-    /// preventing unwanted movement shifts when transitioning between platforms.
+    /// Returns motion deltas without changing the host's transform. The displacement is already
+    /// in world units; do not multiply it by the timestep or add another platform-velocity displacement.
     /// </remarks>
+    /// <param name="position">The scout's world-space foot position, or origin when no foot snapshot is available.</param>
+    /// <param name="rotation">The scout's current world rotation.</param>
+    /// <param name="positionDelta">World-space displacement from the height-adjusted position to the platform attachment point.</param>
+    /// <param name="rotationDelta">The platform attachment's rotation delta relative to the supplied rotation.</param>
     public void GetPlatformInfluence(
         Vector3d position,
         FixedQuaternion rotation,
@@ -348,11 +372,13 @@ public class PlatformLocomotion : ILocomotion
     }
 
     /// <summary>
-    /// Updates platform movement by synchronizing the object's position and rotation with the platform it is standing on.
+    /// Updates the platform-local attachment point and rotation from the scout's accepted world pose.
     /// </summary>
     /// <remarks>
-    /// This method prevents unwanted movement shifts when transitioning between platforms, ensuring smooth locomotion.
+    /// Stores attachment state for subsequent platform carry; it does not move or rotate the host.
     /// </remarks>
+    /// <param name="position">The accepted world-space foot position, or origin when no foot snapshot is available.</param>
+    /// <param name="rotation">The accepted world rotation.</param>
     public void HandlePlatformMovement(Vector3d position, FixedQuaternion rotation)
     {
         position.Y += HeightAdjust;

@@ -59,6 +59,35 @@ impulse to a velocity change (`deltaVelocity = impulse / m`); it must not be
 applied to an already computed velocity or displacement. The core motor does
 not require a rigid body or an assumed physical mass of one.
 
+### One-step corrections and gradual response
+
+Dividing a velocity change by the timestep does not make the response gradual.
+For a positive `DeltaTime`, consider this one-step calculation:
+
+```text
+acceleration = (desiredVelocity - currentVelocity) / DeltaTime
+nextVelocity = currentVelocity + acceleration * DeltaTime
+             = desiredVelocity
+```
+
+With ordinary, unclamped integration and no other contributions, this reaches
+the target in one step, subject to fixed-point rounding. Canceling velocity with
+`-currentVelocity / DeltaTime` is the same calculation with a target of zero;
+both expressions compute acceleration, not force. Canceling downward velocity
+uses the vertical component of that equation.
+
+A gradual response needs an explicit limit or response rule. The motor's
+desired-velocity adjustment limits the magnitude of each velocity change to
+`maxAcceleration * DeltaTime`. A target within that limit can still be reached
+in one step; larger changes take longer. An acceleration value must not be
+passed where an API expects velocity or displacement.
+
+Neither acceleration nor an immediate velocity change is inherently more
+deterministic. Lockstep peers need the same authoritative inputs, timestep,
+fixed-point calculations, state, and execution order. A gradual response that
+lags behind a platform may be undesirable gameplay, but identical lag on every
+peer is not itself a desynchronization.
+
 ## The two-phase frame contract
 
 Direct motor integration has two phases in the same simulation frame:
@@ -155,8 +184,8 @@ downward ground-stick bias. Slopes above the configured limit can enter the
 slide module when it is installed and enabled.
 
 `GroundCondition` also carries moving-platform identity and transform data.
-The motor uses it to transfer velocity, preserve attachment, and avoid applying
-platform motion twice when landing or leaving.
+See [moving platforms](#moving-platforms-attachment-and-momentum) for how
+attachment differs from departure-velocity transfer.
 
 ### Gas
 
@@ -179,6 +208,64 @@ When active mantle validation is enabled and the resolver also implements
 `IActiveMantleValidator`, a failed validation cancels the mantle. Successful
 validation preserves the already latched target; it does not retarget the move
 implicitly.
+
+## Moving platforms: attachment and momentum
+
+Platform motion has two separate jobs: carrying an attached scout and deciding
+what velocity it inherits when it leaves.
+
+### Carrying an attached scout
+
+The motor preserves an attachment point and rotation relative to the platform.
+It uses the platform's transform snapshots to return `platformDisplacement`
+and `platformRotationDelta`, so following the platform does not require
+accelerating toward its speed. On a rotating platform, the attachment point
+can move even when the platform's center stays still.
+
+`PlatformLocomotion.PlatformVelocity` is the sampled world-space velocity of
+that attachment point: its displacement between platform snapshots divided by
+`DeltaTime`. It is not necessarily the velocity of the platform's center, and
+it is not an acceleration or physical impulse.
+
+The host applies the returned platform displacement once, alongside
+`locomotionDisplacement`. Do not also add `PlatformVelocity * DeltaTime` as
+another platform displacement; that would count the same carry twice.
+Navigator already combines the two displacement outputs during its commit.
+
+Grounded carry requires an enabled platform module and an active snapshot with
+`SupportsKinematicMotion`. Jumping, controlled flight, and climbing suppress
+this carry. Supply authoritative fixed-frame platform snapshots, not smoothed
+render transforms.
+
+### Leaving the platform
+
+`GroundCondition.MotionTransferState` selects the transfer mode. Finalization
+refreshes the platform state before applying departure transfer. For
+`InitTransfer` or `PermaTransfer` inheritance, keep the eligible launch-platform
+snapshot and transfer mode in the refreshed `GroundState` for the departure
+frame, even though `Medium` has changed to Gas. Clearing that state or marking
+the platform inactive or non-kinematic first selects `None` and skips transfer.
+`Navigator.SetAirborne()` preserves the last ground condition by default.
+
+| Mode | Effect |
+| --- | --- |
+| `None` | Does not add departure velocity. Ordinary grounded platform carry still applies. |
+| `InitTransfer` | Adds the sampled platform velocity on a solid-to-gas transition. Subsequent locomotion can change that velocity. |
+| `PermaTransfer` | Performs the initial transfer and also adds the captured horizontal contribution to ordinary desired locomotion velocity while that contribution is retained. |
+| `PermaLocked` | Allows platform carry beyond grounded movement while an eligible active platform remains. It does not select departure-velocity transfer. |
+
+`PermaLocked` does not override the jump, flight, or climb exclusions above.
+`FramePlatformVelocity` holds the captured transfer contribution, not a promise
+of unchanging airborne velocity: platform-state refresh clears it, and later
+locomotion can alter the scout's velocity. Landing also has transfer accounting
+to avoid counting inherited platform motion again.
+
+An abrupt platform stop does not imply that every scout must keep moving. An
+attached scout can stop with the platform; a detached scout may retain velocity
+already transferred from it. The result also depends on locomotion settings
+and the host's contact, collision, and friction rules. Inertia means motion
+persists without a change to velocity; acceleration changes that motion. These
+are controller rules, not a rigid-body momentum-conservation simulation.
 
 ## Host-authored traversal state
 

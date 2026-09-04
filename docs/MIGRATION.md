@@ -26,6 +26,8 @@ Use this guide when upgrading from any v1.x package.
   exact `NavigationTransitionInstruction` supplied by its lease.
 - Restore grids, maps, policies, and overlays before populating guided
   Navigators.
+- Supply an explicit world-space surface normal whenever reporting ground
+  contact. Platform orientation is no longer treated as collision geometry.
 - Re-record deterministic replays and serialized fixtures that depended on v1
   request, guide, map, or controller schemas.
 - Run both `Release` and `ReleaseLean` validation after the source migration
@@ -126,6 +128,7 @@ and redundant controller accessors:
 | component `Context` getters | context binding remains constructor/Navigator owned |
 | public NavMotor module aliases | `Handler.Move`, `Handler.Jump`, `Handler.Water`, `Handler.Fly`, and `Handler.Climb` |
 | `LocomotionProfile.CreateBuilder(...)` | `new LocomotionProfileBuilder(...)` |
+| `GroundCondition.GroundNormal` derived from `Platform.Transform.Up` | explicit serialized `GroundCondition.SurfaceNormal` |
 
 Update method calls, overrides, protected-field references, and named arguments
 to the corrected motion names. These are naming-only changes: locomotion and
@@ -134,8 +137,15 @@ already applied. Do not multiply them by time again. `TryTraversal(...)` keeps
 its name and its existing finalization/abort lifecycle; no forwarding aliases
 are provided.
 
-The outer Navigator record is schema version 3. Earlier outer schemas reject
-transactionally; they are not read through renamed-field fallbacks.
+`Navigator.SetGroundContact(...)` now requires `surfaceNormal`. Supply
+`Vector3d.Up` for flat ground, the exact host-provided world-space contact
+normal for slopes, or `Vector3d.Zero` when no normal was sampled. Keep
+`PlatformSnapshot.Transform` as the carrier transform; do not rotate it merely
+to encode collision geometry.
+
+The outer Navigator record is schema version 4. Earlier outer schemas reject
+transactionally; they are not read through renamed-field or missing-normal
+fallbacks.
 
 ## Current v2 Guides
 

@@ -183,9 +183,12 @@ Grounded movement applies acceleration, friction, slope projection, and a small
 downward ground-stick bias. Slopes above the configured limit can enter the
 slide module when it is installed and enabled.
 
-`GroundCondition` also carries moving-platform identity and transform data.
-See [moving platforms](#moving-platforms-attachment-and-momentum) for how
-attachment differs from departure-velocity transfer.
+`GroundCondition.SurfaceNormal` is the exact host-provided world-space support
+normal. It is independent of `PlatformSnapshot.Transform`: the normal describes
+collision geometry, while the transform describes carrier movement. Use
+`Vector3d.Up` for flat ground and `Vector3d.Zero` only when no normal was
+sampled. See [moving platforms](#moving-platforms-attachment-and-momentum) for
+how attachment differs from departure-velocity transfer.
 
 ### Gas
 
@@ -283,6 +286,10 @@ Use `SyncTraversalState(...)` when the host must push a state change before the
 next traversal. Navigator helpers such as `SetGroundContact(...)` and
 `SetTrekCondition(...)` can route through the same seam when
 `updateMotorState` is true.
+
+When calling `SetGroundContact(...)`, pass the support normal separately from
+the platform snapshot. Never rotate a platform snapshot to make its `Up` axis
+look like a slope normal; doing so corrupts attachment and carry calculations.
 
 ## Events
 

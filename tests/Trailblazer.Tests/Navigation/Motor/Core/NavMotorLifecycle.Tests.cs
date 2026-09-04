@@ -837,6 +837,7 @@ public sealed class NavMotorLifecycleTests : IDisposable
                 Fixed64.FromRaw(0x10000000L)));
         var slopedAgent = MockMotorAgentTestFactory.CreatePlatformAgent(
             platformMatrix: slope,
+            surfaceNormal: slope.Up,
             motionTransfer: MotionTransfer.PermaTransfer);
         var flatAgent = MockMotorAgentTestFactory.CreatePlatformAgent(
             motionTransfer: MotionTransfer.PermaTransfer);

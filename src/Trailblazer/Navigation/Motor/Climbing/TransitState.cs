@@ -90,7 +90,7 @@ public class TransitState
 
         if (Medium == TraversalMedium.Solid)
         {
-            SurfaceNormal = GroundState?.GroundNormal ?? Vector3d.Zero;
+            SurfaceNormal = GroundState?.SurfaceNormal ?? Vector3d.Zero;
             SlopeAngle = Vector3d.Angle(Vector3d.Up, SurfaceNormal);
         }
         else

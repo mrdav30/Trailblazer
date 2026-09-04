@@ -1933,6 +1933,7 @@ public class NavigatorTests : IDisposable
 
         navigator.SetGroundContact(
             surfaceLevel: (Fixed64)3,
+            surfaceNormal: Vector3d.Up,
             platform: snapshot,
             surfaceFriction: (Fixed64)0.2f,
             motionTransfer: MotionTransfer.PermaLocked,
@@ -1955,6 +1956,88 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void SetGroundContact_ShouldKeepSurfaceNormalIndependentFromPlatformTransform()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        var platform = new PlatformSnapshot(7, Fixed4x4.Identity);
+        var surfaceNormal = new Vector3d(
+            Fixed64.Zero,
+            Fixed64.FromFraction(4, 5),
+            Fixed64.FromFraction(3, 5));
+
+        navigator.SetGroundContact(
+            surfaceLevel: Fixed64.Zero,
+            surfaceNormal: surfaceNormal,
+            platform: platform,
+            updateMotorState: true);
+
+        navigator.FrameCondition.GroundState.Should().NotBeNull();
+        GroundCondition frameGround = navigator.FrameCondition.GroundState.Value;
+        frameGround.SurfaceNormal.Should().Be(surfaceNormal);
+        frameGround.Platform.Transform.Up.Should().Be(Vector3d.Up);
+
+        motor.CurrentState.SurfaceNormal.Should().Be(surfaceNormal);
+        motor.CurrentState.SlopeAngle.Should().BeGreaterThan(Fixed64.Zero);
+
+        var refreshedPlatform = new PlatformSnapshot(
+            7,
+            Fixed4x4.CreateTransform(
+                new Vector3d(2, 1, 3),
+                FixedQuaternion.FromAxisAngle(Vector3d.Right, Fixed64.PiOver4),
+                Vector3d.One));
+        var refreshedNormal = new Vector3d(
+            Fixed64.FromFraction(3, 5),
+            Fixed64.FromFraction(4, 5),
+            Fixed64.Zero);
+
+        navigator.SetGroundContact(
+            surfaceLevel: Fixed64.One,
+            surfaceNormal: surfaceNormal,
+            platform: refreshedPlatform,
+            updateMotorState: true);
+
+        GroundCondition transformedGround = navigator.FrameCondition.GroundState.Value;
+        transformedGround.Platform.Transform.Should().Be(refreshedPlatform.Transform);
+        transformedGround.SurfaceNormal.Should().Be(surfaceNormal);
+        transformedGround.SurfaceNormal.Should().NotBe(transformedGround.Platform.Transform.Up);
+        motor.CurrentState.SurfaceNormal.Should().Be(surfaceNormal);
+
+        navigator.SetGroundContact(
+            surfaceLevel: Fixed64.One,
+            surfaceNormal: refreshedNormal,
+            platform: refreshedPlatform,
+            updateMotorState: true);
+
+        GroundCondition renormalizedGround = navigator.FrameCondition.GroundState.Value;
+        renormalizedGround.Platform.Transform.Should().Be(refreshedPlatform.Transform);
+        renormalizedGround.SurfaceNormal.Should().Be(refreshedNormal);
+        renormalizedGround.SurfaceNormal.Should().NotBe(renormalizedGround.Platform.Transform.Up);
+        motor.CurrentState.SurfaceNormal.Should().Be(refreshedNormal);
+    }
+
+    [Fact]
+    public void SetGroundContact_ShouldPreserveZeroWhenNoSurfaceNormalWasSampled()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        var platform = new PlatformSnapshot(7, Fixed4x4.Identity);
+
+        navigator.SetGroundContact(
+            surfaceLevel: Fixed64.Zero,
+            surfaceNormal: Vector3d.Zero,
+            platform: platform,
+            updateMotorState: true);
+
+        navigator.FrameCondition.GroundState.Should().NotBeNull();
+        GroundCondition ground = navigator.FrameCondition.GroundState.Value;
+        ground.Platform.Active.Should().BeTrue();
+        ground.SurfaceNormal.Should().Be(Vector3d.Zero);
+        motor.CurrentState.SurfaceNormal.Should().Be(Vector3d.Zero);
+        motor.CurrentState.SlopeAngle.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
     public void SetAirborne_ShouldPreserveGroundStateByDefault()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -1965,6 +2048,7 @@ public class NavigatorTests : IDisposable
 
         navigator.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
+            surfaceNormal: Vector3d.Up,
             platform: snapshot,
             motionTransfer: MotionTransfer.InitTransfer,
             updateMotorState: true);
@@ -1993,6 +2077,7 @@ public class NavigatorTests : IDisposable
 
         navigator.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
+            surfaceNormal: Vector3d.Up,
             platform: snapshot,
             motionTransfer: MotionTransfer.InitTransfer,
             updateMotorState: true);
@@ -2152,6 +2237,7 @@ public class NavigatorTests : IDisposable
 
         navigator.SetGroundContact(
             surfaceLevel: (Fixed64)3,
+            surfaceNormal: Vector3d.Up,
             platform: snapshot,
             surfaceFriction: (Fixed64)0.4f,
             motionTransfer: MotionTransfer.PermaLocked,

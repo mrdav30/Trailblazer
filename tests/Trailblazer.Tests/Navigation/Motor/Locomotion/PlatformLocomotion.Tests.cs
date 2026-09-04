@@ -55,16 +55,6 @@ public class PlatformLocomotionTests : IDisposable
         TestWorld.Context.Simulate();
         scout.Simulate();
 
-        //scout.FrameCondition = new(
-        //    TraversalMedium.Solid,
-        //    Fixed64.Zero,
-        //    new GroundCondition
-        //    {
-        //        GroundNormal = updatedMatrix.Up,
-        //        Platform = new(2, updatedMatrix)
-        //    }
-        //);
-
         // Assert
         scout.Position.Should().Be(platformHandle.Transform.Translation);
     }

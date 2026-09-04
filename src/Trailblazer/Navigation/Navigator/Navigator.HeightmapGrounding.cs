@@ -48,6 +48,7 @@ public abstract partial class Navigator
         _heightmapGrounding.ActiveLayerName = sample.LayerName;
         SetGroundContact(
             surfaceLevel: sample.GroundY,
+            surfaceNormal: Vector3d.Up,
             surfaceFriction: surfaceFriction,
             motionTransfer: motionTransfer,
             updateMotorState: updateMotorState);

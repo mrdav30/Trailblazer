@@ -246,7 +246,7 @@ public sealed class HeightmapNavigator : Navigator
     public override void CheckTrekCondition()
     {
         // Host collision/probing code should decide grounded state first.
-        SetGroundContact(surfaceLevel: FrameSurfaceY);
+        SetGroundContact(surfaceLevel: FrameSurfaceY, surfaceNormal: Vector3d.Up);
         TryApplyHeightmapGrounding(
             updateMotorState: true,
             surfaceFriction: Fixed64.Half,

@@ -34,7 +34,9 @@ instead of burying it in notes.
     full matrix against the aligned 7.1.0/9.1.0 stack without a new physics API.
     The adapter remains independently owned and introduces no core-to-core
     dependency. Phase 1 package-backed work is gated by the aligned Gravitas
-    release; slope support is additionally gated by `TRB-Issue-102`.
+    release. `TRB-Issue-102` is resolved in the Trailblazer working tree through
+    an explicit serialized support-normal contract; package-backed slope work
+    requires the Trailblazer release containing it.
     `TRB-Issue-103` separately tracks the lower-stack duplicate-version defect
     found by solution-wide local-source validation.
 - [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
@@ -74,10 +76,11 @@ scheduler implementation plan is currently active.
 
 The plans share evidence, not competing implementations:
 
-1. Review and release the dependency-aligned Gravitas working tree, then capture
-   the Gravitas adapter's initial fixed-profile wall regression. Resolve
-   `TRB-Issue-102` before slope scenarios; use the wall slice and that focused
-   fix for hardening Phase 1 before interpreting movement-quality results.
+1. Resolve `TRB-Issue-103`, then review and release the dependency-aligned
+   Gravitas working tree and release Trailblazer with the resolved
+   `TRB-Issue-102` contract. Capture the Gravitas adapter's initial fixed-profile
+   wall regression, then use that wall slice and the explicit support normal for
+   hardening Phase 1 before interpreting movement-quality results.
 2. Complete hardening Phase 1 with that host, then Phase 2 profile replacement
    and the adapter's corresponding collider-change tests. Run hardening Phase 3
    measurements; scheduler implementation remains separately evidence-gated.

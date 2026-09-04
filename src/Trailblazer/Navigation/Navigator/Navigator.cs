@@ -790,8 +790,19 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Updates the object to a grounded state using a host-provided platform snapshot plus surface settings.
     /// Inert snapshots still describe the contacted surface but opt out of moving-platform carry logic.
     /// </summary>
+    /// <param name="surfaceLevel">The world-space height of the contacted surface.</param>
+    /// <param name="surfaceNormal">
+    /// The sampled world-space support normal. Supply <see cref="Vector3d.Up"/> for flat ground or
+    /// <see cref="Vector3d.Zero"/> when no surface normal was sampled.
+    /// </param>
+    /// <param name="platform">The independently sampled platform identity and transform.</param>
+    /// <param name="surfaceFriction">Optional friction stored with the contact.</param>
+    /// <param name="motionTransfer">How movement is inherited from an active platform.</param>
+    /// <param name="ceilingLevel">The current world-space ceiling height, when known.</param>
+    /// <param name="updateMotorState">Whether to update the motor before its next simulation step.</param>
     public virtual void SetGroundContact(
         Fixed64 surfaceLevel,
+        Vector3d surfaceNormal,
         PlatformSnapshot platform = default,
         Fixed64? surfaceFriction = null,
         MotionTransfer motionTransfer = MotionTransfer.None,
@@ -804,6 +815,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             surfaceCondition: new GroundCondition()
             {
                 Platform = platform,
+                SurfaceNormal = surfaceNormal,
                 SurfaceFriction = surfaceFriction ?? Fixed64.Zero,
                 MotionTransferState = motionTransfer
             },

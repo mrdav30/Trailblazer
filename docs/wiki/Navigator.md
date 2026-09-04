@@ -195,6 +195,12 @@ The concrete Navigator's `CheckTrekCondition()` remains the host integration
 point. Keep physical state publication deterministic and consistent with any
 completed instruction.
 
+`SetGroundContact(...)` requires the sampled world-space support normal in
+addition to the surface level. Use `Vector3d.Up` for flat ground and
+`Vector3d.Zero` only when no normal was sampled. A `PlatformSnapshot` carries
+moving-platform identity and transform independently; its `Transform.Up` is not
+used as collision geometry.
+
 ## Heightmaps And Occupancy
 
 Heightmap grounding is opt-in and affects kinematic Y projection, not graph

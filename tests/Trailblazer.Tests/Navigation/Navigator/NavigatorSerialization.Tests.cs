@@ -56,9 +56,39 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(3);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(4);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldRestoreGroundSurfaceNormalIndependentlyFromPlatformTransform(
+        bool useMemoryPack)
+    {
+        var source = CreateNavigator(Vector3d.Zero);
+        var surfaceNormal = new Vector3d(
+            Fixed64.Zero,
+            Fixed64.FromFraction(4, 5),
+            Fixed64.FromFraction(3, 5));
+        source.SetGroundContact(
+            surfaceLevel: Fixed64.Zero,
+            surfaceNormal: surfaceNormal,
+            platform: new PlatformSnapshot(7, Fixed4x4.Identity),
+            updateMotorState: true);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.FrameCondition.GroundState.Should().NotBeNull();
+        GroundCondition ground = target.FrameCondition.GroundState.Value;
+        ground.SurfaceNormal.Should().Be(surfaceNormal);
+        ground.Platform.Transform.Up.Should().Be(Vector3d.Up);
+        TestRequire.NotNull(target.Motor).CurrentState.SurfaceNormal.Should().Be(surfaceNormal);
     }
 
     [Theory]
@@ -117,7 +147,7 @@ public class NavigatorSerializationTests : IDisposable
                 99,
                 "FrameCondition",
                 "Medium"),
-            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 2, "SchemaVersion"),
+            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 3, "SchemaVersion"),
             5 => SerializationUtility.SetPayloadValue(
                 payload,
                 useMemoryPack,
@@ -821,6 +851,7 @@ public class NavigatorSerializationTests : IDisposable
             canAffordJump: false);
         source.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
+            surfaceNormal: Vector3d.Up,
             platform: new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1))),
             surfaceFriction: (Fixed64)0.15f,
             motionTransfer: MotionTransfer.PermaLocked,

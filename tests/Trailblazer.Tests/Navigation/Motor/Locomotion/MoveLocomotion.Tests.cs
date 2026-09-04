@@ -95,7 +95,8 @@ public class MoveLocomotionTests : IDisposable
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform
+            platformMatrix: platform,
+            surfaceNormal: platform.Up
         );
 
         TrekRequest frameRequest = new()
@@ -270,7 +271,10 @@ public class MoveLocomotionTests : IDisposable
     {
         var slope = FixedMath.DegToRad((Fixed64)30);
         var ground = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(slope, Fixed64.Zero, Fixed64.Zero));
-        var agent = MockMotorAgentTestFactory.CreatePlatformAgent(startPosition: Vector3d.Zero, platformMatrix: ground);
+        var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
+            startPosition: Vector3d.Zero,
+            platformMatrix: ground,
+            surfaceNormal: ground.Up);
 
         agent.FrameRequest.Direction = Vector3d.Right;
         agent.FrameRequest.Rate = TrekRate.Slow;
@@ -299,7 +303,8 @@ public class MoveLocomotionTests : IDisposable
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform
+            platformMatrix: platform,
+            surfaceNormal: platform.Up
         );
 
         agent.FrameRequest = new()
@@ -320,35 +325,48 @@ public class MoveLocomotionTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Given_AgentOnSlope_When_Simulated_Then_VelocityShouldBeProjectedOntoSlope(
+    public void Given_ExplicitSlopeNormal_When_TraversalResolved_Then_VelocityShouldFollowAuthoredNormal(
         bool coreOnly)
     {
         // Arrange
-        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
-            startPosition: Vector3d.Zero,
-            platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, Fixed64.FromRaw(0x10000000L)) // Shallow slope
-        );
+        var surfaceNormal = new Vector3d(
+            Fixed64.Zero,
+            Fixed64.FromFraction(4, 5),
+            -Fixed64.FromFraction(3, 5));
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform,
+            platformMatrix: Fixed4x4.Identity,
+            surfaceNormal: surfaceNormal,
             profile: coreOnly ? LocomotionProfile.CreateCoreOnly() : null
         );
+        agent.Motor.Handler.Move.ModifySpeedOnSlope = false;
+        agent.Motor.Handler.Forces.GravityForce = Fixed64.Zero;
 
         agent.FrameRequest.Direction = Vector3d.Forward;
         agent.FrameRequest.Rate = TrekRate.Slow;
 
         // Act
-        agent.Simulate();
+        agent.Motor.TryTraversal(
+                agent.FrameRequest,
+                out Vector3d displacement,
+                out _,
+                out _)
+            .Should().BeTrue();
 
-        // Assert - Projected vector must lie in the tangent plane of the slope
-        var velocity = agent.Motor.Handler.Move.FrameVelocity;
-        var slopeNormal = agent.Motor.CurrentState.SurfaceNormal;
-        var expected = Vector3d.ProjectOnPlane(Vector3d.Forward, slopeNormal);
-
-        velocity.Normalized.Should().BeApproximately(expected.Normalized, Fixed64.Epsilon);
+        // Assert - the host-authored normal, not the carrier transform, controls slope movement.
+        var velocity = displacement * TestWorld.Context.InvDeltaTime;
+        agent.Motor.CurrentState.SurfaceNormal.Should().Be(surfaceNormal);
+        agent.Motor.CurrentState.SlopeAngle.Should().Be(Fixed64.FromRaw(158355005278L));
+        agent.Motor.FrameSlopeAngle.Should().Be(Fixed64.FromRaw(-158355005278L));
+        velocity.Should().Be(new Vector3d(
+            Fixed64.Zero,
+            Fixed64.FromRaw(-257698048L),
+            Fixed64.FromRaw(343597376L)));
         if (coreOnly)
             agent.Motor.Handler.Slide.Should().BeNull();
+
+        agent.Motor.AbortTraversalFrame();
     }
 
     [Fact]
@@ -381,8 +399,12 @@ public class MoveLocomotionTests : IDisposable
         Fixed64 slope = FixedMath.DegToRad((Fixed64)30);
         Fixed4x4 platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, slope));
-        var agent = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
-        var limitedAgent = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
+        var limitedAgent = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
         MoveLocomotion move = agent.Motor.Handler.Move;
         MoveLocomotion limitedMove = limitedAgent.Motor.Handler.Move;
         move.ModifySpeedOnSlope = false;
@@ -418,7 +440,8 @@ public class MoveLocomotionTests : IDisposable
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform
+            platformMatrix: platform,
+            surfaceNormal: platform.Up
         );
 
         for (int i = 0; i < 10; i++)
@@ -444,7 +467,8 @@ public class MoveLocomotionTests : IDisposable
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform
+            platformMatrix: platform,
+            surfaceNormal: platform.Up
         );
 
         agent.FrameRequest.Direction = Vector3d.Forward;

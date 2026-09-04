@@ -174,7 +174,9 @@ public class FallLocomotionTests : IDisposable
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
-            startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
+            startPosition: new Vector3d(0, 0, 0),
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
 
         agent.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 
@@ -192,7 +194,9 @@ public class FallLocomotionTests : IDisposable
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
-            startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
+            startPosition: new Vector3d(0, 0, 0),
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
 
         agent.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 

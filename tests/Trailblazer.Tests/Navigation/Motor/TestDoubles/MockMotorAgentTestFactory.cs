@@ -24,7 +24,8 @@ public static class MockMotorAgentTestFactory
                     condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
                     condition.GroundState = new GroundCondition
                     {
-                        Platform = new(1, Fixed4x4.Identity)
+                        Platform = new(1, Fixed4x4.Identity),
+                        SurfaceNormal = Vector3d.Up
                     };
                 }
                 break;
@@ -59,7 +60,8 @@ public static class MockMotorAgentTestFactory
         Vector3d? startVelocity = null,
         Fixed64? surfaceLevel = null,
         Fixed4x4? platformMatrix = null,
-        LocomotionProfile? profile = null)
+        LocomotionProfile? profile = null,
+        Vector3d? surfaceNormal = null)
     {
         TrekCondition condition = new()
         {
@@ -73,7 +75,8 @@ public static class MockMotorAgentTestFactory
             condition.GroundState = new GroundCondition
             {
                 MotionTransferState = MotionTransfer.InitTransfer,
-                Platform = new(1, platformMatrix.Value)
+                Platform = new(1, platformMatrix.Value),
+                SurfaceNormal = surfaceNormal ?? Vector3d.Up
             };
         }
 
@@ -99,15 +102,18 @@ public static class MockMotorAgentTestFactory
         Fixed64? surfaceFriction = null,
         MotionTransfer motionTransfer = MotionTransfer.None,
         bool platformInert = false,
-        LocomotionProfile? profile = null)
+        LocomotionProfile? profile = null,
+        Vector3d? surfaceNormal = null)
     {
+        Fixed4x4 sampledPlatform = platformMatrix ?? Fixed4x4.Identity;
         TrekCondition condition = new()
         {
             Medium = TraversalMedium.Solid,
             CeilingLevel = Fixed64.MaxValue,
             GroundState = new GroundCondition
             {
-                Platform = new(1, platformMatrix ?? Fixed4x4.Identity, platformInert),
+                Platform = new(1, sampledPlatform, platformInert),
+                SurfaceNormal = surfaceNormal ?? Vector3d.Up,
                 SurfaceFriction = surfaceFriction ?? Fixed64.Zero,
                 MotionTransferState = motionTransfer
             }
@@ -159,7 +165,8 @@ public static class MockMotorAgentTestFactory
             CeilingLevel = Fixed64.MaxValue,
             GroundState = new GroundCondition
             {
-                Platform = new(1, Fixed4x4.Identity)
+                Platform = new(1, Fixed4x4.Identity),
+                SurfaceNormal = Vector3d.Up
             }
         };
 

@@ -27,7 +27,8 @@ public class SlideLocomotionTests : IDisposable
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform
+            platformMatrix: platform,
+            surfaceNormal: platform.Up
         );
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
@@ -58,7 +59,8 @@ public class SlideLocomotionTests : IDisposable
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: Vector3d.Zero,
-            platformMatrix: platform
+            platformMatrix: platform,
+            surfaceNormal: platform.Up
         );
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
@@ -86,7 +88,9 @@ public class SlideLocomotionTests : IDisposable
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 
-        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         // No movement input
@@ -108,7 +112,10 @@ public class SlideLocomotionTests : IDisposable
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 
-        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One); // max friction
+        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceFriction: Fixed64.One,
+            surfaceNormal: platform.Up); // max friction
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         var request = new TrekRequest
@@ -140,8 +147,14 @@ public class SlideLocomotionTests : IDisposable
         var slopeAngle = FixedMath.DegToRad((Fixed64)50);
         var platform = MockMotorAgentTestFactory.CreatePlatformTransform(platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
-        var lowFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.Zero);
-        var highFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One);
+        var lowFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceFriction: Fixed64.Zero,
+            surfaceNormal: platform.Up);
+        var highFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceFriction: Fixed64.One,
+            surfaceNormal: platform.Up);
         var lowSlide = TestRequire.NotNull(TestRequire.NotNull(lowFrictionScout.Motor).Handler.Slide);
         var highSlide = TestRequire.NotNull(TestRequire.NotNull(highFrictionScout.Motor).Handler.Slide);
 
@@ -173,7 +186,9 @@ public class SlideLocomotionTests : IDisposable
             platformRotation: FixedQuaternion.FromEulerAngles(steepSlope, Fixed64.Zero, Fixed64.Zero)
         );
 
-        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
         scout.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 
@@ -188,7 +203,9 @@ public class SlideLocomotionTests : IDisposable
 
         GroundCondition shallowSlopeSurface = new()
         {
-            Platform = new PlatformSnapshot(1, Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero)))
+            Platform = new PlatformSnapshot(1, Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero))),
+            SurfaceNormal = Fixed4x4.CreateRotation(
+                FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero)).Up
         };
 
         // Flatten slope
@@ -212,7 +229,9 @@ public class SlideLocomotionTests : IDisposable
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 
-        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
         scout.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
         slide.SidewaysControl = (Fixed64)1;
@@ -245,7 +264,8 @@ public class SlideLocomotionTests : IDisposable
         var scout = MockMotorAgentTestFactory.CreateFallingAgent(
             startPosition: new Vector3d(0, 2, 0),
             surfaceLevel: Fixed64.Zero,
-            platformMatrix: platform);
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         for (int i = 0; i < 32; i++)
@@ -272,7 +292,9 @@ public class SlideLocomotionTests : IDisposable
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 
-        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: platform,
+            surfaceNormal: platform.Up);
         var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
         slide.IsEnabled = false;
 

@@ -11,8 +11,10 @@
 **Status:** Phase 0 preflight complete, including working-tree Gravitas
 dependency alignment and independent review; no adapter, integration tests, or
 playtest evidence created. Phase 1 package-backed work requires an aligned
-Gravitas release. Slope-enabled work also requires
-[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation).
+Gravitas release. The Trailblazer working tree resolves
+[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation);
+package-backed slope work requires a Trailblazer release containing that
+contract.
 Solution-wide local-source validation remains tracked by
 [`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
 
@@ -300,14 +302,14 @@ future callback-only signal requires a reliable obstruction classifier and a
 grounded body-backed support regression. CCD wall clipping needs no such
 callback.
 
-Trailblazer cannot currently preserve the real support normal independently of
-the carrier transform. The confirmed reproducer and focused fix are tracked as
-[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation).
-The fix must establish one explicit serialized normal contract and remove the
-derived-only ambiguity; it must not add Gravitas types to Trailblazer core.
-The initial flat wall proof may proceed after dependency alignment, but slope
-support cannot be claimed until that issue is resolved and the static/moving
-slope regressions pass.
+Trailblazer now preserves the real support normal independently of the carrier
+transform through the explicit serialized `GroundCondition.SurfaceNormal`
+contract. The focused identity-carrier slope, independent carrier/contact
+refresh, and transport regressions resolved
+[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation)
+without adding Gravitas types to Trailblazer core. Package-backed slope support
+still requires a Trailblazer release containing that contract and the real
+static/moving Gravitas slope scenarios in this plan.
 
 #### Adapter, test, and sample map
 
@@ -562,9 +564,9 @@ scenario inputs, results, artifact locations, linked issues, and next steps.
   failure from `TRB-Issue-103` and required the exact SwiftCollections baseline;
   both findings are resolved in this record and tracker.
 - Next dependency-order work: review and release Gravitas against the
-  7.1.0/9.1.0 family, then capture the Phase 1 wall regression before
-  scaffolding the smallest adapter implementation. Resolve `TRB-Issue-102`
-  before slope-enabled integration; resolve `TRB-Issue-103` before advertising
+  7.1.0/9.1.0 family, release Trailblazer with the resolved ground-normal
+  contract, then capture the Phase 1 wall regression before scaffolding the
+  smallest adapter implementation. Resolve `TRB-Issue-103` before advertising
   solution-wide local-source validation as a supported green path.
 
 Package-backed baseline and post-alignment commands were run serially from each
@@ -640,3 +642,26 @@ acceptedDelta=(0.01171875, 0, 0) acceptedXRaw=5955911680
 threshold=0.0078125`. The package list matched the standard and Lean tables
 above. The ignored probe and ordinary `bin`/`obj` outputs are local validation
 artifacts, not product or release files.
+
+### 2026-09-03 - Explicit ground-contact normal completed
+
+- Replaced the derived `GroundCondition.GroundNormal` view with one explicit,
+  serialized world-space `SurfaceNormal`. `Vector3d.Zero` is the only no-sample
+  value; flat hosts and heightmaps deliberately supply `Vector3d.Up`.
+- Made `Navigator.SetGroundContact` require the sampled normal, updated motor
+  slope consumption and host guidance, and added no alias, forwarding overload,
+  Gravitas dependency, or transform fallback.
+- Bumped the outer Navigator schema to 4. JSON and MemoryPack round trips retain
+  a slope normal independently from an identity carrier, while schema 3 rejects
+  through the exact transactional version gate.
+- Focused tests cover exact identity-carrier slope angle and projected velocity,
+  explicit zero behavior, heightmap flat-ground behavior, and separate carrier-
+  transform/contact-normal refreshes. Slope fixtures no longer derive normals
+  implicitly in their shared factory.
+- Full `Release` passes 2,291 tests and full `ReleaseLean` passes 2,241. Both
+  exact coverage aggregates report 30,074/30,074 lines, 11,759/11,759 branches,
+  and 2,951/2,951 methods. DocFX builds with warnings as errors, the wiki helper
+  passes, and independent API plus test/documentation reviews report no findings.
+- `TRB-Issue-102` is resolved. The next focused prerequisite is
+  `TRB-Issue-103`; package-backed integration must consume releases containing
+  both fixes rather than treating these working-tree results as package proof.

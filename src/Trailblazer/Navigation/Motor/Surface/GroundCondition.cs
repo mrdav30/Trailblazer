@@ -23,6 +23,12 @@ public struct GroundCondition : IRecordable
     public PlatformSnapshot Platform;
 
     /// <summary>
+    /// Host-provided world-space normal of the sampled support surface.
+    /// <see cref="Vector3d.Zero"/> indicates that no surface normal was sampled.
+    /// </summary>
+    public Vector3d SurfaceNormal;
+
+    /// <summary>
     /// The current surface friction applied to movement.
     /// </summary>
     public Fixed64 SurfaceFriction;
@@ -33,22 +39,18 @@ public struct GroundCondition : IRecordable
     public MotionTransfer MotionTransferState;
 
     /// <summary>
-    /// Convenience normal derived from the sampled platform transform.
-    /// </summary>
-    public readonly Vector3d GroundNormal => Platform.Active ? Platform.Transform.Up : Vector3d.Zero;
-
-    /// <summary>
     /// Creates a new GroundCondition instance that is a copy of the current instance.
     /// </summary>
     /// <remarks>
     /// The returned object is a shallow copy. Reference-type properties are not deeply cloned.
     /// </remarks>
     /// <returns>
-    /// A new GroundCondition object with the same Platform, SurfaceFriction, and MotionTransferState values as the current instance.
+    /// A new GroundCondition object with the same platform, surface normal, friction, and motion-transfer values as the current instance.
     /// </returns>
     public GroundCondition Clone() => new()
     {
         Platform = Platform,
+        SurfaceNormal = SurfaceNormal,
         SurfaceFriction = SurfaceFriction,
         MotionTransferState = MotionTransferState
     };
@@ -57,6 +59,7 @@ public struct GroundCondition : IRecordable
     public void RecordData(IChronicler chronicler)
     {
         chronicler.LookDeepStruct(ref Platform, "Platform");
+        chronicler.LookValue(ref SurfaceNormal, "SurfaceNormal", Vector3d.Zero);
         chronicler.LookValue(ref SurfaceFriction, "SurfaceFriction", Fixed64.Zero);
         chronicler.LookValue(ref MotionTransferState, "MotionTransferState", MotionTransfer.None);
     }

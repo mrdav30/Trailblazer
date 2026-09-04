@@ -115,6 +115,7 @@ public class LocomotionCompositionTests : IDisposable
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             platformMatrix: platform,
+            surfaceNormal: platform.Up,
             profile: profile);
         var motor = TestRequire.NotNull(agent.Motor);
 

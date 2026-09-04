@@ -54,21 +54,24 @@
   and zero warnings. Then rerun all package-backed matrices to prove the local-
   source fix did not alter released dependency ownership.
 
+## Resolved Issues
+
 ### TRB-Issue-102 - Ground contact conflates the support normal with platform orientation
 
 - **Discovered:** 2026-09-03
 - **Area:** Trailblazer ground-contact ownership and Gravitas integration
-- **Status:** Active; slope-enabled Gravitas integration is blocked.
+- **Status:** Resolved; verified by the 2026-09-03 focused contract and release
+  gates.
 - **Evidence:** Gravitas stores `SolidBody.GroundNormal` independently from the
-  supporting collider's `FixedTransform`. Trailblazer instead computes
-  `GroundCondition.GroundNormal` only as `Platform.Transform.Up`, then uses that
+  supporting collider's `FixedTransform`. Trailblazer previously computed
+  `GroundCondition.GroundNormal` only as `Platform.Transform.Up`, then used that
   value for slope angle, projection, sliding, and ground-jump direction. On an
-  identity-transformed wedge or mesh face, the honest platform transform yields
-  `Up` even when the physical contact normal is sloped. Rotating the snapshot to
-  encode the contact normal corrupts moving-platform attachment and carry.
-- **Impact:** A host cannot preserve both collision geometry and carrier motion.
-  Trailblazer can classify a real slope as flat or move an attached actor from a
-  fabricated carrier orientation.
+  identity-transformed wedge or mesh face, the honest platform transform yielded
+  `Up` even when the physical contact normal was sloped. Rotating the snapshot to
+  encode the contact normal corrupted moving-platform attachment and carry.
+- **Impact:** A host could not preserve both collision geometry and carrier
+  motion. Trailblazer could classify a real slope as flat or move an attached
+  actor from a fabricated carrier orientation.
 - **Expected:** Replace the derived-only `GroundNormal` contract with one
   explicit, serialized `GroundCondition.SurfaceNormal` world-space value that is
   independent of `PlatformSnapshot.Transform`. `Vector3d.Zero` is the sole
@@ -76,18 +79,19 @@
   wants flat-ground behavior supplies `Vector3d.Up`. Update `SetGroundContact`,
   cloning, motor behavior, XML, and wiki guidance without exposing a compatibility
   alias. Keep Trailblazer core free of Gravitas types.
-- **Verification:** First reproduce an unrotated static sloped face and assert
-  the exact slope/projection normal. Then cover a translating/rotating carrier
-  whose contact normal varies independently. Increment the outer Navigator
-  schema version; old payloads are rejected by the existing exact-version gate
-  rather than silently defaulting or deriving a normal. Verify JSON and
-  MemoryPack round trips, explicit `Zero` and `Up` behavior, exact coverage, and
-  the full `Release`/`ReleaseLean` matrix.
+- **Verification:** `SetGroundContact` now requires the normal, heightmap
+  grounding supplies `Up`, and motor fixtures author slope normals explicitly.
+  An identity-platform traversal asserts the exact sampled normal, slope angle,
+  and projected velocity; a separate contact-refresh regression changes carrier
+  transform and normal independently. JSON and MemoryPack preserve the normal,
+  Navigator schema 4 rejects schema 3 transactionally, and the explicit `Zero`
+  behavior is covered. Full `Release` passes 2,291 tests, full `ReleaseLean`
+  passes 2,241, and both exact aggregates cover all 30,074 lines, 11,759
+  branches, and 2,951 methods. DocFX and wiki helper gates pass, and two
+  independent reviews report no remaining findings.
 
-## Resolved Issues
-
-The issues below were resolved and verified as part of the 2026-09-01 coverage
-hardening and code-quality follow-up passes.
+The older issues below were resolved and verified as part of the 2026-09-01
+coverage hardening and code-quality follow-up passes.
 
 ### TRB-Issue-101 - Direct-heading allocation gate warms below its measurement window
 

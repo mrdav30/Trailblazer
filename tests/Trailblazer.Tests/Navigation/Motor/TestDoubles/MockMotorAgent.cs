@@ -139,6 +139,7 @@ public class MockMotorAgent
                     FrameCondition.GroundState ??= new GroundCondition
                     {
                         Platform = default, // Assuming a flat ground by default
+                        SurfaceNormal = Vector3d.Up,
                     };
                 }
             }

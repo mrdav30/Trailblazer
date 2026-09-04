@@ -59,11 +59,11 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 3. The nested path-session and
-standalone `PathQueryRecord` schemas remain version 1. Version 3 uses the final
-guided-state names and the explicit world-unit `WaypointTolerance`; outer
-version-1 and version-2 Navigator records reject transactionally rather than
-being interpreted through compatibility aliases.
+The outer Navigator record is schema version 4. The nested path-session and
+standalone `PathQueryRecord` schemas remain version 1. Version 4 records the
+ground contact's explicit world-space `SurfaceNormal` independently from its
+platform transform. Earlier outer Navigator schemas reject transactionally
+rather than supplying a derived or default normal through a compatibility path.
 
 Navigator does not serialize or restore:
 

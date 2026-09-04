@@ -2,15 +2,25 @@
 
 > **For agentic workers:** Use `superpowers:subagent-driven-development` or
 > `superpowers:executing-plans` when execution is requested. Work through the
-> checkboxes in order and use independent review. This draft does not authorize
-> implementation, sibling-repository edits, or package publication.
+> checkboxes in order and use independent review. This plan is not standing
+> authorization for future implementation, additional sibling-repository edits,
+> or package publication; follow the active user scope.
 
 **Created:** 2026-09-03
 
-**Status:** Draft; no adapter, integration tests, or playtest evidence created.
+**Status:** Phase 0 preflight complete, including working-tree Gravitas
+dependency alignment and independent review; no adapter, integration tests, or
+playtest evidence created. Phase 1 package-backed work requires an aligned
+Gravitas release. Slope-enabled work also requires
+[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation).
+Solution-wide local-source validation remains tracked by
+[`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
 
-**Source baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`;
-Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`.
+**Source baselines:** Trailblazer `609beaaf9b3058b6e6881094ccc91ae5c383331d`;
+Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`; GridForge
+`d73c5c1313db759f8ea7dcbe2e60a27303ba1145`; FixedMathSharp
+`010be577a4c3a10ea676f239c48d739b34d112ae`; SwiftCollections
+`ee3884c550d1240ad4b3fc018fc152e973b4dc95`.
 
 **Goal:** Deliver a reusable, engine-agnostic Gravitas-backed 3D kinematic
 Navigator whose state reflects collision-accepted motion, with a concrete host
@@ -94,21 +104,26 @@ In the Gravitas checkout, read `AGENTS.md`, `docs/wiki/HOST_INTEGRATION.md`,
 - `src/Gravitas/Core/2D/SolidBody2D.cs` only to preserve the future dimension
   boundary, not to claim this 3D adapter serves planar physics.
 
-At the recorded baselines, Gravitas declares FixedMathSharp 7.0.0 and GridForge
-9.0.0, while Trailblazer declares 7.1.0 and 9.1.0. Source compatibility and a
-joint released-package chain have not been verified by writing this plan.
+At the recorded baselines, Gravitas declared FixedMathSharp 7.0.0,
+FixedMathSharp.Chronicler 7.0.0, SwiftCollections.FixedMathSharp 7.0.0, and
+GridForge 9.0.0. Trailblazer declares the corresponding 7.1.0, 7.1.0, 7.1.0,
+and 9.1.0 packages. Phase 0 aligned and verified the Gravitas working tree and a
+joint source-project probe against the higher 7.1.0/9.1.0 stack in both package
+families. Those results are not released-package evidence: Gravitas must still
+release the aligned packages before package-backed adapter implementation begins.
 
-Proposed additions, subject to Phase 0's location/package decision:
+Phase 0 selected the following Phase 1 additions:
 
 | Location | Responsibility |
 | --- | --- |
-| `src/Trailblazer.Gravitas/` | Optional adapter project, 3D Navigator subclass, contact translation, and explicit frame orchestration |
+| `src/Trailblazer.Gravitas/` | Optional adapter project, one 3D Navigator subclass, and internal contact translation |
 | `tests/Trailblazer.Gravitas.Tests/` | Real-body joint behavior, replay, shape-change, and teardown tests; no duplicate core unit suite |
-| Adapter README and runnable host sample | Setup, supported collision behavior, controls, frame order, and presentation-only observation |
+| `samples/Trailblazer.Gravitas.HeadlessSample/` | Runnable deterministic consumer, scenario inputs, trace output, and bounded failure results |
+| Adapter README and Gravitas wiki guide | Setup, supported collision behavior, frame order, limitations, and presentation-only observation |
 
-These directories do not exist yet. Before scaffolding, record exact project,
-type, and sample paths plus the approved package names. Do not add empty projects
-or a second adapter implementation just to reserve future 2D space.
+These directories do not exist yet. Scaffold them only after the recorded
+dependency prerequisites are satisfied. Do not add empty projects or a second
+adapter implementation just to reserve future 2D space.
 
 ## Motion contract
 
@@ -116,65 +131,280 @@ The adapter's first proof uses the following explicit sequence for every fixed
 frame; all actors prepare before the shared physics resolution, and all commit
 after it:
 
-1. Apply ordered host commands and call each context's `Simulate()` once with
-   matching fixed timesteps. Supply the previous accepted body pose and current
-   contact state to the Navigator.
-2. Run Navigator simulation. Form the requested pose from current position plus
-   queued locomotion/platform displacement and the calculated rotation.
-3. Write each requested pose to its kinematic Gravitas host transform before
-   `GravitasWorldContext.LateSimulate()`; execute that world step once.
-4. Read accepted body poses and refreshed contacts after collision resolution.
-5. Replace the Navigator's pending total with accepted displacement, clear the
-   original pending contributions, and supply accepted rotation/contact state.
-   Call the base `CommitFrameMotion()` once so its private coordination remains
-   intact. Do not first commit requested motion and then correct it afterward.
+1. Apply ordered host commands, call `TrailblazerWorldContext.Simulate()`, then
+   call `GravitasWorldContext.Simulate()` once, using matching fixed timesteps.
+   Supply the previous accepted body pose and cached contact state to each
+   Navigator.
+2. In stable host actor order, run each adapter Navigator's `Simulate()` once.
+   The override calls the base simulation, forms the requested pose from current
+   position plus queued locomotion/platform displacement and rotation, and writes
+   that target to its kinematic Gravitas host transform.
+3. After every target has been written, execute
+   `GravitasWorldContext.LateSimulate()` once for the shared world.
+4. Read accepted body poses after collision resolution, then run the declared
+   deterministic support query and cache contact facts without moving the body.
+5. In the same stable actor order, call each adapter's `CommitFrameMotion()`
+   once. Its override replaces pending motion with accepted displacement, clears
+   the original pending contributions, supplies accepted rotation/contact state,
+   and calls the base commit once so its private coordination remains intact. Do
+   not first commit requested motion and then correct it afterward.
 6. After every Navigator commits, call `TrailblazerWorldContext.LateSimulate()`
    once. Observe committed cells and events after this late phase; only then
    expose presentation snapshots.
 
-The subclass approach is a feasibility direction, not a verified adapter.
-Preflight must pin exactly where commands and hooks run in both contexts, test
-rotation already changed by turning during `Simulate()`, and prove that contact
-refresh or optional heightmap projection cannot overwrite the accepted pose.
-Aborted or failed physics steps must close or abort open traversal without
-publishing a fictitious successful move. Trailblazer late hooks must observe the
-collision-accepted, fully committed state, never the unfulfilled target pose.
+Phase 0 source review confirms that the subclass seam can express this order;
+it does not prove an adapter. Phase 1 must test rotation already changed by
+turning during `Simulate()` and prove that contact refresh cannot overwrite the
+accepted pose. Heightmap projection remains disabled until a later test chooses
+it as the sole snap owner. A discarded or failed physics step is an aborted
+authoritative frame, not a locally recoverable movement result.
 
 ## Progress dashboard
 
 | Phase | Deliverable | Status | Gate |
 | --- | --- | --- | --- |
-| 0 | Dependency, ownership, and package contract | Not started | Recorded compatible stack, exact frame order, file/API map, and viewer choice |
+| 0 | Dependency, ownership, and package contract | Complete | Compatible target stack, exact frame order, file/API map, viewer choice, and prerequisites recorded |
 | 1 | Fixed-profile 3D adapter proof | Not started | Wall-clipped pose, contacts, velocity, occupancy, and guide state agree |
 | 2 | Shared hardening and shape-change evidence | Not started | Joint scenarios, observable movement, mutation, replay, and teardown verified |
 | 3 | Package and documentation closeout | Not started | Runnable consumer, full matrix, coverage, and independent review |
 
 ## Phase 0 - Integration Preflight
 
-- [ ] **Verify the dependency chain.** Inspect both project files and resolve
+- [x] **Verify the dependency chain.** Inspect both project files and resolve
   compatible standard/Lean package sets. Record exact versions and baseline
   commands/results. If unreleased sibling changes are necessary, obtain scope
   approval before editing those repositories; document the temporary source
   validation path without representing it as package-release evidence.
-- [ ] **Record context and body ownership.** Decide whether the contexts attach
+- [x] **Record context and body ownership.** Decide whether the contexts attach
   to one host-owned GridWorld; verify that binding is supported and has one
   disposal owner. Specify frame synchronization, stable actor/platform IDs,
   kinematic body configuration, collision modes, gravity, ground snapping,
   platform transfer, and registration/disposal order.
-- [ ] **Review contact semantics before mapping fields.** Gravitas reports a
+- [x] **Review contact semantics before mapping fields.** Gravitas reports a
   supporting surface normal independently of its transform; Trailblazer derives
   its current ground normal from platform orientation. Include a sloped mesh
   under an unrotated transform and moving support with varying contact normals.
   Do not fake carrier rotation to encode a normal. If the existing boundary
   cannot preserve both facts, capture the reproducer and approve a focused fix.
-- [ ] **Set the adapter contract and first fixture.** Record exact project/type
+- [x] **Set the adapter contract and first fixture.** Record exact project/type
   paths, prepare/resolve/commit operations, ownership, lifecycle failure results,
   timestep, collision settings, and bounded wall-test expectations. Start from
   the existing subclass seam; require evidence before adding a new core API.
-- [ ] **Choose the observation host.** Reuse an available playground or select a
+- [x] **Choose the observation host.** Reuse an available playground or select a
   minimal viewer for the same deterministic scenarios. Record its location,
   controls, replay input format, and artifact destination. Rendering is optional
   for early joint tests but required for the movement-quality closeout.
+
+### Phase 0 decisions
+
+#### Dependency and package boundary
+
+The compatible lower-stack target is exact and matched by family:
+
+| Dependency | Standard | Lean |
+| --- | --- | --- |
+| FixedMathSharp | `FixedMathSharp` 7.1.0 | `FixedMathSharp.Lean` 7.1.0 |
+| FixedMathSharp Chronicler bridge | `FixedMathSharp.Chronicler` 7.1.0 | `FixedMathSharp.Chronicler.Lean` 7.1.0 |
+| SwiftCollections | `SwiftCollections` 7.0.0 | `SwiftCollections.Lean` 7.0.0 |
+| SwiftCollections FixedMathSharp bridge | `SwiftCollections.FixedMathSharp` 7.1.0 | `SwiftCollections.FixedMathSharp.Lean` 7.1.0 |
+| GridForge | `GridForge` 9.1.0 | `GridForge.Lean` 9.1.0 |
+| Chronicler | `Chronicler.Core` 0.4.0 | `Chronicler.Core.Lean` 0.4.0 plus `Chronicler.MemoryPackShim` 0.4.0 |
+| MemoryPack | `MemoryPack` 1.21.4 | omitted |
+
+The adapter assembly, root namespace, and standard package ID are
+`Trailblazer.Gravitas`; the Lean package ID is `Trailblazer.Gravitas.Lean`.
+During repository development it references the local
+`src/Trailblazer/Trailblazer.csproj`, which NuGet packing must convert into the
+matching Trailblazer package dependency, and the aligned released Gravitas
+package. It has no direct lower-stack package references. Release validation
+must inspect the generated nuspec and restore a clean consumer to prove that the
+standard package depends only on `Trailblazer` plus `Gravitas`, and the Lean
+package only on their Lean variants.
+
+The Gravitas working tree now explicitly declares this dependency table in both
+package families and gives its local-stack project references the same assembly
+versions. Its test project also selects the 7.1.0 FluentAssertions package in
+both package-backed and local-stack runs rather than pulling 7.0.0 back in.
+Both package configurations pass Gravitas's full build/test matrix, and their
+configuration-specific assets resolve the requested 7.1.0/9.1.0 packages. An
+aligned Gravitas release is still required before that version is pinned in the
+adapter.
+
+#### World, body, and frame ownership
+
+- The host creates and solely disposes one `GridWorld`. Both contexts attach
+  with `takeOwnership: false`; their independent ownership registries permit the
+  same world to be bound once per context type. A 32 Hz joint probe ran one
+  simulate/late cycle in `Release` and `ReleaseLean`, disposed both contexts,
+  and confirmed the shared world remained active.
+- The host registers grids and maps before actors. It assigns deterministic
+  Navigator actor identities and stable nonzero `int` carrier IDs; Gravitas
+  collider IDs are context-local and never become serialized platform IDs.
+- The host owns each `FixedTransform`, `SolidBody`, and collider. The adapter
+  owns only its Navigator and prepare/commit state; it does not create, dispose,
+  subscribe to, or serialize physics objects in the first slice.
+- The first adapter body is a 3D kinematic `SolidBody` with a host-owned
+  `FixedTransform`, `ContinuousCollisionMode.Continuous`, and gravity scale
+  zero. Trailblazer owns requested locomotion, jump/fall gravity, friction,
+  platform carry, and departure transfer. Gravitas owns physical clipping,
+  contacts, and the accepted body pose.
+- Ground snap and step behavior are disabled for the first wall proof. A later
+  scenario must choose exactly one owner before enabling either Gravitas step/
+  snap or Trailblazer heightmap projection. Navigation clearance and the
+  physical collider remain separately configured facts.
+- The host drives the explicit all-prepare / one-resolve / all-commit barrier in
+  stable actor order. No coordinator, generic runner, or future-2D placeholder
+  is approved.
+- Duplicate prepare, commit without a prepared frame, stale-frame commit, and
+  duplicate commit throw `InvalidOperationException` before a second lifecycle
+  mutation. Committing before Gravitas late resolution remains an explicit host-
+  order violation that the current public Gravitas surface cannot detect.
+- If the host discards a prepared frame or Gravitas late simulation throws, the
+  exception propagates and no Navigator commit or committed-cell notification
+  occurs. `NavMotor.AbortTraversalFrame()` closes bookkeeping for teardown, but
+  it is not a rollback: turning, locomotion, guide, clock, and partial physics
+  mutations make that authoritative frame unusable. Continuing requires the host
+  to restore a full pre-frame simulation checkpoint or reset and rebuild every
+  affected shell; the adapter must not advertise local continuation.
+- `GravitasNavigator3D.Reset()` is the adapter's reusable lifecycle endpoint,
+  not a fictional Navigator disposal operation. It aborts an open traversal
+  frame, clears adapter phase/pose snapshots, and calls `base.Reset()` so owned
+  guide leases and Trailblazer registrations are released. Repeated reset is
+  harmless; `Simulate()` and `CommitFrameMotion()` reject until the host sets up
+  and initializes the adapter again.
+- Teardown resets adapters, deactivates bodies and colliders, disposes both non-
+  owning contexts, and disposes the host world last. The first slice has no
+  Gravitas contact-event subscription to remove. A session reset follows the
+  same actor-before-context discipline and rebuilds transient contacts and
+  guides.
+
+#### Contact boundary and focused core issue
+
+Post-resolution grounding comes from one explicit Gravitas closest-hit support
+sweep with fixed origin, radius, distance, layer filter, and mover exclusion.
+The support layer is an adapter authoring contract: it contains non-trigger
+support geometry, so the closest query's distance/collider-ID order remains the
+only tie rule. A hit is accepted only when its world normal has positive Y. The
+adapter caches its point/height, actual world-space normal, dynamic friction,
+supporting transform, and host carrier ID before committing; a miss or rejected
+normal calls `SetAirborne()`. It never fabricates platform rotation from a
+contact normal.
+
+After resolution, requested/accepted pose divergence is the first slice's sole
+obstruction signal. The adapter calls `NotifyCollision()` at most once before
+the base commit. It intentionally does not subscribe to `LSCollider` contact
+callbacks: those callbacks identify the other body but provide no normal or
+support/obstruction classification, so treating every body-backed floor or
+platform contact as an obstruction would spuriously arm collision turning. A
+future callback-only signal requires a reliable obstruction classifier and a
+grounded body-backed support regression. CCD wall clipping needs no such
+callback.
+
+Trailblazer cannot currently preserve the real support normal independently of
+the carrier transform. The confirmed reproducer and focused fix are tracked as
+[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation).
+The fix must establish one explicit serialized normal contract and remove the
+derived-only ambiguity; it must not add Gravitas types to Trailblazer core.
+The initial flat wall proof may proceed after dependency alignment, but slope
+support cannot be claimed until that issue is resolved and the static/moving
+slope regressions pass.
+
+#### Adapter, test, and sample map
+
+| Path | Contract |
+| --- | --- |
+| `src/Trailblazer.Gravitas/Trailblazer.Gravitas.csproj` | Optional `netstandard2.1;net8.0` adapter and `Trailblazer.Gravitas` / `.Lean` packages |
+| `src/Trailblazer.Gravitas/GravitasNavigator3D.cs` | The only public adapter type; a 3D `Navigator` subclass that prepares a kinematic target and commits one accepted pose |
+| `src/Trailblazer.Gravitas/GravitasContactTranslator.cs` | Internal cached support/contact translation; no second public contact model |
+| `tests/Trailblazer.Gravitas.Tests/` | Real Gravitas joint behavior, lifecycle, replay, coverage, and teardown tests |
+| `tests/Trailblazer.Gravitas.Tests/Support/GravitasNavigatorScenarioFixture.cs` | Shared-world setup and bounded stable-order frame driver used only by tests |
+| `tests/Trailblazer.Gravitas.Tests/GravitasNavigator3D.AcceptedMotion.Tests.cs` | First red accepted-motion wall proof |
+| `tests/Trailblazer.Gravitas.Tests/GravitasNavigator3D.CollisionTurning.Tests.cs` | Isolated public collision-turn timeline with no ordinary turn request |
+| `samples/Trailblazer.Gravitas.HeadlessSample/` | Runnable package consumer using the same versioned scenarios and emitting deterministic traces |
+| `docs/wiki/Gravitas.md` | Verified setup, frame order, ownership, supported behavior, and limitations |
+
+`GravitasNavigator3D.Simulate()` is the prepare operation and
+`GravitasNavigator3D.CommitFrameMotion()` is the accepted-motion commit. The
+host's single `GravitasWorldContext.LateSimulate()` is the resolve operation.
+The adapter rejects duplicate prepare, commit-before-prepare, stale-frame commit,
+and duplicate commit. Committing after prepare but before Gravitas late resolution
+is an explicit host-order violation; the current public Gravitas surface does not
+expose its internal late-step token, so this plan does not falsely promise that
+the adapter can detect it. A post-prepare failure invalidates the authoritative
+frame as described above; no adapter-only rollback or coordinator API is approved.
+
+The first fixture uses one shared rectangular world at 32 Hz with default one-
+unit cells and bounds `(-4,-4,-4)` through `(8,8,8)`. Map `gravitas-wall`
+contains connected solid cells `(4,4,4)`, `(5,4,4)`, and `(6,4,4)`, each with
+radius/height clearance `4`, zero cost, and no required capability. Their exact
+foot anchors are `(1/2,0,1/2)`, `(3/2,0,1/2)`, and `(5/2,0,1/2)`.
+
+The actor starts at root pose `(1/2,1/2,1/2)` already facing positive X with
+rotation `FixedQuaternion.FromDirection(Vector3d.Right)`. It uses a fixed
+`KinematicBodyShape(radius=1/2, height=1, rootToFootOffset=1/2)` plus a matching
+`LSSphereCollider(radius=1/2)` on layer 0 with no ignored collision layers. Its
+A* query targets the end anchor in `TraversalMedium.Solid`, and `TrekRate.Fast`
+requests positive-X motion at `1/2` unit per second. A non-trigger bodyless
+`LSCuboidCollider` on layer 1, also with no ignored collision layers, has center
+`(2,1,1/2)`, size `(1/4,2,2)`, identity rotation, and zero restitution. All
+three map cells and their native connections remain navigable, so guidance
+requests motion through physical geometry that Gravitas independently blocks.
+
+Gravity and damping are zero for this isolation case, the kinematic body uses
+`ContinuousCollisionMode.Continuous`, and the loop is bounded at 128 frames.
+The post-resolution support sweep starts at `acceptedFoot + Up * 1/8`, uses
+radius `1/4`, direction `Down`, distance `1/4`, layer mask
+`PhysicsLayerMask.FromLayer(0)`, and excludes the mover collider. This first
+fixture deliberately has no support geometry, so the query must miss and the
+adapter must report airborne; the layer-1 vertical wall cannot become support.
+
+With exact `1/64`-unit frame steps, the first requested/accepted divergence is
+frame 56 (zero-based): requested X is `89/64` and accepted X is exactly `11/8`,
+the wall's near face `15/8` minus the sphere radius. The accepted root keeps
+`Y=1/2`, `Z=1/2`, and `FixedQuaternion.FromDirection(Vector3d.Right)`. The test
+also asserts body/Navigator pose equality,
+`Velocity == (Position - LastPosition) * InvDeltaTime`, middle cell `(5,4,4)`
+as the last committed cell, no committed transition into `(6,4,4)`, airborne
+contact state, and `Motor.TraversalInProgress == false`. It does not count
+private commit/finalize calls or pretend that map clearance and collision
+geometry are the same subsystem.
+
+Collision turning is a separate wall scenario, not a second assertion on the
+fully blocked fixture. It starts at the same root position facing positive Z at
+identity rotation and repeatedly applies unguided positive-X movement with
+`facingDirection: Vector3d.Forward`, so no ordinary turn is requested. Its
+bodyless wall has the same shape and orientation but center X `515/256`; its
+near face is therefore `483/256`. On zero-based frame 56, the request is again
+X `89/64`, but CCD partially accepts X `355/256`. The accepted displacement
+from the previous X `11/8` is `3/256`, which is greater than the exact
+collision-turn threshold `radius / frameRate / 2 == 1/128`.
+
+On that divergence frame the adapter signals collision before commit, then
+input stops. The first idle simulation buffers the accepted positive-X
+displacement while `Turning.TargetReached` remains true and `TargetRotation`
+remains identity. The second idle simulation consumes that buffer:
+`TargetReached` becomes false, `TargetRotation` equals
+`FixedQuaternion.FromDirection(Vector3d.Right)`, and the applied Navigator
+rotation differs from identity. These public states prove the signal without
+method counters or conflating it with guided turning.
+
+#### Observation host and evidence format
+
+Use the local `F:\gamedevrepos\GridForge-Unity` Unity 6000.5 workspace as the
+visual observation host because it already presents a GridForge world and trace
+visualization. Do not modify its published GridForge package sample. After
+separate authorization and compatible Unity-facing packages exist, derive a
+viewer under `Assets/Trailblazer.Gravitas.Playground/` with scenario selection,
+single-step, play/pause, and reset controls.
+
+The headless fixture remains authoritative. It and the viewer consume the same
+versioned JSON scenario commands and line-oriented trace records: scenario hash,
+package versions, frame/command order, requested pose, accepted pose/velocity,
+contact normal and carrier ID, guide/action state, committed cell, and bounded
+outcome. Generated traces go to ignored
+`artifacts/gravitas-integration/<scenario>/`; reviewed observations and exact
+trace hashes are summarized in this execution record. Rendering and interactive
+input capture never become a second collision or navigation implementation.
 
 ## Phase 1 - Fixed-Profile 3D Adapter Proof
 
@@ -185,14 +415,19 @@ collision-accepted, fully committed state, never the unfulfilled target pose.
   Record the intended failure before implementing the bridge.
 - [ ] **Implement the smallest adapter that passes the proof.** Prepare all
   targets, resolve Gravitas once, replace pending movement, and use base commit.
-  Preserve platform and turning rotation order. Test unobstructed motion,
-  completely blocked motion, and collision-driven turning notification.
+  Preserve platform and turning rotation order. Test unobstructed motion and
+  completely blocked motion. Prove collision-driven turning in the separate
+  unguided/idle scenario above so ordinary guide turning cannot satisfy it.
 - [ ] **Prove lifecycle and contact boundaries.** Cover multiple actors in one
   world, duplicate prepare/commit, commit without prepare, a discarded frame,
-  stale-frame finalization, and teardown while work is open. Verify finalization
-  and committed-cell events occur once, with no stale contact or guide reuse.
-  Register an ordered Trailblazer late hook and assert it runs once after all
-  accepted commits with the same final pose/cell state visible to consumers.
+  stale-frame finalization, repeated adapter reset, and reset while work is open.
+  Verify finalization and committed-cell events occur once, with no stale
+  contact or guide reuse, and perform host-owned physics/context teardown in the
+  specified order.
+  From the public host loop, capture pose/cell state immediately after
+  `TrailblazerWorldContext.LateSimulate()` returns and assert every actor already
+  exposes its accepted committed result. Do not add a test-only friend or public
+  late-hook API merely to observe the internal callback.
 - [ ] **Review before sharing the slice.** Run focused tests in both package
   families and obtain an independent review of fixed-frame order and pose
   ownership. Link the verified revision and fixture from hardening Phase 1.
@@ -241,9 +476,9 @@ collision-accepted, fully committed state, never the unfulfilled target pose.
   adapter tests, and relevant Gravitas tests in Release and ReleaseLean; record
   Windows/Linux evidence and exact adapter/core coverage. Verify released package
   references, allocation/lifetime behavior, and deterministic replay.
-- [ ] **Record exact commands after project selection.** Include adapter
+- [ ] **Record exact implementation commands for the selected projects.** Include adapter
   restore/build/test/coverage commands in its README and this execution record
-  once Phase 0 fixes its paths. Reuse each repository's actual scripts/settings;
+  as the projects are added. Reuse each repository's actual scripts/settings;
   do not copy unverified coverage switches or silently omit the adapter assembly.
 - [ ] **Obtain final independent review.** Resolve blocking findings, update
   [feature-work-overview.md](feature-work-overview.md), and archive only after
@@ -261,3 +496,147 @@ scenario inputs, results, artifact locations, linked issues, and next steps.
   handoff. Source review supports feasibility, not integrated runtime behavior.
 - No implementation or verification has started. Next task when authorized:
   dependency and lifecycle preflight, followed by the accepted-motion wall case.
+
+### 2026-09-03 - Phase 0 preflight completed
+
+- Inspected the Trailblazer, Gravitas, GridForge, FixedMathSharp, and
+  SwiftCollections source and package boundaries at the baselines recorded
+  above. Trailblazer resolves the 7.1.0/9.1.0 line. The authorized Gravitas
+  working-tree change now declares FixedMathSharp, its Chronicler bridge, and
+  the SwiftCollections bridge at 7.1.0 plus GridForge 9.1.0 in both package
+  families. The local-stack project references carry matching assembly
+  versions, and Gravitas tests select the 7.1.0 FluentAssertions package
+  consistently.
+- Package-based baseline verification passed with zero warnings/errors:
+  Trailblazer `Release` 2,287 tests, Trailblazer `ReleaseLean` 2,238 tests,
+  Gravitas `Release` 3,930 tests, and Gravitas `ReleaseLean` 3,875 tests.
+- After dependency alignment, Gravitas again built both target frameworks with
+  zero warnings/errors and passed 3,930 `Release` plus 3,875 `ReleaseLean`
+  tests. Its configuration-specific restore assets resolve the requested 7.1.0
+  FixedMathSharp family and 9.1.0 GridForge family; SwiftCollections core stays
+  at 7.0.0 by design. No Gravitas runtime or public API changed.
+- Fresh `Release` coverage passed all 3,930 tests and reports 55,867/55,867
+  lines, 15,833/15,833 branches, and 5,320/5,320 ReportGenerator methods. The
+  standard and Lean generated nuspecs contain the exact dependency families in
+  the Phase 0 table for both target frameworks; Lean omits MemoryPack and the
+  standard packages, while standard includes MemoryPack 1.21.4.
+- Configuration-specific local-stack source builds and test-project runs also
+  passed in both modes with the same test counts. Solution-wide local-stack
+  validation first read stale configuration-less `obj` metadata from a prior
+  isolated NuGet cache; after that generated state was repaired, it exposed the
+  distinct duplicate SwiftCollections assembly-version defect recorded as
+  [`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
+  That convenience path is not used to claim success. The exact direct source/
+  test validation below and the joint probe passed without an authored lower-
+  stack change. The unnecessary experiment that substituted the test-only
+  FluentAssertions package with its source project was reverted before these
+  results.
+- A temporary source-project consumer restored the matched package families and
+  resolved FixedMathSharp 7.1.0, FixedMathSharp.Chronicler 7.1.0,
+  SwiftCollections 7.0.0, SwiftCollections.FixedMathSharp 7.1.0, GridForge
+  9.1.0, and Chronicler 0.4.0. Its `Release` and `ReleaseLean` runs attached both
+  contexts non-owning to one world, advanced the fixed-step order at 32 Hz, and
+  left the host world active after context disposal.
+- Confirmed the existing protected Navigator seam can replace queued motion with
+  the accepted Gravitas pose and call the base commit once. No new pose API,
+  coordinator, or 2D placeholder is justified for the first slice.
+- Confirmed and recorded `TRB-Issue-102`: physical support normal and platform
+  transform are independent facts, but Trailblazer currently derives one from
+  the other. Slope-enabled integration is blocked on its focused fix.
+- Selected the GridForge-Unity workspace for later presentation-only observation
+  and fixed the package/test/sample paths, wall fixture, controls, trace schema,
+  artifact destination, ownership order, and reset/teardown contract. The wall
+  and collision-turn proofs are separate, and callback-only obstruction signals
+  are deferred because Gravitas contact callbacks cannot distinguish support.
+  No visual-host files were changed.
+- Extended the ignored probe with the exact bodyless wall and support sweep. In
+  both configurations, 1/64-unit steps first diverged on zero-based frame 56:
+  requested X was 89/64, accepted X was exactly 11/8 (raw 5905580032), and the
+  layer-0 downward support query returned no hit. A distinct collision-turn
+  wall centered at X 515/256 partially accepted X 355/256 (raw 5955911680),
+  producing an accepted delta of 3/256 above the exact 1/128 turn threshold.
+- Independent documentation review caught that the original collision-turn
+  wording reused the fully blocked wall and therefore supplied no accepted delta
+  for `NavTurning`. The distinct partial-clipping fixture above replaced it and
+  passed re-review. Technical review then separated the unrelated stale-restore
+  failure from `TRB-Issue-103` and required the exact SwiftCollections baseline;
+  both findings are resolved in this record and tracker.
+- Next dependency-order work: review and release Gravitas against the
+  7.1.0/9.1.0 family, then capture the Phase 1 wall regression before
+  scaffolding the smallest adapter implementation. Resolve `TRB-Issue-102`
+  before slope-enabled integration; resolve `TRB-Issue-103` before advertising
+  solution-wide local-source validation as a supported green path.
+
+Package-backed baseline and post-alignment commands were run serially from each
+named repository root:
+
+```powershell
+# F:\gamedevrepos\Trailblazer
+dotnet restore Trailblazer.slnx --property:Configuration=Release
+dotnet build Trailblazer.slnx --configuration Release --no-restore
+dotnet test Trailblazer.slnx --configuration Release --no-build
+dotnet restore Trailblazer.slnx --property:Configuration=ReleaseLean
+dotnet build Trailblazer.slnx --configuration ReleaseLean --no-restore
+dotnet test Trailblazer.slnx --configuration ReleaseLean --no-build
+
+# F:\gamedevrepos\Gravitas
+dotnet restore Gravitas.slnx --property:Configuration=Release
+dotnet build Gravitas.slnx --configuration Release --no-restore
+dotnet test Gravitas.slnx --configuration Release --no-build
+dotnet restore Gravitas.slnx --property:Configuration=ReleaseLean
+dotnet build Gravitas.slnx --configuration ReleaseLean --no-restore
+dotnet test Gravitas.slnx --configuration ReleaseLean --no-build
+```
+
+The aligned Gravitas working tree also passed direct local-stack source and test
+validation with configuration-specific restore assets:
+
+```powershell
+dotnet restore Gravitas.slnx --property:Configuration=Release --property:UseLocalLsfStack=true --force --no-cache
+dotnet build src/Gravitas/Gravitas.csproj --configuration Release --property:UseLocalLsfStack=true --no-restore
+dotnet test tests/Gravitas.Tests/Gravitas.Tests.csproj --configuration Release --property:UseLocalLsfStack=true --no-restore
+dotnet restore Gravitas.slnx --property:Configuration=ReleaseLean --property:UseLocalLsfStack=true --force --no-cache
+dotnet build src/Gravitas/Gravitas.csproj --configuration ReleaseLean --property:UseLocalLsfStack=true --no-restore
+dotnet test tests/Gravitas.Tests/Gravitas.Tests.csproj --configuration ReleaseLean --property:UseLocalLsfStack=true --no-restore
+```
+
+Fresh coverage and package-metadata evidence used isolated ignored output:
+
+```powershell
+dotnet restore Gravitas.slnx --property:Configuration=Release
+dotnet build Gravitas.slnx --configuration Release --no-restore
+dotnet test tests/Gravitas.Tests/Gravitas.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" --settings tests/Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage-phase0-gravitas-alignment-20260903
+reportgenerator "-reports:artifacts/coverage-phase0-gravitas-alignment-20260903/**/coverage.cobertura.xml" "-targetdir:artifacts/coverage-report-phase0-gravitas-alignment-20260903" "-reporttypes:JsonSummary;MarkdownSummaryGithub" "-filefilters:-**/MemoryPack.Generator/**;-**/*.g.cs;-**/obj/**"
+dotnet restore Gravitas.slnx --property:Configuration=ReleaseLean
+dotnet build Gravitas.slnx --configuration ReleaseLean --no-restore
+tar -xOf src/Gravitas/bin/Release/Gravitas.0.0.0.nupkg Gravitas.nuspec
+tar -xOf src/Gravitas/bin/ReleaseLean/Gravitas.Lean.0.0.0.nupkg Gravitas.Lean.nuspec
+```
+
+The temporary probe was created under the ignored planning workspace at
+`.superpowers/sdd/gravitasIntegrationPlan/shared-world-probe/`. Its `net8.0`
+console project directly referenced the Trailblazer and Gravitas source projects;
+the program created one `GridWorld`, attached both contexts non-owning, set 32 Hz,
+ran both simulate phases plus Gravitas late then Trailblazer late, exercised the
+layer-1 bodyless wall and layer-0 support query, disposed the contexts, and
+required the world to remain active. These exact commands passed:
+
+```powershell
+$probe = '.superpowers/sdd/gravitasIntegrationPlan/shared-world-probe/SharedWorldProbe.csproj'
+dotnet run --project $probe --configuration Release
+dotnet run --project $probe --configuration ReleaseLean
+dotnet restore $probe -p:Configuration=Release
+dotnet list $probe package --include-transitive --framework net8.0 --no-restore
+dotnet restore $probe -p:Configuration=ReleaseLean
+dotnet list $probe package --include-transitive --framework net8.0 --no-restore
+```
+
+Both runs printed `shared-world-ok frameRate=32 worldActive=True`, the fully
+blocked result `wall-divergence frame=56 requested=(1.390625, 0.5, 0.5)
+accepted=(1.375, 0.5, 0.5) acceptedXRaw=5905580032 supportHit=False`, and the
+separate partial result `turn-divergence frame=56 previous=(1.375, 0.5, 3)
+requested=(1.390625, 0.5, 3) accepted=(1.38671875, 0.5, 3)
+acceptedDelta=(0.01171875, 0, 0) acceptedXRaw=5955911680
+threshold=0.0078125`. The package list matched the standard and Lean tables
+above. The ignored probe and ordinary `bin`/`obj` outputs are local validation
+artifacts, not product or release files.

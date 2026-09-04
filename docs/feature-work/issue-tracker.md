@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-102`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-104`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -21,8 +21,68 @@
 
 ## Active Issues
 
-No active issues remain after the 2026-09-01 coverage hardening and code-quality
-follow-up passes.
+### TRB-Issue-103 - Local source graph can build SwiftCollections with two assembly versions
+
+- **Discovered:** 2026-09-03
+- **Area:** Cross-stack `UseLocalLsfStack` validation through GridForge
+- **Status:** Active; package-backed integration and direct project validation
+  are not blocked, but solution-wide local-stack validation is unreliable.
+- **Evidence:** After restoring the affected generated assets to the default
+  package cache, `dotnet build Gravitas.slnx --configuration Release --no-restore
+  --property:UseLocalLsfStack=true` reaches compilation and fails with `CS1704`
+  for two `SwiftCollections` assemblies. (A preceding `NETSDK1064` was unrelated
+  stale generated metadata from an isolated NuGet cache.) GridForge's local
+  stack directly pins `SwiftCollections.csproj`
+  to assembly version 7.0.0.0 and also references
+  `SwiftCollections.FixedMathSharp.csproj` as version 7.1.0.0. That bridge's
+  unqualified nested project reference can propagate the bridge's
+  `SemVer`/`AssemblySemVer` into a second SwiftCollections project instance,
+  producing 7.1.0.0 beside the intended 7.0.0.0. Configuration-less solution
+  graph traversal makes the duplicate visible. Direct configuration-specific
+  Gravitas source builds, Gravitas test-project runs, and the shared Trailblazer/
+  Gravitas probe pass in both standard and Lean modes.
+- **Impact:** A contributor following the solution-wide local-stack workflow
+  receives a duplicate-assembly compile error even though every released
+  package family is aligned.
+- **Expected:** The owning lower-stack project must give its nested
+  `SwiftCollections.csproj` reference the core library's explicit 7.0.0 version
+  identity and configuration instead of inheriting the bridge package's 7.1.0
+  identity. Do not add a binary-copy workaround or compatibility package path.
+- **Verification:** From clean generated outputs, restore and build GridForge,
+  Gravitas, and Trailblazer with `UseLocalLsfStack=true` in `Release` and
+  `ReleaseLean`; assert one SwiftCollections project instance/version per target
+  and zero warnings. Then rerun all package-backed matrices to prove the local-
+  source fix did not alter released dependency ownership.
+
+### TRB-Issue-102 - Ground contact conflates the support normal with platform orientation
+
+- **Discovered:** 2026-09-03
+- **Area:** Trailblazer ground-contact ownership and Gravitas integration
+- **Status:** Active; slope-enabled Gravitas integration is blocked.
+- **Evidence:** Gravitas stores `SolidBody.GroundNormal` independently from the
+  supporting collider's `FixedTransform`. Trailblazer instead computes
+  `GroundCondition.GroundNormal` only as `Platform.Transform.Up`, then uses that
+  value for slope angle, projection, sliding, and ground-jump direction. On an
+  identity-transformed wedge or mesh face, the honest platform transform yields
+  `Up` even when the physical contact normal is sloped. Rotating the snapshot to
+  encode the contact normal corrupts moving-platform attachment and carry.
+- **Impact:** A host cannot preserve both collision geometry and carrier motion.
+  Trailblazer can classify a real slope as flat or move an attached actor from a
+  fabricated carrier orientation.
+- **Expected:** Replace the derived-only `GroundNormal` contract with one
+  explicit, serialized `GroundCondition.SurfaceNormal` world-space value that is
+  independent of `PlatformSnapshot.Transform`. `Vector3d.Zero` is the sole
+  no-sample value; the runtime must not infer `Platform.Transform.Up`. A host that
+  wants flat-ground behavior supplies `Vector3d.Up`. Update `SetGroundContact`,
+  cloning, motor behavior, XML, and wiki guidance without exposing a compatibility
+  alias. Keep Trailblazer core free of Gravitas types.
+- **Verification:** First reproduce an unrotated static sloped face and assert
+  the exact slope/projection normal. Then cover a translating/rotating carrier
+  whose contact normal varies independently. Increment the outer Navigator
+  schema version; old payloads are rejected by the existing exact-version gate
+  rather than silently defaulting or deriving a normal. Verify JSON and
+  MemoryPack round trips, explicit `Zero` and `Up` behavior, exact coverage, and
+  the full `Release`/`ReleaseLean` matrix.
 
 ## Resolved Issues
 

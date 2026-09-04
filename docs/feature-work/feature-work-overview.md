@@ -28,10 +28,15 @@ instead of burying it in notes.
     acquisition. Includes posture cycles and fall/flight/controlled-descent
     sequences. Implementation has not started.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
-  - Draft plan for an optional 3D adapter, accepted-pose/contact handoff,
-    coordinated collider/profile changes, joint tests, and runnable examples.
-    Its initial fixed-profile slice supports hardening Phase 1; the adapter
-    remains independently owned and introduces no core-to-core dependency.
+  - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
+    world frame and lifetime order, first bounded wall fixture, and GridForge-
+    Unity observation host. Gravitas's working tree now declares and passes its
+    full matrix against the aligned 7.1.0/9.1.0 stack without a new physics API.
+    The adapter remains independently owned and introduces no core-to-core
+    dependency. Phase 1 package-backed work is gated by the aligned Gravitas
+    release; slope support is additionally gated by `TRB-Issue-102`.
+    `TRB-Issue-103` separately tracks the lower-stack duplicate-version defect
+    found by solution-wide local-source validation.
 - [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
   - Draft plan for native top-down and side-view navigation/controllers, planar
     body/support semantics, and the later Gravitas `SolidBody2D` adapter
@@ -69,9 +74,10 @@ scheduler implementation plan is currently active.
 
 The plans share evidence, not competing implementations:
 
-1. Establish hardening Phase 1 inputs alongside Gravitas integration preflight
-   and its initial fixed-profile 3D slice. Resolve dependency compatibility and
-   accepted-motion ordering before interpreting movement-quality results.
+1. Review and release the dependency-aligned Gravitas working tree, then capture
+   the Gravitas adapter's initial fixed-profile wall regression. Resolve
+   `TRB-Issue-102` before slope scenarios; use the wall slice and that focused
+   fix for hardening Phase 1 before interpreting movement-quality results.
 2. Complete hardening Phase 1 with that host, then Phase 2 profile replacement
    and the adapter's corresponding collider-change tests. Run hardening Phase 3
    measurements; scheduler implementation remains separately evidence-gated.
@@ -81,8 +87,9 @@ The plans share evidence, not competing implementations:
    motion and replacement boundaries. Add the planar adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.
 
-All runtime work remains unstarted. Drafting or reviewing a plan does not mark
-its implementation checkboxes complete. The cross-stack rules apply throughout:
+Runtime implementation remains unstarted; Gravitas Phase 0 is a completed
+preflight, not an adapter. Drafting or reviewing a plan does not mark runtime
+checkboxes complete. The cross-stack rules apply throughout:
 
 1. Keep the benchmark backlog and issue tracker as intake buckets; promote new
    measured risks into dated plans only when they are broader than a focused

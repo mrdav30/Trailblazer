@@ -21,6 +21,22 @@ instead of burying it in notes.
 
 ## Active Coordination
 
+- [Navigation Hardening](navigationHardeningPlan.md)
+  - Planned execution order: combine vertical traversal acceptance scenarios
+    with movement-quality playtesting through a Gravitas-backed 3D host; add safe
+    runtime navigation-profile replacement; then measure cold public guide
+    acquisition. Includes posture cycles and fall/flight/controlled-descent
+    sequences. Implementation has not started.
+- [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
+  - Draft plan for an optional 3D adapter, accepted-pose/contact handoff,
+    coordinated collider/profile changes, joint tests, and runnable examples.
+    Its initial fixed-profile slice supports hardening Phase 1; the adapter
+    remains independently owned and introduces no core-to-core dependency.
+- [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
+  - Draft plan for native top-down and side-view navigation/controllers, planar
+    body/support semantics, and the later Gravitas `SolidBody2D` adapter
+    extension. Contract review precedes implementation; fixed-height projection
+    alone does not complete 2D support.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
@@ -43,10 +59,30 @@ instead of burying it in notes.
 
 ## Deferred / Evidence-Gated
 
-No deferred feature plan is currently active. Add one only after measured runtime
-evidence or a concrete host requirement justifies new work.
+Frame-spread guide scheduling is evidence-gated by Phase 3 of the
+[Navigation Hardening Plan](navigationHardeningPlan.md#phase-3---cold-public-guide-acquisition-measurement).
+That phase delivers measurements and a decision; scheduler implementation
+requires a justified follow-up scope and explicit approval. No separate deferred
+scheduler implementation plan is currently active.
 
 ## Recommended Execution Order
+
+The plans share evidence, not competing implementations:
+
+1. Establish hardening Phase 1 inputs alongside Gravitas integration preflight
+   and its initial fixed-profile 3D slice. Resolve dependency compatibility and
+   accepted-motion ordering before interpreting movement-quality results.
+2. Complete hardening Phase 1 with that host, then Phase 2 profile replacement
+   and the adapter's corresponding collider-change tests. Run hardening Phase 3
+   measurements; scheduler implementation remains separately evidence-gated.
+3. Close the 3D adapter's package, documentation, and joint-verification gates.
+   Reference the same scenario/playtest evidence from both owning plans.
+4. Execute the dedicated 2D plan after its contract review, using the reviewed
+   motion and replacement boundaries. Add the planar adapter extension there;
+   neither the initial 3D slice nor hardening requires completed 2D support.
+
+All runtime work remains unstarted. Drafting or reviewing a plan does not mark
+its implementation checkboxes complete. The cross-stack rules apply throughout:
 
 1. Keep the benchmark backlog and issue tracker as intake buckets; promote new
    measured risks into dated plans only when they are broader than a focused

@@ -8,14 +8,13 @@
 
 **Created:** 2026-09-03
 
-**Status:** Phase 0 preflight complete, including working-tree Gravitas
-dependency alignment and independent review; no adapter, integration tests, or
-playtest evidence created. Phase 1 package-backed work requires an aligned
-Gravitas release. The Trailblazer working tree resolves
+**Status:** Phase 0 preflight and both focused prerequisites are complete in the
+coordinated working trees; no adapter, integration tests, or playtest evidence
+has been created. Phase 1 package-backed work requires an aligned Gravitas
+release. Trailblazer resolves
 [`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation);
 package-backed slope work requires a Trailblazer release containing that
-contract.
-Solution-wide local-source validation remains tracked by
+contract. Solution-wide local-source validation is green after resolving
 [`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
 
 **Source baselines:** Trailblazer `609beaaf9b3058b6e6881094ccc91ae5c383331d`;
@@ -662,6 +661,31 @@ artifacts, not product or release files.
   exact coverage aggregates report 30,074/30,074 lines, 11,759/11,759 branches,
   and 2,951/2,951 methods. DocFX builds with warnings as errors, the wiki helper
   passes, and independent API plus test/documentation reviews report no findings.
-- `TRB-Issue-102` is resolved. The next focused prerequisite is
-  `TRB-Issue-103`; package-backed integration must consume releases containing
-  both fixes rather than treating these working-tree results as package proof.
+- `TRB-Issue-102` was resolved at this checkpoint, leaving `TRB-Issue-103` as
+  the next focused prerequisite. Package-backed integration must consume the
+  aligned releases rather than treating these working-tree results as package
+  proof.
+
+### 2026-09-04 - Solution-wide local source graph completed
+
+- Resolved `TRB-Issue-103` at the project-graph boundaries instead of copying
+  binaries. Local-stack solution builds now retain `Release` or `ReleaseLean`
+  when traversing sibling repositories, and the SwiftCollections FixedMathSharp
+  bridge pins its nested core reference to the intentional 7.0.0 identity only
+  during coordinated local-stack builds.
+- GridForge and Gravitas test and benchmark entry points disable unqualified
+  transitive project traversal in local-stack mode and declare their required
+  lower-stack source references with explicit released identities. Normal
+  package-backed and owner-solution graphs are unchanged.
+- From clean generated outputs, local-stack `Release`/`ReleaseLean` matrices pass
+  with zero build warnings: GridForge 819/819 tests, Gravitas 3,930/3,875, and
+  Trailblazer 2,291/2,241. The Lean output contains one SwiftCollections core at
+  7.0.0.0 beside the distinct 7.1.0.0 FixedMathSharp bridge assembly.
+- Normal FixedMathSharp owner matrices pass 2,708/2,687 tests and normal
+  SwiftCollections owner matrices pass 1,133/1,105. Package-backed GridForge,
+  Gravitas, and Trailblazer repeat their local-stack counts with zero build
+  warnings. No runtime API, package dependency, compatibility path, or copied
+  binary was added.
+- Both focused prerequisites are now ready for review. After their coordinated
+  repository changes are committed, resume the dependency-order release work
+  recorded at the end of Phase 0 before beginning the Phase 1 wall regression.

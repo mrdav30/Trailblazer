@@ -21,15 +21,19 @@
 
 ## Active Issues
 
+No active issues.
+
+## Resolved Issues
+
 ### TRB-Issue-103 - Local source graph can build SwiftCollections with two assembly versions
 
 - **Discovered:** 2026-09-03
 - **Area:** Cross-stack `UseLocalLsfStack` validation through GridForge
-- **Status:** Active; package-backed integration and direct project validation
-  are not blocked, but solution-wide local-stack validation is unreliable.
+- **Status:** Resolved; verified by the 2026-09-04 clean local-source and
+  package-backed matrices.
 - **Evidence:** After restoring the affected generated assets to the default
   package cache, `dotnet build Gravitas.slnx --configuration Release --no-restore
-  --property:UseLocalLsfStack=true` reaches compilation and fails with `CS1704`
+  --property:UseLocalLsfStack=true` reached compilation and failed with `CS1704`
   for two `SwiftCollections` assemblies. (A preceding `NETSDK1064` was unrelated
   stale generated metadata from an isolated NuGet cache.) GridForge's local
   stack directly pins `SwiftCollections.csproj`
@@ -37,24 +41,29 @@
   `SwiftCollections.FixedMathSharp.csproj` as version 7.1.0.0. That bridge's
   unqualified nested project reference can propagate the bridge's
   `SemVer`/`AssemblySemVer` into a second SwiftCollections project instance,
-  producing 7.1.0.0 beside the intended 7.0.0.0. Configuration-less solution
-  graph traversal makes the duplicate visible. Direct configuration-specific
-  Gravitas source builds, Gravitas test-project runs, and the shared Trailblazer/
-  Gravitas probe pass in both standard and Lean modes.
+  producing 7.1.0.0 beside the intended 7.0.0.0. Diagnostic MSBuild traces also
+  showed solution traversal removing `Configuration` from sibling projects not
+  present in the solution. A clean test build exposed the related runtime side:
+  transitive project discovery discarded the explicit versions and copied a
+  rebuilt 0.0.0.0 SwiftCollections assembly beside a GridForge assembly compiled
+  against 7.0.0.0.
 - **Impact:** A contributor following the solution-wide local-stack workflow
-  receives a duplicate-assembly compile error even though every released
-  package family is aligned.
-- **Expected:** The owning lower-stack project must give its nested
-  `SwiftCollections.csproj` reference the core library's explicit 7.0.0 version
-  identity and configuration instead of inheriting the bridge package's 7.1.0
-  identity. Do not add a binary-copy workaround or compatibility package path.
-- **Verification:** From clean generated outputs, restore and build GridForge,
-  Gravitas, and Trailblazer with `UseLocalLsfStack=true` in `Release` and
-  `ReleaseLean`; assert one SwiftCollections project instance/version per target
-  and zero warnings. Then rerun all package-backed matrices to prove the local-
-  source fix did not alter released dependency ownership.
-
-## Resolved Issues
+  could receive either a duplicate-assembly compile error or a runtime load
+  failure even though every released package family was aligned.
+- **Expected:** Local-stack solution builds retain their requested configuration;
+  the SwiftCollections FixedMathSharp bridge uses core 7.0.0 explicitly; and test
+  or benchmark entry points consume direct, versioned lower-stack references
+  instead of rebuilding unqualified transitive instances. Do not add a binary-
+  copy workaround or compatibility package path.
+- **Verification:** Clean `UseLocalLsfStack=true` restore/build/test matrices pass
+  in `Release` and `ReleaseLean`: GridForge 819/819 tests in each mode, Gravitas
+  3,930/3,875, and Trailblazer 2,291/2,241. Every build reports zero warnings.
+  The resolved Lean output contains one `SwiftCollections.dll` at 7.0.0.0,
+  `SwiftCollections.FixedMathSharp.dll` at 7.1.0.0, FixedMathSharp at 7.1.0.0,
+  and GridForge at 9.1.0.0. Normal owner matrices also pass for FixedMathSharp
+  (2,708/2,687 tests) and SwiftCollections (1,133/1,105), while package-backed
+  GridForge, Gravitas, and Trailblazer repeat the same downstream counts with
+  zero build warnings.
 
 ### TRB-Issue-102 - Ground contact conflates the support normal with platform orientation
 

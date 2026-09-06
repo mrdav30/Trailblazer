@@ -37,8 +37,9 @@ instead of burying it in notes.
     release. `TRB-Issue-102` is resolved in the Trailblazer working tree through
     an explicit serialized support-normal contract; package-backed slope work
     requires the Trailblazer release containing it.
-    `TRB-Issue-103` separately tracks the lower-stack duplicate-version defect
-    found by solution-wide local-source validation.
+    `TRB-Issue-103` is resolved in the coordinated working trees through
+    configuration-stable, explicitly versioned local project graphs; clean
+    local-source and package-backed matrices are green.
 - [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
   - Draft plan for native top-down and side-view navigation/controllers, planar
     body/support semantics, and the later Gravitas `SolidBody2D` adapter
@@ -76,10 +77,11 @@ scheduler implementation plan is currently active.
 
 The plans share evidence, not competing implementations:
 
-1. Resolve `TRB-Issue-103`, then review and release the dependency-aligned
-   Gravitas working tree and release Trailblazer with the resolved
-   `TRB-Issue-102` contract. Capture the Gravitas adapter's initial fixed-profile
-   wall regression, then use that wall slice and the explicit support normal for
+1. Review and commit the coordinated `TRB-Issue-103` graph corrections in
+   dependency order, then review and release the dependency-aligned Gravitas
+   working tree and release Trailblazer with the resolved `TRB-Issue-102`
+   contract. Capture the Gravitas adapter's initial fixed-profile wall
+   regression, then use that wall slice and the explicit support normal for
    hardening Phase 1 before interpreting movement-quality results.
 2. Complete hardening Phase 1 with that host, then Phase 2 profile replacement
    and the adapter's corresponding collider-change tests. Run hardening Phase 3

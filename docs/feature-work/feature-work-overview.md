@@ -26,17 +26,19 @@ instead of burying it in notes.
     with movement-quality playtesting through a Gravitas-backed 3D host; add safe
     runtime navigation-profile replacement; then measure cold public guide
     acquisition. Includes posture cycles and fall/flight/controlled-descent
-    sequences. Implementation has not started.
+    sequences. The fixed-profile Gravitas host is ready; the hardening scenarios
+    themselves have not started.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
     world frame and lifetime order, first bounded wall fixture, and GridForge-
     Unity observation host. Gravitas's working tree now declares and passes its
     full matrix against the aligned 7.1.0/9.1.0 stack without a new physics API.
-    The adapter remains independently owned and introduces no core-to-core
-    dependency. Phase 1 package-backed work is gated by the aligned Gravitas
-    release. `TRB-Issue-102` is resolved in the Trailblazer working tree through
-    an explicit serialized support-normal contract; package-backed slope work
-    requires the Trailblazer release containing it.
+    Phase 1 now supplies the independently owned fixed-profile adapter and 19
+    real-body behavior tests without a core-to-core dependency. Its local-source
+    standard/Lean matrix and exact adapter coverage are green, and independent
+    architecture and test-quality reviews closed with no remaining findings.
+    `TRB-Issue-102` provides the explicit serialized support-normal contract used
+    by the adapter.
     `TRB-Issue-103` is resolved in the coordinated working trees through
     configuration-stable, explicitly versioned local project graphs; clean
     local-source and package-backed matrices are green.
@@ -77,12 +79,8 @@ scheduler implementation plan is currently active.
 
 The plans share evidence, not competing implementations:
 
-1. Review and commit the coordinated `TRB-Issue-103` graph corrections in
-   dependency order, then review and release the dependency-aligned Gravitas
-   working tree and release Trailblazer with the resolved `TRB-Issue-102`
-   contract. Capture the Gravitas adapter's initial fixed-profile wall
-   regression, then use that wall slice and the explicit support normal for
-   hardening Phase 1 before interpreting movement-quality results.
+1. Use the completed Gravitas adapter's fixed-profile accepted-motion and
+   support boundary for hardening Phase 1.
 2. Complete hardening Phase 1 with that host, then Phase 2 profile replacement
    and the adapter's corresponding collider-change tests. Run hardening Phase 3
    measurements; scheduler implementation remains separately evidence-gated.
@@ -91,10 +89,14 @@ The plans share evidence, not competing implementations:
 4. Execute the dedicated 2D plan after its contract review, using the reviewed
    motion and replacement boundaries. Add the planar adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.
+5. After every active feature-work plan is complete, release any changed
+   dependencies before their consumers and repeat released-package validation at
+   each layer. Do not publish an intermediate feature-work checkpoint.
 
-Runtime implementation remains unstarted; Gravitas Phase 0 is a completed
-preflight, not an adapter. Drafting or reviewing a plan does not mark runtime
-checkboxes complete. The cross-stack rules apply throughout:
+Runtime implementation has begun with the fixed-profile Gravitas adapter; no
+hardening or first-class 2D phase is complete merely because that host now
+exists. Drafting or reviewing a plan does not mark runtime checkboxes complete.
+The cross-stack rules apply throughout:
 
 1. Keep the benchmark backlog and issue tracker as intake buckets; promote new
    measured risks into dated plans only when they are broader than a focused

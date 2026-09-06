@@ -8,13 +8,12 @@
 
 **Created:** 2026-09-03
 
-**Status:** Phase 0 preflight and both focused prerequisites are complete in the
-coordinated working trees; no adapter, integration tests, or playtest evidence
-has been created. Phase 1 package-backed work requires an aligned Gravitas
-release. Trailblazer resolves
-[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation);
-package-backed slope work requires a Trailblazer release containing that
-contract. Solution-wide local-source validation is green after resolving
+**Status:** Phase 0 and the Phase 1 fixed-profile adapter proof are complete in
+the coordinated working trees, including independent architecture and test-
+quality review. Release and released-package validation are intentionally
+deferred until the active feature-work overview is complete. Trailblazer resolves
+[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation),
+and solution-wide local-source validation is green after resolving
 [`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
 
 **Source baselines:** Trailblazer `609beaaf9b3058b6e6881094ccc91ae5c383331d`;
@@ -110,8 +109,9 @@ FixedMathSharp.Chronicler 7.0.0, SwiftCollections.FixedMathSharp 7.0.0, and
 GridForge 9.0.0. Trailblazer declares the corresponding 7.1.0, 7.1.0, 7.1.0,
 and 9.1.0 packages. Phase 0 aligned and verified the Gravitas working tree and a
 joint source-project probe against the higher 7.1.0/9.1.0 stack in both package
-families. Those results are not released-package evidence: Gravitas must still
-release the aligned packages before package-backed adapter implementation begins.
+families. Those results are not released-package evidence. The active user scope
+keeps the adapter on the coherent local-source stack and defers package-backed
+validation until all captured feature work is complete.
 
 Phase 0 selected the following Phase 1 additions:
 
@@ -122,8 +122,8 @@ Phase 0 selected the following Phase 1 additions:
 | `samples/Trailblazer.Gravitas.HeadlessSample/` | Runnable deterministic consumer, scenario inputs, trace output, and bounded failure results |
 | Adapter README and Gravitas wiki guide | Setup, supported collision behavior, frame order, limitations, and presentation-only observation |
 
-These directories do not exist yet. Scaffold them only after the recorded
-dependency prerequisites are satisfied. Do not add empty projects or a second
+The Phase 1 adapter and test directories now exist. The headless sample and
+adapter guide remain Phase 3 deliverables; do not add empty projects or a second
 adapter implementation just to reserve future 2D space.
 
 ## Motion contract
@@ -165,7 +165,7 @@ authoritative frame, not a locally recoverable movement result.
 | Phase | Deliverable | Status | Gate |
 | --- | --- | --- | --- |
 | 0 | Dependency, ownership, and package contract | Complete | Compatible target stack, exact frame order, file/API map, viewer choice, and prerequisites recorded |
-| 1 | Fixed-profile 3D adapter proof | Not started | Wall-clipped pose, contacts, velocity, occupancy, and guide state agree |
+| 1 | Fixed-profile 3D adapter proof | Complete | Wall-clipped pose, contacts, velocity, occupancy, and guide state agree |
 | 2 | Shared hardening and shape-change evidence | Not started | Joint scenarios, observable movement, mutation, replay, and teardown verified |
 | 3 | Package and documentation closeout | Not started | Runnable consumer, full matrix, coverage, and independent review |
 
@@ -283,12 +283,16 @@ adapter.
 
 Post-resolution grounding comes from one explicit Gravitas closest-hit support
 sweep with fixed origin, radius, distance, layer filter, and mover exclusion.
+The adapter constructor requires the host to provide a positive sweep radius, a
+non-negative foot-relative origin offset, and a positive distance; the canonical
+fixture uses `1/4`, `1/8`, and `1/4`, respectively.
 The support layer is an adapter authoring contract: it contains non-trigger
 support geometry, so the closest query's distance/collider-ID order remains the
 only tie rule. A hit is accepted only when its world normal has positive Y. The
 adapter caches its point/height, actual world-space normal, dynamic friction,
 supporting transform, and host carrier ID before committing; a miss or rejected
-normal calls `SetAirborne()`. It never fabricates platform rotation from a
+normal calls `SetAirborne()` and preserves the prior launch contact for motor
+departure-transfer accounting. It never fabricates platform rotation from a
 contact normal.
 
 After resolution, requested/accepted pose divergence is the first slice's sole
@@ -338,21 +342,24 @@ The first fixture uses one shared rectangular world at 32 Hz with default one-
 unit cells and bounds `(-4,-4,-4)` through `(8,8,8)`. Map `gravitas-wall`
 contains connected solid cells `(4,4,4)`, `(5,4,4)`, and `(6,4,4)`, each with
 radius/height clearance `4`, zero cost, and no required capability. Their exact
-foot anchors are `(1/2,0,1/2)`, `(3/2,0,1/2)`, and `(5/2,0,1/2)`.
+foot anchors are `(0,-1/2,0)`, `(1,-1/2,0)`, and `(2,-1/2,0)`.
 
-The actor starts at root pose `(1/2,1/2,1/2)` already facing positive X with
+The actor starts at root pose `(0,0,0)` already facing positive X with
 rotation `FixedQuaternion.FromDirection(Vector3d.Right)`. It uses a fixed
 `KinematicBodyShape(radius=1/2, height=1, rootToFootOffset=1/2)` plus a matching
-`LSSphereCollider(radius=1/2)` on layer 0 with no ignored collision layers. Its
-A* query targets the end anchor in `TraversalMedium.Solid`, and `TrekRate.Fast`
+`LSSphereCollider(radius=1/2)` on layer 2 that ignores layer 0, keeping actors
+out of the support-only query set and keeping the support-query layer separate
+from physical response while layer-1 walls still collide. Its A* query targets
+the end anchor in `TraversalMedium.Solid`, and `TrekRate.Fast`
 requests positive-X motion at `1/2` unit per second. A non-trigger bodyless
 `LSCuboidCollider` on layer 1, also with no ignored collision layers, has center
 `(2,1,1/2)`, size `(1/4,2,2)`, identity rotation, and zero restitution. All
 three map cells and their native connections remain navigable, so guidance
 requests motion through physical geometry that Gravitas independently blocks.
 
-Gravity and damping are zero for this isolation case, the kinematic body uses
-`ContinuousCollisionMode.Continuous`, and the loop is bounded at 128 frames.
+Gravity is zero for this isolation case; force damping does not participate in
+the kinematic target proof. The body uses `ContinuousCollisionMode.Continuous`,
+and the loop is bounded at 128 frames.
 The post-resolution support sweep starts at `acceptedFoot + Up * 1/8`, uses
 radius `1/4`, direction `Down`, distance `1/4`, layer mask
 `PhysicsLayerMask.FromLayer(0)`, and excludes the mover collider. This first
@@ -360,9 +367,9 @@ fixture deliberately has no support geometry, so the query must miss and the
 adapter must report airborne; the layer-1 vertical wall cannot become support.
 
 With exact `1/64`-unit frame steps, the first requested/accepted divergence is
-frame 56 (zero-based): requested X is `89/64` and accepted X is exactly `11/8`,
+frame 88 (zero-based): requested X is `89/64` and accepted X is exactly `11/8`,
 the wall's near face `15/8` minus the sphere radius. The accepted root keeps
-`Y=1/2`, `Z=1/2`, and `FixedQuaternion.FromDirection(Vector3d.Right)`. The test
+`Y=0`, `Z=0`, and `FixedQuaternion.FromDirection(Vector3d.Right)`. The test
 also asserts body/Navigator pose equality,
 `Velocity == (Position - LastPosition) * InvDeltaTime`, middle cell `(5,4,4)`
 as the last committed cell, no committed transition into `(6,4,4)`, airborne
@@ -373,9 +380,11 @@ geometry are the same subsystem.
 Collision turning is a separate wall scenario, not a second assertion on the
 fully blocked fixture. It starts at the same root position facing positive Z at
 identity rotation and repeatedly applies unguided positive-X movement with
-`facingDirection: Vector3d.Forward`, so no ordinary turn is requested. Its
+`facingDirection: Vector3d.Forward` and an explicit sideways-speed limit of
+`1/2`, so no ordinary turn is requested and motion remains `1/2` unit per
+second. Its
 bodyless wall has the same shape and orientation but center X `515/256`; its
-near face is therefore `483/256`. On zero-based frame 56, the request is again
+near face is therefore `483/256`. On zero-based frame 88, the request is again
 X `89/64`, but CCD partially accepts X `355/256`. The accepted displacement
 from the previous X `11/8` is `3/256`, which is greater than the exact
 collision-turn threshold `radius / frameRate / 2 == 1/128`.
@@ -409,17 +418,17 @@ input capture never become a second collision or navigation implementation.
 
 ## Phase 1 - Fixed-Profile 3D Adapter Proof
 
-- [ ] **Capture the accepted-motion regression first.** Put a wall between a
+- [x] **Capture the accepted-motion regression first.** Put a wall between a
   guided agent and its requested endpoint. Drive real Gravitas collision; assert
   body and Navigator poses agree, velocity derives from the accepted delta, and
   the committed cell is the reachable cell rather than the requested cell.
   Record the intended failure before implementing the bridge.
-- [ ] **Implement the smallest adapter that passes the proof.** Prepare all
+- [x] **Implement the smallest adapter that passes the proof.** Prepare all
   targets, resolve Gravitas once, replace pending movement, and use base commit.
   Preserve platform and turning rotation order. Test unobstructed motion and
   completely blocked motion. Prove collision-driven turning in the separate
   unguided/idle scenario above so ordinary guide turning cannot satisfy it.
-- [ ] **Prove lifecycle and contact boundaries.** Cover multiple actors in one
+- [x] **Prove lifecycle and contact boundaries.** Cover multiple actors in one
   world, duplicate prepare/commit, commit without prepare, a discarded frame,
   stale-frame finalization, repeated adapter reset, and reset while work is open.
   Verify finalization and committed-cell events occur once, with no stale
@@ -429,7 +438,7 @@ input capture never become a second collision or navigation implementation.
   `TrailblazerWorldContext.LateSimulate()` returns and assert every actor already
   exposes its accepted committed result. Do not add a test-only friend or public
   late-hook API merely to observe the internal callback.
-- [ ] **Review before sharing the slice.** Run focused tests in both package
+- [x] **Review before sharing the slice.** Run focused tests in both package
   families and obtain an independent review of fixed-frame order and pose
   ownership. Link the verified revision and fixture from hardening Phase 1.
 
@@ -689,3 +698,47 @@ artifacts, not product or release files.
 - Both focused prerequisites are now ready for review. After their coordinated
   repository changes are committed, resume the dependency-order release work
   recorded at the end of Phase 0 before beginning the Phase 1 wall regression.
+
+### 2026-09-05 - Phase 1 adapter completed and reviewed
+
+- Captured `WallCollision_ShouldCommitOnlyThePoseAcceptedByGravitas` before the
+  accepted-pose bridge; the regression initially exposed body/Navigator pose
+  disagreement after Gravitas clipped the requested target.
+- Added the fixed-profile `GravitasNavigator3D` subclass and its internal support
+  translator without changing Trailblazer or Gravitas core APIs. The adapter
+  writes a world-space kinematic target during prepare, samples the resolved
+  support contact, replaces pending motion with the accepted pose, signals one
+  collision on requested/accepted divergence, and calls the base commit once.
+- Added 19 behavior tests for guided unobstructed, fully blocked, and partially
+  clipped motion; collision-driven turning; inert and identified support;
+  translating/rotating support; a supported input turn; duplicate, stale,
+  discarded, and reset frame boundaries; stable multi-actor ordering; invalid
+  body state, probe geometry, and cross-world rebinding; and a parent transform
+  that cannot represent the requested world pose.
+- Local-source `Release` and `ReleaseLean` builds compile the adapter for
+  `netstandard2.1` and `net8.0` with zero warnings/errors. Both configurations
+  pass all 19 tests. Exact adapter coverage is 160/160 lines, 18/18 branches,
+  and 10/10 methods in both configurations.
+- Coverage artifacts are under ignored
+  `artifacts/phase1-gravitas-release-reviewed/` and
+  `artifacts/phase1-gravitas-releaselean-reviewed/`. The default dependency
+  graph also builds and passes all 19 tests in both configurations.
+- Independent architecture and test-quality reviews completed with no remaining
+  findings. Review-driven regressions cover partial accepted velocity, support-
+  mask isolation, supported turning, cross-world rebinding, and deterministic
+  test isolation. Package creation, released-package validation, and publication
+  remain deferred until the captured feature work is complete.
+
+The focused verification commands were:
+
+```powershell
+dotnet restore tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --property:Configuration=Release --property:UseLocalLsfStack=true --force --no-cache --disable-parallel
+dotnet build src/Trailblazer.Gravitas/Trailblazer.Gravitas.csproj --configuration Release --property:UseLocalLsfStack=true --no-restore --maxcpucount:1 --nodeReuse:false
+dotnet build tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration Release --property:UseLocalLsfStack=true --no-restore --maxcpucount:1 --nodeReuse:false
+dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration Release --property:UseLocalLsfStack=true --no-build --no-restore --results-directory artifacts/phase1-gravitas-release-reviewed
+
+dotnet restore tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --property:Configuration=ReleaseLean --property:UseLocalLsfStack=true --force --no-cache --disable-parallel
+dotnet build src/Trailblazer.Gravitas/Trailblazer.Gravitas.csproj --configuration ReleaseLean --property:UseLocalLsfStack=true --no-restore --maxcpucount:1 --nodeReuse:false
+dotnet build tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ReleaseLean --property:UseLocalLsfStack=true --no-restore --maxcpucount:1 --nodeReuse:false
+dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ReleaseLean --property:UseLocalLsfStack=true --no-build --no-restore --results-directory artifacts/phase1-gravitas-releaselean-reviewed
+```

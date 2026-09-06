@@ -145,6 +145,12 @@ successful accepted motion, and that invalid profiles fail explicitly.
   These are investigation targets, not a mandate to edit every subsystem.
 - Use [NavigatorHeightmapGrounding.Tests.cs](../../tests/Trailblazer.Tests/Navigation/Navigator/NavigatorHeightmapGrounding.Tests.cs)
   for a narrow heightmap-layer handoff companion case.
+- Reuse the fixed-frame host and accepted-motion boundary from
+  [GravitasNavigatorScenarioFixture.cs](../../tests/Trailblazer.Gravitas.Tests/Support/GravitasNavigatorScenarioFixture.cs)
+  and its focused
+  [adapter behavior tests](../../tests/Trailblazer.Gravitas.Tests/GravitasNavigator3D.AcceptedMotion.Tests.cs).
+  Extend scenario setup deliberately; do not duplicate the adapter lifecycle in
+  a second fixture.
 - Update [Transitions](../wiki/Transitions.md), [Navigator](../wiki/Navigator.md),
   [NavMotor](../wiki/NavMotor.md), or [Path guides](../wiki/PathGuides.md) only
   where the scenarios reveal missing integration guidance.
@@ -428,3 +434,17 @@ task. Do not substitute old coverage totals for fresh verification.
   no implementation, new tests, playtests, or measurements have started.
 - Next task: establish bounded Phase 1 inputs alongside Gravitas integration
   preflight and the initial fixed-profile 3D adapter slice.
+
+### 2026-09-05 - Fixed-profile Gravitas host ready
+
+- The linked Gravitas integration Phase 1 slice now provides a shared-world
+  32 Hz fixture with real kinematic collision resolution, accepted pose and
+  velocity commit, support translation, stable multi-actor ordering, and strict
+  prepare/resolve/commit lifecycle checks.
+- The adapter's 19 focused tests pass in local-source `Release` and
+  `ReleaseLean` with exact line, branch, and method coverage. This is reusable
+  infrastructure, not completion of the stairs, ladder, stacked-floor,
+  airborne-sequence, or visual movement-quality requirements above.
+- Next task: establish the bounded authored inputs for hardening Phase 1 and run
+  those worlds through the verified adapter boundary. Releases remain deferred
+  until the active feature-work overview is complete.

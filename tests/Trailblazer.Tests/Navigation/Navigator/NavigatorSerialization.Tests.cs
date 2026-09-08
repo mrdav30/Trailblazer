@@ -56,7 +56,7 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(4);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(5);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
     }
@@ -147,7 +147,7 @@ public class NavigatorSerializationTests : IDisposable
                 99,
                 "FrameCondition",
                 "Medium"),
-            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 3, "SchemaVersion"),
+            4 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 4, "SchemaVersion"),
             5 => SerializationUtility.SetPayloadValue(
                 payload,
                 useMemoryPack,
@@ -670,6 +670,190 @@ public class NavigatorSerializationTests : IDisposable
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
 #endif
+    public void RoundTrip_ShouldUseDefaultControlledDescentIntent_WhenPayloadOmitsIt(bool useMemoryPack)
+    {
+        var source = CreateConfiguredNavigator();
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+
+        payload = SerializationUtility.RemovePayloadEntry(
+            payload,
+            useMemoryPack,
+            "FrameRequest",
+            "IsRequestingControlledDescent");
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4), profile: source.NavigationProfile);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.FrameRequest.IsRequestingControlledDescent.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(false, 2)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, 0)]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+#endif
+    public void RoundTrip_ShouldClearControlledDescent_WhenLoadedConfigurationCannotAdmitIt(
+        bool useMemoryPack,
+        int invalidConfiguration)
+    {
+        var source = MockMotorAgentTestFactory.CreateFallingAgent();
+        FallLocomotion sourceFall = source.Motor.Handler.Fall;
+        sourceFall.CanControlDescent = true;
+        sourceFall.ControlledDescentTerminalSpeed = Fixed64.FromFraction(11, 4);
+        sourceFall.ControlledDescentDeceleration = Fixed64.FromFraction(9, 4);
+        sourceFall.IsControlledDescending = true;
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
+        payload = invalidConfiguration switch
+        {
+            0 => SerializationUtility.SetPayloadValue(
+                payload,
+                useMemoryPack,
+                false,
+                "Handler",
+                "Fall",
+                "CanControlDescent"),
+            1 => SerializationUtility.SetPayloadValue(
+                payload,
+                useMemoryPack,
+                Fixed64.Zero,
+                "Handler",
+                "Fall",
+                "ControlledDescentTerminalSpeed"),
+            _ => SerializationUtility.SetPayloadValue(
+                payload,
+                useMemoryPack,
+                Fixed64.Zero,
+                "Handler",
+                "Fall",
+                "ControlledDescentDeceleration")
+        };
+
+        var target = MockMotorAgentTestFactory.CreateFallingAgent(
+            startPosition: new Vector3d(-2, 0, -2));
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
+
+        FallLocomotion targetFall = target.Motor.Handler.Fall;
+        target.Motor.CurrentState.Medium.Should().Be(TraversalMedium.Gas);
+        targetFall.IsFalling.Should().BeTrue();
+        target.Motor.Handler.Fly!.IsFlying.Should().BeFalse();
+        target.Motor.Handler.Climb!.IsClimbing.Should().BeFalse();
+        target.Motor.Handler.Water!.IsSwimming.Should().BeFalse();
+        targetFall.CanControlDescent.Should().Be(invalidConfiguration != 0);
+        targetFall.ControlledDescentTerminalSpeed.Should().Be(
+            invalidConfiguration == 1 ? Fixed64.Zero : Fixed64.FromFraction(11, 4));
+        targetFall.ControlledDescentDeceleration.Should().Be(
+            invalidConfiguration == 2 ? Fixed64.Zero : Fixed64.FromFraction(9, 4));
+        targetFall.IsControlledDescending.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldPreserveCoreOnlyControlledDescentWithoutOptionalLocomotions(
+        bool useMemoryPack)
+    {
+        LocomotionProfile profile = LocomotionProfile.CreateCoreOnly();
+        var source = MockMotorAgentTestFactory.CreateFallingAgent(profile: profile);
+        FallLocomotion sourceFall = source.Motor.Handler.Fall;
+        sourceFall.CanControlDescent = true;
+        sourceFall.ControlledDescentTerminalSpeed = Fixed64.One;
+        sourceFall.ControlledDescentDeceleration = Fixed64.One;
+        sourceFall.IsControlledDescending = true;
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
+
+        var target = MockMotorAgentTestFactory.CreateFallingAgent(profile: profile);
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
+
+        target.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
+        target.Motor.Handler.Fall.IsControlledDescending.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(false, 2)]
+    [InlineData(false, 3)]
+    [InlineData(false, 4)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, 0)]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+    [InlineData(true, 3)]
+    [InlineData(true, 4)]
+#endif
+    public void RoundTrip_ShouldClearControlledDescent_WhenLoadedRuntimeStateCannotAdmitIt(
+        bool useMemoryPack,
+        int incompatibility)
+    {
+        var source = MockMotorAgentTestFactory.CreateFallingAgent();
+        FallLocomotion sourceFall = source.Motor.Handler.Fall;
+        sourceFall.CanControlDescent = true;
+        sourceFall.ControlledDescentTerminalSpeed = Fixed64.One;
+        sourceFall.ControlledDescentDeceleration = Fixed64.One;
+        sourceFall.IsControlledDescending = true;
+        switch (incompatibility)
+        {
+            case 0:
+                sourceFall.IsFalling = false;
+                break;
+            case 1:
+                source.Motor.SyncTraversalState(new TrekCondition
+                {
+                    Medium = TraversalMedium.Solid
+                });
+                break;
+            case 2:
+                source.Motor.Handler.Fly!.IsFlying = true;
+                break;
+            case 3:
+                source.Motor.Handler.Climb!.IsClimbing = true;
+                break;
+            default:
+                source.Motor.Handler.Water!.IsSwimming = true;
+                break;
+        }
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
+
+        var target = MockMotorAgentTestFactory.CreateFallingAgent();
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
+
+        target.Motor.Handler.Fall.IsControlledDescending.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldPreserveControlledDescent_WhenLoadedRuntimeStateCanAdmitIt(
+        bool useMemoryPack)
+    {
+        var source = MockMotorAgentTestFactory.CreateFallingAgent();
+        FallLocomotion sourceFall = source.Motor.Handler.Fall;
+        sourceFall.CanControlDescent = true;
+        sourceFall.ControlledDescentTerminalSpeed = Fixed64.One;
+        sourceFall.ControlledDescentDeceleration = Fixed64.One;
+        sourceFall.IsControlledDescending = true;
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
+
+        var target = MockMotorAgentTestFactory.CreateFallingAgent();
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
+
+        target.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+        target.Motor.Handler.Fall.IsControlledDescending.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
     public void RoundTrip_ShouldClearTransientState_WhenLocomotionsLoadDisabled(bool useMemoryPack)
     {
         var source = CreateConfiguredMotorAgent();
@@ -719,6 +903,7 @@ public class NavigatorSerializationTests : IDisposable
 
         targetFall.IsEnabled.Should().BeFalse();
         targetFall.IsFalling.Should().BeFalse();
+        targetFall.IsControlledDescending.Should().BeFalse();
         targetFall.FallStart.Should().Be(Fixed64.Zero);
         targetFall.FallEnd.Should().Be(Fixed64.Zero);
 
@@ -807,6 +992,10 @@ public class NavigatorSerializationTests : IDisposable
         jump.StartCooldown();
 
         fall.IsFalling = true;
+        fall.CanControlDescent = true;
+        fall.ControlledDescentTerminalSpeed = Fixed64.FromFraction(11, 4);
+        fall.ControlledDescentDeceleration = Fixed64.FromFraction(9, 4);
+        fall.ControlledDescentControlMultiplier = Fixed64.FromFraction(7, 8);
         fall.FallStart = (Fixed64)9;
         fall.FallEnd = (Fixed64)3;
 
@@ -847,6 +1036,7 @@ public class NavigatorSerializationTests : IDisposable
             Vector3d.Right,
             TrekRate.Moderate,
             isRequestingJump: true,
+            isRequestingControlledDescent: true,
             facingDirection: Vector3d.Forward,
             canAffordJump: false);
         source.SetGroundContact(
@@ -935,6 +1125,11 @@ public class NavigatorSerializationTests : IDisposable
         actualJump.CanJump.Should().Be(expectedJump.CanJump);
 
         actualFall.IsFalling.Should().Be(expectedFall.IsFalling);
+        actualFall.IsControlledDescending.Should().Be(expectedFall.IsControlledDescending);
+        actualFall.CanControlDescent.Should().Be(expectedFall.CanControlDescent);
+        actualFall.ControlledDescentTerminalSpeed.Should().Be(expectedFall.ControlledDescentTerminalSpeed);
+        actualFall.ControlledDescentDeceleration.Should().Be(expectedFall.ControlledDescentDeceleration);
+        actualFall.ControlledDescentControlMultiplier.Should().Be(expectedFall.ControlledDescentControlMultiplier);
         actualFall.FallStart.Should().Be(expectedFall.FallStart);
         actualFall.FallEnd.Should().Be(expectedFall.FallEnd);
 

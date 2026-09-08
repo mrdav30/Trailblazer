@@ -196,6 +196,35 @@ Gas is the physical airborne medium. Gravity and terminal velocity apply unless
 controlled flight or climbing owns the frame. Jumping and falling are separate
 locomotion states within Gas; they are not alternate traversal media.
 
+### Fall-preserving controlled descent
+
+`FallLocomotion` can optionally provide controlled descent without entering
+flight. The host configures `CanControlDescent`, a positive
+`ControlledDescentTerminalSpeed`, a positive
+`ControlledDescentDeceleration`, and an optional lateral
+`ControlledDescentControlMultiplier`. It then requests descent for the frame
+through `TrekRequest.IsRequestingControlledDescent`, or through the matching
+Navigator input methods. The deterministic defaults are a terminal-speed
+magnitude of `3/2` units per second, a deceleration of `20` units per second
+squared, and a lateral-control multiplier of `3/8`; control itself remains
+opt-in by default.
+
+Controlled descent activates only for an already falling scout in Gas when the
+fall module is enabled and configured. Flight, climbing, and active swimming
+prevent activation. While active, the scout remains in the ordinary falling
+lifecycle: its fall start/end/height and normal landing notifications are
+preserved. A fall faster than the configured terminal speed approaches that
+speed by no more than the configured deceleration times the fixed timestep.
+At or below that speed, gravity still applies but cannot push descent beyond the
+controlled terminal speed. Controlled descent never creates positive vertical
+velocity.
+
+Releasing the request resumes ordinary gravity; requesting it again during the
+same fall can redeploy it. Landing, disabling fall, becoming ineligible, or an
+invalid terminal-speed/deceleration configuration clears the active controlled
+descent state. This is not flight: it does not grant ascent and must not be
+used to reinterpret Gas traversal or navigation Fly capability.
+
 ### Liquid
 
 Liquid movement combines buoyancy, water drag, swim input, underwater timing,
@@ -297,6 +326,7 @@ look like a slope normal; doing so corrupts attachment and carry calculations.
 
 - jump and water-breach start/stop;
 - fall start/stop, landing, and maximum fall height;
+- fall-preserving controlled descent through the ordinary fall lifecycle;
 - drowning;
 - climb, mantle, and slip lifecycle.
 

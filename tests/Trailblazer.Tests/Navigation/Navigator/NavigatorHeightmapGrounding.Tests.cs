@@ -3,6 +3,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
@@ -294,6 +295,94 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
     }
 
     [Fact]
+    public void UpperFloorGuide_ShouldResolveExactStackedAddressWithoutHeightmapProjection()
+    {
+        var (upperStartFoot, lowerEndFoot, upperEndFoot, lowerEndAddress, upperEndAddress) =
+            PublishStackedFloorGraph();
+        PathQuery query = CreateStackedFloorQuery(
+            upperStartFoot,
+            upperEndFoot,
+            PathTestFactory.DefaultNavigationProfile);
+
+        lowerEndFoot.Should().Be(new Vector3d(Fixed64.One, -Fixed64.Half, Fixed64.Zero));
+        upperEndFoot.Should().Be(new Vector3d(Fixed64.One, (Fixed64)2 + Fixed64.Half, Fixed64.Zero));
+
+        TestWorld.Context.Guides.RequestGuide(query, out NavigationGuideLease? acquired)
+            .Should().Be(NavigationGuideStatus.Success);
+        acquired.Should().NotBeNull();
+        using NavigationGuideLease guide = acquired!.Value;
+
+        NavigationGuideStep finalStep = default;
+        for (int stepIndex = 0; stepIndex < guide.StepCount; stepIndex++)
+        {
+            guide.TryGetCurrentStep(out finalStep).Should().Be(NavigationGuideStatus.Success);
+            if (stepIndex < guide.StepCount - 1)
+                guide.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
+        }
+
+        finalStep.Address.Should().Be(upperEndAddress);
+        finalStep.Address.Should().NotBe(lowerEndAddress);
+        finalStep.Position.Should().Be(upperEndFoot);
+    }
+
+    [Fact]
+    public void HeightmapGrounding_ShouldProjectAcceptedUpperFloorHeightWithoutChangingGraphDestination()
+    {
+        var (upperStartFoot, _, upperEndFoot, lowerEndAddress, upperEndAddress) =
+            PublishStackedFloorGraph();
+        Fixed64 rootToFootOffset = PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY;
+        HeightmapTestNavigator navigator = CreateNavigator(
+            upperStartFoot + Vector3d.Up * rootToFootOffset,
+            surfaceLevel: upperStartFoot.Y);
+        PathQuery query = CreateStackedFloorQuery(
+            upperStartFoot,
+            upperEndFoot,
+            navigator.NavigationProfile);
+        navigator.ApplyGuidedTrekRequest(query);
+
+        RegisterSurface(
+            "LowerFloor",
+            height: -Fixed64.Half,
+            -Fixed64.One,
+            Fixed64.Zero,
+            minBounds: new Vector3d(upperEndFoot.X, Fixed64.Zero, upperEndFoot.Z));
+        RegisterSurface(
+            "UpperFloor",
+            height: upperEndFoot.Y,
+            (Fixed64)2,
+            (Fixed64)3,
+            minBounds: new Vector3d(upperEndFoot.X, Fixed64.Zero, upperEndFoot.Z));
+
+        Vector3d acceptedRoot = upperEndFoot
+            + Vector3d.Up * (rootToFootOffset + Fixed64.Quarter);
+        navigator.AddPositionDelta(acceptedRoot - navigator.Position);
+        navigator.CommitFrameMotion();
+
+        navigator.LastCommittedCell.Should().NotBeNull();
+        navigator.LastCommittedCell!.Value.Address.Should().Be(upperEndAddress);
+        navigator.LastCommittedCell.Value.Address.Should().NotBe(lowerEndAddress);
+        navigator.Steering!.CurrentQuery.Should().Be(query);
+        navigator.Position.Should().Be(acceptedRoot);
+
+        navigator.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelAndPosition,
+            layerName: "UpperFloor");
+
+        navigator.ApplyHeightmapGrounding().Should().BeTrue();
+
+        navigator.Steering.CurrentQuery.Should().Be(query);
+        navigator.Steering.CurrentQuery!.Value.End.Should().Be(query.End);
+        navigator.LastCommittedCell!.Value.Address.Should().Be(upperEndAddress);
+        navigator.Position.Should().Be(upperEndFoot + Vector3d.Up * rootToFootOffset);
+        navigator.FootPosition.Should().Be(upperEndFoot);
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Solid);
+        navigator.FrameCondition.SurfaceLevel.Should().Be(upperEndFoot.Y);
+        navigator.FrameCondition.GroundState.Should().NotBeNull();
+        navigator.FrameCondition.GroundState!.Value.SurfaceNormal.Should().Be(Vector3d.Up);
+        navigator.HeightmapGrounding.ActiveLayerName.Should().Be("UpperFloor");
+    }
+
+    [Fact]
     public void TryApplyHeightmapGrounding_ShouldSupportJumpFromPlatformToDifferentHeightPlatform()
     {
         RegisterSurface("LowerPlatform", height: 1, Fixed64.Zero, (Fixed64)2, minBounds: Vector3d.Zero);
@@ -361,6 +450,70 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         return navigator;
     }
 
+    private static (
+        Vector3d UpperStartFoot,
+        Vector3d LowerEndFoot,
+        Vector3d UpperEndFoot,
+        NavigationCellAddress LowerEndAddress,
+        NavigationCellAddress UpperEndAddress) PublishStackedFloorGraph()
+    {
+        const string mapId = "heightmap-stacked-floors";
+        var configuration = new GridConfiguration(
+            new Vector3d(-4, -4, -4),
+            new Vector3d(8, 8, 8));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+
+        var lowerEndIndex = new VoxelIndex(5, 4, 4);
+        var upperStartIndex = new VoxelIndex(4, 7, 4);
+        var upperEndIndex = new VoxelIndex(5, 7, 4);
+        var cell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
+        NavigationMap map = new NavigationMapBuilder(mapId, binding)
+            .AddCell(lowerEndIndex, cell)
+            .AddCell(upperStartIndex, cell)
+            .AddCell(upperEndIndex, cell)
+            .Build();
+        var policy = new NavigationAreaPolicy(
+            new NavigationAreaPolicyKey("heightmap-stacked-policy", 1),
+            new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+        GuidedPathTestScene.PublishMapAndPolicy(
+            TestWorld.Context,
+            map,
+            bakeVersion: 1,
+            OverlayReplacementPolicy.Clear,
+            mapSequence: 1,
+            policy,
+            policySequence: 2);
+
+        return (
+            GuidedPathTestScene.Anchor(binding, upperStartIndex),
+            GuidedPathTestScene.Anchor(binding, lowerEndIndex),
+            GuidedPathTestScene.Anchor(binding, upperEndIndex),
+            new NavigationCellAddress(mapId, lowerEndIndex),
+            new NavigationCellAddress(mapId, upperEndIndex));
+    }
+
+    private static PathQuery CreateStackedFloorQuery(
+        Vector3d start,
+        Vector3d end,
+        NavigationAgentProfile profile)
+    {
+        return new PathQuery(
+            new NavigationEndpoint(start, "heightmap-stacked-floors"),
+            new NavigationEndpoint(end, "heightmap-stacked-floors"),
+            profile,
+            new NavigationAreaPolicyKey("heightmap-stacked-policy", 1),
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(4_096, 4_096, 4_096, 4_096, 4_096, 0, 0, 0, 0, 0, 0),
+            allowTransitions: false);
+    }
+
     private static void RegisterSurface(
         string name,
         int height,
@@ -368,12 +521,22 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         Fixed64 maxSelectionY,
         Vector3d? minBounds = null)
     {
+        RegisterSurface(name, (Fixed64)height, minSelectionY, maxSelectionY, minBounds);
+    }
+
+    private static void RegisterSurface(
+        string name,
+        Fixed64 height,
+        Fixed64 minSelectionY,
+        Fixed64 maxSelectionY,
+        Vector3d? minBounds = null)
+    {
         HeightmapSurface surface = HeightmapSurface.FromHeights(
             name,
-            new Fixed64[1, 1] { { (Fixed64)height } },
+            new Fixed64[1, 1] { { height } },
             minBounds ?? Vector3d.Zero,
             Fixed64.One,
-            new HeightmapCompression(Fixed64.Zero, Fixed64.One));
+            new HeightmapCompression(Fixed64.Zero, Fixed64.Half));
 
         TestWorld.Context.Heightmaps.Register(surface, minSelectionY, maxSelectionY).Should().BeTrue();
     }

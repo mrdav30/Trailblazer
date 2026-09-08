@@ -251,6 +251,54 @@ public class NavSteeringTests : IDisposable
         grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void GetHeading_ShouldPreserveFullPathIntentWhenGroupForcesOpposeIt(
+        int cohesionDenominator)
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero)
+        {
+            Velocity = Vector3d.Left,
+            Speed = Fixed64.One
+        };
+        var neighbor = new MockSteerAgent(Vector3d.Right * (Fixed64)2)
+        {
+            Velocity = Vector3d.Zero,
+            Speed = Fixed64.Zero
+        };
+        PathQuery query = CreateSurfaceQuery();
+        Fixed64 cohesion = Fixed64.FromFraction(1, cohesionDenominator);
+        var ownerSteering = new FallbackNavSteering(Vector3d.Left)
+        {
+            BehaviorWeights = new GroupBehaviorWeights
+            {
+                Cohesion = cohesion
+            }
+        };
+        var neighborSteering = new NavSteering(TestWorld.Context);
+        ownerSteering.ApplyPathQuery(query, groupId: 7);
+        neighborSteering.ApplyPathQuery(query, groupId: 7);
+        ownerSteering.PrewarmMovementGroup(owner);
+        neighborSteering.PrewarmMovementGroup(neighbor);
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+
+        Vector3d combined = ownerSteering.ComputeCombinedSteering(
+            owner.Position,
+            owner.Velocity,
+            owner.Speed,
+            owner.Radius,
+            owner.GlobalId);
+        Vector3d heading = ownerSteering.GetHeading(owner, out _);
+
+        combined.Should().Be(Vector3d.Right * cohesion,
+            "the regression requires group forces to oppose the selected path heading");
+        heading.Should().Be(Vector3d.Left,
+            "local group shaping must not reduce or erase a valid navigation direction's throttle");
+        grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
+    }
+
     [Fact]
     public void ComputeCombinedSteering_ShouldIgnoreNonPhysicalSteeringOccupants()
     {

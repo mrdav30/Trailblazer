@@ -478,6 +478,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="isRequestingClimb">Whether the agent is requesting to climb or maintain climb intent.</param>
     /// <param name="facingDirection">Optional world-space facing direction to use instead of facing along the movement direction.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
+    /// <param name="isRequestingControlledDescent">Whether the agent is requesting fall-preserving controlled descent.</param>
     public virtual void ApplyInputTrekRequest(
         Vector3d? direction = null,
         TrekRate? rate = null,
@@ -486,7 +487,8 @@ public abstract partial class Navigator : INavigate, IRecordable
         bool? isRequestingSwim = null,
         bool? isRequestingClimb = null,
         bool? isRequestingJump = null,
-        bool canAffordJump = true)
+        bool canAffordJump = true,
+        bool? isRequestingControlledDescent = null)
     {
         if (!IsActive) return;
 
@@ -498,6 +500,7 @@ public abstract partial class Navigator : INavigate, IRecordable
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: isRequestingFlight ?? false,
+                isRequestingControlledDescent: isRequestingControlledDescent ?? false,
                 isRequestingSwim: isRequestingSwim ?? false,
                 isRequestingClimb: isRequestingClimb ?? false,
                 facingDirection: facingDirection,
@@ -516,6 +519,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="isRequestingJump">Whether the object intends to jump during traversal.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
     /// <param name="groupId">Optional shared movement-group identifier.</param>
+    /// <param name="isRequestingControlledDescent">Whether the object intends fall-preserving controlled descent during traversal.</param>
     /// <exception cref="ArgumentException">Thrown when the query does not match the Navigator's exact navigation profile.</exception>
     public virtual void ApplyGuidedTrekRequest(
         PathQuery query,
@@ -525,7 +529,8 @@ public abstract partial class Navigator : INavigate, IRecordable
         bool? isRequestingClimb = null,
         bool? isRequestingJump = null,
         bool canAffordJump = true,
-        int groupId = -1)
+        int groupId = -1,
+        bool? isRequestingControlledDescent = null)
     {
         if (!IsActive)
             return;
@@ -538,6 +543,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             rate: rate ?? TrekRate.Stationary,
             isRequestingJump: isRequestingJump ?? false,
             isRequestingFlight: isRequestingFlight ?? false,
+            isRequestingControlledDescent: isRequestingControlledDescent ?? false,
             isRequestingSwim: isRequestingSwim ?? false,
             isRequestingClimb: isRequestingClimb ?? false,
             facingDirection: null,
@@ -579,6 +585,13 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ToggleGuidedFlight(bool status) => _frameRequest.IsRequestingFlight = status;
+
+    /// <summary>
+    /// Called to toggle fall-preserving controlled descent when the required fall locomotion is configured.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void ToggleGuidedControlledDescent(bool status)
+        => _frameRequest.IsRequestingControlledDescent = status;
 
     /// <summary>
     /// Called to toggle active swim control if supported by the installed locomotion profile.
@@ -653,8 +666,16 @@ public abstract partial class Navigator : INavigate, IRecordable
         }
 
         turnDirection = request.Direction;
+        if (!UsesThreeDimensionalFacing())
+            turnDirection.Y = Fixed64.Zero;
         return turnDirection != Vector3d.Zero;
     }
+
+    private bool UsesThreeDimensionalFacing() =>
+        Motor == null
+        || Motor.IsFlying
+        || Motor.IsClimbing
+        || Motor.Handler.Water?.IsSwimming == true;
 
     /// <summary>
     /// Runs simulation logic for this object (input handling, steering, etc.).
@@ -694,9 +715,6 @@ public abstract partial class Navigator : INavigate, IRecordable
              direction: IsGuided ? heading : null
         );
 
-        if (TryGetTurnDirection(_frameRequest, out Vector3d turnDirection))
-            Turning!.RequestTurnDirection(Forward, turnDirection);
-
         if (Motor!.TryTraversal(
                 _frameRequest,
                 out Vector3d locomotionDisplacement,
@@ -708,7 +726,19 @@ public abstract partial class Navigator : INavigate, IRecordable
             ApplyRotationDelta(platformRotationDelta);
         }
 
-        if (Turning!.TrySimulateTurn(_position, _lastPosition, Forward, _rotation, out FixedQuaternion appliedRotation))
+        if (TryGetTurnDirection(_frameRequest, out Vector3d turnDirection))
+            Turning!.RequestTurnDirection(Forward, turnDirection);
+
+        Vector3d turnPosition = _position;
+        Vector3d lastTurnPosition = _lastPosition;
+        if (!UsesThreeDimensionalFacing())
+            lastTurnPosition.Y = turnPosition.Y;
+        if (Turning!.TrySimulateTurn(
+                turnPosition,
+                lastTurnPosition,
+                Forward,
+                _rotation,
+                out FixedQuaternion appliedRotation))
             _rotation = appliedRotation;
     }
 

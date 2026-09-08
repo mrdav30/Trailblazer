@@ -181,6 +181,14 @@ the built-in locomotion request flags.
 request. Manual movement can work without a navigation map. Guided map truth and
 semantic actions are relevant only to `ApplyGuidedTrekRequest(...)`.
 
+Both input methods accept `isRequestingControlledDescent`. For an already
+falling agent whose required `FallLocomotion` is configured, this requests
+fall-preserving controlled descent for the current intent without enabling
+flight or ascent. Guided callers can update the active intent with
+`ToggleGuidedControlledDescent(bool)`. The host still owns the request timing
+and any damage or presentation response; see [NavMotor](NavMotor.md#fall-preserving-controlled-descent)
+for the exact fixed-frame admission and velocity rules.
+
 ## Traversal State
 
 Hosts report state through methods such as:

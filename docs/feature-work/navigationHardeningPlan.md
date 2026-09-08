@@ -7,7 +7,9 @@
 
 **Created:** 2026-09-03
 
-**Status:** Planned; implementation and new measurements have not started.
+**Status:** In progress. Phase 1 headless acceptance is complete; the required
+visual host observation remains pending compatible Unity-facing packages and
+separate approval for that sibling repository.
 
 **Source baseline:** `cb0d744b76a377807a253f0efa1c480ba169a7e9`
 
@@ -92,7 +94,7 @@ An evidence-backed decision to retain synchronous acquisition is a valid outcome
 
 | Phase | Deliverable | Status | Completion gate |
 | --- | --- | --- | --- |
-| 1 | Vertical traversal and movement-quality evidence | Not started | Headless acceptance cases and host playtest observations recorded; confirmed defects resolved or explicitly dispositioned |
+| 1 | Vertical traversal and movement-quality evidence | Headless acceptance complete; visual observation pending | Headless acceptance cases and host playtest observations recorded; confirmed defects resolved or explicitly dispositioned |
 | 2 | Runtime navigation-profile replacement | Not started; follows Phase 1 | Atomic replacement, rejection behavior, guidance lifecycle, and serialization verified |
 | 3 | Cold public guide acquisition measurements | Not started; follows Phase 2 | Reproducible public-call measurements and an explicit scheduling/no-change decision |
 | Closeout | Reviewed implementation and documentation | Not started | Required matrix, exact coverage, relevant benchmarks, and independent review complete |
@@ -184,29 +186,74 @@ uses accepted impact velocity; health/damage rules remain host owned. If the
 existing host/tuning boundary cannot express the agreed behavior, record the
 gap and review the smallest contract change before adding runtime machinery.
 
-- [ ] **Establish scenario inputs and bounded expectations.** Record authored
+The Phase 1 controlled-descent contract keeps the behavior inside the required
+`FallLocomotion` instead of adding an equipment module or overloading flight.
+An explicitly configured agent may deploy only after ordinary falling has begun
+in Gas. Deployment keeps `IsFalling` and distance-based fall events active,
+approaches a configured downward terminal speed with bounded deceleration,
+applies a separate configured lateral-control multiplier, and never creates
+upward velocity. Releasing the request resumes ordinary gravity; redeployment is
+allowed during the same fall; landing or disabling fall clears deployment.
+Accepted impact velocity remains observable host motion and damage remains host
+owned. Track this missing contract as `TRB-Issue-104` until its component and
+Gravitas-backed regressions pass.
+
+### Scenario inputs and bounds
+
+- All Gravitas-backed worlds advance Trailblazer and Gravitas together at
+  32 Hz and commit only collision-accepted pose and velocity.
+- The stair world contains four automatically composed maps and three
+  three-quarter-unit rises. A fitting profile has a one-sixteenth-unit radius,
+  a quarter-unit body height, and three-quarter-unit step/drop limits; it must
+  reach the fourth map within 512 frames with A* and Flow. Exact inclusive
+  radius/headroom/step limits succeed, while one raw fixed-point unit beyond
+  each limit rejects. Reversed A*/Flow queries separately prove the exact
+  three-quarter-unit drop and a drop limit one raw unit below it.
+- The stacked-floor world publishes lower, middle, and upper maps at shared X/Z.
+  An explicit upper-map query from cell 0 to cell 2 must remain on that map and
+  arrive within 256 frames with A* and Flow. The heightmap companion first
+  proves the same graph truth without projection, then opts into the upper
+  height layer without changing the graph destination.
+- The ladder route walks from cell `(0,0,0)` to a source at `(1,0,0)`, holds one
+  exact climb instruction for four host-action frames, reports completion once
+  at `(1,2,0)`, and resumes to `(2,2,0)`. Approach and continuation each have a
+  512-frame bound under A* and Flow. Missing climb capability rejects before
+  action start; invalidation while held makes later completion stale.
+- The off-axis world selects an explicit portal of radius three eighths over an
+  expensive native middle cell. Single radii of one eighth and three eighths,
+  plus a non-overlapping two-agent group, use Flow at `TrekRate.Fast` and finish
+  within 384 frames. Graph-level A*/Flow equivalence also proves exact-fit and
+  one-raw-unit-too-large clearance outcomes.
+- Airborne scenarios use a 256-frame landing/jump bound, a deterministic
+  12-frame powered-flight trace, all nine release/capability/module-loss by
+  hover/ascent/descent combinations, and a 192-frame paired free-fall versus
+  controlled-descent trace. Controlled descent deploys at frame 4, cancels at
+  frame 12, redeploys at frame 15, targets one unit per second downward, and
+  reduces excessive descent by at most four units per second squared.
+
+- [x] **Establish scenario inputs and bounded expectations.** Record authored
   maps/transitions, profiles, fixed timestep, start/end addresses, action
   handler, and the maximum simulation frames for each case. Run the same
   applicable worlds with A* and Flow; compare legal outcomes, not identical
   frame-by-frame trajectories between algorithms.
-- [ ] **Build full motion acceptance tests.** Drive context simulation,
+- [x] **Build full motion acceptance tests.** Drive context simulation,
   guidance, Navigator/motor motion, host collision/contact refresh, and commit
   or finalization. Do not advance by teleporting directly to each guide point.
   Assert accepted foot positions, final address/medium, arrival, and action
   execution count. A static successful case must not rely on repeated retries
   or silent recovery to hide a failure.
-- [ ] **Add meaningful boundary cases.** Include insufficient step/drop limits,
+- [x] **Add meaningful boundary cases.** Include insufficient step/drop limits,
   inadequate headroom/radius clearance, unavailable climb capability, and a
   transition invalidated before completion. Assert the documented failure or
   stale result and no unapproved action or wrong-floor arrival.
-- [ ] **Exercise airborne sequences rather than isolated flags.** Verify the
+- [x] **Exercise airborne sequences rather than isolated flags.** Verify the
   scenario table over bounded fixed frames, including simultaneous jump/flight
   input against its no-jump flight control, denied flight activation, flight loss
   before the apex, landing reset, and controlled-descent cancellation. Assert
   accepted velocity/position, unchanged jump count, no jump event, and retained
   flight as well as other locomotion state. Replay identical inputs and compare
   state; preserve deliberately configured extra jumps during ascent.
-- [ ] **Separate graph truth from heightmap projection.** Establish stacked-
+- [x] **Separate graph truth from heightmap projection.** Establish stacked-
   floor correctness without relying on heightmap layer selection to choose the
   route. Then verify an opt-in layer handoff preserves the graph destination
   and actual grounded state. Heightmaps do not create stair/ladder connectivity.
@@ -217,12 +264,12 @@ gap and review the smallest contract change before adding runtime machinery.
   record the viewer during integration preflight; obtain approval before
   creating an external project. Missing visual observation leaves this checkbox
   open: passing headless integration tests alone is not movement-quality review.
-- [ ] **Capture movement-quality evidence.** Record selected edge/portal,
+- [x] **Capture movement-quality evidence.** Record selected edge/portal,
   sampled heading, combined group/avoidance heading, accepted displacement,
   completion frames, and any oscillation, portal misses, stuck states, or
   replanning. Compare single agents and groups at normal and larger valid sizes.
   Distinguish authoritative movement from presentation interpolation.
-- [ ] **Resolve demonstrated problems, not hypothetical ones.** Record each
+- [x] **Resolve demonstrated problems, not hypothetical ones.** Record each
   confirmed issue, capture a failing regression before a focused fix, and rerun
   the affected scenario. A steering adjustment must preserve body clearance and
   action boundaries; cosmetic smoothing cannot substitute for legal motion.
@@ -448,3 +495,49 @@ task. Do not substitute old coverage totals for fresh verification.
 - Next task: establish the bounded authored inputs for hardening Phase 1 and run
   those worlds through the verified adapter boundary. Releases remain deferred
   until the active feature-work overview is complete.
+
+### 2026-09-06 - Phase 1 behavior ownership refined
+
+- Confirmed that Gravitas `SolidBody.StepOffset` preserves down-step grounding;
+  it is not an implicit step-up controller. Stair acceptance must therefore be
+  proven through actual collision-accepted geometry, with no ownership claim
+  based only on that setting.
+- Recorded the fall-preserving parachute-style behavior as `TRB-Issue-104` and
+  selected the smallest contract: explicit fall intent and tuning on the
+  required `FallLocomotion`, not a new module and not flight reuse.
+- Read-only Unity preflight confirmed that `GridForge-Unity` remains the
+  selected presentation host, but it currently lacks compatible Trailblazer,
+  Gravitas, and GridForge package versions plus the shared scenario/trace
+  producer. Headless acceptance can proceed; the visual-playtest checkbox
+  remains open pending compatible Unity-facing packages and separate approval
+  for sibling-repository changes.
+
+### 2026-09-06 - Phase 1 headless acceptance reviewed
+
+- Implemented and reviewed the headless Phase 1 slice from Trailblazer working
+  tree `ef5da2142cd35bb47658e113ebb3a403dd542134` and the approved Gravitas
+  sibling working tree `819e635cf06b416cfc81da82c474b5688d3063a7`, both on `develop`.
+- Added bounded A*/Flow acceptance for physical stairs, stacked floors, an exact
+  four-frame ladder action, and off-axis Flow guidance for single and grouped
+  bodies. Added the complete airborne transition table, deterministic replay,
+  and paired free-fall/controlled-descent impact traces at 32 Hz.
+- Resolved `TRB-Issue-104` through `TRB-Issue-107`. The final independent review
+  additionally found and closed current-frame facing-state selection, missing
+  reverse `MaxDropDown` boundaries, ladder test-helper bookkeeping, a
+  false-positive serialization case, and insufficient impact evidence. The
+  former multi-scenario Gravitas fixture was split into dedicated stair,
+  stacked-floor, and off-axis authoring fixtures with no hidden behavior flags.
+- Final local-source `Release` validation built both target frameworks with zero
+  warnings and passed 52 adapter plus 2,355 core tests. Instrumentation covered
+  30,161 of 30,161 lines, 11,829 of 11,829 branches, and all 2,955 methods fully.
+  `ReleaseLean` likewise built both targets with zero warnings, passed 52 adapter
+  plus 2,294 core tests, and retained the same exact coverage totals.
+- The Release DocFX build completed with warnings as errors, the wiki helper
+  passed 4/4, the published-copy rewrite completed, and all 131 generated local
+  links resolved. Trailblazer and Gravitas diff checks were clean. Gravitas also
+  retained its independently verified exact `Release`/`ReleaseLean` coverage
+  after the shape-exact zero-time CCD correction recorded as `GRV-Issue-069`.
+- Next task: supply compatible Unity-facing packages and the shared scenario
+  trace to the selected visual host, then record observable movement-quality
+  playtesting. Phase 1 and its review checkbox remain open until that evidence
+  exists; no Windows/Linux CI claim is made for these uncommitted working trees.

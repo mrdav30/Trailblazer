@@ -257,6 +257,7 @@ public sealed class LocomotionHandlerCompositionTests : IDisposable
         target.IsInControl = false;
         target.Move.FrameVelocity = Vector3d.Zero;
         target.Fall.IsFalling = false;
+        target.Fall.IsControlledDescending = false;
         target.Jump!.RegisterJump();
         target.Jump.IsEnabled = false;
         target.Fly!.IsFlying = true;
@@ -264,12 +265,14 @@ public sealed class LocomotionHandlerCompositionTests : IDisposable
         source.IsInControl = true;
         source.Move.FrameVelocity = Vector3d.Forward;
         source.Fall.IsFalling = true;
+        source.Fall.IsControlledDescending = true;
 
         target.SyncTransientState(source);
 
         target.IsInControl.Should().BeTrue();
         target.Move.FrameVelocity.Should().Be(Vector3d.Forward);
         target.Fall.IsFalling.Should().BeTrue();
+        target.Fall.IsControlledDescending.Should().BeTrue();
         Assert.NotNull(target.Jump);
         target.Jump.IsJumping.Should().BeFalse();
         Assert.NotNull(target.Fly);
@@ -293,6 +296,7 @@ public sealed class LocomotionHandlerCompositionTests : IDisposable
         var handler = new LocomotionHandler();
         handler.Move.FrameVelocity = Vector3d.Forward;
         handler.Fall.IsFalling = true;
+        handler.Fall.IsControlledDescending = true;
         handler.Water!.IsSwimming = true;
         handler.Water.UnderwaterTimer = Fixed64.One;
 
@@ -302,6 +306,7 @@ public sealed class LocomotionHandlerCompositionTests : IDisposable
         handler.ClearAllTransientState();
 
         handler.Fall.IsFalling.Should().BeFalse();
+        handler.Fall.IsControlledDescending.Should().BeFalse();
         handler.Water.IsSwimming.Should().BeFalse();
         handler.Water.UnderwaterTimer.Should().Be(Fixed64.Zero);
     }

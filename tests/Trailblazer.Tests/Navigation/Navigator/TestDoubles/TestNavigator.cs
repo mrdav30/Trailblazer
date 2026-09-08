@@ -7,6 +7,8 @@ namespace Trailblazer.Tests.Navigation;
 
 internal sealed class TestNavigator : Navigator
 {
+    private Fixed64? _acceptedTestSurfaceLevel;
+
     public TestNavigator() { }
 
     public TestNavigator(TrailblazerWorldContext context)
@@ -17,6 +19,14 @@ internal sealed class TestNavigator : Navigator
     public TrekRequest FrameRequest => _frameRequest;
 
     public TrekCondition FrameCondition => _frameCondition;
+
+    public Vector3d RequestedFramePosition =>
+        _position + _positionDelta + _locomotionDisplacement;
+
+    public bool ResolveTurnDirection(
+        TrekRequest request,
+        out Vector3d turnDirection) =>
+        TryGetTurnDirection(request, out turnDirection);
 
     public void SetTestSteering(NavSteering steering) => _steering = steering;
 
@@ -32,6 +42,15 @@ internal sealed class TestNavigator : Navigator
         _velocity = velocity;
         _speed = velocity.Magnitude;
     }
+
+    public void ResolveAcceptedFramePosition(Vector3d acceptedPosition)
+    {
+        _positionDelta = acceptedPosition - _position;
+        _locomotionDisplacement = Vector3d.Zero;
+    }
+
+    public void ConstrainTestMotionToSurface(Fixed64? surfaceLevel) =>
+        _acceptedTestSurfaceLevel = surfaceLevel;
 
     public void ConfigurePartialControllerShell(
         bool includeSteering,
@@ -56,5 +75,10 @@ internal sealed class TestNavigator : Navigator
 
     public override void CheckTrekCondition()
     {
+        if (_acceptedTestSurfaceLevel is not Fixed64 surfaceLevel)
+            return;
+
+        _position.Y = surfaceLevel + NavigationProfile.Shape.RootToFootOffsetY;
+        SetGroundContact(surfaceLevel, Vector3d.Up);
     }
 }

@@ -15,7 +15,7 @@ public sealed class GravitasNavigator3DAcceptedMotionTests
     public void UnobstructedMotion_ShouldCommitTheCompleteResolvedPath()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
         actor.Navigator.ApplyGuidedTrekRequest(fixture.CreateQuery(), TrekRate.Fast);
 
         for (int frame = 0; frame < 128; frame++)
@@ -36,7 +36,7 @@ public sealed class GravitasNavigator3DAcceptedMotionTests
     {
         using var fixture = new GravitasNavigatorScenarioFixture(
             wallCenterX: Fixed64.FromFraction(5, 8));
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
         actor.Navigator.ApplyGuidedTrekRequest(fixture.CreateQuery(), TrekRate.Fast);
 
         fixture.Step(actor);
@@ -54,7 +54,7 @@ public sealed class GravitasNavigator3DAcceptedMotionTests
     public void WallCollision_ShouldCommitOnlyThePoseAcceptedByGravitas()
     {
         using var fixture = new GravitasNavigatorScenarioFixture();
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
         actor.Navigator.ApplyGuidedTrekRequest(fixture.CreateQuery(), TrekRate.Fast);
 
         actor.Body.Position3d.Should().Be(fixture.StartRoot);

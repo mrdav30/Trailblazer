@@ -15,7 +15,7 @@ public sealed class GravitasNavigator3DContactTests
         using var fixture = new GravitasNavigatorScenarioFixture(
             addWall: false,
             addSupport: true);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
 
         fixture.Step(actor);
 
@@ -35,7 +35,7 @@ public sealed class GravitasNavigator3DContactTests
             addWall: false,
             addSupport: true,
             supportCenterY: Fixed64.Zero);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor(
+        using GravitasNavigatorActor actor = fixture.CreateActor(
             carrierIdResolver: _ => 3);
 
         fixture.Step(actor);
@@ -53,7 +53,7 @@ public sealed class GravitasNavigator3DContactTests
         using var fixture = new GravitasNavigatorScenarioFixture(
             addWall: false,
             addSupport: true);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor(
+        using GravitasNavigatorActor actor = fixture.CreateActor(
             carrierIdResolver: _ => -1);
         fixture.Prepare(actor);
         fixture.Gravitas.LateSimulate();
@@ -72,7 +72,7 @@ public sealed class GravitasNavigator3DContactTests
         using var fixture = new GravitasNavigatorScenarioFixture(
             addWall: false,
             addSupport: true);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor(
+        using GravitasNavigatorActor actor = fixture.CreateActor(
             carrierIdResolver: _ => 7);
 
         fixture.Step(actor);
@@ -93,7 +93,7 @@ public sealed class GravitasNavigator3DContactTests
         using var fixture = new GravitasNavigatorScenarioFixture(
             addWall: false,
             addSupport: true);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor(
+        using GravitasNavigatorActor actor = fixture.CreateActor(
             carrierIdResolver: _ => 11);
         fixture.Step(actor);
 
@@ -144,7 +144,7 @@ public sealed class GravitasNavigator3DContactTests
         using var fixture = new GravitasNavigatorScenarioFixture(
             addWall: false,
             addSupport: true);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor(
+        using GravitasNavigatorActor actor = fixture.CreateActor(
             rotation: FixedQuaternion.Identity,
             carrierIdResolver: _ => 13);
         fixture.Step(actor);

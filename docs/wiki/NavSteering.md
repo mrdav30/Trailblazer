@@ -116,6 +116,13 @@ do not modify medium-state graph connectivity and do not merge semantic action
 ownership. `PrewarmMovementGroup(...)` can restore coordinator membership after
 loading; otherwise it rebuilds lazily.
 
+Group and avoidance forces shape direction, not movement throttle. A nonzero
+combined result is normalized back to a heading. If local shaping exactly
+cancels the selected path direction, steering retains that path direction so a
+stable formation cannot erase valid guidance indefinitely. Destination
+deceleration remains responsible for reducing the requested movement magnitude;
+the host still decides which motion is physically accepted.
+
 ## Common Mistakes
 
 - Starting a guided query whose profile differs from the Navigator profile.

@@ -107,6 +107,111 @@ public sealed class NavigationFlowFieldEquivalenceTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AStarAndFlow_ShouldUseAnOffAxisExplicitCorridorOnlyWhenTheBodyFits(
+        bool exceedsClearance)
+    {
+        using var world = new GridWorld();
+        VoxelIndex source = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        Fixed64 offAxisDistance = Fixed64.One / (Fixed64)8;
+        Fixed64 fittingRadius = Fixed64.Half - offAxisDistance;
+        Vector3d offAxisOffset = new(
+            Fixed64.Zero,
+            Fixed64.Zero,
+            -offAxisDistance);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateExplicitMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { source, destination },
+                "off-axis-clearance",
+                new[]
+                {
+                    new NavigationAStarExitTestHarness.ExplicitEdgeSpec(
+                        "off-axis",
+                        source,
+                        destination,
+                        corridorCost: Fixed64.Zero,
+                        radiusClearance: fittingRadius,
+                        entryOffset: offAxisOffset,
+                        exitOffset: offAxisOffset)
+                });
+        Fixed64 radius = exceedsClearance
+            ? fittingRadius + Fixed64.FromRaw(1)
+            : fittingRadius;
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(radius, Fixed64.One, Fixed64.Zero),
+            maxStepUp: Fixed64.Zero,
+            maxDropDown: Fixed64.Zero,
+            arrivalRadius: Fixed64.Zero,
+            allowedMedia: TraversalMedia.Solid,
+            capabilities: TraversalCapability.None);
+        PathQuery query = fixture.CreateQuery(source, destination, profile);
+        var origin = new NavigationCellAddress(fixture.MapId, source);
+        var target = new NavigationCellAddress(fixture.MapId, destination);
+
+        NavigationAStarExitTestHarness.SearchResult aStar =
+            NavigationAStarExitTestHarness.RunAStar(
+                world,
+                fixture.Graph,
+                query);
+        NavigationFlowFieldPayload flow = RunFlow(
+            world,
+            fixture.Graph,
+            ToFlowField(query),
+            origin,
+            target);
+
+        Fixed64 expectedCost = exceedsClearance
+            ? Fixed64.One
+            : offAxisDistance + offAxisDistance;
+        NavigationGraphEdgeKind expectedKind = exceedsClearance
+            ? NavigationGraphEdgeKind.Native
+            : NavigationGraphEdgeKind.Explicit;
+        Vector3d sourceEntry = NavigationAStarExitTestHarness.GetFoot(
+                fixture.Binding,
+                source)
+            + offAxisOffset;
+        Vector3d targetExit = NavigationAStarExitTestHarness.GetFoot(
+                fixture.Binding,
+                destination)
+            + offAxisOffset;
+
+        aStar.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        aStar.Cost.Should().Be(expectedCost);
+        if (exceedsClearance)
+        {
+            aStar.Payload!.GuidePoints.Should().NotContain(
+                point => point.Position == sourceEntry || point.Position == targetExit,
+                "one raw unit above the certified body clearance must exclude the explicit corridor");
+        }
+        else
+        {
+            aStar.Payload!.GuidePoints.Should().Contain(
+                point => point.Position == sourceEntry);
+            aStar.Payload.GuidePoints.Should().Contain(
+                point => point.Position == targetExit);
+        }
+
+        flow.TryGetNode(
+                origin,
+                TraversalMedium.Solid,
+                out NavigationFlowFieldNode flowOrigin)
+            .Should().BeTrue();
+        flowOrigin.IntegrationCost.Should().Be(expectedCost);
+        TryGetSelectedEdgeKind(
+                fixture.Graph,
+                origin,
+                flowOrigin.SelectedEdge.CanonicalOutgoingOrdinal,
+                out NavigationGraphEdgeKind selectedKind)
+            .Should().BeTrue(
+                "the selected outgoing edge must remain present in the graph");
+        selectedKind.Should().Be(expectedKind);
+    }
+
     [Fact]
     public void FlowField_ShouldApplyNodeAndAreaWeightsExactlyOnce()
     {
@@ -625,6 +730,28 @@ public sealed class NavigationFlowFieldEquivalenceTests
         }
         work.Status.Should().Be(expectedStatus);
         return work.Result!;
+    }
+
+    private static bool TryGetSelectedEdgeKind(
+        NavigationWorldGraph graph,
+        NavigationCellAddress origin,
+        int canonicalOutgoingOrdinal,
+        out NavigationGraphEdgeKind kind)
+    {
+        graph.TryGetNodeRef(origin, out NavigationNodeRef source).Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator outgoing =
+            graph.EnumerateStructuralSurfaceEdges(source);
+        while (outgoing.MoveNext())
+        {
+            if (outgoing.CurrentOrdinal == canonicalOutgoingOrdinal)
+            {
+                kind = outgoing.Current.Kind;
+                return true;
+            }
+        }
+
+        kind = default;
+        return false;
     }
 
     private static PathQuery ToFlowField(PathQuery query) => new(

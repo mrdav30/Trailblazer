@@ -15,7 +15,7 @@ public sealed class GravitasNavigator3DCollisionTurningTests
     {
         using var fixture = new GravitasNavigatorScenarioFixture(
             wallCenterX: Fixed64.FromFraction(515, 256));
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor(
+        using GravitasNavigatorActor actor = fixture.CreateActor(
             rotation: FixedQuaternion.Identity);
         actor.Navigator.Motor!.Handler.Move.MaxSidewaysSpeed = Fixed64.Half;
 

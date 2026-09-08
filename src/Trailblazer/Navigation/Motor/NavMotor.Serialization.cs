@@ -28,6 +28,14 @@ public partial class NavMotor
         {
             CurrentState ??= new(currentCondition, previousCondition);
             CurrentState.Update(currentCondition, previousCondition);
+            if (Handler.Fall.IsControlledDescending
+                && (CurrentState.Medium != TraversalMedium.Gas
+                    || Handler.Fly?.IsFlying == true
+                    || Handler.Climb?.IsClimbing == true
+                    || Handler.Water?.IsSwimming == true))
+            {
+                Handler.Fall.IsControlledDescending = false;
+            }
             AbortTraversalFrame();
         }
     }

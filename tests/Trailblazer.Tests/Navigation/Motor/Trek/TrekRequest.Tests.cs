@@ -23,7 +23,8 @@ public class TrekRequestTests
             isRequestingFlight: false,
             isRequestingSwim: false,
             isRequestingClimb: false,
-            facingDirection);
+            facingDirection: facingDirection,
+            isRequestingControlledDescent: false);
 
         request.Direction.Should().Be(Vector3d.Right);
         request.FacingDirection.Should().BeNull();
@@ -42,6 +43,7 @@ public class TrekRequestTests
             IsRequestingJump = true,
             CanAffordJump = false,
             IsRequestingFlight = true,
+            IsRequestingControlledDescent = true,
             IsRequestingSwim = true,
             IsRequestingClimb = true
         };
@@ -58,6 +60,7 @@ public class TrekRequestTests
         clone.IsRequestingJump.Should().Be(request.IsRequestingJump);
         clone.CanAffordJump.Should().Be(request.CanAffordJump);
         clone.IsRequestingFlight.Should().Be(request.IsRequestingFlight);
+        clone.IsRequestingControlledDescent.Should().Be(request.IsRequestingControlledDescent);
         clone.IsRequestingSwim.Should().Be(request.IsRequestingSwim);
         clone.IsRequestingClimb.Should().Be(request.IsRequestingClimb);
     }
@@ -75,6 +78,7 @@ public class TrekRequestTests
             IsRequestingJump = true,
             CanAffordJump = true,
             IsRequestingFlight = true,
+            IsRequestingControlledDescent = true,
             IsRequestingSwim = true,
             IsRequestingClimb = true,
             FootPosition = new Vector3d(1, 1, 3)
@@ -91,6 +95,7 @@ public class TrekRequestTests
         request.IsRequestingJump.Should().BeFalse();
         request.CanAffordJump.Should().BeTrue();
         request.IsRequestingFlight.Should().BeFalse();
+        request.IsRequestingControlledDescent.Should().BeFalse();
         request.IsRequestingSwim.Should().BeFalse();
         request.IsRequestingClimb.Should().BeFalse();
     }
@@ -109,6 +114,7 @@ public class TrekRequestTests
             IsRequestingJump = true,
             CanAffordJump = false,
             IsRequestingFlight = true,
+            IsRequestingControlledDescent = true,
             IsRequestingSwim = true,
             IsRequestingClimb = true
         };
@@ -124,7 +130,31 @@ public class TrekRequestTests
         request.IsRequestingJump.Should().BeFalse();
         request.CanAffordJump.Should().BeTrue();
         request.IsRequestingFlight.Should().BeTrue();
+        request.IsRequestingControlledDescent.Should().BeTrue();
         request.IsRequestingSwim.Should().BeTrue();
         request.IsRequestingClimb.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetRequest_ShouldPreserveExistingPositionalActionOrdering()
+    {
+        var request = new TrekRequest();
+
+        request.SetRequest(
+            Vector3d.Right,
+            TrekRate.Fast,
+            true,
+            true,
+            true,
+            true,
+            Vector3d.Forward,
+            false);
+
+        request.IsRequestingJump.Should().BeTrue();
+        request.IsRequestingFlight.Should().BeTrue();
+        request.IsRequestingSwim.Should().BeTrue();
+        request.IsRequestingClimb.Should().BeTrue();
+        request.CanAffordJump.Should().BeFalse();
+        request.IsRequestingControlledDescent.Should().BeFalse();
     }
 }

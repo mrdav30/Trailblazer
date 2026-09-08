@@ -63,6 +63,221 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void GroundedDefaultTurning_ShouldProjectSlopeHeadingOntoWorldPlane()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        navigator.ApplyInputTrekRequest(
+            direction: new Vector3d(Fixed64.One, Fixed64.Half, Fixed64.Zero),
+            rate: TrekRate.Slow);
+
+        navigator.ResolveTurnDirection(
+                navigator.FrameRequest,
+                out Vector3d turnDirection)
+            .Should().BeTrue();
+
+        turnDirection.Should().Be(Vector3d.Right,
+            "a world-Y-up grounded body must remain upright while following an ascending surface heading");
+    }
+
+    [Fact]
+    public void CoreOnlyDefaultTurning_ShouldRemainPlanarWithoutWaterLocomotion()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        motor.SetLocomotionProfile(LocomotionProfile.CreateCoreOnly());
+        motor.Handler.Water.Should().BeNull();
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        navigator.ApplyInputTrekRequest(
+            direction: new Vector3d(Fixed64.One, Fixed64.Half, Fixed64.Zero),
+            rate: TrekRate.Slow);
+
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right),
+            "omitting optional water locomotion must not pitch surface-facing movement vertically");
+    }
+
+    [Fact]
+    public void FallingDefaultTurning_ShouldProjectSurfaceHeadingOntoWorldPlane()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetAirborne(updateMotorState: true);
+        navigator.ApplyInputTrekRequest(
+            direction: new Vector3d(Fixed64.One, -Fixed64.Half, Fixed64.Zero),
+            rate: TrekRate.Slow);
+
+        navigator.ResolveTurnDirection(
+                navigator.FrameRequest,
+                out Vector3d turnDirection)
+            .Should().BeTrue();
+
+        turnDirection.Should().Be(Vector3d.Right,
+            "losing support during a surface route must not pitch a world-Y-up body into the terrain");
+    }
+
+    [Fact]
+    public void FlightAdmission_ShouldUseThreeDimensionalDefaultFacingInTheAdmissionFrame()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        Vector3d flightDirection = new(Fixed64.One, Fixed64.Half, Fixed64.Zero);
+        navigator.SetAirborne(updateMotorState: true);
+        navigator.ApplyInputTrekRequest(
+            flightDirection,
+            TrekRate.Fast,
+            isRequestingFlight: true);
+
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        motor.IsFlying.Should().BeTrue();
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(flightDirection));
+    }
+
+    [Fact]
+    public void FlightRelease_ShouldReturnDefaultFacingToTheWorldPlaneInTheReleaseFrame()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        navigator.SetAirborne(updateMotorState: true);
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Forward,
+            TrekRate.Fast,
+            isRequestingFlight: true);
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+        navigator.CommitFrameMotion();
+        motor.IsFlying.Should().BeTrue();
+
+        navigator.ApplyInputTrekRequest(
+            new Vector3d(Fixed64.One, Fixed64.Half, Fixed64.Zero),
+            TrekRate.Fast,
+            isRequestingFlight: false);
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        motor.IsFlying.Should().BeFalse();
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
+    }
+
+    [Fact]
+    public void ClimbAdmission_ShouldUseThreeDimensionalDefaultFacingInTheAdmissionFrame()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        Vector3d climbDirection = new(Fixed64.One, Fixed64.Half, Fixed64.Zero);
+        motor.Handler.Climb!.ClimbResolver = new NavigatorClimbResolver();
+        navigator.ApplyInputTrekRequest(
+            climbDirection,
+            TrekRate.Fast,
+            isRequestingClimb: true);
+
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        motor.IsClimbing.Should().BeTrue();
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(climbDirection));
+    }
+
+    [Fact]
+    public void ClimbCapabilityLoss_ShouldReturnDefaultFacingToTheWorldPlaneInTheDetachFrame()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        ClimbLocomotion climb = TestRequire.NotNull(motor.Handler.Climb);
+        climb.ClimbResolver = new NavigatorClimbResolver();
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Forward,
+            TrekRate.Fast,
+            isRequestingClimb: true);
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+        navigator.CommitFrameMotion();
+        motor.IsClimbing.Should().BeTrue();
+
+        climb.CanClimb = false;
+        navigator.ApplyInputTrekRequest(
+            new Vector3d(Fixed64.One, Fixed64.Half, Fixed64.Zero),
+            TrekRate.Fast,
+            isRequestingClimb: true);
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        motor.IsClimbing.Should().BeFalse();
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
+    }
+
+    [Fact]
+    public void SwimAdmission_ShouldUseThreeDimensionalDefaultFacingInTheAdmissionFrame()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        Vector3d swimDirection = new(Fixed64.One, Fixed64.Half, Fixed64.Zero);
+        navigator.SetTrekCondition(medium: TraversalMedium.Liquid, updateMotorState: true);
+        navigator.ApplyInputTrekRequest(
+            swimDirection,
+            TrekRate.Fast,
+            isRequestingSwim: true);
+
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        motor.Handler.Water!.IsSwimming.Should().BeTrue();
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(swimDirection));
+    }
+
+    [Fact]
+    public void ActiveSwimModuleRemoval_ShouldReturnDefaultFacingToTheWorldPlane()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavMotor motor = TestRequire.NotNull(navigator.Motor);
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        navigator.SetTrekCondition(medium: TraversalMedium.Liquid, updateMotorState: true);
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Forward,
+            TrekRate.Fast,
+            isRequestingSwim: true);
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+        navigator.CommitFrameMotion();
+        motor.Handler.Water!.IsSwimming.Should().BeTrue();
+
+        motor.SetLocomotionProfile(LocomotionProfile.CreateCoreOnly());
+        motor.Handler.Water.Should().BeNull();
+        navigator.ApplyInputTrekRequest(
+            new Vector3d(Fixed64.One, Fixed64.Half, Fixed64.Zero),
+            TrekRate.Fast,
+            isRequestingSwim: true);
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
+    }
+
+    [Fact]
+    public void ExplicitFacing_ShouldRemainThreeDimensionalDuringGroundedTraversal()
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        NavTurning turning = TestRequire.NotNull(navigator.Turning);
+        Vector3d facingDirection = new(Fixed64.One, Fixed64.Half, Fixed64.Zero);
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Forward,
+            TrekRate.Fast,
+            facingDirection: facingDirection);
+
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+
+        turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(facingDirection));
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_ShouldRejectAQueryWithADifferentAgentProfile()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -132,13 +347,18 @@ public class NavigatorTests : IDisposable
             new Vector3d(7, 1, 2),
             navigator.NavigationProfile);
 
-        navigator.ApplyGuidedTrekRequest(query, rate: TrekRate.Moderate, groupId: 8);
+        navigator.ApplyGuidedTrekRequest(
+            query,
+            rate: TrekRate.Moderate,
+            isRequestingControlledDescent: true,
+            groupId: 8);
 
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.IsGuided.Should().BeTrue();
         steering.CurrentQuery.Should().Be(query);
         steering.MovementGroupID.Should().Be(8);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
+        navigator.FrameRequest.IsRequestingControlledDescent.Should().BeTrue();
     }
 
     [Fact]
@@ -156,6 +376,33 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         steering.CurrentQuery.Should().Be(query);
         steering.MovementGroupID.Should().Be(12);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_ShouldPreserveExistingPositionalActionOrdering()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        PathQuery query = CreateSurfaceQuery(
+            navigator.FootPosition,
+            Vector3d.Right,
+            navigator.NavigationProfile);
+
+        navigator.ApplyGuidedTrekRequest(
+            query,
+            TrekRate.Moderate,
+            true,
+            true,
+            true,
+            true,
+            false,
+            8);
+
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingJump.Should().BeTrue();
+        navigator.FrameRequest.CanAffordJump.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingControlledDescent.Should().BeFalse();
     }
 
     [Theory]
@@ -1810,6 +2057,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
         navigator.FrameRequest.CanAffordJump.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingControlledDescent.Should().BeFalse();
         navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
         navigator.FrameRequest.FacingDirection.Should().BeNull();
@@ -1826,6 +2074,42 @@ public class NavigatorTests : IDisposable
             isRequestingSwim: true);
 
         navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ApplyInputTrekRequest_ShouldCaptureExplicitControlledDescentIntent()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Forward,
+            TrekRate.Moderate,
+            isRequestingControlledDescent: true);
+
+        navigator.FrameRequest.IsRequestingControlledDescent.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ApplyInputTrekRequest_ShouldPreserveExistingPositionalActionOrdering()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Right,
+            TrekRate.Fast,
+            Vector3d.Forward,
+            true,
+            true,
+            true,
+            true,
+            false);
+
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingJump.Should().BeTrue();
+        navigator.FrameRequest.CanAffordJump.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingControlledDescent.Should().BeFalse();
     }
 
     [Fact]
@@ -2162,6 +2446,7 @@ public class NavigatorTests : IDisposable
         navigator.SetFrameJumpAffordability(false);
         navigator.ToggleGuidedJump(true);
         navigator.ToggleGuidedFlight(true);
+        navigator.ToggleGuidedControlledDescent(true);
         navigator.ToggleGuidedSwim(true);
         navigator.ToggleGuidedClimb(true);
         navigator.SetGuidedTrekRate(TrekRate.Moderate);
@@ -2169,6 +2454,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.CanAffordJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingJump.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingControlledDescent.Should().BeTrue();
         navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
@@ -2928,6 +3214,23 @@ public class NavigatorTests : IDisposable
             GroundState = new GroundCondition()
         });
         return navigator;
+    }
+
+    private sealed class NavigatorClimbResolver : IClimbAffordanceResolver
+    {
+        public bool TryResolveClimbAffordance(
+            TrekRequest request,
+            TransitState currentState,
+            out ClimbAffordanceSnapshot snapshot)
+        {
+            snapshot = new ClimbAffordanceSnapshot(
+                ClimbAffordanceKind.Surface,
+                attachmentPoint: Vector3d.Zero,
+                surfaceNormal: Vector3d.Backward,
+                upDirection: Vector3d.Up,
+                affordanceId: 1);
+            return true;
+        }
     }
 
     private static PathQuery CreateSurfaceQuery(

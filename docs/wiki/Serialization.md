@@ -59,11 +59,18 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 4. The nested path-session and
-standalone `PathQueryRecord` schemas remain version 1. Version 4 records the
-ground contact's explicit world-space `SurfaceNormal` independently from its
-platform transform. Earlier outer Navigator schemas reject transactionally
-rather than supplying a derived or default normal through a compatibility path.
+The outer Navigator record is schema version 5. The nested path-session and
+standalone `PathQueryRecord` schemas remain version 1. Version 5 retains the
+version 4 ground contact's explicit world-space `SurfaceNormal` and adds the
+controlled-descent request, configuration, and active fall state. Earlier outer
+Navigator schemas reject transactionally rather than supplying a derived or
+default contract through a compatibility path.
+
+Controlled descent restores only when its loaded fall and motor state can admit
+it. Loading clears the active flag when the agent is not falling in Gas, when
+flight, climb, or swim is active, or when controlled descent is disabled or has
+non-positive terminal-speed/deceleration tuning. This normalization does not
+discard the ordinary fall start/end state.
 
 Navigator does not serialize or restore:
 

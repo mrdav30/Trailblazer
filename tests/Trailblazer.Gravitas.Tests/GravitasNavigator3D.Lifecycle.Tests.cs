@@ -18,7 +18,7 @@ public sealed class GravitasNavigator3DLifecycleTests
     public void FrameContract_ShouldRejectMissingOrDuplicatePhasesWithoutDoubleCommit()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
         int committedCellChanges = 0;
         actor.Navigator.CommittedCellChanged += _ => committedCellChanges++;
 
@@ -44,7 +44,7 @@ public sealed class GravitasNavigator3DLifecycleTests
     public void StalePreparedFrame_ShouldRejectFinalizationUntilResetAbortsTheMotorWork()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
         int committedCellChanges = 0;
         actor.Navigator.CommittedCellChanged += _ => committedCellChanges++;
 
@@ -68,7 +68,7 @@ public sealed class GravitasNavigator3DLifecycleTests
     public void DiscardedPreparedFrame_ShouldBeClosedByRepeatedResetWithoutPublishingACommit()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
         int committedCellChanges = 0;
         actor.Navigator.CommittedCellChanged += _ => committedCellChanges++;
         actor.Navigator.ApplyGuidedTrekRequest(fixture.CreateQuery(), TrekRate.Fast);
@@ -91,7 +91,7 @@ public sealed class GravitasNavigator3DLifecycleTests
         using var fixture = new GravitasNavigatorScenarioFixture(
             addWall: false,
             addSupport: true);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor(
+        using GravitasNavigatorActor actor = fixture.CreateActor(
             carrierIdResolver: _ => 5);
         actor.Navigator.ApplyGuidedTrekRequest(fixture.CreateQuery(), TrekRate.Fast);
         fixture.Step(actor);
@@ -119,8 +119,8 @@ public sealed class GravitasNavigator3DLifecycleTests
     public void StableActorBatch_ShouldExposeEveryAcceptedPoseAndCellAfterLateSimulation()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor first = fixture.CreateActor();
-        using GravitasNavigatorScenarioFixture.Actor second = fixture.CreateActor(
+        using GravitasNavigatorActor first = fixture.CreateActor();
+        using GravitasNavigatorActor second = fixture.CreateActor(
             fixture.EndRoot,
             FixedQuaternion.FromDirection(Vector3d.Left));
         first.Navigator.ApplyGuidedTrekRequest(fixture.CreateQuery(), TrekRate.Fast);
@@ -152,14 +152,14 @@ public sealed class GravitasNavigator3DLifecycleTests
     public void Adapter_ShouldRejectAnInactiveOrNonKinematicBodyBeforePreparingMotion()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor dynamicActor = fixture.CreateActor();
+        using GravitasNavigatorActor dynamicActor = fixture.CreateActor();
         dynamicActor.Body.SetMotionType(BodyMotionType.Dynamic);
 
         Action simulateDynamic = dynamicActor.Navigator.Simulate;
         simulateDynamic.Should().Throw<InvalidOperationException>();
         dynamicActor.Navigator.Motor!.TraversalInProgress.Should().BeFalse();
 
-        using GravitasNavigatorScenarioFixture.Actor inactiveActor = fixture.CreateActor();
+        using GravitasNavigatorActor inactiveActor = fixture.CreateActor();
         inactiveActor.Body.Deactivate();
 
         Action simulateInactive = inactiveActor.Navigator.Simulate;
@@ -171,7 +171,7 @@ public sealed class GravitasNavigator3DLifecycleTests
     public void Prepare_ShouldRejectAWorldPoseThatTheHostTransformCannotRepresent()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor actor = fixture.CreateActor();
+        using GravitasNavigatorActor actor = fixture.CreateActor();
         var singularParent = new FixedTransform(
             Vector3d.Zero,
             FixedQuaternion.Identity,
@@ -191,7 +191,7 @@ public sealed class GravitasNavigator3DLifecycleTests
     {
         using var first = new GravitasNavigatorScenarioFixture(addWall: false);
         using var second = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor actor = first.CreateActor();
+        using GravitasNavigatorActor actor = first.CreateActor();
 
         Action nullBody = () => new GravitasNavigator3D(
             first.Trailblazer,
@@ -263,7 +263,7 @@ public sealed class GravitasNavigator3DLifecycleTests
     {
         using var first = new GravitasNavigatorScenarioFixture(addWall: false);
         using var second = new GravitasNavigatorScenarioFixture(addWall: false);
-        using GravitasNavigatorScenarioFixture.Actor actor = first.CreateActor();
+        using GravitasNavigatorActor actor = first.CreateActor();
         actor.Navigator.Reset();
 
         Action rebind = () => actor.Navigator.Setup(

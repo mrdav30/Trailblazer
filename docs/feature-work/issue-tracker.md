@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-104`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-108`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -24,6 +24,122 @@
 No active issues.
 
 ## Resolved Issues
+
+### TRB-Issue-107 - Group steering can erase a valid path heading indefinitely
+
+- **Discovered:** 2026-09-06
+- **Area:** NavSteering movement-group shaping and Flow-field progression
+- **Status:** Resolved; verified by the 2026-09-06 focused and full package
+  matrices.
+- **Evidence:** In the Phase 1 off-axis Flow corridor, default separation and
+  cohesion could exactly oppose the selected unit path heading for two actors at
+  a stable non-overlapping spacing. The summed target became zero, so both
+  Navigators remained guided without moving, arriving, or becoming formally
+  stuck. Partial opposition also reduced the vector magnitude and therefore
+  unintentionally acted as motor throttle.
+- **Impact:** A legal Flow route could stall a movement group forever even
+  though its graph proof, sampled portal heading, collision space, and per-frame
+  budgets remained valid. Steering-force magnitude could also change traversal
+  speed even though destination deceleration owns deliberate throttling.
+- **Expected:** Treat group and avoidance output as directional shaping. Keep a
+  nonzero shaped result normalized, and fall back to the selected path heading
+  when local shaping cancels it exactly. Preserve `SetDeceleration` as the owner
+  of deliberate path-speed reduction, while the collision host remains free to
+  reject unsafe accepted motion.
+- **Verification:** Focused steering regressions cover partial and exact
+  opposition. The Gravitas-backed Flow scenario proves nonzero group influence,
+  changed heading, bounded accepted displacement, no overlap-dependent start,
+  no invalid/stuck events, and bounded arrival for both actors in `Release` and
+  `ReleaseLean`. The complete instrumented matrices pass with exact reachable
+  line, branch, method, and fully-covered-method totals in both configurations.
+
+### TRB-Issue-106 - Surface guidance pitches the default facing direction vertically
+
+- **Discovered:** 2026-09-06
+- **Area:** Navigator default turning and accepted-motion collision turning
+- **Status:** Resolved; verified by the 2026-09-06 focused and full package
+  matrices.
+- **Evidence:** The Phase 1 stair world produces legal guidance with an upward
+  component. `Navigator.TryGetTurnDirection` previously forwarded that complete
+  vector as the default facing direction, and accepted-motion turning likewise
+  derived rotation from the complete vertical displacement. A world-Y-up body
+  therefore pitched into a stair or slope even though the host had not supplied
+  an explicit facing request.
+- **Impact:** Ordinary surface locomotion could tilt a character's upright axis,
+  distort its collision orientation, and make a valid rising route fail for a
+  presentation choice that belongs to the host. The same behavior could appear
+  for one frame after losing support during a surface route.
+- **Expected:** Project only the implicit surface and falling facing direction
+  onto the world X/Z plane. Preserve an explicit host-facing direction exactly,
+  and retain three-dimensional default facing during active flight, climbing,
+  or swimming. Apply the same ownership rule to accepted-motion turning.
+- **Verification:** Focused Navigator and Gravitas collision-turning regressions
+  cover grounded, newly airborne, explicit-facing, and volumetric locomotion.
+  Transition-frame regressions also cover flight, climb, and swim admission;
+  flight release; climb capability loss; and active swim-module removal, so
+  facing dimensionality is selected from the resolved current-frame locomotion
+  state. The complete instrumented `Release` and `ReleaseLean` matrices pass
+  with exact reachable line, branch, method, and fully-covered-method totals.
+
+### TRB-Issue-105 - Grounded motion discards legal upward surface guidance
+
+- **Discovered:** 2026-09-06
+- **Area:** NavMotor grounded velocity and Gravitas accepted-motion integration
+- **Status:** Resolved; verified by the 2026-09-06 focused and full package
+  matrices.
+- **Evidence:** A four-map stair world publishes adjacent clearance prisms whose
+  foot anchors rise by three quarters of a unit per step. Both A* and Flow
+  accept the
+  profile and produce a forward/upward sampled heading. `NavMotor` then
+  unconditionally clamps the grounded non-flight velocity Y component to zero,
+  so Gravitas receives a horizontal request into the first riser and resolves
+  the actor at the step face for every bounded frame.
+- **Impact:** `NavigationAgentProfile.MaxStepUp` can admit a valid route that the
+  standard Navigator/motor/host lifecycle cannot attempt. The same clamp also
+  prevents a projected uphill surface velocity from reaching a collision host.
+- **Expected:** Preserve the bounded upward component of an otherwise valid
+  grounded surface-movement request so the host can accept or reject it against
+  physical geometry. Pure vertical ground input must not become powered ascent,
+  and accepted host motion remains authoritative. Prove the focused motor rule
+  and complete the A*/Flow stair world through real Gravitas collision/contact
+  refresh before resolving this issue.
+- **Verification:** Focused motor regressions preserve legal uphill surface
+  velocity while rejecting flat-ground powered ascent. The Gravitas-backed
+  four-map stair world accepts all three rises and reaches the exact upper
+  address under A* and Flow in `Release` and `ReleaseLean`. The complete
+  instrumented matrices retain exact reachable coverage.
+
+### TRB-Issue-104 - Falling has no fall-preserving controlled-descent contract
+
+- **Discovered:** 2026-09-06
+- **Area:** NavMotor airborne locomotion and fixed-frame host integration
+- **Status:** Resolved; verified by the 2026-09-06 component, serialization,
+  integration, and full package matrices.
+- **Evidence:** The existing airborne choices are free fall and `FlyLocomotion`.
+  Flight can limit downward speed, but admitting flight intentionally clears
+  `FallLocomotion` state and permits powered ascent. The Phase 1 parachute-style
+  scenario therefore cannot preserve fall distance, landing events, and a
+  no-powered-ascent rule through the current public request contract.
+- **Impact:** A host cannot request deterministic bounded descent while keeping
+  the agent in the ordinary falling lifecycle. Reusing flight would report the
+  wrong locomotion state and discard fall-height semantics.
+- **Expected:** Add the smallest explicit controlled-descent intent to the
+  required `FallLocomotion`: it activates only for a configured agent already
+  falling in Gas, retains `IsFalling`, approaches a configured terminal descent
+  speed with bounded deceleration, applies configured lateral control, and never
+  creates upward velocity. Request cancellation resumes ordinary gravity,
+  redeployment is allowed while still falling, and landing or disabling fall
+  clears the transient state. Preserve deterministic cloning, reset,
+  synchronization, JSON, and MemoryPack behavior.
+- **Verification:** Component tests cover admission, invalid tuning, optional
+  module absence, cancellation, redeployment, bounded deceleration, terminal
+  speed, lateral control, and no powered ascent. JSON and MemoryPack verify
+  transactional state normalization. The 192-frame Gravitas-backed paired trace
+  proves the controlled impact is more than one-half unit per second less
+  downward than free fall, remains within one five-hundred-twelfth of the
+  configured terminal speed, preserves fall/landing events, and replays exactly
+  in both configurations; the complete instrumented matrices retain exact
+  reachable coverage.
 
 ### TRB-Issue-103 - Local source graph can build SwiftCollections with two assembly versions
 

@@ -370,6 +370,62 @@ public class MoveLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void GroundedUphillTraversal_ShouldPreservePositiveSurfaceVelocityForHostResolution()
+    {
+        var surfaceNormal = new Vector3d(
+            Fixed64.Zero,
+            Fixed64.FromFraction(12, 13),
+            -Fixed64.FromFraction(5, 13));
+        var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
+            startPosition: Vector3d.Zero,
+            platformMatrix: Fixed4x4.Identity,
+            surfaceNormal: surfaceNormal);
+        agent.Motor.Handler.Move.ModifySpeedOnSlope = false;
+        agent.Motor.Handler.Forces.GravityForce = Fixed64.Zero;
+        agent.FrameRequest.Direction = Vector3d.Backward;
+        agent.FrameRequest.Rate = TrekRate.Slow;
+
+        agent.Motor.TryTraversal(
+                agent.FrameRequest,
+                out Vector3d displacement,
+                out _,
+                out _)
+            .Should().BeTrue();
+
+        Vector3d velocity = displacement * TestWorld.Context.InvDeltaTime;
+        velocity.Y.Should().BeGreaterThan(Fixed64.Zero,
+            "an accepted uphill surface direction must reach the collision host; resolved velocity was {0}, frame slope was {1}, and sliding was {2}",
+            velocity,
+            agent.Motor.FrameSlopeAngle,
+            agent.Motor.Handler.Slide!.IsSliding);
+        velocity.Z.Should().BeLessThan(Fixed64.Zero);
+        agent.Motor.AbortTraversalFrame();
+    }
+
+    [Fact]
+    public void GroundedFlatTraversal_ShouldRejectPositiveVerticalInput()
+    {
+        var agent = MockMotorAgentTestFactory.CreatePlatformAgent();
+        agent.Motor.Handler.Move.ModifySpeedOnSlope = false;
+        agent.Motor.Handler.Forces.GravityForce = Fixed64.Zero;
+        agent.FrameRequest.Direction = new Vector3d(Fixed64.One, Fixed64.One, Fixed64.Zero).Normalized;
+        agent.FrameRequest.Rate = TrekRate.Slow;
+
+        agent.Motor.TryTraversal(
+                agent.FrameRequest,
+                out Vector3d displacement,
+                out _,
+                out _)
+            .Should().BeTrue();
+
+        Vector3d velocity = displacement * TestWorld.Context.InvDeltaTime;
+        velocity.X.Should().BeGreaterThan(Fixed64.Zero);
+        velocity.Y.Should().Be(Fixed64.Zero,
+            "ordinary grounded input must not grant ascent on a flat surface");
+        agent.Motor.AbortTraversalFrame();
+    }
+
+    [Fact]
     public void Given_FlatGround_When_SlopeCurveWouldReduceSpeed_Then_FlatSpeedIsUnmodified()
     {
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent();

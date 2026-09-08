@@ -99,6 +99,7 @@ public partial class NavMotor
         UpdateClimbState(request);
         UpdateFlightState(request);
         UpdateSwimState(request);
+        UpdateControlledDescentState(request);
     }
 
     #region Traversal Force Resolution
@@ -418,6 +419,9 @@ public partial class NavMotor
         if (IsOnSolid)
             return Fixed64.One;
 
+        if (Handler.Fall.IsControlledDescending)
+            return FixedMath.Clamp01(Handler.Fall.ControlledDescentControlMultiplier);
+
         if (IsJumping)
             return JumpModule!.JumpControlMultiplier;
 
@@ -538,8 +542,13 @@ public partial class NavMotor
             "UpdateControlState rejects limbo before desired velocity can be applied.");
 
         _forceOutput += velocityChange;
-        if (IsOnSolid && !IsFlying)
+        if (IsOnSolid
+            && !IsFlying
+            && (CurrentState.SurfaceNormal == Vector3d.Zero
+                || CurrentState.SlopeAngle == Fixed64.Zero))
+        {
             _forceOutput.Y = FixedMath.Min(_forceOutput.Y, Fixed64.Zero);
+        }
     }
 
     /// <summary>
@@ -604,7 +613,12 @@ public partial class NavMotor
 
         if (IsOnSolid)
         {
-            _forceOutput.Y = FixedMath.Min(Fixed64.Zero, _forceOutput.Y) - gravityStep;
+            if (CurrentState.SurfaceNormal == Vector3d.Zero
+                || CurrentState.SlopeAngle == Fixed64.Zero)
+            {
+                _forceOutput.Y = FixedMath.Min(Fixed64.Zero, _forceOutput.Y);
+            }
+            _forceOutput.Y -= gravityStep;
             return;
         }
 
@@ -622,6 +636,12 @@ public partial class NavMotor
         }
 
         if (!IsInGas) return;
+
+        if (Handler.Fall.IsControlledDescending)
+        {
+            ApplyControlledDescentForces(gravityStep);
+            return;
+        }
 
         _forceOutput.Y = Handler.Move.FrameVelocity.Y - gravityStep;
 
@@ -643,6 +663,24 @@ public partial class NavMotor
             if (TotalTime <= extraJumpLimit)
                 _forceOutput += jumpModule.FrameJumpDirection * gravityStep;
         }
+    }
+
+    private void ApplyControlledDescentForces(Fixed64 gravityStep)
+    {
+        FallLocomotion fall = Handler.Fall;
+        Fixed64 terminalVelocity = -fall.ControlledDescentTerminalSpeed;
+        Fixed64 currentVelocity = Handler.Move.FrameVelocity.Y;
+
+        if (currentVelocity < terminalVelocity)
+        {
+            Fixed64 maximumSpeedChange = fall.ControlledDescentDeceleration * DeltaTime;
+            _forceOutput.Y = FixedMath.Min(terminalVelocity, currentVelocity + maximumSpeedChange);
+            return;
+        }
+
+        _forceOutput.Y = FixedMath.Min(
+            Fixed64.Zero,
+            FixedMath.Max(terminalVelocity, currentVelocity - gravityStep));
     }
 
     private void ApplyJumpForce(TrekRequest request)
@@ -941,6 +979,20 @@ public partial class NavMotor
         waterModule.IsSwimming = IsInLiquid
             && waterModule.CanSwim
             && request.IsRequestingSwim;
+    }
+
+    private void UpdateControlledDescentState(TrekRequest request)
+    {
+        FallLocomotion fall = Handler.Fall;
+        fall.IsControlledDescending = fall.IsEnabled
+            && fall.CanControlDescent
+            && request.IsRequestingControlledDescent
+            && IsInGas
+            && IsFalling
+            && !IsFlying
+            && !IsClimbing
+            && fall.ControlledDescentTerminalSpeed > Fixed64.Zero
+            && fall.ControlledDescentDeceleration > Fixed64.Zero;
     }
 
     #endregion

@@ -481,12 +481,22 @@ public partial class NavSteering
             && IsCurrentAStarTransitionStep();
         if (_targetDirection == Vector3d.Zero)
             return;
-        _targetDirection += ComputeCombinedSteering(
+        Vector3d pathDirection = _targetDirection;
+        Vector3d localSteering = ComputeCombinedSteering(
             vessel.Position,
             vessel.Velocity,
             vessel.Speed,
             vessel.Radius,
             vessel.GlobalId);
+        if (localSteering == Vector3d.Zero)
+            return;
+
+        _targetDirection += localSteering;
+        // Local steering shapes a selected path heading; it does not own
+        // movement throttle or permission to erase that path indefinitely.
+        _targetDirection = _targetDirection == Vector3d.Zero
+            ? pathDirection
+            : _targetDirection.Normalized;
     }
 
     private bool IsCurrentAStarTransitionStep()

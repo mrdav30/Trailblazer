@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-108`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-113`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -24,6 +24,124 @@
 No active issues.
 
 ## Resolved Issues
+
+### TRB-Issue-112 - Parallel local-stack solution builds could race identical project outputs
+
+- **Discovered:** 2026-09-08
+- **Area:** local-source project graph and Trailblazer/adapter assembly identity
+- **Status:** Resolved; verified by fresh parallel no-incremental `Release` and
+  `ReleaseLean` solution builds.
+- **Evidence:** `dotnet build Trailblazer.slnx -c Release
+  -p:UseLocalLsfStack=true` scheduled `Trailblazer` and
+  `Trailblazer.Gravitas` through direct solution entries and project references
+  carrying different version global-property sets. Separate graph nodes then
+  wrote the same `obj` path concurrently, producing a reproducible `MSB3101`
+  cache-file warning and one observed `CS2012` assembly-file failure.
+- **Impact:** A correct local-source tree could fail or produce a warning based
+  on parallel scheduling. Serializing MSBuild avoided the race but concealed an
+  incoherent project graph and weakened the documented zero-warning gate.
+- **Expected:** Each in-repository project has one local-stack identity and one
+  build node per target/configuration regardless of whether it is reached from
+  the solution or a consumer project.
+- **Resolution:** `Trailblazer.csproj` now owns the intended 2.0.0 local-stack
+  version defaults when GitVersion or explicit version inputs are absent. The
+  adapter and adapter-test references no longer inject redundant Trailblazer or
+  adapter version globals. Fresh parallel no-incremental builds for both package
+  configurations complete with zero warnings and errors, and the full solution
+  tests retain their existing counts.
+
+### TRB-Issue-111 - Same-lease Flow rejoin allocation gate did not establish its measured capacity state
+
+- **Discovered:** 2026-09-08
+- **Area:** Flow-field sampling zero-allocation regression coverage
+- **Status:** Resolved; verified by repeated coverage-instrumented execution and
+  the 2026-09-08 full package matrices.
+- **Evidence:** `WarmSameLeaseRejoinSample_ShouldAllocateZeroBytes` performed
+  only 16 setup iterations before measuring 256 attach/rejoin/sample/dispose
+  cycles. A full coverage-instrumented run intermittently observed 1,888 bytes
+  during the measured window even though the ordinary full suite and earlier
+  coverage runs were green.
+- **Impact:** The test could fail based on whether runtime specialization and
+  retained capacity happened before or during measurement, obscuring a real
+  hot-path allocation regression with a nondeterministic setup boundary.
+- **Expected:** A zero-allocation steady-state assertion first exercises the
+  same operation count as its measured window so all retained capacity and
+  runtime paths are established outside the measurement.
+- **Resolution:** The test now uses one named 256-iteration count for both setup
+  and measurement, matching the adjacent exact-node rebase allocation gate.
+  Repeated coverage-instrumented executions report zero measured bytes.
+
+### TRB-Issue-110 - Physical notification failure could split an accepted adapter replacement across libraries
+
+- **Discovered:** 2026-09-08
+- **Area:** `GravitasNavigator3D` and the cross-library profile/collider
+  replacement commit boundary
+- **Status:** Resolved; verified by the 2026-09-08 focused and full package
+  matrices.
+- **Evidence:** Gravitas first moved separation callbacks after physical
+  shape/root publication but still rethrew a callback failure before
+  `Navigator.TryReplaceNavigationProfile(...)` could publish matching state.
+  Returning that exception closed the interrupted commit, but independent review
+  then proved the callback itself could still observe the new physical envelope
+  alongside Trailblazer's previous profile, root, occupancy, and guidance.
+- **Impact:** One accepted operation could leave the resized Gravitas body paired
+  with Trailblazer's previous navigation envelope and lease state. A retry would
+  be unsafe because the physical change had already committed.
+- **Expected:** A physical transaction result and later host notifications are
+  distinct. Both libraries finish their accepted state transition before any
+  post-commit observer runs or a notification failure reaches the caller.
+- **Resolution:** Gravitas now invokes an optional synchronized-state publisher
+  after physical publication but before separation callbacks, retaining
+  `Applied` as the transaction result. The adapter uses that publisher for the
+  Navigator commit. Publisher and separation failures are returned through
+  `notificationException`; Navigator rethrows them with preserved stacks only
+  after all notifications finish. Core and cross-library regressions verify the
+  synchronized state from inside the physical callback as well as afterward.
+
+### TRB-Issue-109 - Profile replacement callback failure could skip a required capability-loss notification
+
+- **Discovered:** 2026-09-08
+- **Area:** Navigator runtime profile replacement and post-commit host callbacks
+- **Status:** Resolved; verified by the 2026-09-08 focused and full package
+  matrices.
+- **Evidence:** An accepted replacement rebuilt committed-cell state before
+  notifying the motor about lost traversal capabilities. If a host
+  `CommittedCellChanged` callback threw after commitment, control escaped before
+  an active climb could receive its required stop notification.
+- **Impact:** The new profile, position, occupancy, and physical body were
+  already committed, but host-observable capability-loss cleanup could be
+  incomplete. Treating that exception as a rejected operation and retrying
+  would then repeat an already accepted physical change.
+- **Expected:** Replacement callbacks are a documented post-commit boundary.
+  A committed-cell callback exception may propagate, but the climb-stop
+  notification is still attempted and the caller must not retry the accepted
+  replacement as though it had been rejected.
+- **Resolution:** Capability-loss notification now runs from a `finally` around
+  committed-cell publication. The regression deliberately throws from the cell
+  callback and verifies the replacement state is committed, the climb is
+  stopped, and both notifications were attempted.
+
+### TRB-Issue-108 - Gravitas profile replacement did not reject a scaled physical owner before mutation
+
+- **Discovered:** 2026-09-08
+- **Area:** `GravitasNavigator3D` physical profile-replacement boundary
+- **Status:** Resolved; verified by the 2026-09-08 focused and full package
+  matrices.
+- **Evidence:** Navigation profile dimensions are world-space values, while a
+  Gravitas collider definition is interpreted through its owner's transform
+  scale. The adapter originally forwarded a replacement without first proving
+  exact unit world scale; a non-unit owner could therefore throw from the
+  physical layer or represent an envelope different from the navigation
+  profile.
+- **Impact:** Expected physical-fit rejection could escape as an exception, and
+  accepting scale-aware geometry without an explicit conversion contract would
+  let collision and navigation clearance disagree.
+- **Expected:** The focused capsule adapter accepts only a representable exact
+  unit physical scale. Unsupported scale returns `PhysicalFitRejected` without
+  changing the Navigator, body, or collider.
+- **Resolution:** The adapter now preflights lossy world scale and rejects
+  anything other than exact `Vector3d.One`. A regression verifies a scaled body
+  preserves its original profile and physical state.
 
 ### TRB-Issue-107 - Group steering can erase a valid path heading indefinitely
 

@@ -13,9 +13,11 @@ The host must:
 2. restore GridForge grids;
 3. publish every referenced `NavigationMap` and `NavigationAreaPolicy`;
 4. replay persisted overlay transactions in deterministic order;
-5. create/setup the Navigator shell with the exact recorded profile;
-6. populate the existing shell through Chronicler;
-7. resume fixed-step simulation so fresh guidance can be acquired.
+5. restore any host-owned physical body with geometry matching the recorded
+   profile and position;
+6. create/setup the Navigator shell with the exact recorded profile;
+7. populate the existing shell through Chronicler;
+8. resume fixed-step simulation so fresh guidance can be acquired.
 
 Trailblazer does not construct arbitrary runtime/controller graphs from save data
 and does not serialize context bindings.
@@ -88,6 +90,14 @@ The next simulation frame requests fresh guidance from durable intent.
 Navigator loading stages and validates the top-level schema, exact profile,
 position/frame condition, path session, steering, turning, motor, and locomotion
 records before changing the existing live shell.
+
+A successful runtime profile replacement becomes the Navigator's current
+serialized profile. Population still requires a shell configured with that
+exact profile; load does not call the runtime physical-replacement hook or
+resize a host collider. Physical adapters such as `GravitasNavigator3D` must
+therefore restore the matching body shape and accepted root before population.
+This keeps the host body and navigation envelope consistent before the next
+fixed frame.
 
 Malformed early or late nested data must preserve the previous shell, active
 query, guide lease, and pending instruction. This applies to JSON in both

@@ -677,6 +677,19 @@ public abstract partial class Navigator : INavigate, IRecordable
         || Motor.IsClimbing
         || Motor.Handler.Water?.IsSwimming == true;
 
+    private void MaskUnsupportedNavigationRequests()
+    {
+        TraversalCapability capabilities = NavigationProfile.Capabilities;
+        _frameRequest.IsRequestingJump &=
+            (capabilities & TraversalCapability.Jump) != 0;
+        _frameRequest.IsRequestingFlight &=
+            (capabilities & TraversalCapability.Fly) != 0;
+        _frameRequest.IsRequestingSwim &=
+            (capabilities & TraversalCapability.Swim) != 0;
+        _frameRequest.IsRequestingClimb &=
+            (capabilities & TraversalCapability.Climb) != 0;
+    }
+
     /// <summary>
     /// Runs simulation logic for this object (input handling, steering, etc.).
     /// </summary>
@@ -714,6 +727,8 @@ public abstract partial class Navigator : INavigate, IRecordable
              rotation: Rotation,
              direction: IsGuided ? heading : null
         );
+
+        MaskUnsupportedNavigationRequests();
 
         if (Motor!.TryTraversal(
                 _frameRequest,

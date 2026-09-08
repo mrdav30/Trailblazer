@@ -104,6 +104,25 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         AllowTransitions,
         FlowField);
 
+    internal PathQuery WithAgentAndStartState(
+        NavigationAgentProfile agent,
+        Vector3d position,
+        TraversalMedium startMedium,
+        string? startMapId) => new(
+        new NavigationEndpoint(
+            position,
+            startMapId,
+            Start.Resolution,
+            Start.MaxResolutionDistance),
+        End,
+        agent,
+        AreaPolicy,
+        new TraversalIntent(startMedium, Traversal.TargetMedia),
+        Algorithm,
+        Budget,
+        AllowTransitions,
+        FlowField);
+
     /// <inheritdoc/>
     public bool Equals(PathQuery other) =>
         Start == other.Start

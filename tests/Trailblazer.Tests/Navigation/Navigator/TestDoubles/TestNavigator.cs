@@ -1,13 +1,27 @@
 using FixedMathSharp;
+using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
+using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests.Navigation;
 
 internal sealed class TestNavigator : Navigator
 {
     private Fixed64? _acceptedTestSurfaceLevel;
+
+    public bool AcceptPhysicalReplacement { get; set; } = true;
+
+    public bool UseBasePhysicalReplacement { get; set; }
+
+    public Exception? PhysicalReplacementNotificationException { get; set; }
+
+    public int PhysicalReplacementCallCount { get; private set; }
+
+    public NavigationAgentProfile LastPhysicalReplacementProfile { get; private set; }
+
+    public Vector3d LastPhysicalReplacementRoot { get; private set; }
 
     public TestNavigator() { }
 
@@ -80,5 +94,29 @@ internal sealed class TestNavigator : Navigator
 
         _position.Y = surfaceLevel + NavigationProfile.Shape.RootToFootOffsetY;
         SetGroundContact(surfaceLevel, Vector3d.Up);
+    }
+
+    protected override bool TryCommitPhysicalProfileReplacement(
+        NavigationAgentProfile replacement,
+        Vector3d replacementRootPosition,
+        Action publishNavigationState,
+        out Exception? notificationException)
+    {
+        if (UseBasePhysicalReplacement)
+        {
+            return base.TryCommitPhysicalProfileReplacement(
+                replacement,
+                replacementRootPosition,
+                publishNavigationState,
+                out notificationException);
+        }
+
+        notificationException = PhysicalReplacementNotificationException;
+        PhysicalReplacementCallCount++;
+        LastPhysicalReplacementProfile = replacement;
+        LastPhysicalReplacementRoot = replacementRootPosition;
+        if (AcceptPhysicalReplacement)
+            publishNavigationState();
+        return AcceptPhysicalReplacement;
     }
 }

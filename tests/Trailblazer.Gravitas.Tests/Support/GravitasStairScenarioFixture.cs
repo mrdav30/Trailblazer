@@ -24,7 +24,8 @@ internal sealed class GravitasStairScenarioFixture : GravitasNavigatorScenarioFi
         ConfigureStairs();
     }
 
-    protected override LSCollider CreateActorCollider() => new LSCylinderCollider
+    protected override LSCollider CreateActorCollider(
+        NavigationAgentProfile profile) => new LSCylinderCollider
     {
         Radius = Profile.Shape.Radius,
         Size = new Vector3d(

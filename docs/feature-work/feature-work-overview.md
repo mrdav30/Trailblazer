@@ -22,21 +22,22 @@ instead of burying it in notes.
 ## Active Coordination
 
 - [Navigation Hardening](navigationHardeningPlan.md)
-  - Planned execution order: combine vertical traversal acceptance scenarios
-    with movement-quality playtesting through a Gravitas-backed 3D host; add safe
-    runtime navigation-profile replacement; then measure cold public guide
-    acquisition. Includes posture cycles and fall/flight/controlled-descent
-    sequences. The fixed-profile Gravitas host is ready; the hardening scenarios
-    themselves have not started.
+  - Phases 1 and 2 are complete with reviewed vertical traversal, airborne
+    transitions, deterministic accepted-motion evidence, and safe runtime
+    navigation-profile replacement through the Gravitas-backed 3D host. Phase 3
+    will measure cold public guide acquisition. Engine-host visual playtesting
+    is deferred to future engine-specific adapter/package work.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
     world frame and lifetime order, first bounded wall fixture, and GridForge-
     Unity observation host. Gravitas's working tree now declares and passes its
     full matrix against the aligned 7.1.0/9.1.0 stack without a new physics API.
-    Phase 1 now supplies the independently owned fixed-profile adapter and 19
-    real-body behavior tests without a core-to-core dependency. Its local-source
-    standard/Lean matrix and exact adapter coverage are green, and independent
-    architecture and test-quality reviews closed with no remaining findings.
+    Phase 1 supplies the independently owned fixed-profile adapter without a
+    core-to-core dependency. The profile/collider replacement slice of
+    integration Phase 2 is now complete, including stand/crouch/compact cycles,
+    blocked growth, platform-attached mutation, restore/replay, and a post-commit
+    notification boundary that prevents cross-library split state. Integration
+    Phase 2 remains in progress for its broader movement scenarios.
     `TRB-Issue-102` provides the explicit serialized support-normal contract used
     by the adapter.
     `TRB-Issue-103` is resolved in the coordinated working trees through
@@ -79,13 +80,12 @@ scheduler implementation plan is currently active.
 
 The plans share evidence, not competing implementations:
 
-1. Use the completed Gravitas adapter's fixed-profile accepted-motion and
-   support boundary for hardening Phase 1.
-2. Complete hardening Phase 1 with that host, then Phase 2 profile replacement
-   and the adapter's corresponding collider-change tests. Run hardening Phase 3
-   measurements; scheduler implementation remains separately evidence-gated.
+1. Run hardening Phase 3 measurements; scheduler implementation remains
+   separately evidence-gated.
+2. Complete the remaining shared movement scenarios in Gravitas integration
+   Phase 2 on the reviewed replacement boundary.
 3. Close the 3D adapter's package, documentation, and joint-verification gates.
-   Reference the same scenario/playtest evidence from both owning plans.
+   Reference the same deterministic scenario evidence from both owning plans.
 4. Execute the dedicated 2D plan after its contract review, using the reviewed
    motion and replacement boundaries. Add the planar adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.
@@ -93,9 +93,10 @@ The plans share evidence, not competing implementations:
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.
 
-Runtime implementation has begun with the fixed-profile Gravitas adapter; no
-hardening or first-class 2D phase is complete merely because that host now
-exists. Drafting or reviewing a plan does not mark runtime checkboxes complete.
+Runtime implementation includes the fixed-profile Gravitas adapter and complete
+hardening Phases 1 and 2. The broader Gravitas integration Phase 2 and first-
+class 2D work remain incomplete; drafting or reviewing a plan does not mark
+runtime checkboxes complete.
 The cross-stack rules apply throughout:
 
 1. Keep the benchmark backlog and issue tracker as intake buckets; promote new

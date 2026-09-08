@@ -14,10 +14,12 @@
 	<!-- Git Versioning -->
 	<PropertyGroup>
 		<SemVer Condition="'$(GitVersion_FullSemVer)' != ''">$(GitVersion_FullSemVer)</SemVer>
+		<SemVer Condition="'$(UseLocalLsfStack)' == 'true' And '$(SemVer)' == ''">2.0.0</SemVer>
 		<SemVer Condition="'$(SemVer)' == ''">0.0.0</SemVer>
 		<InfoVer Condition="'$(GitVersion_InformationalVersion)' != ''">$(GitVersion_InformationalVersion)</InfoVer>
 		<InfoVer Condition="'$(InfoVer)' == ''">$(SemVer)</InfoVer>
 		<AssemblySemVer Condition="'$(GitVersion_AssemblySemVer)' != ''">$(GitVersion_AssemblySemVer)</AssemblySemVer>
+		<AssemblySemVer Condition="'$(UseLocalLsfStack)' == 'true' And '$(AssemblySemVer)' == ''">2.0.0.0</AssemblySemVer>
 		<AssemblySemVer Condition="'$(AssemblySemVer)' == ''">$(SemVer).0</AssemblySemVer>
 		<AssemblySemFileVer Condition="'$(GitVersion_AssemblySemFileVer)' != ''">$(GitVersion_AssemblySemFileVer)</AssemblySemFileVer>
 		<AssemblySemFileVer Condition="'$(AssemblySemFileVer)' == ''">$(AssemblySemVer)</AssemblySemFileVer>

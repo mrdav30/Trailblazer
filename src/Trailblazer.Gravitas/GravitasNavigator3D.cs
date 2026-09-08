@@ -11,6 +11,7 @@ using Gravitas;
 using Gravitas.Colliders;
 using Gravitas.Support;
 using SwiftCollections.Diagnostics;
+using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
 
@@ -179,6 +180,44 @@ public sealed class GravitasNavigator3D : Navigator
         SetAirborne(
             surfaceLevel: FootPosition.Y,
             updateMotorState: false);
+    }
+
+    /// <inheritdoc/>
+    protected override bool TryCommitPhysicalProfileReplacement(
+        NavigationAgentProfile replacement,
+        Vector3d replacementRootPosition,
+        Action publishNavigationState,
+        out Exception? notificationException)
+    {
+        notificationException = null;
+        KinematicBodyShape shape = replacement.Shape;
+        bool hasUnitScale = _body.PositionTransform.TryGetLossyScale(
+                out Vector3d physicalScale)
+            & physicalScale == Vector3d.One;
+        if (!hasUnitScale
+            || _body.Collider is not LSCapsuleCollider
+            || shape.Radius <= Fixed64.Zero
+            || Fixed64.CompareProducts(
+                shape.Height,
+                Fixed64.One,
+                shape.Radius,
+                Fixed64.Two) < 0)
+        {
+            return false;
+        }
+
+        Fixed64 localOffsetY = shape.Height * Fixed64.Half
+            - shape.RootToFootOffsetY;
+        ValidateBody();
+        ColliderReconfigurationStatus status = _body.TryReconfigureCollider(
+            ColliderShapeDefinition.Capsule(shape.Radius, shape.Height),
+            Vector3d.Up * localOffsetY,
+            replacementRootPosition,
+            out _,
+            out notificationException,
+            publishSynchronizedState: publishNavigationState);
+        return status is ColliderReconfigurationStatus.Applied
+            or ColliderReconfigurationStatus.Unchanged;
     }
 
     /// <inheritdoc/>

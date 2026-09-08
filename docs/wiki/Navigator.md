@@ -20,11 +20,78 @@ navigator.Initialize(new TrekCondition
 
 The profile's `KinematicBodyShape` is authoritative. `FootPosition` is derived
 from root position and `RootToFootOffsetY`; guided endpoints use foot space.
-The configured profile cannot be replaced after setup, and the radius used by
-Navigator-owned turning cannot be independently mutated.
+The profile remains an immutable value. Replace the complete profile through
+the Navigator rather than mutating body size, turning radius, or traversal
+capabilities independently.
 
 `Reset()` releases guidance, pending actions, movement-group ownership, and
 occupancy before the object can be rebound/reinitialized.
+
+## Runtime Profile Replacement
+
+Use `TryReplaceNavigationProfile(...)` for an atomic posture or capability
+change such as standing to crouching, compact-ball presentation, or losing
+flight. Call it between fixed frames: after committed motion and before the
+next `Simulate()`. This fragment assumes `crouchingProfile` is a complete valid
+profile and the host has not opened the next frame:
+
+~~~csharp
+NavigationProfileReplacementStatus status =
+    navigator.TryReplaceNavigationProfile(crouchingProfile);
+
+switch (status)
+{
+    case NavigationProfileReplacementStatus.Applied:
+    case NavigationProfileReplacementStatus.Unchanged:
+        break;
+    default:
+        // Keep the previous posture and retry only after the reported
+        // lifecycle, navigation, guidance, or physical condition changes.
+        break;
+}
+~~~
+
+An accepted change preserves the exact foot point, stable Navigator identity,
+current physical medium, controller instances, unrelated locomotion state, and
+durable destination. Trailblazer updates the root offset, previous root,
+turning radius, occupancy, movement-group radius, affected capability state,
+and active query profile as one operation. Existing A* or Flow guidance is
+released and reacquired from the accepted foot and current medium on demand.
+
+Expected rejection is a status, not an exception, and leaves the live profile,
+position, occupancy, and guidance unchanged. In particular:
+
+- `UnsafeLifecycle` means the Navigator is inactive, a traversal frame is open,
+  or accepted motion still needs to be committed;
+- `ActionInProgress` preserves the pending semantic action for the host to
+  complete or cancel through the ordinary lifecycle;
+- `NavigationClearanceRejected` means the current graph cell or GridForge
+  occupancy cannot accept the replacement envelope;
+- `GuidanceIncompatible` means the durable destination intent cannot be
+  represented with the replacement profile;
+- `PhysicalFitRejected` means the host-owned collision shape cannot be changed
+  at the foot-preserving candidate root.
+
+`CommittedCellChanged` and capability-loss callbacks run only after the
+replacement is fully committed. Host callback exceptions propagate; they do
+not roll back the profile or physical body, and callers must not interpret one
+as a rejected change or retry the same replacement. Keep simulation callbacks
+non-throwing. Trailblazer still attempts the climb-stop notification if a
+committed-cell callback fails. A physical adapter must likewise distinguish an
+accepted physical transaction from a later notification failure;
+`GravitasNavigator3D` publishes the Navigator profile, root, occupancy,
+guidance, and capability state after Gravitas commits the physical state but
+before Gravitas invokes separation callbacks. It then rethrows any returned
+post-commit notification failure with its original stack.
+
+The engine-agnostic base Navigator has no collision body, so a derived physical
+adapter must implement the protected synchronous replacement hook. It must
+either commit the complete host shape and candidate root or reject without
+mutation. `GravitasNavigator3D` supports this transaction for an existing
+capsule body with exact unit world scale; it rejects unsupported collider
+families, scaled owners, unrepresentable scale, and positive overlap while
+allowing exact support contact. A presentation change does not add
+rolling physics, animation, or another navigation mode.
 
 ## Guided Travel
 

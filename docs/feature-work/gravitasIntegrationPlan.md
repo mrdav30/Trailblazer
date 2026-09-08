@@ -10,8 +10,10 @@
 
 **Status:** Phase 0 and the Phase 1 fixed-profile adapter proof are complete in
 the coordinated working trees, including independent architecture and test-
-quality review. Release and released-package validation are intentionally
-deferred until the active feature-work overview is complete. Trailblazer resolves
+quality review. Phase 2 is in progress: its coordinated collider/profile
+replacement slice is complete, while the broader joint movement evidence
+remains. Release and released-package validation are intentionally deferred
+until the active feature-work overview is complete. Trailblazer resolves
 [`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation),
 and solution-wide local-source validation is green after resolving
 [`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
@@ -166,7 +168,7 @@ authoritative frame, not a locally recoverable movement result.
 | --- | --- | --- | --- |
 | 0 | Dependency, ownership, and package contract | Complete | Compatible target stack, exact frame order, file/API map, viewer choice, and prerequisites recorded |
 | 1 | Fixed-profile 3D adapter proof | Complete | Wall-clipped pose, contacts, velocity, occupancy, and guide state agree |
-| 2 | Shared hardening and shape-change evidence | Not started | Joint scenarios, observable movement, mutation, replay, and teardown verified |
+| 2 | Shared hardening and shape-change evidence | In progress | Collider/profile mutation and its restore/replay boundary are verified; broader joint movement scenarios remain |
 | 3 | Package and documentation closeout | Not started | Runnable consumer, full matrix, coverage, and independent review |
 
 ## Phase 0 - Integration Preflight
@@ -191,10 +193,10 @@ authoritative frame, not a locally recoverable movement result.
   paths, prepare/resolve/commit operations, ownership, lifecycle failure results,
   timestep, collision settings, and bounded wall-test expectations. Start from
   the existing subclass seam; require evidence before adding a new core API.
-- [x] **Choose the observation host.** Reuse an available playground or select a
-  minimal viewer for the same deterministic scenarios. Record its location,
-  controls, replay input format, and artifact destination. Rendering is optional
-  for early joint tests but required for the movement-quality closeout.
+- [x] **Disposition visual observation.** Keep the headless Gravitas fixture as
+  the deterministic acceptance host. Defer a visual playground and its controls,
+  replay format, and artifacts until engine-specific adapter packages have a
+  separately owned integration scope; rendering does not gate this plan.
 
 ### Phase 0 decisions
 
@@ -398,13 +400,14 @@ remains identity. The second idle simulation consumes that buffer:
 rotation differs from identity. These public states prove the signal without
 method counters or conflating it with guided turning.
 
-#### Observation host and evidence format
+#### Deferred observation host and evidence format
 
-Use the local `F:\gamedevrepos\GridForge-Unity` Unity 6000.5 workspace as the
-visual observation host because it already presents a GridForge world and trace
-visualization. Do not modify its published GridForge package sample. After
-separate authorization and compatible Unity-facing packages exist, derive a
-viewer under `Assets/Trailblazer.Gravitas.Playground/` with scenario selection,
+The engine-agnostic integration uses its headless fixture as authoritative
+evidence. Once compatible engine-specific Trailblazer and Gravitas adapter
+packages exist, a separately approved integration scope may reuse the local
+`F:\gamedevrepos\GridForge-Unity` Unity 6000.5 workspace for visual observation.
+Do not modify its published GridForge package sample. A future viewer could live
+under `Assets/Trailblazer.Gravitas.Playground/` with scenario selection,
 single-step, play/pause, and reset controls.
 
 The headless fixture remains authoritative. It and the viewer consume the same
@@ -453,11 +456,12 @@ input capture never become a second collision or navigation implementation.
   rotating platforms. Establish the intended stop/slide/step behavior before
   judging results. Conditional CCD clipping alone is not proof of a finished
   character controller; inspect low-speed as well as high-speed motion.
-- [ ] **Capture observable movement quality.** Record host observations and
-  deterministic inputs for the shared scenarios. Track sticking, oscillation,
-  sliding, platform drift, and unexpected replanning separately from visual
-  smoothing. Retain one evidence record referenced by both plans.
-- [ ] **Coordinate collider and profile replacement.** After hardening Phase 2
+- [ ] **Capture deterministic movement-quality evidence.** Record accepted-
+  motion traces and deterministic inputs for the shared scenarios. Track
+  sticking, oscillation, sliding, platform drift, and unexpected replanning.
+  Retain one evidence record referenced by both plans. Defer visual/game-engine
+  playtesting until an engine-specific adapter package exists.
+- [x] **Coordinate collider and profile replacement.** After hardening Phase 2
   defines the runtime operation, add stand/crouch/compact cycles, blocked growth,
   and platform-attached mutation. Validate before changing either side; rejection
   must preserve both live shapes, foot anchor, destination, and bindings. Include
@@ -742,3 +746,37 @@ dotnet build src/Trailblazer.Gravitas/Trailblazer.Gravitas.csproj --configuratio
 dotnet build tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ReleaseLean --property:UseLocalLsfStack=true --no-restore --maxcpucount:1 --nodeReuse:false
 dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ReleaseLean --property:UseLocalLsfStack=true --no-build --no-restore --results-directory artifacts/phase1-gravitas-releaselean-reviewed
 ```
+
+### 2026-09-08 - Coordinated shape-change slice completed and reviewed
+
+- Added one transactional `Navigator.TryReplaceNavigationProfile(...)` contract
+  and one same-family `SolidBody.TryReconfigureCollider(...)` contract. The
+  adapter preserves the foot anchor and validates navigation plus physical fit
+  before either live shape changes.
+- Verified stand/crouch/compact cycles, blocked growth with retry, translating
+  and rotating platforms, clearance/occupancy, guide intent, capability loss and
+  recovery, deterministic repeat, JSON/MemoryPack population, and body-first
+  cross-library restore.
+- Review regressions found that a Gravitas separation callback could first
+  interrupt, then observe, a cross-library half-commit. Gravitas now invokes the
+  adapter's synchronized-state publisher after physical publication but before
+  separation callbacks, and returns publisher or callback failures separately
+  from its `Applied` result. Trailblazer completes its dependent commit before
+  any physical callback observes the state and rethrows preserved failures only
+  after all notifications finish. `GRV-Issue-070` and `TRB-Issue-110` record the
+  owning sides of that boundary.
+- Focused suites pass 40 core Navigator, 13 adapter, and 15 Gravitas collider-
+  reconfiguration tests. Trailblazer `Release` passes 2,395 core plus 65 adapter
+  tests; `ReleaseLean` passes 2,333 core plus 65 adapter tests. Both report exact
+  30,628/30,628 lines, 11,977/11,977 branches, and 2,982/2,982 methods.
+- Gravitas `Release` passes 3,950 tests with exact 44,173/44,173 lines,
+  12,918/12,918 branches, and 4,530/4,530 methods. `ReleaseLean` passes 3,895
+  tests with exact 44,171/44,171 lines, 12,918/12,918 branches, and 4,529/4,529
+  methods. All measured solution builds have zero warnings and errors.
+- This closes only the profile/collider replacement checkbox above. The shared
+  movement worlds, controller-quality evidence, complete restore/teardown gate,
+  and joint-finding closeout remain integration Phase 2 work.
+- `TRB-Issue-112` also removed redundant in-repository version globals that let
+  parallel local-stack solution builds race duplicate Trailblazer/adapter output
+  nodes. Fresh no-incremental `Release` and `ReleaseLean` builds and their full
+  test runs are warning-free; no serialized-build workaround remains necessary.

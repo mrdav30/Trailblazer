@@ -163,12 +163,15 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
     internal GravitasNavigatorActor CreateActor(
         Vector3d? position = null,
         FixedQuaternion? rotation = null,
-        Func<LSCollider, int>? carrierIdResolver = null)
+        Func<LSCollider, int>? carrierIdResolver = null,
+        NavigationAgentProfile? profile = null)
     {
-        Vector3d resolvedPosition = position ?? StartRoot;
+        NavigationAgentProfile resolvedProfile = profile ?? Profile;
+        Vector3d resolvedPosition = position
+            ?? StartFoot + Vector3d.Up * resolvedProfile.Shape.RootToFootOffsetY;
         FixedQuaternion resolvedRotation = rotation ?? FixedQuaternion.FromDirection(Vector3d.Right);
         var transform = new FixedTransform(resolvedPosition, resolvedRotation, Vector3d.One);
-        LSCollider collider = CreateActorCollider();
+        LSCollider collider = CreateActorCollider(resolvedProfile);
         collider.Layer = new PhysicsLayer(2);
         collider.IgnoredCollisionLayers = _actorIgnoredCollisionLayers;
         collider.Material = PhysicsMaterial.Frictionless;
@@ -188,7 +191,11 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
             Fixed64.FromFraction(1, 8),
             Fixed64.Quarter,
             carrierIdResolver);
-        ActivateNavigator(navigator, resolvedPosition, resolvedRotation);
+        ActivateNavigator(
+            navigator,
+            resolvedPosition,
+            resolvedRotation,
+            resolvedProfile);
         navigator.Motor!.Handler.Forces.GravityForce = Fixed64.Zero;
         return new GravitasNavigatorActor(navigator, body);
     }
@@ -317,9 +324,10 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
     protected void AddFixtureCollider(LSCuboidCollider collider) =>
         _fixtureColliders.Add(collider);
 
-    protected virtual LSCollider CreateActorCollider() => new LSSphereCollider
+    protected virtual LSCollider CreateActorCollider(
+        NavigationAgentProfile profile) => new LSSphereCollider
     {
-        Radius = Profile.Shape.Radius
+        Radius = profile.Shape.Radius
     };
 
     protected virtual void PrepareHostMotion(GravitasNavigatorActor actor)
@@ -336,7 +344,7 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
             actor.Navigator,
             StartRoot,
             FixedQuaternion.FromDirection(Vector3d.Right),
-            condition);
+            condition: condition);
         actor.Navigator.Motor!.Handler.Forces.GravityForce = Fixed64.Zero;
     }
 
@@ -422,13 +430,15 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
         GravitasNavigator3D navigator,
         Vector3d position,
         FixedQuaternion rotation,
+        NavigationAgentProfile? profile = null,
         TrekCondition? condition = null)
     {
-        navigator.Setup(Trailblazer, position, Profile, rotation);
+        NavigationAgentProfile resolvedProfile = profile ?? Profile;
+        navigator.Setup(Trailblazer, position, resolvedProfile, rotation);
         navigator.Initialize(condition ?? new TrekCondition
         {
             Medium = TraversalMedium.Solid,
-            SurfaceLevel = position.Y - Profile.Shape.RootToFootOffsetY,
+            SurfaceLevel = position.Y - resolvedProfile.Shape.RootToFootOffsetY,
             GroundState = new GroundCondition
             {
                 SurfaceNormal = Vector3d.Up,

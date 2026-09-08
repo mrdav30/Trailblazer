@@ -14,7 +14,7 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Trailblazer\Trailblazer.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=2.0.0;AssemblySemVer=2.0.0.0" />
+			AdditionalProperties="Configuration=$(Configuration)" />
 		<ProjectReference Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=1.1.0;AssemblySemVer=1.1.0.0" />
 	</ItemGroup>

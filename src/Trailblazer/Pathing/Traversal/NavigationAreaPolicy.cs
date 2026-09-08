@@ -61,6 +61,9 @@ public sealed class NavigationAreaPolicy
         return false;
     }
 
+    internal NavigationAreaRule GetRequiredRule(NavigationAreaId area) =>
+        _rules[area.Value];
+
     internal long RetainedBytes => _retainedBytes;
 
     internal bool ContentEquals(NavigationAreaPolicy other)

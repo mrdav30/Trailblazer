@@ -77,6 +77,28 @@ internal static class NavigatorOccupancyTracker
             TrailblazerLogger.Channel.Warn($"Navigator {navigator.GlobalId} failed to register occupancy in voxel {newVoxel!.Index} of grid {newGrid} at position {newPosition}.");
     }
 
+    internal static bool CanProjectRoot(
+        GridWorld world,
+        Vector3d oldPosition,
+        Vector3d newPosition)
+    {
+        bool oldVoxelFound = TryResolveVoxel(
+            world,
+            oldPosition,
+            out VoxelGrid? oldGrid,
+            out Voxel? oldVoxel);
+        bool newVoxelFound = TryResolveVoxel(
+            world,
+            newPosition,
+            out VoxelGrid? newGrid,
+            out Voxel? newVoxel);
+
+        if (oldVoxelFound && newVoxelFound && oldVoxel == newVoxel)
+            return true;
+
+        return !newVoxelFound || newVoxel!.HasVacancy;
+    }
+
     internal static bool TryResolveVoxel(
         GridWorld world,
         Vector3d position,

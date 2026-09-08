@@ -140,6 +140,10 @@ public partial class NavTurning : IRecordable
         _isColliding = false;
     }
 
+    /// <summary>Updates body-radius thresholds without resetting active turn state.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void UpdateRadius(Fixed64 radius) => _radius = radius;
+
     /// <summary>
     /// Advances authoritative rotation toward <see cref="TargetRotation"/>, handling buffered and collision turns.
     /// </summary>

@@ -726,3 +726,17 @@ task. Do not substitute old coverage totals for fresh verification.
 - Recommended next task: approve focused profiling of `TRB-Benchmark-001`, then
   continue the remaining Gravitas integration Phase 2 scope. No follow-up
   implementation, staging, commit, push or release is performed by this phase.
+
+### Post-Phase 3 Acquisition Investigation - 2026-09-08
+
+- The requested follow-up profiling is complete; source attribution, limitations
+  and retained evidence are in the
+  [acquisition investigation](navigationAcquisitionInvestigation.md).
+- Cold Flow/A* share expensive surface geometry, including confirmed
+  assertion-only calculations left active in Release (`TRB-Issue-115`). Large
+  warm Flow requests are dominated by six dependency-stamp validation passes.
+- Recommended next: remove the unused Release diagnostic work and remeasure,
+  then evaluate portal equivalence and request-scoped dependency-proof reuse
+  separately. `TRB-Benchmark-001` stays open; no performance fix or scheduler
+  has been implemented. `TRB-Issue-114` does not confound the separate acquisition
+  profiles, but its historical allocator remains unattributed.

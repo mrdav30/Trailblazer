@@ -26,8 +26,10 @@ instead of burying it in notes.
     transitions, deterministic accepted-motion evidence, and safe runtime
     navigation-profile replacement through the Gravitas-backed 3D host. Phase 3
     is complete: the [acquisition execution record](navigationAcquisitionMeasurements.md)
-    rejects the provisional large-field in-frame workload and recommends focused
-    acquisition profiling before scheduler design (`TRB-Benchmark-001`). Local
+    rejects the provisional large-field in-frame workload. The follow-up
+    [acquisition investigation](navigationAcquisitionInvestigation.md) identifies
+    unused Release geometry (`TRB-Issue-115`) and repeated warm dependency checks
+    (`TRB-Benchmark-001`) as focused optimization targets before scheduler design. Local
     closeout evidence is recorded; final CI/released-package gates remain pending.
     Engine-host visual playtesting
     is deferred to future engine-specific adapter/package work.
@@ -77,8 +79,9 @@ instead of burying it in notes.
 Frame-spread guide scheduling is informed by the completed Phase 3 of the
 [Navigation Hardening Plan](navigationHardeningPlan.md#phase-3---cold-public-guide-acquisition-measurement).
 Large cold requests do not fit the provisional frame allowance, and four warm
-100K requests also exceed its 2 ms navigation share. Profile acquisition cost
-first; scheduler implementation still requires a justified follow-up scope and
+100K requests also exceed its 2 ms navigation share. Acquisition profiling now
+identifies focused geometry/validation work to address and remeasure first;
+scheduler implementation still requires a justified follow-up scope and
 explicit approval. No separate deferred
 scheduler implementation plan is currently active.
 
@@ -86,9 +89,11 @@ scheduler implementation plan is currently active.
 
 The plans share evidence, not competing implementations:
 
-1. Recommended next: investigate `TRB-Benchmark-001` with focused acquisition
-   profiling against the retained Phase 3 workloads. Optimization and scheduler
-   implementation are follow-up scope, not automatically started by measurement.
+1. Recommended next: fix the confirmed assertion-only Release calculations
+   (`TRB-Issue-115`) and remeasure the retained Phase 3 workloads. Review portal
+   equivalence and exact-graph dependency-proof reuse as separate follow-ups to
+   `TRB-Benchmark-001`. Optimization and scheduler implementation have not been
+   started by this investigation.
 2. Complete the remaining shared movement scenarios in Gravitas integration
    Phase 2 on the reviewed replacement boundary.
 3. Close the 3D adapter's package, documentation, and joint-verification gates.

@@ -65,7 +65,9 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean
 ### TRB-Benchmark-001 - Guide acquisition exceeds the provisional navigation allowance
 
 - **Discovered:** 2026-09-08
-- **Status:** Reproduced; focused profiling recommended, implementation not started.
+- **Status:** Investigated; cold geometry and warm dependency-validation costs
+  attributed. Confirmed assertion-only Release work is `TRB-Issue-115`;
+  implementation and performance remeasurement have not started.
 - **Evidence:** The Phase 3 out-of-process `SlowAcquisition` protocol measures
   median public Flow acquisition of 5.51 seconds at 10K nodes and 55.42 seconds
   at 100K nodes; public A* medians are 2.14 and 21.92 seconds. Four distinct cold
@@ -80,12 +82,21 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean
 - **Reproduction:** Run the cold guide/frame and canonical-control commands in the
   [benchmark guide](../../tests/Trailblazer.Benchmarks/README.md#cold-public-acquisition-and-containing-frames)
   against the recorded local source stack without competing builds or load.
-- **Next isolation step:** Profile admission, search/evaluation, allocation and
-  publication using the recorded matched internal/public cold controls; also
-  isolate large warm acquisition/validation cost. A scheduler
-  can bound the work admitted in one frame but does not reduce total search cost.
-  Do not classify this as a confirmed algorithmic defect, weaken traversal
-  validation, or implement background completion ordering from timing alone.
+- **Investigation:** The [request-root profile and source audit](navigationAcquisitionInvestigation.md)
+  attributes about 91-92% of sampled cold Flow/A* time to the simple surface-route
+  path, including unused Release diagnostic geometry. Warm 100K acquisition
+  spends about 95-97% in dependency validation; six full passes visit 9,378 page
+  entries per successful acquisition in this workload. These overlapping sampled
+  shares are attribution, not predicted speedups. `TRB-Issue-114` remains an
+  unattributed covered-test observation and does not confound these separate
+  acquisition traces.
+- **Next step:** Fix the narrow confirmed diagnostic-work defect first and
+  remeasure matched workloads. Evaluate native-portal equivalence and
+  request-scoped exact-graph dependency-proof reuse separately, preserving
+  geometry, publication, raw-world and lease-ownership checks. A scheduler can
+  bound work admitted in one frame but does not reduce total search cost. Do not
+  weaken traversal validation or add background completion ordering from timing
+  alone.
 
 ## Experimental Signals
 

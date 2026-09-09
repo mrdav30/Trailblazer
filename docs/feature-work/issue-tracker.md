@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-115`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-116`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -21,6 +21,29 @@
 
 ## Active Issues
 
+### TRB-Issue-115 - Release executes assertion-only surface geometry calculations
+
+- **Discovered:** 2026-09-08
+- **Area:** `NavigationSurfaceEdgeRouteWork.AdvanceSimple` and
+  `TraversalEvaluator.EvaluateNative`
+- **Status:** Confirmed runtime inefficiency; implementation not started.
+- **Evidence:** Investigation of `TRB-Benchmark-001` found two unconditional
+  `IsNavigationBodySegmentValid` calls whose results feed only `Debug.Assert`.
+  Release removes the assertion but still executes the geometry calculations;
+  request-root profiles confirm this work during cold Flow and A*. Native
+  retained-portal translation has the same assertion-only result pattern.
+  Source/history attribution and profiler limitations are recorded in the
+  [acquisition investigation](navigationAcquisitionInvestigation.md).
+- **Impact:** Cold acquisition spends time computing diagnostic results that
+  do not affect current Release passability, cost, route points or work counts.
+- **Expected:** Debug diagnostics should not leave expensive prerequisite
+  calculations running in Release when their results have no runtime consumer.
+- **Next step:** Make the entire assertion-only calculations debug-only,
+  preserving the checks in Debug. Keep `AdvanceExplicit` segment rejection and
+  every calculation feeding actual route evidence. Verify unchanged traversal,
+  cost and accounting behavior in both package configurations, then remeasure
+  matched cold workloads before considering portal reuse or scheduler work.
+
 ### TRB-Issue-114 - Warm Flow attach allocation guard used a shorter warmup than its measured window
 
 - **Discovered:** 2026-09-08
@@ -38,6 +61,17 @@
   allocation, successful sampling and drained leases remain mandatory. The
   separate first-attach allocation guard remains unchanged. This is a consistent
   steady-state setup mitigation, not a claim that a runtime allocator was fixed.
+- **Investigation:** The [acquisition cost audit](navigationAcquisitionInvestigation.md#issue-114-separate-allocation-guard-investigation)
+  separates this covered acquire/attach/sample/dispose test from uninstrumented
+  acquisition-only timing. Source inspection identified pool exhaustion and
+  cache republishing as concrete allocation candidates, but attributed none to
+  the historical 616 bytes. Preserve the exact guard; if it fails again, record
+  per-phase allocation deltas in preallocated storage before changing warmup or
+  production code. This issue does not block `TRB-Benchmark-001` attribution.
+- **Fresh verification:** After profiling, three unchanged full covered core
+  Release runs passed 2,395/2,395 each; one ReleaseLean run passed 2,333/2,333.
+  The exact guard passed in every run. No allocator fix or further test-warmup
+  change was made; intermittent root cause remains open.
 
 ## Resolved Issues
 

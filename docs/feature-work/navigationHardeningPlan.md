@@ -7,8 +7,10 @@
 
 **Created:** 2026-09-03
 
-**Status:** In progress. Phases 1 and 2 are complete; Phase 3 cold public guide
-acquisition measurement is next.
+**Status:** Phases 1-3 are complete. Final CI/released-package closeout remains
+pending; measured acquisition cost is an open profiling follow-up, not a scheduler
+implementation. Phase 3's budget, protocol, evidence and decision live in
+[the acquisition execution record](navigationAcquisitionMeasurements.md).
 
 **Source baseline:** `cb0d744b76a377807a253f0efa1c480ba169a7e9`
 
@@ -95,8 +97,8 @@ An evidence-backed decision to retain synchronous acquisition is a valid outcome
 | --- | --- | --- | --- |
 | 1 | Vertical traversal and movement-quality evidence | Complete | Headless acceptance cases and deterministic accepted-motion evidence recorded; confirmed defects resolved or explicitly dispositioned |
 | 2 | Runtime navigation-profile replacement | Complete | Atomic replacement, rejection behavior, guidance lifecycle, and serialization verified |
-| 3 | Cold public guide acquisition measurements | Not started; next | Reproducible public-call measurements and an explicit scheduling/no-change decision |
-| Closeout | Reviewed implementation and documentation | Not started | Required matrix, exact coverage, relevant benchmarks, and independent review complete |
+| 3 | Cold public guide acquisition measurements | Complete | Repeated cold/warm and containing-frame evidence; profile acquisition cost before scheduler design (`TRB-Benchmark-001`) |
+| Closeout | Reviewed implementation and documentation | Local verification; CI/package gates pending | Required matrix, exact coverage, relevant benchmarks, and independent review complete |
 
 Check a task only after its observable result is verified. Update the dashboard
 and [Execution record](#execution-record) together. A completed plan-writing task
@@ -451,36 +453,38 @@ cold public-service cases alongside the existing internal cold and public warm
 cases; do not replace the warm-cache controls or time world construction as if
 it were acquisition.
 
-- [ ] **Define the host acceptance budget before interpreting results.** Record
+- [x] **Define the host acceptance budget before interpreting results.** Record
   target runtime/hardware, fixed timestep, navigation's allotted portion of a
   frame, expected request burst, and representative geometry. Frame-time
   thresholds are measurement criteria, not wall-clock-driven simulation rules.
-- [ ] **Measure cold public Flow requests at 10K and 100K settled nodes.** Use
+- [x] **Measure cold public Flow requests at 10K and 100K settled nodes.** Use
   the public request API, prepublished worlds, finite sufficient capacities,
   and a verified cache-miss setup for each measured operation. Establish small
   controls and representative portal/transition cases so a straight corridor
   alone does not stand in for all workloads.
-- [ ] **Measure the containing fixed-frame workload.** Include existing-agent
+- [x] **Measure the containing fixed-frame workload.** Include existing-agent
   simulation and realistic request bursts. Separate cold payload construction,
   warm reuse, public acquisition overhead, and any setup/pool warmup costs.
   Add a public A* control where relevant; it shares the synchronous boundary.
-- [ ] **Archive reproducible evidence.** Record exact commit/configuration,
+- [x] **Archive reproducible evidence.** Record exact commit/configuration,
   package versions, hardware/runtime, commands, workload sizes, cache state,
   latency distribution, whole-frame cost, work counters, allocations, retained
-  bytes, and terminal statuses. Use repeated canonical runs for decisions;
-  short runs are smoke checks only. Keep generated reports out of tracked
+  bytes, and terminal statuses. Use repeated canonical runs for decisions, with
+  the reviewed three-launch `SlowAcquisition` amendment for the multi-second
+  cold rows; its nine samples support rejection, not a reliable P99 estimate.
+  Short smoke runs are not decision evidence. Keep generated reports out of tracked
   source and reference their retained artifact location from the execution record.
-- [ ] **Write the acquisition decision.** Compare evidence against the stated
+- [x] **Write the acquisition decision.** Compare evidence against the stated
   frame budget. Record either why current acquisition is adequate, a focused
   defect/optimization to investigate, or a measured need for scheduled work.
   Put performance signals in the benchmark backlog with reproduction evidence.
-- [ ] **Describe follow-up constraints only if scheduling is justified.** Any
+- [x] **Describe follow-up constraints only if scheduling is justified.** Any
   later implementation needs context ownership, stable ordering, per-frame work
   slices distinct from total query limits, explicit pending/cancellation,
   bounded retained resources, and stale-proof publication. Background task
   completion order must not control lockstep results. Seek explicit approval
   for that implementation; it is not part of this phase's deliverable.
-- [ ] **Review and close Phase 3.** Independently review benchmark boundaries,
+- [x] **Review and close Phase 3.** Independently review benchmark boundaries,
   cold/warm preconditions, reproducibility, and the decision. Writing benchmark
   code alone does not complete the phase; a justified no-scheduler outcome does.
 
@@ -509,14 +513,19 @@ collect and enforce them independently for both configurations.
 
 - [ ] Full Release/ReleaseLean builds and tests pass, including both library
   targets; Windows/Linux CI evidence is recorded for the tested commit.
-- [ ] Both configurations retain exact line, branch, method, and fully-covered-
+  Local-source builds/tests pass; this combined gate remains open for CI and
+  the coordinated released-package validation after upstream releases.
+- [x] Both configurations retain exact line, branch, method, and fully-covered-
   method totals under the existing reachable-code policy.
-- [ ] Relevant deterministic replay, allocation, lifetime, and benchmark gates
+- [x] Relevant deterministic replay, allocation, lifetime, and benchmark gates
   pass; all new regression and acceptance cases verify observable behavior.
-- [ ] Changed public examples compile/run, wiki links validate, and DocFX builds
+  Benchmark correctness/lifetime checks pass; the measured provisional timing
+  target does not. Its open disposition is `TRB-Benchmark-001`, not a hidden
+  performance pass. `TRB-Issue-114` remains a mitigated allocation-test watch item.
+- [x] Changed public examples compile/run, wiki links validate, and DocFX builds
   with `--warningsAsErrors` from the Release assembly. Do not edit generated
   `docs/api/obj` output.
-- [ ] An independent final review has no unresolved release-blocking findings;
+- [x] An independent final review has no unresolved release-blocking findings;
   every discovered issue/signal has a recorded disposition.
 - [ ] Phase checklists and evidence agree. Update
   [feature-work-overview.md](feature-work-overview.md) and archive this plan
@@ -667,3 +676,53 @@ task. Do not substitute old coverage totals for fresh verification.
   errors.
 - Next task: execute Phase 3's cold public guide-acquisition measurements and
   record the evidence-based scheduler/no-change decision.
+
+### 2026-09-08 - Phase 3 measured and reviewed
+
+- Completed the measurement-only slice on `develop` at
+  `040c886972f011d15eb9b3189314224817e331d5` plus the benchmark, documentation
+  and test-warmup working-tree changes. Production runtime source and sibling
+  repositories are unchanged. The exact local-stack commits, benchmark source
+  hashes, commands, workloads, distributions and artifact fingerprints are in
+  [the acquisition execution record](navigationAcquisitionMeasurements.md).
+- Added public cold Flow/A*, matched internal Flow, small plane/ladder controls,
+  and 100-Navigator containing frames with zero, one or four acquisitions. All
+  accepted captures retain 28 rows, 84 successful child launches and 3,744 actual
+  single-operation samples. Independent review verified timing boundaries,
+  cold/warm preconditions, every distribution, allocation and cleanup evidence.
+  Final prose distinguishes the two older service controls' static cleanup
+  reporting from fresh drain checks in the new benchmarks; no teardown proof
+  is inferred from those older printed zeros.
+- The predeclared 32 Hz headless host gives navigation 2 ms at P99. Cold sizing
+  required a reviewed three-launch, one-warmup, three-actual-per-launch protocol:
+  report min/median/max, not a reliable cold P99. Canonical warm/baseline controls
+  retain three launches and 100 actual iterations per launch. Smoke and failed
+  sizing runs are excluded. Raw accepted captures are preserved in the local
+  ignored `artifacts/hardening-phase3/phase3-acquisition-evidence.zip`.
+- Public Flow medians are 5.51 seconds at 10K nodes and 55.42 seconds at 100K;
+  public A* medians are 2.14 and 21.92 seconds. Every large cold sample exceeds
+  even the entire 31.25 ms frame. Four warm 100K requests also exceed the 2 ms
+  navigation allowance in all 300 samples (sample P99 2.810 ms). This headless
+  evidence is not a game-engine SLA or proof of a specific algorithmic defect.
+- Recorded `TRB-Benchmark-001`: profile cold construction and large warm
+  acquisition/validation before selecting a scheduler API. Scheduling would
+  reduce single-frame monopolization, not the total CPU cost. Documented future
+  ownership, stable ordering, aggregate slices, cancellation, caller-intent,
+  dependency and restore/replay constraints; no scheduler implementation is
+  included or implicitly approved.
+- Resolved stale physics benchmark guidance as `TRB-Issue-113`. A full covered
+  run also exposed a 616-byte warm-attach guard failure; `TRB-Issue-114` records
+  the test-only 256-cycle warmup/measurement alignment and passing final matrices.
+  The allocator remains unattributed; no production allocator fix is claimed.
+- After all captures, fresh local-source Release/ReleaseLean solution builds
+  pass both target frameworks with zero warnings/errors. Covered Release passes
+  2,395 core plus 65 adapter tests; ReleaseLean passes 2,333 core plus 65 adapter
+  tests. Both final reports enforce exact 30,628/30,628 lines, 11,977/11,977
+  branches and 2,982/2,982 methods, all fully covered.
+- The final Release DocFX build has zero warnings/errors, wiki helper tests pass
+  4/4, the published-copy rewrite succeeds and local-link validation covers 132
+  HTML pages. No Windows/Linux CI or released-package result is claimed for this
+  working diff. The plan remains here pending those final gates, not archived.
+- Recommended next task: approve focused profiling of `TRB-Benchmark-001`, then
+  continue the remaining Gravitas integration Phase 2 scope. No follow-up
+  implementation, staging, commit, push or release is performed by this phase.

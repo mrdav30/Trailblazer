@@ -25,6 +25,19 @@ NavigationGuideStatus flowStatus = context.Guides.RequestFlowField(
 The query algorithm must match the method. On success the nullable result has a
 value and must be disposed. On failure no lease is returned.
 
+Both methods are synchronous: a cache miss completes its bounded search before
+the call returns. `NavigationWorkBudget` limits total deterministic work; it is
+not a time allowance and does not spread that work across frames. A large cold
+Flow field can therefore exceed a fixed frame even though its query budget is
+finite and the request succeeds.
+
+Measure cold acquisition and expected request bursts separately from warm lease
+reuse on your target host. Prepare expensive routes at an explicit loading or
+simulation boundary when needed; cache reuse is not guaranteed after relevant
+world changes. The public API currently has no pending request/continuation
+contract. Do not use wall-clock cutoffs or background task completion order to
+decide when a lockstep peer applies navigation results.
+
 ## A* Steps
 
 `NavigationGuideLease` exposes:

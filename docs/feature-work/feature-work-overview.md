@@ -25,7 +25,11 @@ instead of burying it in notes.
   - Phases 1 and 2 are complete with reviewed vertical traversal, airborne
     transitions, deterministic accepted-motion evidence, and safe runtime
     navigation-profile replacement through the Gravitas-backed 3D host. Phase 3
-    will measure cold public guide acquisition. Engine-host visual playtesting
+    is complete: the [acquisition execution record](navigationAcquisitionMeasurements.md)
+    rejects the provisional large-field in-frame workload and recommends focused
+    acquisition profiling before scheduler design (`TRB-Benchmark-001`). Local
+    closeout evidence is recorded; final CI/released-package gates remain pending.
+    Engine-host visual playtesting
     is deferred to future engine-specific adapter/package work.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
@@ -70,18 +74,21 @@ instead of burying it in notes.
 
 ## Deferred / Evidence-Gated
 
-Frame-spread guide scheduling is evidence-gated by Phase 3 of the
+Frame-spread guide scheduling is informed by the completed Phase 3 of the
 [Navigation Hardening Plan](navigationHardeningPlan.md#phase-3---cold-public-guide-acquisition-measurement).
-That phase delivers measurements and a decision; scheduler implementation
-requires a justified follow-up scope and explicit approval. No separate deferred
+Large cold requests do not fit the provisional frame allowance, and four warm
+100K requests also exceed its 2 ms navigation share. Profile acquisition cost
+first; scheduler implementation still requires a justified follow-up scope and
+explicit approval. No separate deferred
 scheduler implementation plan is currently active.
 
 ## Recommended Execution Order
 
 The plans share evidence, not competing implementations:
 
-1. Run hardening Phase 3 measurements; scheduler implementation remains
-   separately evidence-gated.
+1. Recommended next: investigate `TRB-Benchmark-001` with focused acquisition
+   profiling against the retained Phase 3 workloads. Optimization and scheduler
+   implementation are follow-up scope, not automatically started by measurement.
 2. Complete the remaining shared movement scenarios in Gravitas integration
    Phase 2 on the reviewed replacement boundary.
 3. Close the 3D adapter's package, documentation, and joint-verification gates.
@@ -94,7 +101,8 @@ The plans share evidence, not competing implementations:
    each layer. Do not publish an intermediate feature-work checkpoint.
 
 Runtime implementation includes the fixed-profile Gravitas adapter and complete
-hardening Phases 1 and 2. The broader Gravitas integration Phase 2 and first-
+hardening Phases 1 and 2; Phase 3 measurement and its follow-up decision are also
+complete, with no new runtime API. The broader Gravitas integration Phase 2 and first-
 class 2D work remain incomplete; drafting or reviewing a plan does not mark
 runtime checkboxes complete.
 The cross-stack rules apply throughout:

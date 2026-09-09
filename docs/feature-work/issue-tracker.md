@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-113`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-115`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -21,9 +21,38 @@
 
 ## Active Issues
 
-No active issues.
+### TRB-Issue-114 - Warm Flow attach allocation guard used a shorter warmup than its measured window
+
+- **Discovered:** 2026-09-08
+- **Area:** `NavigationFlowFieldSamplingConcurrencyTests` allocation guardrails
+- **Status:** Mitigated; fresh covered `Release` and `ReleaseLean` matrices pass.
+  The allocator remains unattributed; reopen allocation-source investigation if
+  the exact zero-byte guard fails again.
+- **Evidence:** The initial Phase 3 full covered `Release` run passed 2,394 tests
+  and failed `WarmAttachSampleDispose_ShouldAllocateZeroBytes` with 616 bytes
+  instead of zero. The unchanged test then passed alone (1/1) and with its class
+  (9/9). The measured allocator has not been attributed; no runtime allocation
+  defect or 16-cycle storage-growth threshold has been established.
+- **Resolution:** Aligned this warm test with its adjacent rebase/rejoin guards:
+  one named 256-iteration count controls both warmup and measurement. Exact zero
+  allocation, successful sampling and drained leases remain mandatory. The
+  separate first-attach allocation guard remains unchanged. This is a consistent
+  steady-state setup mitigation, not a claim that a runtime allocator was fixed.
 
 ## Resolved Issues
+
+### TRB-Issue-113 - Benchmark backlog documented a nonexistent physics workload
+
+- **Discovered:** 2026-09-08
+- **Area:** benchmark reproduction guidance
+- **Status:** Resolved; verified against the current benchmark catalog, CLI
+  selection handling and local-stack builds.
+- **Evidence:** The backlog instructed users to select
+  `continuous-collision-evidence`, which is absent from Trailblazer's benchmark
+  catalog, and recommended concave collision-shape authoring owned by Gravitas.
+- **Resolution:** Replaced the stale commands with the actual benchmark catalog
+  and public guide-service smoke selection, identified the unreleased local-stack
+  build requirement, and removed the unrelated physics recommendation.
 
 ### TRB-Issue-112 - Parallel local-stack solution builds could race identical project outputs
 

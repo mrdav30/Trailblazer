@@ -6,7 +6,7 @@ hybrid fallback, and legacy steering scenarios are intentionally absent.
 
 ## Requirements
 
-- .NET 8 SDK
+- The .NET SDK selected by the repository's `global.json`, plus the .NET 8 runtime
 - `Release` configuration
 
 ## Running
@@ -30,6 +30,8 @@ joining the remaining words with hyphens. Useful selections include:
 | --- | --- |
 | `navigation-surface-a-star` | `NavigationSurfaceAStarBenchmarks` |
 | `navigation-guide-service` | `NavigationGuideServiceBenchmarks` |
+| `navigation-cold-guide` | `NavigationColdGuideBenchmarks` |
+| `navigation-cold-frame` | `NavigationColdFrameBenchmarks` |
 | `navigation-a-star-contention` | `NavigationAStarContentionBenchmarks` |
 | `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
 | `navigation-flow-field-contention` | `NavigationFlowFieldContentionBenchmarks` |
@@ -106,6 +108,52 @@ like-for-like. An explicit CLI `--job dry` or `--job short` replaces the default
 job for bounded preflight or smoke runs.
 
 ## Benchmark design
+
+### Cold public acquisition and containing frames
+
+`NavigationColdGuideBenchmarks` compares cold public Flow acquisition, matched
+internal Flow construction, cold public A*, and warm public Flow acquisition.
+All public cases include lease disposal but **not sampling**; the existing
+`navigation-guide-service` cases remain the acquire/sample/dispose controls.
+Planes contain exactly 100, 10,000 or 100,000 settled Flow nodes. A 100-node
+ladder joins two separated landing strips with one explicit vertical action.
+The ladder case measures route construction, not host execution of that action.
+
+`NavigationColdFrameBenchmarks` measures a 32 Hz headless frame with 100 real,
+input-driven Navigators on a plane and zero, one or four public Flow requests.
+Each measured frame follows 32 untimed preparation frames. Cold bursts use
+distinct exact profile keys that preserve the integration graph; warm bursts
+reuse those same keys. There is no collision solver, existing guide-following,
+networking or rendering in this fixture. Treat it as a lower-bound host workload.
+
+World construction, publication, workspace/pool warmup, agent reset and cache
+preparation are untimed. Cold setup verifies empty caches before **every**
+invocation. Warm setup verifies the exact reusable payload; cleanup checks
+payload sizes and drained leases/reservations. Console counters report work,
+payload retention and allocation preflights alongside BenchmarkDotNet statistics.
+
+While upstream changes remain unreleased, run the coordinated source stack:
+
+```powershell
+dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -p:UseLocalLsfStack=true
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*Ladder*' --job dry --inProcess --artifacts artifacts/hardening-phase3/smoke-small
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*' '*ColdPublicAStar*' '*ColdInternalFlow*' --launchCount 3 --warmupCount 1 --iterationCount 3 --artifacts artifacts/hardening-phase3/slow-guides
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-frame --filter '*Cold1*' '*Cold4*' --launchCount 3 --warmupCount 1 --iterationCount 3 --artifacts artifacts/hardening-phase3/slow-frames
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide navigation-cold-frame navigation-guide-service --filter '*WarmPublicFlow*' '*Baseline*' '*Warm1*' '*Warm4*' '*WarmFlowAcquireSampleDispose*' --artifacts artifacts/hardening-phase3/canonical-controls
+```
+
+The final command retains the normal canonical job (three launches, 100 measured
+iterations per launch). The slow cold commands use the predeclared nine-sample
+protocol in the execution record: report minimum/median/maximum, not a reliable
+P99 estimate. Generated child builds use `UsePrebuiltLocalLsfStack`
+to consume the already built binaries. Do not run builds or competing benchmark
+jobs during capture. Retain the full JSON/logs, not just a rounded mean. The
+[Phase 3 evidence](../../docs/feature-work/navigationAcquisitionMeasurements.md)
+records the acceptance budget, source identities, results and decision.
+Use in-process smoke only for small cases: large-case setup plus acquisition can
+exceed the in-process runner's timeout even when every query terminates normally.
+
+### General rules
 
 - World and map setup belong in `[GlobalSetup]`, never in benchmark bodies.
 - Setup preflights fail fast when the intended route cannot be produced.

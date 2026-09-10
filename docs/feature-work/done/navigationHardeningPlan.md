@@ -490,8 +490,9 @@ it were acquisition.
 - [x] Full local-source Release/ReleaseLean solution builds and tests, both
   library targets, exact reachable coverage and independent reviews completed.
 - [x] Deterministic acceptance, replay, transactional load, allocation and
-  ownership gates verified. `TRB-Issue-114` remains explicitly mitigated and
-  unattributed in the [issue tracker](../issue-tracker.md), not silently resolved.
+  ownership gates verified. `TRB-Issue-114` was mitigated but unattributed at
+  this checkpoint. The [issue tracker](../issue-tracker.md) records its subsequent
+  2026-09-10 inconclusive closure, not a confirmed production fix.
 - [x] Changed examples, wiki publishing helpers and DocFX verified locally.
 - [x] Phase 3's rejected timing target received a measured follow-up disposition:
   `TRB-Benchmark-001` is closed in the [scheduling plan](navigationSchedulingPlan.md#final-disposition).

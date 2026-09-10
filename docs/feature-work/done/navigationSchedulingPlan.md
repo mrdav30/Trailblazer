@@ -195,8 +195,10 @@ over retaining a previously accepted but invalid route.
 The 616-byte warmed Flow attach failure was mitigated by aligning the test's
 256-cycle warmup with its measurement window. Three covered Release repetitions
 and the Lean matrix passed at that checkpoint, but the allocator remains
-unattributed. `TRB-Issue-114` stays a mitigated watch item in the
-[issue tracker](../issue-tracker.md); this is not a production allocation fix.
+unattributed. The [issue tracker](../issue-tracker.md) records the subsequent
+2026-09-10 investigation and maintainer-approved inconclusive closure of
+`TRB-Issue-114`. The strict guard and evidence remain, but the issue no longer
+blocks performance work; this is not a production allocation fix.
 
 ### Practical interpretation and remaining measurement priorities
 

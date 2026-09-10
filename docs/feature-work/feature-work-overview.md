@@ -21,6 +21,12 @@ instead of burying it in notes.
 
 ## Active Coordination
 
+- Measured navigation performance
+  - The performance pass takes priority over the remaining feature work; use
+    the archived scheduling evidence to select measured bottlenecks, preserving
+    correctness and determinism. `TRB-Issue-114` is closed as an inconclusive
+    investigation in the [issue tracker](issue-tracker.md), not a confirmed fix.
+    Its evidence and strict allocation guard remain; it no longer blocks this pass.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
     world frame and lifetime order, first bounded wall fixture, and GridForge-
@@ -78,22 +84,25 @@ instead of burying it in notes.
 ## Deferred / Evidence-Gated
 
 Engine-host visual playtesting remains deferred until engine-specific adapter
-work. Further performance work is evidence-gated: the archived scheduling plan
-records remaining cold-readiness limits and useful next measurements, not an
-approved new implementation scope.
+work. Individual performance changes remain evidence-gated: the archived
+scheduling plan records remaining cold-readiness limits and useful next
+measurements, not permission for speculative algorithm or cache changes.
 
 ## Recommended Execution Order
 
 The plans share evidence, not competing implementations:
 
-1. Complete the remaining shared movement scenarios in Gravitas integration
+1. Undertake the measured navigation performance pass before resuming feature
+   work. `TRB-Issue-114` requires no further investigation unless new evidence
+   meets its documented reopening criteria.
+2. Complete the remaining shared movement scenarios in Gravitas integration
    Phase 2 on the reviewed replacement boundary.
-2. Close the 3D adapter's package, documentation, and joint-verification gates.
+3. Close the 3D adapter's package, documentation, and joint-verification gates.
    Reference the same deterministic scenario evidence from both owning plans.
-3. Execute the dedicated 2D plan after its contract review, using the reviewed
+4. Execute the dedicated 2D plan after its contract review, using the reviewed
    motion and replacement boundaries. Add the planar adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.
-4. After every active feature-work plan is complete, release any changed
+5. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.
 

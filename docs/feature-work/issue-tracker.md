@@ -12,6 +12,8 @@
 - Record the date on the item, not in this filename.
 - Move an item to `Resolved Issues` only after the fix has tests or documented
   verification evidence.
+- Use `Closed Investigations` for documented decisions to stop without a
+  confirmed fix. Preserve the evidence, limitations and reopening criteria.
 - Do not use this tracker as a substitute for tests, benchmarks, or release
   notes.
 - Performance issues should stay in
@@ -21,34 +23,69 @@
 
 ## Active Issues
 
-### TRB-Issue-114 - Warm Flow attach allocation guard used a shorter warmup than its measured window
+None.
+
+## Closed Investigations
+
+### TRB-Issue-114 - Intermittent allocation signal in the covered warm Flow attach guard
 
 - **Discovered:** 2026-09-08
 - **Area:** `NavigationFlowFieldSamplingConcurrencyTests` allocation guardrails
-- **Status:** Mitigated; fresh covered `Release` and `ReleaseLean` matrices pass.
-  The allocator remains unattributed; reopen allocation-source investigation if
-  the exact zero-byte guard fails again.
+- **Status:** Closed on 2026-09-10 by maintainer decision; investigation
+  inconclusive, with no confirmed production defect or allocator fix.
+  Warmup/measurement consistency has been improved, but the allocation source
+  has not been attributed. Passing runs are not a root-cause resolution.
 - **Evidence:** The initial Phase 3 full covered `Release` run passed 2,394 tests
   and failed `WarmAttachSampleDispose_ShouldAllocateZeroBytes` with 616 bytes
   instead of zero. The unchanged test then passed alone (1/1) and with its class
   (9/9). The measured allocator has not been attributed; no runtime allocation
   defect or 16-cycle storage-growth threshold has been established.
-- **Resolution:** Aligned this warm test with its adjacent rebase/rejoin guards:
-  one named 256-iteration count controls both warmup and measurement. Exact zero
-  allocation, successful sampling and drained leases remain mandatory. The
-  separate first-attach allocation guard remains unchanged. This is a consistent
-  steady-state setup mitigation, not a claim that a runtime allocator was fixed.
-- **Investigation:** The [acquisition cost audit](done/navigationSchedulingPlan.md#issue-114---separate-allocation-guard-investigation)
-  separates this covered acquire/attach/sample/dispose test from uninstrumented
-  acquisition-only timing. Source inspection identified pool exhaustion and
-  cache republishing as concrete allocation candidates, but attributed none to
-  the historical 616 bytes. Preserve the exact guard; if it fails again, record
-  per-phase allocation deltas in preallocated storage before changing warmup or
-  production code. This issue does not block `TRB-Benchmark-001` attribution.
-- **Fresh verification:** After profiling, three unchanged full covered core
-  Release runs passed 2,395/2,395 each; one ReleaseLean run passed 2,333/2,333.
-  The exact guard passed in every run. No allocator fix or further test-warmup
-  change was made; intermittent root cause remains open.
+- **Earlier mitigation:** Aligned warmup with the adjacent guards at 256
+  iterations. The [acquisition cost audit](done/navigationSchedulingPlan.md#issue-114---separate-allocation-guard-investigation)
+  records the earlier passing matrices and separates this covered
+  acquire/attach/sample/dispose signal from acquisition-only timing.
+- **2026-09-10 investigation:** Temporary preallocated phase counters reproduced
+  7,552 bytes in one sample after 16 warmups, 5,192 bytes in a sample after 256
+  warmups, and 5,640 bytes in acquisition after 16 warmups. The bursts did not
+  identify a stable allocation site. These diagnostic builds changed code layout;
+  they do not establish that the same allocator produced the historical 616
+  bytes, or that the unmodified 256-warmup guard has the same failure.
+  Source review found the warmed payload/guide/graph-lease pools already primed,
+  with no ordinary per-cycle construction on the successful path. No constructor
+  or exhausted pool was tied to a failing window.
+- **Attribution limits:** Fully decoded small-allocation traces retained six measured
+  windows without lost events, but all six measured zero bytes. Seven full
+  covered runs with caller-thread JIT counters also passed; the three traced
+  counter runs recorded no caller-thread compilation in the measured phases.
+  Three tiering-disabled runs passed, but this does not establish tiering as the
+  cause. Independent .NET-only probes measured 8.4 million lock windows with
+  allocation churn and forced/concurrent collections without a nonzero delta.
+  Neither a runtime-accounting defect nor a JIT allocation has been established.
+- **Guard improvement:** Warmup and measurement now call the same assertion-free
+  helper, kept separate from the test by `NoInlining`. Both still use 256
+  iterations. Successful sampling, drained leases and exactly zero measured
+  bytes remain mandatory; there are no retries, tolerances or runtime-setting
+  changes. The separate first-attach guard is unchanged. All temporary production
+  probes and tracing hooks were removed. This is a test-harness improvement,
+  not evidence that the historical allocator was fixed.
+- **Verification:** Four fresh covered core `Release` runs passed 2,455/2,455
+  each after the extraction. A temporary 64-byte array allocation on every
+  iteration made the exact guard fail at 22,528 bytes; that mutation was removed.
+  The final local-source matrices passed `Release` (2,455 core + 65 adapter)
+  and `ReleaseLean` (2,393 core + 65 adapter), with zero build warnings/errors.
+  Both merged reports have exact coverage: 30,841/30,841 lines,
+  12,087/12,087 branches and 3,009/3,009 fully covered methods. These results
+  verify the guard's sensitivity and current gates, not allocation attribution.
+- **Closure decision:** Stop the investigation rather than continue speculative
+  changes or repeated clean runs without an actionable allocation site. Retain
+  the strict zero-allocation guard and this evidence record. No further work is
+  scheduled for this issue, and it no longer blocks the measured performance
+  pass. The completed `TRB-Benchmark-001` timing attribution is unchanged.
+- **Reopen when:** The retained guard fails again on an otherwise unmodified
+  production build, or new evidence identifies a concrete allocating branch or
+  allocation type/stack. Preserve the failing commit, configuration, runtime,
+  coverage settings and logs so follow-up starts from new evidence rather than
+  repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
 

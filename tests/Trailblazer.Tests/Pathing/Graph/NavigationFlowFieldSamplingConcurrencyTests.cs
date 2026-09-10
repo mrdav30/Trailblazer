@@ -303,34 +303,13 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
             .Should().BeTrue();
         const int hotPathIterationCount = 256;
-        for (int i = 0; i < hotPathIterationCount; i++)
-        {
-            NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
-            warm.TrySampleHeading(source.FootAnchor, GenerousBudget, out _)
-                .Should().Be(NavigationGuideStatus.Success);
-            warm.Dispose();
-        }
+        _ = MeasureAttachSampleDispose(
+            cache, fixture, source.FootAnchor, hotPathIterationCount, out bool warmed);
+        warmed.Should().BeTrue();
+        cache.ActiveLeaseCount.Should().Be(0);
 
-        bool succeeded = true;
-        long before = System.GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < hotPathIterationCount; i++)
-        {
-            NavigationFlowFieldLease guide = CreateGuideUnchecked(
-                cache,
-                fixture,
-                ref succeeded);
-            if (!succeeded)
-                break;
-            if (guide.TrySampleHeading(
-                    source.FootAnchor,
-                    GenerousBudget,
-                    out _) != NavigationGuideStatus.Success)
-            {
-                succeeded = false;
-            }
-            guide.Dispose();
-        }
-        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = MeasureAttachSampleDispose(
+            cache, fixture, source.FootAnchor, hotPathIterationCount, out bool succeeded);
 
         succeeded.Should().BeTrue();
         allocated.Should().Be(0);
@@ -457,6 +436,34 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         succeeded.Should().BeTrue();
         allocated.Should().Be(0);
         cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    // Use the same assertion-free helper for warmup and measurement,
+    // separate from test setup.
+    [System.Runtime.CompilerServices.MethodImpl(
+        System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static long MeasureAttachSampleDispose(
+        NavigationFlowFieldPayloadCache cache,
+        NavigationFlowFieldCacheTestHarness.LineFixture fixture,
+        Vector3d sourceFoot,
+        int iterationCount,
+        out bool succeeded)
+    {
+        succeeded = true;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < iterationCount; i++)
+        {
+            NavigationFlowFieldLease guide = CreateGuideUnchecked(cache, fixture, ref succeeded);
+            if (!succeeded)
+                break;
+            if (guide.TrySampleHeading(sourceFoot, GenerousBudget, out _)
+                != NavigationGuideStatus.Success)
+            {
+                succeeded = false;
+            }
+            guide.Dispose();
+        }
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private static GuideSampleWorkBudget GenerousBudget => new(

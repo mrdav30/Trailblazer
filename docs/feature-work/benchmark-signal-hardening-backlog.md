@@ -92,9 +92,10 @@ No active benchmark signals remain.
   path, including unused Release diagnostic geometry. Warm 100K acquisition
   spends about 95-97% in dependency validation; six full passes visit 9,378 page
   entries per successful acquisition in this workload. These overlapping sampled
-  shares are attribution, not predicted speedups. `TRB-Issue-114` remains an
-  unattributed covered-test observation and does not confound these separate
-  acquisition traces.
+  shares are attribution, not predicted speedups. `TRB-Issue-114` is closed as
+  an inconclusive investigation in the [issue tracker](issue-tracker.md); its
+  unattributed covered-test observation does not confound these separate
+  acquisition traces, and no production allocator fix is claimed.
 - **Focused fix result:** After resolving `TRB-Issue-115`, matched cold public
   Flow medians are 1.864 seconds at 10K and 18.924 seconds at 100K; A* medians
   are 0.717 and 7.343 seconds. The same nine-sample protocol shows 65.85-66.50%

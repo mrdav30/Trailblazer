@@ -32,6 +32,7 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-guide-service` | `NavigationGuideServiceBenchmarks` |
 | `navigation-cold-guide` | `NavigationColdGuideBenchmarks` |
 | `navigation-cold-frame` | `NavigationColdFrameBenchmarks` |
+| `navigation-scheduled-frame` | `NavigationScheduledFrameBenchmarks` |
 | `navigation-a-star-contention` | `NavigationAStarContentionBenchmarks` |
 | `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
 | `navigation-flow-field-contention` | `NavigationFlowFieldContentionBenchmarks` |
@@ -148,10 +149,69 @@ protocol in the execution record: report minimum/median/maximum, not a reliable
 P99 estimate. Generated child builds use `UsePrebuiltLocalLsfStack`
 to consume the already built binaries. Do not run builds or competing benchmark
 jobs during capture. Retain the full JSON/logs, not just a rounded mean. The
-[Phase 3 evidence](../../docs/feature-work/navigationAcquisitionMeasurements.md)
+[Phase 3 evidence](../../docs/feature-work/done/navigationHardeningPlan.md#phase-3---measurement-protocol-and-baseline)
 records the acceptance budget, source identities, results and decision.
 Use in-process smoke only for small cases: large-case setup plus acquisition can
 exceed the in-process runner's timeout even when every query terminates normally.
+
+### Scheduled cold acquisition across fixed frames
+
+`NavigationScheduledFrameBenchmarks` measures one complete scheduled acquisition
+burst at 10K/100K nodes with A* or Flow and one/four distinct cold queries. A
+zero-request row is a 256-frame instrumentation/continuous-host control. The
+BenchmarkDotNet operation includes the entire acquisition plus all intervening
+headless host frames; its elapsed time is not isolated search cost.
+
+Every containing frame separately records timestamp ticks, current-thread
+allocation, scheduler phase, active request index, completion mask and GC
+collection-count-change mask. These process-wide counters bracket a slightly
+wider interval than the stopwatch; a change shows correlation, not that a GC
+pause caused the frame duration. The
+`NAVIGATION_SCHEDULE_SAMPLES` JSON records retain every observation, including
+activation, publication, result transfer, cancellation-free disposal, GC and
+outliers. Export also records exact scheduler settings and stopwatch frequency.
+Use the surrounding BenchmarkDotNet log to associate records with warmup,
+actual and diagnostic invocations before computing actual-only statistics.
+
+The host runs 100 input-driven Navigators, reversing input at deterministic
+position bounds to stay on the map during long acquisitions. Movement is
+verified over each 32-frame block. Each measured frame includes
+context maintenance/scheduling, all Navigator simulations/commits, request
+polling, typed lease transfer and disposal. Host input assignment and per-frame
+behavior validation are outside the nested frame timer, but remain part of the
+whole-operation measurement. Validation checks fresh committed-cell frames and
+continued movement, exact request costs, A* step counts, complete Flow payloads,
+and drained scheduler/payload ownership.
+
+Map preparation, cache eviction, agent reset and 32 initial moving frames are
+untimed. The fixed sample buffers retain approximately 32 MB per benchmark
+instance. Untimed JSON export makes additional copies; retain this protocol
+when comparing builds rather than selectively warming away its GC effects.
+
+Begin with a separately labeled out-of-process dry/sizing capture, then freeze
+the selected cases and slice settings before repeated capture. The intended
+cold protocol is three launches, one warmup and three actual whole acquisitions
+per launch; pass `--launchCount 3 --warmupCount 1 --iterationCount 3` explicitly
+to override the shared benchmark job's longer defaults. Report completion frame counts (and simulated waiting time at
+32 Hz), per-acquisition and per-phase maxima, observed frame P99, and counts
+above 2 ms/31.25 ms. Nested frames are correlated samples: thousands of cheap
+search frames must not hide an expensive activation or completion in a pooled
+percentile. The [scheduling execution record](../../docs/feature-work/done/navigationSchedulingPlan.md)
+owns the selected commands, results and interpretation.
+
+Summarize a retained log without mixing warmup or allocation-diagnostic frames
+into actual observations:
+
+```powershell
+& tests/Trailblazer.Benchmarks/AnalyzeScheduledFrames.ps1 -LogPath artifacts/scheduled-capture.log -OutputPath artifacts/scheduled-frame-summary.json
+```
+
+The parser pairs each nested record with the following `WorkloadWarmup` or
+`WorkloadActual` line. Records after `AfterActualRun` remain a separate
+diagnostic category; `WorkloadResult` is not a new invocation. It rejects
+unmatched records and incomplete completion masks. Independently verify the
+expected cases, launch/sample counts and whole-operation values against the
+BenchmarkDotNet JSON before accepting the capture.
 
 ### General rules
 

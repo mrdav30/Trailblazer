@@ -344,12 +344,6 @@ internal readonly struct TraversalEvaluator
 
         KinematicBodyShape shape = _profile.Shape;
         GridNavigationPortal template = edge.NativePortal;
-        System.Diagnostics.Debug.Assert(template.IsValid);
-        if (shape.Radius > template.MaximumHorizontalRadius
-            || shape.Height > template.MaximumBodyHeight)
-        {
-            return TraversalEvaluationStatus.Impassable;
-        }
 
         bool hasSourceAddress = _graph.TryGetNodeAddress(
             source,
@@ -365,21 +359,26 @@ internal readonly struct TraversalEvaluator
             out GridCellPrism targetPrism);
         System.Diagnostics.Debug.Assert(
             hasSourceAddress && hasTargetAddress && hasSourcePrism && hasTargetPrism);
-        bool translated = template.TryTranslate(
-            sourceState.Center,
-            out GridNavigationPortal retainedPortal);
-        System.Diagnostics.Debug.Assert(translated);
-        bool createdPortal = GridCellGeometry.TryCreateNavigationPortal(
-            sourcePrism,
-            targetPrism,
-            out GridNavigationPortal portal);
-        System.Diagnostics.Debug.Assert(createdPortal && retainedPortal.IsValid);
-        bool resolvedProfile = portal.TryResolveProfile(
-            shape.Radius,
-            shape.Height,
-            out Vector3d sourcePortalFoot,
-            out Vector3d targetPortalFoot);
-        System.Diagnostics.Debug.Assert(resolvedProfile);
+        GridNavigationPortal portal;
+        if (sourcePrism.TopologyKind == GridTopologyKind.RectangularPrism
+            && targetState.Center - sourceState.Center == template.SourceToTarget)
+        {
+            // Matching rectangular spacing certifies an exact translated baked face.
+            bool translated = template.TryTranslate(sourceState.Center, out portal);
+            System.Diagnostics.Debug.Assert(translated);
+        }
+        else if (!GridCellGeometry.TryCreateNavigationPortal(sourcePrism, targetPrism, out portal))
+        {
+            return TraversalEvaluationStatus.Impassable;
+        }
+        if (!portal.TryResolveProfile(
+                shape.Radius,
+                shape.Height,
+                out Vector3d sourcePortalFoot,
+                out Vector3d targetPortalFoot))
+        {
+            return TraversalEvaluationStatus.Impassable;
+        }
 
         if (!TryGetPortalTraversalCost(
                 useCeilingDistance: true,

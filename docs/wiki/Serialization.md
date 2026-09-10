@@ -182,6 +182,12 @@ boundary.
 - heightmap sample data/layer registration;
 - engine objects, physics state, animation state, or host callbacks.
 
+Scheduled guide requests, their FIFO position, continuations and unclaimed
+results are runtime-only. Record host query intent if it must be replayed;
+restore maps/policies first, then resubmit that intent in deterministic order.
+Do not serialize `NavigationGuideRequest` or assume a reset preserves pending
+work. See [scheduled acquisition](Pathing.md#acquiring-without-blocking-a-fixed-frame).
+
 ## Related guides
 
 - [Overview](Overview.md)

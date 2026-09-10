@@ -107,6 +107,119 @@ The query's `Algorithm` must match the request method. Both algorithms use the
 same medium-state graph, edge evaluator, costs, dependencies, and transition
 completion semantics.
 
+## Spreading acquisition across fixed frames
+
+`RequestGuide` and `RequestFlowField` are synchronous: they finish the complete
+request before returning. Finite query budgets prevent endless work, but do not
+make a large cold search cheap enough for a fixed frame. Use them during loading
+or other host-owned work where that latency is acceptable.
+
+For frame-spread acquisition, submit the same `PathQuery` with
+`context.Guides.Schedule(query, out request)`. Acceptance returns `Pending` and
+a disposable `NavigationGuideRequest`; a capacity or invalid-profile rejection
+returns no request. The context advances one acquisition phase per `Simulate()`
+after graph maintenance and before simulation hooks. Never loop over extra
+`Simulate()` calls merely to drain the queue in a real game frame.
+
+This integration fragment assumes an existing context and valid A* `query`.
+Keep the request alive between fixed frames:
+
+```csharp
+NavigationGuideStatus admission = context.Guides.Schedule(
+    query, out NavigationGuideRequest? request);
+if (admission != NavigationGuideStatus.Pending)
+    Console.WriteLine($"Request not queued: {admission}");
+```
+
+Call the following helper once per host fixed frame while that request is
+owned; stop calling it when it returns `true`. In a host with several requests,
+call `context.Simulate()` once centrally
+and poll each request afterwards, rather than calling this helper per request:
+
+```csharp
+static bool AdvanceAStarRequest(
+    TrailblazerWorldContext context, NavigationGuideRequest request)
+{
+    context.Simulate();
+    if (request.Status == NavigationGuideStatus.Pending)
+        return false;
+
+    if (request.TryTakeGuide(out NavigationGuideLease? result))
+    {
+        using NavigationGuideLease guide = result!.Value;
+        Console.WriteLine($"Route: {guide.StepCount} steps, cost {guide.TotalCost}");
+        // A real host may transfer this lease to its guidance owner instead.
+    }
+    else
+    {
+        Console.WriteLine($"No transferable route: {request.Status}");
+    }
+    request.Dispose();
+    return true;
+}
+```
+
+For Flow, use a Flow query and `request.TryTakeFlowField(out field)`. Taking a
+result revalidates it and transfers its lease exactly once. A wrong-family,
+pending, failed or repeated take returns `false`; inspect `Status` for the
+acquisition outcome. Successful transfer preserves `Success`. Dispose the
+transferred lease normally. Disposing a pending request cancels it; disposing
+any other request releases its unclaimed result without changing its completed
+outcome. `Status` is a stored outcome, not a continuously running validation:
+the take operation can change a previously successful result to `Stale`.
+
+### Ordering, capacity and latency
+
+The scheduler is one FIFO with one active acquisition across A* and Flow.
+Queued entries retain query intent only; they observe the graph when activated.
+Submit and cancel in deterministic host order. A request submitted from a
+simulation hook first advances on a later fixed frame. A large request delays
+later requests; there are no priority overrides, automatic retries or worker
+threads.
+
+`NavigationSchedulingSettings` separates per-frame continuation slices from
+`PathQuery.Budget`, which remains the total-query limit. Configure it through
+the `scheduling` argument of `TrailblazerWorldContextSettings`. Retained request
+count and logical descriptor bytes include queued, active and completed-but-
+unclaimed requests. Take or dispose completed requests promptly: leaving them
+unclaimed can exhaust capacity even when no search is running.
+
+An active scheduled request holds the existing algorithm gate and graph lease.
+Synchronous acquisition of that algorithm can therefore return
+`CapacityExceeded`. Graph snapshot retention limits still apply. The scheduler
+does not bypass these ceilings to make progress.
+
+Scheduling is explicit at the guide-service boundary. It does not automatically
+convert Navigator-owned acquisition or direct-heading checks into queued work.
+The headless benchmark uses input-driven Navigators, not 100 simultaneous cold
+guided-controller starts; measure that host workload separately if you need it.
+
+Scheduled acquisition fails `Stale` if the raw GridWorld change sequence changes
+from activation through result transfer, even for an unrelated change. Exact
+published dependency validation also remains in place. Decide in the host
+whether and when to submit fresh intent; the scheduler never silently restarts.
+Context or pathing reset cancels pending requests and releases unclaimed
+results. Request handles and continuations are runtime-only, not save data.
+
+### What a slice does not guarantee
+
+Slice counts are deterministic work allowances, not a millisecond deadline.
+Some operations remain atomic: endpoint/simplification rays, allocation,
+dependency checks and payload publication. Reused Flow search records are
+cleared incrementally against the node slice; explicit reset/teardown can still
+drain retained work synchronously. The finite
+query/capacity limits still apply, but they can cost more than an ordinary
+search slice. Measure full frames, including activation and result transfer,
+with representative endpoints, body shapes and maps. A smaller slice reduces
+ordinary per-frame work while increasing request latency in simulated frames.
+
+Prepare large shared fields during loading or submit them well ahead of use.
+Conservative slices can make a very large cold field take seconds or minutes
+of simulated time to become ready, especially behind earlier FIFO work. Measure
+both the containing-frame cost and request readiness in your host. Smaller
+slices leave more time for ongoing simulation but make results take longer;
+counted work limits are not elapsed-time guarantees.
+
 ## Traversal Families Inside The Graph
 
 - Solid native movement uses topology contacts plus surface step/drop rules.
@@ -129,6 +242,9 @@ Guide acquisition can report:
 - `NoPath`;
 - `BudgetExceeded`, `CostOverflow`, or `CapacityExceeded`;
 - `Stale` when publication invalidates the proof being consumed.
+
+Scheduled requests additionally use `Pending` while queued or advancing and
+`Cancelled` when disposed or reset before completion.
 
 Leases revalidate their exact dependencies. Dispose every successful lease.
 After a relevant map, overlay, policy, seam, or GridForge publication, reacquire

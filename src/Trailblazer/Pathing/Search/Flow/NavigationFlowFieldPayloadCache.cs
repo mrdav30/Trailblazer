@@ -194,6 +194,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         int slot = -1;
         ulong generation = 0;
         FixedMathSharp.Fixed64 originIntegrationCost = FixedMathSharp.Fixed64.Zero;
+        NavigationWorldGraph? validatedGraph = null;
         lock (_sync)
         {
             if (!_disposed
@@ -224,6 +225,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     }
                     else
                     {
+                        validatedGraph = current;
                         inner = RentGuide(
                             _freeGuides,
                             ref _freeGuideCount,
@@ -253,7 +255,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         guide = new NavigationFlowFieldLease(activeGuide);
         bool currentAfterBind = IsBoundGuideCurrent(
             TryGetGuidePayload(slot, generation, out _),
-            IsPayloadCurrent(store.Current, activePayload));
+            IsPayloadCurrent(store.Current, activePayload, validatedGraph));
         return ResolveBoundGuideValidation(currentAfterBind, ref guide);
     }
 
@@ -334,6 +336,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         lease = default;
         proof = null;
         NavigationFlowFieldPayload? checkedPayload = null;
+        NavigationWorldGraph? validatedGraph = null;
         NavigationFlowFieldStatus status;
         lock (_sync)
         {
@@ -349,7 +352,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 RemoveAt(slot, invalidate: true);
                 return NavigationFlowFieldStatus.Stale;
             }
-            if (!IsPayloadCurrent(expectedGraph, entry.Payload))
+            validatedGraph = graph;
+            if (!IsPayloadCurrent(expectedGraph, entry.Payload, validatedGraph))
                 return NavigationFlowFieldStatus.Pending;
             checkedPayload = entry.Payload;
             status = ClassifyCoverage(checkedPayload, requiredOrigin);
@@ -371,7 +375,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 store,
                 checkedPayload!,
                 status,
-                ref lease);
+                ref lease,
+                validatedGraph);
             proof = ResolveValidatedProof(status, checkedPayload);
         }
         return status;
@@ -879,17 +884,22 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
 
     internal bool IsPayloadCurrent(
         NavigationWorldGraph graph,
-        NavigationFlowFieldPayload payload) =>
-        graph.IsDependencyCurrent(payload.Dependencies)
+        NavigationFlowFieldPayload payload,
+        NavigationWorldGraph? validatedGraph = null) =>
+        // The optional proof belongs to this exact payload and this method call.
+        // Raw world changes remain live even when the immutable root is unchanged.
+        (ReferenceEquals(graph, validatedGraph)
+            || graph.IsDependencyCurrent(payload.Dependencies))
         && IsWorldCurrent(payload);
 
     internal NavigationFlowFieldStatus CompletePostLockValidation(
         NavigationWorldGraphStore store,
         NavigationFlowFieldPayload payload,
         NavigationFlowFieldStatus status,
-        ref NavigationFlowFieldPayloadLease lease)
+        ref NavigationFlowFieldPayloadLease lease,
+        NavigationWorldGraph? validatedGraph = null)
     {
-        if (IsPayloadCurrent(store.Current, payload))
+        if (IsPayloadCurrent(store.Current, payload, validatedGraph))
             return status;
         InvalidateExact(payload);
         lease.Dispose();

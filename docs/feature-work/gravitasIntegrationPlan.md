@@ -46,7 +46,7 @@ retain the approved direction and the pre-implementation decisions in this plan.
 1. Establish compatible dependencies, world ownership, and fixed-frame order.
 2. Prove one fixed-profile 3D Navigator against actual Gravitas collisions.
 3. Reuse that adapter in the vertical and movement-quality scenarios from
-   [Navigation Hardening](navigationHardeningPlan.md).
+   [Navigation Hardening](done/navigationHardeningPlan.md).
 4. Integrate coordinated physical shape changes after hardening Phase 2 defines
    the profile-replacement contract; verify replay, loading, and teardown.
 5. Package and document the verified integration with executable examples.
@@ -449,7 +449,7 @@ input capture never become a second collision or navigation implementation.
 
 - [ ] **Run the hardening worlds through the actual adapter.** Reuse stairs,
   ladders, stacked floors, portals/groups, and airborne scenarios from the
-  [hardening acceptance table](navigationHardeningPlan.md#acceptance-scenarios).
+  [hardening acceptance table](done/navigationHardeningPlan.md#acceptance-scenarios).
   Preserve action completion and actual contact/medium reporting.
 - [ ] **Prove collision-controller behavior.** Cover a wall and corner, slopes,
   steps, thin blockers at high speed, dynamic-body pushes, and translating/
@@ -486,7 +486,7 @@ input capture never become a second collision or navigation implementation.
   supported shapes, contact limitations, and presentation separation. Compile
   and execute every example presented as runnable.
 - [ ] **Run the release-validation matrix without publishing.** Run the
-  [Trailblazer matrix](navigationHardeningPlan.md#verification-and-closeout),
+  [Trailblazer matrix](done/navigationHardeningPlan.md#verification-and-closeout),
   adapter tests, and relevant Gravitas tests in Release and ReleaseLean; record
   Windows/Linux evidence and exact adapter/core coverage. Verify released package
   references, allocation/lifetime behavior, and deterministic replay.

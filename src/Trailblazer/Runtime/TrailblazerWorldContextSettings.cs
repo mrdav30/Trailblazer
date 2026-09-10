@@ -44,7 +44,8 @@ public sealed class TrailblazerWorldContextSettings
         int maxAreaRulesPerPolicy,
         int maxAreaRules,
         int maxConcurrentSnapshotLeases,
-        NavigationQueryLimits queryLimits)
+        NavigationQueryLimits queryLimits,
+        NavigationSchedulingSettings? scheduling = null)
     {
         SwiftThrowHelper.ThrowIfArgument(
             operationLimits.MaxPendingOperations <= 0,
@@ -146,6 +147,7 @@ public sealed class TrailblazerWorldContextSettings
         MaxAreaRules = maxAreaRules;
         MaxConcurrentSnapshotLeases = maxConcurrentSnapshotLeases;
         QueryLimits = queryLimits;
+        Scheduling = scheduling ?? NavigationSchedulingSettings.Default;
     }
 
     /// <summary>Gets the map-operation, preparation, and semantic-overlay ceilings.</summary>
@@ -204,6 +206,9 @@ public sealed class TrailblazerWorldContextSettings
 
     /// <summary>Gets the context-owned navigation query admission and retention ceilings.</summary>
     public NavigationQueryLimits QueryLimits { get; }
+
+    /// <summary>Gets the bounded scheduled-acquisition retention and per-frame continuation settings.</summary>
+    public NavigationSchedulingSettings Scheduling { get; }
 
     private static TrailblazerWorldContextSettings CreateDefault() => new(
         new NavigationOperationLimits(

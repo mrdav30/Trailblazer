@@ -1256,28 +1256,51 @@ public sealed class NavigationFlowFieldCacheTests
         cache.Count.Should().Be(0);
     }
 
-    [Fact]
-    public void PostLockValidation_StaleDependencyShouldReleaseTheExactLeaseAccounting()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PostLockValidation_StaleDependencyShouldReleaseTheExactLeaseAccounting(
+        bool rawWorldChange)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         using var cache = CreateCache(fixture);
+        var payload = new NavigationFlowFieldPayload(
+            fixture.Far.Key,
+            fixture.Far.Nodes,
+            fixture.Far.AddressLookupOrdinals,
+            fixture.Far.TransitionInstructions,
+            fixture.Far.Dependencies,
+            fixture.Far.IsComplete,
+            fixture.World.ChangeSequence);
         NavigationFlowFieldPayloadLease lease = Publish(
             cache,
             fixture,
-            fixture.Far,
+            payload,
             fixture.FarOrigin);
-        NavigationWorldGraph changed = fixture.Graph
-            .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
-            .WithGraphVersion(fixture.Graph.GraphVersion + 1);
-        fixture.Store.TryPublish(changed)
-            .Should().Be(NavigationCandidatePublication.Published);
+        if (rawWorldChange)
+        {
+            VoxelGrid grid = fixture.World.ActiveGrids[0];
+            grid.TryGetVoxel(default(VoxelIndex), out Voxel? voxel).Should().BeTrue();
+            grid.TryAddObstacle(voxel!, fixture.World.AllocateObstacleToken())
+                .Should().BeTrue();
+            fixture.Store.Current.Should().BeSameAs(fixture.Graph);
+        }
+        else
+        {
+            NavigationWorldGraph changed = fixture.Graph
+                .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+                .WithGraphVersion(fixture.Graph.GraphVersion + 1);
+            fixture.Store.TryPublish(changed)
+                .Should().Be(NavigationCandidatePublication.Published);
+        }
 
         cache.CompletePostLockValidation(
                 fixture.Store,
-                fixture.Far,
+                payload,
                 NavigationFlowFieldStatus.Success,
-                ref lease)
+                ref lease,
+                fixture.Graph)
             .Should().Be(NavigationFlowFieldStatus.Stale);
 
         lease.Should().Be(default(NavigationFlowFieldPayloadLease));

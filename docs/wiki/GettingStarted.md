@@ -52,6 +52,10 @@ the complete example below. It creates three adjacent physical cells, gives
 them all Solid navigation meaning, publishes one permissive area policy, and
 requests an A* route from the first cell to the last.
 
+This tiny example uses synchronous acquisition. For large requests during
+fixed-frame gameplay, use the same query with
+[scheduled acquisition](Pathing.md#spreading-acquisition-across-fixed-frames).
+
 ```csharp
 using System;
 using FixedMathSharp;

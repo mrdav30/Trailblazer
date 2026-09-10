@@ -76,6 +76,11 @@ Use `PathAlgorithm.FlowField` with `RequestFlowField(...)` when many agents
 share a destination. Both algorithms consume the same graph, costs,
 dependencies, and action-completion contract.
 
+These request methods finish synchronously. For large cold requests during
+gameplay, `context.Guides.Schedule(query, out request)` spreads acquisition over
+fixed frames. See the [scheduling guide](https://github.com/mrdav30/Trailblazer/wiki/Pathing#spreading-acquisition-across-fixed-frames)
+for finite capacity, result ownership and latency tradeoffs.
+
 ## Choose a package
 
 | Package                                                               | Use it when                                                                                           |

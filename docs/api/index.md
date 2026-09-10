@@ -45,7 +45,8 @@ description: API reference and behavioral guides for deterministic navigation an
   </div>
   <div class="trb-card">
     <h3><a href="xref:Trailblazer.Pathing.TrailblazerGuideService">Acquire A* or Flow guidance</a></h3>
-    <p>Consume immutable-payload leases with acquisition-local cursors and
+    <p>Acquire synchronously or through a deterministic frame-spread queue.
+    Consume immutable-payload leases with acquisition-local cursors and
     completion-safe action instructions.</p>
   </div>
   <div class="trb-card">

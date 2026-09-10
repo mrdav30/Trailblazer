@@ -184,14 +184,21 @@ public sealed class NavigationFlowFieldTests
     }
 
     [Theory]
-    [InlineData((int)TraversalMedia.Solid, 0)]
-    [InlineData((int)(TraversalMedia.Solid | TraversalMedia.Gas), 1)]
+    [InlineData((int)TraversalMedia.Solid, 0, false)]
+    [InlineData((int)(TraversalMedia.Solid | TraversalMedia.Gas), 1, false)]
+    [InlineData((int)(TraversalMedia.Solid | TraversalMedia.Gas), 1, true)]
     [InlineData(
         (int)(TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid),
-        2)]
+        2,
+        false)]
+    [InlineData(
+        (int)(TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid),
+        2,
+        true)]
     public void DestinationSeedCapacity_WhenAnySeedDoesNotFit_ShouldRejectAtomically(
         int mediaValue,
-        int nodeCapacity)
+        int nodeCapacity,
+        bool reuseWorkspace)
     {
         using var world = new GridWorld();
         TraversalMedia media = (TraversalMedia)mediaValue;
@@ -260,10 +267,20 @@ public sealed class NavigationFlowFieldTests
             world.ChangeSequence,
             requiresWorldStamp: true);
 
+        var workspace = new NavigationFlowFieldWorkspace(1, 3, 3, nodeCapacity, 1, 1);
+        if (reuseWorkspace)
+            workspace.TryGetOrAdd(new NavigationMediumStateRef(node, TraversalMedium.Solid),
+                out _, out _).Should().BeTrue();
         using var work = new NavigationFlowFieldWork(
             world,
             resolved,
-            new NavigationFlowFieldWorkspace(1, 3, 3, nodeCapacity, 1, 1));
+            workspace);
+
+        if (reuseWorkspace)
+        {
+            work.Status.Should().Be(NavigationFlowFieldStatus.Pending);
+            work.Advance(0, 1, 0, 0).Should().Be(NavigationFlowFieldStatus.CapacityExceeded);
+        }
 
         work.Status.Should().Be(NavigationFlowFieldStatus.CapacityExceeded);
         work.Result.Should().BeNull();
@@ -978,6 +995,85 @@ public sealed class NavigationFlowFieldTests
             NavigationFlowFieldStatus.BudgetExceeded);
         meter.ExpandedNodes.Should().Be(0);
         work.Result.Should().BeNull();
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReusedWorkspaceCleanup_ShouldShareTheNodeSliceAndResumeOrResetAfterCancellation(
+        bool resetAfterCancellation)
+    {
+        using var world = new GridWorld();
+        VoxelIndex origin = default;
+        var destination = new VoxelIndex(1, 0, 0);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(2),
+                new[] { origin, destination },
+                "sliced-cleanup");
+        var originAddress = new NavigationCellAddress(fixture.MapId, origin);
+        var destinationAddress = new NavigationCellAddress(fixture.MapId, destination);
+        fixture.Graph.TryGetNodeRef(originAddress, out NavigationNodeRef originNode)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(destinationAddress, out NavigationNodeRef destinationNode)
+            .Should().BeTrue();
+        var workspace = new NavigationFlowFieldWorkspace(0, 1, 1, 2, 2, 2);
+        workspace.TryGetOrAdd(new NavigationMediumStateRef(originNode, TraversalMedium.Solid),
+            out int originSlot, out _).Should().BeTrue();
+        workspace.GetRecord(originSlot).Address = originAddress;
+        workspace.TryGetOrAdd(new NavigationMediumStateRef(destinationNode, TraversalMedium.Solid),
+            out int destinationSlot, out _).Should().BeTrue();
+        workspace.GetRecord(destinationSlot).Address = destinationAddress;
+        PathQuery query = ToFlowField(
+            fixture.CreateQuery(origin, destination, fixture.DefaultProfile), Fixed64.Zero);
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        using (var abandoned = new NavigationFlowFieldWork(world,
+            Resolve(store, fixture.Graph, query, originAddress, destinationAddress, out var meter),
+            workspace))
+        {
+            workspace.GetRecord(originSlot).Address.Should().Be(originAddress);
+            workspace.GetRecord(destinationSlot).Address.Should().Be(destinationAddress);
+            abandoned.Advance(64, 0, 64, 64).Should().Be(NavigationFlowFieldStatus.Pending);
+            workspace.GetRecord(destinationSlot).Address.Should().Be(destinationAddress);
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            NavigationFlowFieldStatus status = abandoned.Advance(64, 1, 64, 64);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            status.Should().Be(NavigationFlowFieldStatus.Pending);
+            allocated.Should().Be(0);
+            workspace.GetRecord(destinationSlot).Address.Should().Be(default(NavigationCellAddress));
+            workspace.GetNode(destinationSlot).Should().Be(default(NavigationMediumStateRef));
+            workspace.GetRecord(originSlot).Address.Should().Be(originAddress);
+            meter.ExpandedNodes.Should().Be(0, "cleanup is not search expansion");
+        }
+        store.ActiveLeaseCount.Should().Be(0);
+        if (resetAfterCancellation)
+        {
+            workspace.Reset();
+            workspace.GetRecord(originSlot).Address.Should().Be(default(NavigationCellAddress));
+            workspace.GetNode(originSlot).Should().Be(default(NavigationMediumStateRef));
+        }
+
+        using var resumed = new NavigationFlowFieldWork(world,
+            Resolve(store, fixture.Graph, query, originAddress, destinationAddress, out var resumedMeter),
+            workspace);
+        resumed.Advance(64, 1, 64, 64).Should().Be(NavigationFlowFieldStatus.Pending);
+        resumedMeter.ExpandedNodes.Should().Be(resetAfterCancellation ? 1 : 0,
+            "only a slice that did not spend its allowance clearing may expand a node");
+        for (int step = 0; step < 64 && resumed.Status == NavigationFlowFieldStatus.Pending; step++)
+            resumed.Advance(64, 1, 64, 64);
+
+        resumed.Status.Should().Be(NavigationFlowFieldStatus.Success);
+        resumed.Result!.Nodes.Should().HaveCount(2);
+        resumed.Result.Nodes[0].Address.Should().Be(destinationAddress);
+        resumed.Result.Nodes[0].IntegrationCost.Should().Be(Fixed64.Zero);
+        resumed.Result.Nodes[1].Address.Should().Be(originAddress);
+        resumed.Result.Nodes[1].IntegrationCost.Should().Be(Fixed64.One);
+        resumedMeter.ExpandedNodes.Should().Be(2);
         store.ActiveLeaseCount.Should().Be(0);
     }
 

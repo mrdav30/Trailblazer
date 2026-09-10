@@ -16,10 +16,30 @@ namespace Trailblazer.Pathing;
 public sealed class TrailblazerGuideService
 {
     private readonly TrailblazerWorldContext _context;
+    private readonly NavigationGuideScheduler _scheduler;
     internal TrailblazerGuideService(TrailblazerWorldContext context)
     {
         _context = context;
+        _scheduler = new NavigationGuideScheduler(context);
     }
+
+    /// <summary>Queues immutable query intent for deterministic frame-spread acquisition.</summary>
+    /// <remarks>Pending means accepted. Dispose the returned request or take its successful typed lease.
+    /// Each context Simulate advances at most one FIFO acquisition phase before host hooks.
+    /// Queued intent observes the graph when activated. Any raw GridWorld change between activation and transfer
+    /// makes that acquisition stale. Completed unclaimed requests retain capacity; counted slices do not promise
+    /// elapsed-time deadlines. An active acquisition holds its algorithm's gate, so a synchronous request of the
+    /// same family can return CapacityExceeded until the scheduled acquisition completes or is disposed.</remarks>
+    public NavigationGuideStatus Schedule(PathQuery query, out NavigationGuideRequest? request)
+    {
+        EnsureUsable();
+        return _scheduler.Schedule(query, out request);
+    }
+
+    internal void AdvanceScheduled() => _scheduler.Advance();
+    internal void ResetScheduled() => _scheduler.Reset();
+    internal void DisposeScheduled() => _scheduler.Dispose();
+    internal NavigationGuideScheduler Scheduler => _scheduler;
 
     /// <summary>Proves one cost-neutral graph-direct surface heading.</summary>
     internal NavigationRayStatus TryGetDirectHeading(

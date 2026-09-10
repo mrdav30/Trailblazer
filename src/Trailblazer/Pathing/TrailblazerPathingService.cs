@@ -197,11 +197,12 @@ public sealed class TrailblazerPathingService
     }
 
     /// <summary>
-    /// Cancels active graph queries and clears this context's unified navigation graph.
+    /// Cancels scheduled acquisition ownership and active graph queries, then clears the unified navigation graph.
     /// </summary>
     public void Reset()
     {
         EnsureUsable();
+        _context.Guides.ResetScheduled();
         _navigationAStarAdmissionGate.CancelActive();
         _navigationFlowAdmissionGate.CancelActive();
         _navigationGraph.Reset();

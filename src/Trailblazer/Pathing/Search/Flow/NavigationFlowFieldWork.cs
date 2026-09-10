@@ -23,7 +23,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         CaptureDependencies = 4,
         BuildPayload = 5,
         SortPayloadNodes = 6,
-        SortPayloadLookup = 7
+        SortPayloadLookup = 7,
+        ResetSearch = 8
     }
 
     private NavigationResolvedPathQuery? _query;
@@ -68,7 +69,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         _world = world;
         _graph = query.Graph;
         _workspace = workspace;
-        _workspace.ResetSearch();
+        _stage = Stage.ResetSearch;
         _meter = query.Meter;
         _maximumPayloadBytes = maximumPayloadBytes;
         _worldChangeSequence = query.WorldChangeSequence;
@@ -95,13 +96,9 @@ internal sealed class NavigationFlowFieldWork : IDisposable
             return;
         }
 
-        if (!TrySeedTargetMedium(TraversalMedium.Solid)
-            || !TrySeedTargetMedium(TraversalMedium.Gas)
-            || !TrySeedTargetMedium(TraversalMedium.Liquid))
-        {
-            Finish(NavigationFlowFieldStatus.CapacityExceeded);
-            return;
-        }
+        int nodeRemaining = 0;
+        if (_workspace.AdvanceResetSearch(ref nodeRemaining))
+            TryBeginSearch();
     }
 
     internal NavigationFlowFieldStatus Status { get; private set; }
@@ -129,6 +126,14 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         {
             if (!IsWorldCurrent())
                 return Finish(NavigationFlowFieldStatus.Stale);
+            if (_stage == Stage.ResetSearch)
+            {
+                if (!_workspace.AdvanceResetSearch(ref nodeRemaining)
+                    || !TryBeginSearch())
+                {
+                    return Status;
+                }
+            }
             if (_stage == Stage.Search)
             {
                 if (!_hasCurrent)
@@ -628,6 +633,19 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         record.SelectedEdge = CreateSelectedEdge(target, currentState);
         record.SelectedIsTransition =
             _incoming.CurrentKind == NavigationTraversalEdgeKind.Transition;
+    }
+
+    private bool TryBeginSearch()
+    {
+        if (!TrySeedTargetMedium(TraversalMedium.Solid)
+            || !TrySeedTargetMedium(TraversalMedium.Gas)
+            || !TrySeedTargetMedium(TraversalMedium.Liquid))
+        {
+            Finish(NavigationFlowFieldStatus.CapacityExceeded);
+            return false;
+        }
+        _stage = Stage.Search;
+        return true;
     }
 
     private bool TrySeedTargetMedium(TraversalMedium medium)

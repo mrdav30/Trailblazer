@@ -107,20 +107,31 @@ internal sealed class NavigationFlowFieldWorkspace
 
     internal void ResetSearch()
     {
-        for (int i = 0; i < _nodeCount; i++)
+        int remaining = int.MaxValue;
+        AdvanceResetSearch(ref remaining);
+    }
+
+    /// <summary>Releases prior search records within the supplied node slice.</summary>
+    internal bool AdvanceResetSearch(ref int nodeRemaining)
+    {
+        while (_nodeCount > 0 && nodeRemaining > 0)
         {
-            int slot = _activeSlots[i];
+            int ordinal = --_nodeCount;
+            int slot = _activeSlots[ordinal];
             _keys[slot] = default;
             _records[slot] = default;
-            _activeSlots[i] = 0;
+            _activeSlots[ordinal] = 0;
+            nodeRemaining--;
         }
+        if (_nodeCount > 0)
+            return false;
         unchecked
         {
             _generation++;
         }
-        _nodeCount = 0;
         HeapCount = 0;
         SettledCount = 0;
+        return true;
     }
 
     internal bool TryGetSlot(NavigationMediumStateRef node, out int slot)

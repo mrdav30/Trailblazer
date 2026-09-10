@@ -214,13 +214,17 @@ public sealed class TrailblazerWorldContext : IDisposable
     }
 
     /// <summary>
-    /// Advances this context's deterministic simulation clock and ordered simulate hooks.
+    /// Advances the deterministic clock, maintains the navigation graph, advances at most one
+    /// scheduled guide-acquisition phase, and invokes ordered simulate hooks in that order.
     /// </summary>
     public void Simulate()
     {
+        if (!World.IsActive)
+            Guides.ResetScheduled();
         ThrowIfDisposed();
         _clock.Simulate();
         Pathing.MaintainNavigationGraph(_clock.FrameCount);
+        Guides.AdvanceScheduled();
         _hooks.InvokeSimulate();
     }
 
@@ -317,6 +321,7 @@ public sealed class TrailblazerWorldContext : IDisposable
             if (_disposed)
                 return;
 
+            Guides.DisposeScheduled();
             Pathing.Dispose();
             Heightmaps.Dispose();
             _disposed = true;

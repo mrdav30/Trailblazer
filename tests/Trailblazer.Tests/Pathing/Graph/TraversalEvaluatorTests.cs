@@ -534,6 +534,32 @@ public sealed class TraversalEvaluatorTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SaturatedNativeCenterSpacing_ShouldRejectOverlappingPrismsWithoutAPortal(bool reverse)
+    {
+        GridConfiguration configuration = new(
+            new Vector3d(-1_073_741_824, 0, 0),
+            new Vector3d(1_073_741_824, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(
+                (Fixed64)1_073_741_824, Fixed64.One, Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        var sourceIndex = new VoxelIndex(reverse ? 2 : 1, 0, 0);
+        var targetIndex = new VoxelIndex(reverse ? 1 : 2, 0, 0);
+        NavigationCell cell = Cell(radius: Fixed64.Half, height: Fixed64.One);
+        using TrailblazerWorldContext context = CreateContext(
+            configuration, sourceIndex, targetIndex, cell, cell, targetPhysicallyPresent: true);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef source = Resolve(lease.Graph, sourceIndex);
+        NavigationGraphEdge edge = FindEdge(lease.Graph, source, Resolve(lease.Graph, targetIndex));
+
+        new TraversalEvaluator(lease.Graph, Profile(), DefaultPolicy, TraversalMedium.Solid)
+            .EvaluateEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.Impassable);
+    }
+
     [Fact]
     public void FractionalHexEndpointPortal_ShouldAdmitOnlyZeroRadiusProfiles()
     {

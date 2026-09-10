@@ -15,7 +15,8 @@ context-local services, and its deterministic clock/lifecycle state:
 
 - `Pathing` admits maps, removals, overlays, and area policies and maintains the
   immutable navigation graph;
-- `Guides` acquires A* and Flow leases;
+- `Guides` acquires A* and Flow leases synchronously or through a bounded,
+  deterministic frame-spread queue;
 - `Heightmaps` stores deterministic optional ground-height layers;
 - Navigators bind directly to the context while their registration coordination
   remains internal.
@@ -94,6 +95,12 @@ Hosts admit four operation families through `context.Pathing`:
 Admission only enters bounded storage. `context.Simulate()` advances graph
 maintenance and publishes eligible work atomically at a fixed-step boundary.
 Receipts expose the terminal result and actual publication frame.
+
+After maintenance, the context advances one scheduled guide-acquisition phase,
+then invokes host simulation hooks. Queue submission does not run a search.
+See [Pathing](Pathing.md#spreading-acquisition-across-fixed-frames) for request
+ownership, cancellation, capacity and the distinction between deterministic
+work slices and elapsed-time guarantees.
 
 Overlay transactions change addressed cells, connections, and explicit
 transitions. Map replacement changes immutable bake/default/rule truth.

@@ -43,7 +43,7 @@ signatures and file responsibilities before production implementation.
 - Runnable host examples and actual movement-quality observations, not only
   compile-time API checks or a 3D scene viewed by an orthographic camera.
 
-This is separate from [3D navigation hardening](navigationHardeningPlan.md).
+This is separate from [3D navigation hardening](done/navigationHardeningPlan.md).
 Start runtime implementation after the initial 3D Gravitas accepted-motion
 slice is reviewed; consume the reviewed hardening profile-replacement contract
 before implementing its 2D counterpart. Neither plan depends on completed 2D
@@ -239,7 +239,7 @@ already passed design review.
   notes only where behavior actually changes. Build/run all purportedly runnable
   examples and update affected XML/wiki/API pages together.
 - [ ] **Run the full verification matrix.** Use the
-  [hardening verification commands](navigationHardeningPlan.md#verification-and-closeout),
+  [hardening verification commands](done/navigationHardeningPlan.md#verification-and-closeout),
   the adapter's recorded commands, and relevant Gravitas2D tests in both package
   families. Verify Windows/Linux behavior, exact new/core coverage, 3D regression
   tests, replay, allocations, resource lifetime, and DocFX warnings-as-errors.

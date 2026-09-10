@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-116`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-118`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -21,29 +21,6 @@
 
 ## Active Issues
 
-### TRB-Issue-115 - Release executes assertion-only surface geometry calculations
-
-- **Discovered:** 2026-09-08
-- **Area:** `NavigationSurfaceEdgeRouteWork.AdvanceSimple` and
-  `TraversalEvaluator.EvaluateNative`
-- **Status:** Confirmed runtime inefficiency; implementation not started.
-- **Evidence:** Investigation of `TRB-Benchmark-001` found two unconditional
-  `IsNavigationBodySegmentValid` calls whose results feed only `Debug.Assert`.
-  Release removes the assertion but still executes the geometry calculations;
-  request-root profiles confirm this work during cold Flow and A*. Native
-  retained-portal translation has the same assertion-only result pattern.
-  Source/history attribution and profiler limitations are recorded in the
-  [acquisition investigation](navigationAcquisitionInvestigation.md).
-- **Impact:** Cold acquisition spends time computing diagnostic results that
-  do not affect current Release passability, cost, route points or work counts.
-- **Expected:** Debug diagnostics should not leave expensive prerequisite
-  calculations running in Release when their results have no runtime consumer.
-- **Next step:** Make the entire assertion-only calculations debug-only,
-  preserving the checks in Debug. Keep `AdvanceExplicit` segment rejection and
-  every calculation feeding actual route evidence. Verify unchanged traversal,
-  cost and accounting behavior in both package configurations, then remeasure
-  matched cold workloads before considering portal reuse or scheduler work.
-
 ### TRB-Issue-114 - Warm Flow attach allocation guard used a shorter warmup than its measured window
 
 - **Discovered:** 2026-09-08
@@ -61,7 +38,7 @@
   allocation, successful sampling and drained leases remain mandatory. The
   separate first-attach allocation guard remains unchanged. This is a consistent
   steady-state setup mitigation, not a claim that a runtime allocator was fixed.
-- **Investigation:** The [acquisition cost audit](navigationAcquisitionInvestigation.md#issue-114-separate-allocation-guard-investigation)
+- **Investigation:** The [acquisition cost audit](done/navigationSchedulingPlan.md#issue-114---separate-allocation-guard-investigation)
   separates this covered acquire/attach/sample/dispose test from uninstrumented
   acquisition-only timing. Source inspection identified pool exhaustion and
   cache republishing as concrete allocation candidates, but attributed none to
@@ -74,6 +51,72 @@
   change was made; intermittent root cause remains open.
 
 ## Resolved Issues
+
+### TRB-Issue-117 - Saturated native center spacing can admit a crossing without a portal
+
+- **Discovered:** 2026-09-08
+- **Area:** native surface traversal at extreme GridForge coordinate spans
+- **Status:** Resolved; forward/reverse regressions and both covered matrices pass.
+- **Evidence:** An admitted rectangular binding with X bounds
+  `[-1073741824, 1073741824]` and cell width `1073741824` has three addresses.
+  The intermediate `index * spacing` saturates at the last address. Its center
+  is one raw unit short of the expected spacing even though all final corner
+  prisms are representable. The neighboring prisms overlap instead of sharing
+  a face, so GridForge rejects portal compilation. The existing evaluator
+  ignored that failure in Release and reported `Passable`.
+- **Resolution:** Reuse rectangular native templates only for matching actual
+  displacement. Other native edges use checked GridForge compilation, and
+  actual portal profile resolution is authoritative. Compilation/profile
+  failures return `Impassable`. Hex clipping remains on direct compilation;
+  no upstream coordinate-generation change is included.
+- **Verification:** The real published-world regression fails against both the
+  original direct-compilation path and the initial unconditional reuse.
+  Forward/reverse rejection now passes. Covered Release passes 2,405 core + 65
+  adapter tests; ReleaseLean passes 2,343 core + 65 adapter tests, both with
+  exact 100% line/branch/method coverage. See the
+  [follow-up record](done/navigationSchedulingPlan.md#native-portal-and-warm-validation-follow-up).
+
+### TRB-Issue-116 - Profiling provenance inferred dependency origins from one runtime fingerprint
+
+- **Discovered:** 2026-09-08
+- **Area:** acquisition investigation and diagnostic artifact identity
+- **Status:** Resolved by explicit parent/probe versus measured-child provenance.
+- **Evidence:** The temporary profiling probe copied the benchmark parent output,
+  including released FixedMathSharp 7.1.0, while the BenchmarkDotNet child selects
+  the sibling source build. A matching `Trailblazer.dll` hash alone did not
+  establish the claimed build origin of the whole stack. Both FixedMathSharp
+  assemblies report 7.1.0.0, but have different informational versions and hashes.
+- **Resolution:** Corrected the [investigation record](done/navigationSchedulingPlan.md#source-and-diagnostic-boundary),
+  recorded separate parent/child fingerprints, and qualified the historical
+  baseline's missing complete binary manifest. The FixedMathSharp core source
+  is unchanged between the two commits and all 3,570 normalized method bodies
+  match; no different geometry implementation or runtime defect is inferred.
+  The measured child matches the intended sibling output. No build-resolution
+  change was mixed into the performance patch.
+
+### TRB-Issue-115 - Release executes assertion-only surface geometry calculations
+
+- **Discovered:** 2026-09-08
+- **Area:** `NavigationSurfaceEdgeRouteWork.AdvanceSimple` and
+  `TraversalEvaluator.EvaluateNative`
+- **Status:** Resolved; compiled-call checks and behavior/coverage gates pass.
+- **Evidence:** Investigation of `TRB-Benchmark-001` found two unconditional
+  `IsNavigationBodySegmentValid` calls whose results feed only `Debug.Assert`.
+  Release removed the assertion but still executed the calculations. Native
+  retained-portal translation had the same assertion-only result pattern.
+- **Impact:** Cold acquisition spent time on diagnostic results that did not
+  affect Release passability, cost, route points or work counts.
+- **Resolution:** Guarded the complete diagnostic calculations with `DEBUG`,
+  preserving Debug's original assertion order. Runtime portal compilation,
+  profile resolution and all five explicit-corridor segment rejection calls
+  remain unchanged. The temporary compiled-call check fails before the patch
+  and passes afterward in Release/ReleaseLean, with Debug diagnostics retained.
+- **Verification:** Focused Release 191/191 and Debug 61/61; covered Release
+  2,395 core + 65 adapter and ReleaseLean 2,333 core + 65 adapter pass. Both
+  configurations retain exact 100% line/branch/method coverage. The
+  [follow-up execution record](done/navigationSchedulingPlan.md#issue-115---diagnostic-work-removal)
+  records the bounded remeasurement. The broader `TRB-Benchmark-001` subsequently
+  closed with the completed scheduling scope and its explicit timing limits.
 
 ### TRB-Issue-113 - Benchmark backlog documented a nonexistent physics workload
 

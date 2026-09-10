@@ -21,18 +21,6 @@ instead of burying it in notes.
 
 ## Active Coordination
 
-- [Navigation Hardening](navigationHardeningPlan.md)
-  - Phases 1 and 2 are complete with reviewed vertical traversal, airborne
-    transitions, deterministic accepted-motion evidence, and safe runtime
-    navigation-profile replacement through the Gravitas-backed 3D host. Phase 3
-    is complete: the [acquisition execution record](navigationAcquisitionMeasurements.md)
-    rejects the provisional large-field in-frame workload. The follow-up
-    [acquisition investigation](navigationAcquisitionInvestigation.md) identifies
-    unused Release geometry (`TRB-Issue-115`) and repeated warm dependency checks
-    (`TRB-Benchmark-001`) as focused optimization targets before scheduler design. Local
-    closeout evidence is recorded; final CI/released-package gates remain pending.
-    Engine-host visual playtesting
-    is deferred to future engine-specific adapter/package work.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
     world frame and lifetime order, first bounded wall fixture, and GridForge-
@@ -65,6 +53,19 @@ instead of burying it in notes.
 
 ## Recently Completed
 
+- [Navigation Hardening](done/navigationHardeningPlan.md)
+  - Closed all three phases: headless vertical/airborne acceptance, safe runtime
+    profile/collider replacement and cold acquisition measurement. The baseline
+    measurement record is consolidated into the archived plan. Engine-host
+    visual playtesting remains deferred to engine-specific adapter work.
+
+- [Deterministic Guide Acquisition Scheduling](done/navigationSchedulingPlan.md)
+  - Closed `TRB-Benchmark-001` with focused geometry/validation improvements,
+    opt-in deterministic A*/Flow scheduling, bounded reused Flow cleanup and
+    repeated containing-frame evidence. Warm and scheduled observed P99 fit the
+    selected allowance; rare excursions and long cold FIFO latency remain
+    documented limits, not a universal timing guarantee. Profiling and optimization
+    evidence is consolidated into the archived plan.
 - [`Grid Topology Navigation Map Refactor`](done/gridTopologyNavigationMapRefactorPlan.md)
   - Replaced the dense chart/partition lattice with immutable per-grid maps,
     deterministic overlays, and one topology-native navigation graph. The final
@@ -76,39 +77,31 @@ instead of burying it in notes.
 
 ## Deferred / Evidence-Gated
 
-Frame-spread guide scheduling is informed by the completed Phase 3 of the
-[Navigation Hardening Plan](navigationHardeningPlan.md#phase-3---cold-public-guide-acquisition-measurement).
-Large cold requests do not fit the provisional frame allowance, and four warm
-100K requests also exceed its 2 ms navigation share. Acquisition profiling now
-identifies focused geometry/validation work to address and remeasure first;
-scheduler implementation still requires a justified follow-up scope and
-explicit approval. No separate deferred
-scheduler implementation plan is currently active.
+Engine-host visual playtesting remains deferred until engine-specific adapter
+work. Further performance work is evidence-gated: the archived scheduling plan
+records remaining cold-readiness limits and useful next measurements, not an
+approved new implementation scope.
 
 ## Recommended Execution Order
 
 The plans share evidence, not competing implementations:
 
-1. Recommended next: fix the confirmed assertion-only Release calculations
-   (`TRB-Issue-115`) and remeasure the retained Phase 3 workloads. Review portal
-   equivalence and exact-graph dependency-proof reuse as separate follow-ups to
-   `TRB-Benchmark-001`. Optimization and scheduler implementation have not been
-   started by this investigation.
-2. Complete the remaining shared movement scenarios in Gravitas integration
+1. Complete the remaining shared movement scenarios in Gravitas integration
    Phase 2 on the reviewed replacement boundary.
-3. Close the 3D adapter's package, documentation, and joint-verification gates.
+2. Close the 3D adapter's package, documentation, and joint-verification gates.
    Reference the same deterministic scenario evidence from both owning plans.
-4. Execute the dedicated 2D plan after its contract review, using the reviewed
+3. Execute the dedicated 2D plan after its contract review, using the reviewed
    motion and replacement boundaries. Add the planar adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.
-5. After every active feature-work plan is complete, release any changed
+4. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.
 
-Runtime implementation includes the fixed-profile Gravitas adapter and complete
-hardening Phases 1 and 2; Phase 3 measurement and its follow-up decision are also
-complete, with no new runtime API. The broader Gravitas integration Phase 2 and first-
-class 2D work remain incomplete; drafting or reviewing a plan does not mark
+Runtime implementation includes the Gravitas adapter and complete hardening
+Phases 1 and 2. Phase 3 itself added measurement rather than a new runtime API;
+its separately approved scheduling follow-up now adds explicit frame-spread
+guide acquisition. The broader Gravitas integration Phase 2 and first-class 2D
+work remain incomplete; drafting or reviewing a plan does not mark
 runtime checkboxes complete.
 The cross-stack rules apply throughout:
 
@@ -122,3 +115,21 @@ The cross-stack rules apply throughout:
    validation at each layer.
 5. Run Trailblazer `Release`, `ReleaseLean`, coverage, replay, allocation, and
    relevant benchmark gates against the released package chain.
+
+## Coordinated Release Gates
+
+Hardening and scheduling are complete locally and archived; release readiness
+is a separate cross-stack checkpoint. Do not infer these gates passed from the
+plans' exact local coverage or benchmark results.
+
+- [ ] After all active feature work is complete, run Windows/Linux CI in
+  Release and ReleaseLean against the exact intended release commit, including
+  both library targets and exact reachable coverage.
+- [ ] Release changed dependencies before their consumers, restore package-based
+  references and repeat the full test, replay, allocation, coverage and relevant
+  benchmark matrix against that final released chain.
+- [ ] Revalidate docs/examples and package artifacts against that same chain;
+  review remaining issue/benchmark dispositions before publishing Trailblazer.
+
+These gates were transferred from the completed hardening/scheduling closeout;
+they remain pending, not waived. Do not release an intermediate checkpoint.

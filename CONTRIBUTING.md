@@ -39,8 +39,8 @@ Benchmark commands and evidence rules live in
 2. Add or update tests for meaningful behavior changes. Cover exact ordering,
    fixed-point cost, boundaries, failure status, and serialization where they
    are part of the contract.
-3. Update public XML comments, the root README, the matching wiki page, API
-   snapshots, and migration guidance when their contract changes.
+3. Update public XML comments, the root README, the matching wiki page, generated
+   API-site authored guidance, and migration guidance when their contract changes.
 4. Run focused checks first, then the full applicable `Release` and
    `ReleaseLean` matrix. Describe the exact results in the pull request.
 5. Do not manually bump package versions. Release workflows derive versions

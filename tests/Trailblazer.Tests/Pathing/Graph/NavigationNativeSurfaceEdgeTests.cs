@@ -583,6 +583,110 @@ public sealed class NavigationNativeSurfaceEdgeTests
     }
 
     [Fact]
+    public void NativePortalTemplate_ShouldNotSubstituteForSaturatedFullDomainCenterSpacing()
+    {
+        GridConfiguration configuration = new(
+            new Vector3d(-1_073_741_824, 0, 0),
+            new Vector3d(1_073_741_824, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(
+                (Fixed64)1_073_741_824, Fixed64.One, Fixed64.One));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.Width.Should().Be(3);
+        NavigationMap map = new NavigationMapBuilder("map", binding).Build();
+        binding.TryGetCellPrism(new VoxelIndex(1, 0, 0), out GridCellPrism source).Should().BeTrue();
+        binding.TryGetCellPrism(new VoxelIndex(2, 0, 0), out GridCellPrism target).Should().BeTrue();
+        map.GetNativePortalTemplate(3).TryTranslate(source.Center, out GridNavigationPortal translated)
+            .Should().BeTrue();
+
+        source.Center.X.Should().Be(Fixed64.Zero);
+        target.Center.X.m_rawValue.Should().Be(4_611_686_018_427_387_903L);
+        translated.SourceToTarget.X.m_rawValue.Should().Be(4_611_686_018_427_387_904L);
+        GridCellGeometry.TryCreateNavigationPortal(source, target, out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(GridTopologyKind.RectangularPrism, HexOrientation.PointyTop, false)]
+    [InlineData(GridTopologyKind.RectangularPrism, HexOrientation.PointyTop, true)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.PointyTop, false)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.PointyTop, true)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.FlatTop, false)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.FlatTop, true)]
+    public void NativePortalTemplates_ShouldPreserveCompleteGeometryAndProfileAtTranslatedCells(
+        GridTopologyKind topology,
+        HexOrientation orientation,
+        bool fractional)
+    {
+        Fixed64 width = fractional ? Fixed64.FromRaw(4_294_967_302L) : (Fixed64)2;
+        Fixed64 height = fractional ? Fixed64.FromRaw(6_442_450_946L) : (Fixed64)2;
+        Fixed64 length = fractional ? Fixed64.FromRaw(10_737_418_246L) : (Fixed64)3;
+        GridTopologyMetrics metrics = topology == GridTopologyKind.RectangularPrism
+            ? GridTopologyMetrics.Rectangular(width, height, length)
+            : GridTopologyMetrics.Hex(width, height, orientation);
+        Vector3d[] origins =
+        {
+            new(-8, 3, -20),
+            new(Fixed64.FromRaw(-34_359_738_355L), Fixed64.FromRaw(12_884_901_905L),
+                Fixed64.FromRaw(-85_899_345_901L)),
+            new(-2_000_000_000, -2_000_000_000, -2_000_000_000),
+            new(2_000_000_000, 2_000_000_000, 2_000_000_000)
+        };
+        VoxelIndex[] sources = { new(1, 0, 1), new(2, 1, 3), new(4, 2, 4) };
+        foreach (Vector3d origin in origins)
+        {
+            GridConfiguration configuration = new(
+                origin,
+                origin + new Vector3d(40, 10, 40),
+                topologyKind: topology,
+                topologyMetrics: metrics);
+            configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+            NavigationMap map = new NavigationMapBuilder("map", binding).Build();
+            foreach (VoxelIndex source in sources)
+            {
+                binding.TryGetCellPrism(source, out GridCellPrism sourcePrism).Should().BeTrue();
+                for (int direction = 0; direction < map.NativePortalTemplateCount; direction++)
+                {
+                    VoxelIndex offset = NavigationMap.GetNativeSurfaceOffset(topology, direction);
+                    VoxelIndex target = new(source.x + offset.x, source.y, source.z + offset.z);
+                    binding.TryGetCellPrism(target, out GridCellPrism targetPrism).Should().BeTrue();
+                    GridCellGeometry.TryCreateNavigationPortal(
+                        sourcePrism, targetPrism, out GridNavigationPortal direct).Should().BeTrue();
+                    map.GetNativePortalTemplate(direction)
+                        .TryTranslate(sourcePrism.Center, out GridNavigationPortal translated)
+                        .Should().BeTrue();
+
+                    using var scope = new FluentAssertions.Execution.AssertionScope(
+                        $"{topology}/{orientation}, fractional={fractional}, origin={origin}, source={source}, direction={direction}");
+                    AssertPortal(translated, direct);
+                    Fixed64[] radii =
+                    {
+                        Fixed64.Zero, Fixed64.MinIncrement, direct.MaximumHorizontalRadius,
+                        direct.MaximumHorizontalRadius + Fixed64.MinIncrement
+                    };
+                    Fixed64[] heights =
+                    {
+                        Fixed64.MinIncrement, direct.MaximumBodyHeight,
+                        direct.MaximumBodyHeight + Fixed64.MinIncrement
+                    };
+                    foreach (Fixed64 radius in radii)
+                    {
+                        foreach (Fixed64 bodyHeight in heights)
+                        {
+                            bool expected = direct.TryResolveProfile(
+                                radius, bodyHeight, out Vector3d expectedSource, out Vector3d expectedTarget);
+                            translated.TryResolveProfile(
+                                    radius, bodyHeight, out Vector3d actualSource, out Vector3d actualTarget)
+                                .Should().Be(expected);
+                            actualSource.Should().Be(expectedSource);
+                            actualTarget.Should().Be(expectedTarget);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
     public void NodeState_ShouldDeriveExactBakedAndDynamicAnchors()
     {
         GridConfiguration configuration = new(
@@ -767,6 +871,8 @@ public sealed class NavigationNativeSurfaceEdgeTests
         actual.CanonicalFacePoint.Should().Be(expected.CanonicalFacePoint);
         actual.MaximumHorizontalRadius.Should().Be(expected.MaximumHorizontalRadius);
         actual.MaximumBodyHeight.Should().Be(expected.MaximumBodyHeight);
+        actual.VerticalFaceSegmentStart.Should().Be(expected.VerticalFaceSegmentStart);
+        actual.VerticalFaceSegmentEnd.Should().Be(expected.VerticalFaceSegmentEnd);
     }
 
     private static void AssertNodeAnchors(

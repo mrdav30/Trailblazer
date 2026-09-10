@@ -62,12 +62,17 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean
 
 ## Active Signals
 
+No active benchmark signals remain.
+
+## Closed Signals
+
 ### TRB-Benchmark-001 - Guide acquisition exceeds the provisional navigation allowance
 
 - **Discovered:** 2026-09-08
-- **Status:** Investigated; cold geometry and warm dependency-validation costs
-  attributed. Confirmed assertion-only Release work is `TRB-Issue-115`;
-  implementation and performance remeasurement have not started.
+- **Status:** Closed locally on 2026-09-09; focused optimizations and the approved
+  [deterministic scheduling plan](done/navigationSchedulingPlan.md) are implemented,
+  verified and independently reviewed. CI/released-package validation remains
+  part of the coordinated release gates, not a claim of this local closeout.
 - **Evidence:** The Phase 3 out-of-process `SlowAcquisition` protocol measures
   median public Flow acquisition of 5.51 seconds at 10K nodes and 55.42 seconds
   at 100K nodes; public A* medians are 2.14 and 21.92 seconds. Four distinct cold
@@ -75,14 +80,14 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean
   Every large cold sample exceeds the full 31.25 ms frame. The canonical 100K
   four-warm-request frame also exceeds the 2 ms allowance in all 300 samples
   (minimum 2.535 ms; sample P99 2.810 ms). Distributions, counters and artifacts are in
-  [the acquisition execution record](navigationAcquisitionMeasurements.md).
+  [the acquisition execution record](done/navigationHardeningPlan.md#phase-3---measurement-protocol-and-baseline).
 - **Budget:** Provisional 32 Hz headless host, 2 ms navigation allowance, 100
   existing Navigators and bursts of one or four requests. Finite query work
   limits do not bound elapsed time to one frame.
 - **Reproduction:** Run the cold guide/frame and canonical-control commands in the
   [benchmark guide](../../tests/Trailblazer.Benchmarks/README.md#cold-public-acquisition-and-containing-frames)
   against the recorded local source stack without competing builds or load.
-- **Investigation:** The [request-root profile and source audit](navigationAcquisitionInvestigation.md)
+- **Investigation:** The [request-root profile and source audit](done/navigationSchedulingPlan.md)
   attributes about 91-92% of sampled cold Flow/A* time to the simple surface-route
   path, including unused Release diagnostic geometry. Warm 100K acquisition
   spends about 95-97% in dependency validation; six full passes visit 9,378 page
@@ -90,25 +95,44 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean
   shares are attribution, not predicted speedups. `TRB-Issue-114` remains an
   unattributed covered-test observation and does not confound these separate
   acquisition traces.
-- **Next step:** Fix the narrow confirmed diagnostic-work defect first and
-  remeasure matched workloads. Evaluate native-portal equivalence and
-  request-scoped exact-graph dependency-proof reuse separately, preserving
-  geometry, publication, raw-world and lease-ownership checks. A scheduler can
-  bound work admitted in one frame but does not reduce total search cost. Do not
-  weaken traversal validation or add background completion ordering from timing
-  alone.
+- **Focused fix result:** After resolving `TRB-Issue-115`, matched cold public
+  Flow medians are 1.864 seconds at 10K and 18.924 seconds at 100K; A* medians
+  are 0.717 and 7.343 seconds. The same nine-sample protocol shows 65.85-66.50%
+  median reductions against the retained historical baseline, with unchanged
+  allocations and reported reference counters. Every selected sample still
+  exceeds the full frame allowance. Warm/frame performance was not remeasured;
+  the [execution record](done/navigationSchedulingPlan.md#cpu-cost-improvements)
+  retains the distributions, provenance limits and remaining decision.
+- **Further focused result:** Guarded rectangular portal reuse and method-local
+  dependency-proof reuse reduce cold Flow medians to 293.612 ms / 3,225.761 ms
+  and A* medians to 87.841 ms / 904.471 ms at 10K / 100K. All 36 cold samples
+  still exceed 31.25 ms. The directly measured 100K four-warm-request frame now
+  has observed P99 1.870 ms and maximum 1.915 ms across 300 samples, with
+  unchanged allocations and reference counters. See the
+  [full follow-up evidence](done/navigationSchedulingPlan.md#cpu-cost-improvements).
+- **Final result:** The scheduler-enabled build's four-warm-request P99 is
+  1.940 ms across 300 observations, with one 2.129 ms excursion. All 81 scheduled
+  actual operations have observed containing-frame P99 below 2 ms (highest
+  1.933 ms). The cold cases retain 653,175 frames, including 34 above 2 ms and
+  none above 31.25 ms; maximum is 3.924 ms. A* publication reaches 2.669 ms, so
+  completion is not universally below the allowance. Both configurations retain
+  exact 100% line/branch/method coverage.
+- **Disposition:** Warm reuse meets the selected observed-P99 allowance.
+  Synchronous cold acquisition remains rejected for the measured fixed frame;
+  use loading/off-frame preparation or explicit scheduling. Scheduling preserves
+  deterministic ownership and bounds continuation work but has substantial FIFO
+  latency: 100K Flow takes about 6 simulated minutes for one request and 24.25
+  minutes for the fourth at these conservative defaults. The
+  [complete results and limits](done/navigationSchedulingPlan.md#final-disposition)
+  retain every phase, outlier, completion frame and binary identity. No universal
+  timing guarantee, automatic Navigator queuing or further speculative search
+  optimization is implied by closure.
 
 ## Experimental Signals
 
 | Signal | Status | Revisit When |
 | ------ | ------ | ------------ |
 | n/a    | n/a    | n/a          |
-
-## Closed Signals
-
-| Signal | Status | Closed | Resolution |
-| ------ | ------ | ------ | ---------- |
-| n/a    | n/a    | n/a    | n/a        |
 
 ## Watch Items
 

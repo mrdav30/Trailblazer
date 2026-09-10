@@ -162,6 +162,8 @@ internal struct NavigationSurfaceEdgeRouteWork
             return Complete(NavigationSurfaceEdgeRouteStatus.CostOverflow);
         if (evaluation != TraversalEvaluationStatus.Passable)
             return Complete(NavigationSurfaceEdgeRouteStatus.Impassable);
+#if DEBUG
+        // Keep assertion-only geometry out of Release, including its prerequisite work.
         bool validSourceSegment = GridCellGeometry.IsNavigationBodySegmentValid(
                 evidence.SourcePrism,
                 evidence.SourceFootAnchor,
@@ -196,6 +198,7 @@ internal struct NavigationSurfaceEdgeRouteWork
                 && targetParameter == Fixed64.One),
             "published surface portals retain the exact validated profile crossing");
         System.Diagnostics.Debug.Assert(validSourceSegment && validTargetSegment);
+#endif
 
         _cost = evidence.Cost;
         SetPoints(

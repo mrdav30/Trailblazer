@@ -1,16 +1,13 @@
 # Navigation Hardening Implementation Plan
 
-> **For agentic workers:** Use `superpowers:subagent-driven-development` or
-> `superpowers:executing-plans` when execution is requested. Work phase by phase,
-> use independent reviewers for completed changes, and track progress with the
-> checkboxes below. Creating this plan does not start implementation.
-
 **Created:** 2026-09-03
 
-**Status:** Phases 1-3 are complete. Final CI/released-package closeout remains
-pending; measured acquisition cost is an open profiling follow-up, not a scheduler
-implementation. Phase 3's budget, protocol, evidence and decision live in
-[the acquisition execution record](navigationAcquisitionMeasurements.md).
+**Status:** Completed and archived on 2026-09-09. All three hardening phases
+and their independent local reviews are complete. The approved acquisition
+follow-up is closed in [Deterministic Guide Acquisition Scheduling](navigationSchedulingPlan.md).
+Unrun CI and final released-package checks remain explicit
+[coordinated release gates](../feature-work-overview.md#coordinated-release-gates);
+archival does not claim those gates passed.
 
 **Source baseline:** `cb0d744b76a377807a253f0efa1c480ba169a7e9`
 
@@ -47,20 +44,20 @@ Execute in this order:
    workload, emphasizing 10K-100K-node Flow builds. Deliver measurements and a
    decision, not a scheduler implementation.
 
-A frame-spread scheduler is conditional follow-up work. A measured need must be
-documented and its implementation scope explicitly approved before it is added.
-An evidence-backed decision to retain synchronous acquisition is a valid outcome.
+Phase 3 justified a separately approved scheduling follow-up, now completed.
+Its CPU-cost improvements and full-lifecycle measurements are retained in the
+[scheduling closeout](navigationSchedulingPlan.md), not duplicated here.
 
 ### Related plans and shared evidence
 
-- [Gravitas Integration](gravitasIntegrationPlan.md) owns the reusable adapter
+- [Gravitas Integration](../gravitasIntegrationPlan.md) owns the reusable adapter
   and joint physics/controller contract. Its first 3D slice supplies this
   plan's concrete host; it does not require runtime profile replacement first.
   Build that slice alongside Phase 1, then reuse its tests and accepted-motion
   evidence here. Adapter packaging does not gate the headless scenarios.
 - Phase 2 owns runtime profile replacement. The integration plan consumes that
   contract for coordinated collider changes after the initial 3D slice works.
-- [First-Class 2D Navigation](twoDimensionalNavigationPlan.md) is separate
+- [First-Class 2D Navigation](../twoDimensionalNavigationPlan.md) is separate
   feature work. These hardening scenarios target the current world-Y-up 3D
   controller; a fixed-height projection is not evidence of native 2D support.
 - Retain each shared scenario result once, with its exact adapter/library
@@ -85,8 +82,8 @@ An evidence-backed decision to retain synchronous acquisition is a valid outcome
 - Preserve transactional populate-existing-instance serialization. JSON remains
   supported in both packages; MemoryPack remains supported in standard Release.
 - Keep runtime fixes focused and record newly discovered correctness issues in
-  [issue-tracker.md](issue-tracker.md). Record measured performance signals in
-  [benchmark-signal-hardening-backlog.md](benchmark-signal-hardening-backlog.md).
+  [issue-tracker.md](../issue-tracker.md). Record measured performance signals in
+  [benchmark-signal-hardening-backlog.md](../benchmark-signal-hardening-backlog.md).
   A suspected movement-quality risk is not automatically a confirmed bug.
 - Do not stage, commit, tag, push, publish, or edit another repository without
   the corresponding user authorization. Preserve unrelated worktree changes.
@@ -98,34 +95,33 @@ An evidence-backed decision to retain synchronous acquisition is a valid outcome
 | 1 | Vertical traversal and movement-quality evidence | Complete | Headless acceptance cases and deterministic accepted-motion evidence recorded; confirmed defects resolved or explicitly dispositioned |
 | 2 | Runtime navigation-profile replacement | Complete | Atomic replacement, rejection behavior, guidance lifecycle, and serialization verified |
 | 3 | Cold public guide acquisition measurements | Complete | Repeated cold/warm and containing-frame evidence; profile acquisition cost before scheduler design (`TRB-Benchmark-001`) |
-| Closeout | Reviewed implementation and documentation | Local verification; CI/package gates pending | Required matrix, exact coverage, relevant benchmarks, and independent review complete |
+| Closeout | Reviewed implementation and documentation | Complete locally | Local matrix, exact coverage, relevant benchmarks and review complete; CI/released-package validation transferred to coordinated release gates |
 
-Check a task only after its observable result is verified. Update the dashboard
-and [Execution record](#execution-record) together. A completed plan-writing task
-does not mark any implementation phase complete.
+The completed checklists below preserve the accepted scope. Dated results are
+condensed in the [execution record](#execution-record).
 
 ## Starting evidence
 
 The baseline already contains useful component coverage. Reuse it rather than
 recreating those tests under new names:
 
-- [NavigationExplicitConnectionTests.cs](../../tests/Trailblazer.Tests/Pathing/Graph/NavigationExplicitConnectionTests.cs)
+- [NavigationExplicitConnectionTests.cs](../../../tests/Trailblazer.Tests/Pathing/Graph/NavigationExplicitConnectionTests.cs)
   verifies step limits per semantic leg.
-- [NavigationFlowFieldEquivalenceTests.cs](../../tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowFieldEquivalenceTests.cs)
+- [NavigationFlowFieldEquivalenceTests.cs](../../../tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowFieldEquivalenceTests.cs)
   compares A* and Flow across composed maps, including vertically separated grids.
-- [NavigationTransitionSimulationTests.cs](../../tests/Trailblazer.Tests/Navigation/NavigationTransitionSimulationTests.cs)
+- [NavigationTransitionSimulationTests.cs](../../../tests/Trailblazer.Tests/Navigation/NavigationTransitionSimulationTests.cs)
   covers transition publication, held instructions, and invalidation.
-- [ClimbLocomotion.Tests.cs](../../tests/Trailblazer.Tests/Navigation/Motor/Locomotion/ClimbLocomotion.Tests.cs)
+- [ClimbLocomotion.Tests.cs](../../../tests/Trailblazer.Tests/Navigation/Motor/Locomotion/ClimbLocomotion.Tests.cs)
   verifies climbing from a host-provided ladder affordance.
-- [JumpLocomotion.Tests.cs](../../tests/Trailblazer.Tests/Navigation/Motor/Locomotion/JumpLocomotion.Tests.cs)
-  and [FlyLocomotion.Tests.cs](../../tests/Trailblazer.Tests/Navigation/Motor/Locomotion/FlyLocomotion.Tests.cs)
+- [JumpLocomotion.Tests.cs](../../../tests/Trailblazer.Tests/Navigation/Motor/Locomotion/JumpLocomotion.Tests.cs)
+  and [FlyLocomotion.Tests.cs](../../../tests/Trailblazer.Tests/Navigation/Motor/Locomotion/FlyLocomotion.Tests.cs)
   cover individual jump/fall/flight rules. Extend them only for missing behavior;
   the additional value here is complete input/state/contact sequences.
-- [NavigationFlowFieldGuideTests.cs](../../tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowFieldGuideTests.cs)
+- [NavigationFlowFieldGuideTests.cs](../../../tests/Trailblazer.Tests/Pathing/Graph/NavigationFlowFieldGuideTests.cs)
   exercises off-axis portal progression and explicit connection witnesses.
-- [NavigationFlowFieldBenchmarks.cs](../../tests/Trailblazer.Benchmarks/Pathing/NavigationFlowFieldBenchmarks.cs)
+- [NavigationFlowFieldBenchmarks.cs](../../../tests/Trailblazer.Benchmarks/Pathing/NavigationFlowFieldBenchmarks.cs)
   measures internal cold integration at 100, 1K, 10K, and 100K settled nodes.
-  [NavigationGuideServiceBenchmarks.cs](../../tests/Trailblazer.Benchmarks/Pathing/NavigationGuideServiceBenchmarks.cs)
+  [NavigationGuideServiceBenchmarks.cs](../../../tests/Trailblazer.Benchmarks/Pathing/NavigationGuideServiceBenchmarks.cs)
   currently measures warm public Flow acquisition, sampling, and return.
 
 These establish existing capabilities, not completion of the end-to-end
@@ -138,24 +134,24 @@ successful accepted motion, and that invalid profiles fail explicitly.
 
 ### Code and documentation map
 
-- Extend [GuidedPathTestScene.cs](../../tests/Trailblazer.Tests/Support/GuidedPathTestScene.cs)
+- Extend [GuidedPathTestScene.cs](../../../tests/Trailblazer.Tests/Support/GuidedPathTestScene.cs)
   and the matching navigation tests when those fixtures fit. Add a focused
   scenario fixture only when sharing actual setup avoids duplication.
 - Exercise the public Navigator/guide lifecycle and the existing
-  [motor](../../src/Trailblazer/Navigation/Motor),
-  [steering](../../src/Trailblazer/Navigation/Steering), and
-  [Flow sampling](../../src/Trailblazer/Pathing/Search/Flow) implementations.
+  [motor](../../../src/Trailblazer/Navigation/Motor),
+  [steering](../../../src/Trailblazer/Navigation/Steering), and
+  [Flow sampling](../../../src/Trailblazer/Pathing/Search/Flow) implementations.
   These are investigation targets, not a mandate to edit every subsystem.
-- Use [NavigatorHeightmapGrounding.Tests.cs](../../tests/Trailblazer.Tests/Navigation/Navigator/NavigatorHeightmapGrounding.Tests.cs)
+- Use [NavigatorHeightmapGrounding.Tests.cs](../../../tests/Trailblazer.Tests/Navigation/Navigator/NavigatorHeightmapGrounding.Tests.cs)
   for a narrow heightmap-layer handoff companion case.
 - Reuse the fixed-frame host and accepted-motion boundary from
-  [GravitasNavigatorScenarioFixture.cs](../../tests/Trailblazer.Gravitas.Tests/Support/GravitasNavigatorScenarioFixture.cs)
+  [GravitasNavigatorScenarioFixture.cs](../../../tests/Trailblazer.Gravitas.Tests/Support/GravitasNavigatorScenarioFixture.cs)
   and its focused
-  [adapter behavior tests](../../tests/Trailblazer.Gravitas.Tests/GravitasNavigator3D.AcceptedMotion.Tests.cs).
+  [adapter behavior tests](../../../tests/Trailblazer.Gravitas.Tests/GravitasNavigator3D.AcceptedMotion.Tests.cs).
   Extend scenario setup deliberately; do not duplicate the adapter lifecycle in
   a second fixture.
-- Update [Transitions](../wiki/Transitions.md), [Navigator](../wiki/Navigator.md),
-  [NavMotor](../wiki/NavMotor.md), or [Path guides](../wiki/PathGuides.md) only
+- Update [Transitions](../../wiki/Transitions.md), [Navigator](../../wiki/Navigator.md),
+  [NavMotor](../../wiki/NavMotor.md), or [Path guides](../../wiki/PathGuides.md) only
   where the scenarios reveal missing integration guidance.
 
 ### Acceptance scenarios
@@ -278,21 +274,21 @@ without reconstructing the Navigator or leaving dependent state inconsistent.
 
 ### Code and documentation map
 
-- [NavigationAgentProfile.cs](../../src/Trailblazer/Pathing/Query/NavigationAgentProfile.cs)
+- [NavigationAgentProfile.cs](../../../src/Trailblazer/Pathing/Query/NavigationAgentProfile.cs)
   remains the immutable geometry/capability value.
-- [Navigator.cs](../../src/Trailblazer/Navigation/Navigator/Navigator.cs)
+- [Navigator.cs](../../../src/Trailblazer/Navigation/Navigator/Navigator.cs)
   owns replacement and coordinates geometry, foot position, and guidance.
-- [NavTurning.cs](../../src/Trailblazer/Navigation/Turning/NavTurning.cs),
-  [steering](../../src/Trailblazer/Navigation/Steering), and
-  [Navigator occupancy](../../src/Trailblazer/Navigation/Navigator/Occupancy)
+- [NavTurning.cs](../../../src/Trailblazer/Navigation/Turning/NavTurning.cs),
+  [steering](../../../src/Trailblazer/Navigation/Steering), and
+  [Navigator occupancy](../../../src/Trailblazer/Navigation/Navigator/Occupancy)
   contain dependent state to inspect and update where affected.
-- [Navigator.Serialization.cs](../../src/Trailblazer/Navigation/Navigator/Navigator.Serialization.cs)
-  and [NavigationAgentProfileRecord.cs](../../src/Trailblazer/Navigation/Serialization/NavigationAgentProfileRecord.cs)
+- [Navigator.Serialization.cs](../../../src/Trailblazer/Navigation/Navigator/Navigator.Serialization.cs)
+  and [NavigationAgentProfileRecord.cs](../../../src/Trailblazer/Navigation/Serialization/NavigationAgentProfileRecord.cs)
   define the existing persistence boundary.
-- Extend [Navigator.Tests.cs](../../tests/Trailblazer.Tests/Navigation/Navigator/Navigator.Tests.cs),
-  [NavigatorSerialization.Tests.cs](../../tests/Trailblazer.Tests/Navigation/Navigator/NavigatorSerialization.Tests.cs),
-  and the Phase 1 scenarios. Update [Navigator](../wiki/Navigator.md),
-  [Serialization](../wiki/Serialization.md), affected public XML, and runnable
+- Extend [Navigator.Tests.cs](../../../tests/Trailblazer.Tests/Navigation/Navigator/Navigator.Tests.cs),
+  [NavigatorSerialization.Tests.cs](../../../tests/Trailblazer.Tests/Navigation/Navigator/NavigatorSerialization.Tests.cs),
+  and the Phase 1 scenarios. Update [Navigator](../../wiki/Navigator.md),
+  [Serialization](../../wiki/Serialization.md), affected public XML, and runnable
   examples with the final contract.
 
 ### Replacement contract
@@ -442,13 +438,14 @@ acquisition fits a concrete host's simulation budget.
 
 ### Measurement boundary
 
-[TrailblazerGuideService.cs](../../src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs)
-currently drains both public A* and Flow requests synchronously. Internal work
-can resume in bounded slices, but the public query budget bounds total work,
-not elapsed time in one simulation frame.
+[TrailblazerGuideService.cs](../../../src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs)
+drained public A* and Flow requests synchronously at the Phase 3 baseline.
+Internal work could resume in bounded slices, but query budgets bounded total
+work, not elapsed time in one frame. The later scheduler adds an explicit
+alternative without changing that synchronous contract.
 
 Extend the existing
-[benchmark project](../../tests/Trailblazer.Benchmarks/README.md). Add focused
+[benchmark project](../../../tests/Trailblazer.Benchmarks/README.md). Add focused
 cold public-service cases alongside the existing internal cold and public warm
 cases; do not replace the warm-cache controls or time world construction as if
 it were acquisition.
@@ -490,253 +487,146 @@ it were acquisition.
 
 ## Verification And Closeout
 
-Run focused tests while implementing each task. A regression fix requires the
-behavioral test to fail for the intended reason before the production change.
-Use the [contributor guide](../../AGENTS.md) for the current full gate commands.
-From the repository root, the package matrix is:
+- [x] Full local-source Release/ReleaseLean solution builds and tests, both
+  library targets, exact reachable coverage and independent reviews completed.
+- [x] Deterministic acceptance, replay, transactional load, allocation and
+  ownership gates verified. `TRB-Issue-114` remains explicitly mitigated and
+  unattributed in the [issue tracker](../issue-tracker.md), not silently resolved.
+- [x] Changed examples, wiki publishing helpers and DocFX verified locally.
+- [x] Phase 3's rejected timing target received a measured follow-up disposition:
+  `TRB-Benchmark-001` is closed in the [scheduling plan](navigationSchedulingPlan.md#final-disposition).
+- [x] Supporting measurement notes condensed here; profiling and scheduling
+  evidence condensed into the scheduling plan; overview and inbound links updated.
 
-```powershell
-dotnet restore Trailblazer.slnx --property:Configuration=Release
-dotnet build Trailblazer.slnx --configuration Release --no-restore
-dotnet test Trailblazer.slnx --configuration Release --no-build
+These are Windows/local-source results. Windows/Linux CI for the eventual tested
+commit and validation against the final released dependency chain were not run
+for this closeout. They are retained as unchecked
+[coordinated release gates](../feature-work-overview.md#coordinated-release-gates).
+Engine-host visual playtesting belongs to future engine-specific adapter work.
 
-dotnet restore Trailblazer.slnx --property:Configuration=ReleaseLean
-dotnet build Trailblazer.slnx --configuration ReleaseLean --no-restore
-dotnet test Trailblazer.slnx --configuration ReleaseLean --no-build
-```
-
-Run each command only after the preceding command succeeds. Do not run package
-family restores/builds concurrently in the same checkout. For coverage, use
-[coverlet.runsettings](../../tests/Trailblazer.Tests/coverlet.runsettings) and
-the exact gates in the [coverage workflow](../../.github/workflows/coverage.yml);
-collect and enforce them independently for both configurations.
-
-- [ ] Full Release/ReleaseLean builds and tests pass, including both library
-  targets; Windows/Linux CI evidence is recorded for the tested commit.
-  Local-source builds/tests pass; this combined gate remains open for CI and
-  the coordinated released-package validation after upstream releases.
-- [x] Both configurations retain exact line, branch, method, and fully-covered-
-  method totals under the existing reachable-code policy.
-- [x] Relevant deterministic replay, allocation, lifetime, and benchmark gates
-  pass; all new regression and acceptance cases verify observable behavior.
-  Benchmark correctness/lifetime checks pass; the measured provisional timing
-  target does not. Its open disposition is `TRB-Benchmark-001`, not a hidden
-  performance pass. `TRB-Issue-114` remains a mitigated allocation-test watch item.
-- [x] Changed public examples compile/run, wiki links validate, and DocFX builds
-  with `--warningsAsErrors` from the Release assembly. Do not edit generated
-  `docs/api/obj` output.
-- [x] An independent final review has no unresolved release-blocking findings;
-  every discovered issue/signal has a recorded disposition.
-- [ ] Phase checklists and evidence agree. Update
-  [feature-work-overview.md](feature-work-overview.md) and archive this plan
-  under `done/` only when the agreed deliverables are genuinely complete.
+Use the [contributor guide](../../../AGENTS.md) and
+[coverage workflow](../../../.github/workflows/coverage.yml) for verification
+commands. Do not restore/build different package families concurrently in one
+checkout; validate unreleased coordinated changes with `UseLocalLsfStack=true`,
+then repeat with package references after dependency releases.
 
 ## Execution record
 
-Append a dated entry after each reviewed milestone with the tested commit or
-working-tree identity, scenario/test names, commands and outcomes, artifact
-references, linked issue/signal IDs, decisions, and the next unfinished
-task. Do not substitute old coverage totals for fresh verification.
+### Phases 1 and 2 - accepted behavior
 
-### 2026-09-03 - Scope captured
+Phase 1 was reviewed on 2026-09-06 and closed on 2026-09-07. The shared Gravitas
+host proves physical stairs, stacked floors, an exact four-frame ladder action,
+off-axis Flow for single/grouped bodies, airborne transitions, deterministic
+replay and paired free-fall/controlled-descent impact traces at 32 Hz.
+`TRB-Issue-104` through `107` and upstream `GRV-Issue-069` were resolved.
+Source baselines were Trailblazer `ef5da2142cd35bb47658e113ebb3a403dd542134`
+and Gravitas `819e635cf06b416cfc81da82c474b5688d3063a7`, plus the reviewed diffs.
 
-- Recorded the approved three-phase order and acceptance boundaries.
-- Implementation and new performance measurements have not
-  started. No phase completion or new runtime verification is claimed.
-- Next task: establish the Phase 1 scenario inputs and bounded expectations.
+Phase 2 completed on 2026-09-08 from Trailblazer
+`0ac474a3da3947c161b4ea57bc82b588b702c7e2` and Gravitas
+`f25f1b8f617427f7e41824103f323da72d1a076f`, plus reviewed diffs.
+`Navigator.TryReplaceNavigationProfile(...)` preserves the foot anchor and
+identities while preflighting graph, occupancy, guidance, medium and physical
+fit. The coordinated Gravitas capsule transaction commits matching physical
+and navigation envelopes before separation notifications; callback failure
+cannot leave cross-library split state or interrupt remaining pair retirement.
+Tests cover stand/crouch/compact cycles, blocked growth/retry, translating and
+rotating platforms, offset/capability changes, durable A*/Flow intent, action
+ownership, deterministic replay and JSON/MemoryPack population. Restore rebuilds
+the Gravitas body before the Navigator. `TRB-Issue-108` through `112` and
+`GRV-Issue-070` were resolved, including duplicate parallel build-node races.
 
-### 2026-09-03 - Scenario and integration scope refined
+| Local checkpoint | Release core + adapter tests | Lean core + adapter tests | Lines / branches / fully covered methods (both configurations) |
+| --- | ---: | ---: | --- |
+| Phase 1 | 2,355 + 52 | 2,294 + 52 | 30,161 / 11,829 / 2,955, all exact |
+| Phase 2 and Phase 3 | 2,395 + 65 | 2,333 + 65 | 30,628 / 11,977 / 2,982, all exact |
 
-- Added complete posture cycles, compact-body presentation, airborne permission
-  transitions, and parachute-style controlled-descent acceptance criteria.
-- Selected a Gravitas-backed 3D host for motion acceptance and linked
-  its separately owned adapter plan. Kept first-class 2D in its own plan.
-- Defined shared-evidence ownership and the Phase 1/Phase 2 dependency boundary;
-  no implementation, new tests, or measurements have started.
-- Next task: establish bounded Phase 1 inputs alongside Gravitas integration
-  preflight and the initial fixed-profile 3D adapter slice.
+Phase 2 Gravitas separately passed 3,950 Release and 3,895 Lean tests, with exact
+44,173 / 12,918 / 4,530 and 44,171 / 12,918 / 4,529 line/branch/method totals.
+Both repositories passed DocFX warnings-as-errors and wiki helper checks.
+The later scheduler's final-build matrix is recorded in its
+[verification section](navigationSchedulingPlan.md#verification-and-provenance).
 
-### 2026-09-05 - Fixed-profile Gravitas host ready
+### Phase 3 - measurement protocol and baseline
 
-- The linked Gravitas integration Phase 1 slice now provides a shared-world
-  32 Hz fixture with real kinematic collision resolution, accepted pose and
-  velocity commit, support translation, stable multi-actor ordering, and strict
-  prepare/resolve/commit lifecycle checks.
-- The adapter's 19 focused tests pass in local-source `Release` and
-  `ReleaseLean` with exact line, branch, and method coverage. This is reusable
-  infrastructure, not completion of the stairs, ladder, stacked-floor,
-  airborne-sequence, or movement-quality requirements above.
-- Next task: establish the bounded authored inputs for hardening Phase 1 and run
-  those worlds through the verified adapter boundary. Releases remain deferred
-  until the active feature-work overview is complete.
+This section condenses the former `navigationAcquisitionMeasurements.md`.
+Measurements completed on 2026-09-08, before the later runtime optimizations.
+The acceptance host was Windows 11 build 26200, i7-9700K (8 cores), 32 GiB,
+.NET 8.0.29 / SDK 10.0.302, BenchmarkDotNet 0.15.8, Release, workstation
+concurrent GC and the high-performance power plan. The declared budget was
+**2 ms navigation observed P99 inside a 32 Hz (31.25 ms) frame**.
 
-### 2026-09-06 - Phase 1 behavior ownership refined
+The host simulates 100 input-driven Navigators, without a collision solver,
+guide-following agents, rendering, networking or gameplay. Worlds are unit-cell
+Solid planes of 10x10, 100x100 and 400x250, plus a 100-node ladder joining two
+50-cell landing strips separated by 2 Y units. The ladder has one Climb action
+with cost 1. Profiles use radius 0.25, height 1, zero offset/step/drop and
+Solid-only travel (plus Climb on the ladder); authored clearance is 4 with
+zero added terrain cost. These are controlled workloads, not a typical-game claim.
 
-- Confirmed that Gravitas `SolidBody.StepOffset` preserves down-step grounding;
-  it is not an implicit step-up controller. Stair acceptance must therefore be
-  proven through actual collision-accepted geometry, with no ownership claim
-  based only on that setting.
-- Recorded the fall-preserving parachute-style behavior as `TRB-Issue-104` and
-  selected the smallest contract: explicit fall intent and tuning on the
-  required `FallLocomotion`, not a new module and not flight reuse.
-- Confirmed that visual host validation belongs with future engine-specific
-  adapter/package work. The current engine-agnostic hardening gate is the
-  deterministic accepted-motion evidence produced by the shared Gravitas host.
+For N nodes, query budgets provide N expansions, 512N lookups, 32N edges and
+4N connection/transition/staged/trace/covered work. Endpoint limits are 2 on
+planes and 8 on the ladder; simplification rays are disabled. One active query
+slot has N node capacity, 2N-1 point capacity, two components and eight entries
+per cache; payload caps use the benchmark's exact sizing helper.
+Four-request bursts use distinct exact profile keys with identical graph
+eligibility, not four consumers reusing one destination payload.
 
-### 2026-09-06 - Phase 1 headless acceptance reviewed
+Cold cases use three launches, one warmup and three actual operations per launch:
+nine observations justify reporting min/median/max, not a reliable P99.
+Canonical warm/baseline cases use three launches, ten warmups and 100 actual
+operations per launch. Accepted evidence contains 28 rows, 84 successful child
+launches and 3,744 actual observations. Failed sizing/smoke runs are excluded;
+reported outliers remain in the accepted distributions. Setup/publication/cache
+preparation are untimed; cold queries verify empty caches before each invocation.
+Public acquisition includes lease disposal but not sampling.
 
-- Implemented and reviewed the headless Phase 1 slice from Trailblazer working
-  tree `ef5da2142cd35bb47658e113ebb3a403dd542134` and the approved Gravitas
-  sibling working tree `819e635cf06b416cfc81da82c474b5688d3063a7`, both on `develop`.
-- Added bounded A*/Flow acceptance for physical stairs, stacked floors, an exact
-  four-frame ladder action, and off-axis Flow guidance for single and grouped
-  bodies. Added the complete airborne transition table, deterministic replay,
-  and paired free-fall/controlled-descent impact traces at 32 Hz.
-- Resolved `TRB-Issue-104` through `TRB-Issue-107`. The final independent review
-  additionally found and closed current-frame facing-state selection, missing
-  reverse `MaxDropDown` boundaries, ladder test-helper bookkeeping, a
-  false-positive serialization case, and insufficient impact evidence. The
-  former multi-scenario Gravitas fixture was split into dedicated stair,
-  stacked-floor, and off-axis authoring fixtures with no hidden behavior flags.
-- Final local-source `Release` validation built both target frameworks with zero
-  warnings and passed 52 adapter plus 2,355 core tests. Instrumentation covered
-  30,161 of 30,161 lines, 11,829 of 11,829 branches, and all 2,955 methods fully.
-  `ReleaseLean` likewise built both targets with zero warnings, passed 52 adapter
-  plus 2,294 core tests, and retained the same exact coverage totals.
-- The Release DocFX build completed with warnings as errors, the wiki helper
-  passed 4/4, the published-copy rewrite completed, and all 131 generated local
-  links resolved. Trailblazer and Gravitas diff checks were clean. Gravitas also
-  retained its independently verified exact `Release`/`ReleaseLean` coverage
-  after the shape-exact zero-time CCD correction recorded as `GRV-Issue-069`.
-- No Windows/Linux CI claim is made for these uncommitted working trees.
+| Baseline workload | 10K median ms | 100K median ms |
+| --- | ---: | ---: |
+| Cold public Flow | 5,513.532 | 55,415.369 |
+| Cold public A* | 2,138.129 | 21,920.730 |
+| Frame containing four distinct cold Flow requests | 21,725.395 | 221,105.422 |
 
-### 2026-09-07 - Phase 1 closed
+Every large cold observation exceeds even the entire 31.25 ms frame.
+The baseline 100K four-warm-request frame has median 2.587 ms, observed P99
+2.810 ms and maximum 3.122 ms; all 300 observations exceed 2 ms.
+This justified profiling first, then a separately approved scheduler—not
+treating scheduling as a substitute for reducing CPU cost.
+Small 100-node plane medians were 71.578 ms Flow / 28.063 ms A*, and ladder
+86.272 / 83.564 ms. **Those small controls were not remeasured after optimization.**
 
-- Accepted the independently reviewed headless scenarios and deterministic
-  accepted-motion traces as the Phase 1 movement-quality evidence.
-- Removed observable engine-host playtesting from this engine-agnostic hardening
-  plan. Visual validation is deferred until Trailblazer and Gravitas have
-  engine-specific adapter packages and a separately owned integration scope.
-- Closed Phase 1 with all confirmed defects resolved and advanced Phase 2 runtime
-  navigation-profile replacement to in progress.
-- Next task: settle and implement the atomic runtime profile-replacement contract.
+Matched internal Flow work settles exactly 10,000 / 100,000 nodes, evaluating
+236,408 / 2,388,308 edges and 476,569 / 6,096,442 lookups. These are Flow counters,
+not A* expansion counts. Flow immutable payloads retain 769,272 / 7,688,008 bytes;
+A* payloads retain 31,560 / 160,696 bytes with 397 / 1,297 steps. A* returns a
+route while Flow integrates a reusable field; their times are not interchangeable.
+The benchmark-only internal workspace allocation preflight is 13,672,200 /
+110,552,200 bytes, not a production retained-heap estimate.
+The two older service controls print static cleanup zeros; only the new fixtures'
+actual drained-ownership checks establish fresh teardown evidence.
 
-### 2026-09-08 - Phase 2 completed and reviewed
+The baseline used these commits plus recorded working-tree changes:
 
-- Implemented `Navigator.TryReplaceNavigationProfile(...)` as one explicit
-  status-returning transaction on Trailblazer working tree
-  `0ac474a3da3947c161b4ea57bc82b588b702c7e2` plus the recorded uncommitted
-  changes. It preserves the foot anchor and stable identities, preflights graph,
-  occupancy, guidance, lifecycle, medium, and physical fit, then updates derived
-  turning, group, occupancy, capability, query, and committed-cell state.
-- Added the coordinated Gravitas capsule transaction on working tree
-  `f25f1b8f617427f7e41824103f323da72d1a076f` plus the recorded uncommitted
-  changes. Same-family geometry, offset, root, mass properties, partitions, and
-  pair retirement now publish coherently. The adapter's synchronized-state
-  publisher commits Trailblazer before separation callbacks run, and callback
-  failure cannot interrupt remaining pair retirement.
-- Verified stand/crouch and stand/compact cycles through low passages, rejected
-  growth and successful retry, translating and rotating platform carry,
-  foot-offset changes, unchanged/invalid/unsafe requests, occupancy and graph
-  clearance, durable A*/Flow intent, action ownership, capability loss/recovery,
-  deterministic repeats, and JSON/MemoryPack populate-existing-instance flows.
-  The cross-library restore case reconstructs the Gravitas body first and the
-  Navigator second before resuming the compact passage.
-- Resolved `TRB-Issue-108` through `TRB-Issue-112` and upstream
-  `GRV-Issue-070`. In particular, accepted physical reconfiguration now invokes
-  the adapter's synchronized-state publisher before separation callbacks, then
-  returns any publisher or callback failure as post-commit notification
-  evidence. Every observer therefore sees the matching physical and navigation
-  envelopes before a preserved failure is rethrown, closing the independently
-  reviewed cross-library split-brain case. The same-lease Flow allocation gate now establishes the complete
-  measured capacity state before asserting zero steady-state allocation.
-  Independent review also challenged area-policy indexing; source verification
-  showed that policy publication requires the context's exact area count and map
-  publication validates cell areas against that same count, so no reachable
-  compatibility branch or percentage-only test was added.
-- Focused suites pass 40 core, 13 adapter, and 15 upstream collider-
-  reconfiguration tests. Local-source Trailblazer solution builds have zero
-  warnings/errors; `Release` passes 2,395 core plus 65 adapter tests and
-  `ReleaseLean` passes 2,333 core plus 65 adapter tests. Both configurations
-  report exact 30,628/30,628 lines, 11,977/11,977 branches, and 2,982/2,982
-  methods across Trailblazer and its adapter.
-- Gravitas solution builds have zero warnings/errors; `Release` passes 3,950
-  tests with exact 44,173/44,173 lines, 12,918/12,918 branches, and 4,530/4,530
-  methods. `ReleaseLean` passes 3,895 tests with exact 44,171/44,171 lines,
-  12,918/12,918 branches, and 4,529/4,529 methods.
-- Trailblazer and Gravitas DocFX builds complete with zero warnings/errors;
-  wiki-rewrite tests pass 4/4 and 5/5 respectively, and generated local-link
-  validation covers 132 and 192 HTML pages. No Windows/Linux CI claim is made
-  for these uncommitted working trees.
-- A final local-stack gate exposed `TRB-Issue-112`: redundant in-repository
-  version globals let parallel MSBuild schedule duplicate nodes that raced one
-  output path. Trailblazer now owns its 2.0.0 local-stack identity, the redundant
-  reference globals are removed, and fresh parallel no-incremental `Release`
-  and `ReleaseLean` solution builds plus full tests pass with zero warnings and
-  errors.
-- Next task: execute Phase 3's cold public guide-acquisition measurements and
-  record the evidence-based scheduler/no-change decision.
+| Repository | Commit |
+| --- | --- |
+| Trailblazer | `040c886972f011d15eb9b3189314224817e331d5` |
+| FixedMathSharp | `41eba3cc09e533e505faa66bcd3c7c68606f7258` |
+| SwiftCollections | `df71a0fad083f42a8dde528f8a0634ab8d5a5a54` |
+| GridForge | `b693e383c1a04e07fd8f4048a6c863b3f7af515d` |
+| Gravitas (test matrix only) | `42af506fec0d1aabe5ff9750e0a2d148fe82a5b0` |
 
-### 2026-09-08 - Phase 3 measured and reviewed
+Independent review verified all distributions, timing boundaries, allocation,
+payload and ownership evidence. Final post-capture builds/coverage passed the
+Phase 2/3 totals above, DocFX had zero warnings/errors and wiki helpers passed
+4/4. `TRB-Issue-113` corrected stale benchmark guidance; `TRB-Issue-114` records
+the 616-byte allocation-guard failure and test-only warmup mitigation, not a
+runtime allocator fix.
 
-- Completed the measurement-only slice on `develop` at
-  `040c886972f011d15eb9b3189314224817e331d5` plus the benchmark, documentation
-  and test-warmup working-tree changes. Production runtime source and sibling
-  repositories are unchanged. The exact local-stack commits, benchmark source
-  hashes, commands, workloads, distributions and artifact fingerprints are in
-  [the acquisition execution record](navigationAcquisitionMeasurements.md).
-- Added public cold Flow/A*, matched internal Flow, small plane/ladder controls,
-  and 100-Navigator containing frames with zero, one or four acquisitions. All
-  accepted captures retain 28 rows, 84 successful child launches and 3,744 actual
-  single-operation samples. Independent review verified timing boundaries,
-  cold/warm preconditions, every distribution, allocation and cleanup evidence.
-  Final prose distinguishes the two older service controls' static cleanup
-  reporting from fresh drain checks in the new benchmarks; no teardown proof
-  is inferred from those older printed zeros.
-- The predeclared 32 Hz headless host gives navigation 2 ms at P99. Cold sizing
-  required a reviewed three-launch, one-warmup, three-actual-per-launch protocol:
-  report min/median/max, not a reliable cold P99. Canonical warm/baseline controls
-  retain three launches and 100 actual iterations per launch. Smoke and failed
-  sizing runs are excluded. Raw accepted captures are preserved in the local
-  ignored `artifacts/hardening-phase3/phase3-acquisition-evidence.zip`.
-- Public Flow medians are 5.51 seconds at 10K nodes and 55.42 seconds at 100K;
-  public A* medians are 2.14 and 21.92 seconds. Every large cold sample exceeds
-  even the entire 31.25 ms frame. Four warm 100K requests also exceed the 2 ms
-  navigation allowance in all 300 samples (sample P99 2.810 ms). This headless
-  evidence is not a game-engine SLA or proof of a specific algorithmic defect.
-- Recorded `TRB-Benchmark-001`: profile cold construction and large warm
-  acquisition/validation before selecting a scheduler API. Scheduling would
-  reduce single-frame monopolization, not the total CPU cost. Documented future
-  ownership, stable ordering, aggregate slices, cancellation, caller-intent,
-  dependency and restore/replay constraints; no scheduler implementation is
-  included or implicitly approved.
-- Resolved stale physics benchmark guidance as `TRB-Issue-113`. A full covered
-  run also exposed a 616-byte warm-attach guard failure; `TRB-Issue-114` records
-  the test-only 256-cycle warmup/measurement alignment and passing final matrices.
-  The allocator remains unattributed; no production allocator fix is claimed.
-- After all captures, fresh local-source Release/ReleaseLean solution builds
-  pass both target frameworks with zero warnings/errors. Covered Release passes
-  2,395 core plus 65 adapter tests; ReleaseLean passes 2,333 core plus 65 adapter
-  tests. Both final reports enforce exact 30,628/30,628 lines, 11,977/11,977
-  branches and 2,982/2,982 methods, all fully covered.
-- The final Release DocFX build has zero warnings/errors, wiki helper tests pass
-  4/4, the published-copy rewrite succeeds and local-link validation covers 132
-  HTML pages. No Windows/Linux CI or released-package result is claimed for this
-  working diff. The plan remains here pending those final gates, not archived.
-- Recommended next task: approve focused profiling of `TRB-Benchmark-001`, then
-  continue the remaining Gravitas integration Phase 2 scope. No follow-up
-  implementation, staging, commit, push or release is performed by this phase.
-
-### Post-Phase 3 Acquisition Investigation - 2026-09-08
-
-- The requested follow-up profiling is complete; source attribution, limitations
-  and retained evidence are in the
-  [acquisition investigation](navigationAcquisitionInvestigation.md).
-- Cold Flow/A* share expensive surface geometry, including confirmed
-  assertion-only calculations left active in Release (`TRB-Issue-115`). Large
-  warm Flow requests are dominated by six dependency-stamp validation passes.
-- Recommended next: remove the unused Release diagnostic work and remeasure,
-  then evaluate portal equivalence and request-scoped dependency-proof reuse
-  separately. `TRB-Benchmark-001` stays open; no performance fix or scheduler
-  has been implemented. `TRB-Issue-114` does not confound the separate acquisition
-  profiles, but its historical allocator remains unattributed.
+Reproduction commands and fixture contracts remain in the
+[benchmark README](../../../tests/Trailblazer.Benchmarks/README.md#cold-public-acquisition-and-containing-frames).
+Raw logs, all distributions, source hashes and report fingerprints remain in the
+ignored local archive `artifacts/hardening-phase3/phase3-acquisition-evidence.zip`,
+SHA-256 `D1ACA63C0FD9D9E357AC422E418EA4C79B534512BAE9AF4150E684ED200F0B06`.
+This archive is local evidence, not a checked-in or publicly downloadable artifact.
+The final profiling/optimization comparison is consolidated in the
+[scheduling closeout](navigationSchedulingPlan.md#cpu-cost-improvements).

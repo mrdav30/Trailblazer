@@ -29,7 +29,8 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
     private readonly bool _ladder;
     private long _expectedCost;
 
-    internal ColdGuideBenchmarkScenario(string geometry, int nodeCount, int concurrentQueries = 1)
+    internal ColdGuideBenchmarkScenario(string geometry, int nodeCount, int concurrentQueries = 1,
+        NavigationSchedulingSettings schedulingSettings = null)
     {
         SwiftThrowHelper.ThrowIfTrue(geometry != "Plane" && geometry != "Ladder", "Unknown cold geometry.");
         _ladder = geometry == "Ladder";
@@ -45,7 +46,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
                 topologyKind: GridTopologyKind.RectangularPrism,
                 topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One), storageKind: GridStorageKind.Dense)
             : NavigationGraphBenchmarkScenario.CreateConfiguration(width, length);
-        TrailblazerWorldContextSettings settings = CreateSettings(nodeCount, concurrentQueries);
+        TrailblazerWorldContextSettings settings = CreateSettings(nodeCount, concurrentQueries, schedulingSettings);
         _maximumAStarBytes = settings.QueryLimits.MaxAStarSinglePayloadBytes;
         Fixture = new BenchmarkPathFixture();
         Fixture.Setup(configuration, settings);
@@ -109,6 +110,28 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
     internal int AStarStepCount { get; private set; }
     internal long WorkspaceAllocatedBytes { get; }
     internal long WarmAllocatedBytes { get; }
+    internal long ExpectedCost => _expectedCost;
+
+    /// <summary>Removes one completed scheduled A* payload after its lease has been released.</summary>
+    internal void RemoveAStarPayload(PathQuery query)
+    {
+        NavigationAStarPayloadCache cache = Fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
+        var key = new NavigationAStarPayloadKey(query, _start, _end, TraversalMedium.Solid, TraversalMedia.Solid);
+        SwiftThrowHelper.ThrowIfTrue(!cache.TryReservePayload(_maximumAStarBytes, out var reservation),
+            "Scheduled A* eviction reservation failed.");
+        try
+        {
+            SwiftThrowHelper.ThrowIfTrue(!cache.TryCheckoutReserved(key,
+                Fixture.Context.Pathing.NavigationGraphStore.Current, ref reservation, out var lease),
+                "Scheduled A* eviction expected the exact completed payload.");
+            using (lease)
+                cache.RemoveExact(lease.Payload);
+        }
+        finally
+        {
+            cache.ReleasePayloadReservation(ref reservation);
+        }
+    }
 
     private void WriteSetupPhase(string phase, Stopwatch clock, ref long allocatedBefore)
     {
@@ -308,7 +331,8 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
         query.Agent, query.AreaPolicy, query.Traversal, algorithm, query.Budget, query.AllowTransitions,
         new FlowFieldQueryOptions(Fixed64.Zero));
 
-    private static TrailblazerWorldContextSettings CreateSettings(int nodes, int activeLeases)
+    private static TrailblazerWorldContextSettings CreateSettings(int nodes, int activeLeases,
+        NavigationSchedulingSettings schedulingSettings)
     {
         TrailblazerWorldContextSettings defaults = NavigationGraphBenchmarkScenario.CreateSettings(nodes, 1, 8);
         int pages = NavigationGraphBenchmarkScenario.GetPageCapacity(nodes);
@@ -333,6 +357,6 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
             defaults.MaxRetiredSnapshots, defaults.MaxRetiredSnapshotBytes, defaults.MaxPersistentGraphPages,
             defaults.MaxDynamicCellSlotsPerMap, defaults.MaxDynamicCellSlots, defaults.NavigationAreaCount,
             defaults.MaxAreaPolicies, defaults.MaxAreaRulesPerPolicy, defaults.MaxAreaRules,
-            Math.Max(defaults.MaxConcurrentSnapshotLeases, activeLeases), limits);
+            Math.Max(defaults.MaxConcurrentSnapshotLeases, activeLeases), limits, schedulingSettings);
     }
 }

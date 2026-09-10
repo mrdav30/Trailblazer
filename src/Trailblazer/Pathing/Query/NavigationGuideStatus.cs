@@ -7,7 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Reports the terminal state of one public navigation guide request or lease operation.</summary>
+/// <summary>Reports the state of one public navigation guide request or lease operation.</summary>
 public enum NavigationGuideStatus : byte
 {
     /// <summary>The request or lease operation succeeded.</summary>
@@ -33,5 +33,9 @@ public enum NavigationGuideStatus : byte
     /// <summary>A required graph dependency changed during the operation.</summary>
     Stale = 10,
     /// <summary>The actual foot position requires bounded local field recovery.</summary>
-    LocalRecoveryRequired = 11
+    LocalRecoveryRequired = 11,
+    /// <summary>The accepted scheduled request has not completed.</summary>
+    Pending = 12,
+    /// <summary>The scheduled request was cancelled before completion.</summary>
+    Cancelled = 13
 }

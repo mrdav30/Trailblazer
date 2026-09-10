@@ -83,8 +83,9 @@ The normal host lifecycle is:
    revisions;
 4. admit maps, policies, removals, and overlays through `context.Pathing`;
 5. call `context.Simulate()` once per deterministic fixed frame to advance graph
-   publication and ordered simulation hooks;
-6. request A* or Flow leases through `context.Guides`;
+   publication, one scheduled acquisition phase, and ordered simulation hooks;
+6. acquire A* or Flow leases through `context.Guides`, synchronously or by
+   polling an owned scheduled request after each fixed frame;
 7. drive `Navigator.Simulate()` and `Navigator.CommitFrameMotion()` for
    controller-owned movement;
 8. dispose leases, Navigators, and then the context.
@@ -97,6 +98,14 @@ share one graph, cost model, dependency system, and guide contract.
 medium, and pending transition state belong to each lease acquisition. Never
 cross an action by advancing an ordinary step; execute the host action once and
 complete its exact `NavigationTransitionInstruction`.
+
+Scheduled acquisition is one bounded FIFO across both algorithms. Preserve
+deterministic submission order, query total budgets, exactly-once result
+transfer and cancellation before pathing reset/disposal. Completed unclaimed
+results consume retention capacity. Counted slices do not bound atomic ray,
+allocation or publication time; measure full containing frames before making
+timing claims. The canonical contract is in
+[`Pathing.md`](docs/wiki/Pathing.md#spreading-acquisition-across-fixed-frames).
 
 ## Determinism Rules
 
@@ -132,10 +141,9 @@ improve the long-term contract.
 When changing public behavior:
 
 1. add or update behavior tests;
-2. update the exact public API snapshot when the change is approved;
-3. update README/wiki guidance, public XML, and the API landing/namespace
+2. update README/wiki guidance, public XML, and the API landing/namespace
    content in the same change when affected;
-4. update JSON and MemoryPack coverage when wire behavior changes.
+3. update JSON and MemoryPack coverage when wire behavior changes.
 
 Examples presented as runnable C# must use current public signatures. Label
 partial snippets, host placeholders, or engine-adapter pseudocode explicitly.
@@ -153,7 +161,8 @@ The load model is populate-existing-instance only:
   Navigators;
 - staged validation completes before live shell mutation;
 - host bindings, graph payloads, guide leases/cursors, pending actions,
-  dependencies, and committed-cell notifications are not serialized;
+  scheduled requests/continuations, dependencies, and committed-cell
+  notifications are not serialized;
 - old schema shapes reject instead of flowing through compatibility aliases.
 
 ## Performance And Collections
@@ -238,7 +247,7 @@ Prioritize:
 4. Make the smallest coherent change and preserve unrelated worktree edits.
 5. Run focused `Release` and `ReleaseLean` checks.
 6. Run the full required matrix before claiming completion.
-7. Update docs/XML/snapshots when public behavior changed.
+7. Update docs/XML when public behavior changed.
 8. Report exact failures and evidence; do not hide or work around a red gate.
 
 Keep the root README concise, product-focused, and safe for NuGet rendering. Put

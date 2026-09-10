@@ -835,10 +835,9 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         ApplyTerminalStatus(finalStatus);
     }
 
-    private bool IsWorldCurrent() => NavigationSearchFinalizationRules.IsEpochCurrent(
-        _requiresWorldStamp || _hasCompletedSimplificationProof,
-        _simplificationWorldChangeSequence,
-        _world.ChangeSequence);
+    private bool IsWorldCurrent() =>
+        (!_requiresWorldStamp && !_hasCompletedSimplificationProof)
+        || _world.ChangeSequence == _simplificationWorldChangeSequence;
 
     private bool IsSimplificationEpochCurrent() =>
         NavigationSearchFinalizationRules.IsEpochCurrent(

@@ -6,7 +6,6 @@
 //=======================================================================
 
 using FixedMathSharp;
-using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Grids.Topology;
 
@@ -119,8 +118,7 @@ internal static class NavigatorOccupancyTracker
             return false;
         }
 
-        grid!.Configuration.TryNormalize(out NormalizedGridConfiguration binding);
-        binding.TryGetCellPrism(voxel!.Index, out GridCellPrism prism);
+        GridCellGeometry.TryGetPrism(grid!, voxel!.Index, out GridCellPrism prism);
         if (!prism.Contains(position))
         {
             grid = null;

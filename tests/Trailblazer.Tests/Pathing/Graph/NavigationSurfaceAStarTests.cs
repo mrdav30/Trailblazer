@@ -132,6 +132,66 @@ public sealed class NavigationSurfaceAStarTests
     }
 
     [Fact]
+    public void Advance_ImmutableSurfaceSearch_ShouldIgnoreUnrelatedRawWorldChanges()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = { default, new VoxelIndex(1, 0, 0) };
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(cells.Length),
+                cells,
+                "immutable-surface");
+        PathQuery query = fixture.CreateQuery(cells[0], cells[1], fixture.DefaultProfile);
+        using NavigationWorldGraphStore store = CreateStore(fixture.Graph);
+        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4, 8, 8, 8);
+        using var admission = new NavigationQueryAdmissionWork(
+            world,
+            store,
+            workspace.EndpointWorkspace,
+            workspace.RayWorkspace,
+            PathAlgorithm.AStar);
+        admission.Begin(
+            store.TryAcquire()!,
+            query,
+            TraversalMedium.Solid,
+            TraversalMedia.Solid);
+        while (admission.Status == NavigationQueryAdmissionStatus.Pending)
+            admission.Advance(64, 8);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        admission.Result.RequiresWorldStamp.Should().BeFalse();
+        using var search = new NavigationSurfaceAStarWork(
+            world,
+            store,
+            admission.Result,
+            workspace,
+            admission.RayWork,
+            long.MaxValue);
+        search.Advance(64, 1, 0, 0).Should().Be(NavigationSurfaceAStarStatus.Pending);
+        ulong before = world.ChangeSequence;
+        var unrelated = new GridConfiguration(
+            new Vector3d(100, 0, 0),
+            new Vector3d(100, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        world.TryAddGrid(unrelated, out _).Should().BeTrue();
+        world.ChangeSequence.Should().BeGreaterThan(before);
+
+        for (int step = 0; step < 64 && search.Status == NavigationSurfaceAStarStatus.Pending; step++)
+            search.Advance(64, 64, 64, 64);
+
+        search.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        search.Result!.Cost.Should().Be(Fixed64.One);
+        search.Result.WorldChangeSequence.Should().BeNull();
+        search.Result.GuidePoints[0].Address.Should().Be(
+            new NavigationCellAddress(fixture.MapId, cells[0]));
+        search.Result.GuidePoints[^1].Address.Should().Be(
+            new NavigationCellAddress(fixture.MapId, cells[1]));
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
     public void Advance_WithOneSimplificationRay_ShouldRetainOnlyDirectNodeFeet()
     {
         using var world = new GridWorld();
@@ -915,6 +975,8 @@ public sealed class NavigationSurfaceAStarTests
         while (admission.Status == NavigationQueryAdmissionStatus.Pending)
             admission.Advance(64, 16);
         admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        admission.Result.RequiresWorldStamp.Should().BeFalse(
+            "only the completed simplification proof should require the live-world epoch here");
         using var search = new NavigationSurfaceAStarWork(
             world,
             store,
@@ -933,6 +995,8 @@ public sealed class NavigationSurfaceAStarTests
             GC.GetAllocatedBytesForCurrentThread() - allocationStart;
 
         admission.Meter.SimplificationRays.Should().Be(1);
+        admission.Meter.SuccessfulDependencyMerges.Should().Be(1,
+            "the mutation must occur after the completed proof has been retained");
         candidateAllocatedBytes.Should().Be(0,
             "a warmed candidate proof must reuse its workspace; only the final immutable payload may allocate");
         search.Status.Should().Be(NavigationSurfaceAStarStatus.Pending,

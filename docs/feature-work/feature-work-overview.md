@@ -22,9 +22,14 @@ instead of burying it in notes.
 ## Active Coordination
 
 - Measured navigation performance
-  - The performance pass takes priority over the remaining feature work; use
-    the archived scheduling evidence to select measured bottlenecks, preserving
-    correctness and determinism. `TRB-Issue-114` is closed as an inconclusive
+  - The first focused pass (`TRB-Benchmark-002`) removes per-frame occupancy
+    allocations and unnecessary A* epoch reads, with matched measurements and
+    exact 100% coverage in both configurations. Remaining traversal cost is
+    captured as `TRB-Benchmark-003` in the
+    [benchmark tracker](benchmark-signal-hardening-backlog.md); isolate volume
+    acquisition/sampling and Flow edge rediscovery before resuming feature work.
+    The first pass does not make large synchronous cold requests frame-safe.
+    `TRB-Issue-114` is closed as an inconclusive
     investigation in the [issue tracker](issue-tracker.md), not a confirmed fix.
     Its evidence and strict allocation guard remain; it no longer blocks this pass.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
@@ -59,6 +64,14 @@ instead of burying it in notes.
 
 ## Recently Completed
 
+- [First Focused Performance Pass](benchmark-signal-hardening-backlog.md#trb-benchmark-002---avoidable-controller-allocations-and-a-epoch-reads)
+  - Live grid geometry replaces repeated offline normalization; all 900 measured
+    100-Navigator candidate frames allocate zero bytes versus 11,200 before.
+    A* avoids locking the live-world epoch when no stamp or completed proof
+    requires it. Cold A* median improvements are modest and recorded with the
+    unchanged Flow control and measurement limits. Remaining performance work
+    has its own active signal rather than being declared solved.
+
 - [Navigation Hardening](done/navigationHardeningPlan.md)
   - Closed all three phases: headless vertical/airborne acceptance, safe runtime
     profile/collider replacement and cold acquisition measurement. The baseline
@@ -92,9 +105,12 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Undertake the measured navigation performance pass before resuming feature
-   work. `TRB-Issue-114` requires no further investigation unless new evidence
-   meets its documented reopening criteria.
+1. Continue the measured navigation performance work in `TRB-Benchmark-003`
+   before resuming features; the first focused slice is complete. Stabilize
+   representative volume/sampling timing and investigate repeated traversal
+   work without weakening budgets, dependencies or deterministic results.
+   `TRB-Issue-114` requires no further investigation unless new evidence meets
+   its documented reopening criteria.
 2. Complete the remaining shared movement scenarios in Gravitas integration
    Phase 2 on the reviewed replacement boundary.
 3. Close the 3D adapter's package, documentation, and joint-verification gates.

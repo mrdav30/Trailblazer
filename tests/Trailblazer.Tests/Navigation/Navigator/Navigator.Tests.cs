@@ -2848,6 +2848,110 @@ public class NavigatorTests : IDisposable
         notifications.Should().Be(0);
     }
 
+    [Fact]
+    public void CommitFrameMotion_ShouldRefreshMovingContactAndCommittedCellWithoutAllocating()
+    {
+        const int measuredFrames = 256;
+        (Vector3d start, _, _) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
+        Vector3d root = start + Vector3d.Up * profile.Shape.RootToFootOffsetY;
+        TestNavigator navigator = CreateNavigator(root, profile: profile);
+        navigator.ConstrainTestMotionToSurface(start.Y);
+        navigator.SetGroundContact(start.Y, Vector3d.Up, updateMotorState: true);
+        var expectedAddress = new NavigationCellAddress("navigator-graph", new VoxelIndex(4, 4, 4));
+        (_, Voxel expectedVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, Vector3d.Zero);
+        int movedFrames = 0;
+        int currentCellFrames = 0;
+        int notifications = 0;
+        navigator.CommittedCellChanged += _ => notifications++;
+
+        void AdvanceFrame(int frame)
+        {
+            Vector3d direction = (frame & 1) == 0 ? Vector3d.Right : Vector3d.Left;
+            TestWorld.Context.Simulate();
+            navigator.ApplyInputTrekRequest(direction, TrekRate.Slow);
+            navigator.Simulate();
+            // Accept bounded host motion inside the same physical cell, as a host solver would.
+            navigator.ResolveAcceptedFramePosition(root + direction * Fixed64.FromFraction(1, 8));
+            navigator.CommitFrameMotion();
+            if (navigator.Position != navigator.LastPosition)
+                movedFrames++;
+            if (navigator.LastCommittedCell is NavigationCommittedCellState cell
+                && cell.Address == expectedAddress
+                && cell.Medium == TraversalMedium.Solid
+                && cell.SimulationFrame == TestWorld.Context.FrameCount)
+                currentCellFrames++;
+        }
+
+        try
+        {
+            for (int frame = 0; frame < 256; frame++)
+                AdvanceFrame(frame);
+            movedFrames = 0;
+            currentCellFrames = 0;
+            notifications = 0;
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int frame = 0; frame < measuredFrames; frame++)
+                AdvanceFrame(frame);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            movedFrames.Should().Be(measuredFrames);
+            currentCellFrames.Should().Be(measuredFrames);
+            notifications.Should().Be(0, "moving within one cell must not repeat entry notifications");
+            expectedVoxel.OccupantCount.Should().Be(1);
+            GridOccupantManager.GetOccupiedIndices(TestWorld.World, navigator)
+                .Should().Equal(expectedVoxel.WorldIndex);
+            allocated.Should().Be(0, "warmed motion commits must reuse the active grid's geometry");
+        }
+        finally
+        {
+            navigator.Reset();
+        }
+    }
+
+    [Theory]
+    [InlineData(GridTopologyKind.RectangularPrism, GridStorageKind.Dense, HexOrientation.PointyTop)]
+    [InlineData(GridTopologyKind.RectangularPrism, GridStorageKind.Sparse, HexOrientation.PointyTop)]
+    [InlineData(GridTopologyKind.HexPrism, GridStorageKind.Dense, HexOrientation.PointyTop)]
+    [InlineData(GridTopologyKind.HexPrism, GridStorageKind.Sparse, HexOrientation.FlatTop)]
+    public void ControllerVoxelResolution_ShouldReuseLiveGeometryWithoutAllocating(
+        GridTopologyKind topology,
+        GridStorageKind storage,
+        HexOrientation orientation)
+    {
+        const int resolutions = 256;
+        using var world = new GridWorld();
+        GridTopologyMetrics metrics = topology == GridTopologyKind.RectangularPrism
+            ? GridTopologyMetrics.Rectangular(Fixed64.One)
+            : GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One, orientation);
+        GridConfiguration configuration = new(Vector3d.Zero, Vector3d.One,
+            topologyKind: topology, topologyMetrics: metrics, storageKind: storage);
+        world.TryAddGrid(configuration, new[] { default(VoxelIndex) }, out ushort gridIndex)
+            .Should().BeTrue();
+        world.TryGetGrid(gridIndex, out VoxelGrid? expectedGrid).Should().BeTrue();
+        expectedGrid!.TryGetVoxel(default(VoxelIndex), out Voxel? expectedVoxel).Should().BeTrue();
+        Vector3d position = new(-Fixed64.Quarter, Fixed64.Zero, Fixed64.Zero);
+        bool ResolveExpectedCell() =>
+            NavigatorOccupancyTracker.TryResolveVoxel(world, position, out VoxelGrid? grid, out Voxel? voxel)
+            && ReferenceEquals(grid, expectedGrid)
+            && ReferenceEquals(voxel, expectedVoxel);
+        for (int i = 0; i < 256; i++)
+            ResolveExpectedCell();
+
+        int correctResolutions = 0;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < resolutions; i++)
+        {
+            if (ResolveExpectedCell())
+                correctResolutions++;
+        }
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        correctResolutions.Should().Be(resolutions, "outer-half resolution must retain the current physical cell identity");
+        allocated.Should().Be(0, "live cell resolution must not construct offline topology instances");
+    }
+
     [Theory]
     [InlineData(GridTopologyKind.RectangularPrism)]
     [InlineData(GridTopologyKind.HexPrism)]

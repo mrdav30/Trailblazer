@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-118`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-119`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -88,6 +88,39 @@ None.
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-118 - Rebase/rejoin allocation guards use different warmup and measurement bodies
+
+- **Discovered:** 2026-09-10 during `TRB-Benchmark-003` full validation.
+- **Area:** `NavigationFlowFieldSamplingConcurrencyTests` test-harness consistency.
+- **Status:** Resolved locally on 2026-09-10 for harness consistency only. Fresh
+  Release (2,467 core + 65 adapter) and Lean (2,405 core + 65 adapter) matrices
+  pass with exact 100% line/branch/method coverage. No runtime allocation defect
+  or source for the observed burst has been established.
+- **Evidence:** The first covered local-stack Release run passed 2,466 tests
+  and failed `WarmExactNodeRebaseSample_ShouldAllocateZeroBytes` with 1,992 bytes
+  instead of zero. The unchanged class then passed 9/9 in isolation. That pass
+  is not evidence that the allocator was fixed. The failed binaries, hashes,
+  TRX and coverage/logs are retained under `artifacts/benchmark003`.
+- **Confirmed harness inconsistency:** Exact-node and rejoin guards warm with
+  assertion-bearing `CreateGuide` loops, then measure separate unchecked loops.
+  The neighboring attach guard already uses one shared, assertion-free,
+  non-inlined helper. The two duplicate bodies now use that same existing
+  helper with their original destination/displaced feet, budget and 256
+  iterations. Successful samples, fully drained leases and exactly zero bytes
+  remain mandatory. No retries, tolerances, extra warmups, runtime settings,
+  exclusions or production changes were introduced to address this failure.
+- **Sensitivity:** The aligned class passes 9/9. Temporarily allocating a
+  64-byte array each helper iteration makes the exact-node guard fail at
+  22,528 bytes; the mutation was removed before final validation. Existing
+  guide tests separately protect exact destination heading, rebase budget and
+  displaced rejoin behavior. Independent review confirms that helper reuse
+  removes no measured navigation work. A second fresh covered Release core
+  confirmation also passes 2,467/2,467; all original failures remain retained.
+- **Limits:** This resolves duplicated/inconsistent test setup, not allocation
+  attribution or proof that flakiness is cured. `TRB-Issue-114` remains closed;
+  its aligned attach guard did not fail here. Preserve any future failure with
+  its exact build and coverage context; passing runs do not waive a red gate.
 
 ### TRB-Issue-117 - Saturated native center spacing can admit a crossing without a portal
 

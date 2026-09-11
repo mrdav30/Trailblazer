@@ -24,11 +24,19 @@ instead of burying it in notes.
 - Measured navigation performance
   - The first focused pass (`TRB-Benchmark-002`) removes per-frame occupancy
     allocations and unnecessary A* epoch reads, with matched measurements and
-    exact 100% coverage in both configurations. Remaining traversal cost is
-    captured as `TRB-Benchmark-003` in the
-    [benchmark tracker](benchmark-signal-hardening-backlog.md); isolate volume
-    acquisition/sampling and Flow edge rediscovery before resuming feature work.
-    The first pass does not make large synchronous cold requests frame-safe.
+    exact 100% coverage in both configurations. The second focused pass
+    (`TRB-Benchmark-003`) closes with conservative GridForge body-bound rejection
+    and Trailblazer prism reuse: selected volume medians improve 49% / 66%,
+    and cold surface acquisition improves 9–13%, without budget/dependency
+    shortcuts. Full coverage remains exact in both repositories. The
+    [benchmark tracker](benchmark-signal-hardening-backlog.md) retains the limits
+    and the small-request iteration-position watch (`TRB-Benchmark-004`).
+    Extra validation also records pre-existing GridForge Debug cursor/contact
+    allocation failures as upstream `GF-Benchmark-003`; Release/Lean remain
+    green, but that separate Debug gate needs a focused upstream follow-up.
+    Large synchronous cold requests remain unsuitable for the measured frame;
+    guided-host throughput is the next useful performance gate, not another
+    unmeasured cache or a claim that input-driven frames represent path following.
     `TRB-Issue-114` is closed as an inconclusive
     investigation in the [issue tracker](issue-tracker.md), not a confirmed fix.
     Its evidence and strict allocation guard remain; it no longer blocks this pass.
@@ -63,6 +71,15 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
+
+- [Focused Traversal Performance Pass](benchmark-signal-hardening-backlog.md#trb-benchmark-003---remaining-traversal-cost-needs-focused-isolation)
+  - Existing whole-body bounds reject disjoint prisms before exact sweep math;
+    native evaluation reuses already-built prisms. Selected obstructed A* drops
+    from 164.125 to 84.491 ms and warm Flow acquire/sample from 3.737 to 1.273 ms.
+    Allocation, semantic/work and full-coverage gates remain intact. Prefix
+    skipping is explicitly rejected because it would change observable budgets,
+    dependencies and failure order. `TRB-Issue-118` records adjacent allocation-
+    guard cleanup without claiming attribution of an intermittent allocation.
 
 - [First Focused Performance Pass](benchmark-signal-hardening-backlog.md#trb-benchmark-002---avoidable-controller-allocations-and-a-epoch-reads)
   - Live grid geometry replaces repeated offline normalization; all 900 measured
@@ -105,10 +122,14 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Continue the measured navigation performance work in `TRB-Benchmark-003`
-   before resuming features; the first focused slice is complete. Stabilize
-   representative volume/sampling timing and investigate repeated traversal
-   work without weakening budgets, dependencies or deterministic results.
+1. The two focused performance slices are complete. Address the newly recorded
+   upstream Debug allocation signal (`GF-Benchmark-003`) as a separate bounded
+   follow-up. Before broader throughput
+   claims or speculative optimization, measure representative headless guided-
+   host frames with actual guide following; existing input-driven controls do
+   not establish that result. Keep performance work evidence-gated and ahead of
+   broader features. Investigate `TRB-Benchmark-004` only when small cold-request
+   steady-state/tail claims need that protocol isolation.
    `TRB-Issue-114` requires no further investigation unless new evidence meets
    its documented reopening criteria.
 2. Complete the remaining shared movement scenarios in Gravitas integration

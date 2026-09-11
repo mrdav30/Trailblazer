@@ -64,7 +64,14 @@ internal sealed partial class NavigationWorldGraph
     internal bool TryGetNodeState(
         NavigationNodeRef node,
         TraversalMedium medium,
-        out NavigationNodeState state)
+        out NavigationNodeState state) =>
+        TryGetNodeState(node, medium, out state, out _);
+
+    internal bool TryGetNodeState(
+        NavigationNodeRef node,
+        TraversalMedium medium,
+        out NavigationNodeState state,
+        out GridCellPrism prism)
     {
         System.Diagnostics.Debug.Assert(NavigationCell.IsKnownMedium(medium),
             "graph node-state callers retain one validated exact traversal medium");
@@ -72,9 +79,10 @@ internal sealed partial class NavigationWorldGraph
             || IsSurfaceAddressClosed(
                 new NavigationCellAddress(instance!.MapId, index),
                 medium)
-            || !TryGetRawNodeState(node, instance, index, out state))
+            || !TryGetRawNodeState(node, instance, index, out state, out prism))
         {
             state = default;
+            prism = default;
             return false;
         }
 
@@ -91,19 +99,21 @@ internal sealed partial class NavigationWorldGraph
             out VoxelIndex index);
         System.Diagnostics.Debug.Assert(found,
             "raw node-state lookup receives a node owned by this immutable graph");
-        return TryGetRawNodeState(node, instance!, index, out state);
+        return TryGetRawNodeState(node, instance!, index, out state, out _);
     }
 
     private static bool TryGetRawNodeState(
         NavigationNodeRef node,
         NavigationMapInstance instance,
         VoxelIndex index,
-        out NavigationNodeState state)
+        out NavigationNodeState state,
+        out GridCellPrism prism)
     {
         if (!instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell)
-            || !instance.Map.GridBinding.TryGetCellPrism(index, out GridCellPrism prism))
+            || !instance.Map.GridBinding.TryGetCellPrism(index, out prism))
         {
             state = default;
+            prism = default;
             return false;
         }
 

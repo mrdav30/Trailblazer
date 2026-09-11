@@ -16,7 +16,7 @@ this backlog.
 ## Intake Rules
 
 - Signal IDs use `TRB-Benchmark-NNN`. The next available ID is
-  `TRB-Benchmark-004`.
+  `TRB-Benchmark-005`.
 - Assign an ID at intake and never reuse it, including after a signal closes or
   moves into a dated plan. Check this file's Git history before advancing or
   repairing the counter.
@@ -62,12 +62,17 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 
 ## Active Signals
 
+None. The measurement-only watch below remains evidence-gated.
+
+## Closed Signals
+
 ### TRB-Benchmark-003 - Remaining traversal cost needs focused isolation
 
 - **Discovered:** 2026-09-10
-- **Status:** Open; measured follow-up to the first performance pass, ahead of
-  the remaining integration/2D feature work. This is a performance concern, not
-  a discovered correctness defect or a reopening of `TRB-Issue-114`.
+- **Status:** Closed locally on 2026-09-10; two focused changes are implemented,
+  measured and verified, with a bounded no-change decision for prefix skipping.
+  This does not close the coordinated release gates or claim that every workload
+  is frame-safe. `TRB-Issue-114` remains closed.
 - **Evidence:** The matched capture in `TRB-Benchmark-002` below still measures
   median cold Flow acquisition of 287.615 ms at 10K cells and 3,068.373 ms at
   100K. Large cold A* also remains above the full 31.25 ms frame. The supplemental
@@ -88,7 +93,7 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   outgoing prefix. Repeated prism construction is another possible contributor,
   but some prism evidence is consumed by Release navigation rays and cannot
   simply be put behind `DEBUG`.
-- **Next isolation:** First establish a stable out-of-process timing protocol
+- **Initial isolation scope:** Establish a stable out-of-process timing protocol
   for `RectObstructed2DAStar` and `WarmFlowCacheHit`, then profile the full public
   acquisition/sample boundary to separate union geometry, ray work and cache
   validation. In parallel source analysis, quantify Flow's outgoing-prefix
@@ -96,7 +101,7 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   that it preserves exact cost, edge budgets, dependencies, stale detection and
   failure ordering. Prefix edges currently contribute observable work and
   failure behavior; skipping them is not a safe mechanical optimization.
-- **Reproduction:** Use the cold command and supplemental protocol recorded
+- **Initial reproduction:** Use the cold command and supplemental protocol recorded
   below. The existing `navigation-volume-routing` benchmark selection contains
   both volume cases; use its out-of-process configuration from the
   [benchmark guide](../../tests/Trailblazer.Benchmarks/README.md) for the next
@@ -107,7 +112,183 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   explaining the remaining workload limits. Do not infer that the library is
   universally fast enough from the first pass or silently weaken query budgets.
 
-## Closed Signals
+#### Isolated cost and focused changes
+
+The follow-up begins from Trailblazer `develop`
+`c7bb60973ac14c1ab52121decd76f69357f0d3dc` and GridForge `develop`
+`b693e383c1a04e07fd8f4048a6c863b3f7af515d`. Both were clean before the changes.
+Use `UseLocalLsfStack=true`; upstream feature changes remain unreleased.
+
+Baseline sampled-thread traces are restricted to the measured execution root,
+excluding setup and warmup. Obstructed A* spends about 67% inclusively in body
+tracing and 50% in positive body/prism overlap; warm Flow acquire/sample spends
+about 81% in body tracing and 66% in positive overlap. These nested shares
+overlap and must not be summed or treated as predicted speedups.
+
+Two small changes retain the existing algorithms:
+
+1. **GridForge body tracing:** Reject disjoint whole-sweep/prism AABBs before
+   expensive exact positive-overlap math, for both candidates and missing
+   neighbors. Reuse existing checked sweep bounds and exact prism-vertex AABBs.
+   Inclusive zero-tolerance overlap leaves tangency decisions to the existing
+   narrow phase. Work debits and prism validation still precede rejection;
+   closure, canonical order, physical snapshots and failure statuses are intact.
+   The upstream change is tracked as `GF-Benchmark-002` in GridForge's benchmark
+   backlog, not as a Trailblazer-owned geometry implementation.
+2. **Trailblazer native evaluation:** Return and reuse the two prisms already
+   constructed while resolving source/target passability. Retain complete
+   Release ray evidence, exact portals/cost, source-before-target validation
+   and default evidence on failure. No retained cache, capacity, public API,
+   query budget or dependency rule changes.
+
+The outgoing-prefix audit explains why an apparent shortcut was left alone.
+A fully passable degree-`d` node visits `d` incoming candidates plus two
+outgoing prefixes of length `d(d+1)/2`, or `d² + 2d` evaluated candidates.
+The 10K/100K planes retain exactly 236,408 / 2,388,308 evaluations. Skipping
+prefixes would skip work debits, dependency merges and possible earlier
+overflow/capacity failures. That is not a safe mechanical optimization.
+Prism reuse instead removes two redundant constructions per evaluated native
+prefix member: 196,808 / 1,989,608 constructions in these planes. These counts
+are source-derived, not independently instrumented timing measurements.
+
+#### Matched measurements
+
+Captures ran serially without competing builds, tests or profiling on Windows
+11, Intel i7-9700K, .NET 8.0.29, SDK 10.0.302 and BenchmarkDotNet 0.15.8.
+Both versions use the same out-of-process Monitoring protocols and retain all
+observations, including outliers. Times below are milliseconds. These are
+combined two-patch stack results, not separately measured gains per patch.
+
+Volume: three launches, **100 warmups and 100 actual single-operation
+iterations per launch**, or 300 observations per case/version. The longer
+warmup replaces the earlier diagnostic ten-warmup comparison. Per-launch
+first/last-20 means are retained; candidate obstructed A* ranges from
+84.097–85.655 ms across those windows and warm Flow from 1.261–1.344 ms.
+Small residual variation remains, but not the earlier large timing maturation.
+
+| Volume boundary | Baseline min / median / P95 / observed P99 / max | Candidate min / median / P95 / observed P99 / max | Median reduction | Bytes, both |
+| --- | ---: | ---: | ---: | ---: |
+| Internal obstructed A* construction/disposal | 163.354 / 164.125 / 168.066 / 169.481 / 176.321 | 83.346 / 84.491 / 87.275 / 90.754 / 91.927 | 48.52% | 4,544 |
+| Public warm Flow acquisition, one sample, disposal | 3.671 / 3.737 / 3.842 / 3.882 / 4.298 | 1.241 / 1.273 / 1.389 / 1.445 / 1.559 | 65.95% | 0 |
+
+Sub-100 ms iterations trigger BenchmarkDotNet's minimum-iteration-time warning;
+single requests intentionally remain unbatched. Observed P99 is interpolated
+from all 300 raw observations, not a universal latency guarantee.
+
+Cold public acquisition/disposal, **without sampling**: three launches, one
+warmup and three actual single-operation iterations per launch, or nine
+observations per case/version. This is the existing cold protocol, not a
+steady-state tail study. No P95/P99 claims are made from nine observations.
+
+| Cold public case | Baseline min / median / max | Candidate min / median / max | Median reduction | Bytes, both |
+| --- | ---: | ---: | ---: | ---: |
+| Flow, 100 cells | 10.351 / 10.610 / 13.864 | 9.356 / 9.613 / 12.499 | 9.40% | 18,576 |
+| A*, 100 cells | 2.949 / 3.027 / 3.197 | 2.619 / 2.675 / 2.805 | 11.62% | 6,480 |
+| Flow, 10K cells | 286.566 / 293.391 / 297.379 | 261.110 / 264.253 / 265.686 | 9.93% | 779,656 |
+| A*, 10K cells | 82.010 / 83.084 / 84.823 | 73.590 / 74.655 / 79.724 | 10.14% | 35,320 |
+| Flow, 100K cells | 3,171.907 / 3,232.861 / 3,286.268 | 2,910.909 / 2,936.949 / 2,999.373 | 9.15% | 7,698,392 |
+| A*, 100K cells | 903.425 / 908.124 / 925.291 | 774.229 / 786.905 / 824.507 | 13.35% | 164,456 |
+
+Commands, after the local-stack Release benchmark build:
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-volume-routing --filter '*RectObstructed2DAStar*' '*WarmFlowCacheHit*' --launchCount 3 --warmupCount 100 --iterationCount 100 --keepFiles --artifacts artifacts/benchmark003/candidate-volume
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100*' '*ColdPublicAStar*Plane100*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/benchmark003/candidate-cold
+```
+
+Baseline uses the same commands with `baseline-` artifact destinations before
+source changes. Profiling uses the existing `dotnet-trace` sampled-thread-time
+tool on an ignored harness calling the unchanged volume benchmark. Obstructed
+A* uses 100 warmups / 80 measured calls; warm Flow uses 500 / 4,000. Only the
+`RunMeasured` root is included in attribution, not the fixture's cold setup.
+
+#### Semantic checks, provenance and remaining limits
+
+All six volume and 18 cold cleanup records match exactly between versions,
+including result signals, statuses, work, payload/dependency and drain evidence.
+Allocations match in all eight cases. **Warm volume search counters describe
+cold preflight**, not the timed sample. A separate untimed diagnostic using a
+byte-identical benchmark/probe pair inspects the final immediate-ray meter:
+both versions retain 11 lookups, 7 evaluated edges (3 primary / 4 shortcut),
+5 union checks, 5 trace intervals, 126 covered intervals and 1 portal check;
+all other recorded counters and the sample signal match too. This supplements
+behavior/budget tests; it is one final immediate-ray observation, not complete
+acquisition/sample accounting or a snapshot of every timed iteration. It is
+not a substitute for those tests or a new public API.
+
+Retained local evidence is under `artifacts/benchmark003`: full JSON/logs,
+raw traces and stack summaries, frozen binaries and SHA256/version manifests,
+the warm meter probe, strict `summarize.ps1 -RequireComplete`,
+`verify-evidence.ps1`, and `verify.ps1` with test/coverage artifacts.
+The summary requires the exact eight case identities, every launch and sample,
+and unchanged allocations; missing suites cannot silently pass the final gate.
+
+The baseline volume child was frozen before mutations and also supplies the
+baseline profiling and meter probes. Baseline cold ran from the same unchanged
+source/build sequence before mutations, but its separate child binaries were
+not hashed before that job directory was reused: no separately verified cold
+baseline binary-identity claim is made. Both candidate child sets are frozen;
+their seven runtime/dependency hashes match. The benchmark harness is rebuilt
+from unchanged source but has different hashes across builds/suites. In the
+separate warm diagnostic, the probe, benchmark and unchanged dependencies are
+byte-identical, with only the two changed runtime assemblies swapped.
+
+| Runtime assembly | Baseline volume SHA256 | Candidate SHA256 |
+| --- | --- | --- |
+| Trailblazer | `54B01CB68B51080F742749A84AADD5E748160FDA861D5BB3CD8A550FED3C2CB3` | `120C0168581D082106E7E4A663108ED3DC07996E728F9D9B661A44E611114E42` |
+| GridForge | `BC4BD60001024E4372031864805A5F88ECADC812DED79D27565665B6B443BE6A` | `86372D229795D9E834FB25B52055D58245991BA9C22AF4483AD192ACF78B9CAF` |
+
+This is a focused cost reduction, not a claim that navigation is now universally
+fast enough. Every large cold candidate observation still exceeds the 31.25 ms
+frame, and the small obstructed volume request still takes about 84 ms. One
+warm sample is much cheaper but does not establish throughput for 100 guided
+agents. Existing frame controls are input-driven and do not include guided
+movement or physics. Keep cold preparation/scheduling explicit; measure a real
+containing guided-host frame before claiming a crowd-size or frame-budget win.
+Do not add a prefix cache or weaken deterministic budgets speculatively.
+
+#### Verification and disposition
+
+- GridForge's six new translating-body cases pass against the pre-change
+  implementation; the full 42-test body-trace class passes after the change in
+  both configurations. Existing tangency, one-raw overlap, sparse/hex geometry,
+  budget and zero-allocation tests remain unchanged.
+- Trailblazer's six new native-evidence rows pass before prism reuse. The
+  candidate's 306-test focused suite passes in Release and Lean, including
+  native/incoming traversal, exact Flow budgets, independent search oracles and
+  surface/volume rays. These characterize preserved semantics; the matched
+  benchmark is the before/after evidence for the performance change.
+- Full local-stack solution builds pass with zero warnings/errors and build
+  both library targets. Final Release passes **2,467 core + 65 adapter** tests;
+  Lean passes **2,405 core + 65 adapter**, with no failures or skips. Both reports
+  contain exactly **30,842/30,842 lines, 12,089/12,089 branches and 3,011/3,011
+  fully covered methods**. GridForge passes **825/825** tests in each package
+  configuration with **8,848/8,848 lines, 3,777/3,777 branches and 1,114/1,114
+  fully covered methods**. Existing coverage settings/exclusions are unchanged.
+- The first covered Trailblazer Release run failed one exact-node allocation
+  guard at 1,992 bytes. [TRB-Issue-118](issue-tracker.md#trb-issue-118---rebaserejoin-allocation-guards-use-different-warmup-and-measurement-bodies)
+  records the confirmed duplicate warmup/measurement-body inconsistency, shared
+  helper alignment and deliberate 22,528-byte mutation failure. The original
+  allocation remains unattributed; no allocator fix or cured-flakiness claim is
+  made. The first failed run is retained separately from the fresh passing
+  `artifacts/benchmark003/validated` matrix, with no retry/tolerance gate. A
+  second fresh covered Release core confirmation also passes 2,467/2,467.
+- Final reports consume only fresh run directories. Duplicate TRX coverage
+  attachments are byte-identical pairs, not independent coverage observations.
+  Current Release runtime DLL hashes still match the measured candidate.
+- Additional GridForge Debug validation passes 818/822, with four cursor/contact
+  allocation failures. Restoring its complete pre-change production source
+  reproduces the same failures and counts; restoring this patch then passes all
+  42 body-trace tests in Debug. GridForge's `GF-Benchmark-003` records this
+  separate pre-existing signal and its SwiftDictionary generic-key source lead.
+  The full Debug gate is not green; the local closeout above is for this patch's
+  measured Release/Lean behavior, not a waiver or a fix for that separate gate.
+- Independent source/test and evidence review found no blocking issue after
+  documenting combined-patch attribution, warm-meter scope and binary provenance.
+  These are local Windows results, not Linux CI or released-package validation.
+- Close this narrow optimization slice. Keep the observed workload limits and
+  `TRB-Benchmark-004` measurement watch; the next useful performance decision is
+  representative guided-host throughput, not speculative prefix skipping.
 
 ### TRB-Benchmark-002 - Avoidable controller allocations and A* epoch reads
 
@@ -311,8 +492,25 @@ diagnostics, not causal improvements, regressions or steady-state latency gates.
 
 ## Watch Items
 
-No watch items remain. Add new measured concerns here before they are promoted
-into implementation work.
+### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion
+
+- **Discovered:** 2026-09-10 while measuring `TRB-Benchmark-003`.
+- **Status:** Measurement watch; not a runtime regression, correctness issue,
+  release blocker, or reopening of `TRB-Issue-114`.
+- **Evidence:** In `ColdPublicFlow(Plane100)`, the second actual invocation is
+  slower in all three launches of both versions: baseline 13.472–13.864 ms
+  versus 10.351–10.616 ms for the other invocations; candidate 12.385–12.499 ms
+  versus 9.356–9.797 ms. Allocations and reported semantic/work counters remain
+  unchanged. The cause is not established.
+- **Reproduction:** Use the exact cold command above and inspect ordered raw
+  measurements, not just pooled means. Evidence is in the retained six launch
+  sequences under `artifacts/benchmark003/{baseline,candidate}-cold`.
+- **Next isolation:** Before making a small-request steady-state/tail claim,
+  retain this cold protocol as a control and separately extend its warmups and
+  actual iterations. If the position effect persists, profile that invocation
+  boundary. Do not discard it as an outlier, alter runtime code without cause,
+  or extrapolate a P99 from nine samples. It does not invalidate the matched
+  protocol comparison or the separate 100-warmup volume results.
 
 ## Promotion Criteria
 

@@ -333,11 +333,16 @@ internal readonly struct TraversalEvaluator
         out TraversalEdgeEvidence evidence)
     {
         evidence = default;
-        if (!TryGetPassableNode(source, out NavigationNodeState sourceState, out _)
+        if (!TryGetPassableNode(
+                source,
+                out NavigationNodeState sourceState,
+                out _,
+                out GridCellPrism sourcePrism)
             || !TryGetPassableNode(
                 edge.Target,
                 out NavigationNodeState targetState,
-                out NavigationAreaRule targetRule))
+                out NavigationAreaRule targetRule,
+                out GridCellPrism targetPrism))
         {
             return TraversalEvaluationStatus.Impassable;
         }
@@ -351,14 +356,7 @@ internal readonly struct TraversalEvaluator
         bool hasTargetAddress = _graph.TryGetNodeAddress(
             edge.Target,
             out NavigationCellAddress targetAddress);
-        bool hasSourcePrism = _graph.TryGetSeamPrism(
-            sourceAddress,
-            out GridCellPrism sourcePrism);
-        bool hasTargetPrism = _graph.TryGetSeamPrism(
-            targetAddress,
-            out GridCellPrism targetPrism);
-        System.Diagnostics.Debug.Assert(
-            hasSourceAddress && hasTargetAddress && hasSourcePrism && hasTargetPrism);
+        System.Diagnostics.Debug.Assert(hasSourceAddress && hasTargetAddress);
         GridNavigationPortal portal;
         if (sourcePrism.TopologyKind == GridTopologyKind.RectangularPrism
             && targetState.Center - sourceState.Center == template.SourceToTarget)
@@ -619,10 +617,17 @@ internal readonly struct TraversalEvaluator
     internal bool TryGetPassableNode(
         NavigationNodeRef node,
         out NavigationNodeState state,
-        out NavigationAreaRule areaRule)
+        out NavigationAreaRule areaRule) =>
+        TryGetPassableNode(node, out state, out areaRule, out _);
+
+    private bool TryGetPassableNode(
+        NavigationNodeRef node,
+        out NavigationNodeState state,
+        out NavigationAreaRule areaRule,
+        out GridCellPrism prism)
     {
         areaRule = default;
-        if (!_graph.TryGetNodeState(node, _exactMedium, out state)
+        if (!_graph.TryGetNodeState(node, _exactMedium, out state, out prism)
             || !state.IsPresent
             || state.ObstacleCount != 0
             || (_profile.AllowedMedia & _medium) != _medium
@@ -636,6 +641,7 @@ internal readonly struct TraversalEvaluator
         {
             state = default;
             areaRule = default;
+            prism = default;
             return false;
         }
 

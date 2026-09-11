@@ -101,6 +101,25 @@ payload bytes, and the warm
 sample allocation preflight. BenchmarkDotNet supplies median, P95, P99, max,
 and managed-allocation columns through the shared gate configuration.
 
+Cold volume cases use internal admission/search/payload construction and disposal,
+not the full public guide-service acquisition boundary. Warm cases measure public
+acquisition, one exact guide sample, and disposal. For warm cases, the printed
+search/work/dependency counters describe the untimed cold preflight; they are
+not counters for the timed sample. Do not infer per-agent frame throughput from
+either boundary.
+
+For a matched obstruction/sampling investigation, use the same longer warmup
+on both versions and retain every observation:
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-volume-routing --filter '*RectObstructed2DAStar*' '*WarmFlowCacheHit*' --launchCount 3 --warmupCount 100 --iterationCount 100 --keepFiles --artifacts artifacts/volume-investigation
+```
+
+This remains one operation per iteration. Inspect each launch's timing sequence
+for warmup drift, and report observed tails rather than a universal P99 guarantee.
+Sub-100 ms iterations produce BenchmarkDotNet's minimum-iteration-time warning;
+these per-request observations intentionally do not batch requests together.
+
 The default Flow benchmark run uses the canonical three-launch, ten-warmup,
 100-iteration Monitoring job. The exact 1M articulation case uses a separately
 named one-launch, zero-warmup, one-iteration `SingleShot` job because it builds

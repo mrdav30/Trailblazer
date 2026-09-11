@@ -229,6 +229,71 @@ public sealed class TraversalEvaluatorTests
     }
 
     [Theory]
+    [InlineData(GridTopologyKind.RectangularPrism, HexOrientation.PointyTop, false)]
+    [InlineData(GridTopologyKind.RectangularPrism, HexOrientation.PointyTop, true)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.PointyTop, false)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.PointyTop, true)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.FlatTop, false)]
+    [InlineData(GridTopologyKind.HexPrism, HexOrientation.FlatTop, true)]
+    public void NativeEvaluation_ShouldRetainCompleteTranslatedPrismAndProfileEvidence(
+        GridTopologyKind topology,
+        HexOrientation orientation,
+        bool fractional)
+    {
+        Fixed64 width = fractional ? Fixed64.FromRaw(4_294_967_302L) : (Fixed64)2;
+        Fixed64 height = fractional ? Fixed64.FromRaw(6_442_450_946L) : (Fixed64)2;
+        Fixed64 length = fractional ? Fixed64.FromRaw(10_737_418_246L) : (Fixed64)3;
+        GridTopologyMetrics metrics = topology == GridTopologyKind.RectangularPrism
+            ? GridTopologyMetrics.Rectangular(width, height, length)
+            : GridTopologyMetrics.Hex(width, height, orientation);
+        GridConfiguration configuration = new(
+            new Vector3d(-8, 3, -20),
+            new Vector3d(8, 7, -4),
+            topologyKind: topology,
+            topologyMetrics: metrics,
+            storageKind: GridStorageKind.Sparse);
+        var sourceIndex = new VoxelIndex(1, 0, 1);
+        var targetIndex = new VoxelIndex(2, 0, 1);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(sourceIndex, out GridCellPrism sourcePrism).Should().BeTrue();
+        binding.TryGetCellPrism(targetIndex, out GridCellPrism targetPrism).Should().BeTrue();
+        GridCellGeometry.TryCreateNavigationPortal(
+                sourcePrism, targetPrism, out GridNavigationPortal expectedPortal)
+            .Should().BeTrue();
+        expectedPortal.TryResolveProfile(
+                Fixed64.Zero, Fixed64.One,
+                out Vector3d expectedSourcePortal, out Vector3d expectedTargetPortal)
+            .Should().BeTrue();
+        using TrailblazerWorldContext context = CreateContext(
+            configuration, sourceIndex, targetIndex, Cell(), Cell(), targetPhysicallyPresent: true);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef source = Resolve(lease.Graph, sourceIndex);
+        NavigationGraphEdge edge = FindEdge(lease.Graph, source, Resolve(lease.Graph, targetIndex));
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
+            TraversalMedia.Solid, TraversalCapability.None);
+
+        new TraversalEvaluator(lease.Graph, profile, DefaultPolicy, TraversalMedium.Solid)
+            .EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
+            .Should().Be(TraversalEvaluationStatus.Passable);
+
+        evidence.SourcePrism.Should().Be(sourcePrism);
+        evidence.TargetPrism.Should().Be(targetPrism);
+        evidence.SourceAddress.Should().Be(new NavigationCellAddress("map", sourceIndex));
+        evidence.TargetAddress.Should().Be(new NavigationCellAddress("map", targetIndex));
+        evidence.SourceFootAnchor.Should().Be(
+            new Vector3d(sourcePrism.Center.X, sourcePrism.VerticalMin, sourcePrism.Center.Z));
+        evidence.TargetFootAnchor.Should().Be(
+            new Vector3d(targetPrism.Center.X, targetPrism.VerticalMin, targetPrism.Center.Z));
+        evidence.Portal.Should().Be(expectedPortal);
+        evidence.SourcePortalAnchor.Should().Be(expectedSourcePortal);
+        evidence.TargetPortalAnchor.Should().Be(expectedTargetPortal);
+        if (topology == GridTopologyKind.RectangularPrism)
+            evidence.Cost.Should().Be(width, "the two axial portal legs span one cell width exactly");
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void AutomaticSeamEvaluation_ShouldRejectEitherBlockedEndpointAfterPublication(
@@ -402,6 +467,12 @@ public sealed class TraversalEvaluatorTests
                 lease.Graph.GraphVersion + 1);
             new TraversalEvaluator(closed, Profile(), DefaultPolicy, TraversalMedium.Solid)
                 .TryGetPassableNodeState(target, out _).Should().BeFalse();
+            NavigationNodeRef source = Resolve(lease.Graph, default);
+            NavigationGraphEdge retainedEdge = FindEdge(lease.Graph, source, target);
+            new TraversalEvaluator(closed, Profile(), DefaultPolicy, TraversalMedium.Solid)
+                .EvaluateEdge(source, retainedEdge, out TraversalEdgeEvidence closedEvidence)
+                .Should().Be(TraversalEvaluationStatus.Impassable);
+            closedEvidence.Should().Be(default(TraversalEdgeEvidence));
 
             VoxelGrid grid = context.World.ActiveGrids[0];
             grid.TryGetVoxel(new VoxelIndex(1, 0, 0), out Voxel? voxel).Should().BeTrue();
@@ -651,7 +722,7 @@ public sealed class TraversalEvaluatorTests
 
             evaluator.EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
                 .Should().Be(TraversalEvaluationStatus.CostOverflow);
-            evidence.Cost.Should().Be(Fixed64.Zero);
+            evidence.Should().Be(default(TraversalEdgeEvidence));
         }
 
         using (TrailblazerWorldContext costContext = CreateContext(Cell(), Cell()))
@@ -673,7 +744,7 @@ public sealed class TraversalEvaluatorTests
                 .EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
                 .Should().Be(TraversalEvaluationStatus.CostOverflow,
                     "the native target-area surcharge is part of the checked traversal cost");
-            evidence.Cost.Should().Be(Fixed64.Zero);
+            evidence.Should().Be(default(TraversalEdgeEvidence));
         }
 
         VoxelGrid grid = context.World.ActiveGrids[0];
@@ -692,8 +763,9 @@ public sealed class TraversalEvaluatorTests
                 Profile(),
                 DefaultPolicy,
                 TraversalMedium.Solid)
-            .EvaluateEdge(blockedSource, blockedEdge, out _)
+            .EvaluateEdge(blockedSource, blockedEdge, out TraversalEdgeEvidence blockedEvidence)
                 .Should().Be(TraversalEvaluationStatus.Impassable);
+        blockedEvidence.Should().Be(default(TraversalEdgeEvidence));
     }
 
     [Fact]
@@ -718,9 +790,10 @@ public sealed class TraversalEvaluatorTests
                 Profile(),
                 DefaultPolicy,
                 TraversalMedium.Solid)
-            .EvaluateEdge(source, edge, out _)
+            .EvaluateEdge(source, edge, out TraversalEdgeEvidence evidence)
             .Should().Be(TraversalEvaluationStatus.Impassable,
                 "a blocked source must fail before portal distance or enter-cost evaluation");
+        evidence.Should().Be(default(TraversalEdgeEvidence));
     }
 
     [Fact]

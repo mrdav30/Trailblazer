@@ -355,34 +355,13 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destination)
             .Should().BeTrue();
         const int hotPathIterationCount = 256;
-        for (int i = 0; i < hotPathIterationCount; i++)
-        {
-            NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
-            warm.TrySampleHeading(destination.FootAnchor, GenerousBudget, out _)
-                .Should().Be(NavigationGuideStatus.Success);
-            warm.Dispose();
-        }
+        _ = MeasureAttachSampleDispose(
+            cache, fixture, destination.FootAnchor, hotPathIterationCount, out bool warmed);
+        warmed.Should().BeTrue();
+        cache.ActiveLeaseCount.Should().Be(0);
 
-        bool succeeded = true;
-        long before = System.GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < hotPathIterationCount; i++)
-        {
-            NavigationFlowFieldLease guide = CreateGuideUnchecked(
-                cache,
-                fixture,
-                ref succeeded);
-            if (!succeeded)
-                break;
-            if (guide.TrySampleHeading(
-                    destination.FootAnchor,
-                    GenerousBudget,
-                    out _) != NavigationGuideStatus.Success)
-            {
-                succeeded = false;
-            }
-            guide.Dispose();
-        }
-        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = MeasureAttachSampleDispose(
+            cache, fixture, destination.FootAnchor, hotPathIterationCount, out bool succeeded);
 
         succeeded.Should().BeTrue();
         allocated.Should().Be(0);
@@ -404,34 +383,13 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         Vector3d actualFoot = source.FootAnchor
             + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
         const int hotPathIterationCount = 256;
-        for (int i = 0; i < hotPathIterationCount; i++)
-        {
-            NavigationFlowFieldLease warm = CreateGuide(cache, fixture);
-            warm.TrySampleHeading(actualFoot, GenerousBudget, out _)
-                .Should().Be(NavigationGuideStatus.Success);
-            warm.Dispose();
-        }
+        _ = MeasureAttachSampleDispose(
+            cache, fixture, actualFoot, hotPathIterationCount, out bool warmed);
+        warmed.Should().BeTrue();
+        cache.ActiveLeaseCount.Should().Be(0);
 
-        bool succeeded = true;
-        long before = System.GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < hotPathIterationCount; i++)
-        {
-            NavigationFlowFieldLease guide = CreateGuideUnchecked(
-                cache,
-                fixture,
-                ref succeeded);
-            if (!succeeded)
-                break;
-            if (guide.TrySampleHeading(
-                    actualFoot,
-                    GenerousBudget,
-                    out _) != NavigationGuideStatus.Success)
-            {
-                succeeded = false;
-            }
-            guide.Dispose();
-        }
-        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = MeasureAttachSampleDispose(
+            cache, fixture, actualFoot, hotPathIterationCount, out bool succeeded);
 
         succeeded.Should().BeTrue();
         allocated.Should().Be(0);

@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-120`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-121`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -22,6 +22,30 @@
   here until they have been investigated and confirmed as runtime defects.
 
 ## Active Issues
+
+### TRB-Issue-120 - Benchmark launcher discards failure status
+
+- **Discovered:** 2026-09-11 during upstream `GF-Issue-006` investigation.
+- **Status:** Open; confirmed benchmark-tooling defect, separate from the
+  unexplained exceptions in `TRB-Issue-119` and `GF-Issue-006`.
+- **Boundary:** `tests/Trailblazer.Benchmarks/Program.cs` discards every
+  `BenchmarkSwitcher.Run(...)` summary and returns zero on execution paths.
+  A failed benchmark can therefore appear successful to a calling script.
+  The same defect is observed in GridForge's historical planar baseline and
+  tracked upstream as `GF-Issue-007`.
+- **Required correction:** Inspect critical validation errors, report success
+  and each returned execution's exit status; result rows alone are insufficient.
+  Combine failures across Trailblazer's canonical and single-shot groups without
+  short-circuiting either invocation. Keep legitimate help/list commands working.
+  BenchmarkDotNet 0.15.8 does not return extra diagnoser executions in these
+  summaries, so retain full-log/expected-child-count validation as well.
+- **Acceptance:** Successful launches; success followed by failure; results
+  followed by nonzero/unknown exit; build/validation failure; both group orders;
+  and successful informational commands. Include a real failing-child launcher
+  smoke check. Do not add a runtime workaround or claim this fixes either NRE.
+- **Interim gate:** Require complete expected child exits, launch/sample counts
+  and semantic records. Neither a zero parent exit nor partial statistics makes
+  an incomplete capture eligible for performance comparison.
 
 ### TRB-Issue-119 - Guided A* setup reported an exception in wide geometry
 
@@ -74,6 +98,15 @@
   `artifacts/benchmark005/planar-edge-baseline-children`. This is not an A* setup
   failure; its normal path exits before containment. Neither a shared cause
   nor a relationship to the original wide-helper stack has been established.
+- **Upstream investigation (2026-09-11):** `GF-Issue-006` remains open after
+  seven additional unchanged-child probes: one console-host replay and six
+  acknowledged-pipe replays, three with first-chance capture attached. All exit
+  zero; none is a replay of this A* setup failure or a repair of the incomplete
+  planar baseline. Evidence and a validated native-fault capture procedure are
+  retained upstream and locally under `artifacts/gf-issue006`. A separate null
+  control showed that name-only exception collection missed a caught NRE;
+  including native access violations captured the pre-managed fault state.
+  Neither the control dump nor these passing probes establishes a common cause.
 - **Per-edge experiment watch:** Fresh `guided-ray-{baseline,candidate}`
   captures each complete three A*/100 launches, plus the full Flow/100 and
   Flow/500 matrix, with exact cross-version replay. These six clean A* launches

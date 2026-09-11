@@ -52,6 +52,19 @@ dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj 
 
 Do not treat short-run results as canonical measurements.
 
+## Accepting a capture
+
+Verify the full log against the expected cases, child launches and measurement
+stages before using a result. The current launcher discards BenchmarkDotNet's
+report failure status, so a zero command exit does not prove success. Partial
+statistics from an earlier launch can survive a later child failure.
+
+Exclude incomplete cases, require successful timed and diagnostic child exits,
+and treat missing allocation diagnostics as unknown rather than zero. Retain
+the actual executed child binaries, generated source and runtime configuration
+when an exception occurs. A successful replay is additional diagnostic evidence,
+not a replacement for the missing launches of an earlier capture.
+
 ## Current provider benchmarks
 
 `NavigationSurfaceAStarBenchmarks` measures production endpoint admission plus

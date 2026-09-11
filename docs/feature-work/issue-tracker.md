@@ -26,10 +26,9 @@
 ### TRB-Issue-119 - Guided A* setup reported an exception in wide geometry
 
 - **Discovered:** 2026-09-10 during guided-host performance measurement.
-- **Status:** Open, not reproduced in the bounded follow-up: one failed
-  BenchmarkDotNet A*100 setup, followed by a passing standalone execution and
-  three passing BenchmarkDotNet baseline launches of the unchanged fixture.
-  No fix or runtime attribution is claimed.
+- **Status:** Open. One historical BenchmarkDotNet A*100 setup failure has not
+  reproduced in the bounded follow-ups below. No fix or runtime attribution
+  is claimed.
 - **Failure:** `NullReferenceException` in
   `WideConvex2dRelations.GetRotatedOffset` at ProjectionMath.cs:477, reached from
   `ContainsPoint` through GridForge's planar segment interval calculation and
@@ -56,6 +55,18 @@
   The optimized candidate subsequently passes another three A* launches with
   identical captured replay hashes. This does not identify or fix the earlier
   exception: the performance change avoids some disjoint-candidate math calls.
+- **Follow-up watch (2026-09-11 UTC):** Four frozen generated-runner A*/100 controls
+  complete without the exception (two per GridForge version, same shared
+  runtime). Fresh parent-driven guided baseline and FixedMathSharp-candidate
+  captures each pass all three A* launches. Logs and executed-child snapshots
+  are under
+  `artifacts/benchmark005`. Historical parent-output hashes are not a substitute
+  for the executed child's binaries; new captures preserve both the actual
+  child runtime and generated source. These clean runs are additional evidence,
+  not a fix or a reason to discard the original failure.
+  The containment optimization removes a redundant query-point transform;
+  polygon transforms still use the reported helper. Neither fewer calls nor
+  successful runs establish the cause of the original exception.
 - **Next check:** If this setup failure recurs, capture the preparation frame,
   agent index and exact simplification ray/prism inputs before reducing it to
   the public math boundary. Repeated clean runs are not a root-cause diagnosis.

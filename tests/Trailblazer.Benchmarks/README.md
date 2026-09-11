@@ -263,6 +263,17 @@ peaks, maximum, observed percentiles and frames above the chosen allowance/full
 frame budget. Nested frames are correlated; hundreds of ordinary frames do not
 cancel out a repeatedly expensive recheck frame.
 
+Preserve the **executed child runtime**, not just the parent benchmark output.
+With `--keepFiles`, each `// Execute: dotnet ... in ...` log line identifies the
+generated runner and its working directory. Copy that directory, including its
+dependencies, runtime configuration, symbols and generated runner, to a unique
+evidence folder immediately after each capture; record SHA256 hashes and the
+source revisions/diff. Keep the generated project/source and full log as well.
+Later captures can reuse the same generated directory. Parent-output hashes
+alone do not establish which assemblies the child executed, especially with
+the prebuilt local-stack references. Compare the frozen child manifests before
+attributing a result to a single changed library.
+
 ### Scheduled cold acquisition across fixed frames
 
 `NavigationScheduledFrameBenchmarks` measures one complete scheduled acquisition

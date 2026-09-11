@@ -25,11 +25,14 @@ instead of burying it in notes.
   - `TRB-Benchmark-005` is the active priority in the
     [benchmark tracker](benchmark-signal-hardening-backlog.md). The new fixture
     measures real guided movement and periodic line-of-sight rechecks.
-    GridForge's strict disjoint-segment rejection cuts selected whole-block
-    medians by 82–87%, with matching replay, zero frame allocations and exact
-    full coverage. Periodic frames still exceed 31.25 ms, however, and ordinary
-    A*/100 frames are about 11% slower in this capture. Isolate the remaining
-    ray/sampling costs and that tradeoff before claiming crowd throughput.
+    After GridForge's strict disjoint-segment rejection, the latest narrow
+    FixedMathSharp containment simplification reduces selected whole-block
+    medians by another roughly 10%, with exact replay and zero frame allocations.
+    Periodic medians are still about 122 / 97 / 406 ms for A*/100, Flow/100 and
+    Flow/500, above the 31.25 ms full-frame budget. The earlier ordinary A*
+    increase does not consistently repeat in a frozen-runner control; launch-
+    specific variability remains visible. A fresh profile keeps blocked-ray
+    tracing ahead of Flow sampling as the next measured optimization target.
     Cold-acquisition scheduling does not bound these synchronous rechecks.
     The earlier performance slices (`TRB-Benchmark-002/003`, `GF-Benchmark-003`)
     are closed locally. `TRB-Benchmark-004` now closes with ordered protocol
@@ -68,6 +71,17 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
+
+- [Shared Convex Containment Performance Slice](benchmark-signal-hardening-backlog.md#follow-up-ordinary-frame-control-and-shared-containment-work)
+  - FixedMathSharp widens an already-world-space query point once instead of
+    repeating its general transform for every polygon edge. Public behavior
+    stays unchanged; unused internal offset/forwarding machinery is removed.
+    Eight isolated benchmark cases improve by 26-37%; selected guided-block
+    medians improve by about 10%. Executed-child archives and source-checksum
+    audits strengthen the evidence; correlated frame variability and the
+    still-unmet frame budgets remain explicit. FixedMathSharp, GridForge,
+    Gravitas and Trailblazer pass the full local Release/ReleaseLean matrix
+    with exact 100% line, branch and fully covered method coverage.
 
 - [Cold-Request Protocol Isolation](benchmark-signal-hardening-backlog.md#trb-benchmark-004---tiny-cold-flow-protocol-has-an-iteration-position-excursion)
   - Retained and independently checked 312 warmup and 918 actual observations
@@ -135,10 +149,13 @@ measurements, not permission for speculative algorithm or cache changes.
 The plans share evidence, not competing implementations:
 
 1. Continue the measured guided-frame work in `TRB-Benchmark-005` before broader
-   features: isolate remaining periodic ray work from ordinary Flow sampling
-   and attribute the ordinary A* increase with a bounded matched control.
-   The first GridForge rejection is verified, but the full frame budget is
-   still unmet. `TRB-Benchmark-004` and `GF-Benchmark-003` are closed locally;
+   features: remaining blocked-ray tracing is the first measured priority,
+   with Flow guide-sampling geometry the next distinct cost. The bounded
+   control does not consistently reproduce the earlier ordinary A* increase;
+   retain launch variability without inventing a cause. GridForge's rejection
+   and FixedMathSharp's containment simplification are verified, but the full
+   frame budget is still unmet. `TRB-Benchmark-004` and `GF-Benchmark-003` are
+   closed locally;
    do not repeat their investigations without new evidence. Keep the distinct
    `TRB-Issue-119` setup exception visible and capture exact inputs if it recurs.
    `TRB-Issue-114` requires no further investigation unless new evidence meets

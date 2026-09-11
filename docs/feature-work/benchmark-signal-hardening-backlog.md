@@ -65,8 +65,9 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 ### TRB-Benchmark-005 - Guided frames spend most time in long blocked segment tracing
 
 - **Discovered:** 2026-09-10 during the representative guided-host performance pass.
-- **Status:** Active. The first focused GridForge optimization is implemented
-  and verified locally; guided-frame budget acceptance is not complete.
+- **Status:** Active. The focused GridForge rejection and FixedMathSharp
+  containment simplification are implemented and verified locally;
+  guided-frame budget acceptance is not complete.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -114,6 +115,15 @@ GridForge `7179cce` and SwiftCollections `4b5715b`. The candidate adds only the
 GridForge runtime rejection. SHA256 comparison of all 47 frozen top-level
 benchmark output files finds only `GridForge.dll` and `GridForge.pdb` changed.
 
+**Provenance qualification from the follow-up:** those 47 files are frozen
+parent outputs, not separately frozen before/after generated-child runtimes.
+Both logs reuse the same generated-child directory. Its retained candidate
+contains a different FixedMathSharp binary from the parent snapshots, so the
+parent hashes alone do not establish exact historical child-binary attribution.
+The timings remain recorded observations. The controlled comparison below
+holds the actual child and all shared dependencies fixed; new captures also
+archive the executed child immediately after each run.
+
 Each version retains **27 actual blocks / 1,728 actual frames**, plus nine
 warmup and nine diagnostic blocks. Independent analysis verifies every timed
 block against full BenchmarkDotNet JSON, every exported array against the
@@ -157,8 +167,9 @@ A separate candidate Flow/100 sampled-thread-time profile covers five measured
 and **32%** in Flow guide sampling. The shares overlap and profiling perturbs
 execution; they locate follow-up work, not an additional speedup measurement.
 
-Next isolate the remaining periodic ray work from ordinary guide sampling and
-attribute the ordinary A* change with a bounded matched control. The current
+At this checkpoint, the next steps were to isolate remaining periodic ray work
+from ordinary guide sampling and examine the ordinary A* change with a bounded
+matched control. The follow-up below records those results. The current
 rejection reduces false-positive narrow-phase cost, not the segment-AABB
 candidate range's asymptotic size. Preserve candidate budgets, dependency and
 failure order when evaluating further improvements. Do not disable/stagger
@@ -191,6 +202,155 @@ parser summaries and profiles are under `artifacts/benchmark004`:
 `guided-candidate-flow100.nettrace`, `guided-candidate-flow100-stacks.json`,
 and `verification-final`. `TRB-Issue-119` retains the earlier A* setup exception
 separately; the six later successful A* benchmark launches are not a fix.
+
+#### Follow-up: ordinary-frame control and shared containment work
+
+On 2026-09-11 (UTC), a bounded A*/100 control reused one frozen generated runner and
+the same shared dependencies, swapping only GridForge DLL/PDB between the
+pre-rejection and post-rejection versions. Execution order was after / before /
+before / after. This uses the generated runner's no-acknowledgement console
+host, **not** a parent-driven BenchmarkDotNet capture; keep it separate from
+the historical timing table.
+
+| Launch order | GridForge version | Ordinary-frame median | Periodic-frame median |
+| --- | --- | ---: | ---: |
+| 1 | After rejection | 2.697 ms | 143.338 ms |
+| 2 | Before rejection | 2.625 ms | 1,273.634 ms |
+| 3 | Before rejection | 3.177 ms | 1,277.752 ms |
+| 4 | After rejection | 2.711 ms | 147.552 ms |
+
+Each process retains one warmup, three actual and one diagnostic 64-frame
+block. Independent analysis checks all 20 records / 1,280 exported frames,
+including exact Int64 replay, zero current-thread allocations and zero
+collection-change masks. Actual-only counts are 384 frames per version:
+360 ordinary and 24 periodic. The two unchanged-before launches themselves
+vary substantially. This control does not consistently reproduce the earlier
+ordinary A* increase; it does not prove that no causal regression is possible
+or identify a JIT mechanism. The periodic improvement remains large in every
+launch. All four processes complete without the setup exception.
+
+Source review finds that ordinary A* guide following does not normally enter
+the changed segment helper. Occupancy updates do share its FixedMathSharp
+point-containment implementation. Do not confuse that source distinction with
+measured per-frame call counts or a proven cause of timing variability.
+
+The follow-up removes unnecessary query-point transforms from
+FixedMathSharp convex containment. All four callers supply a world point and
+zero local offset. A single internal method widens that point once; polygon
+rotation, edge order, wide predicates and boundary inclusion stay unchanged.
+The unused internal offset argument and forwarding overload are removed, with
+no public API change. Independent code/proof review finds no actionable issues.
+
+Eight FixedMathSharp microbenchmark cases cover inside/outside queries,
+four/six vertices and zero/30-degree rotation. Three fresh launches per case
+show **26.3-37.0% lower standard BDN means**, with zero allocation/GC reports.
+The default adaptive/outlier policy is retained and documented: all-raw actual
+means also improve **26.2-36.9%**, and every corresponding launch-level raw
+median decreases. These are isolated containment results, not frame savings.
+
+#### Fresh guided-frame comparison
+
+The same three-case, three-launch, one-warmup/three-actual protocol above was
+repeated against the current local stack, before and after the FixedMathSharp
+change. Before source heads are Trailblazer `f62f35a`, GridForge `b3e60f3`,
+FixedMathSharp `839bbdc`, and SwiftCollections `4b5715b`. Only the two
+FixedMathSharp containment implementation files change in production source.
+
+Each version retains 27 actual blocks / 1,728 actual frames, plus nine warmup
+and nine diagnostic blocks. Independent audit checks all 45 records / 2,880
+exported frames per version, every array, all timed operations against full
+BDN JSON, and exact Int64 replay across versions and stages. All nested
+allocation and collection observations, and all BDN memory diagnostics, are
+zero. All 18 benchmark children complete successfully.
+
+Actual-only times in milliseconds:
+
+| Case | Ordinary median before / after | Periodic median before / after | Whole 64-frame block median before / after |
+| --- | ---: | ---: | ---: |
+| A*/100 | 2.692 / 2.554 | 137.949 / 121.561 | 713.590 / 643.311 |
+| Flow/100 | 3.690 / 3.402 | 108.988 / 97.084 | 657.504 / 593.096 |
+| Flow/500 | 20.250 / 19.735 | 469.895 / 405.887 | 3,066.814 / 2,747.608 |
+
+Whole-block medians decrease **9.8% / 9.8% / 10.4%**. Observed nested-frame
+P99 changes **143.800 / 110.646 / 484.510 ms** to
+**126.596 / 98.876 / 423.174 ms**, and maximum changes
+**149.280 / 114.700 / 504.717 ms** to **135.342 / 104.784 / 442.627 ms**.
+Every case still has **576/576 actual frames above 2 ms** and **36/576 above
+31.25 ms**. All observations above 31.25 ms occur at periodic positions
+0/16/32/48. Do not average away those peaks.
+
+Ordinary-frame variability remains material. Relative to the same ordinal
+baseline launch, candidate A*/100 launch 2 is 8.2% slower in ordinary median;
+Flow/500 launch 2 is 12.7% slower. The latter's three actual blocks have ordinary
+medians **23.766 / 23.611 / 23.692 ms**, versus roughly 18-19 ms in the other
+candidate launches. It is not a single removable outlier. Periodic medians
+improve in all ordinal comparisons, but these are correlated frames and
+sequential process launches, not matched statistical pairs or stationary
+throughput guarantees.
+
+Both actual-child archives contain the same 63 paths. Six DLL/PDB files differ:
+FixedMathSharp, GridForge and the benchmark assembly. This is a normal rebuilt
+comparison, not a single-DLL swap. The generated guided runner is byte-identical.
+Portable-PDB document checksums verify unchanged Trailblazer, GridForge,
+benchmark and generated source; only the two intended FixedMathSharp documents
+differ. The micro and guided captures use different build graphs, but all 200
+authored FixedMathSharp source checksums match for each corresponding variant.
+
+#### Residual cost and next boundary
+
+A separate candidate Flow/100 sampled-thread-time profile covers five replay-
+checked 64-frame blocks. Restricting stacks to `RunMeasured` excludes setup
+and preparation; it still includes benchmark validation outside the nested
+frame timer. Mutually exclusive stack groups account for approximately **61.4%
+direct-heading work, 25.7% Flow sampling and 12.9% other measured-block work**.
+These are sampled shares, not exact per-frame call counts or a speed comparison.
+
+Within that root, `GridTracer.TraceIntervalsInto` accounts for about **49.0%**
+inclusively and planar interval solving **36.7%**; Flow body-segment/anchor
+validation accounts for about **13.4%**. These nested shares overlap. Long
+blocked-ray tracing remains the first priority, with guide-sampling geometry
+the next distinct cost. Repeatedly transformed polygon vertices and the
+segment-AABB candidate scan remain candidates for measurement, not approved
+shortcuts. Preserve full-domain geometry, candidate accounting, dependency
+and failure order; do not stagger/disable rechecks or tighten budgets to pass.
+
+The focused containment improvement is measured; `TRB-Benchmark-005` remains
+active because guided-frame budget acceptance is still not met.
+
+#### Containment slice verification
+
+All eight solution builds against the unreleased local stack pass with zero
+warnings/errors, covering both library targets. The full test runs and exact
+coverage reports pass in both configurations:
+
+| Repository | Configuration | Passing tests | Covered lines | Covered branches | Fully covered methods |
+| --- | --- | ---: | ---: | ---: | ---: |
+| FixedMathSharp | Release | 2,708 + 8 Chronicler | 47,858/47,858 | 8,828/8,828 | 3,452/3,452 |
+| FixedMathSharp | ReleaseLean | 2,687 + 8 Chronicler | 47,951/47,951 | 8,828/8,828 | 3,448/3,448 |
+| GridForge | Release | 844 | 8,861/8,861 | 3,787/3,787 | 1,115/1,115 |
+| GridForge | ReleaseLean | 844 | 8,861/8,861 | 3,787/3,787 | 1,115/1,115 |
+| Gravitas | Release | 3,950 | 56,093/56,093 | 15,906/15,906 | 5,341/5,341 |
+| Gravitas | ReleaseLean | 3,895 | 56,091/56,091 | 15,906/15,906 | 5,340/5,340 |
+| Trailblazer | Release | 2,467 + 65 adapter | 30,842/30,842 | 12,089/12,089 | 3,011/3,011 |
+| Trailblazer | ReleaseLean | 2,405 + 65 adapter | 30,842/30,842 | 12,089/12,089 | 3,011/3,011 |
+
+FixedMathSharp coverage includes its core and FluentAssertions assemblies;
+the separate Chronicler tests run without contributing to that coverage gate.
+Trailblazer reports merge core and Gravitas adapter coverage. These are local
+Windows checks, not Linux CI or released-package validation.
+
+Eight new literal containment cases pass on baseline and candidate and all
+fail under a deliberate incorrect-scaling mutation. The restored implementation
+passes all 38 focused relation tests. Independent source/proof, raw timing,
+replay, binary-provenance and profile audits find no remaining actionable
+issues. The guided-log parser's positive and malformed-record checks also pass.
+
+Evidence is under `artifacts/benchmark005`: `ordinary-control-*.log`,
+`ordinary-control-summary.json`, `control-{before,after}`, `control-hashes.json`,
+the new `fms-containment-*` / `guided-*` captures, and `verification` build/test
+logs and exact coverage reports. The controls' shared
+generated runtime is intentionally not claimed to be bit-identical to the
+historical parent snapshots.
 
 ## Closed Signals
 

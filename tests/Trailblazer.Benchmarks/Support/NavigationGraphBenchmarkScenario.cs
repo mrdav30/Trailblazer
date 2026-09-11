@@ -121,8 +121,11 @@ internal static class NavigationGraphBenchmarkScenario
     internal static TrailblazerWorldContextSettings CreateSettings(
         int nodeCapacity,
         int concurrentQueries,
-        int cacheEntries = 128)
+        int cacheEntries = 128,
+        int? activeLeaseCapacity = null)
     {
+        // Held guides do not require one search workspace per consumer.
+        int activeLeases = activeLeaseCapacity ?? concurrentQueries;
         int pageCapacity = checked(((nodeCapacity + NavigationSemanticPage.SlotCount - 1)
             / NavigationSemanticPage.SlotCount) + 2);
         int guidePointCapacity = checked((nodeCapacity * 2) - 1);
@@ -146,8 +149,8 @@ internal static class NavigationGraphBenchmarkScenario
             maxAStarCacheEntries: cacheEntries,
             maxAStarReusablePayloadBytes: Math.Max(16_777_216L, maximumAStarPayloadBytes * cacheEntries),
             maxAStarSinglePayloadBytes: maximumAStarPayloadBytes,
-            maxAStarActivePayloadBytes: checked(maximumAStarPayloadBytes * concurrentQueries),
-            maxAStarActivePayloadLeases: concurrentQueries,
+            maxAStarActivePayloadBytes: checked(maximumAStarPayloadBytes * activeLeases),
+            maxAStarActivePayloadLeases: activeLeases,
             aStarWorkspaceComponentCapacity: 1,
             flowWorkspaceMapCapacity: 1,
             flowWorkspaceEndpointPageCapacity: pageCapacity,
@@ -156,8 +159,8 @@ internal static class NavigationGraphBenchmarkScenario
             maxFlowCacheEntries: cacheEntries,
             maxFlowReusablePayloadBytes: Math.Max(33_554_432L, maximumFlowPayloadBytes * cacheEntries),
             maxFlowSinglePayloadBytes: maximumFlowPayloadBytes,
-            maxFlowActivePayloadBytes: checked(maximumFlowPayloadBytes * concurrentQueries),
-            maxFlowActivePayloadLeases: concurrentQueries,
+            maxFlowActivePayloadBytes: checked(maximumFlowPayloadBytes * activeLeases),
+            maxFlowActivePayloadLeases: activeLeases,
             rayWorkspaceCoveredAddressCapacity: nodeCapacity,
             rayWorkspaceTraceIntervalCapacity: nodeCapacity,
             aStarWorkspaceGuidePointCapacity: guidePointCapacity);
@@ -180,7 +183,7 @@ internal static class NavigationGraphBenchmarkScenario
             defaults.MaxAreaPolicies,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
-            Math.Max(defaults.MaxConcurrentSnapshotLeases, concurrentQueries),
+            Math.Max(defaults.MaxConcurrentSnapshotLeases, Math.Max(concurrentQueries, activeLeases)),
             queryLimits);
     }
 

@@ -16,7 +16,7 @@ this backlog.
 ## Intake Rules
 
 - Signal IDs use `TRB-Benchmark-NNN`. The next available ID is
-  `TRB-Benchmark-005`.
+  `TRB-Benchmark-006`.
 - Assign an ID at intake and never reuse it, including after a signal closes or
   moves into a dated plan. Check this file's Git history before advancing or
   repairing the counter.
@@ -62,9 +62,224 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 
 ## Active Signals
 
-None. The measurement-only watch below remains evidence-gated.
+### TRB-Benchmark-005 - Guided frames spend most time in long blocked segment tracing
+
+- **Discovered:** 2026-09-10 during the representative guided-host performance pass.
+- **Status:** Active. The first focused GridForge optimization is implemented
+  and verified locally; guided-frame budget acceptance is not complete.
+- **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
+  a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
+  64 measured frames at 32 Hz. Agents start together and retain the default
+  16-frame line-of-sight recheck cadence. No physics solver is present.
+- **Initial evidence:** Flow100 sizing retained three actual blocks. Frames
+  0/16/32/48 take 1,140–1,192 ms; ordinary frames are roughly 4 ms. All nested
+  frames allocate zero current-thread bytes, with zero collection-change masks.
+  These are complete host-frame observations, not isolated acquisition timings.
+- **Attribution:** A separate sampled-thread-time trace of the same Flow100
+  fixture, restricted to the measured block, places about 90% inclusively in
+  `GridTracer.TraceIntervalsInto`, 87% in `TryGetPlanarSegmentInterval`, and 60%
+  in wide convex point containment. These are overlapping sampled shares, not
+  additive measurements. The tracer enumerates the segment's bounding-box
+  candidates and runs exact prism intersection on each before Trailblazer can
+  reject the obstructed route.
+- **Implemented slice:** GridForge `GF-Benchmark-004` uses the existing widened
+  `Vector2d.OrientationSign` to reject convex footprints whose vertices all lie
+  strictly on one side of the ray's supporting line. Zero/mixed signs and
+  stationary segments retain the existing interval calculation. Candidate
+  enumeration/counts, limits, output order, closed-set tangencies and exact
+  fallback arithmetic are unchanged. Empty/default prisms still validate.
+- **Evidence:** `artifacts/benchmark004/guided-sizing-2.log` (partial sizing,
+  not a complete matrix), `guided-flow100.nettrace`, `guided-flow100-stacks.json`
+  and the ignored `probe` harness. A*100 setup threw once in wide math before
+  any measured result; a standalone run of the unchanged fixture later passed.
+  Keep this separate correctness investigation out of timing comparisons.
+
+#### Matched guided-frame result
+
+The selected capture ran on 2026-09-10, serially on the same Windows/.NET
+8.0.29 host as `TRB-Benchmark-004`, with normal runtime settings. Each version
+has three cases, three launches per case, one warmup and three actual 64-frame
+blocks per launch. A*/500 is deliberately excluded from this repeated capture:
+its expensive sizing setup was stopped before completion. This is not a
+complete four-case matrix or a cold-acquisition measurement.
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter '*AgentCount: 100,*' '*FlowField*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/benchmark004/guided-candidate
+```
+
+Use `guided-baseline` for the before capture. Build once per version with the
+local-stack command above; do not run builds/tests/profilers during capture.
+The baseline has Trailblazer `4a02250` plus the new benchmark-only fixture,
+GridForge `7179cce` and SwiftCollections `4b5715b`. The candidate adds only the
+GridForge runtime rejection. SHA256 comparison of all 47 frozen top-level
+benchmark output files finds only `GridForge.dll` and `GridForge.pdb` changed.
+
+Each version retains **27 actual blocks / 1,728 actual frames**, plus nine
+warmup and nine diagnostic blocks. Independent analysis verifies every timed
+block against full BenchmarkDotNet JSON, every exported array against the
+summary, and exact 64-frame replay hashes across both versions, all launches
+and all stages. All exported frames have zero measured current-thread bytes
+and zero collection-change masks; the separate BDN diagnostic also reports
+zero bytes per block. All nine child launches per version succeed.
+
+The following are **complete nested host-frame times**, in milliseconds:
+
+| Case | Frame median before / after | Observed P99 before / after | Maximum before / after | Frames >31.25 ms, before / after |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 | 2.382 / 2.638 | 1,217.647 / 137.981 | 1,250.667 / 146.656 | 36/576 / 36/576 |
+| Flow/100 | 3.968 / 3.744 | 1,209.573 / 109.337 | 1,220.792 / 116.166 | 36/576 / 36/576 |
+| Flow/500 | 20.736 / 20.721 | 4,047.782 / 478.972 | 4,117.407 / 501.471 | 36/576 / 36/576 |
+
+Every >31.25 ms observation remains at frame 0/16/32/48. Median periodic-frame
+cost falls from **1,205.348 / 1,187.399 / 3,995.667 ms** to
+**136.355 / 108.475 / 462.501 ms**, respectively. Median whole 64-frame blocks
+fall from **4,960.667 / 4,996.946 / 17,181.732 ms** to
+**703.068 / 648.987 / 3,026.668 ms**: reductions of **85.8% / 87.0% / 82.4%**.
+Whole blocks include validation/instrumentation outside the nested frame timer;
+do not divide them by 64 and call the result a safe frame cost.
+
+There is no universal improvement claim. Ordinary non-recheck A* frames rise
+from a median **2.371 to 2.624 ms (+10.7%)**, with a higher median in all three
+candidate launches. Ordinary Flow/100 falls **3.948 to 3.731 ms (-5.5%)**;
+Flow/500 is essentially unchanged at **20.676 to 20.614 ms** with mixed launch
+directions. Retain the A* change for attribution rather than hiding it behind
+the large recheck win. All measured frames still exceed the selected 2 ms
+navigation allowance, and all periodic frames exceed the full 31.25 ms frame.
+These are correlated frames from nine actual blocks per case, not portable
+P99 guarantees or proof of a stationary distribution.
+
+#### Remaining work and verification
+
+A separate candidate Flow/100 sampled-thread-time profile covers five measured
+64-frame blocks, with preparation outside the selected stack root. Roughly
+**55%** of measured-root sampled time is inclusively in direct-heading work,
+**43%** in `GridTracer.TraceIntervalsInto`, **30%** in planar interval solving,
+and **32%** in Flow guide sampling. The shares overlap and profiling perturbs
+execution; they locate follow-up work, not an additional speedup measurement.
+
+Next isolate the remaining periodic ray work from ordinary guide sampling and
+attribute the ordinary A* change with a bounded matched control. The current
+rejection reduces false-positive narrow-phase cost, not the segment-AABB
+candidate range's asymptotic size. Preserve candidate budgets, dependency and
+failure order when evaluating further improvements. Do not disable/stagger
+rechecks, shrink budgets, or weaken semantic checks to make this fixture pass.
+Cold-acquisition scheduling does not by itself bound these synchronous rechecks.
+
+Verification against the unreleased local stack:
+
+- GridForge Release/Lean: **844/844 tests** each; exact coverage
+  **8,861/8,861 lines**, **3,787/3,787 branches**, **1,115/1,115 fully covered methods**.
+  The additional Debug solution run passes all **841 applicable tests**.
+- Trailblazer Release: **2,467 core + 65 adapter** tests; Lean:
+  **2,405 core + 65 adapter** tests. Both merged reports retain exact coverage:
+  **30,842/30,842 lines**, **12,089/12,089 branches**, **3,011/3,011 fully covered methods**.
+- All four solution builds cover both library targets with zero warnings/errors.
+  These are local Windows checks, not Linux CI or released-package validation.
+- Nineteen new GridForge cases assert literal geometry/budget/failure behavior.
+  Baseline testing caught and corrected an asymmetric full-domain rounding
+  expectation. The first candidate coverage run exposed an untested finite-
+  segment miss on a crossing supporting line; that meaningful case restores
+  full fallback coverage without deleting reachable code or relaxing a gate.
+- Independent code/proof review found no remaining actionable findings. The
+  guided-log parser's duplicate-record finding was reproduced, fixed and
+  re-reviewed; its positive and malformed-record behavior checks pass.
+
+Raw logs, full JSON, frozen before/after binaries and hashes, generated jobs,
+parser summaries and profiles are under `artifacts/benchmark004`:
+`guided-{baseline,candidate}`, `guided-{baseline,candidate}.log`,
+`guided-{baseline,candidate}-summary.json`, `guided-{baseline,candidate}-bin`,
+`guided-candidate-flow100.nettrace`, `guided-candidate-flow100-stacks.json`,
+and `verification-final`. `TRB-Issue-119` retains the earlier A* setup exception
+separately; the six later successful A* benchmark launches are not a fix.
 
 ## Closed Signals
+
+### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion
+
+- **Discovered:** 2026-09-10 while measuring `TRB-Benchmark-003`.
+- **Status:** Closed locally on 2026-09-10 with a measurement-protocol correction
+  and a documented no-runtime-change decision. This was not established as a
+  runtime regression, correctness issue, release blocker, or reason to reopen
+  `TRB-Issue-114`.
+- **Original evidence:** In the historical `ColdPublicFlow(Plane100)` capture,
+  actual invocation 2 was slower in all three launches of both versions:
+  baseline 13.472–13.864 ms versus 10.351–10.616 ms for the other invocations;
+  candidate 12.385–12.499 ms versus 9.356–9.797 ms. Retain those original
+  six sequences in `artifacts/benchmark003/{baseline,candidate}-cold`.
+- **Scope:** A payload-cache miss against warmed graph/workspaces/pools is not
+  necessarily warmed execution of cold integration. Global setup's repeated
+  cache-hit acquisitions do not establish that distinction.
+
+#### Ordered isolation and disposition
+
+All five captures ran serially against unchanged local-stack Release binaries:
+Trailblazer `4a022509e99d89a36cd5a5980f0a1c3d7beb6214`, GridForge
+`7179ccecb7d32107fec31461177a34d2221fd666`, SwiftCollections
+`4b5715b2232930480c207fa6e00944713f5000d6`. This is a new protocol-isolation
+build, not the historical candidate. The Windows host used .NET 8.0.29,
+BenchmarkDotNet 0.15.8 and the High performance power plan. No inherited
+`DOTNET_`/`COMPlus_` overrides were present; only the explicitly labelled
+diagnostic changed tiering. Child jobs used concurrent workstation GC.
+
+Every launch used Monitoring, one operation per invocation and no unrolling.
+The exact filter `'*ColdPublicFlow*Plane100?)'` selected only 100 nodes, unlike
+the historical `Plane100*` filter that also selects 10K/100K. Commands are in
+the [benchmark guide](../../tests/Trailblazer.Benchmarks/README.md#cold-caches-versus-runtime-warmup).
+For the diagnostic, add `--envVars DOTNET_TieredCompilation:0` to the 1-warmup,
+100-actual command. Repeat the original short command afterwards.
+
+| Capture in execution order | Launches | Warmups / actuals per launch | Actual observations | Actual min / median / max (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Original normal control | 3 | 1 / 3 | 9 | 9.742 / 10.172 / 13.270 |
+| Extend actual count only | 3 | 1 / 100 | 300 | 2.280 / 2.630 / 20.600 |
+| Extend warmup count | 3 | 100 / 100 | 300 | 2.239 / 2.329 / 5.996 |
+| Tiering-disabled diagnostic | 3 | 1 / 100 | 300 | 2.375 / 2.431 / 3.150 |
+| Repeat normal short control | 3 | 1 / 3 | 9 | 9.774 / 10.218 / 13.892 |
+
+All **312 warmup and 918 actual observations** were retained and independently
+cross-checked against full JSON, with no mismatches. `WorkloadResult` duplicates
+were not counted again. The mixed early/late 1/100 median is not a steady-state
+statistic; no P99 claim is made from nine observations.
+
+The extended normal runs repeat excursions at total post-setup timed invocation
+ordinals **3 and 8**, not specifically an actual-stage boundary:
+
+- With one warmup: actual 2 is 12.891–14.110 ms; actual 7 is 20.516–20.600 ms.
+- With 100 warmups: warmup 3 is 12.882–12.988 ms; warmup 8 is 20.129–20.317 ms.
+- With tiering disabled: the corresponding actual 2/7 values are 2.388–2.499 ms.
+- Returning to the normal short control reproduces actual 2 at 12.955–13.892 ms.
+
+Normal 1/100 actual first-20 means of 8.693 / 10.469 / 10.771 ms fall to
+last-20 means of 2.336 / 2.401 / 2.445 ms. Normal 100/100 first-20 means are
+2.350 / 2.352 / 2.618 ms, versus last-20 means of 2.291 / 2.347 / 2.351 ms.
+The latter still includes about 10% launch-3 drift and actual excursions of
+5.857 and 5.996 ms. Keep those observations; longer warmup is not proof of a
+perfectly stationary distribution or a universal latency guarantee.
+
+All 15 launch cleanup records match: matched internal preflight settles 100
+nodes with 2,048 evaluated edges and 2,079 lookups; Flow payload retention is
+8,192 bytes; warm allocation preflight and drained active/reserved/detached
+ownership are zero. Separate allocation diagnostics all report 18,576 bytes/op.
+These are not per-actual public-request work or GC counters: BenchmarkDotNet
+collects extra allocation statistics in a separate invocation after actual
+timing, as shown in its [tagged engine source](https://raw.githubusercontent.com/dotnet/BenchmarkDotNet/v0.15.8/src/BenchmarkDotNet/Engines/Engine.cs).
+
+**Decision:** close the narrow watch as warmup/tiering-sensitive measurement
+behavior. The exact runtime/JIT mechanism was not traced; no production fix or
+change to the runtime configuration is justified. .NET documents
+[tiered compilation](https://learn.microsoft.com/en-us/dotnet/core/runtime-config/compilation)
+as background optimization, but that general mechanism does not identify which
+work caused an individual excursion. The diagnostic is not a recommendation to
+disable tiering. Retain short controls as early-invocation evidence and inspect
+ordered longer-warmed observations before making warmed tiny-request claims.
+Do not reclassify the historical larger-node measurements as steady state,
+apply a correction factor, or invalidate their matched-protocol comparisons.
+
+Raw logs/full JSON, generated jobs/runtime configurations, frozen assemblies
+and SHA256 provenance are under `artifacts/benchmark004`: `original-control`,
+`sequence-1w-100a`, `warmed-100w-100a`, `no-tiering-1w-100a`, `control-repeat`,
+`frozen-bin` and `provenance.json`. Reopen only for a new reproducible regression
+under a matched protocol or if a specific host needs causal/tail investigation.
 
 ### TRB-Benchmark-003 - Remaining traversal cost needs focused isolation
 
@@ -294,9 +509,10 @@ Do not add a prefix cache or weaken deterministic budgets speculatively.
 - Independent source/test and evidence review found no blocking issue after
   documenting combined-patch attribution, warm-meter scope and binary provenance.
   These are local Windows results, not Linux CI or released-package validation.
-- Close this narrow optimization slice. Keep the observed workload limits and
-  `TRB-Benchmark-004` measurement watch; the next useful performance decision is
-  representative guided-host throughput, not speculative prefix skipping.
+- Close this narrow optimization slice. Keep the observed workload limits.
+  The subsequent `TRB-Benchmark-004` entry closes the measurement watch with
+  ordered protocol evidence; `TRB-Benchmark-005` measures representative
+  guided-host frames. Neither follow-up authorizes speculative prefix skipping.
 
 ### TRB-Benchmark-002 - Avoidable controller allocations and A* epoch reads
 
@@ -500,25 +716,7 @@ diagnostics, not causal improvements, regressions or steady-state latency gates.
 
 ## Watch Items
 
-### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion
-
-- **Discovered:** 2026-09-10 while measuring `TRB-Benchmark-003`.
-- **Status:** Measurement watch; not a runtime regression, correctness issue,
-  release blocker, or reopening of `TRB-Issue-114`.
-- **Evidence:** In `ColdPublicFlow(Plane100)`, the second actual invocation is
-  slower in all three launches of both versions: baseline 13.472–13.864 ms
-  versus 10.351–10.616 ms for the other invocations; candidate 12.385–12.499 ms
-  versus 9.356–9.797 ms. Allocations and reported semantic/work counters remain
-  unchanged. The cause is not established.
-- **Reproduction:** Use the exact cold command above and inspect ordered raw
-  measurements, not just pooled means. Evidence is in the retained six launch
-  sequences under `artifacts/benchmark003/{baseline,candidate}-cold`.
-- **Next isolation:** Before making a small-request steady-state/tail claim,
-  retain this cold protocol as a control and separately extend its warmups and
-  actual iterations. If the position effect persists, profile that invocation
-  boundary. Do not discard it as an outlier, alter runtime code without cause,
-  or extrapolate a P99 from nine samples. It does not invalidate the matched
-  protocol comparison or the separate 100-warmup volume results.
+None.
 
 ## Promotion Criteria
 

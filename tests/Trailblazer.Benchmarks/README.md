@@ -32,6 +32,7 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-guide-service` | `NavigationGuideServiceBenchmarks` |
 | `navigation-cold-guide` | `NavigationColdGuideBenchmarks` |
 | `navigation-cold-frame` | `NavigationColdFrameBenchmarks` |
+| `navigation-guided-frame` | `NavigationGuidedFrameBenchmarks` |
 | `navigation-scheduled-frame` | `NavigationScheduledFrameBenchmarks` |
 | `navigation-a-star-contention` | `NavigationAStarContentionBenchmarks` |
 | `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
@@ -172,6 +173,95 @@ jobs during capture. Retain the full JSON/logs, not just a rounded mean. The
 records the acceptance budget, source identities, results and decision.
 Use in-process smoke only for small cases: large-case setup plus acquisition can
 exceed the in-process runner's timeout even when every query terminates normally.
+
+#### Cold caches versus runtime warmup
+
+Here, **cold** means a payload-cache miss against an already published graph,
+with reusable workspaces and pools. It does not mean a fresh process, nor does
+warming cache hits establish that cold integration has finished warming up.
+Keep early-invocation measurements separate from longer-warmed measurements.
+
+For an ordered small-request investigation, preserve the short control, then
+change actual count and warmup count separately on the same binaries:
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/cold-protocol/control
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 1 --iterationCount 100 --keepFiles --artifacts artifacts/cold-protocol/long-actual
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 100 --iterationCount 100 --keepFiles --artifacts artifacts/cold-protocol/long-warmup
+```
+
+The final `?)` anchors this filter to the quoted `Plane100` parameter; a trailing
+`Plane100*` also selects 10K and 100K. Verify discovery reports exactly one case.
+Retain every warmup and actual observation, grouped by launch and invocation
+index. Compare early/late windows before describing a distribution as steady
+state; a larger warmup count alone is not proof. `WorkloadResult` repeats the
+actual timings and must not be counted again. BenchmarkDotNet's allocation/GC
+diagnostic uses a separate invocation, not a GC record for each timed request.
+Do not infer a runtime fix from warmup sensitivity or recommend disabling tiered
+compilation to improve a benchmark result. Historical short controls remain
+valid matched-protocol comparisons, not warmed steady-state throughput claims.
+
+### Complete guided-host frames
+
+`NavigationGuidedFrameBenchmarks` runs 100/500 ungrouped Navigators following
+real A* or Flow guides. A wall with a distant gap blocks direct travel on a
+100x100 rectangular grid. Setup verifies that direct rays are blocked by
+geometry, not exhausted budgets. Held-guide capacity is sized independently
+from the single reusable search workspace. Map publication and initial guide
+acquisition are outside the measurement; large A* setup can take minutes.
+
+Each BenchmarkDotNet operation is a **64-frame block**, preceded by 32 untimed
+preparation frames at 32 Hz. Every nested frame includes context simulation,
+all Navigator simulations and motion commits. This exercises guide following,
+local avoidance, motor/turning work, occupancy and the default periodic
+line-of-sight rechecks. Agents start together, so expensive rechecks remain
+synchronized; do not hide them by reporting only ordinary frames. It is a
+headless horizontal-support host with no collision solver, engine, networking,
+rendering or movement groups. The measured initial route portion stays on the
+starting side of the wall; it is not an arrival or full detour acceptance test.
+
+Per-frame validation is outside the inner timer/allocation bracket. It requires
+live guidance, safe body bounds, fresh committed cells and movement in each
+32-frame block. Per-frame position/velocity/cell hashes must replay exactly
+within each process; the log analyzer also compares them across launches.
+Reset verifies drained active/reserved/detached/scheduled ownership.
+
+`NAVIGATION_GUIDED_SAMPLES` records retain raw timestamp ticks, current-thread
+allocations, process-wide collection-count-change masks and replay hashes.
+JSON export is untimed. Collection counters bracket slightly more than the
+stopwatch and indicate overlap, not causal GC attribution. Whole-operation
+BenchmarkDotNet timings include instrumentation and validation, so use the
+nested records for frame costs. No warmup, diagnostic or outlier frames are
+silently folded into or removed from actual-only statistics.
+
+Start with a separately labelled sizing run before choosing a repeated protocol:
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --launchCount 1 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-sizing
+```
+
+For a bounded repeated comparison, this selection runs A*/100, Flow/100 and
+Flow/500 in three fresh processes each. It deliberately excludes the much
+more expensive A*/500 setup; do not describe it as the complete four-case matrix.
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter '*AgentCount: 100,*' '*FlowField*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-capture
+```
+
+Capture console output to a log, then analyze it:
+
+```powershell
+& tests/Trailblazer.Benchmarks/AnalyzeGuidedFrames.ps1 -LogPath artifacts/guided-capture.log -OutputPath artifacts/guided-summary.json
+& tests/Trailblazer.Benchmarks/TestGuidedFrameAnalysis.ps1
+```
+
+The parser checks record shape, stage pairing and cross-launch replay; it
+reports both per-launch and pooled actual-only statistics. Independently check
+expected cases/launches/block counts against BenchmarkDotNet JSON, including
+failed setups: a partial capture is not a passing matrix. Report periodic
+peaks, maximum, observed percentiles and frames above the chosen allowance/full
+frame budget. Nested frames are correlated; hundreds of ordinary frames do not
+cancel out a repeatedly expensive recheck frame.
 
 ### Scheduled cold acquisition across fixed frames
 

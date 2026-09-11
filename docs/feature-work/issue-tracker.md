@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-119`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-120`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -23,7 +23,46 @@
 
 ## Active Issues
 
-None.
+### TRB-Issue-119 - Guided A* setup reported an exception in wide geometry
+
+- **Discovered:** 2026-09-10 during guided-host performance measurement.
+- **Status:** Open, not reproduced in the bounded follow-up: one failed
+  BenchmarkDotNet A*100 setup, followed by a passing standalone execution and
+  three passing BenchmarkDotNet baseline launches of the unchanged fixture.
+  No fix or runtime attribution is claimed.
+- **Failure:** `NullReferenceException` in
+  `WideConvex2dRelations.GetRotatedOffset` at ProjectionMath.cs:477, reached from
+  `ContainsPoint` through GridForge's planar segment interval calculation and
+  Trailblazer's A* simplification. The fixture fails during untimed
+  `Setup -> Prepare -> Navigator.Simulate -> RequestGuide`; no A* timing result
+  exists for that failed launch.
+- **Boundary:** The new wall-detour fixture permits 1,024 simplification rays;
+  historical cold A* cases disable simplification. The reported helper and its
+  inspected arithmetic inputs are value types, with no obvious nullable-object
+  dereference. Optimized source mapping, code generation, provenance and other
+  corruption are hypotheses, not established causes. Do not add a null guard,
+  swallow/retry the exception, or disable simplification as a purported fix.
+- **Provenance:** Trailblazer `4a02250` plus the new benchmark-only fixture;
+  GridForge `7179cce`, SwiftCollections `4b5715b`, local-stack Release,
+  .NET 8.0.29. Retained failure stack:
+  `artifacts/benchmark004/guided-sizing-2.log`. The generated child, source,
+  runtime configuration and dependencies are frozen in `failed-guided-child`,
+  with `failed-guided-child-hashes.json`. The passing standalone run is
+  `astar100-probe.log`; it changes the hosting harness and does not erase the
+  failed BenchmarkDotNet evidence. `guided-baseline.log` retains the three
+  subsequent passing launches with their original preparation order; their
+  nine actual blocks pass replay and lifetime checks. The pre-optimization
+  benchmark binaries are separately frozen in `guided-baseline-bin`.
+  The optimized candidate subsequently passes another three A* launches with
+  identical captured replay hashes. This does not identify or fix the earlier
+  exception: the performance change avoids some disjoint-candidate math calls.
+- **Next check:** If this setup failure recurs, capture the preparation frame,
+  agent index and exact simplification ray/prism inputs before reducing it to
+  the public math boundary. Repeated clean runs are not a root-cause diagnosis.
+  Preserve pre-change artifacts when testing optimizations; avoiding calls on
+  disjoint candidates must not be described as a fix for this exception.
+  This is distinct from the closed `TRB-Benchmark-004` protocol watch and does
+  not meet `TRB-Issue-114`'s allocation-guard reopening criteria.
 
 ## Closed Investigations
 

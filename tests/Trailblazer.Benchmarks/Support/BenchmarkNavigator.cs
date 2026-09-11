@@ -13,7 +13,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks;
 
-/// <summary>A headless input-driven Navigator on an unobstructed horizontal surface.</summary>
+/// <summary>A headless Navigator with horizontal ground support and no collision solver.</summary>
 internal sealed class BenchmarkNavigator : Navigator
 {
     private readonly TrailblazerWorldContext _worldContext;

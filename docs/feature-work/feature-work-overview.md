@@ -22,26 +22,21 @@ instead of burying it in notes.
 ## Active Coordination
 
 - Measured navigation performance
-  - The first focused pass (`TRB-Benchmark-002`) removes per-frame occupancy
-    allocations and unnecessary A* epoch reads, with matched measurements and
-    exact 100% coverage in both configurations. The second focused pass
-    (`TRB-Benchmark-003`) closes with conservative GridForge body-bound rejection
-    and Trailblazer prism reuse: selected volume medians improve 49% / 66%,
-    and cold surface acquisition improves 9–13%, without budget/dependency
-    shortcuts. Full coverage remains exact in both repositories. The
-    [benchmark tracker](benchmark-signal-hardening-backlog.md) retains the limits
-    and the small-request iteration-position watch (`TRB-Benchmark-004`).
-    The separate upstream `GF-Benchmark-003` follow-up is now closed locally:
-    type-aware SwiftDictionary null guards remove value-key boxing and restore
-    all four GridForge Debug allocation gates. The typed indexer also avoids
-    boxing on successful reads. Swift, GridForge and Trailblazer release-variant
-    tests and exact coverage pass together against the unreleased local stack.
-    Large synchronous cold requests remain unsuitable for the measured frame;
-    guided-host throughput is the next useful performance gate, not another
-    unmeasured cache or a claim that input-driven frames represent path following.
-    `TRB-Issue-114` is closed as an inconclusive
-    investigation in the [issue tracker](issue-tracker.md), not a confirmed fix.
-    Its evidence and strict allocation guard remain; it no longer blocks this pass.
+  - `TRB-Benchmark-005` is the active priority in the
+    [benchmark tracker](benchmark-signal-hardening-backlog.md). The new fixture
+    measures real guided movement and periodic line-of-sight rechecks.
+    GridForge's strict disjoint-segment rejection cuts selected whole-block
+    medians by 82–87%, with matching replay, zero frame allocations and exact
+    full coverage. Periodic frames still exceed 31.25 ms, however, and ordinary
+    A*/100 frames are about 11% slower in this capture. Isolate the remaining
+    ray/sampling costs and that tradeoff before claiming crowd throughput.
+    Cold-acquisition scheduling does not bound these synchronous rechecks.
+    The earlier performance slices (`TRB-Benchmark-002/003`, `GF-Benchmark-003`)
+    are closed locally. `TRB-Benchmark-004` now closes with ordered protocol
+    evidence and no runtime change; short cold-cache controls are not warmed
+    steady-state throughput. In the [issue tracker](issue-tracker.md),
+    `TRB-Issue-119` retains a separate, not-yet-reproduced A* setup exception;
+    `TRB-Issue-114` remains closed without a confirmed allocator fix.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
     world frame and lifetime order, first bounded wall fixture, and GridForge-
@@ -73,6 +68,21 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
+
+- [Cold-Request Protocol Isolation](benchmark-signal-hardening-backlog.md#trb-benchmark-004---tiny-cold-flow-protocol-has-an-iteration-position-excursion)
+  - Retained and independently checked 312 warmup and 918 actual observations
+    across five ordered captures. Excursions move into warmup, change in the
+    tiering-disabled diagnostic, and return with the original configuration.
+    Closed narrowly as measurement-protocol sensitivity, without a production
+    patch, runtime-setting recommendation or exact JIT attribution.
+
+- [First Guided-Frame Performance Slice](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
+  - Added a replay-checked headless guided-host benchmark and raw-frame analyzer.
+    A small GridForge rejection removes expensive exact math for provably
+    disjoint candidates, preserving contacts, budgets and failure order.
+    Observed maxima fall from roughly 1.25 s / 1.22 s / 4.12 s to
+    147 ms / 116 ms / 501 ms for A*/100, Flow/100 and Flow/500. The narrow
+    optimization is verified; the broader guided-frame signal remains active.
 
 - [Focused Traversal Performance Pass](benchmark-signal-hardening-backlog.md#trb-benchmark-003---remaining-traversal-cost-needs-focused-isolation)
   - Existing whole-body bounds reject disjoint prisms before exact sweep math;
@@ -124,13 +134,13 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. The two focused performance slices and the upstream Debug allocation
-   follow-up (`GF-Benchmark-003`) are complete locally. Before broader throughput
-   claims or speculative optimization, measure representative headless guided-
-   host frames with actual guide following; existing input-driven controls do
-   not establish that result. Keep performance work evidence-gated and ahead of
-   broader features. Investigate `TRB-Benchmark-004` only when small cold-request
-   steady-state/tail claims need that protocol isolation.
+1. Continue the measured guided-frame work in `TRB-Benchmark-005` before broader
+   features: isolate remaining periodic ray work from ordinary Flow sampling
+   and attribute the ordinary A* increase with a bounded matched control.
+   The first GridForge rejection is verified, but the full frame budget is
+   still unmet. `TRB-Benchmark-004` and `GF-Benchmark-003` are closed locally;
+   do not repeat their investigations without new evidence. Keep the distinct
+   `TRB-Issue-119` setup exception visible and capture exact inputs if it recurs.
    `TRB-Issue-114` requires no further investigation unless new evidence meets
    its documented reopening criteria.
 2. Complete the remaining shared movement scenarios in Gravitas integration

@@ -276,13 +276,21 @@ Do not add a prefix cache or weaken deterministic budgets speculatively.
 - Final reports consume only fresh run directories. Duplicate TRX coverage
   attachments are byte-identical pairs, not independent coverage observations.
   Current Release runtime DLL hashes still match the measured candidate.
-- Additional GridForge Debug validation passes 818/822, with four cursor/contact
+- At this pass's closeout, extra GridForge Debug validation passed 818/822,
+  with four cursor/contact
   allocation failures. Restoring its complete pre-change production source
   reproduces the same failures and counts; restoring this patch then passes all
   42 body-trace tests in Debug. GridForge's `GF-Benchmark-003` records this
   separate pre-existing signal and its SwiftDictionary generic-key source lead.
-  The full Debug gate is not green; the local closeout above is for this patch's
-  measured Release/Lean behavior, not a waiver or a fix for that separate gate.
+  The Debug gate was not green at that point; this patch's local closeout did
+  not waive it. The subsequent `GF-Benchmark-003` follow-up on 2026-09-10 confirms
+  and fixes value-key boxing in SwiftDictionary's null guards, restoring all
+  822 GridForge Debug tests. Its independently reproduced typed-indexer boxing
+  is fixed too. SwiftCollections, GridForge and Trailblazer retain exact full
+  Release/Lean coverage together against the local stack; Swift also has exact
+  full Debug coverage. GridForge's tracker owns the complete closeout, and
+  `artifacts/gf-benchmark003` retains its separate baseline, isolation and final
+  evidence. This is an upstream allocation fix, not another traversal-speed claim.
 - Independent source/test and evidence review found no blocking issue after
   documenting combined-patch attribution, warm-meter scope and binary provenance.
   These are local Windows results, not Linux CI or released-package validation.

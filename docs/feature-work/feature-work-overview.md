@@ -31,9 +31,11 @@ instead of burying it in notes.
     shortcuts. Full coverage remains exact in both repositories. The
     [benchmark tracker](benchmark-signal-hardening-backlog.md) retains the limits
     and the small-request iteration-position watch (`TRB-Benchmark-004`).
-    Extra validation also records pre-existing GridForge Debug cursor/contact
-    allocation failures as upstream `GF-Benchmark-003`; Release/Lean remain
-    green, but that separate Debug gate needs a focused upstream follow-up.
+    The separate upstream `GF-Benchmark-003` follow-up is now closed locally:
+    type-aware SwiftDictionary null guards remove value-key boxing and restore
+    all four GridForge Debug allocation gates. The typed indexer also avoids
+    boxing on successful reads. Swift, GridForge and Trailblazer release-variant
+    tests and exact coverage pass together against the unreleased local stack.
     Large synchronous cold requests remain unsuitable for the measured frame;
     guided-host throughput is the next useful performance gate, not another
     unmeasured cache or a claim that input-driven frames represent path following.
@@ -122,9 +124,8 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. The two focused performance slices are complete. Address the newly recorded
-   upstream Debug allocation signal (`GF-Benchmark-003`) as a separate bounded
-   follow-up. Before broader throughput
+1. The two focused performance slices and the upstream Debug allocation
+   follow-up (`GF-Benchmark-003`) are complete locally. Before broader throughput
    claims or speculative optimization, measure representative headless guided-
    host frames with actual guide following; existing input-driven controls do
    not establish that result. Keep performance work evidence-gated and ahead of

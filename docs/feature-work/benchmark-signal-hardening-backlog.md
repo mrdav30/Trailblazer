@@ -67,7 +67,9 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 - **Discovered:** 2026-09-10 during the representative guided-host performance pass.
 - **Status:** Active. The focused GridForge rejection and FixedMathSharp
   containment simplification are implemented and verified locally;
-  guided-frame budget acceptance is not complete.
+  guided-frame budget acceptance is not complete. A subsequent per-edge
+  rejection experiment was measured and withdrawn; see the final follow-up
+  below. It does not change the current runtime or supply additional savings.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -351,6 +353,119 @@ the new `fms-containment-*` / `guided-*` captures, and `verification` build/test
 logs and exact coverage reports. The controls' shared
 generated runtime is intentionally not claimed to be bit-identical to the
 historical parent snapshots.
+
+#### Follow-up: per-edge rejection measured and withdrawn
+
+On 2026-09-11, GridForge `GF-Benchmark-005` tested skipping exact intersection
+against an individual footprint edge when both endpoints are strictly on the
+same side of the ray's supporting line. Consecutive widened orientation signs
+were reused, and mixed/zero signs retained the existing solver. The candidate
+was correct in the reviewed cases but **was not retained**: its narrow gains
+did not establish a useful, consistent improvement in complete guided frames.
+The earlier whole-footprint rejection remains in place; there is no new runtime
+change in this slice.
+
+GridForge now has a `grid-planar-interval` benchmark for crossings, vertex
+touches and one-raw strict misses on rectangles and both hex orientations.
+Three-launch adaptive captures show hex touch means decreasing 3.7%/6.6%, but
+crossing means changing +0.8%/-0.3%/+1.7% (flat hex/pointy hex/rectangle).
+Unchanged flat-hex/rectangle strict-miss controls increase 3.7%/2.0%; they return
+before the proposed guard. All-raw Actual means have the same directions.
+These descriptive differences do not establish a universal regression,
+statistical noise threshold or code-generation cause. GridForge's tracker
+retains the complete micro comparison table and no-change decision; per-launch
+distributions are in `artifacts/benchmark005/planar-edge-audit.json`.
+
+The pointy-hex strict-miss **baseline is incomplete**: launch 2 reports a
+`NullReferenceException` after 13 actual iterations, and launch 3 never runs.
+`GF-Issue-006` retains the failing actual child/source/hash snapshot and two
+successful direct frozen-runner replays. Those console-host replays are not
+replacement parent-driven launches. The original capture has eight complete
+cases, with 25 successful children and one failure; the candidate completes all
+nine cases / 27 children. Exclude the partial baseline case from comparisons
+and do not treat its unknown allocation diagnostic as zero. This is separate
+from `TRB-Issue-119`; neither exception has an established cause or fix.
+
+The guided comparison repeats the three-case protocol above on the same
+Windows/.NET 8.0.29 host. Baseline source heads are Trailblazer `03b4975`,
+GridForge `b3e60f3`, FixedMathSharp `e8a2ab5` and SwiftCollections `4b5715b`.
+Only the GridForge planar-interval implementation changes in production source
+for the experiment. Use `guided-ray-baseline` and `guided-ray-candidate` as
+distinct artifact labels; all builds, micro runs and guided runs are serial.
+
+Actual-only times, milliseconds; **candidate means the withdrawn experiment**:
+
+| Case | Ordinary median before / candidate | Periodic median before / candidate | Whole 64-frame block median before / candidate |
+| --- | ---: | ---: | ---: |
+| A*/100 | 2.444 / 2.445 | 119.628 / 116.655 | 626.401 / 611.927 |
+| Flow/100 | 3.256 / 3.288 | 95.537 / 94.493 | 578.179 / 575.558 |
+| Flow/500 | 18.252 / 19.393 | 398.497 / 401.301 | 2,683.747 / 2,745.125 |
+
+Whole-block medians change **-2.3% / -0.5% / +2.3%**. Observed full-frame
+P99 changes **122.592 / 98.003 / 415.668 ms** to
+**118.611 / 95.329 / 418.483 ms**. Maximum changes
+**125.781 / 100.410 / 426.656 ms** to **119.799 / 101.762 / 429.244 ms**.
+Each case still has **576/576 actual frames above 2 ms** and **36/576 above
+31.25 ms**, all at periodic positions 0/16/32/48. Flow/500 ordinary medians
+are higher in all three ordinal candidate launches (+2.0% to +7.4%). Whole-block
+directions vary across launches for every case. These correlated observations
+are not randomized matched pairs; no causal ordinary-frame regression is claimed.
+
+Each version has 27 actual blocks / 1,728 actual frames, plus nine warmup and
+nine diagnostic blocks. Independent audit verifies all 45 records / 2,880
+exported frames per version, exact Int64 replay across versions/stages,
+zero current-thread frame allocations and collection-change masks, and all
+timed operations against full BDN JSON. All 18 guided children exit cleanly;
+the six A* launches add watch evidence, not a resolution of `TRB-Issue-119`.
+
+Actual guided child archives each contain 63 files. Only GridForge and the
+benchmark DLL/PDB pairs differ; the generated guided runner is byte-identical.
+Portable-PDB document checks show only
+`GridCellGeometry.NavigationBodySegment.cs` changed among authored source
+inputs. All 110 GridForge and 200 FixedMathSharp authored documents match the
+corresponding micro capture for each variant. These are actual-child source and
+binary checks, not historical parent-output attribution or proof of identical
+native compilation.
+
+Eight new literal GridForge cases retain reversed/closing-edge crossings,
+vertex boundaries and exact raw rounding. All pass on unchanged and candidate
+runtime; an intentionally wrong whole-prism-rejection mutation fails all eight.
+A separate 33,324-query frozen-binary probe returns identical booleans/raw
+intervals across both variants, including extreme-coordinate and one-raw cases.
+The runtime candidate is removed; the behavior checks, benchmark fixture and
+investigation evidence remain. Independent source/proof and evidence reviews
+support that disposition.
+
+Full local-stack Release and ReleaseLean validation passes after withdrawing
+the guard:
+
+| Repository | Passing tests, Release / Lean | Covered lines | Covered branches | Fully covered methods |
+| --- | ---: | ---: | ---: | ---: |
+| GridForge | 852 / 852 | 8,861/8,861 | 3,787/3,787 | 1,115/1,115 |
+| Trailblazer, including adapter | 2,467 + 65 / 2,405 + 65 | 30,842/30,842 | 12,089/12,089 | 3,011/3,011 |
+
+Both configurations build both library targets with zero warnings/errors.
+These are local Windows checks, not Linux CI or released-package validation;
+FixedMathSharp and Gravitas did not change and their suites were not rerun in
+this slice. Trailblazer coverage merges its core and Gravitas adapter reports.
+An additional final restored-source GridForge run passes the same Release/Lean
+gates and all **849 Debug tests**, with zero build warnings/errors. The guided-
+log parser's positive and malformed-record behavior checks also pass.
+
+Evidence remains under `artifacts/benchmark005`: `planar-edge-*`,
+`guided-ray-*`, `edge-source-{baseline,candidate}`, `planar-replay-*`,
+`ray-guard-mutation.log`, `ray-focused-*.log`, `ray-verification`,
+`ray-restored-gridforge` and `ray-parser-tests.log`.
+The micro audit explicitly distinguishes a known incomplete baseline from
+successful integrity checks; it does not silently accept failed measurements.
+
+**Next measured hypothesis:** Reduce repeated transformed-vertex work in
+FixedMathSharp containment, independently of the rejected edge guard. The prior
+measured-root profile remains relevant to the unchanged committed runtime; no
+new speedup is promised. Preserve full-domain wide arithmetic, closing-edge
+and early-exit behavior, and existing caller validation. Candidate enumeration,
+sparse snapshots, geometry-failure order and synchronous LOS cadence remain
+constraints, not performance knobs. `TRB-Benchmark-005` remains active.
 
 ## Closed Signals
 

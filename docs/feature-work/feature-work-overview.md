@@ -31,14 +31,20 @@ instead of burying it in notes.
     Periodic medians are still about 122 / 97 / 406 ms for A*/100, Flow/100 and
     Flow/500, above the 31.25 ms full-frame budget. The earlier ordinary A*
     increase does not consistently repeat in a frozen-runner control; launch-
-    specific variability remains visible. A fresh profile keeps blocked-ray
-    tracing ahead of Flow sampling as the next measured optimization target.
+    specific variability remains visible. The subsequent GridForge per-edge
+    rejection experiment (`GF-Benchmark-005`) is closed with no runtime change:
+    complete-block median changes of -2.3% / -0.5% / +2.3% do not establish a
+    consistent benefit. Its tests and benchmark evidence remain. The next
+    profile-supported hypothesis is repeated transformed-vertex work in shared
+    containment math, followed by Flow sampling as a distinct measured cost.
     Cold-acquisition scheduling does not bound these synchronous rechecks.
     The earlier performance slices (`TRB-Benchmark-002/003`, `GF-Benchmark-003`)
     are closed locally. `TRB-Benchmark-004` now closes with ordered protocol
     evidence and no runtime change; short cold-cache controls are not warmed
     steady-state throughput. In the [issue tracker](issue-tracker.md),
     `TRB-Issue-119` retains a separate, not-yet-reproduced A* setup exception;
+    GridForge `GF-Issue-006` preserves an incomplete strict-miss benchmark
+    baseline, without an established common cause or fix.
     `TRB-Issue-114` remains closed without a confirmed allocator fix.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
@@ -149,15 +155,19 @@ measurements, not permission for speculative algorithm or cache changes.
 The plans share evidence, not competing implementations:
 
 1. Continue the measured guided-frame work in `TRB-Benchmark-005` before broader
-   features: remaining blocked-ray tracing is the first measured priority,
-   with Flow guide-sampling geometry the next distinct cost. The bounded
+   features: investigate repeated transformed-vertex work in FixedMathSharp
+   containment as the next blocked-ray candidate, independently of the withdrawn
+   GridForge per-edge guard. Flow guide-sampling geometry is a distinct cost.
+   The bounded
    control does not consistently reproduce the earlier ordinary A* increase;
    retain launch variability without inventing a cause. GridForge's rejection
    and FixedMathSharp's containment simplification are verified, but the full
    frame budget is still unmet. `TRB-Benchmark-004` and `GF-Benchmark-003` are
-   closed locally;
+   closed locally; `GF-Benchmark-005` closes with its measured no-change decision;
    do not repeat their investigations without new evidence. Keep the distinct
    `TRB-Issue-119` setup exception visible and capture exact inputs if it recurs.
+   Keep GridForge's separate `GF-Issue-006` benchmark failure visible as well;
+   clean replays do not resolve either exception.
    `TRB-Issue-114` requires no further investigation unless new evidence meets
    its documented reopening criteria.
 2. Complete the remaining shared movement scenarios in Gravitas integration

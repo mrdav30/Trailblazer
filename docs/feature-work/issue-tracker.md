@@ -67,6 +67,18 @@
   The containment optimization removes a redundant query-point transform;
   polygon transforms still use the reported helper. Neither fewer calls nor
   successful runs establish the cause of the original exception.
+- **Separate later failure:** The next tracing slice's unchanged-runtime
+  pointy-hex strict-miss microbenchmark reports a null-reference exception in
+  generated `WorkloadActionUnroll` after 13 actual iterations. GridForge tracks
+  it as `GF-Issue-006`, with the actual child/source/hash snapshot under
+  `artifacts/benchmark005/planar-edge-baseline-children`. This is not an A* setup
+  failure; its normal path exits before containment. Neither a shared cause
+  nor a relationship to the original wide-helper stack has been established.
+- **Per-edge experiment watch:** Fresh `guided-ray-{baseline,candidate}`
+  captures each complete three A*/100 launches, plus the full Flow/100 and
+  Flow/500 matrix, with exact cross-version replay. These six clean A* launches
+  do not establish a fix. The GridForge edge guard was withdrawn after mixed
+  performance results; no new runtime workaround is retained.
 - **Next check:** If this setup failure recurs, capture the preparation frame,
   agent index and exact simplification ray/prism inputs before reducing it to
   the public math boundary. Repeated clean runs are not a root-cause diagnosis.

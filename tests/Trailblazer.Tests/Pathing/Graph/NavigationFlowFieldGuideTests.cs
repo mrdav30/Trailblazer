@@ -939,7 +939,7 @@ public sealed class NavigationFlowFieldGuideTests
     }
 
     [Fact]
-    public void Sample_DependencyChangedAfterGuideCreation_ShouldMarkGuideStale()
+    public void Sample_AfterCompatibleThenIncompatiblePublication_ShouldMarkGuideStale()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
@@ -954,12 +954,24 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().BeTrue();
         fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
             .Should().BeTrue();
+        guide.Status.Should().Be(NavigationGuideStatus.Success);
+        guide.TrySampleHeading(source.FootAnchor, GenerousSampleBudget, out Vector3d initialHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        NavigationWorldGraph compatible = fixture.Graph.WithGraphVersion(
+            fixture.Graph.GraphVersion + 1);
+        fixture.Store.TryPublish(compatible)
+            .Should().Be(NavigationCandidatePublication.Published);
+        guide.Status.Should().Be(NavigationGuideStatus.Success);
+        guide.TrySampleHeading(source.FootAnchor, GenerousSampleBudget, out Vector3d currentHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        currentHeading.Should().Be(initialHeading);
         NavigationWorldGraph changed = fixture.Graph.WithAreaCatalog(
             NavigationAreaCatalog.Empty,
-            fixture.Graph.GraphVersion + 1);
+            compatible.GraphVersion + 1);
         fixture.Store.TryPublish(changed)
             .Should().Be(NavigationCandidatePublication.Published);
 
+        guide.Status.Should().Be(NavigationGuideStatus.Stale);
         guide.TrySampleHeading(
                 source.FootAnchor,
                 GenerousSampleBudget,
@@ -969,6 +981,87 @@ public sealed class NavigationFlowFieldGuideTests
         heading.Should().Be(Vector3d.Zero);
         guide.Status.Should().Be(NavigationGuideStatus.Stale);
         guide.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void WarmGuide_WorldStampedPayload_ShouldRejectMutationWithoutGraphPublication()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        var payload = new NavigationFlowFieldPayload(
+            fixture.Far.Key,
+            fixture.Far.Nodes,
+            fixture.Far.AddressLookupOrdinals,
+            fixture.Far.TransitionInstructions,
+            fixture.Far.Dependencies,
+            fixture.Far.IsComplete,
+            fixture.World.ChangeSequence);
+        NavigationFlowFieldPayloadLease payloadLease = Publish(
+            cache, fixture.Store, payload, fixture.FarOrigin);
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out NavigationFlowFieldLease guide)
+            .Should().Be(NavigationGuideStatus.Success);
+        using (guide)
+        {
+            guide.Status.Should().Be(NavigationGuideStatus.Success);
+            fixture.World.TryAddGrid(
+                    new GridConfiguration(new Vector3d(64, 64, 64), new Vector3d(2, 2, 2)),
+                    out _)
+                .Should().BeTrue();
+
+            fixture.Store.Current.Should().BeSameAs(fixture.Graph);
+            guide.Status.Should().Be(NavigationGuideStatus.Stale);
+            var meter = new GuideSampleWorkMeter(GenerousSampleBudget);
+            guide.TrySample(Vector3d.Zero, ref meter, out NavigationFlowSample sample)
+                .Should().Be(NavigationGuideStatus.Stale);
+            sample.Should().Be(default(NavigationFlowSample));
+            meter.Should().Be(new GuideSampleWorkMeter(GenerousSampleBudget));
+        }
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void PooledGuide_ReboundToAnotherStore_ShouldNotReuseItsPreviousVersionProof()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        using NavigationWorldGraphStore otherStore =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 8);
+        NavigationWorldGraph newer = fixture.Graph.WithGraphVersion(fixture.Graph.GraphVersion + 1);
+        fixture.Store.TryPublish(newer).Should().Be(NavigationCandidatePublication.Published);
+        NavigationFlowFieldPayloadLease firstPayload = Publish(cache, fixture);
+        cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, firstPayload),
+                out NavigationFlowFieldLease first)
+            .Should().Be(NavigationGuideStatus.Success);
+        first.Status.Should().Be(NavigationGuideStatus.Success);
+        NavigationFlowFieldLease staleAlias = first;
+        first.Dispose();
+
+        NavigationFlowFieldPayloadLease secondPayload = Publish(
+            cache, otherStore, fixture.Far, fixture.FarOrigin);
+        cache.TryCreateGuide(
+                otherStore,
+                new NavigationFlowQueryResult(fixture.FarOrigin, secondPayload),
+                out NavigationFlowFieldLease second)
+            .Should().Be(NavigationGuideStatus.Success);
+        using (second)
+        {
+            otherStore.TryPublish(fixture.Graph.WithAreaCatalog(
+                    NavigationAreaCatalog.Empty, newer.GraphVersion))
+                .Should().Be(NavigationCandidatePublication.Published);
+
+            // The old binding proved this number in a different store, not this root.
+            second.Status.Should().Be(NavigationGuideStatus.Stale);
+            staleAlias.Dispose();
+            cache.ActiveLeaseCount.Should().Be(1);
+        }
         cache.ActiveLeaseCount.Should().Be(0);
     }
 

@@ -45,9 +45,16 @@ instead of burying it in notes.
     the initial apparent 2–3% gains are not counted. Map-local lookup reuse and
     early loop guards are withdrawn, and world-sequence synchronization stays
     intact. Overlay cost regression tests cover Solid, Gas and Liquid.
-    The tracker retains serial-run variability, including an unchanged A*
-    control improvement during the final Flow-only step; not every timing
-    difference is uniquely attributable to that patch.
+    A subsequent Flow-only change remembers a successful dependency proof for
+    the bound lease's current graph version, while preserving every live cache
+    and world check. Original/candidate/control/confirmation captures show
+    **31-36% lower ordinary Flow-frame medians** and **6-10% lower LOS-recheck
+    medians**. No old graph is retained, and pooled bindings clear the proof.
+    This is a repeatable improvement, not a 2 ms tail guarantee: the final
+    100-agent Flow capture still has 49/540 ordinary frames above that allowance.
+    The tracker retains serial-run variability: unchanged A* ordinary medians
+    move -3.3% then +3.4% across the latest two comparisons; no A* speedup is
+    attributed to this Flow-only patch.
     Full-frame acceptance remains incomplete: the latest candidate still has
     **0 / 0 / 36** of each case's 36 measured rechecks exceeding 31.25 ms.
     Cold-acquisition scheduling does not

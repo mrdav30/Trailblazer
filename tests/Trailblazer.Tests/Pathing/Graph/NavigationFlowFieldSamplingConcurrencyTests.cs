@@ -11,17 +11,28 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed class NavigationFlowFieldSamplingConcurrencyTests
 {
-    [Fact]
-    public void CacheReset_ShouldMakeGuideStickyStaleAndReleaseExactlyOnce()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void WarmGuide_CacheInvalidation_ShouldMakeGuideStickyStaleAndReleaseExactlyOnce(
+        int invalidation)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldLease guide = CreateGuide(cache, fixture);
         NavigationFlowFieldLease copied = guide;
+        guide.Status.Should().Be(NavigationGuideStatus.Success);
 
-        cache.Reset();
+        switch (invalidation)
+        {
+            case 0: cache.Reset(); break;
+            case 1: cache.RemoveExact(fixture.Far); break;
+            case 2: cache.Dispose(); break;
+        }
 
+        fixture.Store.Current.Should().BeSameAs(fixture.Graph);
         guide.Status.Should().Be(NavigationGuideStatus.Stale);
         guide.TrySampleHeading(
                 Vector3d.Zero,

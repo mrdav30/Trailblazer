@@ -932,6 +932,81 @@ map-local,unreached,finish,semantic,semantic-control,semantic-confirm}*`,
 `semantic-ray-{candidate,control}*`, `ray-semantic-*-{red,green}.log`,
 `guided-ray-semantic-review-audit.md` and `ray-semantic-verification`.
 
+#### Follow-up: reuse a bound Flow guide's successful graph proof
+
+On 2026-09-13 UTC, a fresh guided-frame profile against Trailblazer `81e0aab`
+identifies repeated immutable dependency walks in Flow status and sampling.
+Those walks account for about 14% / 16% of the sampled 100 / 500-agent operation
+root. That root includes benchmark validation outside the inner host-frame
+timer; these shares are attribution, not predicted frame-time savings.
+GridForge `847458b`, FixedMathSharp `c8d343c`, SwiftCollections `4b5715b` and
+Gravitas `42af506` remain unchanged.
+
+`NavigationFlowFieldGuideLease` now remembers the graph version of its last
+successful dependency validation. A bound lease fixes store and immutable
+payload identity; a store only publishes strictly increasing versions. One
+`long`, cleared on bind/detach, avoids retaining an old graph or repeating its
+proof. Each boundary still checks the active payload generation, cache
+invalidation and live world stamp. A new graph version revalidates dependencies;
+graph acquisition, final publication/world checks, work meters, transition
+ownership and the synchronous 16-frame LOS cadence are unchanged. This does not
+cache an overall successful guide status or remove world synchronization.
+
+The original / candidate / original control / candidate confirmation protocol
+uses three launches per case, one warmup, three actual and one diagnostic
+64-frame block per launch. The second comparison confirms the first:
+
+| Case | Repeat ordinary median, original / candidate | Repeat LOS-recheck median, original / candidate | Repeat complete-block median, original / candidate |
+| --- | ---: | ---: | ---: |
+| A*/100 (unchanged control) | 2.080 / 2.151 ms | 26.657 / 26.703 ms | 232.967 / 237.221 ms |
+| Flow/100 | 1.267 / 0.839 ms | 17.714 / 16.642 ms | 143.018 / 115.924 ms |
+| Flow/500 | 7.206 / 4.893 ms | 84.547 / 79.139 ms | 764.165 / 603.932 ms |
+
+The initial ordinary medians are 1.230 / 0.851 ms for Flow/100 and
+7.588 / 4.853 ms for Flow/500. Across both comparisons, ordinary Flow medians
+improve **31-36%**, LOS rechecks **6-10%**, and complete blocks **19-24%**.
+Complete blocks include untimed-per-frame validation and must not be presented
+as containing-frame timings. The unchanged A* ordinary median moves -3.3% then
++3.4%; no A* speedup is attributed to this Flow-only change.
+
+No outliers are trimmed. Flow/100 ordinary frames above 2 ms number
+**2 / 0 / 18 / 49** out of 540 per capture. Confirmation ordinary P99 is
+**2.124 ms**, maximum **2.253 ms**; its median improvement does not establish
+2 ms tail acceptance. Every capture still has **0 / 0 / 36** of each case's
+36 LOS rechecks above 31.25 ms. All ordinary frames are below 31.25 ms, but
+500-agent Flow ordinary medians remain above the 2 ms allowance.
+`TRB-Benchmark-005` stays active. This is substantial headway without a major
+refactor, not a solution to the remaining large synchronous-ray spikes.
+
+Behavior tests warm a proof before compatible/incompatible publication,
+same-root world mutation and cache reset/removal/disposal. A pooled guide
+rebound to another store rejects an incompatible root whose numeric version
+matches its old proof. Deliberately bypassing live checks fails the invalidation
+tests; omitting both proof resets specifically fails the pooled-store test.
+Existing publication-race, transition, budget and zero-allocation tests remain.
+Independent correctness/Ponytail and evidence reviews find no actionable issue.
+
+The complete Trailblazer solution builds both library targets with zero
+warnings/errors. Release passes **2,482 core + 65 adapter tests**; ReleaseLean
+passes **2,420 + 65**, no failures or skips. Both retain exact **100% coverage**:
+**30,853/30,853 lines, 12,097/12,097 branches and 3,011/3,011 fully covered
+methods**, with unchanged coverage settings. No new runtime correctness issue,
+upstream edit, public API, benchmark project or CI framework is introduced.
+
+Independent raw-log/BDN/export checks verify all **180 records / 11,520 frames**
+(6,912 actual frames), exact cross-capture Int64 replay and zero observed frame
+allocation/GC. All 252 archived file hashes validate. Original/control runtimes
+are byte-identical, as are candidate/confirmation runtimes. Portable PDBs
+identify only `NavigationFlowFieldGuideLease.cs` as changed source; benchmark
+and upstream source are unchanged. This is local Windows/.NET 8.0.29 evidence,
+not Linux CI, released-package or full-gameplay acceptance.
+
+Ignored evidence is under `artifacts/benchmark005`: `guided-structure-baseline*`,
+`structure-baseline-profile-*`, `guided-flow-version-{proof,control,confirm}*`,
+`flow-version-*-mutation.log`, focused logs and `flow-version-verification`.
+The existing capture/audit/verification scripts retain the protocol; no new
+benchmark tooling is required for this slice.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

@@ -1454,12 +1454,12 @@ internal sealed class NavigationRayWork
 
     private bool IsSemanticCostNeutral(NavigationNodeRef target)
     {
-        _request.ExpectedGraph.TryGetNodeState(
-            target,
-            Medium,
-            out NavigationNodeState state);
-        _request.AreaPolicy.TryGetRule(state.Cell.Area, out NavigationAreaRule rule);
-        return state.Cell.EnterCost == Fixed64.Zero
+        bool found = _request.ExpectedGraph.GetInstance(target.MapOrdinal)
+            .TryGetEffectiveCell(target.CellSlot, out NavigationCell cell);
+        System.Diagnostics.Debug.Assert(found,
+            "semantic cost inspection receives a passable node mapped by this ray");
+        _request.AreaPolicy.TryGetRule(cell.Area, out NavigationAreaRule rule);
+        return cell.EnterCost == Fixed64.Zero
             && rule.AdditionalEnterCost == Fixed64.Zero;
     }
 

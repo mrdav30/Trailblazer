@@ -856,6 +856,82 @@ open-closure}*`, `flow-proof-profile-*`, `closure-mutation-red.log`,
 `closure-focused-green.log`, `guided-open-closure-review-audit.md` and
 `open-closure-verification`.
 
+#### Follow-up: inspect semantic cost without rebuilding node geometry
+
+On 2026-09-13 UTC, the next pass starts from Trailblazer `378247d`, with
+GridForge `847458b`, FixedMathSharp `c8d343c` and SwiftCollections `4b5715b`
+unchanged. The retained change is a small cleanup, **not a demonstrated
+guided-frame performance improvement**.
+
+`NavigationRayWork.IsSemanticCostNeutral` needs only the destination cell's
+enter cost and area rule. It now calls the existing effective-cell resolver
+instead of reconstructing a complete node state and prism. Every caller has
+already mapped and admitted that exact target against the same immutable graph.
+Overlay, baked and default-cell precedence remain intact; live-world freshness,
+closure admission, dependency recording, cost overflow and work meters are
+unchanged. There is no cache, added state, public API or scheduling change.
+
+The existing surcharge theory now also tests overlay cell/area costs in Solid,
+Gas and Liquid, with exact traversal cost and non-neutrality assertions. A
+deliberate baked-only lookup fails all six new successful overlay cases; the
+effective-cell implementation passes. Overlay overflow is covered too.
+Independent correctness/Ponytail review finds no actionable issue.
+
+The same guided-frame protocol runs original / candidate / original control /
+identical candidate confirmation, with three launches per case and no trimming.
+
+| Case | Initial recheck median, original / candidate | Repeat recheck median, original / candidate |
+| --- | ---: | ---: |
+| A*/100 | 27.371 / 26.546 ms | 26.303 / 26.613 ms |
+| Flow/100 | 18.401 / 17.778 ms | 17.716 / 17.690 ms |
+| Flow/500 | 86.098 / 84.381 ms | 85.281 / 85.896 ms |
+
+The initial apparent **3.0% / 3.4% / 2.0%** recheck gains do not survive the
+control. Repeat ordinary medians move from **2.104 / 1.263 / 7.293 ms** to
+**2.115 / 1.299 / 7.340 ms**; all three repeat block medians also rise slightly.
+These serial observations do not establish a repeatable speedup or regression.
+Do not add the initial percentages to earlier improvements. Flow/100 has
+**1 / 18 / 30 / 1** ordinary frames above 2 ms across the four captures, so even
+that ordinary-frame allowance is not uniformly met. All ordinary frames remain
+below 31.25 ms; every capture still has **0 / 0 / 36** rechecks above that limit.
+`TRB-Benchmark-005` remains open.
+
+The existing isolated ray cases also give mixed, effectively flat results.
+Original / candidate medians are **11.447 / 11.525 ms** for Long,
+**0.887 / 0.867 ms** for Short and **0.3667 / 0.3668 ms** for SparseBlocked.
+These use three launches, three warmups, nine actual iterations and 32
+invocations per iteration, with candidate captured before original control.
+Short and SparseBlocked receive BenchmarkDotNet's short-iteration warning;
+SparseBlocked evaluates no edges and is an unchanged-path control. No isolated
+speedup or extrapolation to guided frames is claimed.
+
+Other investigated shortcuts are not retained: map-local lookup reuse and
+early continuation/finish guards have no convincing full-frame benefit. The
+world-sequence lock is unchanged: its writer protocol mutates state both before
+and after incrementing the sequence, so an atomic getter alone is not equivalent.
+No new runtime correctness issue, upstream change or benchmark/CI framework is
+introduced.
+
+Independent evidence review verifies all four guided captures, 8,640 exact
+cross-capture Int64 checksum pairs, zero observed frame allocation/GC, and all
+63-file child manifests. Original/control runtimes are byte-identical, as are
+candidate/confirmation runtimes. Portable PDBs identify only
+`NavigationRayWork.cs` as changed runtime source; benchmark source and upstream
+runtime files are unchanged. This is local Windows/.NET 8.0.29 evidence, not
+Linux, released-package or full-gameplay acceptance.
+
+The complete Trailblazer solution builds both library targets in Release and
+ReleaseLean against the local source stack with zero warnings/errors. Core and
+adapter tests pass **2,478 + 65** and **2,416 + 65**, respectively. Both retain
+exact **100% line/branch/fully covered method coverage**: **30,847 / 12,095 /
+3,011** covered and total. No coverage exclusion changes; no separate upstream
+test matrix is claimed for this Trailblazer-only change.
+
+Evidence remains under `artifacts/benchmark005`: `guided-ray-{local-baseline,
+map-local,unreached,finish,semantic,semantic-control,semantic-confirm}*`,
+`semantic-ray-{candidate,control}*`, `ray-semantic-*-{red,green}.log`,
+`guided-ray-semantic-review-audit.md` and `ray-semantic-verification`.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

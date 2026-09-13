@@ -1414,11 +1414,20 @@ public sealed class NavigationRayTests
     }
 
     [Theory]
-    [InlineData(0, (int)NavigationRayStatus.Success)]
-    [InlineData(1, (int)NavigationRayStatus.Success)]
-    [InlineData(2, (int)NavigationRayStatus.CostOverflow)]
+    [InlineData(0, false, TraversalMedium.Solid, (int)NavigationRayStatus.Success)]
+    [InlineData(1, false, TraversalMedium.Solid, (int)NavigationRayStatus.Success)]
+    [InlineData(2, false, TraversalMedium.Solid, (int)NavigationRayStatus.CostOverflow)]
+    [InlineData(0, true, TraversalMedium.Solid, (int)NavigationRayStatus.Success)]
+    [InlineData(1, true, TraversalMedium.Solid, (int)NavigationRayStatus.Success)]
+    [InlineData(2, true, TraversalMedium.Solid, (int)NavigationRayStatus.CostOverflow)]
+    [InlineData(0, true, TraversalMedium.Gas, (int)NavigationRayStatus.Success)]
+    [InlineData(1, true, TraversalMedium.Gas, (int)NavigationRayStatus.Success)]
+    [InlineData(0, true, TraversalMedium.Liquid, (int)NavigationRayStatus.Success)]
+    [InlineData(1, true, TraversalMedium.Liquid, (int)NavigationRayStatus.Success)]
     public void OrderedRay_ShouldReportCellAndAreaSurchargesWithoutWrapping(
         int surchargeKind,
+        bool useOverlay,
+        TraversalMedium medium,
         int expectedStatus)
     {
         using var world = new GridForge.Grids.GridWorld();
@@ -1437,8 +1446,16 @@ public sealed class NavigationRayTests
         Fixed64 enterCost = surchargeKind == 0
             ? Fixed64.Half
             : surchargeKind == 2 ? Fixed64.MaxValue : Fixed64.Zero;
+        TraversalMedia media = TraversalMedia.Solid | TraversalMedia.AnyVolume;
+        var neutralCell = new NavigationCell(
+            media,
+            TraversalCapability.None,
+            default,
+            Fixed64.Zero,
+            (Fixed64)4,
+            (Fixed64)4);
         var targetCell = new NavigationCell(
-            TraversalMedia.Solid,
+            media,
             TraversalCapability.None,
             targetArea,
             enterCost,
@@ -1457,15 +1474,20 @@ public sealed class NavigationRayTests
         var destination = new VoxelIndex(1, 0, 0);
         var prepared = new PreparedNavigationMap(
             new NavigationMapBuilder("ray-cost", binding)
-                .AddCell(default, NavigationAStarExitTestHarness.Cell)
-                .AddCell(destination, targetCell)
+                .AddCell(default, neutralCell)
+                .AddCell(destination, useOverlay ? neutralCell : targetCell)
                 .Build(),
             1);
+        NavigationMapOverlayState overlay = useOverlay
+            ? NavigationMapOverlayState.Empty.Apply(
+                NavigationCellOverlayOperation.Set(destination, targetCell),
+                operationSequence: 1)
+            : NavigationMapOverlayState.Empty;
         var state = new NavigationOperationCandidate.MapState(
             prepared.Map,
             prepared.BakeVersion,
             prepared.RetainedBytes,
-            NavigationMapOverlayState.Empty,
+            overlay,
             dynamicSlotGeneration: 0,
             bakedCellLookup: prepared.BakedCellLookup);
         NavigationMapInstance instance = NavigationMapInstanceTestFactory.Compose(
@@ -1489,13 +1511,20 @@ public sealed class NavigationRayTests
             NavigationSurfaceComponentTestFactory.Build(graph));
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(graph, 2);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            media,
+            TraversalCapability.None);
         var request = new NavigationRayRequest(
             world,
             store,
             graph,
-            NavigationAStarExitTestHarness.Profile(),
+            profile,
             policy,
-            TraversalMedium.Solid,
+            medium,
             NavigationAStarExitTestHarness.GetFoot(binding, default),
             NavigationAStarExitTestHarness.GetFoot(binding, destination),
             NavigationRayEndpointAllowance.None);

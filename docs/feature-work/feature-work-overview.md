@@ -39,6 +39,12 @@ instead of burying it in notes.
     lookup when both closure sets are empty. Its fresh before/after capture
     reduces recheck medians another **6.7% / 8.9% / 5.3%** to about
     **27 / 18 / 88 ms**, with no cache or changed validation contract.
+    The next ray-cost cleanup reads effective semantic cells without rebuilding
+    already-admitted node geometry. Original/candidate/control/confirmation
+    captures do **not** establish an additional repeatable frame-time win;
+    the initial apparent 2–3% gains are not counted. Map-local lookup reuse and
+    early loop guards are withdrawn, and world-sequence synchronization stays
+    intact. Overlay cost regression tests cover Solid, Gas and Liquid.
     The tracker retains serial-run variability, including an unchanged A*
     control improvement during the final Flow-only step; not every timing
     difference is uniquely attributable to that patch.

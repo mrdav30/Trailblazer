@@ -25,24 +25,26 @@ instead of burying it in notes.
   - `TRB-Benchmark-005` is the active priority in the
     [benchmark tracker](benchmark-signal-hardening-backlog.md). The new fixture
     measures real guided movement and periodic line-of-sight rechecks.
-    After the earlier geometry improvements, reusing wide rotated endpoints in
-    FixedMathSharp containment reduces selected whole-block medians by another
-    7.6-9.8%, with exact replay and zero frame allocations.
-    The refreshed baseline's periodic medians are about 106 / 88 / 355 ms for
-    A*/100, Flow/100 and Flow/500, above the 31.25 ms full-frame budget. The
-    earlier ordinary A* increase does not consistently repeat in a frozen-runner
-    control; launch-specific variability remains visible. The subsequent
-    GridForge per-edge rejection experiment (`GF-Benchmark-005`) is closed with no runtime change:
-    complete-block median changes of -2.3% / -0.5% / +2.3% do not establish a
-    consistent benefit. Its tests and benchmark evidence remain. A fresh
-    profiling-only pass confirms planar interval calculation at 24-27% of
-    sampled measured-root time and containment at 10-11% across the selected
-    cases; that root includes benchmark validation and replay hashing.
-    Next, measure a private exact zero-rotation containment specialization in
-    FixedMathSharp; unrotated queries still use general wide rotation. No new
-    speedup is claimed yet. Flow body-anchor validation remains a distinct
-    measured cost, about 13% of sampled measured-root time in the Flow cases.
-    Cold-acquisition scheduling does not bound these synchronous rechecks.
+    GridForge now narrows eligible rectangular candidate geometry and uses
+    exact slab intervals; FixedMathSharp removes general rotation/projection
+    work from raw-coordinate predicates and skips unnecessary capsule solves.
+    Trailblazer Flow sampling reuses per-call immutable dependency validation
+    while retaining live-world and cache invalidation checks.
+    Against the refreshed baseline, recheck medians fall from about
+    106 / 88 / 355 ms to **28 / 19 / 90 ms** for A*/100, Flow/100 and Flow/500.
+    Whole-block medians improve **58% / 72% / 67%**, with exact replay and zero
+    frame allocations. APIs, budgets, dependencies and LOS cadence are unchanged.
+    This is implemented source work, not another profiling-only checkpoint.
+    The tracker retains serial-run variability, including an unchanged A*
+    control improvement during the final Flow-only step; not every timing
+    difference is uniquely attributable to that patch.
+    Full-frame acceptance remains incomplete: **0 / 0 / 36** of each case's
+    36 measured rechecks exceed 31.25 ms. Cold-acquisition scheduling does not
+    bound these synchronous checks. The original planar geometry cost is much
+    smaller; remaining work must target the complete guided frame without
+    weakening geometry, freshness checks or failure semantics.
+    The separate per-edge rejection experiment (`GF-Benchmark-005`) remains
+    withdrawn; its mixed results are not counted as implemented savings.
     The earlier performance slices (`TRB-Benchmark-002/003`, `GF-Benchmark-003`)
     are closed locally. `TRB-Benchmark-004` now closes with ordered protocol
     evidence and no runtime change; short cold-cache controls are not warmed
@@ -161,18 +163,14 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Continue the measured guided-frame work in `TRB-Benchmark-005` before broader
-   features: measure a private exact zero-rotation containment path in
-   FixedMathSharp, with rotated controls and matched complete guided frames.
-   Preserve full-domain signs and exact raw interval results; do not revive
-   the withdrawn GridForge per-edge guard. Keep streamed interval extrema as
-   a separate lower-priority candidate and Flow body validation as a distinct
-   cost. The profiling pass does not implement these follow-ups.
-   The bounded
-   control does not consistently reproduce the earlier ordinary A* increase;
-   retain launch variability without inventing a cause. GridForge's rejection
-   and FixedMathSharp's containment simplification are verified, but the full
-   frame budget is still unmet. `TRB-Benchmark-004` and `GF-Benchmark-003` are
+1. Continue `TRB-Benchmark-005` before broader features. Exact rectangular
+   tracing, raw-coordinate geometry and per-sample Flow proof reuse are implemented; do not
+   repeat their original profiling-only investigation. Full-frame budget
+   acceptance is still unmet, particularly Flow/500 synchronous rechecks.
+   Preserve full-domain arithmetic, candidate accounting, dependency validation
+   and LOS cadence when reducing remaining work; do not revive the withdrawn
+   per-edge guard. Retain launch variability without inventing a cause.
+   `TRB-Benchmark-004` and `GF-Benchmark-003` are
    closed locally; `GF-Benchmark-005` closes with its measured no-change decision;
    do not repeat their investigations without new evidence. Keep the distinct
    `TRB-Issue-119` setup exception visible and capture exact inputs if it recurs.

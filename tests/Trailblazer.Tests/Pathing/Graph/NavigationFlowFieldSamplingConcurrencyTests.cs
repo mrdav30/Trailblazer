@@ -228,6 +228,134 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         cache.ActiveLeaseCount.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(false, NavigationGuideStatus.Success)]
+    [InlineData(true, NavigationGuideStatus.Stale)]
+    public void PublicationAfterPayloadValidation_ShouldRevalidateTheAcquiredGraph(
+        bool changeDependency,
+        NavigationGuideStatus expected)
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        using NavigationFlowFieldLease guide = CreateGuide(cache, fixture);
+        fixture.Graph.TryGetNodeRef(fixture.FarOrigin, out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        object storeSync = typeof(NavigationWorldGraphStore)
+            .GetField("_sync", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(fixture.Store)!;
+        using var sampleStarted = new ManualResetEventSlim();
+        var meter = new GuideSampleWorkMeter(GenerousBudget);
+        NavigationGuideStatus sampleStatus = default;
+        NavigationFlowSample sample = default;
+        Exception? sampleError = null;
+        var sampleThread = new Thread(() =>
+        {
+            sampleStarted.Set();
+            try
+            {
+                sampleStatus = guide.TrySample(source.FootAnchor, ref meter, out sample);
+            }
+            catch (Exception error)
+            {
+                sampleError = error;
+            }
+        })
+        {
+            IsBackground = true
+        };
+
+        lock (storeSync)
+        {
+            sampleThread.Start();
+            sampleStarted.Wait(5_000, TestContext.Current.CancellationToken)
+                .Should().BeTrue();
+            SpinWait.SpinUntil(
+                    () => (sampleThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                    TimeSpan.FromSeconds(5))
+                .Should().BeTrue("sampling must pause after payload validation at graph acquisition");
+            NavigationWorldGraph changed = changeDependency
+                ? fixture.Graph.WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+                : fixture.Graph;
+            fixture.Store.TryPublish(changed.WithGraphVersion(fixture.Graph.GraphVersion + 1))
+                .Should().Be(NavigationCandidatePublication.Published);
+        }
+        sampleThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        sampleError.Should().BeNull();
+        sampleStatus.Should().Be(expected);
+        guide.Status.Should().Be(expected);
+        if (changeDependency)
+        {
+            sample.Should().Be(default(NavigationFlowSample));
+            meter.Should().Be(new GuideSampleWorkMeter(GenerousBudget),
+                "a stale acquired graph must stop before consuming sampling work");
+        }
+        else
+        {
+            sample.Heading.Should().Be(Vector3d.Left);
+            sample.HasTransition.Should().BeFalse();
+        }
+        guide.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void ExactPayloadInvalidationWhileRejoinWaits_ShouldFailStickyStale()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
+        using NavigationFlowFieldLease guide = CreateGuide(cache, fixture);
+        fixture.Graph.TryGetNodeRef(fixture.FarOrigin, out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
+        using var sampleStarted = new ManualResetEventSlim();
+        NavigationGuideStatus sampleStatus = default;
+        NavigationFlowSample sample = default;
+        Exception? sampleError = null;
+        var sampleThread = new Thread(() =>
+        {
+            sampleStarted.Set();
+            try
+            {
+                sampleStatus = guide.TrySample(actualFoot, GenerousBudget, out sample);
+            }
+            catch (Exception error)
+            {
+                sampleError = error;
+            }
+        })
+        {
+            IsBackground = true
+        };
+
+        lock (cache.ImmediateRayWorkspace.SyncRoot)
+        {
+            sampleThread.Start();
+            sampleStarted.Wait(5_000, TestContext.Current.CancellationToken)
+                .Should().BeTrue();
+            SpinWait.SpinUntil(
+                    () => (sampleThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                    TimeSpan.FromSeconds(5))
+                .Should().BeTrue("the rejoin must pause after its payload and graph validation");
+            cache.RemoveExact(fixture.Far);
+        }
+        sampleThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        sampleError.Should().BeNull();
+        sampleStatus.Should().Be(NavigationGuideStatus.Stale);
+        sample.Should().Be(default(NavigationFlowSample));
+        guide.Status.Should().Be(NavigationGuideStatus.Stale);
+        guide.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
     [Fact]
     public void WorldMutationWhileRejoinWaits_ShouldFailStickyStale()
     {

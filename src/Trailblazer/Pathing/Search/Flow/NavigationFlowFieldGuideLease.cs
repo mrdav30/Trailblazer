@@ -86,7 +86,7 @@ internal sealed class NavigationFlowFieldGuideLease
                 return NavigationGuideStatus.Stale;
             if (_status != NavigationGuideStatus.Success)
                 return _status;
-            return TryGetCurrentPayloadUnderLock(out _)
+            return TryGetCurrentPayloadUnderLock(out _, out _)
                 ? NavigationGuideStatus.Success
                 : MarkStaleUnderLock();
         }
@@ -115,7 +115,9 @@ internal sealed class NavigationFlowFieldGuideLease
                 return NavigationGuideStatus.Stale;
             if (_status != NavigationGuideStatus.Success)
                 return _status;
-            if (!TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload payload))
+            if (!TryGetCurrentPayloadUnderLock(
+                    out NavigationFlowFieldPayload payload,
+                    out NavigationWorldGraph? validatedGraph))
                 return MarkStaleUnderLock();
             NavigationFlowFieldPayloadCache owner = _owner!;
             GridWorld world = owner.World;
@@ -127,7 +129,8 @@ internal sealed class NavigationFlowFieldGuideLease
             using (graphLease)
             {
                 NavigationWorldGraph graph = graphLease.Graph;
-                bool dependencyCurrent = graph.IsDependencyCurrent(payload.Dependencies);
+                bool dependencyCurrent = ReferenceEquals(graph, validatedGraph)
+                    || graph.IsDependencyCurrent(payload.Dependencies);
                 NavigationCellAddress candidateSource = _currentSource;
                 NavigationFlowFieldNode currentNode = default;
                 Vector3d target = default;
@@ -152,7 +155,7 @@ internal sealed class NavigationFlowFieldGuideLease
                         out target,
                         out candidateHeading);
                 if (!dependencyCurrent
-                    || !TryGetCurrentPayloadUnderLock(out _)
+                    || !TryGetCurrentPayloadUnderLock(out _, out _, graph)
                     || world.ChangeSequence != worldSequence)
                 {
                     return MarkStaleUnderLock();
@@ -185,7 +188,7 @@ internal sealed class NavigationFlowFieldGuideLease
                             ref meter,
                             out sample);
                         bool transitionEpochCurrent = IsSampleEpochCurrent(
-                            TryGetCurrentPayloadUnderLock(out _),
+                            TryGetCurrentPayloadUnderLock(out _, out _, graph),
                             world.ChangeSequence,
                             worldSequence);
                         transitionStatus = ResolveTransitionSampleStatus(
@@ -223,7 +226,7 @@ internal sealed class NavigationFlowFieldGuideLease
         {
             if (!IsGenerationActiveUnderLock(generation)
                 || !_hasPendingTransition
-                || !TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload payload)
+                || !TryGetCurrentPayloadUnderLock(out NavigationFlowFieldPayload payload, out _)
                 || !payload.TryGetNode(
                     _currentSource,
                     _currentMedium,
@@ -336,7 +339,9 @@ internal sealed class NavigationFlowFieldGuideLease
         && _payloadSlot >= 0;
 
     private bool TryGetCurrentPayloadUnderLock(
-        out NavigationFlowFieldPayload payload)
+        out NavigationFlowFieldPayload payload,
+        out NavigationWorldGraph? currentGraph,
+        NavigationWorldGraph? validatedGraph = null)
     {
         NavigationFlowFieldPayloadCache? owner = _owner;
         NavigationWorldGraphStore? store = _store;
@@ -345,12 +350,16 @@ internal sealed class NavigationFlowFieldGuideLease
             && owner.TryGetGuidePayload(
                     _payloadSlot,
                     _payloadGeneration,
-                    out payload) == NavigationFlowFieldStatus.Success
-            && owner.IsPayloadCurrent(store.Current, payload))
+                    out payload) == NavigationFlowFieldStatus.Success)
         {
-            return true;
+            currentGraph = store.Current;
+            // The held guide generation fixes payload identity. Cache invalidation
+            // and raw world changes remain live at every validation boundary.
+            if (owner.IsPayloadCurrent(currentGraph, payload, validatedGraph))
+                return true;
         }
         payload = null!;
+        currentGraph = null;
         return false;
     }
 

@@ -65,11 +65,13 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 ### TRB-Benchmark-005 - Guided frames spend most time in long blocked segment tracing
 
 - **Discovered:** 2026-09-10 during the representative guided-host performance pass.
-- **Status:** Active. The focused GridForge rejection and FixedMathSharp
-  containment simplification are implemented and verified locally;
-  guided-frame budget acceptance is not complete. A subsequent per-edge
-  rejection experiment was measured and withdrawn; see the final follow-up
-  below. It does not change the current runtime or supply additional savings.
+- **Status:** Active for remaining full-frame budget misses. Exact rectangular
+  candidate pruning/slab intersection in GridForge and raw-coordinate
+  containment/distance/capsule simplifications in FixedMathSharp are now
+  implemented, together with per-sample immutable dependency-proof reuse in
+  Trailblazer. Recheck medians fall another 73-78% against the refreshed
+  baseline; see the final follow-up. This is source work, not a profiling-only
+  result. The earlier per-edge rejection experiment remains withdrawn.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -647,6 +649,146 @@ historical record, not a new validation claim.
 Independent raw-evidence/source review verifies the results and attribution;
 the overview now makes the measured-root denominator explicit. The Ponytail
 review finds no unnecessary scope in the proposed next experiment.
+
+#### Follow-up: remove the measured geometry work
+
+On 2026-09-13 UTC, the coordinated working trees implement the next reductions
+against GridForge `b19f373`, FixedMathSharp `eec40bf` and Trailblazer `3bf1b87`.
+The benchmark source is unchanged. Public APIs, query budgets, candidate
+accounting, dependencies and the default synchronous 16-frame LOS cadence stay
+unchanged.
+
+- **GridForge (`GF-Benchmark-006`):** Preserve admission against the complete
+  address range, but narrow rectangular candidate geometry to conservative
+  per-column Z ranges. Use actual cell centers, closed boundaries and guarded
+  rounding; retain Y candidates and fall back for horizontal/vertical rays,
+  unrepresentable arithmetic and unsupported topology. Rectangular containment
+  uses canonical closed bounds. Eligible rectangular interval queries use exact
+  slab comparisons before rounding only the selected entry/exit parameters.
+- **FixedMathSharp:** Zero-angle convex containment uses widened raw differences
+  instead of general rotation. Raw segment endpoint-distance comparisons reuse
+  the existing exact strict capsule predicate, removing the unused rational
+  projection bridge. For a nondegenerate endpoint-authored 2D capsule, a
+  closed-contained start and strictly contained end return `[0,1]` without a
+  boundary solve. Defer unused dot products until needed; end-boundary,
+  zero-axis and rotated/general fallback paths remain.
+- **Trailblazer:** Flow sampling reuses the existing cache's exact immutable-root
+  dependency proof within one call instead of walking the same stamp three or
+  four times. Changed roots still require full comparison. Every live payload
+  generation/invalidation lookup and world-sequence check stays at its existing
+  boundary. The held guide lock fixes payload identity; no retained proof,
+  new cache or public API is needed.
+- **Compatibility correction during review:** An early column candidate skipped
+  horizontal collinear contacts whose extrapolated parameter rounds onto a
+  finite endpoint. Literal forward/reverse regressions now preserve `[1,1]` /
+  `[0,0]` through the original horizontal path. The intermediate `column`
+  capture predates this correction and is not the final source. No known
+  regression is left open or hidden by a changed expectation.
+
+The serial Windows/i7-9700K/.NET 8.0.29 Release protocol is unchanged. Each
+capture has three fresh launches per selected case, one warmup and three actual
+64-frame blocks per launch, plus diagnostic blocks. The final `flow-proof`
+capture and refreshed `interval-baseline` compare as follows:
+
+| Case | Ordinary median before / after | Recheck median before / after | All-frame P99 before / after | 64-frame block median before / after |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 | 2.420 / 2.070 ms | 105.639 / 28.325 ms | 107.088 / 28.912 ms | 571.505 / 238.710 ms |
+| Flow/100 | 3.060 / 1.303 ms | 88.105 / 19.141 ms | 90.970 / 19.810 ms | 539.468 / 153.375 ms |
+| Flow/500 | 16.857 / 7.442 ms | 354.757 / 90.386 ms | 366.528 / 94.696 ms | 2,441.737 / 801.356 ms |
+
+Recheck reductions are **73.2% / 78.3% / 74.5%**; whole-block reductions are
+**58.2% / 71.6% / 67.2%**. Blocks include validation/hashing outside the host
+frame timer; dividing their durations by 64 does not establish frame latency.
+Actual timing uses 1,728 frames per capture, with no outlier removal. These are
+descriptive serial local measurements, not randomized paired trials or a
+cross-platform guarantee. A*/500 remains outside this selected capture.
+
+Intermediate captures isolate meaningful steps. In particular, `distance` to
+`slab` changes exactly one authored GridForge runtime document: recheck medians
+improve 27.5% / 38.8% / 35.6%, with improvement in all nine launch medians.
+`slab` to `endpoints` combines the final raw-distance and capsule changes in
+FixedMathSharp; do not attribute their gains separately. Ordinary A* is
+effectively unchanged in that last step (+0.216%); ordinary timing does not
+improve uniformly across every intermediate launch.
+
+The subsequent `endpoints` to `flow-proof` step changes only the Flow guide
+lease in authored runtime source. Ordinary Flow/100 and Flow/500 medians move
+from **1.590 / 9.671 ms** to **1.303 / 7.442 ms**; their block medians move from
+**177.332 / 967.227 ms** to **153.375 / 801.356 ms**. The unchanged A* control
+also moves (ordinary **2.255 to 2.070 ms**, block **254.771 to 238.710 ms**).
+Do not attribute that control movement, or every captured Flow difference,
+uniquely to the proof-reuse patch.
+
+The final independent audit verifies baseline, `endpoints` and `flow-proof`:
+27 successful children, 135 properly staged records and **8,640 exact
+signed-Int64 frame checksums**, with zero measured frame allocation/GC. Raw
+summaries and full BDN measurements agree. All 189 retained child files and
+18 PE/PDB identities verify; all 697 final authored source hashes match the
+checkout. Baseline to final changes nine runtime documents (FMS five,
+GridForge three, Trailblazer one). Benchmark and Swift sources are unchanged;
+FMS/GridForge DLLs and PDBs are byte-identical between the last two captures.
+Earlier geometry-stage audits remain in `guided-final-endpoints-review-audit.json`;
+the final extension is `guided-flow-proof-review-audit.json`.
+
+**Remaining acceptance:** Final rechecks above 31.25 ms are **0/36 A*/100,
+0/36 Flow/100 and 36/36 Flow/500**; maxima are **29.805 / 20.400 / 97.517 ms**.
+Ordinary frames all fit 31.25 ms; all 540 Flow/100 ordinary frames also fit
+the smaller 2 ms navigation allowance. That allowance still has misses in
+the other cases and all rechecks. Keep `TRB-Benchmark-005` active; neither a
+budget increase nor
+spreading/skipping LOS checks is used to manufacture acceptance. A separate
+`endpoints` Flow/100 profile, before the Flow proof-reuse patch, puts planar
+interval calculation at about 1.5% of sampled `RunMeasured` time versus 27.4%
+before, and tracing at 8.9% versus
+45.5%. The original geometry bottleneck is substantially reduced, not evidence
+that all guided-frame costs are solved. Shares overlap and include benchmark
+validation; they are not additive pure-frame savings.
+
+Tests cover full-domain differences, one-raw boundaries, degenerate/reversed
+segments, rounded tangencies, exact interval misses, sparse candidates and
+unchanged capacity/failure precedence. Deliberate broken closing-edge,
+narrowed-difference, rounded-slab and capsule-boundary mutations fail the new
+behavior tests, then pass with the correct implementation restored. Independent
+correctness and Ponytail reviews find no remaining actionable issues. No new
+test project, CI framework, public geometry API or cache is added.
+Three additional Flow cases cover publication after initial validation and
+exact cache invalidation during a rejoin. Removing the acquired-graph check or
+the final cache lookup makes sampling incorrectly succeed and the new tests
+fail, as their mutation runs demonstrate. The first characterization run's
+wrong Right heading assertion was corrected from the fixture's authored `(3,0,0)` to
+`(0,0,0)` route; that retained failure is a test-authoring error, not a runtime
+regression. Restored focused Release/Lean selections each pass 200 tests.
+
+**Full local validation:** All four solutions build both library targets with
+zero warnings/errors in Release and ReleaseLean against `UseLocalLsfStack=true`.
+Every configured line, branch and fully covered method is covered exactly,
+without new exclusions or relaxed gates. Counts below are both covered and
+total; `+` identifies the separate integration-test project.
+
+| Repository / configuration | Passed tests | Lines | Branches | Fully covered methods |
+| --- | ---: | ---: | ---: | ---: |
+| FixedMathSharp Release | 2,744 + 8 | 47,868 | 8,846 | 3,453 |
+| FixedMathSharp ReleaseLean | 2,723 + 8 | 47,961 | 8,846 | 3,449 |
+| GridForge Release | 887 | 8,957 | 3,857 | 1,118 |
+| GridForge ReleaseLean | 887 | 8,957 | 3,857 | 1,118 |
+| Gravitas Release | 3,950 | 56,093 | 15,906 | 5,341 |
+| Gravitas ReleaseLean | 3,895 | 56,091 | 15,906 | 5,340 |
+| Trailblazer Release | 2,470 + 65 | 30,847 | 12,091 | 3,011 |
+| Trailblazer ReleaseLean | 2,408 + 65 | 30,847 | 12,091 | 3,011 |
+
+The four-repository matrix passes after the geometry changes. Trailblazer's
+complete matrix passes again after its proof-reuse change; upstream source is
+unchanged between those matrices. These are local Windows source-stack checks,
+not Linux CI, released-package validation or release authorization.
+
+Evidence stays under `artifacts/benchmark005`: `guided-{zero-angle,column,
+rectangle,distance,slab,endpoints,flow-proof}*`, independent audits,
+`endpoints-profile-*`, focused/mutation logs, `reduction-verification` and
+`flow-proof-verification`.
+Use the existing guided-frame command above with a distinct artifact directory
+and `UseLocalLsfStack=true`; timings and full verification run serially.
+Historical benchmark exceptions and incomplete microcaptures remain separate
+evidence, without a claimed common cause or fix.
 
 ## Closed Signals
 

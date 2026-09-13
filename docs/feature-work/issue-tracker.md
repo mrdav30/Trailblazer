@@ -23,30 +23,6 @@
 
 ## Active Issues
 
-### TRB-Issue-120 - Benchmark launcher discards failure status
-
-- **Discovered:** 2026-09-11 during upstream `GF-Issue-006` investigation.
-- **Status:** Open; confirmed benchmark-tooling defect, separate from the
-  unexplained exceptions in `TRB-Issue-119` and `GF-Issue-006`.
-- **Boundary:** `tests/Trailblazer.Benchmarks/Program.cs` discards every
-  `BenchmarkSwitcher.Run(...)` summary and returns zero on execution paths.
-  A failed benchmark can therefore appear successful to a calling script.
-  The same defect is observed in GridForge's historical planar baseline and
-  tracked upstream as `GF-Issue-007`.
-- **Required correction:** Inspect critical validation errors, report success
-  and each returned execution's exit status; result rows alone are insufficient.
-  Combine failures across Trailblazer's canonical and single-shot groups without
-  short-circuiting either invocation. Keep legitimate help/list commands working.
-  BenchmarkDotNet 0.15.8 does not return extra diagnoser executions in these
-  summaries, so retain full-log/expected-child-count validation as well.
-- **Acceptance:** Successful launches; success followed by failure; results
-  followed by nonzero/unknown exit; build/validation failure; both group orders;
-  and successful informational commands. Include a real failing-child launcher
-  smoke check. Do not add a runtime workaround or claim this fixes either NRE.
-- **Interim gate:** Require complete expected child exits, launch/sample counts
-  and semantic records. Neither a zero parent exit nor partial statistics makes
-  an incomplete capture eligible for performance comparison.
-
 ### TRB-Issue-119 - Guided A* setup reported an exception in wide geometry
 
 - **Discovered:** 2026-09-10 during guided-host performance measurement.
@@ -183,6 +159,38 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-120 - Benchmark launcher discards failure status
+
+- **Discovered:** 2026-09-11 during upstream `GF-Issue-006` investigation.
+- **Status:** Resolved locally on 2026-09-11; benchmark tooling only.
+- **Failure:** Every launcher execution route discarded `BenchmarkSwitcher.Run`
+  summaries and returned zero, making a failed benchmark appear successful to
+  scripts. GridForge's matching defect is tracked as `GF-Issue-007`.
+- **Resolution:** All routes return `1` for critical validation errors, failed
+  reports/builds, missing executables and nonzero/unknown returned child exits.
+  Canonical and single-shot groups both run; either failure survives the other
+  group's success. Help/list still return `0`. Runtime navigation, dependencies,
+  benchmark selection and measurement job policy are unchanged.
+- **Verification (2026-09-11):** Temporary checks reproduced the original false
+  success and verified later-launch/post-result failures, mixed reports and
+  failure in either group while both still ran. Result-model checks covered
+  validation/build failures and unknown exits. Local Windows `Release` and
+  `ReleaseLean` builds passed without warnings/errors, with 2,467 core + 65
+  adapter and 2,405 core + 65 adapter tests respectively. Production DLLs returned
+  `1` for invalid invocation/unroll settings and `0` for help/list.
+- **Scope (2026-09-12):** Retain the launcher fix and documented evidence only.
+  The temporary verification projects and their CI additions were removed at
+  maintainer review; no permanent benchmark-tooling test system is introduced.
+- **Evidence location:** `artifacts/gf-issue006/launcher-red-trailblazer.log`,
+  `artifacts/gf-issue006/launcher-validation/Trailblazer-*`, and the per-case
+  logs/counters under `artifacts/launcher-regression/`.
+- **Remaining limits:** BenchmarkDotNet 0.15.8 omits extra diagnoser executions
+  from returned reports, and empty summaries also represent informational or
+  invalid/no-match commands. Continue requiring complete expected child exits,
+  launch/sample counts and semantic records from full logs. Neither a zero exit
+  nor partial statistics makes an incomplete capture eligible for comparison.
+  `GF-Issue-006` and `TRB-Issue-119` remain open; this is not an NRE fix.
 
 ### TRB-Issue-118 - Rebase/rejoin allocation guards use different warmup and measurement bodies
 

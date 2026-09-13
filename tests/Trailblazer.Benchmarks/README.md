@@ -55,9 +55,15 @@ Do not treat short-run results as canonical measurements.
 ## Accepting a capture
 
 Verify the full log against the expected cases, child launches and measurement
-stages before using a result. The current launcher discards BenchmarkDotNet's
-report failure status, so a zero command exit does not prove success. Partial
-statistics from an earlier launch can survive a later child failure.
+stages before using a result. The launcher returns `1` for critical validation
+errors, failed reports/builds, and failed or unknown exits in returned child
+executions. A failure in either the canonical or single-shot group remains a
+failure after the other group runs. Successful help/list commands return `0`.
+
+A zero exit is still not a complete capture audit: BenchmarkDotNet does not
+include extra diagnoser executions in its returned reports, and empty summaries
+can represent informational or invalid/no-match requests. Partial statistics
+from an earlier launch can survive a later child failure.
 
 Exclude incomplete cases, require successful timed and diagnostic child exits,
 and treat missing allocation diagnostics as unknown rather than zero. Retain

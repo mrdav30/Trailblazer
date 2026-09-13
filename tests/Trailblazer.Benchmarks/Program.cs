@@ -13,8 +13,7 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
-            return 0;
+            return BenchmarkExitCode.Get(BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args));
         }
 
         string command = args[0];
@@ -43,8 +42,7 @@ internal static class Program
                 return 1;
             }
 
-            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args.Skip(1).ToArray());
-            return 0;
+            return BenchmarkExitCode.Get(BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args.Skip(1).ToArray()));
         }
 
         int aliasCount = 0;
@@ -53,8 +51,7 @@ internal static class Program
 
         if (aliasCount == 0)
         {
-            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
-            return 0;
+            return BenchmarkExitCode.Get(BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args));
         }
 
         Type[] selectedTypes = _catalog.Resolve(args.Take(aliasCount).ToArray(), out string unknownAlias);
@@ -77,10 +74,9 @@ internal static class Program
             string.Equals(argument, "--job", StringComparison.OrdinalIgnoreCase));
         if (hasCommandLineJob)
         {
-            BenchmarkSwitcher.FromTypes(selectedTypes).Run(
+            return BenchmarkExitCode.Get(BenchmarkSwitcher.FromTypes(selectedTypes).Run(
                 benchmarkArgs,
-                DefaultConfig.Instance);
-            return 0;
+                DefaultConfig.Instance));
         }
 
         Type[] singleShotTypes = selectedTypes
@@ -90,11 +86,12 @@ internal static class Program
                 StringComparison.Ordinal))
             .ToArray();
         Type[] canonicalTypes = selectedTypes.Except(singleShotTypes).ToArray();
+        int exitCode = 0;
         if (canonicalTypes.Length > 0)
-            BenchmarkSwitcher.FromTypes(canonicalTypes).Run(benchmarkArgs, CreateGlobalConfig(false));
+            exitCode |= BenchmarkExitCode.Get(BenchmarkSwitcher.FromTypes(canonicalTypes).Run(benchmarkArgs, CreateGlobalConfig(false)));
         if (singleShotTypes.Length > 0)
-            BenchmarkSwitcher.FromTypes(singleShotTypes).Run(benchmarkArgs, CreateGlobalConfig(true));
-        return 0;
+            exitCode |= BenchmarkExitCode.Get(BenchmarkSwitcher.FromTypes(singleShotTypes).Run(benchmarkArgs, CreateGlobalConfig(true)));
+        return exitCode;
     }
 
     private static IConfig CreateGlobalConfig(bool singleShot) =>

@@ -69,9 +69,11 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   candidate pruning/slab intersection in GridForge and raw-coordinate
   containment/distance/capsule simplifications in FixedMathSharp are now
   implemented, together with per-sample immutable dependency-proof reuse in
-  Trailblazer. Recheck medians fall another 73-78% against the refreshed
-  baseline; see the final follow-up. This is source work, not a profiling-only
-  result. The earlier per-edge rejection experiment remains withdrawn.
+  Trailblazer. The latest ray-admission/prism reuse and integer bit-count slice
+  reduces repeat LOS medians another 9-11%, to about 25.1 / 15.4 / 73.6 ms for
+  A*/100, Flow/100 and Flow/500. See the final follow-up for remaining budget
+  misses and tail regressions. The earlier per-edge rejection experiment remains
+  withdrawn.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -1006,6 +1008,90 @@ Ignored evidence is under `artifacts/benchmark005`: `guided-structure-baseline*`
 `flow-version-*-mutation.log`, focused logs and `flow-version-verification`.
 The existing capture/audit/verification scripts retain the protocol; no new
 benchmark tooling is required for this slice.
+
+#### Follow-up: admit traced cells without rebuilding their geometry
+
+On 2026-09-13 UTC, the next profile against Trailblazer `866d9a7` places
+roughly 10-11% of the measured Flow operation root in ray interval mapping.
+Mapping discards the node state it requests, including reconstructed prism
+geometry that the current GridForge trace has already proved representable.
+The revised mapper reads the published effective cell and obstacle count,
+reuses the exact component closure lookup and shares scalar admission with
+`TraversalEvaluator`. Open component membership and exact captured physical
+presence remain asserted invariants, not invented rejection branches.
+Dependencies are still recorded before admission; identity/sequence checks,
+failure precedence, negative proofs, work meters and live-world locks remain.
+The mapper reads intervals by readonly reference, and ordinary edge validation
+uses its existing evidence prism instead of constructing the same prism twice.
+
+FixedMathSharp `c8d343c` supplies one additional measured change:
+`CountLeadingZeroes` uses the exact integer `BitOperations.LeadingZeroCount`
+under `NET8_0_OR_GREATER`. The `netstandard2.1` implementation is unchanged.
+No public API, retained cache, package dependency or LOS cadence changes.
+GridForge `847458b`, SwiftCollections `4b5715b` and Gravitas `42af506` are unchanged.
+
+Serial original/final-candidate/original-control/final-confirmation captures
+retain the same three-launch protocol: `baseline` / `span` is the initial pair
+and `control` / `confirm` is the repeat pair (all with the `trace-state-` prefix).
+The table uses the repeat pair; each
+ordinary median has 540 actual frames, each LOS median 36, and each block median
+nine complete operations. Blocks include validation outside the host-frame timer.
+
+| Case | Repeat ordinary median, original / final | Repeat LOS median, original / final | Repeat complete-block median, original / final |
+| --- | ---: | ---: | ---: |
+| A*/100 | 2.208 / 2.129 ms | 27.499 / 25.091 ms | 242.997 / 229.679 ms |
+| Flow/100 | 0.846 / 0.851 ms | 17.306 / 15.370 ms | 118.100 / 110.210 ms |
+| Flow/500 | 5.223 / 5.051 ms | 81.639 / 73.603 ms | 636.793 / 596.292 ms |
+
+Both comparisons improve LOS medians: **12.3% then 8.8%** for A*/100,
+**13.0% then 11.2%** for Flow/100, and **9.8% then 9.8%** for Flow/500.
+Repeat complete blocks improve **5.5% / 6.7% / 6.4%**. The initial Flow/100
+ordinary improvement does not repeat and is not counted. Its ordinary P95
+worsens in both pairs, from 1.529 / 1.448 ms to 2.017 / 1.833 ms; the final
+confirmation has four ordinary frames above 2 ms, with a 2.308 ms maximum.
+Flow/100 complete-block P95 also worsens in both pairs, from 161.205 / 152.483 ms
+to 164.407 / 166.867 ms. Median improvements are not tail-acceptance claims.
+No observations are trimmed, and the intermediate mapping/refined/native captures
+are not pooled with final comparisons or claimed as independently additive wins.
+
+All seven captures preserve exact Int64 replay and zero observed frame
+allocation/GC across **315 records / 20,160 frames**, including 12,096 actual
+frames. All **441** archived file hashes validate. Portable PDB authored hashes
+match original/control and final/confirmation; only the two Trailblazer runtime
+files and `Fixed64.Statics.cs` change. Benchmark and other upstream source inputs
+are unchanged. Independent source/Ponytail and raw-evidence reviews accompany
+the existing semantic, concurrency, deterministic replay and allocation gates.
+Eleven new stationary-ray cases cover admitted and rejected profile boundaries,
+published obstacles, and same-root closed-component `Stale` results. Deliberately
+bypassing mapping admission makes all five scalar rejection cases fail.
+
+Final local Release/ReleaseLean solution builds have zero warnings or errors.
+Trailblazer passes **2,493 / 2,431** core tests plus **65** adapter tests in each
+configuration, with no failures or skips. Both configured coverage reports
+contain exactly **30,858/30,858 lines, 12,101/12,101 branches and 3,012/3,012 fully
+covered methods**, without new exclusions. FixedMathSharp, GridForge and Gravitas
+also pass their full Release/ReleaseLean suites and exact coverage gates.
+Both `netstandard2.1` and `net8.0` library targets build. Direct checks of the four
+FixedMathSharp assemblies execute 768 bit assertions; both portable helper IL
+bodies match the archived original implementation byte-for-byte. These checks
+run on the local .NET host, not on Mono or a game engine.
+
+`TRB-Benchmark-005` remains active: every 500-agent LOS recheck still exceeds
+31.25 ms, and its ordinary median still exceeds the 2 ms navigation allowance.
+The final profile removes most discarded node/prism reconstruction from mapping,
+but mapping, candidate collection, interval geometry and chain validation still
+run per ray. The next structural investigation should reduce repeated trace
+preparation/data movement while preserving complete-trace failure priority and
+dependency evidence. A stop-at-first-wall shortcut or an unlocked world stamp
+would change those contracts; neither is part of this improvement. Sampled
+world-getter attribution alone is not proof of removable lock overhead.
+
+Ignored evidence: `artifacts/benchmark005/guided-trace-state-*`,
+`trace-state-{baseline,confirm}-profile-*`, `trace-state-comparison.json`,
+`leading-zero-*`, focused/mutation logs and `trace-state-final-verification`.
+These are local Windows/.NET 8.0.29 measurements, not Linux CI or full-gameplay
+acceptance. FixedMathSharp's completed leading-zero performance record retains
+the separate arithmetic measurement and portable-target verification.
 
 ## Closed Signals
 

@@ -55,6 +55,15 @@ instead of burying it in notes.
     The tracker retains serial-run variability: unchanged A* ordinary medians
     move -3.3% then +3.4% across the latest two comparisons; no A* speedup is
     attributed to this Flow-only patch.
+    The next coordinated slice avoids discarded node/prism construction during
+    ray mapping, reuses evaluated source prisms and uses an exact .NET 8
+    leading-zero operation in FixedMathSharp, retaining its unchanged
+    `netstandard2.1` fallback. Repeated LOS medians improve another **9-11%**
+    to **25.1 / 15.4 / 73.6 ms**. Ordinary Flow/100 improvement does not repeat;
+    its tail remains above the 2 ms allowance. Exact replay, physical/semantic
+    admission, dependencies, work budgets, world synchronization and cadence
+    remain unchanged. The next structural investigation is repeated trace
+    preparation/data movement, not skipping required validation.
     Full-frame acceptance remains incomplete: the latest candidate still has
     **0 / 0 / 36** of each case's 36 measured rechecks exceeding 31.25 ms.
     Cold-acquisition scheduling does not

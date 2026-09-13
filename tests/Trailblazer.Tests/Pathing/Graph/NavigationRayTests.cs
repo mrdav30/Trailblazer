@@ -16,6 +16,110 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed class NavigationRayTests
 {
     [Theory]
+    [InlineData(false, 0, (int)NavigationRayStatus.Success)]
+    [InlineData(true, 0, (int)NavigationRayStatus.Blocked)]
+    [InlineData(false, 1, (int)NavigationRayStatus.Stale)]
+    [InlineData(false, 2, (int)NavigationRayStatus.Stale)]
+    public void StationaryRay_ShouldRejectPublishedObstaclesAndSameRootClosures(
+        bool hasObstacle,
+        int closureKind,
+        int expectedStatus)
+    {
+        using var world = new GridWorld();
+        GridConfiguration configuration = NavigationAStarExitTestHarness.RectangularLine(1);
+        world.TryAddGrid(configuration, new VoxelIndex[] { default }, out ushort gridIndex)
+            .Should().BeTrue();
+        if (hasObstacle)
+        {
+            VoxelGrid grid = world.ActiveGrids[gridIndex];
+            grid.TryGetVoxel(default(VoxelIndex), out Voxel? voxel).Should().BeTrue();
+            grid.TryAddObstacle(voxel!, world.AllocateObstacleToken()).Should().BeTrue();
+        }
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        var prepared = new PreparedNavigationMap(
+            new NavigationMapBuilder("ray-published-state", binding)
+                .AddCell(default, NavigationAStarExitTestHarness.Cell).Build(),
+            bakeVersion: 1);
+        var state = new NavigationOperationCandidate.MapState(
+            prepared.Map, prepared.BakeVersion, prepared.RetainedBytes,
+            NavigationMapOverlayState.Empty, dynamicSlotGeneration: 0,
+            bakedCellLookup: prepared.BakedCellLookup);
+        NavigationMapInstance instance = NavigationMapInstanceTestFactory.Compose(
+            world, state, previous: null, instanceVersion: 1);
+        NavigationWorldGraph graph = NavigationAStarExitTestHarness.WithPolicy(
+            new NavigationWorldGraph(1, new[] { instance }));
+        graph = graph.WithSurfaceComponents(NavigationSurfaceComponentTestFactory.Build(graph));
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress(instance.MapId, default),
+                TraversalMedium.Solid, out NavigationSurfaceComponentKey component, out _)
+            .Should().BeTrue();
+        if (closureKind != 0)
+        {
+            graph = graph.WithClosedStructuralComponents(
+                closureKind == 1
+                    ? NavigationSurfaceComponentKeySet.Empty.Add(component)
+                    : NavigationSurfaceComponentKeySet.Empty,
+                closureKind == 2,
+                graph.GraphVersion + 1);
+        }
+        using NavigationWorldGraphStore store = NavigationAStarExitTestHarness.CreateStore(graph);
+        Vector3d foot = NavigationAStarExitTestHarness.GetFoot(binding, default);
+
+        RunRay(CreateRequest(world, store, graph,
+                NavigationAStarExitTestHarness.Profile(), foot, foot))
+            .Status.Should().Be((NavigationRayStatus)expectedStatus);
+    }
+
+    [Theory]
+    [InlineData(true, true, 0, 0, 0, true)]
+    [InlineData(true, true, 0, 1, 1, true)]
+    [InlineData(false, true, 0, 0, 0, false)]
+    [InlineData(true, false, 0, 0, 0, false)]
+    [InlineData(true, true, 1, 0, 0, false)]
+    [InlineData(true, true, 0, -1, 0, false)]
+    [InlineData(true, true, 0, 0, -1, false)]
+    public void StationaryRay_ShouldRequireCellAdmissionIncludingExactClearanceBoundaries(
+        bool hasCapability,
+        bool allowsMedium,
+        ushort area,
+        int radiusClearanceDeltaRaw,
+        int heightClearanceDeltaRaw,
+        bool expectedPassable)
+    {
+        using var world = new GridWorld();
+        Fixed64 radius = Fixed64.One / (Fixed64)4;
+        var cell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.Climb,
+            new NavigationAreaId(area),
+            Fixed64.Zero,
+            radius + Fixed64.FromRaw(radiusClearanceDeltaRaw),
+            Fixed64.One + Fixed64.FromRaw(heightClearanceDeltaRaw));
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(1),
+                new VoxelIndex[] { default },
+                "ray-admission",
+                new[] { cell });
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(radius, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            allowsMedium ? TraversalMedia.Solid : TraversalMedia.Gas,
+            hasCapability ? TraversalCapability.Climb : TraversalCapability.None);
+        Vector3d foot = NavigationAStarExitTestHarness.GetFoot(fixture.Binding, default);
+
+        RunRay(CreateRequest(world, store, fixture.Graph, profile, foot, foot))
+            .Status.Should().Be(expectedPassable
+                ? NavigationRayStatus.Success
+                : NavigationRayStatus.Blocked);
+    }
+
+    [Theory]
     [InlineData(true, true, true, true)]
     [InlineData(false, true, true, false)]
     [InlineData(true, false, true, false)]

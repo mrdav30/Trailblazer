@@ -206,13 +206,14 @@ internal sealed class NavigationRayWork
     {
         NavigationWorldGraph graph = _request.ExpectedGraph;
         NavigationRayChainRecord[] records = _workspace.ChainRecords;
-        for (int ordinal = 0; ordinal < _workspace.TraceIntervals.Count; ordinal++)
+        ReadOnlySpan<GridTraceInterval> intervals = _workspace.TraceIntervals.AsReadOnlySpan();
+        for (int ordinal = 0; ordinal < intervals.Length; ordinal++)
         {
             ref NavigationRayChainRecord record = ref records[ordinal];
             record = default;
             record.PredecessorOrdinal = -1;
             record.RootOrdinal = -1;
-            GridTraceInterval interval = _workspace.TraceIntervals[ordinal];
+            ref readonly GridTraceInterval interval = ref intervals[ordinal];
             if (!TryConsumeLookup(
                     queryMeter,
                     ref guideMeter,
@@ -259,7 +260,18 @@ internal sealed class NavigationRayWork
             }
             if (!_workspace.Dependencies.TryRecordComponent(component))
                 return NavigationRayStatus.CapacityExceeded;
-            if (!_evaluator.TryGetPassableNodeState(node, out _))
+            // The current trace interval already proves representable cell geometry.
+            // Mapping only needs the published physical and semantic admission state.
+            if (graph.IsSurfaceComponentClosed(component))
+                continue;
+            bool hasCell = instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell);
+            System.Diagnostics.Debug.Assert(hasCell,
+                "an open structural component contains only effective cells supporting its medium");
+            bool hasPhysicalState = instance.TryGetPhysicalState(
+                node.CellSlot, out bool isPresent, out byte obstacleCount);
+            System.Diagnostics.Debug.Assert(hasPhysicalState && isPresent,
+                "a present trace interval with the exact captured grid identity and sequence has published physical state");
+            if (obstacleCount != 0 || !_evaluator.IsCellPassable(cell, out _))
                 continue;
 
             record.Node = node;
@@ -465,8 +477,6 @@ internal sealed class NavigationRayWork
         graph.TryGetNodeAddress(
             sourceRecord.Node,
             out NavigationCellAddress sourceAddress);
-        graph.TryGetSeamPrism(sourceAddress, out GridCellPrism sourcePrism);
-
         NavigationSurfaceEdgeEnumerator edges = graph.EnumerateSurfaceEdges(sourceRecord.Node);
         int edgeSteps = int.MaxValue;
         while (true)
@@ -566,7 +576,7 @@ internal sealed class NavigationRayWork
                     "a successful explicit exit lies on the traced ray inside the convex source prism and therefore on its following ordinary portal leg");
                 if (!TryConsumePrism(queryMeter, ref guideMeter, useGuideMeter)
                     || !GridCellGeometry.IsNavigationBodySegmentValid(
-                        sourcePrism,
+                        evidence.SourcePrism,
                         sourcePoint,
                         portalPoint,
                         _request.Profile.Shape.Radius,

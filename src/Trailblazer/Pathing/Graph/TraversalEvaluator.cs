@@ -620,6 +620,18 @@ internal readonly struct TraversalEvaluator
         out NavigationAreaRule areaRule) =>
         TryGetPassableNode(node, out state, out areaRule, out _);
 
+    internal bool IsCellPassable(in NavigationCell cell, out NavigationAreaRule areaRule)
+    {
+        areaRule = default;
+        return (_profile.AllowedMedia & _medium) == _medium
+            && (cell.Media & _medium) == _medium
+            && (_profile.Capabilities & cell.RequiredCapabilities) == cell.RequiredCapabilities
+            && _areaPolicy.TryGetRule(cell.Area, out areaRule)
+            && areaRule.IsAllowed
+            && _profile.Shape.Radius <= cell.RadiusClearance
+            && _profile.Shape.Height <= cell.HeightClearance;
+    }
+
     private bool TryGetPassableNode(
         NavigationNodeRef node,
         out NavigationNodeState state,
@@ -630,14 +642,7 @@ internal readonly struct TraversalEvaluator
         if (!_graph.TryGetNodeState(node, _exactMedium, out state, out prism)
             || !state.IsPresent
             || state.ObstacleCount != 0
-            || (_profile.AllowedMedia & _medium) != _medium
-            || (state.Cell.Media & _medium) != _medium
-            || (_profile.Capabilities & state.Cell.RequiredCapabilities)
-                != state.Cell.RequiredCapabilities
-            || !_areaPolicy.TryGetRule(state.Cell.Area, out areaRule)
-            || !areaRule.IsAllowed
-            || _profile.Shape.Radius > state.Cell.RadiusClearance
-            || _profile.Shape.Height > state.Cell.HeightClearance)
+            || !IsCellPassable(state.Cell, out areaRule))
         {
             state = default;
             areaRule = default;

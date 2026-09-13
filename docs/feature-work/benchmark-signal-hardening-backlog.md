@@ -459,13 +459,110 @@ Evidence remains under `artifacts/benchmark005`: `planar-edge-*`,
 The micro audit explicitly distinguishes a known incomplete baseline from
 successful integrity checks; it does not silently accept failed measurements.
 
-**Next measured hypothesis:** Reduce repeated transformed-vertex work in
+**Next hypothesis at that checkpoint:** Reduce repeated transformed-vertex work in
 FixedMathSharp containment, independently of the rejected edge guard. The prior
 measured-root profile remains relevant to the unchanged committed runtime; no
 new speedup is promised. Preserve full-domain wide arithmetic, closing-edge
 and early-exit behavior, and existing caller validation. Candidate enumeration,
 sparse snapshots, geometry-failure order and synchronous LOS cadence remain
 constraints, not performance knobs. `TRB-Benchmark-005` remains active.
+
+#### Follow-up: reuse wide rotated endpoints inside containment
+
+On 2026-09-13 UTC, keep the one-method FixedMathSharp change that carries each
+rotated endpoint into the next polygon edge and widens point-minus-origin once.
+Wide rotation is linear without scalar rounding, so subtracting the rotated
+endpoints produces exactly the previous edge. Full-domain intermediates fit
+`Signed192` and the determinant fits `Signed320`. Authored edge order, the closing
+edge, earliest rejection and public validation remain unchanged. No cache, new
+API, candidate pruning, budget change or deferred LOS recheck is introduced.
+
+Fresh serial Release captures use the existing 100x100 wall-detour fixture,
+32 Hz clock, synchronized 16-frame rechecks, three launches per case and three
+actual 64-frame blocks per launch. The machine/runtime remain Windows 11,
+i7-9700K, .NET 8.0.29 and BDN 0.15.8. Baseline source heads are Trailblazer
+`5841b26`, GridForge `b19f373`, FixedMathSharp `e8a2ab5`, SwiftCollections
+`4b5715b` and Gravitas `42af506`. The only runtime edit is containment in FMS.
+
+| Case | Ordinary median, before -> after | Recheck median, before -> after | All-frame P99, before -> after | 64-frame block median, before -> after |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 | 2.492 -> 2.489 ms | 118.644 -> 107.127 ms | 119.746 -> 109.664 ms | 628.478 -> 580.658 ms (-7.6%) |
+| Flow/100 | 3.337 -> 3.132 ms | 96.029 -> 86.388 ms | 98.386 -> 88.019 ms | 574.462 -> 526.588 ms (-8.3%) |
+| Flow/500 | 18.277 -> 16.751 ms | 392.543 -> 353.334 ms | 410.771 -> 368.822 ms | 2,697.504 -> 2,432.333 ms (-9.8%) |
+
+All nine corresponding launch-level block and recheck medians decrease.
+Ordinary A* is effectively unchanged in aggregate and mixed by launch; do not
+claim every kind of frame improved. All-frame maxima decrease from
+125.908 / 100.961 / 431.662 ms to 112.192 / 91.839 / 383.899 ms. No sample is
+trimmed. Each capture completes all nine children, 27 actual, nine warmup and
+nine diagnostic blocks. Independent audit verifies all 45 records / 2,880
+frame checksums across versions as exact Int64 values, with zero frame bytes
+and collections. Timing summaries use the 1,728 actual frames per version.
+The whole block includes benchmark instrumentation/validation; it is not a
+per-frame budget. All 36 actual recheck frames per case still exceed 31.25 ms.
+
+The executed-child archives each contain 63 files; only FixedMathSharp and
+benchmark DLL/PDB pairs differ. Generated source/project/build files match.
+Portable-PDB document checks confirm the sole authored-source difference is
+`WideConvex2dRelations.cs`; all benchmark and downstream source inputs match.
+This is a normal rebuilt comparison, not proof of identical native compilation.
+
+**Incomplete microbenchmarks:** Both separately labeled unchanged FMS baselines
+fail in `Outside(4 vertices, 30 degrees)`, launch 2: one native access violation,
+one managed NRE in `GetWorldPoint`. Each executes only 23/24 planned children.
+Neither capture, including its partial statistics, is used for performance
+comparison. No candidate microcomparison or isolated-math speedup is claimed.
+FMS tracks this as `FMS-Issue-018`; one frozen-child diagnostic replay with
+first-chance native-fault capture passes without a dump. It changes hosting and
+debugger timing and does not repair either baseline or establish a fix. The
+separate `TRB-Issue-119` and `GF-Issue-006` remain open without a proven common cause.
+
+**Remaining work:** A fresh five-block Flow/100 profile using the archived
+candidate binaries attributes 58.5% of measured-root sampled time to direct
+heading, 28.7% to guide sampling and 12.7% elsewhere. Within direct heading,
+`GridTracer.TraceIntervalsInto` is 43.2% of the root inclusive and planar interval
+calculation 27.0%; direct-heading containment is 9.8%. Guide-sampling body-anchor
+validation is a separate 10.9%. These nested shares overlap and are approximate stack
+samples, not exact call counts or independently additive savings. All five
+profile blocks retain matching frame checksums and zero frame allocation.
+
+Next, inspect repeated endpoint/edge work in the remaining planar-interval path
+for a measured consolidation, preserving exact raw interval results and failure
+order. Do not revive the rejected per-edge guard or add speculative public
+geometry machinery. Keep Flow sampling as its own measured cost. This slice
+improves the existing behavior; it does not close `TRB-Benchmark-005` or make
+the stress fixture fit a fixed frame.
+
+Evidence is retained under `artifacts/benchmark005`: `guided-vertex-*`,
+`vertex-source-audit.json`, `vertex-profile-*`, `fms-vertex-baseline*`,
+`fms-vertex-fault-probe` and the eight new FMS boundary cases. Deliberately
+omitting the closing edge fails all six new closing-edge cases. Source/proof
+and Ponytail reviews find no actionable issue in the containment change.
+
+Full local-stack solution builds and tests pass in Release and ReleaseLean,
+with zero build warnings/errors and exact reachable coverage:
+
+| Repository | Tests, Release / Lean | Covered lines, Release / Lean | Covered branches | Fully covered methods, Release / Lean |
+| --- | ---: | ---: | ---: | ---: |
+| FixedMathSharp core + Chronicler | 2,716 + 8 / 2,695 + 8 | 47,856 / 47,949 | 8,828 | 3,452 / 3,448 |
+| GridForge | 852 / 852 | 8,861 / 8,861 | 3,787 | 1,115 / 1,115 |
+| Gravitas | 3,950 / 3,895 | 56,093 / 56,091 | 15,906 | 5,341 / 5,340 |
+| Trailblazer core + adapter | 2,467 + 65 / 2,405 + 65 | 30,842 / 30,842 | 12,089 | 3,011 / 3,011 |
+
+Every listed covered count equals its total. FMS coverage includes
+FluentAssertions, not its separate Chronicler package; Trailblazer merges core
+and adapter coverage. Both library targets build. These are local Windows
+checks, not Linux CI or released-package validation.
+
+The first FMS Lean run failed its unchanged product-comparison allocation guard
+at 2,208 bytes. A focused test-only correction uses the repository's existing
+warmed-allocation helper for one shared 64-iteration operation; exact zero bytes
+and checksum assertions remain. An intentional allocation mutation fails at
+5,632 bytes and is removed. `FMS-Issue-019` retains the original burst without
+allocator attribution or a claim that flakiness is cured. The failed first
+matrix remains in `vertex-verification`; all final green logs/reports are in
+`vertex-verification-final`. No new test project, CI, runner framework or runtime
+workaround is added.
 
 ## Closed Signals
 

@@ -25,18 +25,18 @@ instead of burying it in notes.
   - `TRB-Benchmark-005` is the active priority in the
     [benchmark tracker](benchmark-signal-hardening-backlog.md). The new fixture
     measures real guided movement and periodic line-of-sight rechecks.
-    After GridForge's strict disjoint-segment rejection, the latest narrow
-    FixedMathSharp containment simplification reduces selected whole-block
-    medians by another roughly 10%, with exact replay and zero frame allocations.
-    Periodic medians are still about 122 / 97 / 406 ms for A*/100, Flow/100 and
+    After the earlier geometry improvements, reusing wide rotated endpoints in
+    FixedMathSharp containment reduces selected whole-block medians by another
+    7.6-9.8%, with exact replay and zero frame allocations.
+    Periodic medians are still about 107 / 86 / 353 ms for A*/100, Flow/100 and
     Flow/500, above the 31.25 ms full-frame budget. The earlier ordinary A*
     increase does not consistently repeat in a frozen-runner control; launch-
     specific variability remains visible. The subsequent GridForge per-edge
     rejection experiment (`GF-Benchmark-005`) is closed with no runtime change:
     complete-block median changes of -2.3% / -0.5% / +2.3% do not establish a
     consistent benefit. Its tests and benchmark evidence remain. The next
-    profile-supported hypothesis is repeated transformed-vertex work in shared
-    containment math, followed by Flow sampling as a distinct measured cost.
+    profile-supported boundary is repeated endpoint/edge work in planar-interval
+    calculation; Flow sampling remains a distinct measured cost.
     Cold-acquisition scheduling does not bound these synchronous rechecks.
     The earlier performance slices (`TRB-Benchmark-002/003`, `GF-Benchmark-003`)
     are closed locally. `TRB-Benchmark-004` now closes with ordered protocol
@@ -45,6 +45,8 @@ instead of burying it in notes.
     `TRB-Issue-119` retains a separate, not-yet-reproduced A* setup exception;
     GridForge `GF-Issue-006` preserves an incomplete strict-miss benchmark
     baseline, without an established common cause or fix.
+    FixedMathSharp's `FMS-Issue-018` preserves two failed containment microbaselines;
+    they are excluded from comparisons, with no isolated-math speedup claim.
     `TRB-Issue-114` remains closed without a confirmed allocator fix.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-
@@ -155,9 +157,10 @@ measurements, not permission for speculative algorithm or cache changes.
 The plans share evidence, not competing implementations:
 
 1. Continue the measured guided-frame work in `TRB-Benchmark-005` before broader
-   features: investigate repeated transformed-vertex work in FixedMathSharp
-   containment as the next blocked-ray candidate, independently of the withdrawn
-   GridForge per-edge guard. Flow guide-sampling geometry is a distinct cost.
+   features: inspect repeated endpoint/edge work in the remaining planar-interval
+   calculation after the verified endpoint-reuse improvement. Preserve exact
+   raw interval results; do not revive the withdrawn GridForge per-edge guard.
+   Flow guide-sampling geometry is a distinct cost.
    The bounded
    control does not consistently reproduce the earlier ordinary A* increase;
    retain launch variability without inventing a cause. GridForge's rejection
@@ -167,7 +170,9 @@ The plans share evidence, not competing implementations:
    do not repeat their investigations without new evidence. Keep the distinct
    `TRB-Issue-119` setup exception visible and capture exact inputs if it recurs.
    Keep GridForge's separate `GF-Issue-006` benchmark failure visible as well;
-   clean replays do not resolve either exception.
+   clean replays do not resolve either exception. FMS's separate `FMS-Issue-018`
+   containment failures also remain unexplained; failed microcaptures are not
+   replacement performance baselines.
    `TRB-Issue-114` requires no further investigation unless new evidence meets
    its documented reopening criteria.
 2. Complete the remaining shared movement scenarios in Gravitas integration

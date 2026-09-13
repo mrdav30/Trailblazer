@@ -95,6 +95,17 @@
   disjoint candidates must not be described as a fix for this exception.
   This is distinct from the closed `TRB-Benchmark-004` protocol watch and does
   not meet `TRB-Issue-114`'s allocation-guard reopening criteria.
+- **Separate containment micro failure (2026-09-13 UTC):** FixedMathSharp now
+  tracks `FMS-Issue-018`: two unchanged-runtime `Outside(4 vertices, 30 degrees)`
+  captures fail in launch 2. The first exits with native access violation
+  `0xC0000005` after six actual iterations, without a managed stack; the second
+  reports an NRE in `GetWorldPoint` after four. Windows event/log and executed-
+  child archives are preserved under `artifacts/benchmark005/fms-vertex-baseline*`.
+  Both incomplete captures are excluded from comparison. Neither is an A* setup
+  failure, and no common cause or fix is established. The subsequent guided
+  baseline/candidate each complete all three A* launches with matching replay;
+  endpoint reuse removes the reported helper from this containment path, so
+  clean candidate runs cannot establish a fix.
 
 ## Closed Investigations
 

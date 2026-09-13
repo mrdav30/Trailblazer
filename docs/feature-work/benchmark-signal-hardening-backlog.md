@@ -564,6 +564,90 @@ matrix remains in `vertex-verification`; all final green logs/reports are in
 `vertex-verification-final`. No new test project, CI, runner framework or runtime
 workaround is added.
 
+#### Follow-up: profile the remaining planar-interval work
+
+On 2026-09-13 UTC, a profiling-only pass refreshes the baseline after the
+endpoint-reuse changes were committed. No runtime, test, benchmark, dependency,
+budget or LOS-cadence change is made. Source heads are Trailblazer `864225a`,
+GridForge `b19f373`, FixedMathSharp `eec40bf`, SwiftCollections `4b5715b` and
+Gravitas `42af506`. The same Windows/i7-9700K/.NET 8.0.29 local-source Release
+protocol runs serially, without competing builds, tests or profiles.
+
+| Case | Ordinary median | Recheck median | All-frame P99 | All-frame maximum | 64-frame block median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A*/100 | 2.420 ms | 105.639 ms | 107.088 ms | 115.947 ms | 571.505 ms |
+| Flow/100 | 3.060 ms | 88.105 ms | 90.970 ms | 94.324 ms | 539.468 ms |
+| Flow/500 | 16.857 ms | 354.757 ms | 366.528 ms | 396.471 ms | 2,441.737 ms |
+
+This is a refreshed baseline, not another optimization or a before/after claim.
+All nine children complete: 27 actual, nine warmup and nine diagnostic blocks.
+The audit retains all 45 records / 2,880 frame checksums, with zero measured
+frame allocation and collections; timings use the 1,728 actual frames. Every
+case still has 36/36 actual recheck frames above 31.25 ms. No outlier is removed.
+Whole-block timings include benchmark instrumentation/validation, not just the
+fixed frames.
+
+Separate profiles reuse all 63 files from that executed child, adding only the
+existing probe entry point and its source copy. Portable-PDB checks match the
+authored benchmark and five local runtime assemblies' source documents to the
+current checkout. Profiles capture 20 A*/100, 20 Flow/100 and ten Flow/500
+blocks, excluding setup/preparation from the `RunMeasured` attribution root.
+All 50 blocks / 3,200 frame checksums match the baseline exactly as Int64 values,
+with zero frame allocation and collections. These longer profiles confirm the
+earlier Flow/100 signal across the other selected workloads:
+
+| Sampled share of the measured root | A*/100 | Flow/100 | Flow/500 |
+| --- | ---: | ---: | ---: |
+| Direct-heading work, inclusive | 66.4% | 58.8% | 50.5% |
+| Its `TraceIntervalsInto`, inclusive | 39.8% | 45.5% | 37.0% |
+| Its planar interval calculation, inclusive | 25.1% | 27.4% | 23.5% |
+| Containment, across all callers | 10.5% | 10.2% | 11.0% |
+| Direct-heading segment intersection, inclusive | 7.3% | 7.1% | 5.9% |
+| Flow guide-sampling body-anchor validation, inclusive | n/a | 12.9% | 12.9% |
+
+Nested rows overlap; they are approximate sampled attribution, not additive
+savings or exact invocation counts. Profiles cover about 13.1 / 12.2 / 28.9
+seconds of measured-root sampled time. This root includes benchmark validation
+and replay hashing outside the inner host-frame timer. Profiles are not timing
+comparisons with the unprofiled baseline. Absence of a distinct A* sampling
+stack is not a claim that A* sampling is free.
+
+**Next experiment:** Specialize exact zero-rotation containment privately inside
+FixedMathSharp's existing implementation. GridForge's endpoint and prism checks
+use the no-rotation overload, which currently still constructs a rotation frame
+and performs general wide vertex rotation. At zero rotation, the determinant
+can use widened raw differences directly: the current determinant is the same
+expression multiplied by the positive scale squared. Preserve vertex-count
+validation, both windings, repeated/collinear and closing edges, and earliest
+mixed-sign rejection. Never narrow `point - origin - offset` or reconstruct
+world vertices through saturating scalar arithmetic. Keep nonzero rotation
+unchanged and use the existing rotated benchmark cases as controls. This is a
+source-supported hypothesis, not implemented or measured as a speedup here.
+
+Streamed interval extrema can separately replace the small parameter array and
+deduplication pass: duplicates do not affect min/max. It is lower priority
+because it leaves the measured wide math intact. Reusing supporting-line signs
+would add bookkeeping, and those signs cannot replace endpoint containment
+predicates. Neither warrants bundling into the first experiment. The rejected
+per-edge guard remains rejected; no new geometry API, cache, framework or CI
+project is proposed.
+
+Containment alone cannot explain enough of the measured cost to make the stress
+fixture fit a fixed frame. Remeasure complete guided frames after the focused
+experiment, then revisit remaining interval/tracer work and the separate Flow
+body-validation cost. `TRB-Benchmark-005` stays active. No historical exception
+is reproduced or resolved by these successful captures.
+
+Evidence: `artifacts/benchmark005/guided-interval-baseline*`,
+`interval-profile-*`, `interval-source-audit.json`, `collect-interval-profiles.ps1` and
+`audit-interval-profiles.ps1`. The Release benchmark build passes with zero
+warnings/errors. Full unit/coverage and Lean matrices are not rerun in this
+profiling-only pass; the preceding committed-source validation remains the
+historical record, not a new validation claim.
+Independent raw-evidence/source review verifies the results and attribution;
+the overview now makes the measured-root denominator explicit. The Ponytail
+review finds no unnecessary scope in the proposed next experiment.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

@@ -28,15 +28,20 @@ instead of burying it in notes.
     After the earlier geometry improvements, reusing wide rotated endpoints in
     FixedMathSharp containment reduces selected whole-block medians by another
     7.6-9.8%, with exact replay and zero frame allocations.
-    Periodic medians are still about 107 / 86 / 353 ms for A*/100, Flow/100 and
-    Flow/500, above the 31.25 ms full-frame budget. The earlier ordinary A*
-    increase does not consistently repeat in a frozen-runner control; launch-
-    specific variability remains visible. The subsequent GridForge per-edge
-    rejection experiment (`GF-Benchmark-005`) is closed with no runtime change:
+    The refreshed baseline's periodic medians are about 106 / 88 / 355 ms for
+    A*/100, Flow/100 and Flow/500, above the 31.25 ms full-frame budget. The
+    earlier ordinary A* increase does not consistently repeat in a frozen-runner
+    control; launch-specific variability remains visible. The subsequent
+    GridForge per-edge rejection experiment (`GF-Benchmark-005`) is closed with no runtime change:
     complete-block median changes of -2.3% / -0.5% / +2.3% do not establish a
-    consistent benefit. Its tests and benchmark evidence remain. The next
-    profile-supported boundary is repeated endpoint/edge work in planar-interval
-    calculation; Flow sampling remains a distinct measured cost.
+    consistent benefit. Its tests and benchmark evidence remain. A fresh
+    profiling-only pass confirms planar interval calculation at 24-27% of
+    sampled measured-root time and containment at 10-11% across the selected
+    cases; that root includes benchmark validation and replay hashing.
+    Next, measure a private exact zero-rotation containment specialization in
+    FixedMathSharp; unrotated queries still use general wide rotation. No new
+    speedup is claimed yet. Flow body-anchor validation remains a distinct
+    measured cost, about 13% of sampled measured-root time in the Flow cases.
     Cold-acquisition scheduling does not bound these synchronous rechecks.
     The earlier performance slices (`TRB-Benchmark-002/003`, `GF-Benchmark-003`)
     are closed locally. `TRB-Benchmark-004` now closes with ordered protocol
@@ -157,10 +162,12 @@ measurements, not permission for speculative algorithm or cache changes.
 The plans share evidence, not competing implementations:
 
 1. Continue the measured guided-frame work in `TRB-Benchmark-005` before broader
-   features: inspect repeated endpoint/edge work in the remaining planar-interval
-   calculation after the verified endpoint-reuse improvement. Preserve exact
-   raw interval results; do not revive the withdrawn GridForge per-edge guard.
-   Flow guide-sampling geometry is a distinct cost.
+   features: measure a private exact zero-rotation containment path in
+   FixedMathSharp, with rotated controls and matched complete guided frames.
+   Preserve full-domain signs and exact raw interval results; do not revive
+   the withdrawn GridForge per-edge guard. Keep streamed interval extrema as
+   a separate lower-priority candidate and Flow body validation as a distinct
+   cost. The profiling pass does not implement these follow-ups.
    The bounded
    control does not consistently reproduce the earlier ordinary A* increase;
    retain launch variability without inventing a cause. GridForge's rejection

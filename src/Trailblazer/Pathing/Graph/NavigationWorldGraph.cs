@@ -382,7 +382,9 @@ internal sealed partial class NavigationWorldGraph
         NavigationCellAddress address,
         TraversalMedium medium) =>
         _allStructuralComponentsClosed
-        || (SurfaceComponents.TryGet(
+        || ((_closedStructuralComponents.Count != 0
+                || _additionalClosedStructuralComponents.Count != 0)
+            && SurfaceComponents.TryGet(
                 address,
                 medium,
                 out NavigationSurfaceComponent component)

@@ -317,8 +317,11 @@ public sealed class NavigationMediumGraphTests
             .Should().BeFalse("one byte-like slot below the total must fail closed");
     }
 
-    [Fact]
-    public void MediumStateResolution_ShouldHonorOnlyTheRequestedMediumClosure()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MediumStateResolution_ShouldHonorOnlyTheRequestedMediumClosure(
+        bool additionalOnly)
     {
         GridConfiguration configuration = RectangularConfiguration(GridStorageKind.Dense);
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
@@ -345,8 +348,11 @@ public sealed class NavigationMediumGraphTests
                 out _)
             .Should().BeTrue();
 
-        NavigationWorldGraph gasClosed = graph.WithClosedStructuralComponents(
-            NavigationSurfaceComponentKeySet.Empty.Add(gasKey),
+        NavigationSurfaceComponentKeySet closedGas =
+            NavigationSurfaceComponentKeySet.Empty.Add(gasKey);
+        NavigationWorldGraph gasClosed = graph.WithOwnedStructuralClosure(
+            additionalOnly ? NavigationSurfaceComponentKeySet.Empty : closedGas,
+            additionalOnly ? closedGas : NavigationSurfaceComponentKeySet.Empty,
             closeAllStructuralComponents: false,
             graph.GraphVersion + 1);
         gasClosed.TryGetMediumStateRef(address, TraversalMedium.Gas, out _)
@@ -363,6 +369,17 @@ public sealed class NavigationMediumGraphTests
         graph.TryGetNodeRef(address, out NavigationNodeRef node).Should().BeTrue();
         gasClosed.TryGetNodeState(node, out _).Should().BeTrue(
             "the legacy physical-node API keeps its Solid closure behavior");
+        gasClosed.TryGetNodeState(node, TraversalMedium.Gas, out _)
+            .Should().BeFalse();
+
+        NavigationWorldGraph reopened = gasClosed.ReopenStructuralScopes(
+            gasClosed.GraphVersion + 1);
+        reopened.TryGetNodeState(node, TraversalMedium.Gas, out NavigationNodeState gasState)
+            .Should().BeTrue("removing the last closure makes the authored Gas cell usable again");
+        gasState.Cell.Media.Should().Be(
+            TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid);
+        gasClosed.TryGetNodeState(node, TraversalMedium.Gas, out _)
+            .Should().BeFalse("reopening a new graph must not change the retained closed snapshot");
 
         NavigationWorldGraph solidClosed = graph.WithClosedStructuralComponents(
             NavigationSurfaceComponentKeySet.Empty.Add(solidKey),

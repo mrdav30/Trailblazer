@@ -35,11 +35,16 @@ instead of burying it in notes.
     Whole-block medians improve **58% / 72% / 67%**, with exact replay and zero
     frame allocations. APIs, budgets, dependencies and LOS cadence are unchanged.
     This is implemented source work, not another profiling-only checkpoint.
+    A subsequent two-condition Trailblazer fast path skips structural membership
+    lookup when both closure sets are empty. Its fresh before/after capture
+    reduces recheck medians another **6.7% / 8.9% / 5.3%** to about
+    **27 / 18 / 88 ms**, with no cache or changed validation contract.
     The tracker retains serial-run variability, including an unchanged A*
     control improvement during the final Flow-only step; not every timing
     difference is uniquely attributable to that patch.
-    Full-frame acceptance remains incomplete: **0 / 0 / 36** of each case's
-    36 measured rechecks exceed 31.25 ms. Cold-acquisition scheduling does not
+    Full-frame acceptance remains incomplete: the latest candidate still has
+    **0 / 0 / 36** of each case's 36 measured rechecks exceeding 31.25 ms.
+    Cold-acquisition scheduling does not
     bound these synchronous checks. The original planar geometry cost is much
     smaller; remaining work must target the complete guided frame without
     weakening geometry, freshness checks or failure semantics.

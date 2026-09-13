@@ -790,6 +790,72 @@ and `UseLocalLsfStack=true`; timings and full verification run serially.
 Historical benchmark exceptions and incomplete microcaptures remain separate
 evidence, without a claimed common cause or fix.
 
+#### Follow-up: skip membership lookup when no structural scope is closed
+
+On 2026-09-13 UTC, the next Trailblazer-only reduction is measured against
+committed `a0edce3`, with GridForge `847458b` and FixedMathSharp `c8d343c` unchanged.
+`IsSurfaceAddressClosed` now checks the two immutable closure-set counts before
+resolving address/medium membership. When both are empty, neither can contain
+the resolved component. Close-all remains the first check; selective closures
+still use the original exact lookup and both sets. This adds two conditions,
+not a cache, retained state, public API or altered work budget.
+
+Fresh `flow-proof-profile-*` captures motivated the change: in Flow/500,
+`MapIntervals` accounts for 8.54% inclusive / 4.35% exclusive sampled root time,
+and its passability call includes a redundant closure membership lookup in the
+normal open graph. Sampled shares include benchmark validation and overlap;
+they do not predict exact frame savings.
+
+The same serial guided-frame protocol compares a fresh committed-code
+`map-baseline` capture with `open-closure`. The baseline name reflects the
+initial map-lookup investigation; no map-lookup cache is included in the patch.
+
+| Case | Ordinary median before / after | Recheck median before / after | All-frame P99 before / after | 64-frame block median before / after |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 | 2.202 / 2.170 ms | 29.367 / 27.391 ms | 29.857 / 27.782 ms | 249.428 / 241.312 ms |
+| Flow/100 | 1.316 / 1.310 ms | 19.874 / 18.109 ms | 21.204 / 19.196 ms | 161.278 / 152.989 ms |
+| Flow/500 | 7.994 / 7.581 ms | 92.917 / 87.968 ms | 97.833 / 92.413 ms | 851.097 / 802.301 ms |
+
+Recheck medians improve **6.7% / 8.9% / 5.3%**; block medians improve
+**3.3% / 5.1% / 5.7%**. Ordinary A*/100 and Flow/100 medians move only slightly;
+do not claim a uniform ordinary-frame improvement. These remain descriptive
+serial Windows/i7-9700K/.NET 8.0.29 measurements, not randomized trials or
+cross-platform guarantees. No outliers are removed, and A*/500 is not measured.
+
+**Acceptance remains incomplete.** Rechecks exceeding 31.25 ms change from
+**2 / 0 / 36** to **0 / 0 / 36**, out of 36 per case. Candidate maxima are
+**28.643 / 20.572 / 93.705 ms**. All ordinary frames remain within 31.25 ms;
+only Flow/100 also fits the 2 ms navigation allowance throughout its ordinary
+frames. Keep `TRB-Benchmark-005` active. Geometry, dependency/world freshness,
+failure ordering and the synchronous 16-frame LOS cadence are unchanged.
+
+The independent audit verifies all 18 child executions and 90 staged records,
+including exact equality of all 2,880 cross-capture Int64 frame-checksum pairs
+and zero measured frame allocation/GC. Both 63-file child manifests rehash
+correctly. Portable PDBs identify exactly one changed runtime source document,
+`NavigationWorldGraph.cs`, matching the checkout; benchmark source and upstream
+binaries are unchanged. Candidate recheck launch-median ranges are below the
+baseline ranges in every case, while ordinary-frame ranges overlap.
+
+The existing medium-closure behavior test now runs for primary-only and
+additional-only ownership and verifies reopening without mutating a retained
+closed snapshot. A deliberate dropped-additional-root mutation fails the new
+row, then all 273 focused tests pass with the correct implementation restored.
+Independent correctness/Ponytail review finds no actionable issue. No upstream
+source, benchmark case, CI framework or coverage exclusion changes.
+
+The complete Trailblazer solution builds both library targets in Release and
+ReleaseLean against the local source stack with zero warnings/errors. Tests
+pass **2,471 + 65** and **2,409 + 65**, respectively. Both configurations retain
+exact **100% line/branch/fully covered method coverage**: **30,849 / 12,095 /
+3,011** covered and total, including the adapter assembly. No upstream source
+is changed or claimed newly validated by a separate upstream test matrix.
+
+Evidence is retained under `artifacts/benchmark005/guided-{map-baseline,
+open-closure}*`, `flow-proof-profile-*`, `closure-mutation-red.log`,
+`closure-focused-green.log`, `guided-open-closure-review-audit.md` and
+`open-closure-verification`.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

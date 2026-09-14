@@ -39,13 +39,13 @@ instead of burying it in notes.
     has a **57.64 ms** LOS median, all **36/36** rechecks above 31.25 ms, and all
     **540/540** ordinary frames above the 2 ms navigation allowance. These are
     local headless observations, not portable timing guarantees.
-  - End the open-ended micro-optimization sweep here. The recommended next
-    discussion is an **opt-in deterministic phase for periodic LOS refreshes**,
-    with explicit host assignment, bounded phase-entry delay, pause/resume and
-    serialization rules. Preserve immediate admission/freshness/retries and the
-    unchanged synchronized benchmark. This is a proposed behavior feature, not
-    an implemented scheduler or proof that every frame will fit; phase spreading
-    redistributes work without reducing total ray cost. The existing cold
+  - The open-ended micro-optimization sweep has ended. The next work is the
+    [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
+    starting with Phase 0 contract review. It defines opt-in host-assigned phases,
+    bounded phase entry, pause/resume and serialization rules, while preserving
+    required admission/freshness/retry boundaries and the synchronized control.
+    This is a draft, not an implemented feature or proof that every frame fits.
+    Spreading periodic work does not reduce each ray's cost; the existing cold
     acquisition scheduler does not own Navigator LOS checks.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
@@ -160,13 +160,16 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Continue `TRB-Benchmark-005` before broader features. Exact rectangular
-   tracing, raw-coordinate geometry and per-sample Flow proof reuse are implemented; do not
-   repeat their original profiling-only investigation. Full-frame budget
-   acceptance is still unmet, particularly Flow/500 synchronous rechecks.
-   Preserve full-domain arithmetic, candidate accounting, dependency validation
-   and LOS cadence when reducing remaining work; do not revive the withdrawn
-   per-edge guard. Retain launch variability without inventing a cause.
+1. Execute Phase 0 of the [LOS phase-spreading plan](navigationLineOfSightPhasePlan.md)
+   before broader features, then implement and measure its reviewed contract.
+   `TRB-Benchmark-005` remains open for unmet full-frame budgets, particularly
+   Flow/500 synchronous rechecks; completing the feature does not automatically
+   close the signal. Exact rectangular tracing, raw-coordinate geometry and
+   per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
+   accounting and dependency guarantees, and keep the unphased cadence/control
+   unchanged. Do not restart the open-ended micro-optimization sweep or revive
+   withdrawn experiments without new evidence. Retain launch variability without
+   inventing a cause.
    `TRB-Benchmark-004` and `GF-Benchmark-003` are
    closed locally; `GF-Benchmark-005` closes with its measured no-change decision;
    do not repeat their investigations without new evidence. Keep the distinct

@@ -71,9 +71,11 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   its repeated LOS gains do not establish a convincing complete-frame benefit
   across the measured cases. The final unchanged Flow/500 control still has a
   **57.64 ms** LOS median, with all 36 rechecks above 31.25 ms. End the open-ended
-  micro-optimization sweep here. The recommended next discussion is an explicit,
-  opt-in periodic LOS phase contract, not a silent cadence change or closure of
-  this signal. Keep the synchronized fixture unchanged as its control.
+  micro-optimization sweep here. The next work is Phase 0 of the
+  [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
+  which owns the opt-in contract, implementation and separate phased evidence.
+  It is a draft, not a silent cadence change or closure of this signal. Keep the
+  synchronized fixture unchanged as its control.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -1649,6 +1651,16 @@ Ignored evidence under `artifacts/benchmark005`: `dependency-final-profile-*`,
 `page-proof-comparison.json`, `page-proof-{characterization,mutation,focused}.log`,
 `page-proof-pages-{characterization,mutation}.log`,
 `page-proof-final-verification` and `page-proof-docfx.log`.
+
+#### Follow-up: explicit periodic LOS phase plan
+
+On 2026-09-14, the agreed next direction was promoted into the
+[Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md).
+That plan owns contract review, shared steering implementation, lifecycle/load
+hardening and distinct phase-aware full-frame evidence. Phase 0 is next; no
+runtime implementation or new benchmark result is claimed by creating it.
+The historical synchronized results above remain the control, and this signal
+stays active until its remaining budget misses receive an explicit disposition.
 
 ## Closed Signals
 

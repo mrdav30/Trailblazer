@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-134`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-135`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -211,6 +211,26 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-134 - Phased replay proof omits construction-order and restored sequences
+
+- **Discovered / resolved locally:** 2026-09-14 during final LOS phase review.
+- **Gap:** The movement replay constructed both runs in the same order. Enabled
+  restore tests established admission/timing but not repeated multi-frame
+  replay. The checked plan requirement overstated that evidence; no runtime
+  defect was established.
+- **Fix:** Extend the shared real-movement fixture with actual reversed
+  construction and stable explicit logical IDs, phase assignments and simulation
+  order. Equivalent restored executions reuse the same saved intent and compare
+  twelve per-frame position/LOS/guidance snapshots across multiple phase slots.
+  Restored runs compare with restored runs, not uninterrupted execution.
+  The default-timing file now reuses the same partial fixture, removing copied
+  setup/helpers while retaining all five characterizations.
+- **Verification:** Focused Release passes 58/58 (six fresh/restored A*/Flow
+  replay rows); ReleaseLean passes 49/49 (four applicable rows). JSON is covered
+  in both configurations and MemoryPack in Release. Independent scoped review
+  approves both the proof and fixture cleanup. Evidence is in
+  `artifacts/los-phase/final-fix`; production and benchmark source are unchanged.
 
 ### TRB-Issue-123 - Navigator migration and restore guidance disagree with current records
 

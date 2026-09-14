@@ -6,8 +6,9 @@
 
 **Created:** 2026-09-14
 
-**Status:** Implementation, performance acceptance and documentation verification
-are complete locally. Final whole-branch reviews and archival closeout remain.
+**Status:** All implementation, performance, documentation and local verification
+gates pass. Final correctness/Ponytail findings are resolved; archival closeout
+remains.
 
 **Execution branch:** `codex/los-phase-spreading`, created from `develop` at
 `5367f5a` after the user requested branch-based implementation and final review.
@@ -278,7 +279,7 @@ reviewed disposition; do not redefine the target after seeing results.
   library targets, exact reachable coverage, replay/allocation gates, analyzer
   self-tests and DocFX warnings-as-errors. Include the Gravitas adapter tests;
   no adapter runtime change is implied by this plan.
-- [ ] Obtain independent final correctness and Ponytail reviews. Resolve actual
+- [x] Obtain independent final correctness and Ponytail reviews. Resolve actual
   defects in the issue tracker and keep unrelated benchmark exceptions separate
   from accepted timing evidence.
 - [ ] Summarize selected capture results and limitations here, update the
@@ -639,18 +640,27 @@ wrapper's post-capture PowerShell expected-count arithmetic was corrected and
 the original records revalidated; no runtime, sample or accepted protocol was
 changed. Failed implementation/parser experiments remain separate from captures.
 
-Final Release passes **2,568 core + 65 adapter** tests; ReleaseLean passes
-**2,498 + 65**, no failures or skips. Both library targets build with zero
+Final Release passes **2,572 core + 65 adapter** tests; ReleaseLean passes
+**2,500 + 65**, no failures or skips. Both library targets build with zero
 warnings/errors. Each configuration covers exactly **31,019/31,019 lines,
 12,181/12,181 branches and 3,032/3,032 covered and fully covered methods**.
 The parser suite passes. DocFX builds with zero warnings/errors; the four wiki
 helper tests pass. All three current configuration host fragments appear
 verbatim in the executed console harness and pass phase/default/opt-in checks.
 Documentation review is independently approved. Coverage and logs are under
-`final-verification`, `docfx-final.log`, `doc-snippet-final.log`, and the wiki/link
+`final-verified-replay`, `docfx-final.log`, `doc-snippet-final.log`, and the wiki/link
 logs. A missing namespace import in the temporary verification harness was
 corrected without changing the authored fragments.
 
-Final whole-branch correctness/Ponytail review and archival closeout follow.
+Final whole-branch review identified and resolved a replay-evidence gap
+(`TRB-Issue-134`). Actual reversed construction now retains explicit logical
+IDs, host phases and simulation order; equivalent restored runs compare twelve
+per-frame movement/LOS/guidance snapshots across multiple phase slots. A*/Flow
+JSON and standard-package MemoryPack cases pass. Ponytail's duplicate timing
+fixture finding is also resolved: all five characterizations share the existing
+partial fixture. Scoped re-review approves both fixes with no remaining findings.
+The fix is tests-only; no runtime defect or benchmark recapture is claimed.
+The full matrix was rerun after this fix and retains the exact coverage above;
+the analyzer self-tests also pass. Archival closeout follows.
 Windows/Linux CI and released-package validation remain deferred coordinated
 release gates; no sibling repository, remote branch, tag or release was changed.

@@ -16,6 +16,10 @@ namespace Trailblazer.Tests.Navigation.Steering;
 public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
 {
     private const string MapId = "steering-los-phase";
+    private static readonly Guid FirstReplayId =
+        new("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid SecondReplayId =
+        new("22222222-2222-2222-2222-222222222222");
 
     public NavSteeringLineOfSightPhaseTests()
     {
@@ -473,18 +477,48 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
     [Theory]
     [InlineData(PathAlgorithm.AStar)]
     [InlineData(PathAlgorithm.FlowField)]
-    public void ExplicitPhases_ShouldReplayActualMovementInStableSimulationOrder(
+    public void ExplicitPhases_ShouldReplayActualMovementAcrossReversedConstruction(
         PathAlgorithm algorithm)
     {
-        (Vector3d[] firstPositions, Vector3d[] secondPositions) first =
-            RunMovementReplay(algorithm);
-        (Vector3d[] firstPositions, Vector3d[] secondPositions) replay =
-            RunMovementReplay(algorithm);
+        var normal = RunMovementReplay(algorithm, reverseConstruction: false);
+        var reversed = RunMovementReplay(algorithm, reverseConstruction: true);
 
-        replay.firstPositions.Should().Equal(first.firstPositions);
-        replay.secondPositions.Should().Equal(first.secondPositions);
-        first.firstPositions[^1].Should().NotBe(first.firstPositions[0]);
-        first.secondPositions[^1].Should().NotBe(first.secondPositions[0]);
+        reversed.FirstFrames.Should().Equal(normal.FirstFrames);
+        reversed.SecondFrames.Should().Equal(normal.SecondFrames);
+        normal.FirstFrames[^1].Position.Should().NotBe(normal.FirstFrames[0].Position);
+        normal.SecondFrames[^1].Position.Should().NotBe(normal.SecondFrames[0].Position);
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar, false)]
+    [InlineData(PathAlgorithm.FlowField, false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(PathAlgorithm.AStar, true)]
+    [InlineData(PathAlgorithm.FlowField, true)]
+#endif
+    public void ExplicitPhases_ShouldReplayEquivalentRestoredMovementAcrossConstructionOrders(
+        PathAlgorithm algorithm,
+        bool useMemoryPack)
+    {
+        (object First, object Second) savedIntent =
+            CreateMovementReplayPayloads(algorithm, useMemoryPack);
+        var normal = RunRestoredMovementReplay(
+            algorithm,
+            useMemoryPack,
+            savedIntent,
+            reverseConstruction: false);
+        var reversed = RunRestoredMovementReplay(
+            algorithm,
+            useMemoryPack,
+            savedIntent,
+            reverseConstruction: true);
+
+        reversed.FirstFrames.Should().Equal(normal.FirstFrames);
+        reversed.SecondFrames.Should().Equal(normal.SecondFrames);
+        normal.FirstFrames[0].Frame.Should().Be(2);
+        normal.FirstFrames[^1].Frame.Should().Be(13);
+        normal.FirstFrames[^1].Position.Should().NotBe(normal.FirstFrames[0].Position);
+        normal.SecondFrames[^1].Position.Should().NotBe(normal.SecondFrames[0].Position);
     }
 
     private static TestNavigator CreateNavigator(
@@ -495,10 +529,11 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
     private static TestNavigator CreateNavigator(
         TrailblazerWorldContext context,
         Vector3d position,
-        NavigationAgentProfile profile)
+        NavigationAgentProfile profile,
+        Guid? globalId = null)
     {
         var navigator = new TestNavigator(context);
-        navigator.Setup(position, profile);
+        navigator.Setup(position, profile, globalId: globalId);
         navigator.Initialize(new TrekCondition
         {
             Medium = TraversalMedium.Solid,
@@ -516,10 +551,11 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
         allowedMedia: TraversalMedia.Solid,
         capabilities: TraversalCapability.None);
 
-    private static (Vector3d[] FirstPositions, Vector3d[] SecondPositions)
-        RunMovementReplay(PathAlgorithm algorithm)
+    private static (
+        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
+        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
+        RunMovementReplay(PathAlgorithm algorithm, bool reverseConstruction)
     {
-        const int frames = 8;
         using var world = new GridWorld();
         world.TryAddGrid(
             new GridConfiguration(
@@ -528,19 +564,14 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
             out _).Should().BeTrue();
         using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
         (Vector3d start, _, Vector3d end) = PublishLine(context, Fixed64.One);
-        NavigationAgentProfile profile = new(
-            new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
-            maxStepUp: Fixed64.Zero,
-            maxDropDown: Fixed64.Zero,
-            arrivalRadius: Fixed64.Zero,
-            allowedMedia: TraversalMedia.Solid,
-            capabilities: TraversalCapability.None);
-        TestNavigator first = CreateNavigator(context, start, profile);
-        TestNavigator second = CreateNavigator(context, start, profile);
-        first.ConstrainTestMotionToSurface(start.Y);
-        second.ConstrainTestMotionToSurface(start.Y);
-        first.SetGroundContact(start.Y, Vector3d.Up, updateMotorState: true);
-        second.SetGroundContact(start.Y, Vector3d.Up, updateMotorState: true);
+        NavigationAgentProfile profile = CreateMovementReplayProfile();
+        CreateMovementReplayNavigators(
+            context,
+            start,
+            profile,
+            reverseConstruction,
+            out TestNavigator first,
+            out TestNavigator second);
         NavSteering firstSteering = TestRequire.NotNull(first.Steering);
         NavSteering secondSteering = TestRequire.NotNull(second.Steering);
         firstSteering.ConfigurePathRechecks(4, 0);
@@ -551,8 +582,105 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
         second.ApplyGuidedTrekRequest(
             CreateQuery(start, end, profile, algorithm),
             rate: TrekRate.Slow);
-        var firstPositions = new Vector3d[frames];
-        var secondPositions = new Vector3d[frames];
+
+        return CaptureMovementReplay(context, first, second);
+    }
+
+    private static (object First, object Second) CreateMovementReplayPayloads(
+        PathAlgorithm algorithm,
+        bool useMemoryPack)
+    {
+        using var world = new GridWorld();
+        world.TryAddGrid(
+            new GridConfiguration(
+                new Vector3d(-4, -4, -4),
+                new Vector3d(8, 8, 8)),
+            out _).Should().BeTrue();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+        (Vector3d start, _, Vector3d end) = PublishLine(context, Fixed64.One);
+        NavigationAgentProfile profile = CreateMovementReplayProfile();
+        CreateMovementReplayNavigators(
+            context,
+            start,
+            profile,
+            reverseConstruction: false,
+            out TestNavigator first,
+            out TestNavigator second);
+        TestRequire.NotNull(first.Steering).ConfigurePathRechecks(4, 0);
+        TestRequire.NotNull(second.Steering).ConfigurePathRechecks(4, 2);
+        first.ApplyGuidedTrekRequest(
+            CreateQuery(start, end, profile, algorithm),
+            rate: TrekRate.Slow);
+        second.ApplyGuidedTrekRequest(
+            CreateQuery(start, end, profile, algorithm),
+            rate: TrekRate.Slow);
+
+        object firstPayload = SerializationUtility.SerializeRecord(first, useMemoryPack);
+        object secondPayload = SerializationUtility.SerializeRecord(second, useMemoryPack);
+
+        first.Reset();
+        second.Reset();
+        return (firstPayload, secondPayload);
+    }
+
+    private static (
+        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
+        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
+        RunRestoredMovementReplay(
+            PathAlgorithm algorithm,
+            bool useMemoryPack,
+            (object First, object Second) savedIntent,
+            bool reverseConstruction)
+    {
+        using var world = new GridWorld();
+        world.TryAddGrid(
+            new GridConfiguration(
+                new Vector3d(-4, -4, -4),
+                new Vector3d(8, 8, 8)),
+            out _).Should().BeTrue();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+        (Vector3d start, _, _) = PublishLine(context, Fixed64.One);
+        NavigationAgentProfile profile = CreateMovementReplayProfile();
+        CreateMovementReplayNavigators(
+            context,
+            start,
+            profile,
+            reverseConstruction,
+            out TestNavigator first,
+            out TestNavigator second);
+
+        SerializationUtility.PopulateRecord(first, savedIntent.First, useMemoryPack);
+        SerializationUtility.PopulateRecord(second, savedIntent.Second, useMemoryPack);
+
+        first.GlobalId.Should().Be(FirstReplayId);
+        second.GlobalId.Should().Be(SecondReplayId);
+        NavSteering firstSteering = TestRequire.NotNull(first.Steering);
+        NavSteering secondSteering = TestRequire.NotNull(second.Steering);
+        firstSteering.CurrentQuery.Should().NotBeNull();
+        firstSteering.CurrentQuery!.Value.Algorithm.Should().Be(algorithm);
+        secondSteering.CurrentQuery.Should().NotBeNull();
+        secondSteering.CurrentQuery!.Value.Algorithm.Should().Be(algorithm);
+        firstSteering.PathRecheckPhase.Should().Be(0);
+        secondSteering.PathRecheckPhase.Should().Be(2);
+
+        return CaptureMovementReplay(context, first, second);
+    }
+
+    private static (
+        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
+        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
+        CaptureMovementReplay(
+            TrailblazerWorldContext context,
+            TestNavigator first,
+            TestNavigator second)
+    {
+        const int frames = 12;
+        NavSteering firstSteering = TestRequire.NotNull(first.Steering);
+        NavSteering secondSteering = TestRequire.NotNull(second.Steering);
+        var firstFrames =
+            new (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[frames];
+        var secondFrames =
+            new (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[frames];
 
         for (int frame = 0; frame < frames; frame++)
         {
@@ -563,13 +691,64 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
             second.ResolveAcceptedFramePosition(second.RequestedFramePosition);
             first.CommitFrameMotion();
             second.CommitFrameMotion();
-            firstPositions[frame] = first.Position;
-            secondPositions[frame] = second.Position;
+            firstFrames[frame] = (
+                context.LogicalFrameIndex,
+                first.Position,
+                firstSteering.HasLineOfSightPath,
+                firstSteering.HasNavigationGuidance);
+            secondFrames[frame] = (
+                context.LogicalFrameIndex,
+                second.Position,
+                secondSteering.HasLineOfSightPath,
+                secondSteering.HasNavigationGuidance);
         }
 
         first.Reset();
         second.Reset();
-        return (firstPositions, secondPositions);
+        return (firstFrames, secondFrames);
+    }
+
+    private static NavigationAgentProfile CreateMovementReplayProfile() => new(
+        new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
+        maxStepUp: Fixed64.Zero,
+        maxDropDown: Fixed64.Zero,
+        arrivalRadius: Fixed64.Zero,
+        allowedMedia: TraversalMedia.Solid,
+        capabilities: TraversalCapability.None);
+
+    private static void CreateMovementReplayNavigators(
+        TrailblazerWorldContext context,
+        Vector3d start,
+        NavigationAgentProfile profile,
+        bool reverseConstruction,
+        out TestNavigator first,
+        out TestNavigator second)
+    {
+        if (reverseConstruction)
+        {
+            second = CreateMovementReplayNavigator(context, start, profile, SecondReplayId);
+            first = CreateMovementReplayNavigator(context, start, profile, FirstReplayId);
+        }
+        else
+        {
+            first = CreateMovementReplayNavigator(context, start, profile, FirstReplayId);
+            second = CreateMovementReplayNavigator(context, start, profile, SecondReplayId);
+        }
+
+        first.GlobalId.Should().Be(FirstReplayId);
+        second.GlobalId.Should().Be(SecondReplayId);
+    }
+
+    private static TestNavigator CreateMovementReplayNavigator(
+        TrailblazerWorldContext context,
+        Vector3d start,
+        NavigationAgentProfile profile,
+        Guid globalId)
+    {
+        TestNavigator navigator = CreateNavigator(context, start, profile, globalId);
+        navigator.ConstrainTestMotionToSurface(start.Y);
+        navigator.SetGroundContact(start.Y, Vector3d.Up, updateMotorState: true);
+        return navigator;
     }
 
     private static PathQuery CreateQuery(

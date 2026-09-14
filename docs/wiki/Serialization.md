@@ -61,12 +61,13 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 5. The nested path-session and
-standalone `PathQueryRecord` schemas remain version 1. Version 5 retains the
-version 4 ground contact's explicit world-space `SurfaceNormal` and adds the
-controlled-descent request, configuration, and active fall state. Earlier outer
-Navigator schemas reject transactionally rather than supplying a derived or
-default contract through a compatibility path.
+The outer Navigator record is schema version 6. The nested path-session and
+standalone `PathQueryRecord` schemas remain version 1. Version 6 retains the
+earlier explicit world-space ground `SurfaceNormal` and controlled-descent
+request, configuration, and active fall state. It adds the periodic direct-LOS
+interval and nullable phase. Earlier outer Navigator schemas reject
+transactionally rather than supplying a derived or default contract through a
+compatibility path.
 
 Controlled descent restores only when its loaded fall and motor state can admit
 it. Loading clears the active flag when the agent is not falling in Gas, when
@@ -81,9 +82,15 @@ Navigator does not serialize or restore:
 - a pending transition instruction;
 - private completion stamps;
 - dependency snapshots or cache slots;
+- the context logical clock, clock lifetime, or a phased due marker;
 - `LastCommittedCell` or committed-cell notifications.
 
-The next simulation frame requests fresh guidance from durable intent.
+With a configured phase, restore discards serialized direct-LOS trust and
+requires a fresh admission decision on the next eligible steering update,
+whether loading into the same context or a new one. It does not acquire a guide
+during population. With no phase, the established direct/countdown restore
+behavior remains unchanged. Navigator population does not restore or advance
+the context clock.
 
 ## Transactional Load
 
@@ -100,11 +107,11 @@ This keeps the host body and navigation envelope consistent before the next
 fixed frame.
 
 Malformed early or late nested data must preserve the previous shell, active
-query, guide lease, and pending instruction. This applies to JSON in both
-package families and to MemoryPack in the standard package. A failed load does
-not partially stop the current session, replace controller tuning, or release
-guidance. It also preserves the shell's existing GridForge occupancy
-registration and committed-cell state.
+query, guide lease, pending instruction, LOS configuration, and timing state.
+This applies to JSON in both package families and to MemoryPack in the standard
+package. A failed load does not partially stop the current session, replace
+controller tuning, or release guidance. It also preserves the shell's existing
+GridForge occupancy registration and committed-cell state.
 
 After all staged data validates, population removes the shell's old occupancy
 registration before applying the restored identity/position, registers the new
@@ -186,7 +193,8 @@ Scheduled guide requests, their FIFO position, continuations and unclaimed
 results are runtime-only. Record host query intent if it must be replayed;
 restore maps/policies first, then resubmit that intent in deterministic order.
 Do not serialize `NavigationGuideRequest` or assume a reset preserves pending
-work. See [scheduled acquisition](Pathing.md#acquiring-without-blocking-a-fixed-frame).
+work. See
+[scheduled acquisition](Pathing.md#spreading-acquisition-across-fixed-frames).
 
 ## Related guides
 

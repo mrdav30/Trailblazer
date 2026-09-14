@@ -135,6 +135,9 @@ The normal order is:
 instruction. `CommitFrameMotion()` applies accumulated locomotion/platform
 displacements and rotation deltas; it does not execute semantic actions. Both
 calls belong to the authoritative fixed-step lifecycle, not the render loop.
+Configure optional stable fixed-frame alignment for periodic direct-LOS checks
+through the steering controller; see
+[periodic line-of-sight rechecks](NavSteering.md#periodic-line-of-sight-rechecks).
 
 Custom integrations can queue locomotion with `AddLocomotionDisplacement(...)`
 and additional world-space offsets with `AddPositionDelta(...)`. Both accept

@@ -52,7 +52,8 @@ description: API reference and behavioral guides for deterministic navigation an
   <div class="trb-card">
     <h3><a href="xref:Trailblazer.Navigation.Navigator">Compose a controller</a></h3>
     <p>Bring steering, turning, motor, locomotion, occupancy, heightmap
-    grounding, and explicit serialization together when your host needs them.</p>
+    grounding, explicit periodic direct-LOS timing, and serialization together
+    when your host needs them.</p>
   </div>
 </div>
 

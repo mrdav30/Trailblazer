@@ -28,6 +28,9 @@ Use this guide when upgrading from any v1.x package.
   Navigators.
 - Supply an explicit world-space surface normal whenever reporting ground
   contact. Platform orientation is no longer treated as collision geometry.
+- Replace assignments to the writable `PathRecheckCooldownFrames` field with
+  `ConfigurePathRechecks(...)`; the interval and optional phase observations are
+  read-only.
 - Re-record deterministic replays and serialized fixtures that depended on v1
   request, guide, map, or controller schemas.
 - Run both `Release` and `ReleaseLean` validation after the source migration
@@ -143,9 +146,40 @@ normal for slopes, or `Vector3d.Zero` when no normal was sampled. Keep
 `PlatformSnapshot.Transform` as the carrier transform; do not rotate it merely
 to encode collision geometry.
 
-The outer Navigator record is schema version 4. Earlier outer schemas reject
-transactionally; they are not read through renamed-field or missing-normal
-fallbacks.
+### Periodic line-of-sight rechecks
+
+The v2 source workstream intentionally replaces the writable cooldown field
+with one atomic configuration method. There is no setter or forwarding alias.
+These host fragments assume an initialized Navigator with a configured,
+non-null steering controller.
+
+Obsolete host fragment (does not compile against the current API):
+
+~~~csharp
+navigator.Steering!.PathRecheckCooldownFrames = 16;
+~~~
+
+Current host fragment preserving the old unphased countdown:
+
+~~~csharp
+navigator.Steering!.ConfigurePathRechecks(16);
+~~~
+
+Optional host fragment enabling stable fixed-frame alignment:
+
+~~~csharp
+navigator.Steering!.ConfigurePathRechecks(16, phase: stableHostOrdinal % 16);
+~~~
+
+Use a stable, nonnegative host ordinal. See the evergreen
+[periodic line-of-sight timing guide](wiki/NavSteering.md#periodic-line-of-sight-rechecks)
+for disabled countdown behavior, phase boundaries, lifecycle resets, and burst
+caveats.
+
+The outer Navigator record is schema version 6. It retains the earlier explicit
+surface-normal and controlled-descent fields and adds the periodic direct-LOS
+interval and nullable phase. Earlier outer schemas reject transactionally; they
+are not read through renamed-field, missing-normal, or timing defaults.
 
 ## Current v2 Guides
 
@@ -155,5 +189,6 @@ fallbacks.
 - [Map publication](wiki/MapPublication.md)
 - [Pathing](wiki/Pathing.md)
 - [Path guides](wiki/PathGuides.md)
+- [NavSteering](wiki/NavSteering.md)
 - [Serialization](wiki/Serialization.md)
 - [Troubleshooting](wiki/Troubleshooting.md)

@@ -69,16 +69,20 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   geometry, mapping and dependency improvements remain in place; their matched
   comparisons are below. The latest page-proof experiment is withdrawn because
   its repeated LOS gains do not establish a convincing complete-frame benefit
-  across the measured cases. The final unchanged Flow/500 control still has a
-  **57.64 ms** LOS median, with all 36 rechecks above 31.25 ms. End the open-ended
-  micro-optimization sweep here. Current work is the
+  across the measured cases. The historical unchanged Flow/500 control had a
+  **57.64 ms** LOS median, with all 36 rechecks above 31.25 ms. The open-ended
+  micro-optimization sweep has ended. Current work is the
   [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
   which owns the opt-in contract, implementation and separate phased evidence.
   Phases 0 and 1 are complete with independent runtime review and exact local
   coverage; the narrow `TRB-Issue-125` steering correction is also verified.
-  Phase 2 instrumentation and recovery preflights are reviewed; matched capture
-  and final documentation remain. No performance acceptance or closure is
-  claimed. Keep the
+  Repeated balanced captures now pass the relative keep gates: Flow/500 P95
+  improves **80.84% / 81.47%**, with **+2.98% / -1.07%** block-cost changes and
+  maxima **10.15 / 10.23 ms**. Every selected balanced steady frame fits
+  31.25 ms, but the 2 ms allowance still fails and synchronous recovery can
+  burst. Instrumentation, raw evidence, documentation and the exact local matrix
+  are independently checked; final whole-branch review remains. This signal
+  is not closed. Keep the
   synchronized fixture unchanged as its control.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
@@ -1665,6 +1669,19 @@ hardening and distinct phase-aware full-frame evidence. Phase 0 is next; no
 runtime implementation or new benchmark result is claimed by creating it.
 The historical synchronized results above remain the control, and this signal
 stays active until its remaining budget misses receive an explicit disposition.
+
+**Implemented follow-up:** The same plan now holds the repeated ABBA comparison,
+all launch/block/tail statistics, phase-entry and recovery costs, and independent
+binary/replay audit. Keep explicit phase spreading: both predeclared relative
+gates pass without a frequency reduction or steady-state allocation. Balanced
+Flow/500 has no observed 31.25 ms steady-frame miss, but all 576 frames in each
+repeat still exceed 2 ms; A*/100 also misses throughout, and Flow/100 misses
+161/576 and 159/576. Required initial/recovery checks remain outside phasing.
+This resolves the synchronized-peak part of the signal for the selected balanced
+workloads, not its overall allowance. Next isolate ordinary sampling/body and
+controller costs, or explicitly review recovery-acquisition ownership, before
+choosing another change. Do not repeat the ended open-ended micro-optimization
+sweep, lower check frequency, or enlarge the budgets to call the signal closed.
 
 ## Closed Signals
 

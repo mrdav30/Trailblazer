@@ -20,6 +20,7 @@ Useful public observations include:
 - `HasNavigationGuidance`;
 - `IsAtDestination`;
 - `IsStuck`;
+- `PathRecheckCooldownFrames` and `PathRecheckPhase`;
 - movement-group ID and tuning values;
 - `Events`.
 
@@ -60,6 +61,63 @@ cannot bypass its action through a geometric line-of-sight shortcut.
 If direct proof is blocked, stale, or not semantically cost neutral, steering
 acquires normal guidance. Internal ray capacity and dependency details are not
 part of the public steering contract.
+
+`CanPathfind = false` disables graph-guide acquisition; it does not disable
+direct line-of-sight checks. Direct-only steering still applies the query's
+profile, policy, medium, budget, and current published graph. Periodic phasing
+is not a way to bypass that validation.
+
+## Periodic Line-Of-Sight Rechecks
+
+`ConfigurePathRechecks(int intervalFrames, int? phase = null)` replaces the
+complete periodic-recheck configuration atomically. `PathRecheckCooldownFrames`
+and `PathRecheckPhase` are read-only observations. The default interval is 16
+frames.
+
+A null `phase` disables fixed-frame alignment and retains the established
+completed-heading countdown: context-only frames and heading calls that return
+before completion do not consume it. Nonpositive intervals also retain their
+existing unphased behavior; they are supported compatibility values, not
+recommended tuning.
+
+A non-null `phase` enables alignment to the bound context's fixed-frame clock.
+The interval must then be positive and the phase must satisfy
+`0 <= phase < intervalFrames`; phase zero is valid. After a periodic check, the
+next slot is always strictly 1 through `intervalFrames` context frames later.
+If steering cannot update at a due slot, it refreshes once at the next eligible
+update and realigns. There is no background work or catch-up loop, and repeated
+heading calls in one context frame do not repeat periodic work.
+
+This host fragment assumes an initialized Navigator with a configured, non-null
+steering controller and a stable, nonnegative host ordinal:
+
+~~~csharp
+const int pathRecheckIntervalFrames = 16;
+int pathRecheckPhase = stableHostOrdinal % pathRecheckIntervalFrames;
+
+navigator.Steering!.ConfigurePathRechecks(
+    pathRecheckIntervalFrames,
+    pathRecheckPhase);
+~~~
+
+Derive the ordinal from stable host identity or canonical simulation order.
+Do not use runtime hashes, randomness, object construction order, or assign a
+new phase every frame. Keep the normal fixed-step order described in the
+[Navigator guide](Navigator.md#fixed-step-lifecycle).
+
+Initial admission and required recovery keep their existing boundary and do not
+wait for a configured phase. Replacing the configuration retains work that is
+already due; applying identical values is a no-op. Stopping or starting a
+session discards phased timing debt while retaining the configuration. At 32
+Hz, the default interval is one half-second between periodic opportunities; it
+is the existing cadence, not a reduction from every-frame checks.
+
+Phasing affects only periodic discovery that a direct route has opened or
+closed. It does not defer guide freshness, held-action validation,
+collision/occupancy work, or guide-acquisition scheduling. Stable phases can
+spread ordinary periodic checks, but simultaneous request admission, resume,
+publication, or profile changes can still create bursts. Balanced check counts
+are not a universal frame-time ceiling.
 
 ## A* Guidance
 

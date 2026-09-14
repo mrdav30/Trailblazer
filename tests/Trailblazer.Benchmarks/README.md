@@ -232,12 +232,30 @@ acquisition are outside the measurement; large A* setup can take minutes.
 Each BenchmarkDotNet operation is a **64-frame block**, preceded by 32 untimed
 preparation frames at 32 Hz. Every nested frame includes context simulation,
 all Navigator simulations and motion commits. This exercises guide following,
-local avoidance, motor/turning work, occupancy and the default periodic
-line-of-sight rechecks. Agents start together, so expensive rechecks remain
-synchronized; do not hide them by reporting only ordinary frames. It is a
-headless horizontal-support host with no collision solver, engine, networking,
-rendering or movement groups. The measured initial route portion stays on the
-starting side of the wall; it is not an arrival or full detour acceptance test.
+local avoidance, motor/turning work, occupancy and periodic line-of-sight
+rechecks. It is a headless horizontal-support host with no collision solver,
+engine, networking, rendering or movement groups. The measured initial route
+portion stays on the starting side of the wall; it is not an arrival or full
+detour acceptance test.
+
+The original benchmark remains
+`NavigationGuidedFrameBenchmarks.Simulate64GuidedFrames`; its method body,
+agent simulation, parameters, and legacy payload are uninstrumented. Three
+separate instrumented identities use interval 16:
+
+| Method | Payload `mode` | Phase assignment |
+| --- | --- | --- |
+| `Simulate64GuidedFramesInstrumentedUnphased` | `Unphased` | null |
+| `Simulate64GuidedFramesInstrumentedBalancedPhases` | `BalancedPhases` | stable agent index modulo 16 |
+| `Simulate64GuidedFramesInstrumentedUnbalancedPhase` | `UnbalancedPhase` | zero for every agent |
+
+Instrumented cases observe each agent's real direct ray immediately around its
+ordered `Navigator.Simulate()` call, inside the same containing-frame timer.
+Per-agent schedule validation and aggregate reconciliation run afterward. The
+instrumented `NAVIGATION_GUIDED_SAMPLES` payload adds `mode`,
+`intervalFrames`, `phaseAssignments`, `clockOrigin`, `mandatoryRayCount`,
+`preparationRayCounts`, `periodicRayCounts`, `firstAdmissionTicks`,
+`firstAdmissionAllocatedBytes`, and `firstAdmissionCollectionMask`.
 
 Per-frame validation is outside the inner timer/allocation bracket. It requires
 live guidance, safe body bounds, fresh committed cells and movement in each
@@ -253,18 +271,23 @@ BenchmarkDotNet timings include instrumentation and validation, so use the
 nested records for frame costs. No warmup, diagnostic or outlier frames are
 silently folded into or removed from actual-only statistics.
 
-Start with a separately labelled sizing run before choosing a repeated protocol:
+Start with a separately labelled sizing run before choosing a repeated protocol.
+Select one exact method identity and pair it with the case in every filter
+pattern because BenchmarkDotNet unions separate patterns:
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --launchCount 1 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-sizing
+$method = 'Simulate64GuidedFramesInstrumentedBalancedPhases'
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter "*.$method(AgentCount: 100,*" "*.$method(AgentCount: 500,*FlowField*" --launchCount 1 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-sizing
 ```
 
-For a bounded repeated comparison, this selection runs A*/100, Flow/100 and
-Flow/500 in three fresh processes each. It deliberately excludes the much
-more expensive A*/500 setup; do not describe it as the complete four-case matrix.
+For a bounded repeated capture, the same paired filters run A*/100, Flow/100 and
+Flow/500 in three fresh processes each. Set `$method` to exactly one of the four
+identities above and use a distinct artifacts path and console log for each
+mode. The selection deliberately excludes the much more expensive A*/500 setup;
+do not describe it as the complete four-case matrix.
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter '*AgentCount: 100,*' '*FlowField*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-capture
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter "*.$method(AgentCount: 100,*" "*.$method(AgentCount: 500,*FlowField*" --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-capture
 ```
 
 Capture console output to a log, then analyze it:
@@ -274,13 +297,27 @@ Capture console output to a log, then analyze it:
 & tests/Trailblazer.Benchmarks/TestGuidedFrameAnalysis.ps1
 ```
 
-The parser checks record shape, stage pairing and cross-launch replay; it
-reports both per-launch and pooled actual-only statistics. Independently check
-expected cases/launches/block counts against BenchmarkDotNet JSON, including
-failed setups: a partial capture is not a passing matrix. Report periodic
-peaks, maximum, observed percentiles and frames above the chosen allowance/full
-frame budget. Nested frames are correlated; hundreds of ordinary frames do not
-cancel out a repeatedly expensive recheck frame.
+The parser checks record shape, method-to-mode identity, the hand-derived
+per-agent schedule, stage pairing, successful child exits, and cross-launch
+replay. It reports `StageValidation`, `StageCounts`, full-block statistics,
+per-launch records, and pooled actual-only frame statistics. Instrumented modes
+also report `Periodic` and `Ordinary` slices. Frame statistics contain observed
+median/P95/P99/maximum, counts above 2 ms and 31.25 ms, total/maximum allocation,
+and collection-overlap counts; each sample uses its own stopwatch frequency.
+Independently check expected cases, launches, and block counts against
+BenchmarkDotNet JSON, including failed setups: a partial capture is not a
+passing matrix. Nested frames are correlated; hundreds of ordinary frames do
+not cancel out a repeatedly expensive recheck frame.
+
+For a bounded end-to-end semantic lifecycle smoke, use:
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll guided-phase-smoke
+```
+
+Its `json-end-to-end-restore-preparation` sample includes serialization, source
+Navigator reset, restored-shell construction, prepare/populate, and assertions.
+It is not a population-only timing label or an acceptance benchmark.
 
 Preserve the **executed child runtime**, not just the parent benchmark output.
 With `--keepFiles`, each `// Execute: dotnet ... in ...` log line identifies the

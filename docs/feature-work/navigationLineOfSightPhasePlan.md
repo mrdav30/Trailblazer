@@ -1,15 +1,13 @@
 # Deterministic Line-of-Sight Phase Spreading Implementation Plan
 
-> **For agentic workers:** Execute only when implementation is requested. Use
-> the phase checkboxes and independent contract, correctness and Ponytail
-> reviews. Keep decisions and evidence in this document rather than creating
-> parallel plans. This draft does not start runtime implementation.
+> **Execution record:** The user approved implementation on a feature branch.
+> Keep the contract, decisions and condensed evidence here; raw captures remain
+> in ignored artifacts. Phase checkboxes record verified progress.
 
 **Created:** 2026-09-14
 
-**Status:** In progress; Phases 0 and 1 and the narrow steering correction are
-complete. Phase 2 instrumentation is independently reviewed; matched performance
-capture and final documentation remain.
+**Status:** Implementation, performance acceptance and documentation verification
+are complete locally. Final whole-branch reviews and archival closeout remain.
 
 **Execution branch:** `codex/los-phase-spreading`, created from `develop` at
 `5367f5a` after the user requested branch-based implementation and final review.
@@ -29,7 +27,7 @@ Do not introduce a world queue, worker scheduler or automatic agent registry.
 NavSteering, Navigator, Chronicler, xUnit v3 and BenchmarkDotNet infrastructure.
 
 **Spec:** [Scope and constraints](#scope-and-constraints) and
-[Proposed timing contract](#proposed-timing-contract) define the intended
+[Timing contract](#timing-contract) define the intended
 behavior. Phase 0 freezes exact signatures, state transitions and wire fields
 before production changes. Any material departure returns here for review.
 
@@ -96,11 +94,10 @@ acquisition, or a new geometry/cache optimization pass. The existing scheduled
 guide-acquisition service remains separate and does not own these refreshes.
 Engine-specific visual playtesting and competitor benchmarking are not gates.
 
-## Proposed timing contract
+## Timing contract
 
-These are the recommended semantics to settle in Phase 0, not an already
-available public API. Preserve one unphased default and make the changed timing
-explicit when a host opts in.
+Phase 0 froze these semantics and Phase 1 implemented them. One unphased default
+remains; the changed timing is explicit when a host opts in.
 
 | Situation | Required behavior |
 | --- | --- |
@@ -124,7 +121,7 @@ For example, with `I = 16`, `P = 3` and admission at context frame 0, normal
 periodic checks occur at frames 3, 19 and 35. If updates are paused across frame
 19 and resume at 22, perform one overdue refresh at 22, then return to slot 35.
 For `P = 0`, admission at frame 0 is followed by slot 16, not another periodic
-check in frame 0. These are proposed timing examples, not callable C# snippets.
+check in frame 0. These are timing examples, not complete C# programs.
 
 Phase alignment changes when agents discover that direct travel has become
 available or blocked. Enabled and disabled trajectories need not have identical
@@ -242,17 +239,17 @@ registry, unbounded catch-up work, or claim that the performance target is met.
   profile replacement and restore bursts. Time representative containing frames
   separately: initial acquisition is outside the original steady-state timer,
   so that control cannot establish startup or recovery costs.
-- [ ] Size cases first, then freeze a bounded repeated protocol and the minimum
+- [x] Size cases first, then freeze a bounded repeated protocol and the minimum
   peak reduction / tolerated full-block regression for a keep decision, before
   examining candidate timings. Keep the existing budget targets unchanged. Start with
   A*/100, Flow/100 and Flow/500; label any A*/500 sizing separately. Use matched
   runtime settings and interleaved control/candidate captures, with no concurrent
   builds, tests or profilers. Do not keep extending runs to hunt a favorable tail.
-- [ ] Retain all launch/stage records and the executed child binaries, generated
+- [x] Retain all launch/stage records and the executed child binaries, generated
   sources, runtime settings, SHA256 manifests and exact source revisions/diffs.
   Require complete successful captures, semantic preflight, deterministic
   per-mode replay and zero warmed current-thread frame allocation.
-- [ ] Compare per-launch/full-block cost, observed frame P95/P99/max and counts
+- [x] Compare per-launch/full-block cost, observed frame P95/P99/max and counts
   over 2 ms and 31.25 ms. Show periodic density and startup/recovery bursts
   separately. Report total-work changes, phase-entry checks and shifted work;
   do not claim a universal frame-time ceiling from balanced agent counts.
@@ -270,14 +267,14 @@ reviewed disposition; do not redefine the target after seeing results.
 
 ## Phase 3 - Documentation, verification and closeout
 
-- [ ] Update evergreen docs/XML with the actual API, default behavior, stable
+- [x] Update evergreen docs/XML with the actual API, default behavior, stable
   host phase assignment, fixed-frame order, pause/retry and restore semantics.
   Clearly separate LOS refresh latency from guide freshness and collision work.
   Compile/run any example presented as runnable C#; label partial host snippets.
   Do not link feature-work plans from wiki pages.
-- [ ] Document any intentional public/wire changes in migration guidance; remove
+- [x] Document any intentional public/wire changes in migration guidance; remove
   obsolete timing descriptions rather than leaving contradictory examples.
-- [ ] Run the complete local source-stack Release/ReleaseLean matrix, both
+- [x] Run the complete local source-stack Release/ReleaseLean matrix, both
   library targets, exact reachable coverage, replay/allocation gates, analyzer
   self-tests and DocFX warnings-as-errors. Include the Gravitas adapter tests;
   no adapter runtime change is implied by this plan.
@@ -305,10 +302,12 @@ separate artifact folders, and do not run coverage or builds during capture.
 ```powershell
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c Release -p:UseLocalLsfStack=true --filter 'FullyQualifiedName~NavSteering|FullyQualifiedName~NavigatorSerialization|FullyQualifiedName~NavigatorProfileReplacement|FullyQualifiedName~NavigationTransitionSimulation'
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c ReleaseLean -p:UseLocalLsfStack=true --filter 'FullyQualifiedName~NavSteering|FullyQualifiedName~NavigatorSerialization|FullyQualifiedName~NavigatorProfileReplacement|FullyQualifiedName~NavigationTransitionSimulation'
-dotnet build Trailblazer.slnx -c Release -p:UseLocalLsfStack=true
-dotnet test Trailblazer.slnx -c Release -p:UseLocalLsfStack=true --no-build --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/los-phase/coverage-release
-dotnet build Trailblazer.slnx -c ReleaseLean -p:UseLocalLsfStack=true
-dotnet test Trailblazer.slnx -c ReleaseLean -p:UseLocalLsfStack=true --no-build --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/los-phase/coverage-lean
+foreach ($configuration in @('Release', 'ReleaseLean')) {
+    dotnet build Trailblazer.slnx -c $configuration -p:UseLocalLsfStack=true
+    foreach ($project in @('Trailblazer.Tests', 'Trailblazer.Gravitas.Tests')) {
+        dotnet test "tests/$project/$project.csproj" -c $configuration --no-build -p:UseLocalLsfStack=true --settings "tests/$project/coverlet.runsettings" --results-directory "artifacts/los-phase/coverage/$configuration/$project"
+    }
+}
 & tests/Trailblazer.Benchmarks/TestGuidedFrameAnalysis.ps1
 dotnet tool restore
 dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
@@ -524,3 +523,134 @@ separate CLI filters are unioned; those observations are not acceptance data.
 Repeated captures retain the predeclared three-case selection using method and
 case in each filter. Raw smoke/RED/GREEN evidence is under
 `artifacts/los-phase/phase2`. No timing keep decision is claimed yet.
+
+### Phase 2 - Accepted containing-frame comparison
+
+**Decision: keep opt-in balanced phase spreading.** Both repeated comparisons
+meet the predeclared relative gates. Flow/500 actual-frame P95 decreases by
+**80.84% and 81.47%**, exceeding the required 50% in each pair. Its nested
+64-frame block median changes by **+2.98% and -1.07%**; every selected case stays
+within the 10% block-regression limit. This establishes peak spreading, not a
+general reduction in total work or a portable frame-time guarantee.
+
+The unchanged-method candidate control ran first, followed by
+`Unphased-1 / Balanced-1 / Balanced-2 / Unphased-2`. Each capture selected only
+A*/100, Flow/100 and Flow/500, with three launches, one warmup and three actual
+64-frame blocks per case. Every capture has nine successful child exits,
+nine warmup, 27 actual and nine diagnostic records. All 10,368 actual frames
+across the six original/candidate captures allocate zero caller-thread bytes
+and overlap no recorded GC collection. Preparation, export and post-frame
+validation are outside those measured brackets.
+
+| Pair | Case | Unphased block median | Balanced block median | Block change | Unphased P95 | Balanced P95 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | A*/100 | 206.96 ms | 203.55 ms | -1.65% | 19.94 ms | 3.69 ms |
+| 1 | Flow/100 | 104.70 ms | 99.52 ms | -4.95% | 12.15 ms | 3.14 ms |
+| 1 | Flow/500 | 506.15 ms | 521.23 ms | +2.98% | 45.48 ms | 8.71 ms |
+| 2 | A*/100 | 213.17 ms | 204.64 ms | -4.00% | 20.50 ms | 3.55 ms |
+| 2 | Flow/100 | 106.25 ms | 98.01 ms | -7.76% | 11.83 ms | 3.04 ms |
+| 2 | Flow/500 | 537.63 ms | 531.85 ms | -1.07% | 47.41 ms | 8.79 ms |
+
+Per-launch nested-block medians remain visible rather than being pooled away:
+
+| Case / mode | Launch medians, pair 1 | Launch medians, pair 2 |
+| --- | --- | --- |
+| A*/100 Unphased | 204.44 / 206.96 / 208.52 ms | 213.17 / 266.59 / 209.95 ms |
+| A*/100 Balanced | 202.06 / 202.34 / 215.06 ms | 204.31 / 206.16 / 204.01 ms |
+| Flow/100 Unphased | 104.70 / 122.17 / 104.41 ms | 106.25 / 132.04 / 102.15 ms |
+| Flow/100 Balanced | 99.79 / 97.24 / 99.52 ms | 99.40 / 96.93 / 98.01 ms |
+| Flow/500 Unphased | 505.57 / 505.47 / 513.54 ms | 536.80 / 535.42 / 539.40 ms |
+| Flow/500 Balanced | 520.48 / 521.61 / 521.23 ms | 526.45 / 521.86 / 538.05 ms |
+
+Original-method candidate block medians differ from the frozen baseline by
+**-5.23% / +5.23% / -3.42%** for A*/100, Flow/100 and Flow/500. The corresponding
+ordinal launch changes are **-2.69/-2.14/-5.37%**, **+5.23/+5.66/+5.46%** and
+**-4.04/-0.82/-4.71%**. These are descriptive serial comparisons, not evidence of
+a default-mode speedup or an attributed runtime/JIT effect. Default replay is
+exactly preserved; the modest Flow/100 increase is not hidden.
+
+### Absolute targets, phase-entry work and bursts
+
+Each measured agent still performs exactly four periodic checks per block:
+400 checks for 100 agents and 2,000 for 500. Balanced slots contain 6-7 and
+31-32 checks respectively. Its 32-frame preparation contains 294/1,469 checks
+including mandatory admission, versus 200/1,000 unphased; these extra initial
+phase-entry opportunities are not presented as reduced work. The unbalanced
+control concentrates checks in a single slot and does not establish spreading.
+
+| Balanced capture | Case | P99 | Maximum | Frames >2 ms | Frames >31.25 ms |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1 | A*/100 | 3.88 ms | 5.17 ms | 576/576 | 0/576 |
+| 1 | Flow/100 | 3.37 ms | 3.58 ms | 161/576 | 0/576 |
+| 1 | Flow/500 | 9.15 ms | 10.15 ms | 576/576 | 0/576 |
+| 2 | A*/100 | 3.76 ms | 4.39 ms | 576/576 | 0/576 |
+| 2 | Flow/100 | 3.18 ms | 3.29 ms | 159/576 | 0/576 |
+| 2 | Flow/500 | 9.25 ms | 10.23 ms | 576/576 | 0/576 |
+
+Unphased P99/max values are **20.63/21.29**, **16.02/16.83**, **61.12/62.71 ms**
+in pair 1 and **21.65/23.23**, **16.27/18.21**, **63.09/64.61 ms** in pair 2.
+Its >2 ms counts are **526/36/576** then **576/73/576**; only Flow/500 exceeds
+31.25 ms, in **36/576 frames each time**. Spreading peaks can increase the count
+of smaller allowance misses. The 2 ms allowance remains unmet.
+
+A separate bounded Flow/100 probe executes the archived candidate binary. The
+following are single same-host observations, not repeated BDN distributions;
+milliseconds use the recorded host stopwatch frequency of 10,000,000 ticks/s,
+also verified against all candidate guided-frame payloads:
+
+| Boundary | Observed time | Allocated bytes | Direct checks / guides |
+| --- | ---: | ---: | --- |
+| Initial admission, cold guide payloads and warm ray workspace | 496.87 ms | 772,560 | 100 / 100 |
+| Resume after 17 ineligible frames | 17.45 ms | 0 | 100 / 100 |
+| Same-map rebake publication | 277.15 ms | 1,105,152 | 100 / 99 |
+| Next pending retry plus normal phase | 230.74 ms | 771,568 | 7 / 100 |
+| Public profile replacement admission | 246.36 ms | 771,568 | 100 / 100 |
+| End-to-end JSON restore preparation, not a simulation frame | 206.62 ms | 19,592,968 | 0 / 0 |
+| Restored next admission | 20.61 ms | 21,600 | 100 / 100 |
+
+Paused frames perform no checks; the 16 frames after overdue resume perform
+100 checks total, with no catch-up loop. JSON preparation overlaps a collection
+and includes serialization, source reset, shell construction, preparation,
+population and assertions. Required acquisition/recovery still creates large
+bursts; this feature does not spread that work or restore a guide during load.
+
+**`TRB-Benchmark-005` remains active.** The steady 31.25 ms peaks are resolved for
+these balanced cases, but the 2 ms allowance and synchronous recovery costs are
+not. A next bounded pass should isolate ordinary guide sampling/body validation
+and controller work, or explicitly address recovery-acquisition ownership, before
+proposing a structural change. Do not resume an open-ended blocked-ray sweep,
+lower the refresh frequency, or enlarge the budget to manufacture acceptance.
+
+### Provenance and final local verification
+
+Candidate source is `9f56efe`, with the same clean sibling revisions recorded
+above. Capture-time edits were Markdown only. Independent audit parses all 270
+raw records, reproduces every relative gate and budget count, verifies 17,280
+exact Int64 replay comparisons, and rehashes all 378 manifest files across six
+archives. Eight candidate assembly identities match across all five candidate
+captures. Executed generated runners, source and runtime settings are retained;
+the archive chain is not a signed provenance attestation or rebuild proof.
+
+Raw evidence is under `artifacts/los-phase`: `original-control`,
+`candidate-control`, the four ABBA prefixes and their `-children` directories,
+`comparison.json`, and `frozen-lifecycle*`. The original capture is reparsed
+without replacement as `phase2/original-control-reparsed.json`. The one sizing
+wrapper's post-capture PowerShell expected-count arithmetic was corrected and
+the original records revalidated; no runtime, sample or accepted protocol was
+changed. Failed implementation/parser experiments remain separate from captures.
+
+Final Release passes **2,568 core + 65 adapter** tests; ReleaseLean passes
+**2,498 + 65**, no failures or skips. Both library targets build with zero
+warnings/errors. Each configuration covers exactly **31,019/31,019 lines,
+12,181/12,181 branches and 3,032/3,032 covered and fully covered methods**.
+The parser suite passes. DocFX builds with zero warnings/errors; the four wiki
+helper tests pass. All three current configuration host fragments appear
+verbatim in the executed console harness and pass phase/default/opt-in checks.
+Documentation review is independently approved. Coverage and logs are under
+`final-verification`, `docfx-final.log`, `doc-snippet-final.log`, and the wiki/link
+logs. A missing namespace import in the temporary verification harness was
+corrected without changing the authored fragments.
+
+Final whole-branch correctness/Ponytail review and archival closeout follow.
+Windows/Linux CI and released-package validation remain deferred coordinated
+release gates; no sibling repository, remote branch, tag or release was changed.

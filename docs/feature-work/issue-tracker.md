@@ -64,22 +64,6 @@
   timestamps locally without accounting for pending operations and ordering.
   This broader clock/publication change is outside periodic LOS phase spreading.
 
-### TRB-Issue-123 - Navigator migration and restore guidance disagree with current records
-
-- **Discovered:** 2026-09-14 during LOS phase-spreading documentation review.
-- **Status:** Open; documentation-only drift, not a newly established runtime defect.
-- **Evidence:** Before phase spreading, `Navigator.Serialization.cs` and the
-  serialization wiki use outer schema 5, but `docs/MIGRATION.md` still names
-  schema 4. The wiki also says the next simulation frame always requests fresh
-  guidance, while an ordinary restored direct-travel session retains its
-  existing LOS flag and does not automatically request a guide.
-- **Resolution scope:** Align migration and serialization guidance with the
-  implemented phase configuration/schema, and distinguish enabled fresh
-  admission from the preserved phase-disabled direct/countdown behavior.
-  Verify authored examples against public signatures and build DocFX with
-  warnings treated as errors. Do not alter default runtime behavior solely to
-  make the old prose true.
-
 ### TRB-Issue-119 - Guided A* setup reported an exception in wide geometry
 
 - **Discovered:** 2026-09-10 during guided-host performance measurement.
@@ -227,6 +211,22 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-123 - Navigator migration and restore guidance disagree with current records
+
+- **Discovered / resolved locally:** 2026-09-14 during LOS documentation work.
+- **Failure:** Migration still named outer schema 4 when source/wiki used 5;
+  restore prose implied unconditional fresh guidance despite the existing
+  direct-mode/countdown behavior. A serialization-to-pathing anchor was stale.
+- **Fix:** Document implemented outer schema 6 and nested schema 1, persisted
+  configuration versus non-persisted runtime schedule, enabled fresh admission
+  versus preserved unphased behavior, and the corrected evergreen link. The
+  migration shows an unphased replacement before separately labeled phase opt-in.
+- **Evidence:** Independent documentation review approves. Three current host
+  fragments execute verbatim; DocFX builds with zero warnings/errors. Four wiki
+  helper tests and changed-document/site link checks pass. Evidence is under
+  `artifacts/los-phase/doc-snippet-final.log`, `docfx-final.log` and wiki/link logs.
+  No default runtime behavior was changed to match the stale prose.
 
 ### TRB-Issue-133 - Candidate LOS evidence loses per-agent check identity
 

@@ -29,27 +29,24 @@ instead of burying it in notes.
     costs while preserving deterministic replay, budgets and the default LOS
     cadence. The tracker retains the matched comparisons and their limitations;
     withdrawn experiments are not counted as shipped savings.
-  - The latest bounded page-proof reuse experiment is **withdrawn**. Flow/500
-    LOS medians improve in both short comparisons, but its repeat complete-block
-    gain is only **0.4%**, with worse 100-agent block results. Four useful
-    page-only negative-proof tests remain; production source is unchanged from
-    `f9c3d37`. The preceding `TRB-Issue-121/122` dependency-identity and byte
-    accounting fixes remain committed.
-  - Full-frame acceptance is still unmet. The final unchanged Flow/500 control
-    has a **57.64 ms** LOS median, all **36/36** rechecks above 31.25 ms, and all
-    **540/540** ordinary frames above the 2 ms navigation allowance. These are
-    local headless observations, not portable timing guarantees.
-  - The open-ended micro-optimization sweep has ended. Current work is the
+  - The open-ended micro-optimization sweep has ended; the last page-proof
+    experiment remains withdrawn. Its tests and the preceding dependency-key
+    and byte-accounting corrections are retained in the historical tracker.
+  - Current work is the
     [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
     on `codex/los-phase-spreading` from `develop`. Phase 0 contract review,
     default-mode characterizations, unchanged benchmark control and Phase 1
-    runtime implementation are complete. Independent review and the full local
-    Release/Lean matrix pass with exact coverage. Opt-in host-assigned phases
+    runtime implementation are complete. The full local Release/Lean matrix
+    passes with exact coverage. Opt-in host-assigned phases
     preserve required admission/freshness/retry boundaries; schema 6 defines
     enabled restore behavior. The narrow pre-existing zero-radius steering defect
-    (`TRB-Issue-125`) is corrected and independently verified. Phase 2 benchmark
-    instrumentation and recovery preflights are reviewed; matched performance
-    capture and final documentation remain.
+    (`TRB-Issue-125`) is corrected and independently verified. Independent
+    measurement audit confirms **80.84% / 81.47%** Flow/500 P95 reductions, with
+    **+2.98% / -1.07%** block-cost changes. All selected balanced steady frames
+    fit 31.25 ms; Flow/500 maxima are **10.15 / 10.23 ms**. The 2 ms allowance
+    still misses, and required acquisition/recovery can still burst. These are
+    local headless observations, not portable guarantees. Documentation and
+    examples are verified; final whole-branch review/closeout remain.
     Spreading periodic work does not reduce each ray's cost; the existing cold
     acquisition scheduler does not own Navigator LOS checks.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
@@ -165,12 +162,14 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Complete the [LOS phase-spreading plan](navigationLineOfSightPhasePlan.md)
-   before broader features. Phase 0 is complete; implement, harden and measure
-   its reviewed contract on the feature branch.
-   `TRB-Benchmark-005` remains open for unmet full-frame budgets, particularly
-   Flow/500 synchronous rechecks; completing the feature does not automatically
-   close the signal. Exact rectangular tracing, raw-coordinate geometry and
+1. Finish review/closeout of the [LOS phase-spreading plan](navigationLineOfSightPhasePlan.md)
+   before broader features. Its repeated relative performance gates and exact
+   local verification pass on the feature branch.
+   `TRB-Benchmark-005` remains open for the 2 ms allowance and required recovery
+   bursts, not the now-spread steady Flow/500 peaks. Further performance work
+   should begin with bounded isolation of ordinary sampling/body/controller
+   costs or recovery-acquisition ownership, not another speculative ray sweep.
+   Exact rectangular tracing, raw-coordinate geometry and
    per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
    accounting and dependency guarantees, and keep the unphased cadence/control
    unchanged. Do not restart the open-ended micro-optimization sweep or revive

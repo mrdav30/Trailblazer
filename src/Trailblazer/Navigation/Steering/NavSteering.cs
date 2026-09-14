@@ -133,19 +133,37 @@ public partial class NavSteering : IRecordable
 
     private object? _pathRecheckClockLifetime;
 
-    /// <inheritdoc cref="DefaultPathRecheckCooldown"/>
+    /// <summary>
+    /// Gets the configured interval for periodic line-of-sight rechecks, in frames.
+    /// </summary>
     public int PathRecheckCooldownFrames => _pathRecheckCooldownFrames;
 
     /// <summary>
-    /// Gets the optional fixed-frame phase used for periodic line-of-sight rechecks.
+    /// Gets the optional context fixed-frame phase used for periodic line-of-sight rechecks.
+    /// A null value selects the completed-heading countdown.
     /// </summary>
     public int? PathRecheckPhase => _pathRecheckPhase;
 
     /// <summary>
-    /// Configures the interval and optional fixed-frame phase for periodic line-of-sight rechecks.
+    /// Replaces the interval and optional context fixed-frame phase for periodic
+    /// line-of-sight rechecks.
     /// </summary>
-    /// <param name="intervalFrames">The recheck interval. Phase-enabled intervals must be positive.</param>
-    /// <param name="phase">The optional fixed-frame phase in the range [0, <paramref name="intervalFrames"/>).</param>
+    /// <remarks>
+    /// A null phase uses the completed-heading countdown. A non-null phase aligns
+    /// periodic checks to the bound context clock; initial admission and required
+    /// recovery do not wait for that phase.
+    /// </remarks>
+    /// <param name="intervalFrames">
+    /// The recheck interval. It must be positive when <paramref name="phase"/> has a value.
+    /// </param>
+    /// <param name="phase">
+    /// Null to use the completed-heading countdown, or a fixed-frame phase in the
+    /// range [0, <paramref name="intervalFrames"/>).
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="phase"/> has a value and the interval is nonpositive, or the
+    /// phase is outside the interval.
+    /// </exception>
     public void ConfigurePathRechecks(int intervalFrames, int? phase = null)
     {
         ValidatePathRecheckConfiguration(intervalFrames, phase);
@@ -257,7 +275,9 @@ public partial class NavSteering : IRecordable
     protected bool _shouldRequestPathThisFrame;
 
     /// <summary>
-    /// Represents the cooldown period, in milliseconds, before the next path check can be performed.
+    /// Tracks the completed-heading countdown when fixed-frame phasing is disabled.
+    /// With phasing enabled, it is a due marker: nonpositive forces work due
+    /// immediately, while positive defers to the logical-frame schedule.
     /// </summary>
     protected int _pathCheckCooldown;
 

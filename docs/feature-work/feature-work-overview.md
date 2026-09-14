@@ -62,8 +62,14 @@ instead of burying it in notes.
     to **25.1 / 15.4 / 73.6 ms**. Ordinary Flow/100 improvement does not repeat;
     its tail remains above the 2 ms allowance. Exact replay, physical/semantic
     admission, dependencies, work budgets, world synchronization and cadence
-    remain unchanged. The next structural investigation is repeated trace
-    preparation/data movement, not skipping required validation.
+    remain unchanged. A further GridForge heap-sort cleanup reduces interval
+    payload copying, with no new API/cache and the same portable implementation
+    on both targets. Repeated LOS medians improve another **5-8%** to
+    **23.7 / 14.5 / 67.5 ms**. Short-protocol Flow/100 complete-block medians
+    regress in both pairs; a separate ten-warmup/twenty-actual comparison improves
+    its blocks **5.8%**, with ordinary medians near 0.79 ms on both versions.
+    Both results are retained: this demonstrates protocol sensitivity, not a
+    confirmed JIT cause or a uniform containing-frame win.
     Full-frame acceptance remains incomplete: the latest candidate still has
     **0 / 0 / 36** of each case's 36 measured rechecks exceeding 31.25 ms.
     Cold-acquisition scheduling does not

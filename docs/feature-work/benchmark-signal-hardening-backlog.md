@@ -69,11 +69,12 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   candidate pruning/slab intersection in GridForge and raw-coordinate
   containment/distance/capsule simplifications in FixedMathSharp are now
   implemented, together with per-sample immutable dependency-proof reuse in
-  Trailblazer. The latest ray-admission/prism reuse and integer bit-count slice
-  reduces repeat LOS medians another 9-11%, to about 25.1 / 15.4 / 73.6 ms for
-  A*/100, Flow/100 and Flow/500. See the final follow-up for remaining budget
-  misses and tail regressions. The earlier per-edge rejection experiment remains
-  withdrawn.
+  Trailblazer. The latest GridForge interval-sort change reduces repeat LOS
+  medians another 5-8%, to about 23.7 / 14.5 / 67.5 ms for A*/100, Flow/100 and
+  Flow/500. Short-protocol Flow/100 containing blocks regress; a separate
+  longer-warmed comparison improves them. See the final follow-up for both
+  results and remaining budget misses. The earlier per-edge rejection
+  experiment remains withdrawn.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -1092,6 +1093,119 @@ Ignored evidence: `artifacts/benchmark005/guided-trace-state-*`,
 These are local Windows/.NET 8.0.29 measurements, not Linux CI or full-gameplay
 acceptance. FixedMathSharp's completed leading-zero performance record retains
 the separate arithmetic measurement and portable-target verification.
+
+#### Follow-up: reduce interval-sort payload copying
+
+On 2026-09-14 UTC, the next focused change starts from Trailblazer `74dbd15`,
+GridForge `847458b`, FixedMathSharp `29bfa28` and SwiftCollections `4b5715b`.
+Only GridForge runtime source changes (`GF-Benchmark-007`). Its existing heap
+sort carries the root interval once, moves each selected child up once and
+writes the saved interval at the final position. Comparisons take readonly
+references. The comparator, child selection and equal-key permutation are
+unchanged; a bounded parent loop replaces the open-ended loop. No cache, public
+API, retained storage, geometry shortcut or runtime-specific API is introduced.
+The same implementation supports `netstandard2.1` and `net8.0`.
+
+A fresh Flow/500 profile motivates the change: sorting accounts for about
+77 ms of 3,340 ms sampled measured-root time, falling to about 40 ms of 3,149 ms
+in the confirmation profile. Roots include benchmark validation; samples overlap
+and are not predicted frame savings. Flow/100 does not show the same inclusive
+sorting reduction, so this is not a universal isolated-sort speedup claim.
+
+Four serial captures use the existing three-case/three-launch protocol, with
+one warmup and three actual blocks per launch. Labels are `prepared-prism-baseline`
+(original), `interval-sort-candidate`, `interval-sort-control` (original again)
+and `interval-sort-confirm` (the same final candidate). The first label reflects
+an investigation only: no prepared-prism implementation was added. Every capture
+has 27 actual, nine warmup and nine diagnostic blocks. Repeat medians follow;
+ordinary/LOS/block sample sizes are 540/36/nine per case, with no trimming.
+
+| Case | Repeat ordinary median, original / final | Repeat LOS median, original / final | Repeat complete-block median, original / final |
+| --- | ---: | ---: | ---: |
+| A*/100 | 2.1365 / 2.1450 ms | 25.1145 / 23.7378 ms | 230.0874 / 225.1843 ms |
+| Flow/100 | 0.8791 / 1.0391 ms | 15.4540 / 14.4889 ms | 113.3585 / 126.6763 ms |
+| Flow/500 | 5.0646 / 5.1390 ms | 73.5019 / 67.4599 ms | 599.4426 / 570.4502 ms |
+
+LOS medians improve in both pairs: **6.9% then 5.5%**, **8.6% then 6.2%** and
+**8.3% then 8.2%**, respectively. A*/100 and Flow/500 complete-block medians also
+improve in both pairs. Ordinary frames do not establish a repeatable improvement.
+**Short-protocol Flow/100 regresses:** ordinary medians rise **51.6% then 18.2%**,
+and complete-block medians rise **25.7% then 11.7%**. Its ordinary/block P95 worsens
+in the first pair but improves in the repeat; do not call this a repeated tail
+regression or hide the containing-block median regression behind faster LOS.
+
+Slower intermediate Flow/100 blocks persist longer in some candidate launches;
+later diagnostic ordinary medians settle near 0.77-0.81 ms in all four captures.
+To distinguish that observation from sustained throughput, two separate Flow/100
+captures use **ten warmup and twenty actual blocks per launch**, still with three
+fresh launches and unchanged authored harness source, frame preparation and
+runtime settings. This longer pair ran candidate then original; it is not a
+fully counterbalanced experiment and is not pooled with the short results.
+
+```powershell
+$env:UseLocalLsfStack = 'true'
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter '*AgentCount: 100, Algorithm: "FlowField"*' --launchCount 3 --warmupCount 10 --iterationCount 20 --keepFiles --artifacts artifacts/benchmark005/guided-interval-sort-confirm-long
+```
+
+Rebuild each version first using the baseline command; use a distinct
+`guided-interval-sort-control-long` directory for the original. All 60 actual
+blocks per version are retained, including BDN-identified outliers. Original to
+final ordinary medians are **0.7869 to 0.7927 ms (+0.7%)**, LOS medians
+**15.3143 to 13.6863 ms (-10.6%)**, and complete-block medians
+**107.9576 to 101.7507 ms (-5.8%)**. Ordinary P95/P99/max are slightly worse;
+LOS and block P95/P99/max improve. Every launch-number comparison improves LOS
+and block medians, while ordinary direction varies. No ordinary frame exceeds
+2 ms in either longer capture. This supports sustained LOS/block improvement
+and protocol sensitivity, **not a confirmed JIT/tiering cause or a fix for the
+short-protocol regression**. The longer run's sub-100 ms iteration advisory is
+retained; it is not a failed execution.
+
+Independent raw/source audits verify all **366 records / 23,424 frame checksums**
+across the six captures as exact signed Int64 replay, including warmup and
+diagnostics, with zero observed frame allocations/collection masks and zero BDN
+GC/allocation records. All **378** frozen child-file hashes match. Portable PDB
+authored hashes identify only `GridTracer.TraceIntervals.cs` as changed between
+versions; the harness and other upstream authored source are unchanged. Generated
+short/long runners differ with the protocol, and rebuilt harness binaries need
+not be byte-identical. All 42 child executions succeed. These are serial local
+Windows/i7-9700K/.NET 8.0.29 observations, not Linux or engine-runtime evidence;
+A*/500 remains outside the selected capture.
+
+New public behavior tests trace 31/32/33-cell corridors in both directions and
+assert every interval's exact identity, payload, parameter and tie position.
+They pass on the original sort, fail a deliberately reversed heap comparison,
+and pass with the final implementation (83 focused tracing tests). An additional
+ignored diagnostic compares the complete original/final permutations in 56
+empty/singleton, heap-boundary and equal/duplicate-key cases on the local .NET
+10 host. Independent correctness and Ponytail reviews find no actionable issue.
+
+**Full local verification:** FixedMathSharp, GridForge, Gravitas and Trailblazer
+pass their complete Release/ReleaseLean solution builds and configured test/
+coverage gates against `UseLocalLsfStack=true`, with zero warnings, errors,
+test failures or skips. Both `netstandard2.1` and `net8.0` library targets build.
+Every configured line, branch and method is fully covered, without new exclusions
+or relaxed gates. GridForge passes **890 tests per configuration**, with exact
+**8,957/8,957 lines, 3,857/3,857 branches and 1,118/1,118 fully covered methods**.
+Trailblazer passes **2,493 / 2,431** core tests plus **65** adapter tests in each
+configuration, with exact **30,858/30,858 lines, 12,101/12,101 branches and
+3,012/3,012 fully covered methods**. These are local source-stack checks, not
+Linux CI or released-package validation.
+
+**Remaining acceptance:** all 36 final Flow/500 LOS frames still exceed 31.25 ms
+(median 67.5 ms, maximum 73.2 ms). Its ordinary median remains about 5.1 ms;
+A*/100 ordinary frames also remain above 2 ms. Final short Flow/100 has one
+ordinary frame above 2 ms. Keep `TRB-Benchmark-005` active. Candidate collection,
+mapping, geometry and chain validation remain measurable; no further structural
+change is justified solely by this sorting result. Full-trace failure priority,
+dependencies, live-world synchronization and the default 16-frame LOS cadence
+remain unchanged.
+
+Ignored evidence: `artifacts/benchmark005/guided-prepared-prism-baseline*`,
+`guided-interval-sort-*`, `interval-sort-comparison.json`,
+`{prepared-prism-baseline,interval-sort-confirm}-profile-*`,
+`interval-sort-{characterization,mutation,focused}.log`,
+`interval-sort-permutation-verification.json` and
+`interval-sort-final-verification`.
 
 ## Closed Signals
 

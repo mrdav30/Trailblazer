@@ -22,85 +22,35 @@ instead of burying it in notes.
 ## Active Coordination
 
 - Measured navigation performance
-  - `TRB-Benchmark-005` is the active priority in the
-    [benchmark tracker](benchmark-signal-hardening-backlog.md). The new fixture
-    measures real guided movement and periodic line-of-sight rechecks.
-    GridForge now narrows eligible rectangular candidate geometry and uses
-    exact slab intervals; FixedMathSharp removes general rotation/projection
-    work from raw-coordinate predicates and skips unnecessary capsule solves.
-    Trailblazer Flow sampling reuses per-call immutable dependency validation
-    while retaining live-world and cache invalidation checks.
-    Against the refreshed baseline, recheck medians fall from about
-    106 / 88 / 355 ms to **28 / 19 / 90 ms** for A*/100, Flow/100 and Flow/500.
-    Whole-block medians improve **58% / 72% / 67%**, with exact replay and zero
-    frame allocations. APIs, budgets, dependencies and LOS cadence are unchanged.
-    This is implemented source work, not another profiling-only checkpoint.
-    A subsequent two-condition Trailblazer fast path skips structural membership
-    lookup when both closure sets are empty. Its fresh before/after capture
-    reduces recheck medians another **6.7% / 8.9% / 5.3%** to about
-    **27 / 18 / 88 ms**, with no cache or changed validation contract.
-    The next ray-cost cleanup reads effective semantic cells without rebuilding
-    already-admitted node geometry. Original/candidate/control/confirmation
-    captures do **not** establish an additional repeatable frame-time win;
-    the initial apparent 2–3% gains are not counted. Map-local lookup reuse and
-    early loop guards are withdrawn, and world-sequence synchronization stays
-    intact. Overlay cost regression tests cover Solid, Gas and Liquid.
-    A subsequent Flow-only change remembers a successful dependency proof for
-    the bound lease's current graph version, while preserving every live cache
-    and world check. Original/candidate/control/confirmation captures show
-    **31-36% lower ordinary Flow-frame medians** and **6-10% lower LOS-recheck
-    medians**. No old graph is retained, and pooled bindings clear the proof.
-    This is a repeatable improvement, not a 2 ms tail guarantee: the final
-    100-agent Flow capture still has 49/540 ordinary frames above that allowance.
-    The tracker retains serial-run variability: unchanged A* ordinary medians
-    move -3.3% then +3.4% across the latest two comparisons; no A* speedup is
-    attributed to this Flow-only patch.
-    The next coordinated slice avoids discarded node/prism construction during
-    ray mapping, reuses evaluated source prisms and uses an exact .NET 8
-    leading-zero operation in FixedMathSharp, retaining its unchanged
-    `netstandard2.1` fallback. Repeated LOS medians improve another **9-11%**
-    to **25.1 / 15.4 / 73.6 ms**. Ordinary Flow/100 improvement does not repeat;
-    its tail remains above the 2 ms allowance. Exact replay, physical/semantic
-    admission, dependencies, work budgets, world synchronization and cadence
-    remain unchanged. A further GridForge heap-sort cleanup reduces interval
-    payload copying, with no new API/cache and the same portable implementation
-    on both targets. Repeated LOS medians improve another **5-8%** to
-    **23.7 / 14.5 / 67.5 ms**. Short-protocol Flow/100 complete-block medians
-    regress in both pairs; a separate ten-warmup/twenty-actual comparison improves
-    its blocks **5.8%**, with ordinary medians near 0.79 ms on both versions.
-    Both results are retained: this demonstrates protocol sensitivity, not a
-    confirmed JIT cause or a uniform containing-frame win.
-    The next GridForge change calculates only the coordinate used by rectangular
-    candidate probes, preserving exact saturating arithmetic and all tracing
-    contracts. Repeated LOS medians improve **6-11%** to **22.6 / 13.1 / 63.8 ms**,
-    with lower complete-block medians in both pairs. Short Flow/100 ordinary
-    tails worsen; a separate longer-warmed pair improves LOS/blocks **7% / 4%**
-    with ordinary medians **3% slower**. These qualifications remain in the
-    tracker; no ordinary-frame or universal timing guarantee is claimed.
-    The next GridForge slice reuses existing rectangle containment during
-    contact construction, preserving generic hex/default behavior and all edge
-    intersections. Repeated LOS medians improve another **4-7%** to
-    **21.2 / 12.5 / 59.8 ms**. Ordinary gains do not repeat, short Flow/100 tails
-    worsen and its block results are mixed. A separate longer-warmed Flow/100
-    pair improves LOS/blocks **5.9% / 2.3%**, with ordinary medians essentially
-    unchanged; both protocols and their limitations remain in the tracker.
-    Full-frame acceptance remains incomplete: the latest candidate still has
-    **0 / 0 / 36** of each case's 36 measured rechecks exceeding 31.25 ms.
-    Cold-acquisition scheduling does not
-    bound these synchronous checks. The original planar geometry cost is much
-    smaller; remaining work must target the complete guided frame without
-    weakening geometry, freshness checks or failure semantics.
-    The separate per-edge rejection experiment (`GF-Benchmark-005`) remains
-    withdrawn; its mixed results are not counted as implemented savings.
-    The earlier performance slices (`TRB-Benchmark-002/003`, `GF-Benchmark-003`)
-    are closed locally. `TRB-Benchmark-004` now closes with ordered protocol
-    evidence and no runtime change; short cold-cache controls are not warmed
-    steady-state throughput. In the [issue tracker](issue-tracker.md),
-    `TRB-Issue-119` retains a separate, not-yet-reproduced A* setup exception;
-    GridForge `GF-Issue-006` preserves an incomplete strict-miss benchmark
-    baseline, without an established common cause or fix.
-    FixedMathSharp's `FMS-Issue-018` preserves two failed containment microbaselines;
-    they are excluded from comparisons, with no isolated-math speedup claim.
+  - `TRB-Benchmark-005` remains the active performance signal in the
+    [benchmark tracker](benchmark-signal-hardening-backlog.md). The implemented
+    GridForge/FixedMathSharp geometry improvements and Trailblazer mapping,
+    sampling and dependency-proof reuse have substantially reduced guided-frame
+    costs while preserving deterministic replay, budgets and the default LOS
+    cadence. The tracker retains the matched comparisons and their limitations;
+    withdrawn experiments are not counted as shipped savings.
+  - The latest bounded page-proof reuse experiment is **withdrawn**. Flow/500
+    LOS medians improve in both short comparisons, but its repeat complete-block
+    gain is only **0.4%**, with worse 100-agent block results. Four useful
+    page-only negative-proof tests remain; production source is unchanged from
+    `f9c3d37`. The preceding `TRB-Issue-121/122` dependency-identity and byte
+    accounting fixes remain committed.
+  - Full-frame acceptance is still unmet. The final unchanged Flow/500 control
+    has a **57.64 ms** LOS median, all **36/36** rechecks above 31.25 ms, and all
+    **540/540** ordinary frames above the 2 ms navigation allowance. These are
+    local headless observations, not portable timing guarantees.
+  - End the open-ended micro-optimization sweep here. The recommended next
+    discussion is an **opt-in deterministic phase for periodic LOS refreshes**,
+    with explicit host assignment, bounded phase-entry delay, pause/resume and
+    serialization rules. Preserve immediate admission/freshness/retries and the
+    unchanged synchronized benchmark. This is a proposed behavior feature, not
+    an implemented scheduler or proof that every frame will fit; phase spreading
+    redistributes work without reducing total ray cost. The existing cold
+    acquisition scheduler does not own Navigator LOS checks.
+  - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
+    locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
+    `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate
+    incomplete/failing benchmark evidence without an established shared cause;
     `TRB-Issue-114` remains closed without a confirmed allocator fix.
 - [Gravitas Kinematic Integration](gravitasIntegrationPlan.md)
   - Phase 0 preflight fixed the optional 3D adapter/package boundary, shared-

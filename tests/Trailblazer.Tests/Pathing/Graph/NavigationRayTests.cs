@@ -3388,6 +3388,62 @@ public sealed class NavigationRayTests
             "closing a consumed surface component invalidates the exact ray proof");
     }
 
+    [Theory]
+    [InlineData("unchanged", (int)NavigationRayStatus.Blocked)]
+    [InlineData("equivalent", (int)NavigationRayStatus.Blocked)]
+    [InlineData("removed", (int)NavigationRayStatus.Stale)]
+    [InlineData("dormant", (int)NavigationRayStatus.Stale)]
+    public void OrderedRay_ShouldValidatePagesEvenWithoutAComponentDependency(
+        string publication,
+        int expectedStatus)
+    {
+        using var world = new GridWorld();
+        var gasCell = new NavigationCell(
+            TraversalMedia.Gas,
+            TraversalCapability.None,
+            new NavigationAreaId(0),
+            Fixed64.Zero,
+            Fixed64.MaxValue,
+            Fixed64.MaxValue);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world,
+                NavigationAStarExitTestHarness.RectangularLine(1),
+                new VoxelIndex[] { default },
+                "ray-page-proof",
+                new[] { gasCell });
+        NavigationWorldGraph expected = fixture.Graph;
+        using NavigationWorldGraphStore store = NavigationAStarExitTestHarness.CreateStore(expected);
+        ulong sequence = world.ChangeSequence;
+        long nextVersion = expected.GraphVersion + 1;
+        NavigationWorldGraph current = publication switch
+        {
+            "unchanged" => expected,
+            "equivalent" => expected.WithGraphVersion(nextVersion),
+            "removed" => new NavigationWorldGraph(
+                nextVersion, System.Array.Empty<NavigationMapInstance>(), expected.AreaCatalog),
+            "dormant" => new NavigationWorldGraph(
+                nextVersion, new[] { expected.GetInstance(0).FailClosed(nextVersion) }, expected.AreaCatalog),
+            _ => throw new System.ArgumentOutOfRangeException(nameof(publication))
+        };
+        if (!ReferenceEquals(current, expected))
+            store.TryPublish(current).Should().Be(NavigationCandidatePublication.Published);
+        Vector3d foot = NavigationAStarExitTestHarness.GetFoot(fixture.Binding, default);
+        var workspace = new NavigationRayWorkspace(1, 1, 1, 4, 4);
+        var work = new NavigationRayWork(workspace);
+        var meter = new NavigationWorkMeter(CreateRayBudget(4, 4));
+        work.Begin(CreateRequest(world, store, expected,
+            NavigationAStarExitTestHarness.Profile(), foot, foot));
+
+        work.Advance(meter).Should().Be((NavigationRayStatus)expectedStatus);
+
+        workspace.Dependencies.PageCount.Should().Be(1);
+        workspace.Dependencies.ComponentCount.Should().Be(0,
+            "the Solid ray cannot enter the Gas-only cell, but still consumes its page proof");
+        world.ChangeSequence.Should().Be(sequence,
+            "only graph publication changed, so the world fence cannot detect this stale proof");
+    }
+
     [Fact]
     public void OrderedRay_ShouldRejectPreTraceRawWorldMutationAsStale()
     {

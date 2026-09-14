@@ -65,17 +65,15 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 ### TRB-Benchmark-005 - Guided frames spend most time in long blocked segment tracing
 
 - **Discovered:** 2026-09-10 during the representative guided-host performance pass.
-- **Status:** Active for remaining full-frame budget misses. Exact rectangular
-  candidate pruning/slab intersection in GridForge and raw-coordinate
-  containment/distance/capsule simplifications in FixedMathSharp are now
-  implemented, together with per-sample immutable dependency-proof reuse in
-  Trailblazer. The latest GridForge contact-containment simplification reduces
-  repeat LOS medians another 4-7%, to about 21.2 / 12.5 / 59.8 ms for A*/100,
-  Flow/100 and Flow/500. Ordinary-frame gains do not repeat, short Flow/100 tails
-  worsen and its block results are mixed. A separate longer-warmed pair improves
-  Flow/100 LOS/blocks with essentially unchanged ordinary medians. See the final
-  follow-up for both results and remaining budget misses. The earlier per-edge rejection
-  experiment remains withdrawn.
+- **Status:** Active for remaining full-frame budget misses. The implemented
+  geometry, mapping and dependency improvements remain in place; their matched
+  comparisons are below. The latest page-proof experiment is withdrawn because
+  its repeated LOS gains do not establish a convincing complete-frame benefit
+  across the measured cases. The final unchanged Flow/500 control still has a
+  **57.64 ms** LOS median, with all 36 rechecks above 31.25 ms. End the open-ended
+  micro-optimization sweep here. The recommended next discussion is an explicit,
+  opt-in periodic LOS phase contract, not a silent cadence change or closure of
+  this signal. Keep the synchronized fixture unchanged as its control.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -1550,6 +1548,107 @@ starting source. This is a final replay/allocation check, not a speedup claim.
 The DocFX site also builds with warnings treated as errors and reports none.
 Evidence: `guided-dependency-final-*`, `dependency-final-replay.json` and
 `dependency-docfx.log` under `artifacts/benchmark005`.
+
+#### Follow-up: withdraw page-proof reuse and end the micro-optimization sweep
+
+On 2026-09-14 UTC, this bounded pass starts from Trailblazer `f9c3d37` and
+unchanged GridForge `52e9d94`, FixedMathSharp `29bfa28` and SwiftCollections
+`4b5715b`. Fresh sampled-thread-time profiles use the frozen `dependency-final`
+runtime: ten measured 64-frame blocks each for A*/100 and Flow/100, and five for
+Flow/500. Preparation is outside `RunMeasured`. In Flow/500, direct-heading work
+accounts for **35.7%** of measured-root sampled time; `AreDependenciesCurrent`
+accounts for **8.1%** of that direct-heading time inclusively. Mapping, tracing,
+body validation, guide/cache checks and steering remain other substantial costs.
+These overlapping samples locate work; they are not elapsed-time savings.
+
+One source-equivalent experiment skips only the page-stamp comparison loop when
+the expected and current graph are the same immutable object. Recorded page
+keys belong to that graph, including pages accumulated by explicit and volume
+body checks. Area-policy content, component checks and both live-world sequence
+fences remain unchanged. A whole-dependency identity shortcut is **not** valid:
+already-closed components must still reject a same-root negative proof as stale.
+
+The unchanged short protocol runs original/candidate, then candidate/original,
+with three launches per case and one warmup, three actual and one diagnostic
+block per launch. Each capture retains 540 ordinary frames, 36 LOS frames and
+nine actual complete blocks per case. Whole-block times include validation and
+instrumentation outside the nested frame timer.
+
+| Case | First LOS median, original / candidate (ms) | First block median (ms) | Reverse-order LOS median, original / candidate (ms) | Reverse-order block median (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 | 20.8242 / 19.9955 | 211.2661 / 211.4297 | 19.9871 / 20.2216 | 203.7243 / 222.5180 |
+| Flow/100 | 12.8350 / 12.6995 | 116.7450 / 100.9453 | 14.1685 / 12.2914 | 105.9182 / 132.3312 |
+| Flow/500 | 60.4916 / 55.2785 | 544.5352 / 524.7930 | 57.6370 / 55.0505 | 516.2721 / 514.1295 |
+
+Flow/500 LOS medians improve **8.6% then 4.5%**, but its complete-block gain
+shrinks from **3.6% to 0.4%**. A* blocks worsen in both pairs; Flow/100's initial
+block gain reverses to a **24.9%** increase. Ordinary medians also move against
+the candidate in the repeat: A*/100 **2.0351 to 2.2896 ms**, Flow/100 **0.8559 to
+1.2679 ms**, and Flow/500 **4.7808 to 4.8837 ms**. Repeat Flow/100 ordinary frames
+above 2 ms rise from **0/540 to 61/540**. Repeat Flow/500 ordinary maximum rises
+from **5.6237 to 6.2048 ms**. Every Flow/500 LOS frame remains over 31.25 ms on
+both versions. No observation is trimmed, and these serial short captures do
+not establish the cause of their ordinary-frame variation.
+
+Independent raw-log/summary/BenchmarkDotNet audits verify all four captures:
+**180 records / 11,520 frames**, 36 successful child exits, all 252 frozen-file
+hashes and exact signed-Int64 replay. Frame allocation/collection masks and BDN
+allocation/GC diagnostics remain zero. Baseline/control frozen runtimes are
+byte-identical, as are candidate/confirmation. Portable PDBs identify only
+`NavigationRayWork.cs` as changed authored source; all upstream documents, 30
+benchmark source documents and three generated build inputs match. Benchmark
+assemblies are normally rebuilt too: this is not a single-DLL swap. The serial
+Windows/i7-9700K/.NET 8.0.29 protocol excludes A*/500 and is not a warmed
+steady-state or portable tail-latency claim.
+
+**Disposition:** restore `NavigationRayWork.cs` exactly to the starting source.
+Do not count the isolated/repeated LOS improvement as a shipped optimization,
+or keep extending the protocol to pursue this small conditional. Retain four
+useful page-dependency behavior cases: a Solid ray blocked by a Gas-only cell
+records a page but no component; unchanged/equivalent graphs remain blocked,
+while removed/dormant map publications make that negative proof stale without
+changing the raw-world sequence. They pass on the original implementation.
+An unconditional page-skip mutation fails the two stale cases; a broader
+same-root dependency-skip mutation fails two existing closure cases. Both
+mutations are removed. No new runtime defect is established by those deliberate
+mutations, so they do not create another issue-tracker entry.
+
+Source review also finds one duplicate source-prism lookup in native-edge
+enumerator construction, but no profile evidence strong enough to pursue that
+smaller target. Retaining an incoming portal across winning continuations would
+add 104 bytes per provisioned ray record and require replacement/re-ready
+ownership rules; a one-value cache would be incorrect. Neither is implemented.
+
+**Recommended next scope, not yet implemented:** discuss an opt-in,
+host-assigned deterministic phase for recurring LOS refreshes. Today the public
+setting controls the interval, not a phase, and the cooldown counts completed
+heading steps rather than absolute context frames. Spread only periodic work;
+keep initial admission, mandatory freshness checks and forced retries immediate.
+Define phase entry, pause/resume, held transitions, interval/profile changes,
+reset and save/load before adding behavior. Evenly distributing 500 agents over
+16 slots would assign 31-32 recurring checks per slot, but that is a work-count
+example, **not a frame-time prediction**. This reduces synchronization, not
+total ray work, and simultaneous acquisition/invalidation can still burst.
+The existing acquisition scheduler does not own these synchronous Navigator
+checks. Preserve the original synchronized fixture and introduce separate
+phase-aware acceptance evidence only with that feature's explicit contract.
+`TRB-Benchmark-005` stays open; its original full-frame budget is not met.
+
+**Final verification:** both Trailblazer solution configurations build for
+`netstandard2.1` and `net8.0` with zero warnings/errors. Release passes 2,505 core
+and 65 Gravitas-adapter tests; ReleaseLean passes 2,443 core and 65 adapter tests
+(5,078 total, no failures/skips). Both retain exact configured coverage of
+**30,883/30,883 lines, 12,109/12,109 branches and 3,017/3,017 fully covered
+methods**, without new exclusions. DocFX builds with warnings treated as errors
+and reports none. Independent correctness, Ponytail and evidence reviews support
+withdrawal and the retained behavior tests. These are local source-stack checks,
+not Linux CI or released-package validation. Upstream repositories are unchanged.
+
+Ignored evidence under `artifacts/benchmark005`: `dependency-final-profile-*`,
+`guided-page-proof-{baseline,candidate,confirm,control}*`,
+`page-proof-comparison.json`, `page-proof-{characterization,mutation,focused}.log`,
+`page-proof-pages-{characterization,mutation}.log`,
+`page-proof-final-verification` and `page-proof-docfx.log`.
 
 ## Closed Signals
 

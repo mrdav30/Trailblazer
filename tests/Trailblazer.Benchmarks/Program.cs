@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Running;
+using Trailblazer.Benchmarks.Pathing;
 
 namespace Trailblazer.Benchmarks;
 
@@ -17,6 +18,12 @@ internal static class Program
         }
 
         string command = args[0];
+
+        if (string.Equals(command, "guided-phase-smoke", StringComparison.OrdinalIgnoreCase)
+            && args.Length == 1)
+        {
+            return NavigationGuidedFrameBenchmarks.RunPhaseSpreadingSmoke();
+        }
 
         if ((string.Equals(command, "list", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(command, "ls", StringComparison.OrdinalIgnoreCase)) &&

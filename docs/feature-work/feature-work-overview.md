@@ -48,8 +48,8 @@ instead of burying it in notes.
     preserve required admission/freshness/retry boundaries; schema 6 defines
     enabled restore behavior. The narrow pre-existing zero-radius steering defect
     (`TRB-Issue-125`) is corrected and independently verified. Phase 2 benchmark
-    implementation comes next. Performance
-    acceptance and final documentation are not yet established.
+    instrumentation and recovery preflights are reviewed; matched performance
+    capture and final documentation remain.
     Spreading periodic work does not reduce each ray's cost; the existing cold
     acquisition scheduler does not own Navigator LOS checks.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed

@@ -76,8 +76,9 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   which owns the opt-in contract, implementation and separate phased evidence.
   Phases 0 and 1 are complete with independent runtime review and exact local
   coverage; the narrow `TRB-Issue-125` steering correction is also verified.
-  Phase 2 benchmark implementation is next. No performance acceptance or
-  closure is claimed. Keep the
+  Phase 2 instrumentation and recovery preflights are reviewed; matched capture
+  and final documentation remain. No performance acceptance or closure is
+  claimed. Keep the
   synchronized fixture unchanged as its control.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and

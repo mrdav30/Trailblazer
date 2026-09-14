@@ -8,7 +8,8 @@
 **Created:** 2026-09-14
 
 **Status:** In progress; Phases 0 and 1 and the narrow steering correction are
-complete. Phase 2 benchmark implementation is next.
+complete. Phase 2 instrumentation is independently reviewed; matched performance
+capture and final documentation remain.
 
 **Execution branch:** `codex/los-phase-spreading`, created from `develop` at
 `5367f5a` after the user requested branch-based implementation and final review.
@@ -222,22 +223,22 @@ registry, unbounded catch-up work, or claim that the performance target is met.
 
 ## Phase 2 - Prove the containing-frame benefit
 
-- [ ] Add distinct phased cases using existing benchmark host/helpers. If a
+- [x] Add distinct phased cases using existing benchmark host/helpers. If a
   small fixture extraction is needed, prove the original workload, setup,
   timing brackets and replay remain unchanged before comparing results.
-- [ ] Include synchronized control, evenly distributed explicit phases and a
+- [x] Include synchronized control, evenly distributed explicit phases and a
   deliberately unbalanced assignment. Assert exact periodic check frames/counts
   on the stable blocked workload so a lower frequency cannot masquerade as a
   win. Keep mandatory checks distinguishable from periodic checks.
-- [ ] Record mode, interval, assignments, clock origin and per-frame refresh
+- [x] Record mode, interval, assignments, clock origin and per-frame refresh
   counts alongside the existing ticks, allocations, collection masks and hashes.
   Keep diagnostic instrumentation bounded and equivalent between compared cases;
   do not add a public telemetry API for this benchmark.
-- [ ] Extend the existing analyzer and its self-tests for distinct mode/case
+- [x] Extend the existing analyzer and its self-tests for distinct mode/case
   identities and per-mode replay. Reject malformed/incomplete captures; never
   pool phased records with the old synchronized series or infer all expensive
   frames from a fixed modulo-16 index.
-- [ ] Preflight pause/resume, simultaneous new requests, relevant invalidation,
+- [x] Preflight pause/resume, simultaneous new requests, relevant invalidation,
   profile replacement and restore bursts. Time representative containing frames
   separately: initial acquisition is outside the original steady-state timer,
   so that control cannot establish startup or recovery costs.
@@ -490,3 +491,36 @@ in each configuration. Evidence is under `artifacts/los-phase/issue125` and
 `verification-issue125`. Candidate capture will remeasure the unchanged control;
 the adjacent runtime/load tuning asymmetry remains separately tracked as
 `TRB-Issue-129`, without broadening this numerical fix.
+
+### Phase 2 - Reviewed measurement boundary
+
+The original benchmark identity and uninstrumented simulation loop remain.
+Distinct Unphased, BalancedPhases and UnbalancedPhase cases use equivalent
+bounded observations. Each agent's actual preparation/measured check schedule
+and four checks per measured block are verified outside the timer; aggregate
+frame counts remain the compact exported data. One shared post-frame helper
+preserves semantic/hash validation across both loops.
+
+The analyzer preserves old captures while validating method/mode identities,
+per-sample frequencies, exact Int64 replay, complete case/launch/stage/exit
+records, and separate nested-frame/block/outer-operation statistics. Independent
+review identified and verified fixes for `TRB-Issue-130/131/132/133`. A temporary
+equal-population observation swap fails despite unchanged fleet totals; it is
+removed from the final fixture. Original/Unphased setup runs from copied output
+outside the repository, without an ignored capture dependency. Frozen replay
+comparison remains an explicit acceptance-analysis gate.
+
+The bounded Flow/100 recovery probe passes initial admission, 17 ineligible
+frames, one overdue resume and realignment, same-map rebake, profile replacement,
+and JSON restore. Publication returns Applied with 99 replacement guides and
+one off-phase zero heading; the next frame performs one retry plus six due
+checks and restores 100 guides. The JSON preparation timer explicitly includes
+serialization, source Navigator reset, target construction/preparation,
+population and assertions; it is not a population-only timing.
+
+Release benchmark build and parser checks pass. Dry unbalanced sizing
+inadvertently selected all four parameterizations, including A*/500, because
+separate CLI filters are unioned; those observations are not acceptance data.
+Repeated captures retain the predeclared three-case selection using method and
+case in each filter. Raw smoke/RED/GREEN evidence is under
+`artifacts/los-phase/phase2`. No timing keep decision is claimed yet.

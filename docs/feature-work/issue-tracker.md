@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-130`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-134`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -227,6 +227,59 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-133 - Candidate LOS evidence loses per-agent check identity
+
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
+- **Failure:** Fleet counts hid agent identity, so exchanged slots or missing
+  work masked by another agent could pass. The instrumented loop also copied
+  the original post-frame semantic/hash safeguards.
+- **Fix:** Preallocated observations retain each agent's actual check. Validation
+  outside the timer verifies assigned frames and four measured checks per agent.
+  Both variants share the post-timer semantic/hash helper; the original simulation
+  loop remains uninstrumented.
+- **Evidence:** A temporary swap of equal-population observation slots leaves
+  aggregate counts unchanged but fails at frame 12, agent 0. The injection was
+  removed. Clean Release build, parser suite, balanced lifecycle and unbalanced
+  dry cases pass; independent scoped review approves. Raw evidence is under
+  `artifacts/los-phase/phase2/round1-*`.
+
+### TRB-Issue-132 - Candidate benchmark requires an ignored local baseline
+
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
+- **Failure:** Original/Unphased setup required an ignored local control summary,
+  making normal benchmark use fail on a clean checkout.
+- **Fix:** Remove the capture-specific reader and ancestor probing. Reusable
+  setup retains self-contained replay validation; explicit cross-capture analysis
+  owns exact frozen-control comparison.
+- **Evidence:** Copied Release output outside the repository runs exactly the
+  original and Unphased A*/100 cases successfully, with no baseline file to
+  discover. Independent review approves; `round1-original-unphased-no-artifact.log`
+  retains the run. This portability correction does not waive replay acceptance.
+
+### TRB-Issue-131 - Candidate analyzer can accept an unfinished case or extra launch
+
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
+- **Failure:** Launchless case headers could disappear from completeness checks;
+  extra or out-of-order launch indices could also pass.
+- **Fix:** Register every declared case, reject repeated/unfinished headers, and
+  require a unique exact `1..n` launch sequence with successful child exits.
+- **Evidence:** Focused malformed fixtures fail before correction; the complete
+  parser suite passes afterward and the historical control still reparses.
+  `parser-completeness-red.log`, `parser-sequence-red.log` and
+  `round1-parser-green.log` retain evidence. Independent review approves.
+
+### TRB-Issue-130 - Candidate guided-frame analyzer pools unscaled ticks
+
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
+- **Failure:** Pooling raw ticks and applying the final sample's frequency
+  distorted valid captures containing different stopwatch frequencies.
+- **Fix:** Convert each sample with its own frequency before pooling. Exact
+  Int64 replay comparison remains separate from timing statistics.
+- **Evidence:** Two launches with equal real duration and different tick
+  frequencies reproduce the defect, then pass. The full parser suite and frozen
+  control reparse pass; independent review approves. Raw evidence:
+  `artifacts/los-phase/phase2/parser-frequency-red.log` and `round1-parser-green.log`.
 
 ### TRB-Issue-125 - Local steering divides by zero for an admitted zero-radius body
 

@@ -74,8 +74,10 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   micro-optimization sweep here. Current work is the
   [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
   which owns the opt-in contract, implementation and separate phased evidence.
-  Phase 0 is complete and implementation is underway; no performance acceptance
-  or closure of this signal is claimed yet. Keep the
+  Phases 0 and 1 are complete with independent runtime review and exact local
+  coverage; the narrow `TRB-Issue-125` steering correction is also verified.
+  Phase 2 benchmark implementation is next. No performance acceptance or
+  closure is claimed. Keep the
   synchronized fixture unchanged as its control.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and

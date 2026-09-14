@@ -36,7 +36,9 @@ public partial class NavSteering
 
         // we need to see everybody who might influence us—either for group or for avoidance
         Fixed64 groupRadius = radius * GroupFactor;
-        Fixed64 invGR = Fixed64.One / groupRadius;
+        Fixed64 invGR = groupRadius == Fixed64.Zero
+            ? Fixed64.Zero
+            : Fixed64.One / groupRadius;
         Fixed64 avoidRadius = radius * AvoidFactor;
         Fixed64 scanRadius = FixedMath.Max(groupRadius, avoidRadius);
         Fixed64 groupRadiusSq = groupRadius * groupRadius;

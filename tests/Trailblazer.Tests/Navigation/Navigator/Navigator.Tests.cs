@@ -379,6 +379,43 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void Simulate_ShouldContinueGuidedZeroRadiusMovementAfterTheInitialFrame()
+    {
+        (Vector3d start, _, Vector3d end) = PublishGraphLine(bakeVersion: 1);
+        NavigationAgentProfile defaults = PathTestFactory.DefaultNavigationProfile;
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            defaults.MaxStepUp,
+            defaults.MaxDropDown,
+            arrivalRadius: Fixed64.Zero,
+            TraversalMedia.Solid,
+            defaults.Capabilities);
+        TestNavigator navigator = CreateNavigator(start, profile: profile);
+        navigator.ConstrainTestMotionToSurface(start.Y);
+        navigator.SetGroundContact(start.Y, Vector3d.Up, updateMotorState: true);
+        navigator.ApplyGuidedTrekRequest(
+            CreateSurfaceQuery(start, end, profile, mapId: "navigator-graph"),
+            rate: TrekRate.Slow);
+
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Right);
+        navigator.ResolveAcceptedFramePosition(navigator.RequestedFramePosition);
+        navigator.CommitFrameMotion();
+        Vector3d firstPosition = navigator.Position;
+        navigator.Speed.Should().BeGreaterThan(Fixed64.Zero);
+
+        TestWorld.Context.Simulate();
+        navigator.Simulate();
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Right);
+        navigator.ResolveAcceptedFramePosition(navigator.RequestedFramePosition);
+        navigator.CommitFrameMotion();
+
+        navigator.Position.X.Should().BeGreaterThan(firstPosition.X);
+        navigator.Reset();
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_ShouldPreserveExistingPositionalActionOrdering()
     {
         var navigator = CreateNavigator(Vector3d.Zero);

@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-129`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-130`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -23,23 +23,21 @@
 
 ## Active Issues
 
-### TRB-Issue-125 - Local steering divides by zero for an admitted zero-radius body
+### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 
-- **Discovered:** 2026-09-14 during the phased actual-movement replay test setup.
-- **Status:** Open; pre-existing steering defect exposed by integration testing.
-- **Evidence:** `KinematicBodyShape` accepts radius zero and describes radius
-  as nonnegative. At positive vessel speed, `UpdateTargetDirection` calls
-  `ComputeCombinedSteering`, which eagerly calculates `1 / (radius *
-  GroupFactor)` before inspecting neighbors. A zero-radius owner therefore
-  throws even though its profile was admitted. The same eager division exists
-  at branch base `5367f5a`; the phase implementation did not introduce it.
-  Setting public `GroupFactor` to zero reaches the same denominator and must
-  also be considered without disabling otherwise valid avoidance work.
-- **Next scope:** Retain a focused failing zero-radius moving-controller
-  regression, then make the smallest shared local-steering correction. Verify
-  zero group influence, ordinary-radius behavior, avoidance and both package
-  families. Do not relabel an accepted shape as invalid or broaden this into
-  a new group-steering architecture.
+- **Discovered:** 2026-09-14 while reviewing the narrow zero-radius steering fix.
+- **Status:** Open; confirmed API/validation asymmetry, not a reproduced new
+  performance or determinism failure.
+- **Evidence:** `NavSteering.GroupFactor` and `AvoidFactor` are public mutable
+  fields, so runtime assignment accepts negative values. Navigator nested-load
+  validation rejects either field below zero. The same authored settings can
+  therefore enter live steering but fail a later round trip. This predates the
+  phase-spreading and zero-denominator changes.
+- **Next scope:** Reproduce runtime assignment and rejected round-trip behavior,
+  then settle consistent nonnegative range validation at the owning public
+  boundary. Review the source-compatibility effect before changing fields to
+  guarded properties. Do not silently clamp values or expand the zero-radius
+  fix into a general tuning API redesign.
 
 ### TRB-Issue-124 - World publication cannot advance across signed frame-count wrap
 
@@ -229,6 +227,25 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-125 - Local steering divides by zero for an admitted zero-radius body
+
+- **Discovered / resolved locally:** 2026-09-14 during phased movement testing.
+- **Failure:** At positive vessel speed, local steering eagerly calculated
+  `1 / (radius * GroupFactor)`. Radius zero is a valid admitted body shape;
+  zero `GroupFactor` reaches the same denominator. The defect predates `5367f5a`.
+- **Fix:** A computed zero group radius uses a zero reciprocal. Group range
+  already excludes all group neighbors there, while independent avoidance stays
+  active. All nonzero arithmetic and evaluation order remain unchanged.
+- **Evidence:** Both new tests fail with `DivideByZeroException` before the fix.
+  One proves real zero-radius Navigator movement after the initial zero-speed
+  frame; the other asserts exact avoidance with zero group factor. Independent
+  spec/quality review passes. Full Release 2,568 core + 65 adapter and Lean
+  2,498 + 65 pass, both targets build clean, and each configuration has exact
+  31,019 lines, 12,181 branches and 3,032 covered/fully covered methods.
+  Raw evidence: `artifacts/los-phase/issue125` and `verification-issue125`.
+- **Separate follow-up:** `TRB-Issue-129` records runtime/load validation
+  asymmetry; this fix does not redesign public tuning fields.
 
 ### TRB-Issue-128 - New-request initialization changes the legacy stale-ray cadence
 

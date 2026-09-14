@@ -42,11 +42,14 @@ instead of burying it in notes.
   - The open-ended micro-optimization sweep has ended. Current work is the
     [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
     on `codex/los-phase-spreading` from `develop`. Phase 0 contract review,
-    default-mode characterizations and the unchanged benchmark control are
-    complete; runtime implementation is underway. It defines opt-in host-assigned phases,
-    bounded phase entry, pause/resume and serialization rules, while preserving
-    required admission/freshness/retry boundaries and the synchronized control.
-    Completion and performance acceptance are not yet established.
+    default-mode characterizations, unchanged benchmark control and Phase 1
+    runtime implementation are complete. Independent review and the full local
+    Release/Lean matrix pass with exact coverage. Opt-in host-assigned phases
+    preserve required admission/freshness/retry boundaries; schema 6 defines
+    enabled restore behavior. The narrow pre-existing zero-radius steering defect
+    (`TRB-Issue-125`) is corrected and independently verified. Phase 2 benchmark
+    implementation comes next. Performance
+    acceptance and final documentation are not yet established.
     Spreading periodic work does not reduce each ray's cost; the existing cold
     acquisition scheduler does not own Navigator LOS checks.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed

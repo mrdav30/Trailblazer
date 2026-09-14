@@ -251,6 +251,51 @@ public class NavSteeringTests : IDisposable
         grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
     }
 
+    [Fact]
+    public void ComputeCombinedSteering_ShouldKeepAvoidanceWhenGroupFactorIsZero()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero)
+        {
+            Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        var neighbor = new MockSteerAgent(Vector3d.Right)
+        {
+            Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        PathQuery query = CreateSurfaceQuery();
+        var ownerSteering = new NavSteering(TestWorld.Context)
+        {
+            GroupFactor = Fixed64.Zero,
+            BehaviorWeights = new GroupBehaviorWeights
+            {
+                Separation = Fixed64.One,
+                Alignment = Fixed64.One,
+                Cohesion = Fixed64.One,
+                Avoidance = Fixed64.One
+            }
+        };
+        var neighborSteering = new NavSteering(TestWorld.Context);
+        ownerSteering.ApplyPathQuery(query, groupId: 7);
+        neighborSteering.ApplyPathQuery(query, groupId: 7);
+        ownerSteering.PrewarmMovementGroup(owner);
+        neighborSteering.PrewarmMovementGroup(neighbor);
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+
+        Vector3d force = ownerSteering.ComputeCombinedSteering(
+            owner.Position,
+            owner.Velocity,
+            owner.Speed,
+            owner.Radius,
+            owner.GlobalId);
+
+        force.Should().Be(Vector3d.Forward,
+            "zero grouping range must suppress grouping without disabling avoidance");
+        grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]

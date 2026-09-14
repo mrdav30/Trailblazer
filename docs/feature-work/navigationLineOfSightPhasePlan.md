@@ -7,8 +7,8 @@
 
 **Created:** 2026-09-14
 
-**Status:** In progress; Phases 0 and 1 complete. Narrow steering correction
-precedes Phase 2 performance capture.
+**Status:** In progress; Phases 0 and 1 and the narrow steering correction are
+complete. Phase 2 benchmark implementation is next.
 
 **Execution branch:** `codex/los-phase-spreading`, created from `develop` at
 `5367f5a` after the user requested branch-based implementation and final review.
@@ -481,6 +481,12 @@ pass after the scoped fixes. This is not yet performance acceptance or final
 documentation validation.
 
 Actual-movement testing also exposed the pre-existing `TRB-Issue-125`: a valid
-zero-radius body reaches an eager reciprocal in local group steering. Resolve
-that narrow defect with its own regression/review before candidate capture;
-keep its change separate from LOS timing and remeasure the unchanged control.
+zero-radius body reaches an eager reciprocal in local group steering. The narrow
+fix is independently reviewed: guard exactly zero group radius, preserving
+positive arithmetic and avoidance. Two regressions fail before the fix and pass
+afterward. Full Release **2,568 + 65** and Lean **2,498 + 65** tests pass with
+exact **31,019 lines, 12,181 branches and 3,032 covered/fully covered methods**
+in each configuration. Evidence is under `artifacts/los-phase/issue125` and
+`verification-issue125`. Candidate capture will remeasure the unchanged control;
+the adjacent runtime/load tuning asymmetry remains separately tracked as
+`TRB-Issue-129`, without broadening this numerical fix.

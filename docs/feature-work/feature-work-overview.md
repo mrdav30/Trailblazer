@@ -32,11 +32,10 @@ instead of burying it in notes.
   - The open-ended micro-optimization sweep has ended; the last page-proof
     experiment remains withdrawn. Its tests and the preceding dependency-key
     and byte-accounting corrections are retained in the historical tracker.
-  - Current work is the
-    [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
-    on `codex/los-phase-spreading` from `develop`. Phase 0 contract review,
-    default-mode characterizations, unchanged benchmark control and Phase 1
-    runtime implementation are complete. The full local Release/Lean matrix
+  - The completed
+    [Deterministic LOS Phase Spreading plan](done/navigationLineOfSightPhasePlan.md)
+    is archived, with all four phases implemented and verified on
+    `codex/los-phase-spreading` from `develop`. The full local Release/Lean matrix
     passes with exact coverage. Opt-in host-assigned phases
     preserve required admission/freshness/retry boundaries; schema 6 defines
     enabled restore behavior. The narrow pre-existing zero-radius steering defect
@@ -46,7 +45,9 @@ instead of burying it in notes.
     fit 31.25 ms; Flow/500 maxima are **10.15 / 10.23 ms**. The 2 ms allowance
     still misses, and required acquisition/recovery can still burst. These are
     local headless observations, not portable guarantees. Documentation and
-    examples are verified; final whole-branch review/closeout remain.
+    examples are verified. Final correctness/Ponytail reviews are complete,
+    including the construction-order/restored-replay proof and shared test-fixture
+    cleanup. The branch is retained for the user's review; it is not merged.
     Spreading periodic work does not reduce each ray's cost; the existing cold
     acquisition scheduler does not own Navigator LOS checks.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
@@ -85,6 +86,15 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
+
+- [Deterministic LOS Phase Spreading](done/navigationLineOfSightPhasePlan.md)
+  - One opt-in host-assigned phase policy spreads A*/Flow periodic checks while
+    preserving the default countdown and required admission/recovery boundaries.
+    Both repeated relative performance gates pass, with about 81% lower Flow/500
+    P95 and no observed balanced steady frame over 31.25 ms. Exact local coverage,
+    serialization/replay, documentation/examples and independent reviews pass.
+    The archived plan consolidates the measurements and remaining limits;
+    `TRB-Benchmark-005` stays open for the 2 ms allowance and mandatory bursts.
 
 - [Shared Convex Containment Performance Slice](benchmark-signal-hardening-backlog.md#follow-up-ordinary-frame-control-and-shared-containment-work)
   - FixedMathSharp widens an already-world-space query point once instead of
@@ -162,9 +172,9 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Finish review/closeout of the [LOS phase-spreading plan](navigationLineOfSightPhasePlan.md)
-   before broader features. Its repeated relative performance gates and exact
-   local verification pass on the feature branch.
+1. Review the completed [LOS phase-spreading branch](done/navigationLineOfSightPhasePlan.md)
+   before broader features. Its repeated relative performance gates, exact local
+   verification and independent reviews pass; the plan is archived.
    `TRB-Benchmark-005` remains open for the 2 ms allowance and required recovery
    bursts, not the now-spread steady Flow/500 peaks. Further performance work
    should begin with bounded isolation of ordinary sampling/body/controller
@@ -217,9 +227,9 @@ The cross-stack rules apply throughout:
 
 ## Coordinated Release Gates
 
-Hardening and scheduling are complete locally and archived; release readiness
-is a separate cross-stack checkpoint. Do not infer these gates passed from the
-plans' exact local coverage or benchmark results.
+Hardening, acquisition scheduling and LOS phase spreading are complete locally
+and archived; release readiness is a separate cross-stack checkpoint. Do not
+infer these gates passed from the plans' exact local coverage or benchmark results.
 
 - [ ] After all active feature work is complete, run Windows/Linux CI in
   Release and ReleaseLean against the exact intended release commit, including

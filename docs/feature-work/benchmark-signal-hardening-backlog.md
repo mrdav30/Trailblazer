@@ -71,18 +71,18 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   its repeated LOS gains do not establish a convincing complete-frame benefit
   across the measured cases. The historical unchanged Flow/500 control had a
   **57.64 ms** LOS median, with all 36 rechecks above 31.25 ms. The open-ended
-  micro-optimization sweep has ended. Current work is the
-  [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
-  which owns the opt-in contract, implementation and separate phased evidence.
-  Phases 0 and 1 are complete with independent runtime review and exact local
-  coverage; the narrow `TRB-Issue-125` steering correction is also verified.
+  micro-optimization sweep has ended. The completed
+  [Deterministic LOS Phase Spreading plan](done/navigationLineOfSightPhasePlan.md)
+  consolidates the opt-in contract, implementation and separate phased evidence.
+  All four phases and final reviews pass with exact local coverage; the narrow
+  `TRB-Issue-125` steering correction is also verified.
   Repeated balanced captures now pass the relative keep gates: Flow/500 P95
   improves **80.84% / 81.47%**, with **+2.98% / -1.07%** block-cost changes and
   maxima **10.15 / 10.23 ms**. Every selected balanced steady frame fits
   31.25 ms, but the 2 ms allowance still fails and synchronous recovery can
   burst. Instrumentation, raw evidence, documentation and the exact local matrix
-  are independently checked; final whole-branch review remains. This signal
-  is not closed. Keep the
+  are independently checked, and final correctness/Ponytail findings are resolved.
+  The plan is archived; this signal is not closed. Keep the
   synchronized fixture unchanged as its control.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
@@ -1663,14 +1663,14 @@ Ignored evidence under `artifacts/benchmark005`: `dependency-final-profile-*`,
 #### Follow-up: explicit periodic LOS phase plan
 
 On 2026-09-14, the agreed next direction was promoted into the
-[Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md).
+[Deterministic LOS Phase Spreading plan](done/navigationLineOfSightPhasePlan.md).
 That plan owns contract review, shared steering implementation, lifecycle/load
-hardening and distinct phase-aware full-frame evidence. Phase 0 is next; no
-runtime implementation or new benchmark result is claimed by creating it.
+hardening and distinct phase-aware full-frame evidence. At creation, Phase 0
+was next; drafting alone claimed no implementation or new benchmark result.
 The historical synchronized results above remain the control, and this signal
 stays active until its remaining budget misses receive an explicit disposition.
 
-**Implemented follow-up:** The same plan now holds the repeated ABBA comparison,
+**Completed follow-up:** The archived plan holds the repeated ABBA comparison,
 all launch/block/tail statistics, phase-entry and recovery costs, and independent
 binary/replay audit. Keep explicit phase spreading: both predeclared relative
 gates pass without a frequency reduction or steady-state allocation. Balanced

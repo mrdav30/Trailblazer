@@ -6,9 +6,9 @@
 
 **Created:** 2026-09-14
 
-**Status:** All implementation, performance, documentation and local verification
-gates pass. Final correctness/Ponytail findings are resolved; archival closeout
-remains.
+**Status:** Complete locally on 2026-09-14. All four phases, independent reviews,
+performance acceptance and exact local verification gates pass. Coordinated
+release verification remains separate.
 
 **Execution branch:** `codex/los-phase-spreading`, created from `develop` at
 `5367f5a` after the user requested branch-based implementation and final review.
@@ -35,7 +35,7 @@ before production changes. Any material departure returns here for review.
 ## Why this work comes next
 
 The bounded micro-optimization sweep for
-[`TRB-Benchmark-005`](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
+[`TRB-Benchmark-005`](../benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
 has ended. Keep its implemented geometry/dependency improvements and do not
 revive withdrawn experiments without new evidence.
 
@@ -81,8 +81,8 @@ simultaneous admission or invalidation can still burst.
   Release and ReleaseLean. Add observable behavior tests, not API snapshots or
   existence-only tests. No new coverage exclusions to make the numbers pass.
 - Keep this slice in Trailblazer unless a reproduced upstream defect requires
-  an owning-library fix. Capture defects in [issue-tracker.md](issue-tracker.md).
-  Releases remain deferred under the [overview](feature-work-overview.md).
+  an owning-library fix. Capture defects in [issue-tracker.md](../issue-tracker.md).
+  Releases remain deferred under the [overview](../feature-work-overview.md).
 - Work on the requested `codex/los-phase-spreading` feature branch from
   `develop`, preserving unrelated worktree changes. Pushes, merges and releases
   still require the corresponding request.
@@ -282,11 +282,11 @@ reviewed disposition; do not redefine the target after seeing results.
 - [x] Obtain independent final correctness and Ponytail reviews. Resolve actual
   defects in the issue tracker and keep unrelated benchmark exceptions separate
   from accepted timing evidence.
-- [ ] Summarize selected capture results and limitations here, update the
+- [x] Summarize selected capture results and limitations here, update the
   benchmark signal and overview, then mark/move this plan to `done` only after
   its local gates or explicit no-change disposition are complete. Condense any
   supporting notes into this plan; keep raw captures in ignored artifacts.
-- [ ] Report changed repositories and concise suggested commit messages. Do not
+- [x] Report changed repositories and concise suggested commit messages. Do not
   stage, commit, push, tag or release without the corresponding request.
 
 **Exit:** One documented timing contract, reviewed code and test evidence, an
@@ -317,7 +317,7 @@ dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
 Use the existing CI ReportGenerator/exact-summary checks for each configuration:
 covered lines equal coverable lines, covered branches equal total branches, and
 both covered and fully covered methods equal total methods. Reuse the
-[benchmark README's capture protocol](../../tests/Trailblazer.Benchmarks/README.md#complete-guided-host-frames)
+[benchmark README's capture protocol](../../../tests/Trailblazer.Benchmarks/README.md#complete-guided-host-frames)
 for the original control; record the new phased selection and executed commands
 here when available, rather than documenting a command for an API not yet built.
 
@@ -661,6 +661,21 @@ fixture finding is also resolved: all five characterizations share the existing
 partial fixture. Scoped re-review approves both fixes with no remaining findings.
 The fix is tests-only; no runtime defect or benchmark recapture is claimed.
 The full matrix was rerun after this fix and retains the exact coverage above;
-the analyzer self-tests also pass. Archival closeout follows.
+the analyzer self-tests also pass. All local phases are now closed, with
+supporting results condensed into this plan. Raw captures and review records
+remain under ignored `artifacts/los-phase`.
 Windows/Linux CI and released-package validation remain deferred coordinated
 release gates; no sibling repository, remote branch, tag or release was changed.
+
+### Local handoff
+
+Only Trailblazer changed. Reviewed implementation, documentation and final test
+proofs are committed locally on `codex/los-phase-spreading` through `ce09901`;
+the subsequent documentation closeout archives this plan. The branch remains
+available for the user's final review and optional squash into `develop`.
+Suggested squash message: `feat(steering): add deterministic LOS phase spreading`.
+
+`TRB-Benchmark-005` remains open for its 2 ms allowance and mandatory recovery
+costs. The separately documented signed world-frame limit (`TRB-Issue-124`),
+runtime/restored steering-range asymmetry (`TRB-Issue-129`) and historical
+benchmark exception (`TRB-Issue-119`) are not claimed fixed by this feature.

@@ -24,7 +24,7 @@ public readonly struct NavigationQueryLimits
         aStarWorkspaceNodeCapacity: 4_096,
         maxAStarCacheEntries: 128,
         maxAStarReusablePayloadBytes: 16_777_216,
-        maxAStarSinglePayloadBytes: 1_159_480,
+        maxAStarSinglePayloadBytes: 1_163_576,
         maxAStarActivePayloadBytes: 4_194_304,
         maxAStarActivePayloadLeases: 8,
         flowWorkspaceMapCapacity: 16,
@@ -36,7 +36,7 @@ public readonly struct NavigationQueryLimits
         aStarWorkspaceGuidePointCapacity: 8_191,
         maxFlowCacheEntries: 128,
         maxFlowReusablePayloadBytes: 33_554_432,
-        maxFlowSinglePayloadBytes: 1_012_024,
+        maxFlowSinglePayloadBytes: 1_016_120,
         maxFlowActivePayloadBytes: 4_194_304,
         maxFlowActivePayloadLeases: 8);
 

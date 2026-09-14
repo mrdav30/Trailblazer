@@ -12,7 +12,7 @@ namespace Trailblazer.Pathing;
 /// <summary>Owns fixed page and component dependency accumulation.</summary>
 internal sealed class NavigationDependencyWorkspace
 {
-    private readonly NavigationAddressStampSet _componentSet;
+    private readonly NavigationComponentStampSet _componentSet;
     private readonly NavigationPageStampSet _pageSet;
 
     internal NavigationDependencyWorkspace(int pageCapacity, int componentCapacity)
@@ -25,7 +25,7 @@ internal sealed class NavigationDependencyWorkspace
         Components = componentCapacity == 0
             ? Array.Empty<NavigationSurfaceComponentKey>()
             : new NavigationSurfaceComponentKey[componentCapacity];
-        _componentSet = new NavigationAddressStampSet(Math.Max(1, componentCapacity));
+        _componentSet = new NavigationComponentStampSet(Math.Max(1, componentCapacity));
         _pageSet = new NavigationPageStampSet(Math.Max(1, pageCapacity));
     }
 
@@ -55,8 +55,8 @@ internal sealed class NavigationDependencyWorkspace
     internal bool TryRecordComponent(NavigationSurfaceComponentKey component)
     {
         if (ComponentCount >= Components.Length)
-            return _componentSet.Contains(component.Representative);
-        if (!_componentSet.Add(component.Representative))
+            return _componentSet.Contains(component);
+        if (!_componentSet.Add(component))
             return true;
         Components[ComponentCount++] = component;
         return true;
@@ -89,7 +89,7 @@ internal sealed class NavigationDependencyWorkspace
             return false;
         for (int i = 0; i < source.ComponentCount; i++)
         {
-            if (!_componentSet.Contains(source.Components[i].Representative))
+            if (!_componentSet.Contains(source.Components[i]))
                 missingComponents++;
         }
         for (int i = 0; i < source.PageCount; i++)

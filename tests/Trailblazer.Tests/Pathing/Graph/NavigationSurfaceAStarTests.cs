@@ -1394,7 +1394,11 @@ public sealed class NavigationSurfaceAStarTests
         emptyDependencies.RetainedBytes.Should().Be(64L);
         GraphDependencyStamp.GetRetainedBytes(componentCount: 0, pageCount: 0)
             .Should().Be(emptyDependencies.RetainedBytes);
-        populatedDependencies.RetainedBytes.Should().Be(400L);
+        Unsafe.SizeOf<GraphComponentDependency>().Should().Be(40);
+        Unsafe.SizeOf<GraphPageDependency>().Should().Be(56);
+        populatedDependencies.RetainedBytes.Should().Be(
+            64L + 24L + components.Length * Unsafe.SizeOf<GraphComponentDependency>()
+            + 24L + pages.Length * Unsafe.SizeOf<GraphPageDependency>());
         GraphDependencyStamp.GetRetainedBytes(components.Length, pages.Length)
             .Should().Be(populatedDependencies.RetainedBytes);
 
@@ -1460,13 +1464,13 @@ public sealed class NavigationSurfaceAStarTests
         emptyPayload.RetainedBytes.Should().Be(432L);
         NavigationAStarPayload.GetMaximumRetainedBytes(0, 0, 0, 0)
             .Should().Be(emptyPayload.RetainedBytes);
-        populatedPayload.RetainedBytes.Should().Be(960L);
+        populatedPayload.RetainedBytes.Should().Be(976L);
         NavigationAStarPayload.GetRetainedBytes(
                 populatedPayload.GuidePoints.Length,
                 transitionInstructionCount: 0,
                 populatedDependencies)
             .Should().Be(populatedPayload.RetainedBytes);
-        worstPayload.RetainedBytes.Should().Be(1_464L);
+        worstPayload.RetainedBytes.Should().Be(1_480L);
         NavigationAStarPayload.GetMaximumRetainedBytes(
                 populatedPayload.GuidePoints.Length,
                 worstPayload.TransitionInstructions.Length,

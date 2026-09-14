@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-121`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-123`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -170,6 +170,66 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-122 - Component dependency byte accounting omits the medium slot
+
+- **Discovered:** 2026-09-14 during independent review of `TRB-Issue-121`.
+- **Status:** Resolved locally on 2026-09-14.
+- **Failure:** `GraphDependencyStamp` charged 32 bytes per component dependency,
+  but the full address-medium key plus generation occupies 40 bytes in the
+  supported x64 layout. This pre-existing mismatch undercounted both retained
+  payloads and admission reservations by eight bytes per component.
+- **Resolution:** Charge 40 bytes per component in the shared retained-byte
+  formula, which feeds A* and Flow payload accounting. Raise the default single
+  payload ceilings by 4,096 bytes each to cover their existing 512-component
+  workspaces: A* is 1,163,576 bytes and Flow is 1,016,120 bytes. This restores the
+  same admitted workspace envelope; custom host limits remain explicit. No new
+  retained fields or runtime-dependent budget calculation are introduced.
+- **Verification:** The existing payload-layout test now checks actual struct
+  sizes and derives the dependency-array charge from those sizes. Before the
+  fix, it expects 416 bytes for two components/four pages and observes 400;
+  downstream A* payload expectations increase by the same 16 bytes. The Flow
+  exact-fit/one-byte-short test moves from 768/767 to 776/775 bytes for one
+  component. The first full run exposes the stale default ceilings; correcting
+  them restores the semantic-actions and culture-invariance tests without
+  changing their budgets or canonical digests. All 11 focused fallout checks
+  pass. The full Release/ReleaseLean matrix documented in `TRB-Issue-121` also
+  passes; no budget assertions or determinism digests are relaxed.
+  Evidence: `component-byte-accounting-red.log`,
+  `continuation-final-verification` and `dependency-accounting-fallout-green.log`
+  under `artifacts/benchmark005`.
+
+### TRB-Issue-121 - Dependency workspace merges components from different media
+
+- **Discovered:** 2026-09-14 during `TRB-Benchmark-005` source review.
+- **Status:** Resolved locally on 2026-09-14.
+- **Failure:** Component dependency accumulation deduplicated the representative
+  cell address but omitted the traversal medium. Solid, Gas and Liquid components
+  can share an address without sharing membership or generation. Recording one
+  could silently discard the others, undercount capacity/merge work, and let a
+  guide retain a stale component proof.
+- **Reproduction:** A map has one Solid/Gas cell and a long Gas-only continuation.
+  A short Solid-to-Gas A* guide and bounded Flow field both incorrectly report
+  `Success` after a distant Gas cell is suppressed. The Gas component changes,
+  while the Solid component, local semantic/physical/transition page, transition
+  rules and native world sequence remain unchanged. Eight focused regression
+  cases fail on the original implementation, including both public guide checks.
+- **Resolution:** A fixed-capacity generation-stamped set now uses the complete
+  `NavigationSurfaceComponentKey` in recording, full-capacity duplicate checks
+  and dependency-union preflight. Insertion order, lookup charging and atomic
+  merge admission are unchanged. More distinct components correctly consume more
+  capacity; no global graph invalidation or public API is introduced.
+- **Verification:** All eight regression cases pass after the fix. Both local
+  Release/ReleaseLean solution builds pass with zero warnings/errors, including
+  `netstandard2.1` and `net8.0`. Core tests pass 2,501 / 2,439 cases, plus 65
+  Gravitas-adapter cases per configuration: 5,070 total, no failures/skips.
+  Both configurations retain exact configured coverage of 30,883/30,883 lines,
+  12,109/12,109 branches and 3,017/3,017 fully covered methods, with unchanged
+  exclusions. Independent correctness and Ponytail review finds no blocker.
+  These are local Windows source-stack checks, not Linux CI or released-package
+  validation. Evidence is under `artifacts/benchmark005/medium-dependency-red.log`,
+  `medium-green-scalar-characterization.log` and `dependency-final-verification`;
+  tests are in `NavigationDependencyMediumTests.cs`.
 
 ### TRB-Issue-120 - Benchmark launcher discards failure status
 

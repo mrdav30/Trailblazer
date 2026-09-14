@@ -1447,6 +1447,110 @@ Ignored evidence: `artifacts/benchmark005/guided-contact-*`,
 `contact-{characterization,mutation,default-mutation,focused,focused-lean,debug}.log`
 and `contact-final-verification`.
 
+#### Follow-up: reject small mapping/ordering experiments and repair dependencies
+
+On 2026-09-14 UTC, this slice starts from Trailblazer `e5d0381`, GridForge
+`52e9d94`, FixedMathSharp `29bfa28` and SwiftCollections `4b5715b`. Two bounded
+Trailblazer experiments are **withdrawn**, not shipped as optimizations:
+
+- Passing immutable configuration keys by readonly reference through
+  `PersistentGridConfigurationMap` avoids copies in source, but the three guided
+  cases are flat to slower. LOS medians move **20.03 to 20.30 / 12.94 to 13.01 /
+  57.87 to 58.88 ms** for A*/100, Flow/100 and Flow/500. The original lookup and
+  storage declarations are restored. Existing lookup tests pass originally;
+  a wrong-key mutation fails two tests and is removed.
+- Continuation ordering can interpolate only X, or Z when X is stationary,
+  instead of constructing two complete vectors. Characterization covers both
+  directions, native/explicit anchors, full-domain coordinates and rounded ties;
+  admitting ties fails all ten cases. However, the complete-frame evidence does
+  not justify keeping the change. The implementation, internal test seam and
+  experiment-only tests are removed; their execution evidence remains ignored.
+
+The scalar short captures run original/candidate, then candidate/original.
+Each has three launches per case, one warmup, three actual and one diagnostic
+64-frame block per launch: 540 ordinary frames, 36 LOS frames and nine complete
+blocks per case. The first scalar pair contains the component-identity fix below
+on both sides; the repeat also contains the corrected component-byte formula on
+both sides. Compare within pairs, not across these different correctness baselines.
+
+| Scalar trial, original to candidate | A*/100 LOS median | Flow/100 LOS median | Flow/500 LOS median | Flow/500 complete-block median |
+| --- | ---: | ---: | ---: | ---: |
+| First short pair | +0.90% | -2.21% | -1.35% | +1.02% |
+| Reverse-order repeat | +0.36% | -8.14% | -1.71% | -2.45% |
+| Longer-warmed Flow/500 pair | — | — | -0.99% | -0.18% |
+
+The separate long pair runs original then candidate, with three launches,
+ten warmup and twenty actual blocks per launch. It is not fully counterbalanced
+or pooled with the short protocol. Across 60 actual blocks per version, LOS
+medians move **58.75015 to 58.17080 ms**, ordinary medians **4.75050 to 4.74895 ms**,
+and complete-block medians **518.41865 to 517.49835 ms**. Launch ranges overlap;
+the candidate's first launch is slightly slower in both LOS and block medians.
+LOS maximum worsens **65.5893 to 66.3108 ms**; ordinary maximum worsens too.
+Both versions retain **240/240 LOS frames above 31.25 ms** and **3,600/3,600
+ordinary frames above 2 ms**. The first short Flow/100 candidate also has seven
+ordinary frames above 2 ms versus zero originally. All observations are retained.
+The small pooled LOS shifts do not establish a useful complete-frame gain.
+
+Independent raw/summary/BenchmarkDotNet audits verify all eight captures:
+**456 records / 29,184 frames**, 60 successful child exits, exact signed-Int64
+replay and zero observed frame allocations/collection masks and BDN allocation/GC
+diagnostics. All **504** frozen-file hashes validate. Within each matched pair,
+portable PDBs identify exactly one changed authored Trailblazer source document:
+the configuration map for the copy trial, or `NavigationRayWork.cs` for the
+ordering trials. All 30 benchmark source-document hashes, generated source,
+project/build files and upstream binaries match within each pair. These are
+serial local Windows/i7-9700K/.NET 8.0.29 observations; A*/500 is not measured.
+
+The source review does uncover two confirmed correctness defects, fixed at their
+shared owners rather than bypassed for the measured case:
+
+- **TRB-Issue-121:** dependency accumulation used only the representative address,
+  collapsing distinct Solid/Gas/Liquid component identities. A dedicated bounded
+  full-key stamp set now preserves each medium during recording, full-capacity
+  duplicate checks and union preflight. Eight regressions fail originally and
+  pass after the fix, including public A* and bounded Flow guides that must go
+  stale after a remote Gas-only change while other dependency stamps stay equal.
+- **TRB-Issue-122:** component dependency records occupy 40 bytes, but payload
+  accounting charged 32. Correct the common formula, the default single-payload
+  ceilings for the same workspace envelopes, and exact-fit/one-byte-short tests.
+  Actual struct-size assertions now protect the formula. The original semantic
+  determinism digests remain unchanged. See the [issue tracker](issue-tracker.md)
+  for failure evidence and verification.
+
+The new full-key workspace table has wider elements than the address-only table;
+this is fixed construction storage, not a steady-state allocation. Correctly
+retaining distinct components also consumes their real dependency slots and
+payload bytes. No public API, lookup work-budget bypass, cache or changed LOS
+cadence is introduced. Keep `TRB-Benchmark-005` open: this pass repairs correctness
+but claims no retained performance improvement. Future work should return to
+measured mapping/chain/body-validation costs, not repeat these copy/ordering trials.
+
+Ignored evidence: `artifacts/benchmark005/guided-keycopy-*`, `guided-scalar-*`,
+`keycopy-comparison.json`, `scalar-final-comparison.json`,
+`scalar-reviewer-evidence.json`, `keycopy-{characterization,mutation}.log`,
+`scalar-tie-mutation.log`, `medium-dependency-red.log`,
+`component-byte-accounting-red.log` and `dependency-final-verification`.
+
+**Final local verification:** both Trailblazer solution configurations build for
+`netstandard2.1` and `net8.0` with zero warnings/errors. Release passes 2,501 core
+and 65 Gravitas-adapter tests; ReleaseLean passes 2,439 core and 65 adapter tests
+(5,070 total, no failures/skips). Both retain exact configured coverage of
+**30,883/30,883 lines, 12,109/12,109 branches and 3,017/3,017 fully covered methods**,
+without new exclusions. Independent correctness and Ponytail review finds no
+blocker. Upstream repositories are unchanged; these are local source-stack checks,
+not Linux CI or released-package validation.
+
+A final correctness-only guided capture (`dependency-final`) completes all nine
+child executions and 45 records / 2,880 frames, with exact replay against the
+unchanged starting capture and zero observed frame allocations/collections and
+BDN memory diagnostics. Its 63 frozen-file hashes validate. Authored PDB changes
+are limited to the dependency workspace, dependency byte formula, default query
+ceilings and the new component stamp set; both experimental hot paths match the
+starting source. This is a final replay/allocation check, not a speedup claim.
+The DocFX site also builds with warnings treated as errors and reports none.
+Evidence: `guided-dependency-final-*`, `dependency-final-replay.json` and
+`dependency-docfx.log` under `artifacts/benchmark005`.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

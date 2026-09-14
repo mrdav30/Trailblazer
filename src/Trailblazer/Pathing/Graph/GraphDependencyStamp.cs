@@ -18,7 +18,7 @@ internal sealed class GraphDependencyStamp
     private const long ReferenceSlotBytes = 8L;
     private const long Int64Bytes = 8L;
     private const long NavigationAreaPolicyKeyBytes = ReferenceSlotBytes + Int64Bytes;
-    private const long GraphComponentDependencyBytes = 32L;
+    private const long GraphComponentDependencyBytes = 40L;
     private const long GraphPageDependencyBytes = 56L;
     private static readonly long BaseRetainedBytes = Align8(
         ObjectHeaderBytes

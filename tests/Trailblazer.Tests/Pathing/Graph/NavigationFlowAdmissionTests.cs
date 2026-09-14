@@ -66,7 +66,7 @@ public sealed class NavigationFlowAdmissionTests
             limits.FlowWorkspaceComponentCapacity,
             limits.FlowWorkspaceEndpointPageCapacity);
 
-        exactBytes.Should().Be(1_012_024L);
+        exactBytes.Should().Be(1_016_120L);
         limits.MaxFlowSinglePayloadBytes.Should().Be(exactBytes);
 
         using var world = new GridWorld();

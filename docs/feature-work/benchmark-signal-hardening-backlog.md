@@ -69,11 +69,11 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   candidate pruning/slab intersection in GridForge and raw-coordinate
   containment/distance/capsule simplifications in FixedMathSharp are now
   implemented, together with per-sample immutable dependency-proof reuse in
-  Trailblazer. The latest GridForge axis-only candidate probes reduce repeat LOS
-  medians another 6-11%, to about 22.6 / 13.1 / 63.8 ms for A*/100, Flow/100 and
-  Flow/500. Complete-block medians improve in both comparisons, but ordinary
-  Flow/100 tails worsen in the short protocol. A separate longer-warmed pair
-  improves LOS/blocks with slightly slower ordinary medians. See the final
+  Trailblazer. The latest GridForge contact-containment simplification reduces
+  repeat LOS medians another 4-7%, to about 21.2 / 12.5 / 59.8 ms for A*/100,
+  Flow/100 and Flow/500. Ordinary-frame gains do not repeat, short Flow/100 tails
+  worsen and its block results are mixed. A separate longer-warmed pair improves
+  Flow/100 LOS/blocks with essentially unchanged ordinary medians. See the final
   follow-up for both results and remaining budget misses. The earlier per-edge rejection
   experiment remains withdrawn.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
@@ -1309,20 +1309,143 @@ validation remain material; source review did not justify reintroducing the
 withdrawn map-local cache or removing physical/component validation. Dependencies,
 world synchronization and the default 16-frame LOS cadence remain unchanged.
 
-**Next bounded experiment, not implemented:** incoming ordinary-portal
-reconstruction still reaches `BuildFootprintIntersection`, which uses general
-polygon containment for both sets of vertices. Test reuse of the existing
-rectangle point-containment predicate only when topology is rectangular and
-the footprint has four vertices. Keep default/invalid inputs on the current
-generic path to preserve exceptions, and retain all rounded edge intersections,
-uniqueness and hull processing. This is distinct from the withdrawn per-edge
-rejection experiment. The entire intersection method accounts for about 78 ms
-of the final 2,994 ms sampled root (2.6%); any benefit is unmeasured and likely
-modest, not evidence for a broad refactor or another cache.
+**Lead carried into the following slice:** incoming ordinary-portal
+reconstruction still reached `BuildFootprintIntersection`, using general polygon
+containment for both sets of vertices. The proposed experiment was to reuse
+existing rectangle point containment only for rectangular, four-vertex
+footprints, retaining generic default/invalid validation and all rounded edge
+intersections, uniqueness and hull processing. This was distinct from the
+withdrawn per-edge rejection experiment. Intersection accounted for about 78 ms
+of the final 2,994 ms sampled root (2.6%); benefit was then unmeasured and likely
+modest, not evidence for a broad refactor or another cache. The following
+follow-up records the implementation and measured outcome.
 
 Ignored evidence: `artifacts/benchmark005/guided-chain-baseline*`, `guided-axis-*`,
 `axis-comparison.json`, `{chain-baseline,axis-confirm}-profile-*`,
 `axis-{characterization,mutation,focused}.log` and `axis-final-verification`.
+
+#### Follow-up: reuse rectangular containment during contact construction
+
+On 2026-09-14 UTC, this slice starts from Trailblazer `94d0eec`, GridForge
+`011c422`, FixedMathSharp `29bfa28` and SwiftCollections `4b5715b`. Only GridForge
+runtime source changes (`GF-Benchmark-009`). `BuildFootprintIntersection` reuses
+the existing planar containment predicate when the prism being tested is
+rectangular and has four footprint vertices. Factory-created rectangles have
+exact symmetric bounds, so four inclusive coordinate comparisons replace the
+generic widened polygon-edge tests without changing the closed set. This holds
+at translated scalar extremes as well as near the origin. Hexagonal footprints
+retain generic containment; default prisms retain its empty-footprint exception
+after vertical admission. Offset preparation, rounded edge intersections,
+candidate uniqueness, hull construction and area/contact classification are
+unchanged. No public API, cache, retained storage or target-specific code is added.
+
+The unchanged short protocol runs serially as `contact-baseline` (original),
+`contact-candidate`, `contact-control` (original again) and `contact-confirm`
+(same final candidate). Each capture has three launches per case, one warmup,
+three actual and one diagnostic 64-frame block per launch. Actual ordinary/LOS/
+block sample sizes are 540/36/nine per case; all observations are retained.
+
+| Case | Repeat ordinary median, original / final | Repeat LOS median, original / final | Repeat complete-block median, original / final |
+| --- | ---: | ---: | ---: |
+| A*/100 | 2.1186 / 2.1668 ms | 22.7572 / 21.2390 ms | 224.1101 / 218.1768 ms |
+| Flow/100 | 0.8671 / 0.8563 ms | 13.0754 / 12.5091 ms | 104.4479 / 102.2288 ms |
+| Flow/500 | 5.1756 / 5.2749 ms | 63.3116 / 59.8006 ms | 573.2471 / 561.8745 ms |
+
+LOS medians improve **7.3% then 6.7% / 3.5% then 4.3% / 4.4% then 5.5%**,
+respectively. A*/100 and Flow/500 block medians improve in both pairs; Flow/100
+blocks move **105.8836 to 106.5883 ms (+0.7%)**, then **104.4479 to 102.2288 ms
+(-2.1%)**. These are complete containing-operation measurements, not sums of
+nested frame timers. Ordinary gains do not repeat: A* medians worsen **0.5%
+then 2.3%**, and Flow/500 moves **-1.7% then +1.9%**.
+
+**Short Flow/100 ordinary tails worsen in both pairs.** Frames above 2 ms rise
+**34 to 74**, then **62 to 72**, of 540 per capture; P99 rises **2.2090 to
+2.2434 ms**, then **2.2004 to 2.4142 ms**. The first candidate's third-launch
+LOS median is **14.1842 ms**, versus **12.8083 ms** originally, so pooled gains
+are not uniform across launches. Repeat A* block P95/maximum also worsen from
+**233.5566/233.7140 to 234.0708/241.5988 ms** despite its lower median.
+Flow/100 block P95/maximum worsen in both pairs as well.
+
+A separate Flow/100 pair uses three launches with ten warmup and twenty actual
+blocks per launch, retaining 60 actual blocks / 3,600 ordinary / 240 LOS frames
+per version. It runs original (`contact-control-long`) then final
+(`contact-confirm-long`), not fully counterbalanced, and is not pooled with the
+short protocol. With the matching local-stack binary rebuilt first, its command is:
+
+```powershell
+$env:UseLocalLsfStack = 'true'
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter '*AgentCount: 100, Algorithm: "FlowField"*' --launchCount 3 --warmupCount 10 --iterationCount 20 --keepFiles
+```
+
+Original to final medians are **0.7900 to 0.7913 ms (+0.2%)** ordinary,
+**12.7955 to 12.0469 ms (-5.9%)** LOS and **98.9626 to 96.6949 ms (-2.3%)**
+complete block. LOS/block P95, P99 and maximum improve; ordinary P95/P99 slightly
+worsen, with no actual ordinary frame above 2 ms in either capture. Warmup
+excursions remain retained. Keep both protocols:
+this supports a focused LOS benefit, not a confirmed JIT cause, an ordinary-frame
+fix or a universal containing-frame win.
+
+Independent raw/source audits verify **366 records / 23,424 frame checksums**
+across all six captures, including warmup and diagnostics, with exact signed
+Int64 replay and zero observed frame allocations, collection masks and BDN
+GC/allocation diagnostics. All **378** frozen child-file hashes validate and
+all **42** child executions succeed. Portable PDBs identify only GridForge's
+`GridCellGeometry.cs` as changed among 698 authored documents. Original/control
+and candidate/confirmation runtime binaries match, including their corresponding
+short/long versions. Authored harness source is unchanged; generated runners
+match within each protocol. The long original capture ran between short control
+and confirmation, with the long final capture last. Captures, profiles and
+validation jobs run serially, not concurrently.
+
+Separate frozen-child profiles attribute about **78 to 48 ms** to footprint
+intersection in Flow/500, against measured sampled roots of **3,138 and
+3,116 ms**. Samples include benchmark validation, overlap inclusively and do not
+establish isolated-method speedups or replace full-frame measurements.
+Independent checks match all six raw stack totals to their saved splits,
+validate all 126 frozen-profile file hashes and confirm exact replay with zero
+frame allocations/collection masks in 50 profile blocks / 3,200 frames. These
+profile observations are separate from the unprofiled timing comparisons.
+
+Fifteen new behavior cases cover nested rectangles without crossing edges,
+exact ordered polygons/area/contact kind in both argument orders, stacked faces,
+translations near both scalar extremes, opposite-extreme separation, and default
+prism failure precedence. All pass on original source. Deliberately disabling
+containment fails all 12 nested cases; removing the footprint-count guards fails
+the default-prism test. Both mutations are removed. Final source passes all
+102 focused geometry tests in Release and ReleaseLean, and all 906 Debug tests.
+Independent correctness and Ponytail review finds no actionable issue.
+
+**Full local verification:** FixedMathSharp, GridForge, Gravitas and Trailblazer
+pass all eight Release/ReleaseLean solution builds and all 12 configured test
+runs against `UseLocalLsfStack=true`: **20,200 tests**, zero warnings/errors,
+failures or skips. Both `netstandard2.1` and `net8.0` library targets build.
+Every configured line, branch and method is fully covered without new exclusions
+or relaxed gates. GridForge passes **909 tests per configuration**, with exact
+**8,968/8,968 lines, 3,865/3,865 branches and 1,118/1,118 fully covered methods**.
+Trailblazer passes **2,493 / 2,431** core tests plus **65** adapter tests in each
+configuration, with exact **30,858/30,858 lines, 12,101/12,101 branches and
+3,012/3,012 fully covered methods**. These are local source-stack checks, not
+Linux CI or released-package validation.
+
+**Remaining acceptance:** all 36 final Flow/500 LOS frames still exceed 31.25 ms
+(median **59.8 ms**, maximum **66.4 ms**). Its ordinary median is **5.27 ms**;
+A*/100 ordinary median is **2.17 ms**, and short Flow/100 retains **72/540**
+ordinary frames above 2 ms. Keep `TRB-Benchmark-005` active. Physical/semantic
+admission, candidate/work budgets, dependencies, world synchronization and the
+default 16-frame LOS cadence are unchanged. These are serial local
+Windows/i7-9700K/.NET 8.0.29 observations, not Linux or engine-runtime evidence;
+A*/500 remains outside the selected capture. A bounded follow-up source review
+finds no further small simplification justified by these profiles: mapping,
+chain/body admission, dependency checks and synchronized world reads remain
+material, but sampled parent attribution does not show which work is redundant.
+Keep the profiles as the next baseline without adding a cache, bypassing checks
+or changing synchronization.
+
+Ignored evidence: `artifacts/benchmark005/guided-contact-*`,
+`contact-comparison.json`, `contact-independent-review.json`,
+`contact-{baseline,confirm}-profile-*`,
+`contact-{characterization,mutation,default-mutation,focused,focused-lean,debug}.log`
+and `contact-final-verification`.
 
 ## Closed Signals
 

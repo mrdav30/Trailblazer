@@ -77,6 +77,13 @@ instead of burying it in notes.
     tails worsen; a separate longer-warmed pair improves LOS/blocks **7% / 4%**
     with ordinary medians **3% slower**. These qualifications remain in the
     tracker; no ordinary-frame or universal timing guarantee is claimed.
+    The next GridForge slice reuses existing rectangle containment during
+    contact construction, preserving generic hex/default behavior and all edge
+    intersections. Repeated LOS medians improve another **4-7%** to
+    **21.2 / 12.5 / 59.8 ms**. Ordinary gains do not repeat, short Flow/100 tails
+    worsen and its block results are mixed. A separate longer-warmed Flow/100
+    pair improves LOS/blocks **5.9% / 2.3%**, with ordinary medians essentially
+    unchanged; both protocols and their limitations remain in the tracker.
     Full-frame acceptance remains incomplete: the latest candidate still has
     **0 / 0 / 36** of each case's 36 measured rechecks exceeding 31.25 ms.
     Cold-acquisition scheduling does not

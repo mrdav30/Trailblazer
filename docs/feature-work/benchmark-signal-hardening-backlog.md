@@ -69,11 +69,12 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   candidate pruning/slab intersection in GridForge and raw-coordinate
   containment/distance/capsule simplifications in FixedMathSharp are now
   implemented, together with per-sample immutable dependency-proof reuse in
-  Trailblazer. The latest GridForge interval-sort change reduces repeat LOS
-  medians another 5-8%, to about 23.7 / 14.5 / 67.5 ms for A*/100, Flow/100 and
-  Flow/500. Short-protocol Flow/100 containing blocks regress; a separate
-  longer-warmed comparison improves them. See the final follow-up for both
-  results and remaining budget misses. The earlier per-edge rejection
+  Trailblazer. The latest GridForge axis-only candidate probes reduce repeat LOS
+  medians another 6-11%, to about 22.6 / 13.1 / 63.8 ms for A*/100, Flow/100 and
+  Flow/500. Complete-block medians improve in both comparisons, but ordinary
+  Flow/100 tails worsen in the short protocol. A separate longer-warmed pair
+  improves LOS/blocks with slightly slower ordinary medians. See the final
+  follow-up for both results and remaining budget misses. The earlier per-edge rejection
   experiment remains withdrawn.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
@@ -1206,6 +1207,122 @@ Ignored evidence: `artifacts/benchmark005/guided-prepared-prism-baseline*`,
 `interval-sort-{characterization,mutation,focused}.log`,
 `interval-sort-permutation-verification.json` and
 `interval-sort-final-verification`.
+
+#### Follow-up: calculate only the axis queried during candidate narrowing
+
+On 2026-09-14 UTC, this slice starts from Trailblazer `e8059b6`, GridForge
+`8a9de6f`, FixedMathSharp `29bfa28` and SwiftCollections `4b5715b`. Only GridForge
+runtime source changes (`GF-Benchmark-008`). Eligible rectangular candidate
+probes calculate X or Z directly instead of building a complete world position.
+The expression is exactly the topology's saturating multiply followed by its
+separate saturating add, using the same origin and metric. It is not a fused,
+incremental or inverse-coordinate shortcut. Extreme-prism validation, binary
+search over potentially repeated centers, full candidate/work charges, sparse
+presence, closed-set contacts and failure precedence are unchanged. No cache,
+public API, retained storage or framework-specific code is introduced; both
+`netstandard2.1` and `net8.0` use this implementation.
+
+The existing three-case, three-launch, one-warmup/three-actual protocol runs
+serially as `chain-baseline` (original), `axis-candidate`, `axis-control`
+(original again) and `axis-confirm` (same final candidate). Every capture retains
+27 actual, nine warmup and nine diagnostic blocks. Actual ordinary/LOS/block
+sample sizes remain 540/36/nine per case, with no trimming.
+
+| Case | Repeat ordinary median, original / final | Repeat LOS median, original / final | Repeat complete-block median, original / final |
+| --- | ---: | ---: | ---: |
+| A*/100 | 2.2139 / 2.1565 ms | 24.1289 / 22.6284 ms | 229.2059 / 224.7099 ms |
+| Flow/100 | 1.2394 / 0.9320 ms | 14.6147 / 13.0754 ms | 134.7648 / 104.1028 ms |
+| Flow/500 | 5.2465 / 5.2449 ms | 68.3507 / 63.7945 ms | 594.3401 / 565.4016 ms |
+
+LOS medians improve **6.2% then 6.2% / 11.1% then 10.5% / 7.0% then 6.7%**,
+respectively. Complete-block medians improve **2.1% then 2.0% / 18.5% then
+22.8% / 3.7% then 4.9%**. These block measurements include the full containing
+operation, not a sum of nested frame timers. Ordinary Flow/500 stays essentially
+flat. The unchanged A* ordinary path varies by launch, including a slow control
+launch; do not attribute its apparent ordinary-tail reduction to this ray patch.
+
+**Short-protocol Flow/100 ordinary tails worsen in both pairs.** Frames above
+2 ms rise **9 to 136**, then **43 to 75**, of 540 per capture. First-pair P95/P99
+rise **1.8912/2.0600 to 2.1777/2.4117 ms**; repeat P95/P99 rise **2.1208/2.3025
+to 2.1351/2.3328 ms**. The first candidate's third launch has ordinary/LOS/block
+medians **1.9745 / 15.5589 / 193.0783 ms**, so the pooled median improvement
+is not a uniform launch-level win. Retain these excursions and all outliers.
+
+A separate Flow/100 pair uses ten warmup and twenty actual blocks per launch,
+with three launches, unchanged authored harness/preparation and default runtime
+settings. It runs candidate (`axis-confirm-long`) then original
+(`axis-control-long`), not fully counterbalanced, and is not pooled with the
+short protocol. Use the longer command in the preceding follow-up with these
+artifact labels, rebuilding each version with `UseLocalLsfStack=true` first.
+Each version retains 60 actual blocks / 3,600 ordinary / 240 LOS frames.
+Original to final medians are **0.7864 to 0.8112 ms (+3.1%)** ordinary,
+**13.7156 to 12.7511 ms (-7.0%)** LOS, and **102.6354 to 98.4398 ms (-4.1%)**
+complete block. Ordinary P95/P99 slightly worsen; neither capture has an
+ordinary frame above 2 ms. LOS P95/P99/maximum improve. Block P95 improves,
+but P99/maximum rise slightly from **106.7434/106.7729 to 106.8567/106.8924 ms**.
+This supports a measured LOS/block benefit with protocol-sensitive tails, not
+a confirmed JIT/tiering cause or an ordinary-frame performance fix.
+
+Independent raw/source audits verify **366 records / 23,424 frame checksums**
+across all six captures, including warmup and diagnostics, with exact signed
+Int64 replay, zero observed frame allocations/collection masks and zero BDN
+GC/allocation diagnostics. All **378** frozen child-file hashes validate and
+all **42** child executions succeed. Portable PDBs identify only the GridForge
+trace-interval source as changed; the other runtime and harness authored source
+is unchanged. Original/control runtime binaries match, as do candidate/confirm
+and corresponding short/long runtime binaries. Rebuilt benchmark binaries can
+differ; generated runners differ between protocols but match within each pair.
+These serial local Windows/i7-9700K/.NET 8.0.29 observations are not Linux or
+engine-runtime evidence. A*/500 is outside the selected capture.
+
+Separate profiles of the frozen original/final children show Flow/500 candidate
+collection falling from about **250 to 48 ms**, against sampled measured roots
+of **3,120 and 2,994 ms**. A*/100 collection is about 61/62 ms; no universal
+isolated-method speedup is claimed. Roots include benchmark validation, sampled
+shares overlap, and these profiles do not replace the containing-frame evidence.
+
+Behavior tests extend the existing spatial-diagonal theory to negative translated
+origins with fractional unequal-axis metrics, dense/sparse storage and both ray
+directions. They assert all 29 exact contacts and parameters, physical presence,
+continuous coverage, and exact/one-below candidate, work and output budgets.
+All eight rows pass on original source; omitting the Z origin deliberately fails
+exactly the four new rows. The final patch passes all 87 focused tracing tests.
+Independent correctness/Ponytail review finds no actionable issue.
+
+**Full local verification:** FixedMathSharp, GridForge, Gravitas and Trailblazer
+pass all eight Release/ReleaseLean solution builds and their configured test/
+coverage gates against `UseLocalLsfStack=true`, with zero warnings, errors,
+test failures or skips. Both `netstandard2.1` and `net8.0` library targets build.
+Every configured line, branch and method is fully covered without new exclusions
+or relaxed gates. GridForge passes **894 tests per configuration**, with exact
+**8,960/8,960 lines, 3,857/3,857 branches and 1,118/1,118 fully covered methods**.
+Trailblazer passes **2,493 / 2,431** core tests plus **65** adapter tests in each
+configuration, with exact **30,858/30,858 lines, 12,101/12,101 branches and
+3,012/3,012 fully covered methods**. These are local source-stack checks, not
+Linux CI or released-package validation.
+
+**Remaining acceptance:** all 36 final Flow/500 LOS frames still exceed 31.25 ms
+(median **63.8 ms**, maximum **69.1 ms**). Its ordinary median is **5.24 ms**;
+A*/100 ordinary median is **2.16 ms**, and short Flow/100 retains **75/540**
+ordinary frames above 2 ms. Keep `TRB-Benchmark-005` active. Mapping and chain/body
+validation remain material; source review did not justify reintroducing the
+withdrawn map-local cache or removing physical/component validation. Dependencies,
+world synchronization and the default 16-frame LOS cadence remain unchanged.
+
+**Next bounded experiment, not implemented:** incoming ordinary-portal
+reconstruction still reaches `BuildFootprintIntersection`, which uses general
+polygon containment for both sets of vertices. Test reuse of the existing
+rectangle point-containment predicate only when topology is rectangular and
+the footprint has four vertices. Keep default/invalid inputs on the current
+generic path to preserve exceptions, and retain all rounded edge intersections,
+uniqueness and hull processing. This is distinct from the withdrawn per-edge
+rejection experiment. The entire intersection method accounts for about 78 ms
+of the final 2,994 ms sampled root (2.6%); any benefit is unmeasured and likely
+modest, not evidence for a broad refactor or another cache.
+
+Ignored evidence: `artifacts/benchmark005/guided-chain-baseline*`, `guided-axis-*`,
+`axis-comparison.json`, `{chain-baseline,axis-confirm}-profile-*`,
+`axis-{characterization,mutation,focused}.log` and `axis-final-verification`.
 
 ## Closed Signals
 

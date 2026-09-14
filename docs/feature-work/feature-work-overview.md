@@ -70,6 +70,13 @@ instead of burying it in notes.
     its blocks **5.8%**, with ordinary medians near 0.79 ms on both versions.
     Both results are retained: this demonstrates protocol sensitivity, not a
     confirmed JIT cause or a uniform containing-frame win.
+    The next GridForge change calculates only the coordinate used by rectangular
+    candidate probes, preserving exact saturating arithmetic and all tracing
+    contracts. Repeated LOS medians improve **6-11%** to **22.6 / 13.1 / 63.8 ms**,
+    with lower complete-block medians in both pairs. Short Flow/100 ordinary
+    tails worsen; a separate longer-warmed pair improves LOS/blocks **7% / 4%**
+    with ordinary medians **3% slower**. These qualifications remain in the
+    tracker; no ordinary-frame or universal timing guarantee is claimed.
     Full-frame acceptance remains incomplete: the latest candidate still has
     **0 / 0 / 36** of each case's 36 measured rechecks exceeding 31.25 ms.
     Cold-acquisition scheduling does not

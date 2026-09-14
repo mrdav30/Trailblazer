@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-123`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-124`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -22,6 +22,22 @@
   here until they have been investigated and confirmed as runtime defects.
 
 ## Active Issues
+
+### TRB-Issue-123 - Navigator migration and restore guidance disagree with current records
+
+- **Discovered:** 2026-09-14 during LOS phase-spreading documentation review.
+- **Status:** Open; documentation-only drift, not a newly established runtime defect.
+- **Evidence:** Before phase spreading, `Navigator.Serialization.cs` and the
+  serialization wiki use outer schema 5, but `docs/MIGRATION.md` still names
+  schema 4. The wiki also says the next simulation frame always requests fresh
+  guidance, while an ordinary restored direct-travel session retains its
+  existing LOS flag and does not automatically request a guide.
+- **Resolution scope:** Align migration and serialization guidance with the
+  implemented phase configuration/schema, and distinguish enabled fresh
+  admission from the preserved phase-disabled direct/countdown behavior.
+  Verify authored examples against public signatures and build DocFX with
+  warnings treated as errors. Do not alter default runtime behavior solely to
+  make the old prose true.
 
 ### TRB-Issue-119 - Guided A* setup reported an exception in wide geometry
 

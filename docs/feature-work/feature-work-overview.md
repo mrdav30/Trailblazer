@@ -39,12 +39,14 @@ instead of burying it in notes.
     has a **57.64 ms** LOS median, all **36/36** rechecks above 31.25 ms, and all
     **540/540** ordinary frames above the 2 ms navigation allowance. These are
     local headless observations, not portable timing guarantees.
-  - The open-ended micro-optimization sweep has ended. The next work is the
+  - The open-ended micro-optimization sweep has ended. Current work is the
     [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
-    starting with Phase 0 contract review. It defines opt-in host-assigned phases,
+    on `codex/los-phase-spreading` from `develop`. Phase 0 contract review,
+    default-mode characterizations and the unchanged benchmark control are
+    complete; runtime implementation is underway. It defines opt-in host-assigned phases,
     bounded phase entry, pause/resume and serialization rules, while preserving
     required admission/freshness/retry boundaries and the synchronized control.
-    This is a draft, not an implemented feature or proof that every frame fits.
+    Completion and performance acceptance are not yet established.
     Spreading periodic work does not reduce each ray's cost; the existing cold
     acquisition scheduler does not own Navigator LOS checks.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
@@ -160,8 +162,9 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Execute Phase 0 of the [LOS phase-spreading plan](navigationLineOfSightPhasePlan.md)
-   before broader features, then implement and measure its reviewed contract.
+1. Complete the [LOS phase-spreading plan](navigationLineOfSightPhasePlan.md)
+   before broader features. Phase 0 is complete; implement, harden and measure
+   its reviewed contract on the feature branch.
    `TRB-Benchmark-005` remains open for unmet full-frame budgets, particularly
    Flow/500 synchronous rechecks; completing the feature does not automatically
    close the signal. Exact rectangular tracing, raw-coordinate geometry and

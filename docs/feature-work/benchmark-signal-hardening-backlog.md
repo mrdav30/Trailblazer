@@ -71,10 +71,11 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   its repeated LOS gains do not establish a convincing complete-frame benefit
   across the measured cases. The final unchanged Flow/500 control still has a
   **57.64 ms** LOS median, with all 36 rechecks above 31.25 ms. End the open-ended
-  micro-optimization sweep here. The next work is Phase 0 of the
+  micro-optimization sweep here. Current work is the
   [Deterministic LOS Phase Spreading plan](navigationLineOfSightPhasePlan.md),
   which owns the opt-in contract, implementation and separate phased evidence.
-  It is a draft, not a silent cadence change or closure of this signal. Keep the
+  Phase 0 is complete and implementation is underway; no performance acceptance
+  or closure of this signal is claimed yet. Keep the
   synchronized fixture unchanged as its control.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and

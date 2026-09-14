@@ -7,7 +7,10 @@
 
 **Created:** 2026-09-14
 
-**Status:** Draft; Phase 0 is next. No runtime behavior has changed.
+**Status:** In progress; Phase 0 complete, Phase 1 implementation underway.
+
+**Execution branch:** `codex/los-phase-spreading`, created from `develop` at
+`5367f5a` after the user requested branch-based implementation and final review.
 
 **Source baseline:** Trailblazer `bc5349cc44db0ac4cdba183bacebaef0fe91530f`.
 Record the exact sibling revisions and executed binaries again before capture.
@@ -79,8 +82,9 @@ simultaneous admission or invalidation can still burst.
 - Keep this slice in Trailblazer unless a reproduced upstream defect requires
   an owning-library fix. Capture defects in [issue-tracker.md](issue-tracker.md).
   Releases remain deferred under the [overview](feature-work-overview.md).
-- Continue on `develop`, preserving unrelated worktree changes. This plan does
-  not authorize staging, commits, pushes or an intermediate release.
+- Work on the requested `codex/los-phase-spreading` feature branch from
+  `develop`, preserving unrelated worktree changes. Pushes, merges and releases
+  still require the corresponding request.
 
 ### Not included
 
@@ -161,21 +165,21 @@ Phase 0 records any minimal adjustment alongside the approved API.
 
 ## Phase 0 - Freeze the contract and control
 
-- [ ] Read the mapped source/tests, benchmark README, serialization/publication
+- [x] Read the mapped source/tests, benchmark README, serialization/publication
   guides and latest `TRB-Benchmark-005` evidence. Record current source-stack
   revisions; retain the synchronized fixture and its exact cadence/replay.
-- [ ] Add bounded characterization tests for default/zero intervals, initial
+- [x] Add bounded characterization tests for default/zero intervals, initial
   checks, retries, skipped/early-return heading updates and direct versus
   guide-backed restore. Existing behavior should pass before adding the feature.
-- [ ] Settle one minimal public configuration shape, including disabled versus
+- [x] Settle one minimal public configuration shape, including disabled versus
   phase zero, interval/phase validation, atomic replacement and enabling/disabling
   during an active request. Do not leave two competing configuration surfaces.
-- [ ] Record a finite state/transition table for due calculation, missed slots,
+- [x] Record a finite state/transition table for due calculation, missed slots,
   forced checks, held actions, lifecycle reset and signed-counter boundaries.
   Define what survives save/load and how re-entry into another clock is handled.
-- [ ] Decide exact serialized keys and Navigator schema handling. Preserve
+- [x] Decide exact serialized keys and Navigator schema handling. Preserve
   transactional rejection of unsupported shapes; no silent compatibility shim.
-- [ ] Have an independent reviewer challenge correctness and unnecessary state.
+- [x] Have an independent reviewer challenge correctness and unnecessary state.
   Resolve findings here before runtime implementation. Freeze test expectations
   and the distinct benchmark identities; no further planning document is needed.
 
@@ -321,3 +325,118 @@ here when available, rather than documenting a command for an API not yet built.
   investigation and reviewed source boundaries. No runtime implementation,
   new timing measurements, coverage run or release gate is claimed by drafting
   the plan. All execution phases remain unchecked.
+
+### Phase 0 - Reviewed contract decisions
+
+Execution began on 2026-09-14 from `5367f5a`. The clean local Release baseline
+passes 2,505 core and 65 adapter tests. Local source-stack revisions are
+FixedMathSharp `29bfa28`, SwiftCollections `4b5715b`, GridForge `52e9d94`, and
+Gravitas `42af506`. The earlier benchmark record remains historical evidence;
+the new feature has not yet been measured.
+
+Independent source/contract review confirms these implementation decisions:
+
+- One mutation API: `NavSteering.ConfigurePathRechecks(int intervalFrames,
+  int? phase = null)`. `PathRecheckCooldownFrames` becomes read-only and
+  `PathRecheckPhase` exposes the nullable phase. There is no parallel writable
+  field/property or compatibility wrapper. This is an intentional source change
+  with a migration example. Disabled mode accepts the original integer interval
+  domain; enabled mode requires a positive interval and `0 <= phase < interval`.
+- Identical configuration is a no-op. Validate the whole pair before changing
+  anything. For active sessions preserve already-due work; otherwise align the
+  next enabled slot, or start the ordinary countdown when disabling. New/idle
+  sessions have no timing debt. Configuration is not a path request.
+- The signed public `FrameCount` cannot distinguish long gaps, a complete
+  counter wrap and reset. Use one internal nonnegative `ulong` frame index plus
+  a reset-lifetime identity in the existing clock, with internal context access.
+  Preserve public `FrameCount`'s low-32-bit behavior; expose no new public clock
+  API or agent registry. Exhaustion rejects before mutating the clock. Reset
+  replaces the lifetime identity and starts the index at zero.
+- Keep only an armed frame index, a bounded positive delay and the owning
+  lifetime reference for phased due state. For logical frame `T`, calculate
+  `distance = P - (T % I)` and add `I` when non-positive. Due means elapsed
+  frames reach that distance; do not add a future absolute deadline that can
+  overflow. The existing countdown's zero value can preserve already-due work
+  during active configuration changes, including enabling at logical frame zero
+  after enough completed headings. Normal enabled arms clear that marker and
+  enabled headings do not decrement it. Future-slot arms always use `1..I`. A missing/lost
+  lifetime is unarmed, not proof that travel is valid.
+- Before consuming an enabled session after a clock-lifetime change, discard
+  its timing/direct-travel assumption and enter the existing re-admission path.
+  Normal admission and retry paths remain outside the periodic gate. A check
+  arms a strictly future slot, preventing a duplicate periodic check that tick.
+- Keep the existing countdown semantics when disabled. Enabled stop, new query,
+  reset and rebind discard phased timing debt. Profile replacement retains the
+  configuration and existing forced re-admission. Held actions retain their
+  current validation/completion boundary; missed periodic work is handled only
+  when heading updates resume.
+- Preserve record key `PathRecheckCooldownFrames`, add nullable
+  `PathRecheckPhase`, and advance the outer Navigator schema from **5 to 6**.
+  Path-session schema remains 1. Stage/validate the pair before mutation.
+  Enabled restore clears old direct-travel trust and requires fresh admission
+  at the next eligible update, in either the same or a new context. That check
+  re-establishes the phase. Do not serialize phased clock identity or deadline;
+  disabled restore retains its existing countdown/direct-mode behavior.
+
+The clock/context files join the implementation map solely for the internal
+index/lifetime boundary. Characterization and runtime tests must prove the
+public signed wrap, reset-to-the-same-frame case and transactional counter
+exhaustion. This avoids an undocumented maximum pause length or phase drift
+after a 32-bit counter revolution.
+
+Five new real-graph default-mode characterizations pass in Release, with four
+in ReleaseLean (the MemoryPack case is omitted there). Existing tests cover
+zero-interval, initial admission, stale retry, JSON direct restore and
+guide-backed restore; their locations and focused commands are recorded in the
+ignored task report. Independent spec/correctness/Ponytail review found no
+actionable findings. No production change was needed for these characterizations.
+
+The fresh unchanged `original-control` capture completes all three selected
+cases and nine child exits: nine warmup, 27 actual and nine diagnostic records.
+Its 1,728 actual frames allocate zero current-thread bytes; replay is exact
+within/across launches. Actual-frame P95/max are 20.65/22.35 ms for A*/100,
+11.50/15.82 ms for Flow/100 and 47.19/63.81 ms for Flow/500. These are whole
+distribution statistics, not the earlier periodic-only medians. All executed
+child binaries, generated source and SHA256 hashes are frozen under
+`artifacts/los-phase/original-control-children`; logs and analyzed records use
+the same `original-control` prefix. Runtime source still matched the branch base
+when this capture ran.
+
+The same actual-only baseline has 576 frames per selected case:
+
+| Original control | Median 64-frame sum | Observed P99 | Frames >2 ms | Frames >31.25 ms |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 | 213.97 ms | 21.26 ms | 566/576 | 0/576 |
+| Flow/100 | 100.28 ms | 14.90 ms | 36/576 | 0/576 |
+| Flow/500 | 526.79 ms | 62.08 ms | 576/576 | 36/576 |
+
+The block sum contains only the 64 inner host-frame timings, not untimed setup
+or export, nor the semantic validation included in the outer BenchmarkDotNet
+operation.
+
+### Predeclared performance decision
+
+The original `Simulate64GuidedFrames` method/case identity remains the
+uninstrumented control. New matched-instrumentation method identities are
+`Simulate64GuidedFramesInstrumentedUnphased`,
+`Simulate64GuidedFramesInstrumentedBalancedPhases`, and
+`Simulate64GuidedFramesInstrumentedUnbalancedPhase`. Their interval is 16;
+assignments are null, stable host ordinal modulo 16, and all phase zero.
+Independent benchmark design review supports observing the existing immediate
+ray work meter in this sequential blocked-route fixture, with explicit rejection
+of guide-recovery work and exact per-frame/total-count assertions. This is
+benchmark-only evidence, not a general ray invocation counter or runtime API.
+
+Before observing candidate timings, require balanced Flow/500 actual-frame P95
+to improve by at least **50%** against the matched instrumented synchronized
+control in each repeated capture. Require no more than **10%** full-block
+median regression for each selected case; also compare the unchanged default
+control against its frozen baseline and report per-launch differences. Report
+P99/max and every budget miss, not only these keep criteria. The existing 2 ms
+and 31.25 ms targets are not replaced by relative improvement thresholds.
+
+Use bounded sizing followed by two matched repeated comparisons of A*/100,
+Flow/100 and Flow/500 (three launches, one warmup, three actual 64-frame blocks
+per case). Retain an unbalanced assignment as a bounded behavior/sizing control,
+not an unrequested multiplication of the full repeated matrix. Separate
+startup/resume/invalidation/restore burst evidence from steady-state blocks.

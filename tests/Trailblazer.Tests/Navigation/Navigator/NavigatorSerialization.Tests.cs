@@ -56,7 +56,7 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(5);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(6);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
     }
@@ -118,6 +118,7 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(false, 3)]
     [InlineData(false, 4)]
     [InlineData(false, 5)]
+    [InlineData(false, 6)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true, 0)]
     [InlineData(true, 1)]
@@ -125,6 +126,7 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true, 3)]
     [InlineData(true, 4)]
     [InlineData(true, 5)]
+    [InlineData(true, 6)]
 #endif
     public void RoundTrip_ShouldRejectMissingOrInvalidFinalSchemaTransactionally(
         bool useMemoryPack,
@@ -154,6 +156,7 @@ public class NavigatorSerializationTests : IDisposable
                 -Fixed64.One,
                 "NavigationProfile",
                 "Radius"),
+            6 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 5, "SchemaVersion"),
             _ => throw new InvalidOperationException()
         };
 

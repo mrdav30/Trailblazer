@@ -503,6 +503,7 @@ public sealed class NavigatorProfileReplacementTests : IDisposable
                 : default);
         navigator.ApplyGuidedTrekRequest(query, groupId: 13);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        steering.ConfigurePathRechecks(16, 15);
         steering.GetHeading(navigator, out _);
         ActiveLeaseCount().Should().Be(1);
 
@@ -519,6 +520,8 @@ public sealed class NavigatorProfileReplacementTests : IDisposable
         rebuilt.Budget.Should().Be(query.Budget);
         rebuilt.FlowField.Should().Be(query.FlowField);
         steering.MovementGroupID.Should().Be(13);
+        steering.PathRecheckCooldownFrames.Should().Be(16);
+        steering.PathRecheckPhase.Should().Be(15);
 
         steering.GetHeading(navigator, out _);
 

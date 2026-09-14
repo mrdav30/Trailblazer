@@ -22,6 +22,10 @@ internal sealed class TrailblazerClock
 
     private Fixed64 _deltaTime = Fixed64.One / (Fixed64)DefaultFrameRate;
 
+    private ulong _frameIndex;
+
+    private object _lifetime = new();
+
     /// <summary>
     /// Gets the fixed simulation frame rate.
     /// </summary>
@@ -41,6 +45,10 @@ internal sealed class TrailblazerClock
     /// Gets the number of simulated frames.
     /// </summary>
     public int FrameCount { get; private set; }
+
+    internal ulong FrameIndex => _frameIndex;
+
+    internal object Lifetime => _lifetime;
 
     /// <summary>
     /// Gets the total simulated time in seconds.
@@ -67,7 +75,12 @@ internal sealed class TrailblazerClock
     /// </summary>
     public void Simulate()
     {
-        FrameCount++;
+        SwiftThrowHelper.ThrowIfTrue(
+            _frameIndex == ulong.MaxValue,
+            message: "Trailblazer frame index is exhausted.");
+
+        _frameIndex++;
+        FrameCount = unchecked((int)_frameIndex);
         TotalTime += _deltaTime;
     }
 
@@ -99,6 +112,8 @@ internal sealed class TrailblazerClock
     /// </summary>
     public void Reset()
     {
+        _frameIndex = 0;
+        _lifetime = new object();
         FrameCount = 0;
         TotalTime = Fixed64.Zero;
         AccumulatedTime = Fixed64.Zero;

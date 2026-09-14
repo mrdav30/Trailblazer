@@ -123,8 +123,97 @@ public partial class NavSteering : IRecordable
 
     private Vector3d _requestedDestination;
 
+    private int _pathRecheckCooldownFrames = DefaultPathRecheckCooldown;
+
+    private int? _pathRecheckPhase;
+
+    private ulong _pathRecheckArmedFrameIndex;
+
+    private int _pathRecheckDelayFrames;
+
+    private object? _pathRecheckClockLifetime;
+
     /// <inheritdoc cref="DefaultPathRecheckCooldown"/>
-    public int PathRecheckCooldownFrames = DefaultPathRecheckCooldown;
+    public int PathRecheckCooldownFrames => _pathRecheckCooldownFrames;
+
+    /// <summary>
+    /// Gets the optional fixed-frame phase used for periodic line-of-sight rechecks.
+    /// </summary>
+    public int? PathRecheckPhase => _pathRecheckPhase;
+
+    /// <summary>
+    /// Configures the interval and optional fixed-frame phase for periodic line-of-sight rechecks.
+    /// </summary>
+    /// <param name="intervalFrames">The recheck interval. Phase-enabled intervals must be positive.</param>
+    /// <param name="phase">The optional fixed-frame phase in the range [0, <paramref name="intervalFrames"/>).</param>
+    public void ConfigurePathRechecks(int intervalFrames, int? phase = null)
+    {
+        ValidatePathRecheckConfiguration(intervalFrames, phase);
+
+        if (_pathRecheckCooldownFrames == intervalFrames
+            && _pathRecheckPhase == phase)
+        {
+            return;
+        }
+
+        bool activeSession = _currentQuery.HasValue && _shouldMove && !_isAtDestination;
+        bool changedClockLifetime = activeSession
+            && _pathRecheckPhase.HasValue
+            && _pathRecheckClockLifetime != null
+            && !ReferenceEquals(
+                _pathRecheckClockLifetime,
+                ResolveContext().ClockLifetime);
+        bool preserveDue = activeSession
+            && !changedClockLifetime
+            && IsPeriodicPathRecheckDue();
+
+        if (changedClockLifetime)
+        {
+            _hasLineOfSightPath = false;
+            PreparePathRetry();
+        }
+
+        _pathRecheckCooldownFrames = intervalFrames;
+        _pathRecheckPhase = phase;
+        ClearPhasedPathRecheckSchedule();
+
+        if (!activeSession)
+        {
+            _pathCheckCooldown = 0;
+            return;
+        }
+
+        if (changedClockLifetime)
+        {
+            _pathCheckCooldown = 0;
+            return;
+        }
+
+        if (!phase.HasValue)
+        {
+            _pathCheckCooldown = preserveDue ? 0 : intervalFrames;
+            return;
+        }
+
+        ArmNextPhasedPathRecheck();
+        if (preserveDue)
+            _pathCheckCooldown = 0;
+    }
+
+    private static void ValidatePathRecheckConfiguration(int intervalFrames, int? phase)
+    {
+        if (!phase.HasValue)
+            return;
+
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            intervalFrames <= 0,
+            intervalFrames,
+            nameof(intervalFrames));
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            phase.Value < 0 || phase.Value >= intervalFrames,
+            phase.Value,
+            nameof(phase));
+    }
 
     /// <inheritdoc cref="_targetDirection"/>
     public Vector3d TargetDirection => _targetDirection;
@@ -311,6 +400,10 @@ public partial class NavSteering : IRecordable
         OnInitialize();
     }
 
+    private NavSteering() { }
+
+    internal static NavSteering CreateSerializationValidationShell() => new();
+
     /// <summary>
     /// Binds this steering controller to a world context.
     /// </summary>
@@ -321,10 +414,24 @@ public partial class NavSteering : IRecordable
         if (ReferenceEquals(_context, context))
             return;
 
+        bool activePhasedSession = _pathRecheckPhase.HasValue
+            && _currentQuery.HasValue
+            && _shouldMove
+            && !_isAtDestination;
         if (_context != null)
             _context.Navigation.MovementGroups.Remove(_movementGroupSession);
 
         _context = context;
+        if (_pathRecheckPhase.HasValue)
+        {
+            ClearPhasedPathRecheckSchedule();
+            if (activePhasedSession)
+            {
+                _hasLineOfSightPath = false;
+                PreparePathRetry();
+                _pathCheckCooldown = 0;
+            }
+        }
     }
 
     #endregion

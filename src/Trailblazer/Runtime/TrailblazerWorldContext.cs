@@ -128,6 +128,24 @@ public sealed class TrailblazerWorldContext : IDisposable
         }
     }
 
+    internal ulong LogicalFrameIndex
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _clock.FrameIndex;
+        }
+    }
+
+    internal object ClockLifetime
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _clock.Lifetime;
+        }
+    }
+
     /// <summary>
     /// Gets this context's total simulated time.
     /// </summary>

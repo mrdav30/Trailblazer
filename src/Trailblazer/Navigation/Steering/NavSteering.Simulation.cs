@@ -44,6 +44,7 @@ public partial class NavSteering
         _requestedDestination = Vector3d.Zero;
         _movementGroupSession.Reset();
         _movementGroupMode = MovementGroupTravelMode.None;
+        ClearPhasedPathRecheckSchedule();
     }
 
     internal void Reset()
@@ -172,6 +173,7 @@ public partial class NavSteering
         NavigationGuideStatus status = ResolveContext().Guides.RequestGuide(
             query,
             out NavigationGuideLease? lease);
+        ArmNextPhasedPathRecheck();
         if (status != NavigationGuideStatus.Success)
         {
             if (status is NavigationGuideStatus.Stale
@@ -218,6 +220,7 @@ public partial class NavSteering
         NavigationGuideStatus status = ResolveContext().Guides.RequestFlowField(
             query,
             out NavigationFlowFieldLease? lease);
+        ArmNextPhasedPathRecheck();
         if (status != NavigationGuideStatus.Success)
         {
             if (status is NavigationGuideStatus.Stale
@@ -246,6 +249,7 @@ public partial class NavSteering
             query,
             origin,
             out _);
+        ArmNextPhasedPathRecheck();
         if (status == NavigationRayStatus.Success)
         {
             _hasLineOfSightPath = true;
@@ -414,6 +418,8 @@ public partial class NavSteering
 
     private bool TryPrepareMovementPathForHeading(Vector3d position)
     {
+        EnsurePhasedClockLifetime();
+
         if (CanPathfind && !ValidateMovementPath(position))
         {
             HandleInvalidPath("Invalid path detected!");
@@ -426,7 +432,7 @@ public partial class NavSteering
 
     private void RefreshLineOfSightState(Vector3d position)
     {
-        if (_pathCheckCooldown > 0)
+        if (!IsPeriodicPathRecheckDue())
             return;
 
         if (_currentQuery is not PathQuery currentQuery)
@@ -439,7 +445,7 @@ public partial class NavSteering
                 & NavigationCell.ToMedia(query.Traversal.StartMedium)) == 0)
         {
             _hasLineOfSightPath = false;
-            _pathCheckCooldown = PathRecheckCooldownFrames;
+            ScheduleNextPeriodicPathRecheck();
             return;
         }
         NavigationRayStatus status = ResolveContext().Guides.TryGetDirectHeading(
@@ -457,7 +463,68 @@ public partial class NavSteering
             _hasLineOfSightPath = false;
             PreparePathRetry();
         }
-        _pathCheckCooldown = PathRecheckCooldownFrames;
+        ScheduleNextPeriodicPathRecheck();
+    }
+
+    private bool IsPeriodicPathRecheckDue()
+    {
+        if (_pathCheckCooldown <= 0)
+            return true;
+
+        if (!_pathRecheckPhase.HasValue)
+            return false;
+
+        TrailblazerWorldContext context = ResolveContext();
+        return context.LogicalFrameIndex - _pathRecheckArmedFrameIndex
+            >= (ulong)_pathRecheckDelayFrames;
+    }
+
+    private void EnsurePhasedClockLifetime()
+    {
+        if (!_pathRecheckPhase.HasValue || !_currentQuery.HasValue)
+            return;
+
+        TrailblazerWorldContext context = ResolveContext();
+        if (ReferenceEquals(_pathRecheckClockLifetime, context.ClockLifetime))
+            return;
+
+        _hasLineOfSightPath = false;
+        PreparePathRetry();
+        ClearPhasedPathRecheckSchedule();
+        _pathCheckCooldown = 0;
+    }
+
+    private void ScheduleNextPeriodicPathRecheck()
+    {
+        if (_pathRecheckPhase.HasValue)
+            ArmNextPhasedPathRecheck();
+        else
+            _pathCheckCooldown = PathRecheckCooldownFrames;
+    }
+
+    private void ArmNextPhasedPathRecheck()
+    {
+        if (_pathRecheckPhase is not int phase)
+            return;
+
+        TrailblazerWorldContext context = ResolveContext();
+        ulong frameIndex = context.LogicalFrameIndex;
+        int remainder = (int)(frameIndex % (ulong)_pathRecheckCooldownFrames);
+        int delay = phase - remainder;
+        if (delay <= 0)
+            delay += _pathRecheckCooldownFrames;
+
+        _pathRecheckArmedFrameIndex = frameIndex;
+        _pathRecheckDelayFrames = delay;
+        _pathRecheckClockLifetime = context.ClockLifetime;
+        _pathCheckCooldown = 1;
+    }
+
+    private void ClearPhasedPathRecheckSchedule()
+    {
+        _pathRecheckArmedFrameIndex = 0;
+        _pathRecheckDelayFrames = 0;
+        _pathRecheckClockLifetime = null;
     }
 
     private void HandleInvalidPath(string debugMessage)
@@ -571,7 +638,8 @@ public partial class NavSteering
     private Vector3d FinalizeHeadingFrame()
     {
         _autoStopFrameCount--;
-        _pathCheckCooldown--;
+        if (!_pathRecheckPhase.HasValue)
+            _pathCheckCooldown--;
 
         Events.OnStartTraversal?.Invoke(TargetDirection);
         return TargetDirection;
@@ -677,6 +745,7 @@ public partial class NavSteering
         _shouldMove = false;
         _shouldRequestPathThisFrame = false;
         _hasLineOfSightPath = false;
+        ClearPhasedPathRecheckSchedule();
         LeaveMovementGroup();
         if (!wasMoving)
             return;

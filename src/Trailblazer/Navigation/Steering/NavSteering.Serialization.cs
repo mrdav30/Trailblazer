@@ -20,11 +20,17 @@ public partial class NavSteering
     public virtual void RecordData(IChronicler chronicler)
     {
         int movementGroupId = _movementGroupSession.GroupId;
+        int pathRecheckCooldownFrames = _pathRecheckCooldownFrames;
+        int? pathRecheckPhase = _pathRecheckPhase;
+
+        RecordValues.Look(chronicler, ref pathRecheckCooldownFrames, "PathRecheckCooldownFrames", DefaultPathRecheckCooldown);
+        RecordValues.Look(chronicler, ref pathRecheckPhase, "PathRecheckPhase", null);
+        if (chronicler.Mode == SerializationMode.Loading)
+            ValidatePathRecheckConfiguration(pathRecheckCooldownFrames, pathRecheckPhase);
 
         RecordValues.Look(chronicler, ref CanPathfind, "CanPathfind", true);
         RecordValues.Look(chronicler, ref _destination, "Destination", Vector3d.Zero);
         RecordValues.Look(chronicler, ref _requestedDestination, "RequestedDestination", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref PathRecheckCooldownFrames, "PathRecheckCooldownFrames", DefaultPathRecheckCooldown);
         RecordValues.Look(chronicler, ref _targetDirection, "TargetDirection", Vector3d.Zero);
         RecordValues.Look(chronicler, ref _lastTargetDirection, "LastTargetDirection", Vector3d.Zero);
         RecordValues.Look(chronicler, ref _shouldMove, "ShouldMove", false);
@@ -48,8 +54,18 @@ public partial class NavSteering
         RecordValues.Look(chronicler, ref _movementGroupMode, "MovementGroupMode", MovementGroupTravelMode.None);
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            ReleaseNavigationGuidance();
-            ResetMovementGroupSession();
+            _pathRecheckCooldownFrames = pathRecheckCooldownFrames;
+            _pathRecheckPhase = pathRecheckPhase;
+            ClearPhasedPathRecheckSchedule();
+            if (_context != null)
+            {
+                ReleaseNavigationGuidance();
+                ResetMovementGroupSession();
+            }
+            else
+            {
+                _movementGroupSession.Reset();
+            }
 
             _currentQuery = null;
             _pendingCommittedAreaPolicy = null;
@@ -66,11 +82,18 @@ public partial class NavSteering
         _pendingCommittedAreaPolicy = null;
         _currentQuery = query;
         ReleaseNavigationGuidance();
+        ClearPhasedPathRecheckSchedule();
         if (!query.HasValue)
             return;
 
         _requestedDestination = query.Value.End.Position;
-        if (!HasLineOfSightPath)
+        if (_pathRecheckPhase.HasValue)
+        {
+            _hasLineOfSightPath = false;
+            _shouldRequestPathThisFrame = _shouldMove;
+            _pathCheckCooldown = 0;
+        }
+        else if (!HasLineOfSightPath)
             _shouldRequestPathThisFrame = true;
     }
 

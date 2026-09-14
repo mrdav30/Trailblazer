@@ -7,7 +7,8 @@
 
 **Created:** 2026-09-14
 
-**Status:** In progress; Phase 0 complete, Phase 1 implementation underway.
+**Status:** In progress; Phases 0 and 1 complete. Narrow steering correction
+precedes Phase 2 performance capture.
 
 **Execution branch:** `codex/los-phase-spreading`, created from `develop` at
 `5367f5a` after the user requested branch-based implementation and final review.
@@ -189,30 +190,30 @@ complete merely because the design has been written down.
 
 ## Phase 1 - Implement and harden shared periodic timing
 
-- [ ] Write failing phase-enabled behavior tests, then implement the smallest
+- [x] Write failing phase-enabled behavior tests, then implement the smallest
   bounded due-state calculation and shared periodic gate. Preserve required
   validation/retry order and avoid steady-state allocation.
-- [ ] Cover intervals 1, 2 and 16, phase boundaries and invalid combinations;
+- [x] Cover intervals 1, 2 and 16, phase boundaries and invalid combinations;
   starts on/off a slot; repeated heading calls; unchanged/default/zero behavior;
   runtime enable/disable/reconfiguration; and bounded delay after a forced check.
-- [ ] Exercise A* and Flow on blocked and clear routes, with actual movement and
+- [x] Exercise A* and Flow on blocked and clear routes, with actual movement and
   guide/direct-mode changes at the expected frames. Include medium mismatch,
   exhausted budgets, stale status and movement-group participation.
-- [ ] Prove relevant map/policy/overlay changes and profile replacement retain
+- [x] Prove relevant map/policy/overlay changes and profile replacement retain
   their existing invalidation/recovery boundaries even off-phase. Include a
   change immediately before a scheduled slot and a forced retry on that slot.
-- [ ] Cover paused/disabled movement, skipped updates, early returns, held and
+- [x] Cover paused/disabled movement, skipped updates, early returns, held and
   completed transitions, stop/start, arrival, reset, rebind and disposal. Verify
   exactly-once action ownership and no catch-up loop for missed refreshes.
-- [ ] Implement JSON and standard-package MemoryPack records together with the
+- [x] Implement JSON and standard-package MemoryPack records together with the
   runtime state. Test enabled/disabled, direct/guided, same/new-clock restores,
   malformed late fields and unsupported schemas. Failed loads must preserve
   live guidance, pending actions, occupancy and timing state.
-- [ ] Replay stable host-assigned phases across fresh worlds, different object
+- [x] Replay stable host-assigned phases across fresh worlds, different object
   construction orders with the same simulation order, and restored sessions.
   Test signed-counter boundaries through existing internal clock test access or
   the bounded due-state calculation; do not add a public test-only clock API.
-- [ ] Run focused Release/ReleaseLean tests and allocation gates. Obtain an
+- [x] Run focused Release/ReleaseLean tests and allocation gates. Obtain an
   independent correctness/Ponytail review before timed evidence is accepted.
 
 **Exit:** Both algorithms use the reviewed policy; default behavior is intact;
@@ -384,6 +385,13 @@ public signed wrap, reset-to-the-same-frame case and transactional counter
 exhaustion. This avoids an undocumented maximum pause length or phase drift
 after a 32-bit counter revolution.
 
+Boundary verification found a separate existing world limit, now tracked as
+`TRB-Issue-124`: publication accepts monotonically increasing signed frames and
+rejects the public counter's signed wrap. The new LOS arithmetic is tested through
+the internal clock boundary; it does not claim whole-world wrap support or change
+publication ordering. The clock's own `ulong` exhaustion rejection is distinct
+from transactional exhaustion of an entire world simulation frame.
+
 Five new real-graph default-mode characterizations pass in Release, with four
 in ReleaseLean (the MemoryPack case is omitted there). Existing tests cover
 zero-interval, initial admission, stale retry, JSON direct restore and
@@ -440,3 +448,39 @@ Flow/100 and Flow/500 (three launches, one warmup, three actual 64-frame blocks
 per case). Retain an unbalanced assignment as a bounded behavior/sizing control,
 not an unrequested multiplication of the full repeated matrix. Separate
 startup/resume/invalidation/restore burst evidence from steady-state blocks.
+After sizing and the unchanged-method candidate control, capture the matched
+instrumented modes in `Unphased-1 / Balanced-1 / Balanced-2 / Unphased-2` order
+on the same candidate source. Archive each executed child immediately; no
+concurrent builds, tests or profiling. A source correction requires a separately
+labeled recapture, never silently mixing attempts.
+
+### Phase 1 - Reviewed runtime and lifecycle implementation
+
+Shared A*/Flow timing, the explicit configuration API, internal logical clock
+and schema 6 records are implemented. Required admission remains outside phase
+delay; disabled completed-heading behavior is preserved. Enabled trust-loss
+boundaries set the existing due-now marker before later configuration can arm
+a future slot. The final implementation removes the redundant direct-only
+helper and unreachable lifetime guards rather than manufacturing coverage tests.
+
+Independent review found and verified fixes for `TRB-Issue-126/127/128`: reset
+trust loss, direct-only admission across lifecycle/reconfiguration, and legacy
+initial-Stale cadence. Observable tests also establish exact transition/medium
+timing, overdue pause handling, stale-policy recovery, late-load transactionality,
+resource release/rebind, deterministic actual-movement replay and zero warmed
+allocation. Clock-boundary headings use internal clock access; the separate
+whole-world publication limit remains `TRB-Issue-124`.
+
+Final runtime gates: **2,566 core + 65 adapter** tests in Release and **2,496 + 65**
+in ReleaseLean, no failures or skips. Both library targets build without warnings
+or errors. Each configuration covers exactly **31,017/31,017 lines,
+12,179/12,179 branches and 3,032/3,032 covered and fully covered methods** across
+the core and adapter assemblies. Evidence is retained under
+`artifacts/los-phase/verification-round3`; independent spec and quality review
+pass after the scoped fixes. This is not yet performance acceptance or final
+documentation validation.
+
+Actual-movement testing also exposed the pre-existing `TRB-Issue-125`: a valid
+zero-radius body reaches an eager reciprocal in local group steering. Resolve
+that narrow defect with its own regression/review before candidate capture;
+keep its change separate from LOS timing and remeasure the unchanged control.

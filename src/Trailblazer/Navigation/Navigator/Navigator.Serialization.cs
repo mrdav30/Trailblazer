@@ -18,7 +18,7 @@ namespace Trailblazer.Navigation;
 
 public abstract partial class Navigator
 {
-    private const int CurrentSerializationSchemaVersion = 5;
+    private const int CurrentSerializationSchemaVersion = 6;
 
     #region Serialization
 
@@ -161,7 +161,7 @@ public abstract partial class Navigator
         TrailblazerWorldContext context = RequireContext();
         if (_steering != null)
         {
-            var steering = new NavSteering(context);
+            var steering = NavSteering.CreateSerializationValidationShell();
             RecordDeep.Look(chronicler, ref steering, "Steering");
             SwiftThrowHelper.ThrowIfTrue(
                 steering.BrakingPower < Fixed64.Zero

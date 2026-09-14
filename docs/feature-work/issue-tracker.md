@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-124`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-129`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -22,6 +22,49 @@
   here until they have been investigated and confirmed as runtime defects.
 
 ## Active Issues
+
+### TRB-Issue-125 - Local steering divides by zero for an admitted zero-radius body
+
+- **Discovered:** 2026-09-14 during the phased actual-movement replay test setup.
+- **Status:** Open; pre-existing steering defect exposed by integration testing.
+- **Evidence:** `KinematicBodyShape` accepts radius zero and describes radius
+  as nonnegative. At positive vessel speed, `UpdateTargetDirection` calls
+  `ComputeCombinedSteering`, which eagerly calculates `1 / (radius *
+  GroupFactor)` before inspecting neighbors. A zero-radius owner therefore
+  throws even though its profile was admitted. The same eager division exists
+  at branch base `5367f5a`; the phase implementation did not introduce it.
+  Setting public `GroupFactor` to zero reaches the same denominator and must
+  also be considered without disabling otherwise valid avoidance work.
+- **Next scope:** Retain a focused failing zero-radius moving-controller
+  regression, then make the smallest shared local-steering correction. Verify
+  zero group influence, ordinary-radius behavior, avoidance and both package
+  families. Do not relabel an accepted shape as invalid or broaden this into
+  a new group-steering architecture.
+
+### TRB-Issue-124 - World publication cannot advance across signed frame-count wrap
+
+- **Discovered:** 2026-09-14 while testing LOS phase clock boundaries.
+- **Status:** Open; pre-existing world/publication lifetime limit, not a
+  phase-spreading regression. No fix is claimed.
+- **Evidence:** `TrailblazerWorldContext.Simulate()` advances its clock before
+  passing signed `FrameCount` to `MaintainNavigationGraph`. The operation
+  processor requires `frame > _lastProcessedFrame`; wrapping from
+  `int.MaxValue` to `int.MinValue` therefore rejects. Operation authoring also
+  rejects negative effective frames. Both guards exist at the feature branch
+  base `5367f5a`. Clock/index tests can cross the boundary internally, but that
+  does not establish successful whole-world simulation across it.
+- **Impact:** A continuously running context eventually reaches the signed
+  publication limit (about 2.1 years of simulated time at 32 Hz; accelerated
+  simulation can reach it sooner in wall-clock time). The failing call has already
+  advanced clock state before graph maintenance rejects; it is not a
+  transactional whole-world exhaustion boundary. A wider internal LOS index
+  alone does not remove this limitation.
+- **Next scope:** Review one explicit frame-lifetime contract across context,
+  operation effective frames, publication ordering, scheduled work and host
+  records. Reproduce the containing-frame failure at the boundary before any
+  fix. Do not remove monotonicity/nonnegative guards or wrap publication
+  timestamps locally without accounting for pending operations and ordering.
+  This broader clock/publication change is outside periodic LOS phase spreading.
 
 ### TRB-Issue-123 - Navigator migration and restore guidance disagree with current records
 
@@ -186,6 +229,43 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-128 - New-request initialization changes the legacy stale-ray cadence
+
+- **Discovered / resolved locally:** 2026-09-14, before committing the LOS feature.
+- **Failure:** Unconditionally clearing the countdown for a replacement query
+  caused an extra same-heading ray when initial admission returned `Stale`.
+- **Fix:** Only enabled new sessions clear timing debt. Disabled replacement
+  preserves the previous completed-heading countdown.
+- **Evidence:** A real-graph regression observes the exact later clear-path
+  switch. Independent runtime review passes; Release 2,566 core + 65 adapter
+  and Lean 2,496 + 65 pass with exact 100% line/branch/method coverage.
+  Raw RED and final matrix logs remain under `artifacts/los-phase`.
+
+### TRB-Issue-127 - Phasing prevents initial direct-only travel
+
+- **Discovered / resolved locally:** 2026-09-14, before committing the LOS feature.
+- **Failure:** Enabled `CanPathfind=false` requests could remain motionless or
+  wait for a phase before initial admission. Reconfiguration could hide pending
+  admission after new request, clock reset, successful restore or active rebind.
+- **Fix:** Trust-loss boundaries establish the existing due-now marker before
+  configuration can arm a future slot. Direct-only and graph-backed sessions
+  share that invariant; no extra flag or special direct-only helper remains.
+- **Evidence:** Ten direct-only lifecycle cases include JSON/MemoryPack restore,
+  rebind and repeated reconfiguration. Tests observe immediate admission and the
+  exact later phase, rejecting an every-heading workaround. Independent review
+  passes; the full Release/Lean matrix and exact coverage cited above are green.
+
+### TRB-Issue-126 - Reconfiguration can discard reset identity before invalidating direct travel
+
+- **Discovered / resolved locally:** 2026-09-14, before committing the LOS feature.
+- **Failure:** Disabling or repeatedly changing enabled phases after context
+  reset could erase the old clock identity while retaining its direct-path trust.
+- **Fix:** Invalidate direct travel and prepare admission when the lifetime
+  change is detected, before replacing configuration or clearing its identity.
+- **Evidence:** Both sequences fail before the fix and pass against a changed
+  weighted map afterward. Independent runtime review and the full Release/Lean
+  matrix pass with exact 100% coverage; no old direct trust is restored by timing.
 
 ### TRB-Issue-122 - Component dependency byte accounting omits the medium slot
 

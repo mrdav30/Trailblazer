@@ -145,6 +145,54 @@ public sealed class TrailblazerWorldContextTests : IDisposable
     }
 
     [Fact]
+    public void Simulate_ShouldPreserveSignedLowBitsAcrossACompleteIntWrap()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        TrailblazerClock clock = ReflectionUtility.GetPrivateField<TrailblazerClock>(context, "_clock");
+        ReflectionUtility.SetPrivateField(clock, "_frameIndex", (ulong)uint.MaxValue - 1);
+
+        clock.Simulate();
+        context.FrameCount.Should().Be(-1);
+        context.LogicalFrameIndex.Should().Be(uint.MaxValue);
+
+        clock.Simulate();
+        context.FrameCount.Should().Be(0);
+        context.LogicalFrameIndex.Should().Be((ulong)uint.MaxValue + 1);
+    }
+
+    [Fact]
+    public void Simulate_ShouldRejectExhaustedLogicalFrameBeforeMutation()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        TrailblazerClock clock = ReflectionUtility.GetPrivateField<TrailblazerClock>(context, "_clock");
+        ReflectionUtility.SetPrivateField(clock, "_frameIndex", ulong.MaxValue);
+        Fixed64 totalTime = context.TotalTime;
+        int frameCount = context.FrameCount;
+
+        Action simulate = clock.Simulate;
+
+        simulate.Should().Throw<InvalidOperationException>()
+            .WithMessage("*frame index is exhausted*");
+        context.LogicalFrameIndex.Should().Be(ulong.MaxValue);
+        context.FrameCount.Should().Be(frameCount);
+        context.TotalTime.Should().Be(totalTime);
+    }
+
+    [Fact]
+    public void Reset_ShouldReplaceTheClockLifetimeAndRestartTheLogicalFrame()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        object initialLifetime = context.ClockLifetime;
+        context.Simulate();
+
+        context.Reset();
+
+        context.ClockLifetime.Should().NotBeSameAs(initialLifetime);
+        context.LogicalFrameIndex.Should().Be(0);
+        context.FrameCount.Should().Be(0);
+    }
+
+    [Fact]
     public void Reset_ShouldClearOnlyThisContextClock()
     {
         using TrailblazerWorldContext contextA = TrailblazerWorldContext.CreateOwned();

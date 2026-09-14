@@ -49,6 +49,9 @@ public partial class NavSteering
 
         _repathTries = 0;
         _shouldRequestPathThisFrame = true;
+        ClearPhasedPathRecheckSchedule();
+        if (_pathRecheckPhase.HasValue)
+            _pathCheckCooldown = 0;
         AddToMovementGroup(groupId);
         UpdateMovementGroupState(origin, query.Agent.Shape.Radius, true);
         Events.OnMoveRequestApplied?.Invoke();

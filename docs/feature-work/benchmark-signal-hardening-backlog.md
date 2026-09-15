@@ -1775,6 +1775,99 @@ summaries, commands/source state and frozen executed children;
 comparison, verification and independent reviews. No benchmark project or CI
 machinery was added.
 
+#### Follow-up: withdraw the rectangular body-interior shortcut
+
+The next bounded pass started from Trailblazer `152c8e06` and GridForge
+`52e9d947`. The existing measured-frame profile attributed about 125/2,804
+sampled milliseconds inclusively to guide-sampling body validation. This was
+a reason to investigate, not a prediction of avoidable latency.
+
+GridForge's 20-line candidate positively certified unclipped rectangular body
+sweeps whose endpoints lie inside the closed radius-inset rectangle, after all
+existing endpoint/height checks. Checked overflow, wall-adjacent, clipped and
+hex cases kept the original portal/wall authority. No budgets, dependencies,
+LOS cadence, geometry tolerance or public contract changed. Independent source
+correctness and Ponytail reviews found no actionable implementation issues.
+
+**Decision: candidate withdrawn (`GF-Benchmark-010`).** Before measuring it,
+the keep gate required at least 2% lower Flow/500 block median in each original
+and balanced repeat, and no selected case worsening over 10% in block median
+or observed frame P95. Eight serial captures use B1/C1/C2/B2 per mode; every
+capture retains A*/100, Flow/100 and Flow/500, three launches, one warmup and
+three actual 64-frame blocks per launch. All observations, including the failed
+comparison, remain in the evidence.
+
+| Flow/500 mode / repeat | Baseline / candidate block median (ms) | Block reduction | Baseline / candidate frame P95 (ms) |
+| --- | ---: | ---: | ---: |
+| Original / 1 | 477.94 / 435.83 | 8.81% | 47.14 / 45.36 |
+| Original / 2 | 459.06 / 439.24 | 4.32% | 45.59 / 45.43 |
+| Balanced / 1 | 514.46 / 440.20 | 14.43% | 8.84 / 7.29 |
+| Balanced / 2 | 457.65 / 448.31 | 2.04% | 7.82 / 7.38 |
+
+The larger case improves, but balanced Flow/100 block costs change
+**+22.84% / +8.49%**: **103.98 / 127.73 ms** and **98.57 / 106.94 ms**.
+The first pair fails the keep gate. Original Flow/100 changes **+0.47% / -7.63%**.
+A*/100 improves **1.53% / 0.44%** original and **6.85% / 1.15%** balanced.
+No observed P95 regression exceeds 10%. Baseline variation and correlated
+frames limit causal attribution; this does not establish a universal
+small-population regression. It does prevent a safe improvement claim from
+this protocol. Do not substitute the best repeat or expand the gate afterward.
+
+All **72 guided child executions**, **216 actual blocks**, and **360 complete
+stage records** are retained. Exact replay passes **23,040 Int64 comparisons**;
+actual-frame allocation and collection-overlap counts remain zero. Frozen
+runtime hashes match within each variant. The benchmark DLL's differing
+identity was investigated: all 603 method bodies, source checksums and build
+options match; only deterministic/debug identity tracks the changed GridForge
+reference. Other principal runtime DLLs are byte-identical. No benchmark logic
+or runtime settings were changed to obtain the comparison.
+
+The isolated candidate run is complete, but its interior timings vary during
+actual iterations. Further isolated comparisons were omitted once the
+containing-frame gate failed; there is no isolated before/after gain claim.
+GridForge retains 13 useful boundary/overflow behavior cases and one six-case
+fixture in its existing benchmark project. Its generated-job dependency issue
+is fixed through documented inherited build settings (`GF-Issue-008`), not a
+new build system. The original GridForge runtime is restored exactly.
+
+**Next boundary:** source audits reject target-only selected-edge lookup:
+ordinals describe a native/explicit/seam merge, and stream lookahead plus
+rejected candidates contribute to the sample budget. A native-only merge bypass
+is possible in principle, but its attributed scope is only about 2.25% of the
+sampled root and it remains unmeasured; no new branch/index is added speculatively.
+Likewise, stopping the generic ray at the first apparent wall is not equivalent:
+complete tracing establishes failure precedence and dependency evidence, and
+later overlapping/seam records can unlock earlier reachable records.
+
+For a larger next step, prefer an explicitly designed **Navigator-only blocked
+visibility query**, backed by an ordered incremental GridForge trace and a
+certified reachable frontier. Specify prefix failure precedence, exact counted
+work and dependency/publication behavior before implementation; keep generic
+endpoint/search/guide rays unchanged. This is a cross-library feature decision,
+not authorization to skip freshness checks or silently reinterpret `Blocked`.
+It remains a recommendation, with no performance guarantee or implementation
+in this pass. **TRB-Benchmark-005 stays open** for the 2 ms allowance and required
+acquisition/recovery bursts; the preceding steering improvement remains intact.
+
+**Final verification:** GridForge and Trailblazer build both `netstandard2.1`
+and `net8.0` in Release and ReleaseLean with zero warnings/errors. GridForge
+passes **922 tests** per configuration. Trailblazer passes **2,576 core + 65
+adapter** tests in Release and **2,504 core + 65 adapter** in ReleaseLean,
+with no failures or skips. Both configurations retain exact coverage:
+GridForge **8,968 lines / 3,865 branches / 1,118 covered and fully covered
+methods**; Trailblazer and its adapter **31,021 / 12,185 / 3,032**. No coverage
+exclusions are added. Final Release runtime DLLs match the initial frozen
+baselines. Both DocFX sites build with warnings treated as errors and report
+none. Independent retained-diff and evidence reviews have no outstanding
+findings. This is local sibling-source verification, not Linux CI,
+released-package validation or a rerun of standalone Gravitas tests.
+
+Evidence: `artifacts/benchmark005-edge-ray` contains the candidate diff,
+comparison, mutation/restored checks, source audits and evidence review;
+`artifacts/los-phase/edge-ray-*` retains the raw guided logs, all stage summaries,
+commands/source state and frozen executed children. No further profiling loop,
+new benchmark project, CI machinery or production instrumentation is retained.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

@@ -59,6 +59,15 @@ instead of burying it in notes.
     Release/Lean coverage gates pass. The 2 ms allowance and mandatory recovery
     bursts remain unresolved; the next investigation concerns ray/sampling work
     or explicitly reviewed acquisition ownership, not discarded validation.
+  - The subsequent rectangular body-interior experiment (`GF-Benchmark-010`)
+    is withdrawn: matched Flow/500 gains did not satisfy the smaller-case
+    non-regression gate. GridForge retains useful boundary tests and benchmark
+    invocation guidance (`GF-Issue-008`), not the runtime shortcut. Source audits
+    identify an explicitly designed Navigator-only blocked visibility query as
+    the next structural option; generic early ray termination would change
+    failure, dependency and counted-work semantics. That option is a proposal,
+    not an approved implementation or promised speedup. The benchmark tracker
+    retains all comparisons and the remaining 2 ms/recovery limits.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
     `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate

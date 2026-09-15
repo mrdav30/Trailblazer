@@ -330,6 +330,12 @@ alone do not establish which assemblies the child executed, especially with
 the prebuilt local-stack references. Compare the frozen child manifests before
 attributing a result to a single changed library.
 
+Establish a compiled benchmark-host hash with the actual comparison job settings.
+A quick preflight with different launch/warmup/iteration counts can produce a
+different generated job directory and embedded debug metadata, even with identical
+method bodies. Preserve that preflight separately; subsequent identical-job
+captures must still match their formal host and runtime-library hashes exactly.
+
 ### Direct-visibility full-host controls
 
 `NavigationDirectVisibilityFrameBenchmarks` adds five fixed FlowField controls:
@@ -368,15 +374,14 @@ prints the actual expanded BDN parameter cases without executing workloads.
 The automatic catalog alias is `navigation-direct-visibility-frame`.
 Use the existing Monitoring job and a separately approved capture protocol;
 never silently raise budgets or replace a failed clear scene with blockage.
-Before freeze, the 256x192 negative control exhausted the original 320,000-edge
-budget at 13,545 settled nodes. The approved control-only edge budget is
+The control-only edge budget is
 `max(320000, 32 * width * length)` (1,572,864 for large scenes); all other budgets
 and the primary guided fixture are unchanged. Use this same sizing on every
 baseline and candidate capture.
-The 4,798-cell Sparse500 default-cell map also requires an explicitly approved
+The 4,798-cell Sparse500 default-cell map also requires an explicit
 8,192 per-map dynamic-slot capacity (global capacity remains 16,384); the
 default 4,096 cannot materialize that physical seed. Other cases retain the
-existing settings defaults. Both changes precede the timing freeze.
+existing settings defaults.
 New `NAVIGATION_GUIDED_SAMPLES` records include `controlCase`; the existing
 analyzer validates its exact algorithm/count mapping and keeps control keys
 disjoint from historical records. Analyze formal BDN logs with

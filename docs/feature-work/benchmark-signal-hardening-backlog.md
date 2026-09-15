@@ -1868,14 +1868,32 @@ comparison, mutation/restored checks, source audits and evidence review;
 commands/source state and frozen executed children. No further profiling loop,
 new benchmark project, CI machinery or production instrumentation is retained.
 
-#### Follow-up: promote certified direct-visibility rejection to a gated plan
+#### Follow-up: certified direct-visibility investigation closes at its measurement gate
 
 On 2026-09-15, source investigation was promoted to the
-[Certified Direct-Visibility plan](navigationDirectVisibilityPlan.md). Its
-Phase 0 must prove a sound, useful negative certificate and budget-safe fallback
-before production integration. No new timing capture or speedup is claimed;
-all phases remain unchecked. `TRB-Benchmark-005` stays active and the earlier
-body-interior shortcut remains withdrawn. The plan owns the design and exit gates.
+[Certified Direct-Visibility plan](done/navigationDirectVisibilityPlan.md).
+The bounded negative-only proof, arithmetic cases and budget-safe continuation
+passed independent review. Actual partial discovery visits/maps 73 of 145
+candidates in the guided wall and 53 of 436 in the separate sparse scene,
+without sorting or chain evaluation on a valid certificate; full continuation
+retains exact complete-ray results and accounting.
+
+The final full-host calibration failed before production implementation:
+identical-binary balanced late-blocked block medians were **265.9488 / 250.5213 ms**
+(-5.8009%), exceeding the predeclared 5% agreement limit. Unphased A*/100 also
+failed at **212.7254 / 198.6892 ms** (-6.5983%). The other 14 median gates and
+all 16 P95 gates passed, but every case was required. The single correction
+allowance had already corrected a preflight-versus-formal benchmark-host hash
+pin; it did not change executable code or measurement thresholds. No additional
+retry or production candidate follows this no-go.
+
+The archived plan consolidates the complete calibration, proof and provenance
+record. Local executable-host math selection is corrected in `TRB-Issue-135`
+and `GF-Issue-009`; five replay-checked full-host controls are retained. These
+are validation improvements, not runtime speedups. A separately reviewed
+measurement scope is required before another timed attempt. `TRB-Benchmark-005`
+stays active for the 2 ms allowance and acquisition/recovery bursts; the earlier
+body-interior shortcut remains withdrawn.
 
 ## Closed Signals
 

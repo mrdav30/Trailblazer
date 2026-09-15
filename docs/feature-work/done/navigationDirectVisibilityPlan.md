@@ -6,12 +6,17 @@
 
 **Created:** 2026-09-15
 
-**Status:** Approved for execution on `codex/certified-direct-visibility`,
-branched from `develop` at `785b801`. Phase 0 is in progress; production
-integration and all phase exits remain unverified.
+**Status:** Closed at the Phase 0 measurement gate on 2026-09-15, with a
+reviewed no-go decision. The bounded geometry/accounting proof passed, but
+corrected identical-baseline captures failed the required repeatability limit.
+No production shortcut or new tracing API was implemented. The
+`codex/certified-direct-visibility` branches remain available for user review;
+they have not been merged, pushed, or released.
 
-**Source baseline:** Trailblazer `5f44495`; GridForge `02aa2de`, both on
-`develop`. Record fresh sibling revisions and executed binaries before a probe.
+**Source baseline:** Planning began at Trailblazer `5f44495` / GridForge
+`02aa2de`; the Trailblazer feature branch started from `develop` at `785b801`.
+The final frozen baseline is Trailblazer `e6391ee` / GridForge `be85b56`.
+The execution record identifies the remaining sibling revisions and binaries.
 
 **Goal:** Reduce work on long, obstructed Navigator direct-travel checks by
 proving an obstruction before processing an irrelevant suffix, without false
@@ -29,12 +34,15 @@ existing Trailblazer workspaces/meters, xUnit v3 and BenchmarkDotNet.
 **Spec:** The [decision contract](#decision-contract),
 [proof and fallback gates](#proof-and-fallback-gates) and
 [acceptance matrix](#acceptance-matrix) below are the design specification.
-Phase 0 must resolve its explicit feasibility gates and freeze exact interfaces
-here before any production integration. A failed gate stops the feature.
+The proposed implementation below is retained as a design record, not a current
+API reference or permission to resume implementation. Phase 0 required every
+feasibility gate before production integration; its failed calibration stops
+this attempt. A new measurement strategy requires a separately reviewed scope,
+not another retry under this closed protocol.
 
 ## Why investigate this
 
-[`TRB-Benchmark-005`](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
+[`TRB-Benchmark-005`](../benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
 remains open. The prior measured-frame Flow/500 profile attributes about **45%**
 of sampled controller time to direct-heading checks. This is historical local
 attribution, not a new timing run or a prediction of recoverable time. The
@@ -68,8 +76,8 @@ enough of it is **not established** by source inspection.
 
 ## Global constraints
 
-Follow [AGENTS.md](../../AGENTS.md) for coding, tests, exact coverage, documentation,
-issue tracking and worktree ownership, and the [overview](feature-work-overview.md)
+Follow [AGENTS.md](../../../AGENTS.md) for coding, tests, exact coverage, documentation,
+issue tracking and worktree ownership, and the [overview](../feature-work-overview.md)
 for coordinated release gates. The user authorizes this feature branch and
 checkpoint commits, but not merging, pushing or releasing. Feature-specific
 constraints:
@@ -218,31 +226,36 @@ speculative result types or a new tracing API in advance.
 
 ## Phase 0 - Prove the opportunity and freeze the contract
 
-- [ ] Capture current source identities and the unchanged complete-ray outcomes,
+- [x] Capture current source identities and the unchanged complete-ray outcomes,
   meter categories, dependency evidence and controller state table. Read the
-  [benchmark README](../../tests/Trailblazer.Benchmarks/README.md),
-  [publication](../wiki/MapPublication.md) and [serialization](../wiki/Serialization.md)
+  [benchmark README](../../../tests/Trailblazer.Benchmarks/README.md),
+  [publication](../../wiki/MapPublication.md) and [serialization](../../wiki/Serialization.md)
   boundaries before touching state or lifecycle.
-- [ ] Build one bounded, ignored diagnostic against the complete ray. Record
+- [x] Build one bounded, ignored diagnostic against the complete ray. Record
   actual candidate visits/prism evaluations, interval output/sorting and map
   work before/after the earliest **certifiable** obstruction. Separate admitted
   range counts from work actually performed; do not claim a saving from the
   first blocked voxel's index. Include the existing guided wall and a separate
   long oblique/sparse blocked scene plus open/late-blocked controls.
-- [ ] Prove original-parameter discovery completeness and the narrow eligibility
+- [x] Prove original-parameter discovery completeness and the narrow eligibility
   envelope with literal adversarial examples from the acceptance matrix.
   Prefer a strict separator; try a closed bounded prefix only if necessary.
-- [ ] Demonstrate the fallback budget rule on clear/inconclusive and exact-budget
+- [x] Demonstrate the fallback budget rule on clear/inconclusive and exact-budget
   inputs, including unrelated publication during proof. Reject a prototype that
   needs reset/refund or repeated charged work.
-- [ ] Settle the deliberate suffix-failure precedence, controller result mapping,
+- [x] Settle the deliberate suffix-failure precedence, controller result mapping,
   certificate scope, exact interfaces, capacities and reset behavior here. Have
   independent correctness and Ponytail reviewers challenge both proof and scope;
   obtain user sign-off on the semantic difference before production changes.
-- [ ] Calibrate and freeze the measurement protocol below before candidate timing.
+- [x] Calibrate and freeze the measurement protocol below before candidate timing.
   Record a go/no-go decision here: useful avoided work in both blocked scenes,
   bounded proof/ownership, passing fallback accounting, and an actionable small
   lower-stack interface. Diagnostic code is not production completion.
+
+**Decision:** No-go. Proof, work-count and fallback-accounting gates passed;
+the corrected unphased A*/100 and balanced late-blocked cases exceeded the 5%
+identical-baseline median agreement limit. The single correction allowance was
+consumed. No candidate timing or production implementation followed.
 
 **Exit:** Reviewed concrete proof, accounting and interfaces with reproducible
 work-count evidence. Source feasibility alone does not complete Phase 0. If every
@@ -250,6 +263,8 @@ useful proof needs full discovery or general frontier machinery, stop with a
 no-change decision and return the evidence for a separate scope review.
 
 ## Phase 1 - Implement the minimum geometric capability, if required
+
+Not executed: the Phase 0 no-go prevents this conditional implementation phase.
 
 - [ ] Write failing GridForge completeness, original-parameter, ordering, stale
   and limit tests for the frozen interface; run them before implementation.
@@ -267,6 +282,8 @@ unchanged eager APIs intact. This is not yet a Navigator performance improvement
 
 ## Phase 2 - Integrate the certified direct-only decision
 
+Not executed: no production GridForge capability or Trailblazer certificate was added.
+
 - [ ] Write failing paired complete-ray/certificate behavior tests and controller
   state assertions. Use a separate expectation for intentional unseen-suffix
   differences; never change generic-ray tests to conceal a contract change.
@@ -283,6 +300,9 @@ unchanged eager APIs intact. This is not yet a Navigator performance improvement
 are the explicitly approved suffix-precedence cases; generic consumers unchanged.
 
 ## Phase 3 - Measure containing frames and make the retain/withdraw decision
+
+Not executed: there is no candidate or B1/C1/C2/B2 comparison. The baseline
+calibration failure is not evidence that the proposed shortcut is slow.
 
 - [ ] Run the frozen protocol below serially with executed-child archives and
   raw observations. Report work avoided, eligibility/fallback rates and total
@@ -303,15 +323,23 @@ no-change decision. Neither outcome automatically closes `TRB-Benchmark-005`.
 
 ## Phase 4 - Documentation and cross-stack closeout
 
-- [ ] Run full GridForge, Gravitas and Trailblazer Release/Lean builds/tests,
-  both library targets, exact coverage, replay and allocation gates against
-  the coordinated source stack. Include changed lower libraries if necessary.
-- [ ] Document any observable direct-decision change in evergreen guidance/XML,
-  complete repository documentation gates and independent final review.
-- [ ] Consolidate decisions/results here and mark/move the plan to `done` only
-  after its required gates pass or a reviewed no-change closeout is recorded.
-  Keep the parent signal open unless its full 2 ms/recovery criteria are met
-  or the user separately approves a documented change to that goal.
+Close out the Phase 0 no-go only. Production-specific API, serialization,
+coverage and candidate-comparison gates below are inapplicable because no
+runtime change was made; retained validation/benchmark changes are verified
+separately in the execution record. `TRB-Benchmark-005` remains open.
+
+- [x] Verify retained changes with full local-stack Trailblazer and GridForge
+  Release/Lean builds/tests, both library targets and exact coverage. The
+  Trailblazer matrix includes its Gravitas adapter; a standalone Gravitas
+  rerun is inapplicable to this no-runtime-change closeout. Production-specific
+  certificate replay/allocation gates were not reached; full-host baseline
+  controls retain their own exact replay and zero-frame-allocation evidence.
+- [x] Complete documentation/link/API-site gates and independent final review.
+  There is no observable runtime decision or serialization change to document
+  in evergreen guidance/XML.
+- [x] Consolidate the reviewed no-go here and move the plan to `done`.
+  Keep `TRB-Benchmark-005` open: neither the full 2 ms/recovery criteria nor a
+  user-approved change to that goal is established by this investigation.
 
 **Exit:** One documented runtime story and complete local evidence. Coordinated
 Windows/Linux released-package gates and releases remain under the overview.
@@ -379,7 +407,7 @@ Use existing analysis scripts; a new telemetry or CI project is not warranted.
 These are local headless acceptance criteria, not universal frame-time promises
 or competitor comparisons. Do not increase the 2 ms goal or reduce LOS frequency.
 
-Use the [benchmark README](../../tests/Trailblazer.Benchmarks/README.md) for
+Use the [benchmark README](../../../tests/Trailblazer.Benchmarks/README.md) for
 commands, analysis and executed-child archiving. Phase 0 must record the exact
 frozen commands and artifact locations here, including inherited local-stack
 properties for generated sibling benchmarks; do not infer them from outer builds.
@@ -426,9 +454,10 @@ results do not substitute for the formal warmed timing/allocation gates.
 
 ## Concrete production contract
 
-Independent correctness and Ponytail reviews approve this bounded production
-contract, arithmetic proof and full-host controls. Final-harness calibration
-still precedes the Phase 0 exit; this approval is not a performance result.
+Independent correctness and Ponytail reviews found no blocker in this bounded
+contract, arithmetic proof and full-host controls. Calibration subsequently
+failed. Everything in this section is **proposed and unimplemented**, not a
+shipped API or performance result.
 
 GridForge adds one synchronous `GridTracer.TryTraceRectangularSlabsInto`:
 
@@ -517,6 +546,149 @@ Trailblazer keeps this internal and direct-only:
 
 ## Execution record
 
+The final four corrected captures are complete. Each contains 216 actual,
+240 warmup and 24 diagnostic records (480 total), with 27 actual 64-frame
+blocks per case. Every actual frame allocates zero bytes, and each case's
+64-frame checksum sequence matches across launches and paired captures.
+The complete comparison is below; these are **identical-baseline comparisons,
+not optimization results**. Original means unphased. Percentage change is
+`100 * (capture2 / capture1 - 1)`; absolute agreement must be within 5% for
+block medians and 10% for observed frame P95.
+
+| Cadence / case | Block median 1 / 2 (ms per 64 frames) | Change | Frame P95 1 / 2 (ms) | Change | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Original A*/100 | 212.725 / 198.689 | -6.60% | 20.429 / 19.775 | -3.20% | Fail median |
+| Original Flow/100 | 88.211 / 85.941 | -2.57% | 9.914 / 9.576 | -3.41% | Pass |
+| Original Flow/500 | 469.215 / 459.831 | -2.00% | 46.913 / 45.546 | -2.91% | Pass |
+| Original Clear100 | 2271.680 / 2183.358 | -3.89% | 552.488 / 532.605 | -3.60% | Pass |
+| Original Short100 | 101.968 / 100.576 | -1.36% | 16.103 / 15.781 | -2.00% | Pass |
+| Original Late100 | 648.567 / 622.441 | -4.03% | 21.088 / 20.486 | -2.86% | Pass |
+| Original Ineligible100 | 650.986 / 625.622 | -3.90% | 21.109 / 20.444 | -3.15% | Pass |
+| Original Sparse500 | 991.390 / 950.473 | -4.13% | 155.548 / 150.335 | -3.35% | Pass |
+| Balanced A*/100 | 201.840 / 195.407 | -3.19% | 3.504 / 3.394 | -3.13% | Pass |
+| Balanced Flow/100 | 89.192 / 86.849 | -2.63% | 1.542 / 1.470 | -4.65% | Pass |
+| Balanced Flow/500 | 465.197 / 454.282 | -2.35% | 7.808 / 7.452 | -4.56% | Pass |
+| Balanced Clear100 | 2308.204 / 2215.237 | -4.03% | 40.981 / 39.247 | -4.23% | Pass |
+| Balanced Short100 | 105.690 / 103.795 | -1.79% | 1.800 / 1.824 | +1.33% | Pass |
+| Balanced Late100 | 265.949 / 250.521 | -5.80% | 31.324 / 29.659 | -5.31% | Fail median |
+| Balanced Ineligible100 | 265.833 / 252.750 | -4.92% | 31.120 / 29.882 | -3.98% | Pass |
+| Balanced Sparse500 | 1002.965 / 961.560 | -4.13% | 16.383 / 15.651 | -4.47% | Pass |
+
+Full-frame outliers remain visible below: each capture contributes 1,728 actual
+frames per case. These are existing baseline costs, not candidate regressions.
+The new long-clear control is deliberately costly; a negative-only certificate
+would still need the complete authority there. Mandatory admission is outside
+these warmed blocks; no new acquisition/recovery comparison was reached.
+
+| Cadence / case | Maximum 1 / 2 (ms) | Frames >2 ms, 1 / 2 | Frames >31.25 ms, 1 / 2 |
+| --- | ---: | ---: | ---: |
+| Original A*/100 | 22.725 / 20.619 | 1421 / 543 | 0 / 0 |
+| Original Flow/100 | 12.184 / 12.402 | 108 / 108 | 0 / 0 |
+| Original Flow/500 | 65.031 / 61.724 | 1728 / 1728 | 108 / 108 |
+| Original Clear100 | 595.440 / 562.376 | 108 / 108 | 108 / 108 |
+| Original Short100 | 17.581 / 17.549 | 108 / 108 | 0 / 0 |
+| Original Late100 | 562.827 / 538.048 | 108 / 108 | 27 / 27 |
+| Original Ineligible100 | 558.595 / 553.149 | 108 / 108 | 27 / 27 |
+| Original Sparse500 | 167.244 / 163.482 | 1728 / 1728 | 108 / 108 |
+| Balanced A*/100 | 5.446 / 5.003 | 1728 / 1728 | 0 / 0 |
+| Balanced Flow/100 | 2.099 / 1.989 | 2 / 0 | 0 / 0 |
+| Balanced Flow/500 | 9.294 / 8.115 | 1728 / 1728 | 0 / 0 |
+| Balanced Clear100 | 43.376 / 41.386 | 1728 / 1728 | 1728 / 1541 |
+| Balanced Short100 | 2.166 / 2.195 | 1 / 6 | 0 / 0 |
+| Balanced Late100 | 41.886 / 38.912 | 915 / 577 | 95 / 54 |
+| Balanced Ineligible100 | 41.391 / 39.587 | 977 / 619 | 79 / 55 |
+| Balanced Sparse500 | 17.688 / 17.022 | 1728 / 1728 | 0 / 0 |
+
+- Final retained-change verification passes in both Release and ReleaseLean
+  using `-p:UseLocalLsfStack=true`: Trailblazer 2,576 / 2,504 core tests plus
+  65 adapter tests per family; GridForge 922 tests per family, with no failures
+  or skips. All solution builds succeed with zero warnings/errors and include
+  `netstandard2.1` and `net8.0` library targets. Exact coverage for Trailblazer
+  plus its adapter is 31,021/31,021 lines, 12,185/12,185 branches and
+  3,032/3,032 covered/fully covered methods; GridForge is 8,968/8,968 lines,
+  3,865/3,865 branches and 1,118/1,118 covered/fully covered methods. These
+  counts hold in each configuration without new coverage exclusions.
+  All ten executable-host/configuration math hashes match the current sibling
+  build; `math-host-hashes.json` records those final provenance checks.
+  The parser behavior checks, 51 local document path/anchor checks and DocFX
+  warnings-as-errors build pass. Commands, TRX, coverage summaries, build/test
+  and API logs remain under `artifacts/direct-visibility-phase0/final-validation`;
+  `verify-final.ps1` beside that directory reproduces the build/test/coverage
+  matrix. Windows local-source validation does not replace coordinated
+  Windows/Linux released-package gates. No merge, push or release was performed.
+- Independent final calibration audit reconciles all 1,920 raw stage records,
+  1,824 BDN timed measurements and 96 successful child exits. Every one of the
+  55,296 actual frames has zero recorded allocation and collection overlap.
+  All 606 frozen inputs, three tools, seven runtime-library pins, formal host
+  hash, 252 archived child files and 268 evidence-inventory entries match.
+  Command timestamps confirm serial captures; no unproved environmental cause
+  is assigned to the drift. Correctness/Ponytail review finds no actionable
+  retained-code issue; production source remains unchanged in both repositories.
+- The corrected pairs fail the predeclared repeatability gate.
+  Independent recomputation from raw frame ticks confirms late-blocked block
+  medians of 265.9488 / 250.5213 ms, a **-5.8009286%** difference against the
+  5% limit. Its frame P95 changes -5.3142%, within the separate 10% limit.
+  All other balanced cases pass both limits. Late-blocked launch medians are
+  267.6793 / 265.9488 / 262.3780 ms in the first capture and
+  251.9658 / 250.3537 / 249.9669 ms in the second: all launches shift, with no
+  basis for removing one. The completed unphased pair also fails A*/100:
+  212.7254 / 198.6892 ms, **-6.5982718%**. Its launch medians are
+  201.5776 / 212.7254 / 296.2214 versus 199.8941 / 196.3705 / 198.8561 ms;
+  the slow first-capture launch remains in the record. All 16 P95 gates pass.
+  This establishes measurement drift, not its cause. The one correction was
+  already consumed; no runtime implementation or extra retry follows this plan.
+- The final baseline is frozen at Trailblazer `e6391ee`, GridForge `be85b56`,
+  FixedMathSharp `29bfa28`, SwiftCollections `4b5715b`, and Gravitas `42af506`.
+  `artifacts/dv-baseline/Trailblazer` is an independent detached source snapshot,
+  with binary-only sibling inputs and a source archive. The manifest records
+  606 immutable inputs, exact library hashes, SDK information and pinned
+  analysis/archive tools. Implementation remains in the original checkout.
+  The relocated eight-case generated-child preflight passes: 24 complete stage
+  records, zero actual-frame allocation, exact library hashes and a generated
+  project referencing only the frozen benchmark source. Its rebuilt benchmark
+  host hash is pinned separately from the copied launcher's hash. Evidence is
+  under `artifacts/direct-visibility-phase0/final-baseline-preflight*`.
+- The final-harness calibration order is Original-1, Balanced-1, Balanced-2,
+  Original-2. Each invocation uses the reviewed ignored `capture-final.ps1`,
+  the detached baseline root and `snapshot-manifest.json`, with default
+  `Launches=3`, `Warmups=10`, `Iterations=9`. Labels are
+  `final-calibration-original-1`, `final-calibration-balanced-1`,
+  `final-calibration-balanced-2`, and `final-calibration-original-2` under
+  `artifacts/direct-visibility-phase0`. Per-run command sidecars record exact
+  arguments, script/manifest hashes, timestamps and launcher exit codes;
+  child archives preserve generated build commands and actual runtime files.
+  Preflight timing is not calibration or candidate acceptance evidence.
+- The first formal capture completed all eight cases (216 actual, 240 warmup
+  and 24 diagnostic records), but its verifier rejected the benchmark-host
+  hash. Root cause was a provenance assumption, not different executable code:
+  the quick 1/1/1 preflight and formal 3/10/9 job have different deterministic
+  BenchmarkDotNet job names, which enter the embedded PDB path and generated
+  module ID. Independent PE inspection found identical complete bodies for all
+  657 methods and identical metadata except the module ID. Of 230,400 DLL bytes,
+  only 77 differ: deterministic timestamps, module ID, CodeView path/GUID and
+  PDB checksum. Every runtime-library hash still matches its frozen input.
+  Installed BenchmarkDotNet code and all historical/current formal job headers
+  confirm the same formal `Job-WQLAGK` identity for both cadences.
+- Use the single permitted correction for this provenance mismatch: keep the
+  preflight hash as evidence and pin the host built with the actual frozen
+  3/10/9 settings (`7DAAD4B43D77964B65A3BCCA326257209AA926C980C23E59846524E1AA99D17B`).
+  No source, compiler/runtime flags, scene, threshold, or verifier code changes.
+  The failed verifier run and its exact original manifest remain intact; it is
+  not substituted for a corrected calibration result. Repeat all four captures
+  from scratch in the same order, with labels `calibration-r1-original-1`,
+  `calibration-r1-balanced-1`, `calibration-r1-balanced-2`, and
+  `calibration-r1-original-2`. A further provenance or repeatability failure
+  blocks timing-based acceptance; no correction allowance remains.
+- GridForge's corresponding direct-host prerequisite is resolved as
+  `GF-Issue-009` in `be85b56`. Fresh red/green checks confirmed the same package
+  collision in both test/benchmark hosts and both configurations. Two local-only
+  project-file exclusions correct it; full local tests pass 922/922 per family
+  and both library targets build. Default package mode is unchanged. Independent
+  review and parent hash checks pass. GridForge's generated top-level benchmark
+  project still selects released math; that limitation is recorded, not hidden
+  or expanded into new infrastructure. This experiment uses Trailblazer's
+  separately verified prebuilt-child route. Raw prerequisite logs remain in
+  `GridForge/artifacts/direct-visibility-provenance`.
 - Full-host control preflight caught a fixture-sizing limit before timing:
   the 256-by-192 late scene exhausted 320,000 evaluated edges after 13,545 of
   49,152 nodes; ordinary Flow acquisition returned `BudgetExceeded`, not a
@@ -623,12 +795,14 @@ Trailblazer keeps this internal and direct-only:
   headroom. Provisional stale evidence disarms certification and finishes the
   full authority with its original failure precedence. Actual partial-work
   continuation, precise interfaces and adversarial proof remain open gates.
-- Unchanged-binary calibration passed on its first protocol attempt. Each
+- The earlier, three-case unchanged-binary calibration passed on its first
+  protocol attempt, before the final eight-case harness. Each
   capture used three launches, ten warmup blocks and nine actual blocks per
   case/launch, 32 preparation frames and 64 measured frames per operation.
   All captures have 81 actual, 90 warmup and nine diagnostic records; actual
   frames allocate zero bytes. Runs were serial, without competing builds,
-  tests or profiles. No calibration correction or discarded rerun was used.
+  tests or profiles. No correction or discarded rerun was used in that earlier
+  three-case series; it does not supersede the failed final-harness gate.
 
   | Cadence / case | Block median 1 / 2 (ms per 64 frames) | Change | Frame P95 1 / 2 (ms) | Change |
   | --- | ---: | ---: | ---: | ---: |
@@ -662,16 +836,16 @@ Trailblazer keeps this internal and direct-only:
   checks launcher exit codes and its outer command returned zero; per-capture
   launcher exit is not separately persisted as a JSON field. No rerun was
   recommended. This calibration is not candidate performance evidence.
-- 2026-09-15: Read-only source investigation and independent geometry/semantics
-  audits support a gated negative-only feasibility spike. No new runtime API,
-  tests, benchmark capture or speedup is claimed.
+- Initial planning, 2026-09-15: read-only source investigation and independent
+  geometry/semantics audits supported a gated negative-only feasibility spike.
+  That planning step did not add runtime APIs, tests or benchmark captures.
 - Independent correctness and Ponytail plan reviews completed. Review clarified
   budget-safe fallback after unrelated publication and removed speculative file
   scaffolding and duplicate guidance. Local file/anchor checks pass for all 48
   links across this plan and its two coordination documents; `git diff --check`
-  passes. No builds or tests were run for this documentation-only change.
-- [ ] Phase 0 exit recorded and reviewed.
-- [ ] Phase 1 exit recorded and reviewed, or no-new-API decision substantiated.
-- [ ] Phase 2 exit recorded and reviewed.
-- [ ] Phase 3 retain/withdraw decision recorded and independently audited.
-- [ ] Phase 4 closeout recorded; parent benchmark and release status reconciled.
+  passed for the initial documentation-only change; no build/test claim was
+  made for that planning step.
+- [x] Phase 0 exit recorded and independently reviewed: measurement-limited no-go.
+- Phases 1 and 2: not executed after the failed Phase 0 gate.
+- Phase 3: no candidate built or measured; no performance-retention claim.
+- [x] Phase 4 no-go closeout recorded; parent benchmark and release status reconciled.

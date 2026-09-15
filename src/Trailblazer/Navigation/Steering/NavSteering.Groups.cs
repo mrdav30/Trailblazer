@@ -40,7 +40,11 @@ public partial class NavSteering
             ? Fixed64.Zero
             : Fixed64.One / groupRadius;
         Fixed64 avoidRadius = radius * AvoidFactor;
-        Fixed64 scanRadius = FixedMath.Max(groupRadius, avoidRadius);
+        // Ungrouped agents only use avoidance; retain legacy signed-radius
+        // behavior for negative inputs until their public validation changes.
+        Fixed64 scanRadius = !IsInGroup && avoidRadius >= Fixed64.Zero
+            ? avoidRadius
+            : FixedMath.Max(groupRadius, avoidRadius);
         Fixed64 groupRadiusSq = groupRadius * groupRadius;
 
         // Accumulators

@@ -47,9 +47,18 @@ instead of burying it in notes.
     local headless observations, not portable guarantees. Documentation and
     examples are verified. Final correctness/Ponytail reviews are complete,
     including the construction-order/restored-replay proof and shared test-fixture
-    cleanup. The branch is retained for the user's review; it is not merged.
+    cleanup. The user reviewed and merged the branch into `develop`; the
+    follow-up investigation now targets ordinary controller/steering costs.
     Spreading periodic work does not reduce each ray's cost; the existing cold
     acquisition scheduler does not own Navigator LOS checks.
+  - The follow-up ungrouped steering scan now uses only the useful avoidance
+    radius, preserving grouped and negative-radius behavior. Repeated matched
+    captures reduce Flow/500 block cost by **10.42–13.94%** with the original
+    cadence and **11.59–15.28%** with balanced phases. Smaller Flow workloads
+    are mixed; the tracker retains all results. Replay, allocation and exact
+    Release/Lean coverage gates pass. The 2 ms allowance and mandatory recovery
+    bursts remain unresolved; the next investigation concerns ray/sampling work
+    or explicitly reviewed acquisition ownership, not discarded validation.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
     `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate

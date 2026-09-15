@@ -33,6 +33,11 @@
   validation rejects either field below zero. The same authored settings can
   therefore enter live steering but fail a later round trip. This predates the
   phase-spreading and zero-denominator changes.
+- **Performance follow-up:** The ungrouped-scan optimization preserves the
+  existing maximum-radius path for negative computed avoidance radii. A focused
+  regression protects that behavior: passing a negative radius directly to
+  GridForge would expand the scan by its magnitude. Remove that compatibility
+  condition and revise its test only when this issue settles live validation.
 - **Next scope:** Reproduce runtime assignment and rejected round-trip behavior,
   then settle consistent nonnegative range validation at the owning public
   boundary. Review the source-compatibility effect before changing fields to

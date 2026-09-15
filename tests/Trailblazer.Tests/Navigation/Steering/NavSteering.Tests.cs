@@ -408,6 +408,115 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void ComputeCombinedSteering_ShouldPreserveFirstNearestAcrossScanCellBoundaries()
+    {
+        TestWorld.Attach(new GridWorld(), takeOwnership: true);
+        TestWorld.World.TryAddGrid(new GridConfiguration(
+            new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8),
+            scanCellSize: 1), out _).Should().BeTrue();
+        TestWorld.World.TryGetGrid(Vector3d.Zero, out VoxelGrid? grid).Should().BeTrue();
+        // The lower-X cell wins the tie despite reversed registration order.
+        // Removing the farther occupant from the scan must not change that.
+        foreach (int x in new[] { 2, 1, -1 })
+            grid!.TryAddVoxelOccupant(new MockSteerAgent(new Vector3d(x, 0, 0))
+            {
+                Size = Fixed64.One
+            }).Should().BeTrue();
+        var steer = new NavSteering(TestWorld.Context);
+
+        Vector3d force = steer.ComputeCombinedSteering(
+            Vector3d.Zero, Vector3d.Right, Fixed64.One, Fixed64.Half, Guid.Empty);
+
+        force.Should().Be(Vector3d.Backward);
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldRestoreWiderRangeWhenRejoiningGroup()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero)
+        {
+            Size = Fixed64.One,
+            Speed = Fixed64.One,
+            Velocity = Vector3d.Right
+        };
+        var neighbor = new MockSteerAgent(new Vector3d(2, 0, 0)) { Size = Fixed64.One };
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+        var steer = new NavSteering(TestWorld.Context)
+        {
+            BehaviorWeights = new GroupBehaviorWeights { Cohesion = Fixed64.One }
+        };
+        var peer = new NavSteering(TestWorld.Context);
+        PathQuery query = CreateSurfaceQuery();
+        steer.ApplyPathQuery(query, groupId: 7);
+        peer.ApplyPathQuery(query, groupId: 7);
+        steer.PrewarmMovementGroup(owner);
+        peer.PrewarmMovementGroup(neighbor);
+
+        foreach (int groupId in new[] { 7, -1, 7 })
+        {
+            steer.MovementGroupID = groupId;
+            Vector3d force = steer.ComputeCombinedSteering(
+                owner.Position, owner.Velocity, owner.Speed, owner.Radius, owner.GlobalId);
+
+            force.Should().Be(groupId == -1 ? Vector3d.Zero : Vector3d.Right,
+                "a peer outside avoidance range contributes only while the owner belongs to its group");
+        }
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldPreserveScanRangeForNegativeAvoidanceFactor()
+    {
+        var neighbor = new MockSteerAgent(new Vector3d(2, 0, 0));
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+        var steer = new NavSteering(TestWorld.Context)
+        {
+            GroupFactor = (Fixed64)2,
+            AvoidFactor = (Fixed64)(-8)
+        };
+
+        Vector3d force = steer.ComputeCombinedSteering(
+            Vector3d.Zero, Vector3d.Right, Fixed64.One, Fixed64.Half, Guid.Empty);
+
+        // Live negative assignments remain admitted (TRB-Issue-129). Preserve
+        // the old max(1, -4) scan instead of expanding it to magnitude 4.
+        force.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldNotGrowForOccupantsOutsideUngroupedAvoidance()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero)
+        {
+            Size = Fixed64.One,
+            Speed = Fixed64.One,
+            Velocity = Vector3d.Right
+        };
+        var neighbor = new MockSteerAgent(Vector3d.Right) { Size = Fixed64.One };
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+        var steer = new NavSteering(TestWorld.Context);
+
+        for (int i = 0; i < 64; i++)
+            steer.ComputeCombinedSteering(
+                owner.Position, owner.Velocity, owner.Speed, owner.Radius, owner.GlobalId);
+
+        // These occupants share an already-scanned cell, but none can influence
+        // the ungrouped owner: avoidance ends at 1.5, grouping would reach 5.
+        for (int i = 0; i < 128; i++)
+            grid!.TryAddVoxelOccupant(new MockSteerAgent(new Vector3d(2, 0, 0))).Should().BeTrue();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        Vector3d force = steer.ComputeCombinedSteering(
+            owner.Position, owner.Velocity, owner.Speed, owner.Radius, owner.GlobalId);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        force.Should().Be(Vector3d.Forward);
+        allocated.Should().Be(0, "irrelevant occupants must not grow the retained steering results");
+    }
+
+    [Fact]
     public void ComputeCombinedSteering_ShouldAvoidSteadyStateAllocation()
     {
         var world = new GridWorld();

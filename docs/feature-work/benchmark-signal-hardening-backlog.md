@@ -1683,6 +1683,98 @@ controller costs, or explicitly review recovery-acquisition ownership, before
 choosing another change. Do not repeat the ended open-ended micro-optimization
 sweep, lower check frequency, or enlarge the budgets to call the signal closed.
 
+#### Follow-up: ungrouped steering scans only its useful radius
+
+After the user merged LOS phase spreading into `develop`, the next bounded pass
+started from `b234b8606dbbe9110338b765e16b4730f401da9d`. Nearby-occupant scanning
+accounted for about 18% of the pre-change Flow/500 sampled CPU time. The host's
+ungrouped, radius-1/4 agents scanned the default group radius **2.5** even though
+only occupants within avoidance radius **0.75** could affect their steering.
+
+**Change:** ungrouped steering now scans the nonnegative avoidance radius.
+Grouped sessions retain the maximum of group and avoidance radii, including
+after leaving/rejoining a group. Negative computed avoidance radii keep the old
+path until `TRB-Issue-129` settles live validation. Nearest-neighbor ordering,
+force arithmetic, default/explicit LOS cadence, guide freshness and budgets are
+unchanged. There is no new cache, API, dependency or upstream modification.
+
+Four focused tests protect scan-cell tie order, live group-range restoration,
+negative-radius behavior, and unwanted result-buffer growth. Adding 128
+outside-avoidance occupants after warming reproduced **4,088 bytes** of growth
+before the change and **zero** afterwards, with the same exact avoidance force.
+
+**Matched evidence:** eight captures with nonoverlapping benchmark-child runs
+cover original and balanced cadence, each in baseline/candidate/candidate/baseline
+order. One wrapper's post-run analysis overlapped the next wrapper's build,
+not its benchmark children; timestamps are retained in the evidence progress log.
+Every capture has
+three selected cases, three launches, one warmup and three actual blocks per
+launch: **72 successful child executions, 216 actual 64-frame blocks**, and 360
+complete stage records. Preparation, setup and semantic validation remain
+outside containing-frame timing. The executed-child archives verify stable
+upstream binaries and repeat identities. All **23,040 Int64 frame-checksum
+comparisons** match; actual-frame allocations and collection-overlap counts are
+zero. Balanced runs retain exactly four periodic checks per agent per block.
+
+The predeclared keep gates required at least 5% lower Flow/500 block median in
+both repeats of each mode, with no selected case worsening by more than 10% in
+block median or observed frame P95. All gates pass. These are local Windows
+.NET 8.0.29 headless observations, not confidence intervals or portable limits.
+
+| Flow/500 mode / repeat | Baseline / candidate block median (ms) | Block reduction | Baseline / candidate frame P95 (ms) |
+| --- | ---: | ---: | ---: |
+| Original / 1 | 561.08 / 482.88 | 13.94% | 48.56 / 49.09 |
+| Original / 2 | 548.00 / 490.89 | 10.42% | 49.16 / 48.94 |
+| Balanced / 1 | 590.22 / 500.05 | 15.28% | 10.32 / 9.02 |
+| Balanced / 2 | 564.94 / 499.47 | 11.59% | 9.78 / 8.65 |
+
+A*/100 block medians improve in every comparison (3.98–10.09% original,
+4.24–6.16% balanced). Flow/100 is mixed: original block changes are -20.24% and
++0.36%; balanced changes are +5.81% and -0.30%. Its P95 worsens by as much as
+9.81%, within the predeclared gate. Do not claim a universal small-population
+speedup or hide that variation. Original Flow/500 still has **36/576 frames**
+over 31.25 ms in each candidate repeat. Balanced Flow/500 has none, with maxima
+**10.54 / 10.84 ms**, but all 576 frames in each repeat still miss 2 ms.
+Balanced A*/100 also misses 2 ms throughout; Flow/100 misses 246/576 and 178/576.
+
+**Next boundary:** profiles include only stacks containing both `RunMeasured`
+and `SimulateAgents`, excluding preparation and post-frame semantic validation.
+The fresh candidate Flow/500 profile assigns roughly 45% of this sampled root
+to direct-heading rays, 20% to guide sampling, and 35% to other controller work.
+Scanning falls from about 17.5% to 10.8% of the balanced sampled root; retained
+GridForge scan cells still test their contained occupants. The three categories
+partition this root; individual inclusive method shares overlap and are
+diagnostic attribution, not additive latency savings. An independent guide
+audit found no safe focused deletion of cache or
+freshness checks: steering's status check permits same-call stale reacquisition,
+whereas a stale sample defers retry. Keep those boundaries intact.
+
+Retain this focused improvement. **TRB-Benchmark-005 remains open:** neither
+the 2 ms allowance nor required acquisition/recovery bursts are resolved.
+The next investigation should target the design of expensive ray/sampling work
+or explicitly reviewed acquisition ownership, not another reduction in check
+frequency or removal of validation. Do not revive the withdrawn page-proof
+experiment or infer a new safe spatial-pruning contract from occupant buckets.
+
+**Verification:** both solution configurations build `netstandard2.1` and
+`net8.0` with zero warnings/errors. Release passes **2,576 core + 65 adapter**
+tests; ReleaseLean passes **2,504 core + 65 adapter**, with no failures/skips.
+Both preserve exact **31,021/31,021 lines, 12,185/12,185 branches and
+3,032/3,032 covered and fully covered methods**, with no new exclusions.
+The tested Release DLL matches the frozen benchmark candidate. Independent
+correctness and Ponytail reviews found no actionable source/test issues.
+An independent raw-evidence review verifies the comparisons, replay, archived
+binaries and disclosed timing scope, with no remaining findings.
+DocFX builds with warnings treated as errors and reports none.
+This is local source-stack verification, not Linux CI or released-package
+validation.
+
+Evidence: `artifacts/los-phase/postphase-*` holds raw captures, full stage
+summaries, commands/source state and frozen executed children;
+`artifacts/benchmark005-postphase` holds the red/green logs, profile probes,
+comparison, verification and independent reviews. No benchmark project or CI
+machinery was added.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

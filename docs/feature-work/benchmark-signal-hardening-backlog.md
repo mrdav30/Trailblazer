@@ -1868,6 +1868,15 @@ comparison, mutation/restored checks, source audits and evidence review;
 commands/source state and frozen executed children. No further profiling loop,
 new benchmark project, CI machinery or production instrumentation is retained.
 
+#### Follow-up: promote certified direct-visibility rejection to a gated plan
+
+On 2026-09-15, source investigation was promoted to the
+[Certified Direct-Visibility plan](navigationDirectVisibilityPlan.md). Its
+Phase 0 must prove a sound, useful negative certificate and budget-safe fallback
+before production integration. No new timing capture or speedup is claimed;
+all phases remain unchecked. `TRB-Benchmark-005` stays active and the earlier
+body-interior shortcut remains withdrawn. The plan owns the design and exit gates.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

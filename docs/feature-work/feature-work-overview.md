@@ -62,12 +62,13 @@ instead of burying it in notes.
   - The subsequent rectangular body-interior experiment (`GF-Benchmark-010`)
     is withdrawn: matched Flow/500 gains did not satisfy the smaller-case
     non-regression gate. GridForge retains useful boundary tests and benchmark
-    invocation guidance (`GF-Issue-008`), not the runtime shortcut. Source audits
-    identify an explicitly designed Navigator-only blocked visibility query as
-    the next structural option; generic early ray termination would change
-    failure, dependency and counted-work semantics. That option is a proposal,
-    not an approved implementation or promised speedup. The benchmark tracker
-    retains all comparisons and the remaining 2 ms/recovery limits.
+    invocation guidance (`GF-Issue-008`), not the runtime shortcut. The subsequent
+    [Certified Direct-Visibility plan](navigationDirectVisibilityPlan.md) starts
+    with a negative-only proof/work-count spike and a fallback-accounting gate.
+    A complete generic streaming tracer is not a prerequisite. Exact prefix
+    completeness and the deliberate unseen-suffix failure difference require
+    review before production integration. The plan is drafted, not implemented;
+    the benchmark tracker retains the remaining 2 ms/recovery limits.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
     `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate
@@ -190,13 +191,8 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Review the completed [LOS phase-spreading branch](done/navigationLineOfSightPhasePlan.md)
-   before broader features. Its repeated relative performance gates, exact local
-   verification and independent reviews pass; the plan is archived.
-   `TRB-Benchmark-005` remains open for the 2 ms allowance and required recovery
-   bursts, not the now-spread steady Flow/500 peaks. Further performance work
-   should begin with bounded isolation of ordinary sampling/body/controller
-   costs or recovery-acquisition ownership, not another speculative ray sweep.
+1. Review and execute [Certified Direct-Visibility Phase 0](navigationDirectVisibilityPlan.md#phase-0---prove-the-opportunity-and-freeze-the-contract)
+   before broader features; the merged LOS phase-spreading runtime is the control.
    Exact rectangular tracing, raw-coordinate geometry and
    per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
    accounting and dependency guarantees, and keep the unphased cadence/control

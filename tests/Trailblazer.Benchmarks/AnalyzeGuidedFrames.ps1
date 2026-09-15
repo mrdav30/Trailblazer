@@ -16,6 +16,8 @@ $diagnostic = $false
 $launch = 0
 $currentCase = $null
 $currentMode = $null
+$currentControl = $null
+$controlCounts = @{ Clear100 = 100; Short100 = 100; Late100 = 100; Ineligible100 = 100; Sparse500 = 500 }
 $launchState = $null
 $launchStates = [System.Collections.Generic.List[object]]::new()
 $seenCases = [System.Collections.Generic.HashSet[string]]::new()
@@ -175,6 +177,11 @@ function Assert-InstrumentedMetadata($Sample, [string]$Mode) {
 }
 
 function Add-Sample($Sample, [string]$Stage, [int]$Index, [double]$OperationNanoseconds) {
+    if ($null -ne $currentControl) {
+        if ($Sample.controlCase -ne $currentControl -or $Sample.algorithm -ne 'FlowField' -or
+            $Sample.agents -ne $controlCounts[$currentControl]) { throw 'Invalid control metadata.' }
+    }
+    elseif ($Sample.PSObject.Properties.Name -contains 'controlCase') { throw 'Unexpected control metadata.' }
     if ($Sample.frames -ne 64 -or $Sample.preparationFrames -ne 32 -or $Sample.frameRate -ne 32 -or
         !(Test-Integer $Sample.stopwatchFrequency) -or $Sample.stopwatchFrequency -le 0 -or
         !(Test-Integer $Sample.agents) -or $Sample.agents -notin @(100, 500) -or
@@ -194,6 +201,7 @@ function Add-Sample($Sample, [string]$Stage, [int]$Index, [double]$OperationNano
     $case = if ($null -eq $currentMode) {
         "$($Sample.algorithm)/$($Sample.agents)"
     } else { "$currentMode/$($Sample.algorithm)/$($Sample.agents)" }
+    if ($null -ne $currentControl) { $case = "Control/$currentControl/$case" }
     if ($case -ne $currentCase) { throw 'Payload case metadata disagrees with the benchmark header.' }
     if (!(Test-Integer $Sample.process) -or $Sample.process -le 0 -or
         !(Test-Integer $Sample.iteration) -or $Sample.iteration -ne $launchState.Iteration + 1) {
@@ -229,14 +237,22 @@ foreach ($line in [System.IO.File]::ReadAllLines((Resolve-Path -LiteralPath $Log
         if ($null -ne $currentCase -and !$currentCaseHasLaunch) {
             throw 'Started benchmark case has no launch.'
         }
-        if ($line -notmatch '^// Benchmark: NavigationGuidedFrameBenchmarks\.([A-Za-z0-9]+): .+ \[AgentCount=(100|500), Algorithm=(AStar|FlowField)\]$') {
+        $currentControl = $null
+        if ($line -match '^// Benchmark: NavigationDirectVisibilityFrameBenchmarks\.Simulate64Frames(Unphased|BalancedPhases): .+ \[Case=(Clear100|Short100|Late100|Ineligible100|Sparse500)\]$') {
+            $currentMode = $Matches[1]
+            $currentControl = $Matches[2]
+            $currentCase = "Control/$currentControl/$currentMode/FlowField/$($controlCounts[$currentControl])"
+        }
+        elseif ($line -match '^// Benchmark: NavigationGuidedFrameBenchmarks\.([A-Za-z0-9]+): .+ \[AgentCount=(100|500), Algorithm=(AStar|FlowField)\]$') {
+            $method = $Matches[1]
+            if (!$methodModes.ContainsKey($method)) { throw 'Unsupported guided-frame benchmark method.' }
+            $currentMode = $methodModes[$method]
+            $currentCase = if ($null -eq $currentMode) { "$($Matches[3])/$($Matches[2])" }
+                else { "$currentMode/$($Matches[3])/$($Matches[2])" }
+        }
+        else {
             throw 'Unsupported benchmark header.'
         }
-        $method = $Matches[1]
-        if (!$methodModes.ContainsKey($method)) { throw 'Unsupported guided-frame benchmark method.' }
-        $currentMode = $methodModes[$method]
-        $currentCase = if ($null -eq $currentMode) { "$($Matches[3])/$($Matches[2])" }
-            else { "$currentMode/$($Matches[3])/$($Matches[2])" }
         if (!$seenCases.Add($currentCase)) { throw 'Duplicate benchmark header.' }
         $currentCaseHasLaunch = $false
         $currentLaunchSequence = 0

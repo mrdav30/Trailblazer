@@ -252,4 +252,42 @@ Invoke-Rejected (@((Get-Header 'Simulate64GuidedFrames' -WithCounts $false)) + $
 
 Invoke-Rejected ($complete + @((Get-Header 'Simulate64GuidedFrames'))) 'Duplicate benchmark header'
 
+# Control scenes must remain disjoint from each other and from historical identities.
+$controlLines = [System.Collections.Generic.List[string]]::new()
+foreach ($control in @('Clear100', 'Short100', 'Late100', 'Ineligible100', 'Sparse500')) {
+    foreach ($mode in @('Unphased', 'BalancedPhases')) {
+        $count = if ($control -eq 'Sparse500') { 500 } else { 100 }
+        $sample = New-Sample 'FlowField' $count
+        Add-Instrumentation $sample $mode
+        $sample.controlCase = $control
+        $sample.checksums = @([long]$controlLines.Count) * 64
+        $header = "// Benchmark: NavigationDirectVisibilityFrameBenchmarks.Simulate64Frames${mode}: Job-X(IterationCount=1, LaunchCount=1, WarmupCount=1) [Case=$control]"
+        $controlLines.Add($header)
+        foreach ($line in (Get-CompleteLaunch $sample)) { $controlLines.Add($line) }
+    }
+}
+$result = Invoke-Parser $controlLines.ToArray()
+if ($result.Summaries.Count -ne 10 -or
+    @($result.Summaries | Where-Object Case -notlike 'Control/*').Count -ne 0) {
+    throw 'Direct visibility controls were pooled or misidentified.'
+}
+foreach ($mutation in @('unknown', 'missing', 'mismatch', 'algorithm', 'count')) {
+    $sample = New-Sample 'FlowField'
+    Add-Instrumentation $sample 'Unphased'
+    $sample.controlCase = 'Clear100'
+    switch ($mutation) {
+        'unknown' { $sample.controlCase = 'Unknown' }
+        'missing' { $sample.Remove('controlCase') }
+        'mismatch' { $sample.controlCase = 'Short100' }
+        'algorithm' { $sample.algorithm = 'AStar' }
+        'count' { $sample.agents = 500 }
+    }
+    Invoke-Rejected (@($controlLines[0]) + (Get-CompleteLaunch $sample)) 'control metadata'
+}
+Invoke-Rejected @($controlLines[0].Replace('Clear100', 'Unknown')) 'Unsupported benchmark header'
+Invoke-Rejected @($controlLines[0].Replace('Simulate64FramesUnphased', 'Simulate64FramesOther')) 'Unsupported benchmark header'
+$sample = New-Sample
+$sample.controlCase = 'Clear100'
+Invoke-Rejected (@((Get-Header 'Simulate64GuidedFrames')) + (Get-CompleteLaunch $sample)) 'control metadata'
+
 Write-Output "Guided parser checks passed; fixtures: $directory"

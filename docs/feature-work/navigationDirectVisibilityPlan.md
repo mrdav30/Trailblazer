@@ -6,9 +6,9 @@
 
 **Created:** 2026-09-15
 
-**Status:** Draft for review. Source feasibility investigation complete;
-implementation and all phase exits remain unverified. The user requested this
-investigation and plan, not a runtime cutover in this documentation pass.
+**Status:** Approved for execution on `codex/certified-direct-visibility`,
+branched from `develop` at `785b801`. Phase 0 is in progress; production
+integration and all phase exits remain unverified.
 
 **Source baseline:** Trailblazer `5f44495`; GridForge `02aa2de`, both on
 `develop`. Record fresh sibling revisions and executed binaries before a probe.
@@ -70,8 +70,9 @@ enough of it is **not established** by source inspection.
 
 Follow [AGENTS.md](../../AGENTS.md) for coding, tests, exact coverage, documentation,
 issue tracking and worktree ownership, and the [overview](feature-work-overview.md)
-for coordinated release gates. This documentation pass authorizes no git or
-release operations. Feature-specific constraints:
+for coordinated release gates. The user authorizes this feature branch and
+checkpoint commits, but not merging, pushing or releasing. Feature-specific
+constraints:
 
 - Correctness and deterministic replay before speed; fixed-point simulation
   math only. Both library targets share the implementation.
@@ -383,8 +384,284 @@ commands, analysis and executed-child archiving. Phase 0 must record the exact
 frozen commands and artifact locations here, including inherited local-stack
 properties for generated sibling benchmarks; do not infer them from outer builds.
 
+## Frozen full-host controls
+
+The reviewed `NavigationDirectVisibilityFrameBenchmarks` adds exactly five
+FlowField controls per cadence; the original A*/100, Flow/100 and Flow/500
+remain unchanged. This tests the shared direct-ray path without an unnecessary
+algorithm-by-scene Cartesian product. Methods are `Simulate64FramesUnphased`
+and `Simulate64FramesBalancedPhases`, with interval 16 and null phase or stable
+agent index modulo 16. All use unit rectangular single-layer geometry, foot
+Y=-1/2, radius 1/8, height 1, zero root offset/step/drop, arrival radius 1/4,
+permissive zero-cost Solid cells, `TrekRate.Slow`, and 32 preparation plus
+64 measured frames at 32 Hz.
+
+| Case | Agents | Grid | Start X/Z for agent i | Destination X/Z | Obstruction |
+| --- | ---: | --- | --- | --- | --- |
+| Clear100 | 100 | Dense 256x192 | `(2+2*i, 2+i)` | `(254,128)` | None; actual direct success required |
+| Short100 | 100 | Dense 32x32 | `(2+2*(i%10), 2+2*(i/10))` | Start + `(4,2)` | None; actual direct success required |
+| Late100 | 100 | Dense 256x192 | Same as Clear100 | `(254,128)` | Semantic wall x=250 below z=189 |
+| Ineligible100 | 100 | Same as Late100 | Same as Clear100 | `(254,128)` | Same wall plus distant unbound 1-cell grid at `(10000,10000)` |
+| Sparse500 | 500 | Sparse 256x192 | `(4+i%25, 4+2*(i/25))` | `(253,185)` | Physical wall x=48 below z=189 |
+
+Sparse physical storage is the clipped union of staging x=2..30/z=2..44,
+the band `abs((z-2)*251-(x-2)*183) <= 4*251`, west x=2..4/east x=251..253
+connectors, and top z=189..191 connector, minus the wall. It has 4,798 physical
+cells and uses default-cell navigation authoring, not a dense semantic copy.
+Its per-map dynamic-slot cap is 8,192; the existing global 16,384 remains.
+Other controls retain settings defaults. Workspace capacities use the full
+grid dimensions; query limits are lookup 10,240,000, endpoint 16, expanded nodes
+width*length, evaluated edges `max(320000,32*width*length)`, trace 160,000,
+covered intervals 320,000, simplification rays 1,024, and zero transition work.
+
+Setup must finish publication/materialization before admission. All ten
+case/cadence combinations pass setup plus two complete reset/replay cycles in
+both Release and Lean, with zero measured allocation/GC masks and exact
+N mandatory / 4N periodic rays per measured block. Clear/short keep moving in
+direct mode with zero guide leases; negatives keep exactly N Flow leases.
+Every frame validates fresh physical/semantic committed cells and query intent;
+each separate 32-frame block must move. Independent code/evidence review passes.
+Sparse publication needs 15 additional untimed maintenance frames. These smoke
+results do not substitute for the formal warmed timing/allocation gates.
+
+## Concrete production contract
+
+Independent correctness and Ponytail reviews approve this bounded production
+contract, arithmetic proof and full-host controls. Final-harness calibration
+still precedes the Phase 0 exit; this approval is not a performance result.
+
+GridForge adds one synchronous `GridTracer.TryTraceRectangularSlabsInto`:
+
+```csharp
+public static bool TryTraceRectangularSlabsInto(
+    GridWorld world, Vector3d start, Vector3d end,
+    in GridCoveredAddressGeneration expectedGeneration,
+    SwiftList<GridTraceInterval> results, GridTraceIntervalScratch scratch,
+    Span<int> intervalSourceOrdinals, Func<GridTraceSlab, bool> continueTrace,
+    int gridCandidateLimit, int addressCandidateLimit, int outputLimit,
+    long candidateWorkLimit, out GridTraceIntervalReport report);
+```
+
+- Eligibility is exactly one active physical grid matching the expected
+  generation/configuration/sequence, rectangular single-layer geometry, nonzero
+  representable original X/Z deltas, and valid original extreme prisms/planar
+  slab arithmetic. Ineligible returns `false` before charged discovery, clears
+  output, and invokes no observer; the caller ignores its report and uses the
+  complete authority. After qualification, all terminal outcomes return `true`.
+- The existing optimized rectangular collector emits complete X slabs, in
+  ascending X, over the original full Y/Z bounds and segment. Admission retains
+  the original full candidate-range charge. Do not build the whole address list
+  first. Each interval is mapped once before constructing the next slab.
+- New immutable `GridTraceSlab` carries `XIndex`, `IntervalStart`,
+  `IntervalCount`, `SeparatesEndpoints`, `WorldSpawnToken`,
+  `WorldChangeSequence` and `GridCoveredAddressGeneration Generation`.
+  Its constructor is internal; it holds no live grid. Separation uses actual
+  opposing prism faces, checked endpoint differences, and exact
+  `CompareProducts(gap, One, positiveDeltaX, MinIncrement) > 0` on both sides.
+  This conservative one-raw-parameter margin excludes rounded endpoint peers.
+- Returning `false` from the observer produces the appended
+  `GridTraceIntervalStatus.StoppedAfterCompleteSlab`, not `Complete` or a
+  navigation result. Output remains in emission order; tie count and continuous
+  coverage flags are zero/false. The old eager method never returns this status.
+- Continuation uses the current canonical heap sort, carrying one caller-owned
+  integer source ordinal through every move, then unchanged tie/coverage
+  finalization. The supplied span must fit `outputLimit`. Trailblazer permutes
+  retained mapping records in place from these tags, without remapping or a
+  second record array. Failed traces clear output; observer exceptions clear
+  output/used tags, release locks and propagate.
+- The observer runs under the existing world read lock. XML forbids world/grid
+  reentry and mutation of results/scratch. A small scratch active-use guard
+  rejects same-scratch reentry/`Clear` before destructive clearing. `finally`
+  releases the guard and all temporary grid/address references. No cursor,
+  retained lock, general frontier or host classification callback is added.
+  That read lock does not freeze obstacle changes: capture the original world
+  stamp before generation qualification (or capture/check them together under
+  `ChangeSyncRoot`). Never adopt a later stamp that legitimizes a mutation
+  between qualification and an empty-slab certificate.
+
+Trailblazer keeps this internal and direct-only:
+
+- `NavigationRayWork.AdvanceDirect(NavigationImmediateRayWorkspace)` uses a
+  shared extracted `MapOne` also called by ordinary `MapIntervals`. Append
+  internal `NavigationRayStatus.CertifiedObstruction`; generic `Advance` never
+  returns it. The direct service and initial/periodic steering paths retain the
+  distinction and apply the existing decision table above.
+- Only the immediate workspace gains `int[traceCapacity]`, one cached observer
+  delegate and transient proof fields. Generic A*/Flow ray workspaces do not.
+  Clear transient references/tags on all terminal, fallback and exception paths.
+- Require Solid, no endpoint allowance/chain restriction, exactly one current
+  materialized map, no automatic seam pairs and no explicit source owners.
+  Native rectangular edges change X by at most one: an entirely unadmitted,
+  complete strict slab separates all possible seed/finish records. Passable
+  expensive cells remain admitted; cost does not establish an obstruction.
+- Snapshot original ceilings before observation. With
+  `N = min(traceCapacity, remainingTraceIntervals)`, require lookup headroom
+  `1L + N`, page capacity `min(N, instance.PhysicalPageCount)`, and component
+  capacity `min(N, singleMapSolidComponentRecordCount)`. These are computed
+  immutable metadata counts, not new stored counters or per-ray scans. A present
+  mapped slot belongs to the captured physical pages even when it lacks the
+  requested medium; graph identity protects missing-slot/alternative absence.
+- Preserve post-report geometric charges and debit each mapping lookup once.
+  Do not recompute discovery ceilings after those debits. A deferred semantic
+  failure disarms certification; full geometry finishes and retains ordinary
+  failure priority before that mapping failure. Completed fallback has exact
+  category equality; failed partially observed attempts may have already paid
+  mapping work. No reset, refund or extra direct budget is allowed.
+- Every slab maps once. If any record is admitted, the slab is not strict, or
+  proof is disarmed, continue immediately. Only an empty strict candidate runs
+  accumulated dependency validation: graph/world fence, existing validation,
+  then graph/world fence again. Graph identity-only change means continuation,
+  not manufactured stale. Commit the certificate only after the final fence;
+  the outer trace world-sequence check still applies. Ordinary full completion
+  keeps its existing final dependency validation.
+
 ## Execution record
 
+- Full-host control preflight caught a fixture-sizing limit before timing:
+  the 256-by-192 late scene exhausted 320,000 evaluated edges after 13,545 of
+  49,152 nodes; ordinary Flow acquisition returned `BudgetExceeded`, not a
+  route/visibility defect. Both cadences and the matched ineligible scene agree.
+  Before any capture, scale only the new controls' edge budget to
+  `max(320000, 32 * width * length)` (1,572,864 for large controls), following
+  the existing cold-guide benchmark's per-node sizing. All other budgets and
+  the original primary fixture remain unchanged. Baseline and candidate must
+  use this same frozen sizing. Sparse's initial 4,096 dynamic-slot cap also
+  prevented its 4,798-cell baseline from materializing; its approved 8,192 cap
+  resolves that fixture limit. All controls now pass both cadences in Release
+  and Lean. Raw failed/successful smoke logs, parser red/green checks and
+  expanded BDN discovery remain under `artifacts/direct-visibility-phase0/task-0c`.
+- Before seeing any new-control timing results, freeze this protocol extension:
+  after the reviewed five-control harness is committed, create an ignored
+  baseline source/runtime snapshot and repeat identical-baseline calibration
+  for all eight selected cases per cadence (original three plus five controls).
+  The prior four passing captures remain pre-controls evidence; they do not
+  calibrate the added cases or rebuilt benchmark host. Use the same 3/10/9
+  protocol and 5% median / 10% P95 agreement gates. The one permitted correction
+  is still unused and is not reset by this scope extension. Only then run fresh
+  B1/C1/C2/B2 comparisons. This is a predeclared harness-scope extension, not a
+  response to an unfavorable candidate result. Preserve the original method in
+  unphased primary captures and pair it with the controls' explicit unphased
+  method; use balanced-phase methods for both in the other cadence.
+- Aligned validation prerequisite `TRB-Issue-135` is resolved in `a65c118`:
+  local executable hosts now select the sibling math implementation instead of
+  the competing released package asset. Full solution builds/tests pass with
+  verified local hashes: Release 2,576 core / 65 adapter, Lean 2,504 / 65,
+  both library targets, zero warnings/errors or failed/skipped tests. The
+  `direct-visibility-aligned-release[lean].trx` files and
+  `artifacts/direct-visibility-phase0/aligned-release[lean]-*.log` preserve the
+  matrix. Independent correctness/minimality review approved the three-project
+  fix; normal package selection and generated prebuilt children remain intact.
+  This is a separate validation fix, not a visibility speedup.
+- The aligned actual partial-execution spike passes 15 scenes. Guided wall
+  discovery visits/maps 73 of 145 candidates; the separate sparse oblique wall
+  visits/maps 53 of 436. Add two extreme-prism qualification checks to each.
+  Full address admission remains 5,049 / 47,244; successful certificates perform
+  no canonical sorting or chain evaluation. Late/reverse sparse walls require
+  414 visits, so no direction-aware near-start saving is claimed. Full forced
+  continuation matches all intervals/ties, mapped records, dependency sets,
+  meter categories and successful selected cost/heading. Exact-budget eligible
+  cases continue without remapping. Capacity-vs-semantic-failure priority and
+  unrelated publication after dependency validation are exercised. Deliberate
+  eager-only, remapping and missing-final-fence controls fail as intended.
+- The final arithmetic addition passes 22 rows: 16 literal one-raw-margin
+  combinations at both ends/directions, one-raw oblique slopes forward/reverse,
+  exact horizontal bypass, unrepresentable deltas forward/reverse and two
+  actual prism representation rejections. Half-raw peers round to endpoint
+  parameters but cannot certify separation. Near-zero oblique controls genuinely
+  succeed and map five intervals once; unsupported cases have zero observer
+  charges before full authority. Three deliberate weakened-guard/eager-only
+  controls fail. The 15-scene regression remains green afterward.
+  Reproduce with `dotnet build artifacts/direct-visibility-phase0/probe/Phase0Probe.csproj
+  -c Release`, then its `bin/Release/net8.0/Trailblazer.Tests.dll` with output
+  path and `--partial` or `--arithmetic`. It uses frozen calibration-child
+  references, not mutable parent outputs. Latest raw files are
+  `artifacts/direct-visibility-phase0/partial-arithmetic-regression.json`
+  (SHA256 `5EAE7FECA016381CB4F50CEEE61E312A52B91643665FC13B2BA1E20421CDC5A2`)
+  and `arithmetic.json`
+  (`9676E01C323AD6344D7243164D7366F6AD58B6986EFC667686D3DAC88C86041B`).
+  Earlier output/binary snapshots and all red logs remain preserved. Reflection,
+  diagnostic source copies and eight nullable warnings in linked benchmark
+  support make this a feasibility harness, not production/allocation/timing
+  evidence. Production tests must cover their own implementation and lifecycle.
+- 2026-09-15: User approved the plan and its deliberate unseen-suffix contract,
+  authorized implementation/checkpoint commits and requested independent reviews.
+  Created `codex/certified-direct-visibility` from clean `develop` at `785b801`,
+  using the existing checkout as requested. GridForge `02aa2de` and Gravitas
+  `42af506` also start clean. Exact geometry/accounting interfaces remain a
+  Phase 0 gate; approval does not broaden the fallback budget or tracing scope.
+- Baseline `dotnet test Trailblazer.slnx -c Release -p:UseLocalLsfStack=true
+  --logger 'trx;LogFileName=direct-visibility-baseline-release.trx'` passed:
+  2,576 core and 65 adapter tests, no failures/skips. Both library targets built.
+  TRX evidence is under each test project's ignored `TestResults` directory.
+- The same baseline command in `ReleaseLean` with
+  `direct-visibility-baseline-releaselean.trx` passed 2,504 core and 65 adapter
+  tests, no failures/skips, with both library targets built.
+- Binary audit qualifies those baseline tests: their host output contains
+  released FixedMathSharp `010be577`, whereas the measured children contain
+  sibling `29bfa28`. The core sources differ, so the baseline tests are not
+  evidence for the entire current sibling stack. The ignored diagnostic is
+  being aligned with the frozen child dependencies before its feasibility
+  results are accepted; final local-stack verification must resolve this too.
+- Initial ignored diagnostic completed 14 scenes and compared every replayed
+  interval with the real complete trace. The guided wall admits 5,049 addresses
+  but evaluates 145 actual candidates; the long sparse oblique wall admits
+  47,244 but evaluates 436. Complete provisional empty X slabs leave 72 and
+  383 candidate evaluations respectively. These are posthoc opportunities, not
+  implemented savings. Raw predecessor evidence is retained at
+  `artifacts/direct-visibility-phase0/phase0.json`, including its separate
+  runtime fingerprint. The quarter-radius oblique open control already rejects
+  at portal-pair clearance; the eighth-radius oblique and quarter-radius
+  axis-aligned open controls succeed. Do not attribute every rejection to the
+  authored wall or infer a geometry bug from that control alone.
+- Independent source correctness and Ponytail reviews support a narrower
+  prototype: exactly one matching materialized rectangular map/physical grid,
+  Solid medium, no explicit connections or seams, and the existing optimized
+  oblique X-slab path only. All unsupported cases retain the original ray.
+  Retain mapped records plus one ordinal permutation for complete fallback;
+  no cursor, general frontier, symmetric axis walker or second mapping store.
+  Before interleaving mapping, metadata must prove lookup/page/component
+  headroom. Provisional stale evidence disarms certification and finishes the
+  full authority with its original failure precedence. Actual partial-work
+  continuation, precise interfaces and adversarial proof remain open gates.
+- Unchanged-binary calibration passed on its first protocol attempt. Each
+  capture used three launches, ten warmup blocks and nine actual blocks per
+  case/launch, 32 preparation frames and 64 measured frames per operation.
+  All captures have 81 actual, 90 warmup and nine diagnostic records; actual
+  frames allocate zero bytes. Runs were serial, without competing builds,
+  tests or profiles. No calibration correction or discarded rerun was used.
+
+  | Cadence / case | Block median 1 / 2 (ms per 64 frames) | Change | Frame P95 1 / 2 (ms) | Change |
+  | --- | ---: | ---: | ---: | ---: |
+  | Original A*/100 | 206.117 / 197.509 | -4.18% | 20.306 / 19.782 | -2.58% |
+  | Original Flow/100 | 88.419 / 86.652 | -2.00% | 10.007 / 9.763 | -2.43% |
+  | Original Flow/500 | 466.833 / 451.468 | -3.29% | 46.146 / 45.503 | -1.39% |
+  | Balanced A*/100 | 201.425 / 201.400 | -0.01% | 3.483 / 3.567 | +2.42% |
+  | Balanced Flow/100 | 87.426 / 87.861 | +0.50% | 1.477 / 1.502 | +1.68% |
+  | Balanced Flow/500 | 458.425 / 455.170 | -0.71% | 7.532 / 7.853 | +4.27% |
+
+  Exact captures use the existing ignored helper:
+  `artifacts/los-phase/capture.ps1 -Label <label> -Mode <mode>
+  -Launches 3 -Warmups 10 -Iterations 9`. Serial order was
+  `visibility-calibration-original-1` (`Original`),
+  `visibility-calibration-balanced-1` (`BalancedPhases`),
+  `visibility-calibration-balanced-2` (`BalancedPhases`), then
+  `visibility-calibration-original-2` (`Original`). Each label under
+  `artifacts/los-phase` retains its command/source JSON, source diff, raw log,
+  analyzer summary and `-children` archive/manifest. The command records contain
+  exact method filters; the existing helper selects A*/100, Flow/100 and
+  Flow/500, never A*/500. Generated children inherit
+  `/p:UseLocalLsfStack=true /p:UsePrebuiltLocalLsfStack=true /m:1`.
+  Trailblazer, GridForge, FixedMathSharp, SwiftCollections and benchmark assembly
+  hashes match across all four archives. Independent audit reproduced the six
+  comparisons, matched all 720 raw stage records to summaries and all 684
+  warmup/actual measurements to BenchmarkDotNet JSON, verified 36 successful
+  child exits, exact replay and 252 archived runtime-file hashes. Individual
+  launches still show some settling: balanced capture 2 Flow/500 launch 1's
+  early-three versus last-three block median falls 6.89%. Preserve that sequence;
+  aggregate agreement is not proof that every launch is stationary. The helper
+  checks launcher exit codes and its outer command returned zero; per-capture
+  launcher exit is not separately persisted as a JSON field. No rerun was
+  recommended. This calibration is not candidate performance evidence.
 - 2026-09-15: Read-only source investigation and independent geometry/semantics
   audits support a gated negative-only feasibility spike. No new runtime API,
   tests, benchmark capture or speedup is claimed.

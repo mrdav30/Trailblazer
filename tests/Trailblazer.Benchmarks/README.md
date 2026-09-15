@@ -330,6 +330,58 @@ alone do not establish which assemblies the child executed, especially with
 the prebuilt local-stack references. Compare the frozen child manifests before
 attributing a result to a single changed library.
 
+### Direct-visibility full-host controls
+
+`NavigationDirectVisibilityFrameBenchmarks` adds five fixed FlowField controls:
+`Clear100`, `Short100`, `Late100`, `Ineligible100`, and `Sparse500`. Its two
+methods are `Simulate64FramesUnphased` and `Simulate64FramesBalancedPhases`.
+The original guided-frame methods, parameters, and payloads are unchanged.
+These controls use radius 1/8, `TrekRate.Slow`, 32 preparation plus 64 measured
+frames at 32 Hz, and interval 16 (null phase or agent index modulo 16).
+
+Clear/short require actual direct success and no guide leases throughout the
+moving lifecycle. Late/ineligible/sparse require one real Flow lease per agent
+and no direct path. The ineligible control adds a distant unbound physical grid;
+the sparse control physically seeds a narrow oblique band, staging rectangle,
+and detour connectors, with a missing physical wall. Setup validates captured
+physical pages, one Solid component, materialization, and workspace headroom.
+Every invocation resets the same formation; each 32-frame block must move,
+every frame checks fresh physical/semantic committed cells, and full replay
+hashes must match. Only existing immediate-meter observations run inside the
+timer; no second diagnostic ray is issued in a timed frame.
+
+Run semantic validation before accepting or freezing any timing protocol:
+
+```powershell
+dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -p:UseLocalLsfStack=true
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll direct-visibility-smoke
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll direct-visibility-smoke --list
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-direct-visibility-frame --filter '*Simulate64FramesUnphased*' --list flat
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-direct-visibility-frame --filter '*Simulate64FramesBalancedPhases*' --list flat
+```
+
+The smoke runs all five cases in both cadences, with full setup preflight and
+two reset/replay/cleanup cycles. Its raw timing is diagnostic only, not formal
+acceptance evidence. Discovery must select exactly five parameter cases per
+cadence. BDN's flat list prints methods only; `direct-visibility-smoke --list`
+prints the actual expanded BDN parameter cases without executing workloads.
+The automatic catalog alias is `navigation-direct-visibility-frame`.
+Use the existing Monitoring job and a separately approved capture protocol;
+never silently raise budgets or replace a failed clear scene with blockage.
+Before freeze, the 256x192 negative control exhausted the original 320,000-edge
+budget at 13,545 settled nodes. The approved control-only edge budget is
+`max(320000, 32 * width * length)` (1,572,864 for large scenes); all other budgets
+and the primary guided fixture are unchanged. Use this same sizing on every
+baseline and candidate capture.
+The 4,798-cell Sparse500 default-cell map also requires an explicitly approved
+8,192 per-map dynamic-slot capacity (global capacity remains 16,384); the
+default 4,096 cannot materialize that physical seed. Other cases retain the
+existing settings defaults. Both changes precede the timing freeze.
+New `NAVIGATION_GUIDED_SAMPLES` records include `controlCase`; the existing
+analyzer validates its exact algorithm/count mapping and keeps control keys
+disjoint from historical records. Analyze formal BDN logs with
+`AnalyzeGuidedFrames.ps1`, not the standalone smoke log.
+
 ### Scheduled cold acquisition across fixed frames
 
 `NavigationScheduledFrameBenchmarks` measures one complete scheduled acquisition

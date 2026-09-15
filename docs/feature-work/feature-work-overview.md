@@ -67,8 +67,13 @@ instead of burying it in notes.
     with a negative-only proof/work-count spike and a fallback-accounting gate.
     A complete generic streaming tracer is not a prerequisite. Exact prefix
     completeness and the deliberate unseen-suffix failure difference require
-    review before production integration. The plan is drafted, not implemented;
-    the benchmark tracker retains the remaining 2 ms/recovery limits.
+    review before production integration. The approved plan is executing on
+    `codex/certified-direct-visibility` from `develop`; Phase 0 proof and
+    single-meter continuation gates remain open. First-attempt unchanged-binary
+    calibration passes; `TRB-Issue-135` resolved the separate local test-host math
+    dependency mismatch, with both aligned solution matrices passing. No
+    candidate speedup is claimed. The benchmark tracker
+    retains the remaining 2 ms/recovery limits.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
     `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate

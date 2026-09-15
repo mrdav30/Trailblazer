@@ -122,7 +122,8 @@ internal static class NavigationGraphBenchmarkScenario
         int nodeCapacity,
         int concurrentQueries,
         int cacheEntries = 128,
-        int? activeLeaseCapacity = null)
+        int? activeLeaseCapacity = null,
+        int? dynamicCellSlotsPerMap = null)
     {
         // Held guides do not require one search workspace per consumer.
         int activeLeases = activeLeaseCapacity ?? concurrentQueries;
@@ -177,7 +178,7 @@ internal static class NavigationGraphBenchmarkScenario
             defaults.MaxRetiredSnapshots,
             Math.Max(defaults.MaxRetiredSnapshotBytes, 268_435_456L),
             defaults.MaxPersistentGraphPages,
-            defaults.MaxDynamicCellSlotsPerMap,
+            dynamicCellSlotsPerMap ?? defaults.MaxDynamicCellSlotsPerMap,
             defaults.MaxDynamicCellSlots,
             defaults.NavigationAreaCount,
             defaults.MaxAreaPolicies,

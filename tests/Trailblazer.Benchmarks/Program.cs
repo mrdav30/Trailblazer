@@ -19,6 +19,21 @@ internal static class Program
 
         string command = args[0];
 
+        if (string.Equals(command, "direct-visibility-smoke", StringComparison.OrdinalIgnoreCase)
+            && args.Length == 1)
+            return NavigationDirectVisibilityFrameBenchmarks.RunSmoke();
+
+        if (string.Equals(command, "direct-visibility-smoke", StringComparison.OrdinalIgnoreCase)
+            && args.Length == 2 && args[1] == "--list")
+        {
+            // BDN's flat list omits parameter values; retain its actual expanded cases for audit.
+            var run = BenchmarkConverter.TypeToBenchmarks(
+                typeof(NavigationDirectVisibilityFrameBenchmarks), CreateGlobalConfig(false));
+            foreach (var benchmark in run.BenchmarksCases)
+                Console.WriteLine(benchmark.DisplayInfo);
+            return 0;
+        }
+
         if (string.Equals(command, "guided-phase-smoke", StringComparison.OrdinalIgnoreCase)
             && args.Length == 1)
         {

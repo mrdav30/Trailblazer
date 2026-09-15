@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-135`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-136`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -216,6 +216,38 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-135 - Local-stack test hosts execute the released math dependency
+
+- **Discovered / resolved:** 2026-09-15 during direct-visibility binary verification.
+- **Cause:** The three executable test/benchmark hosts selected released math
+  `010be577` through transitive package assets despite `UseLocalLsfStack=true`.
+  Generated prebuilt benchmark children correctly selected sibling `29bfa28`.
+  Both expose assembly version 7.1.0.0, but seven core source files differ;
+  unlike the earlier provenance-only `TRB-Issue-116`, this affects validation.
+- **Fix:** Exclude competing math compile/runtime package assets only in local
+  host builds, with explicit sibling project references where missing. Standard
+  and Lean families remain separate; prebuilt children and normal package-mode
+  dependency selection are unchanged. No runtime source or copied-DLL workaround.
+- **Verification:** Captured a failing three-host hash assertion before the fix.
+  All local hosts now execute sibling revision `29bfa28`: Release SHA256
+  `8B125CBF3E70BF6C3731638510A33AECA1F79C43EC990CDBA08BA03721F7A4AB`,
+  Lean `BF21DA9A746A603E382D6C81E84E69210B85ED237017EDD8A84809E772FC9283`.
+  Manifests select reference runtime assets; host traces resolve those DLLs.
+  Full aligned solution builds and tests pass: Release 2,576 core / 65 adapter,
+  Lean 2,504 / 65, no failures/skips or build warnings; both library targets build.
+  Commands: `dotnet build Trailblazer.slnx -c <configuration>
+  -p:UseLocalLsfStack=true`, then `dotnet test Trailblazer.slnx
+  -c <configuration> -p:UseLocalLsfStack=true --no-build --no-restore`.
+  Both benchmark parents pass the 40-record lifecycle smoke. One generated
+  Release child executed with the intended hash; both prebuilt families retain
+  zero project/math package references. All six normal package-mode host builds
+  preserve their released math hashes and package runtime entries. Independent
+  correctness/minimality review found no remaining issues. Raw logs, manifests
+  and the red/green hash check remain in ignored direct-visibility artifacts.
+- **Boundary:** Earlier tests remain evidence only for the binaries they ran.
+  The four calibration children were already aligned and unchanged, so their
+  within-stack comparisons remain valid. This fix makes no performance claim.
 
 ### TRB-Issue-134 - Phased replay proof omits construction-order and restored sequences
 

@@ -30,6 +30,15 @@
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- The Test SDK is required only for the VSTest Adapter to work -->
   </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'">
+    <!-- Suppress competing transitive package binaries at the executable host. -->
+    <PackageReference Include="FixedMathSharp" Version="7.1.0"
+      Condition="'$(Configuration)' != 'ReleaseLean' And '$(DisableMemoryPack)' != 'true'" ExcludeAssets="compile;runtime" />
+    <PackageReference Include="FixedMathSharp.Lean" Version="7.1.0"
+      Condition="'$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true'" ExcludeAssets="compile;runtime" />
+    <ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
+      AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
+  </ItemGroup>
   <!-- Generated BenchmarkDotNet projects consume the already-verified local build.
        This prevents nested project-reference builds from overwriting versioned LSF binaries. -->
   <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' == 'true'">

@@ -15,7 +15,7 @@ using GridForge.Utility;
 namespace Trailblazer.Pathing;
 
 /// <summary>Evaluates one bounded straight segment through the immutable navigation graph.</summary>
-internal sealed class NavigationRayWork
+internal sealed partial class NavigationRayWork
 {
     private readonly NavigationRayWorkspace _workspace;
     private NavigationRayRequest _request;
@@ -204,80 +204,92 @@ internal sealed class NavigationRayWork
         ref GuideSampleWorkMeter guideMeter,
         bool useGuideMeter)
     {
-        NavigationWorldGraph graph = _request.ExpectedGraph;
-        NavigationRayChainRecord[] records = _workspace.ChainRecords;
         ReadOnlySpan<GridTraceInterval> intervals = _workspace.TraceIntervals.AsReadOnlySpan();
         for (int ordinal = 0; ordinal < intervals.Length; ordinal++)
         {
-            ref NavigationRayChainRecord record = ref records[ordinal];
-            record = default;
-            record.PredecessorOrdinal = -1;
-            record.RootOrdinal = -1;
-            ref readonly GridTraceInterval interval = ref intervals[ordinal];
-            if (!TryConsumeLookup(
-                    queryMeter,
-                    ref guideMeter,
-                    useGuideMeter,
-                    1))
-                return NavigationRayStatus.BudgetExceeded;
-            if (!graph.TryGetMapId(interval.ConfigurationKey, out string mapId))
-                continue;
-            bool hasInstance = graph.TryGetMap(
-                mapId,
-                out NavigationMapInstance instance);
-            System.Diagnostics.Debug.Assert(
-                hasInstance,
-                "the immutable configuration index and map directory are built and replaced together");
-            if (!IsTraceIntervalCurrent(
-                    instance.GridIdentity.Matches(
-                        interval.Cell.WorldSpawnToken,
-                        interval.Cell.GridIndex,
-                        interval.Cell.GridSpawnToken),
-                    instance.GridIdentity.ConfigurationKey == interval.ConfigurationKey,
-                    instance.GridLastChangeSequence == interval.GridLastChangeSequence))
-            {
-                return NavigationRayStatus.Stale;
-            }
-            if (!interval.IsPhysicallyPresent)
-                continue;
-
-            var address = new NavigationCellAddress(mapId, interval.Cell.VoxelIndex);
-            if (!graph.TryGetNodeRef(address, out NavigationNodeRef node))
-                continue;
-            if (!_workspace.Dependencies.TryRecordPage(
-                    mapId,
-                    node.CellSlot / NavigationSemanticPage.SlotCount))
-            {
-                return NavigationRayStatus.CapacityExceeded;
-            }
-            if (!graph.TryGetSurfaceComponent(
-                    address,
-                    Medium,
-                    out NavigationSurfaceComponentKey component,
-                    out _))
-            {
-                continue;
-            }
-            if (!_workspace.Dependencies.TryRecordComponent(component))
-                return NavigationRayStatus.CapacityExceeded;
-            // The current trace interval already proves representable cell geometry.
-            // Mapping only needs the published physical and semantic admission state.
-            if (graph.IsSurfaceComponentClosed(component))
-                continue;
-            bool hasCell = instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell);
-            System.Diagnostics.Debug.Assert(hasCell,
-                "an open structural component contains only effective cells supporting its medium");
-            bool hasPhysicalState = instance.TryGetPhysicalState(
-                node.CellSlot, out bool isPresent, out byte obstacleCount);
-            System.Diagnostics.Debug.Assert(hasPhysicalState && isPresent,
-                "a present trace interval with the exact captured grid identity and sequence has published physical state");
-            if (obstacleCount != 0 || !_evaluator.IsCellPassable(cell, out _))
-                continue;
-
-            record.Node = node;
-            record.State = NavigationRayChainRecordState.Unreached;
-            record.IsSemanticCostNeutral = true;
+            NavigationRayStatus status = MapOne(ordinal, intervals[ordinal],
+                queryMeter, ref guideMeter, useGuideMeter);
+            if (status != NavigationRayStatus.Pending)
+                return status;
         }
+        return NavigationRayStatus.Pending;
+    }
+
+    private NavigationRayStatus MapOne(
+        int ordinal,
+        in GridTraceInterval interval,
+        NavigationWorkMeter? queryMeter,
+        ref GuideSampleWorkMeter guideMeter,
+        bool useGuideMeter)
+    {
+        NavigationWorldGraph graph = _request.ExpectedGraph;
+        ref NavigationRayChainRecord record = ref _workspace.ChainRecords[ordinal];
+        record = default;
+        record.PredecessorOrdinal = -1;
+        record.RootOrdinal = -1;
+        if (!TryConsumeLookup(
+                queryMeter,
+                ref guideMeter,
+                useGuideMeter,
+                1))
+            return NavigationRayStatus.BudgetExceeded;
+        if (!graph.TryGetMapId(interval.ConfigurationKey, out string mapId))
+            return NavigationRayStatus.Pending;
+        bool hasInstance = graph.TryGetMap(
+            mapId,
+            out NavigationMapInstance instance);
+        System.Diagnostics.Debug.Assert(
+            hasInstance,
+            "the immutable configuration index and map directory are built and replaced together");
+        if (!IsTraceIntervalCurrent(
+                instance.GridIdentity.Matches(
+                    interval.Cell.WorldSpawnToken,
+                    interval.Cell.GridIndex,
+                    interval.Cell.GridSpawnToken),
+                instance.GridIdentity.ConfigurationKey == interval.ConfigurationKey,
+                instance.GridLastChangeSequence == interval.GridLastChangeSequence))
+        {
+            return NavigationRayStatus.Stale;
+        }
+        if (!interval.IsPhysicallyPresent)
+            return NavigationRayStatus.Pending;
+
+        var address = new NavigationCellAddress(mapId, interval.Cell.VoxelIndex);
+        if (!graph.TryGetNodeRef(address, out NavigationNodeRef node))
+            return NavigationRayStatus.Pending;
+        if (!_workspace.Dependencies.TryRecordPage(
+                mapId,
+                node.CellSlot / NavigationSemanticPage.SlotCount))
+        {
+            return NavigationRayStatus.CapacityExceeded;
+        }
+        if (!graph.TryGetSurfaceComponent(
+                address,
+                Medium,
+                out NavigationSurfaceComponentKey component,
+                out _))
+        {
+            return NavigationRayStatus.Pending;
+        }
+        if (!_workspace.Dependencies.TryRecordComponent(component))
+            return NavigationRayStatus.CapacityExceeded;
+        // The current trace interval already proves representable cell geometry.
+        // Mapping only needs the published physical and semantic admission state.
+        if (graph.IsSurfaceComponentClosed(component))
+            return NavigationRayStatus.Pending;
+        bool hasCell = instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell);
+        System.Diagnostics.Debug.Assert(hasCell,
+            "an open structural component contains only effective cells supporting its medium");
+        bool hasPhysicalState = instance.TryGetPhysicalState(
+            node.CellSlot, out bool isPresent, out byte obstacleCount);
+        System.Diagnostics.Debug.Assert(hasPhysicalState && isPresent,
+            "a present trace interval with the exact captured grid identity and sequence has published physical state");
+        if (obstacleCount != 0 || !_evaluator.IsCellPassable(cell, out _))
+            return NavigationRayStatus.Pending;
+
+        record.Node = node;
+        record.State = NavigationRayChainRecordState.Unreached;
+        record.IsSemanticCostNeutral = true;
         return NavigationRayStatus.Pending;
     }
 

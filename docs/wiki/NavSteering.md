@@ -58,9 +58,22 @@ exact start medium, profile, policy, and work budget. It is skipped when reachin
 the target requires a medium change. A transition-required query therefore
 cannot bypass its action through a geometric line-of-sight shortcut.
 
-If direct proof is blocked, stale, or not semantically cost neutral, steering
-acquires normal guidance. Internal ray capacity and dependency details are not
-part of the public steering contract.
+A direct check can stop once a complete, current obstruction proof rules out
+the route. It need not inspect the remaining segment after that proof, but a
+clear result always requires the full route check. This does not skip freshness
+checks on an active guide: keeping guidance still requires that guide to be
+independently current.
+
+At the start of travel, a blocked or non-neutral direct route falls back to
+ordinary guide acquisition in the same call. During a periodic check, a blocked
+direct route does not discard an independently valid guide. If the agent was
+already travelling directly, it leaves direct mode and retries acquisition on
+the next heading call instead.
+
+Observed stale data is different: steering releases guidance, yields zero
+heading, and prepares a retry rather than acquiring against that stale result
+in the same call. Internal ray capacity and dependency details are not part of
+the public steering contract.
 
 `CanPathfind = false` disables graph-guide acquisition; it does not disable
 direct line-of-sight checks. Direct-only steering still applies the query's

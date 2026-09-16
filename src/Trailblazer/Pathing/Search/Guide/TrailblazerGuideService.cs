@@ -83,7 +83,7 @@ public sealed class TrailblazerGuideService
             {
                 do
                 {
-                    status = ray.Advance(meter);
+                    status = ray.AdvanceDirect(immediate);
                 }
                 while (status == NavigationRayStatus.Pending);
                 result = ray.Result;
@@ -92,6 +92,8 @@ public sealed class TrailblazerGuideService
             {
                 ray.Reset();
             }
+            if (status == NavigationRayStatus.CertifiedObstruction)
+                return NavigationRayStatus.Blocked;
             if (status != NavigationRayStatus.Success)
                 return status;
             if (!result.IsSemanticCostNeutral)

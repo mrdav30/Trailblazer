@@ -287,17 +287,20 @@ unchanged eager APIs intact. This is not yet a Navigator performance improvement
 
 ## Phase 2 - Integrate the certified direct-only decision
 
-Ready after reviewed Phase 1; no production Trailblazer certificate yet.
+Implemented and independently reviewed. Paired direct-service/controller tests
+failed against complete suffix tracing and pass with the new integration.
+Fallback, freshness, cleanup and exact local coverage pass. Candidate containing-
+frame performance and the final cross-stack/release gates remain separate.
 
-- [ ] Write failing paired complete-ray/certificate behavior tests and controller
+- [x] Write failing paired complete-ray/certificate behavior tests and controller
   state assertions. Use a separate expectation for intentional unseen-suffix
   differences; never change generic-ray tests to conceal a contract change.
-- [ ] Implement the internal proof and full-authority continuation using Phase 0's
+- [x] Implement the internal proof and full-authority continuation using Phase 0's
   single-meter design. Keep the same lock/lease and reuse existing semantic/body
   primitives. Integrate both initial and periodic Navigator checks together.
-- [ ] Complete the acceptance matrix, including fallback budget parity,
+- [x] Complete the acceptance matrix, including fallback budget parity,
   publication races, held actions, restore, and both LOS cadence modes.
-- [ ] Verify exact coverage and warmed allocations; run independent correctness,
+- [x] Verify exact coverage and warmed allocations; run independent correctness,
   lifetime/accounting and Ponytail reviews. Remove prototype scaffolding or
   dead branches; leave no parallel public navigation story.
 
@@ -380,6 +383,15 @@ Do not relabel the old 5% check as passed. Repeat exactly the same cases,
 cadences, job settings, budgets and analyzer for the candidate. After candidate
 captures, rerun the frozen unchanged baseline as a drift control. Do not compare
 different workload identities or quietly change JIT/tiering options.
+
+The first candidate capture also establishes its generated benchmark-host hash
+using these same formal 3/10/9 settings. Use the capture helper's existing
+preflight switch only to bootstrap that unknown host hash; all source, runtime
+library, pinned-tool, case-count, replay and allocation checks still apply.
+Preserve its bootstrap manifest, pin the observed host hash for subsequent
+captures, and retain this first capture as candidate repeat one. Do not infer
+the formal host hash from a differently configured quick run or discard this
+capture based on its timings.
 
 For the main Flow/500 improvement, compare both candidate repeats against the
 fastest baseline capture median within that same cadence, including the
@@ -548,8 +560,12 @@ Trailblazer keeps this internal and direct-only:
 
 - `NavigationRayWork.AdvanceDirect(NavigationImmediateRayWorkspace)` uses a
   shared extracted `MapOne` also called by ordinary `MapIntervals`. Append
-  internal `NavigationRayStatus.CertifiedObstruction`; generic `Advance` never
-  returns it. Keep that distinction through proof and freshness validation;
+  internal `NavigationRayStatus.CertifiedObstruction`; generic evaluation never
+  creates it. Completed work retains its terminal status until `Begin`/`Reset`,
+  including a repeated call through either internal entry point; the service
+  resets its immediate work before another operation. Do not add a second mode
+  flag solely to change that terminal-status echo. Keep the distinction through
+  proof and freshness validation;
   only the direct-heading service translates a valid certificate to its existing
   `Blocked` result. That service already uses `Blocked` for cost-ineligible
   direct travel, rather than promising a complete generic-ray result. Its
@@ -588,6 +604,43 @@ Trailblazer keeps this internal and direct-only:
   keeps its existing final dependency validation.
 
 ## Execution record
+
+**Trailblazer implementation (2026-09-15):** Added the direct-only completed-slab
+proof and shared interval mapper, with bounded in-place canonical continuation.
+Only the immediate workspace gains the configured ordinal buffer and cached
+observer. Generic evaluation remains complete; steering production code and the
+frozen benchmark are unchanged. The service alone maps a validated certificate
+to its existing blocked direct-travel decision. The two wiki corrections explain
+observable stale/retry behavior and the existing scheduled-acquisition API.
+
+The new 82-case suite covers strict margins, dense/sparse and reverse routes,
+cost-neutral/expensive continuation, unsupported topology/media/connections,
+exact and one-below meter/scratch/headroom limits, graph/world mutation,
+unobserved-suffix differences, controller ownership and warmed zero allocations.
+An exception regression caught retained request/dependency state before the
+reset-and-rethrow correction. A cached-Flow recovery discrepancy was reproduced
+against the original generic entry and pinned as its existing two-heading retry;
+no steering workaround was introduced. Publication is not artificially injected
+between the two final fence instructions: their order is source-reviewed, while
+real mutation before observation and after the final observer is tested.
+
+Full core tests pass 2,658 Release / 2,586 ReleaseLean; adapter tests pass 65 in
+each. Both configurations have exact core coverage of 30,949 lines, 12,215
+branches and 3,029 fully covered methods; adapter coverage is 186 lines, 28
+branches and 11 methods. Both TFMs build without warnings/errors. All eight
+core/adapter math and GridForge copies match the recorded local-stack hashes.
+Independent correctness/Ponytail review found no actionable issue. Raw tests,
+coverage, red controls and provenance remain under
+`artifacts/direct-visibility-phase0/task-2/`. These are local Windows results,
+not candidate timing or released-package/Linux validation.
+
+**Additional cross-stack prerequisite:** A fresh Gravitas local-stack build
+confirmed the same test/benchmark host math-resolution defect fixed earlier in
+Trailblazer and GridForge. A minimal host-only correction is in progress on its
+matching feature branch; no physics change is implied. The user permits useful
+dependency bumps, but live NuGet feeds confirm the current LSF pins already
+match the latest stable releases. Version churn cannot correct this local
+project-versus-package selection issue.
 
 **GridForge implementation (2026-09-15, `4a6b1bd`):** Added the completed-slab API, original
 world-stamp capture and shared geometry/admission/sort helpers. Existing eager
@@ -930,6 +983,6 @@ these warmed blocks; no new acquisition/recovery comparison was reached.
   passed for the initial documentation-only change; no build/test claim was
   made for that planning step.
 - [x] Phase 0 baseline reconciliation complete under the amended rule.
-- [ ] Phases 1 and 2 implemented and independently reviewed.
+- [x] Phases 1 and 2 implemented and independently reviewed.
 - [ ] Phase 3 candidate compared against the frozen baseline; disposition recorded.
 - [ ] Phase 4 production closeout and parent/release status reconciled.

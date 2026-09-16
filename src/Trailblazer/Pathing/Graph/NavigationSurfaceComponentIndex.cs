@@ -105,6 +105,12 @@ internal sealed class NavigationSurfaceComponentIndex
         return false;
     }
 
+    internal int GetSolidComponentRecordCount(string mapId)
+    {
+        _components.TryGet(TraversalMedium.Solid, out var maps);
+        return maps.TryGetValue(mapId, out var components) ? components.Count : 0;
+    }
+
     internal bool TryGet(
         NavigationSurfaceComponentKey key,
         out NavigationSurfaceComponent component)

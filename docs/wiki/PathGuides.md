@@ -34,9 +34,12 @@ finite and the request succeeds.
 Measure cold acquisition and expected request bursts separately from warm lease
 reuse on your target host. Prepare expensive routes at an explicit loading or
 simulation boundary when needed; cache reuse is not guaranteed after relevant
-world changes. The public API currently has no pending request/continuation
-contract. Do not use wall-clock cutoffs or background task completion order to
-decide when a lockstep peer applies navigation results.
+world changes. To spread acquisition across fixed frames, use
+`context.Guides.Schedule(...)` and poll the owned request after each context
+step; see [scheduled acquisition](Pathing.md#spreading-acquisition-across-fixed-frames)
+for budgets, cancellation and result ownership. Do not use wall-clock cutoffs
+or background task completion order to decide when a lockstep peer applies
+navigation results.
 
 ## A* Steps
 

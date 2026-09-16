@@ -102,6 +102,8 @@ internal sealed partial class NavigationMapInstance
 
     internal int LastCopiedPhysicalPages { get; }
 
+    internal int PhysicalPageCount => _physicalPages.Count;
+
     internal bool IsMaterialized => GridIdentity.IsValid;
 
     internal int BakedSlotCount => Map.CellSpan.Length;

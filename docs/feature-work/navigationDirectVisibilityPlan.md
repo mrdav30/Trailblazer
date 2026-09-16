@@ -267,7 +267,10 @@ no-change decision and return the evidence for a separate scope review.
 
 ## Phase 1 - Implement the minimum geometric capability, if required
 
-Pending the baseline reconciliation; no geometric production capability yet.
+In progress after baseline reconciliation. The initial behavioral tests failed
+against an unsupported-only stub before implementation; the implementation now
+passes its first focused checks. Broader verification and independent review
+remain before this phase is complete.
 
 - [ ] Write failing GridForge completeness, original-parameter, ordering, stale
   and limit tests for the frozen interface; run them before implementation.
@@ -380,10 +383,15 @@ captures, rerun the frozen unchanged baseline as a drift control. Do not compare
 different workload identities or quietly change JIT/tiering options.
 
 For the main Flow/500 improvement, compare both candidate repeats against the
-fastest baseline capture median, including the post-candidate control. This is
-a deliberately conservative reference; display all baseline/candidate medians,
-not just the chosen reference. Retain the 10% improvement target and 10%
-non-regression checks below. Differences comparable to baseline variability
+fastest baseline capture median within that same cadence, including the
+post-candidate control. For every case/cadence's non-regression check, compare
+each candidate repeat's block median and frame P95 against the lowest matching
+baseline block median and frame P95 respectively, across the two pre-change
+captures and the post-candidate control. Do not pool cases, cadences or stages.
+These are deliberately conservative references; display every baseline and
+candidate value, not just the reference. Retain the 10% improvement target and
+10% non-regression checks below, using these references instead of the original
+pair labels. Differences comparable to baseline variability
 are inconclusive, not speedups or automatic proof of regression. Investigate
 material uncertainty with a focused check; do not endlessly rerun until green.
 The implementation/retention decision belongs to the evidence and user review,
@@ -542,8 +550,15 @@ Trailblazer keeps this internal and direct-only:
 - `NavigationRayWork.AdvanceDirect(NavigationImmediateRayWorkspace)` uses a
   shared extracted `MapOne` also called by ordinary `MapIntervals`. Append
   internal `NavigationRayStatus.CertifiedObstruction`; generic `Advance` never
-  returns it. The direct service and initial/periodic steering paths retain the
-  distinction and apply the existing decision table above.
+  returns it. Keep that distinction through proof and freshness validation;
+  only the direct-heading service translates a valid certificate to its existing
+  `Blocked` result. That service already uses `Blocked` for cost-ineligible
+  direct travel, rather than promising a complete generic-ray result. Its
+  existing initial/periodic steering branches implement the decision table
+  above unchanged. Paired ray tests retain the certificate distinction, and
+  controller tests verify the resulting lifecycle behavior. This simplification
+  avoids a redundant controller outcome and preserves the frozen benchmark's
+  existing heading-service assertions without editing its workload or harness.
 - Only the immediate workspace gains `int[traceCapacity]`, one cached observer
   delegate and transient proof fields. Generic A*/Flow ray workspaces do not.
   Clear transient references/tags on all terminal, fallback and exception paths.

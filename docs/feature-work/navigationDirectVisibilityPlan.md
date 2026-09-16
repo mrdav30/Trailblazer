@@ -267,20 +267,19 @@ no-change decision and return the evidence for a separate scope review.
 
 ## Phase 1 - Implement the minimum geometric capability, if required
 
-In progress after baseline reconciliation. The initial behavioral tests failed
-against an unsupported-only stub before implementation; the implementation now
-passes its first focused checks. Broader verification and independent review
-remain before this phase is complete.
+Complete in GridForge commit `4a6b1bd`. Independent correctness/Ponytail review
+and scoped re-review pass. One cleanup-test assertion gap was corrected and
+backed by a failing cleanup mutation test before completion.
 
-- [ ] Write failing GridForge completeness, original-parameter, ordering, stale
+- [x] Write failing GridForge completeness, original-parameter, ordering, stale
   and limit tests for the frozen interface; run them before implementation.
-- [ ] Add the smallest capability using current topology/prism/interval math and
+- [x] Add the smallest capability using current topology/prism/interval math and
   caller-owned scratch. Every emitted prefix must carry its actual completeness
   and world/run stamp. No navigation semantics belong upstream.
-- [ ] Verify all generic trace regressions still pass, including far disjoint
+- [x] Verify all generic trace regressions still pass, including far disjoint
   unrepresentable geometry and rounded collinear endpoint peers. Cover reset,
   terminal reuse, exact retained bytes and warmed allocation.
-- [ ] Run focused then full GridForge Release/Lean checks and independent review.
+- [x] Run focused then full GridForge Release/Lean checks and independent review.
   Record why no new API was necessary instead if existing primitives suffice.
 
 **Exit:** Exact, bounded, independently tested geometry contract, with the
@@ -288,7 +287,7 @@ unchanged eager APIs intact. This is not yet a Navigator performance improvement
 
 ## Phase 2 - Integrate the certified direct-only decision
 
-Pending Phase 1; no production Trailblazer certificate yet.
+Ready after reviewed Phase 1; no production Trailblazer certificate yet.
 
 - [ ] Write failing paired complete-ray/certificate behavior tests and controller
   state assertions. Use a separate expectation for intentional unseen-suffix
@@ -493,8 +492,8 @@ results do not substitute for the formal warmed timing/allocation gates.
 ## Concrete production contract
 
 Independent correctness and Ponytail reviews found no blocker in this bounded
-contract, arithmetic proof and full-host controls. Everything in this section
-is **proposed and unimplemented** until the respective phase is completed.
+contract, arithmetic proof and full-host controls. GridForge's capability is
+implemented and verified below; Trailblazer's integration remains pending.
 
 GridForge adds one synchronous `GridTracer.TryTraceRectangularSlabsInto`:
 
@@ -589,6 +588,27 @@ Trailblazer keeps this internal and direct-only:
   keeps its existing final dependency validation.
 
 ## Execution record
+
+**GridForge implementation (2026-09-15, `4a6b1bd`):** Added the completed-slab API, original
+world-stamp capture and shared geometry/admission/sort helpers. Existing eager
+tracing retains its full-authority behavior. Release and ReleaseLean each pass
+981 tests, with exact coverage of 9,100 lines, 3,949 branches and 1,132 methods;
+both target frameworks build without warnings/errors. Actual local-stack math
+hashes and runtime dependency manifests were checked before tests. DocFX is
+warning-free. These are local Windows results, not a performance claim.
+
+Behavioral tests first failed against an unsupported-only stub. Adversarial
+tests cover strict raw-parameter margins, reversed and sparse traces, complete
+source-ordinal association, original admission limits, world mutation, reentry,
+exceptions and zero warmed allocations. Self-review caught a new-path accounting
+error when snapped topology bounds reached a grid outside world discovery;
+a zero-budget regression failed first, and the corrected path now completes
+with zero charges and no observer. Independent review then found that a cleanup
+assertion helper cleared scratch before inspecting it. Moving the assertions
+first caused ten expected failures when automatic cleanup was removed; restoring
+cleanup passed them. No production test hooks or coverage exclusions were added.
+Full evidence is retained under GridForge `artifacts/direct-visibility/task1/`,
+with final review fixes under `review-fix1/`. The frozen benchmark is unchanged.
 
 **Resumed baseline freeze (2026-09-15):** Independent reconciliation confirms
 the pre-branch `edge-ray-baseline-*` captures used the same original guided

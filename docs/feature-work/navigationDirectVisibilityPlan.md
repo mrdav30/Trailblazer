@@ -6,12 +6,14 @@
 
 **Created:** 2026-09-15
 
-**Status:** Closed at the Phase 0 measurement gate on 2026-09-15, with a
-reviewed no-go decision. The bounded geometry/accounting proof passed, but
-corrected identical-baseline captures failed the required repeatability limit.
-No production shortcut or new tracing API was implemented. The
-`codex/certified-direct-visibility` branches remain available for user review;
-they have not been merged, pushed, or released.
+**Status:** Active. Reopened on 2026-09-15 after the user corrected the premature
+Phase 0 closeout. Geometry/accounting feasibility passed; baseline variability
+is a measurement limitation, not a failed optimization. Preserve the existing
+baseline, settle any benchmark changes before runtime implementation, then
+compare the implemented candidate using the same setup. The user authorizes
+reasonable experimental judgment rather than rigid adherence to this plan.
+Work remains on `codex/certified-direct-visibility` in both existing checkouts;
+no merge, push or release is authorized.
 
 **Source baseline:** Planning began at Trailblazer `5f44495` / GridForge
 `02aa2de`; the Trailblazer feature branch started from `develop` at `785b801`.
@@ -34,15 +36,15 @@ existing Trailblazer workspaces/meters, xUnit v3 and BenchmarkDotNet.
 **Spec:** The [decision contract](#decision-contract),
 [proof and fallback gates](#proof-and-fallback-gates) and
 [acceptance matrix](#acceptance-matrix) below are the design specification.
-The proposed implementation below is retained as a design record, not a current
-API reference or permission to resume implementation. Phase 0 required every
-feasibility gate before production integration; its failed calibration stops
-this attempt. A new measurement strategy requires a separately reviewed scope,
-not another retry under this closed protocol.
+The concrete contract below is a reviewed design, not yet a shipped API.
+The user's latest direction supersedes the former calibration-based closeout:
+baseline first, implementation second, comparable measurement third. Process
+thresholds guide investigation; they do not replace engineering judgment or
+turn ordinary timing variability into evidence against an unbuilt feature.
 
 ## Why investigate this
 
-[`TRB-Benchmark-005`](../benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
+[`TRB-Benchmark-005`](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
 remains open. The prior measured-frame Flow/500 profile attributes about **45%**
 of sampled controller time to direct-heading checks. This is historical local
 attribution, not a new timing run or a prediction of recoverable time. The
@@ -76,8 +78,8 @@ enough of it is **not established** by source inspection.
 
 ## Global constraints
 
-Follow [AGENTS.md](../../../AGENTS.md) for coding, tests, exact coverage, documentation,
-issue tracking and worktree ownership, and the [overview](../feature-work-overview.md)
+Follow [AGENTS.md](../../AGENTS.md) for coding, tests, exact coverage, documentation,
+issue tracking and worktree ownership, and the [overview](feature-work-overview.md)
 for coordinated release gates. The user authorizes this feature branch and
 checkpoint commits, but not merging, pushing or releasing. Feature-specific
 constraints:
@@ -228,8 +230,8 @@ speculative result types or a new tracing API in advance.
 
 - [x] Capture current source identities and the unchanged complete-ray outcomes,
   meter categories, dependency evidence and controller state table. Read the
-  [benchmark README](../../../tests/Trailblazer.Benchmarks/README.md),
-  [publication](../../wiki/MapPublication.md) and [serialization](../../wiki/Serialization.md)
+  [benchmark README](../../tests/Trailblazer.Benchmarks/README.md),
+  [publication](../wiki/MapPublication.md) and [serialization](../wiki/Serialization.md)
   boundaries before touching state or lifecycle.
 - [x] Build one bounded, ignored diagnostic against the complete ray. Record
   actual candidate visits/prism evaluations, interval output/sorting and map
@@ -252,10 +254,11 @@ speculative result types or a new tracing API in advance.
   bounded proof/ownership, passing fallback accounting, and an actionable small
   lower-stack interface. Diagnostic code is not production completion.
 
-**Decision:** No-go. Proof, work-count and fallback-accounting gates passed;
-the corrected unphased A*/100 and balanced late-blocked cases exceeded the 5%
-identical-baseline median agreement limit. The single correction allowance was
-consumed. No candidate timing or production implementation followed.
+**Decision:** Technical feasibility passed. The original 5% calibration rule
+was missed by two cases, but that does not reject the feature. Reconcile and
+freeze the existing before-implementation evidence under the amended measurement
+approach below; retain every original capture and its variability. Do not start
+runtime work with an unsettled benchmark setup.
 
 **Exit:** Reviewed concrete proof, accounting and interfaces with reproducible
 work-count evidence. Source feasibility alone does not complete Phase 0. If every
@@ -264,7 +267,7 @@ no-change decision and return the evidence for a separate scope review.
 
 ## Phase 1 - Implement the minimum geometric capability, if required
 
-Not executed: the Phase 0 no-go prevents this conditional implementation phase.
+Pending the baseline reconciliation; no geometric production capability yet.
 
 - [ ] Write failing GridForge completeness, original-parameter, ordering, stale
   and limit tests for the frozen interface; run them before implementation.
@@ -282,7 +285,7 @@ unchanged eager APIs intact. This is not yet a Navigator performance improvement
 
 ## Phase 2 - Integrate the certified direct-only decision
 
-Not executed: no production GridForge capability or Trailblazer certificate was added.
+Pending Phase 1; no production Trailblazer certificate yet.
 
 - [ ] Write failing paired complete-ray/certificate behavior tests and controller
   state assertions. Use a separate expectation for intentional unseen-suffix
@@ -301,8 +304,8 @@ are the explicitly approved suffix-precedence cases; generic consumers unchanged
 
 ## Phase 3 - Measure containing frames and make the retain/withdraw decision
 
-Not executed: there is no candidate or B1/C1/C2/B2 comparison. The baseline
-calibration failure is not evidence that the proposed shortcut is slow.
+Pending implementation. The historical calibration miss is not evidence that
+the proposed shortcut is slow.
 
 - [ ] Run the frozen protocol below serially with executed-child archives and
   raw observations. Report work avoided, eligibility/fallback rates and total
@@ -323,23 +326,17 @@ no-change decision. Neither outcome automatically closes `TRB-Benchmark-005`.
 
 ## Phase 4 - Documentation and cross-stack closeout
 
-Close out the Phase 0 no-go only. Production-specific API, serialization,
-coverage and candidate-comparison gates below are inapplicable because no
-runtime change was made; retained validation/benchmark changes are verified
-separately in the execution record. `TRB-Benchmark-005` remains open.
+The prior pre-implementation verification remains evidence for that revision,
+not completion of the production feature's release gates.
 
-- [x] Verify retained changes with full local-stack Trailblazer and GridForge
-  Release/Lean builds/tests, both library targets and exact coverage. The
-  Trailblazer matrix includes its Gravitas adapter; a standalone Gravitas
-  rerun is inapplicable to this no-runtime-change closeout. Production-specific
-  certificate replay/allocation gates were not reached; full-host baseline
-  controls retain their own exact replay and zero-frame-allocation evidence.
-- [x] Complete documentation/link/API-site gates and independent final review.
-  There is no observable runtime decision or serialization change to document
-  in evergreen guidance/XML.
-- [x] Consolidate the reviewed no-go here and move the plan to `done`.
-  Keep `TRB-Benchmark-005` open: neither the full 2 ms/recovery criteria nor a
-  user-approved change to that goal is established by this investigation.
+- [ ] Run full GridForge, Gravitas and Trailblazer Release/Lean builds/tests,
+  both library targets, exact coverage, replay and allocation gates against
+  the coordinated source stack. Include changed lower libraries if necessary.
+- [ ] Document observable direct-decision behavior in evergreen guidance/XML,
+  complete documentation gates and independent final review.
+- [ ] Consolidate the implemented outcome here before moving the plan to `done`.
+  Keep `TRB-Benchmark-005` open unless the full 2 ms/recovery criteria are met
+  or the user approves a changed goal.
 
 **Exit:** One documented runtime story and complete local evidence. Coordinated
 Windows/Linux released-package gates and releases remain under the overview.
@@ -365,6 +362,39 @@ and `HorizontalTrace_ShouldRetainRoundedCollinearEndpointIntervals` in GridForge
 `GridPlanarTraceIntervalTests.cs`. They are constraints to preserve, not tests to delete.
 
 ## Measurement protocol and acceptance
+
+### Amended execution rule after user review
+
+Preserve the existing pre-change captures and frozen source/runtime snapshot.
+The original guided-frame benchmark and runtime source are unchanged by this
+branch's setup work; new full-host controls supplement rather than replace it.
+Any benchmark-code, runtime-option or workload change must happen before
+implementation and receive a new baseline. No such change is assumed necessary
+merely because measurements vary.
+
+Use all four completed `calibration-r1-*` captures as the current eight-case,
+3/10/9 before-implementation baseline, including both missed calibration cases.
+Do not relabel the old 5% check as passed. Repeat exactly the same cases,
+cadences, job settings, budgets and analyzer for the candidate. After candidate
+captures, rerun the frozen unchanged baseline as a drift control. Do not compare
+different workload identities or quietly change JIT/tiering options.
+
+For the main Flow/500 improvement, compare both candidate repeats against the
+fastest baseline capture median, including the post-candidate control. This is
+a deliberately conservative reference; display all baseline/candidate medians,
+not just the chosen reference. Retain the 10% improvement target and 10%
+non-regression checks below. Differences comparable to baseline variability
+are inconclusive, not speedups or automatic proof of regression. Investigate
+material uncertainty with a focused check; do not endlessly rerun until green.
+The implementation/retention decision belongs to the evidence and user review,
+not to a baseline-only calibration veto. Correctness, budgets, deterministic
+replay and allocation requirements remain mandatory.
+
+### Original calibration protocol and retained targets
+
+The following calibration was executed before implementation and is preserved
+as history. Its one-correction stop rule no longer closes the feature; the
+amended rule above governs the resumed experiment.
 
 The preceding experiment had meaningful same-binary drift. Before candidate
 timings, run two identical-baseline captures per cadence on the same host with
@@ -407,7 +437,7 @@ Use existing analysis scripts; a new telemetry or CI project is not warranted.
 These are local headless acceptance criteria, not universal frame-time promises
 or competitor comparisons. Do not increase the 2 ms goal or reduce LOS frequency.
 
-Use the [benchmark README](../../../tests/Trailblazer.Benchmarks/README.md) for
+Use the [benchmark README](../../tests/Trailblazer.Benchmarks/README.md) for
 commands, analysis and executed-child archiving. Phase 0 must record the exact
 frozen commands and artifact locations here, including inherited local-stack
 properties for generated sibling benchmarks; do not infer them from outer builds.
@@ -455,9 +485,8 @@ results do not substitute for the formal warmed timing/allocation gates.
 ## Concrete production contract
 
 Independent correctness and Ponytail reviews found no blocker in this bounded
-contract, arithmetic proof and full-host controls. Calibration subsequently
-failed. Everything in this section is **proposed and unimplemented**, not a
-shipped API or performance result.
+contract, arithmetic proof and full-host controls. Everything in this section
+is **proposed and unimplemented** until the respective phase is completed.
 
 GridForge adds one synchronous `GridTracer.TryTraceRectangularSlabsInto`:
 
@@ -545,6 +574,24 @@ Trailblazer keeps this internal and direct-only:
   keeps its existing final dependency validation.
 
 ## Execution record
+
+**Resumed baseline freeze (2026-09-15):** Independent reconciliation confirms
+the pre-branch `edge-ray-baseline-*` captures used the same original guided
+fixture and unchanged runtime source, with the same measured FixedMathSharp
+binary. They used 3/1/3 sampling; retain them as historical context, not pooled
+samples for the current 3/10/9 setup. The current four `calibration-r1-*`
+captures and `artifacts/dv-baseline/snapshot-manifest.json` are the frozen
+pre-implementation reference for all eight cases per cadence. The parent
+rehashed all 606 frozen inputs; independent audit rehashed 96 historical/current
+primary binaries and reconciled 103,680 shared-case frame checksums without
+mismatch. No benchmark source, workload, runtime option or analyzer change is
+needed for the resumed comparison. Baseline setup is settled before runtime
+implementation; the known variation remains visible rather than erased.
+
+The following records preserve the work and the premature closeout. On
+2026-09-15 the user required baseline-before-implementation sequencing and
+authorized practical departures from the plan. The former feature no-go is
+withdrawn; the calibration observations and useful prerequisite changes stand.
 
 The final four corrected captures are complete. Each contains 216 actual,
 240 warmup and 24 diagnostic records (480 total), with 27 actual 64-frame
@@ -636,7 +683,8 @@ these warmed blocks; no new acquisition/recovery comparison was reached.
   201.5776 / 212.7254 / 296.2214 versus 199.8941 / 196.3705 / 198.8561 ms;
   the slow first-capture launch remains in the record. All 16 P95 gates pass.
   This establishes measurement drift, not its cause. The one correction was
-  already consumed; no runtime implementation or extra retry follows this plan.
+  counted as consumed at that time. The subsequent no-go closeout was premature;
+  it is superseded by the user's direction and amended execution rule above.
 - The final baseline is frozen at Trailblazer `e6391ee`, GridForge `be85b56`,
   FixedMathSharp `29bfa28`, SwiftCollections `4b5715b`, and Gravitas `42af506`.
   `artifacts/dv-baseline/Trailblazer` is an independent detached source snapshot,
@@ -678,7 +726,8 @@ these warmed blocks; no new acquisition/recovery comparison was reached.
   from scratch in the same order, with labels `calibration-r1-original-1`,
   `calibration-r1-balanced-1`, `calibration-r1-balanced-2`, and
   `calibration-r1-original-2`. A further provenance or repeatability failure
-  blocks timing-based acceptance; no correction allowance remains.
+  originally blocked timing-based acceptance. This historical correction count
+  does not prohibit the user-authorized resumed experiment above.
 - GridForge's corresponding direct-host prerequisite is resolved as
   `GF-Issue-009` in `be85b56`. Fresh red/green checks confirmed the same package
   collision in both test/benchmark hosts and both configurations. Two local-only
@@ -845,7 +894,7 @@ these warmed blocks; no new acquisition/recovery comparison was reached.
   links across this plan and its two coordination documents; `git diff --check`
   passed for the initial documentation-only change; no build/test claim was
   made for that planning step.
-- [x] Phase 0 exit recorded and independently reviewed: measurement-limited no-go.
-- Phases 1 and 2: not executed after the failed Phase 0 gate.
-- Phase 3: no candidate built or measured; no performance-retention claim.
-- [x] Phase 4 no-go closeout recorded; parent benchmark and release status reconciled.
+- [x] Phase 0 baseline reconciliation complete under the amended rule.
+- [ ] Phases 1 and 2 implemented and independently reviewed.
+- [ ] Phase 3 candidate compared against the frozen baseline; disposition recorded.
+- [ ] Phase 4 production closeout and parent/release status reconciled.

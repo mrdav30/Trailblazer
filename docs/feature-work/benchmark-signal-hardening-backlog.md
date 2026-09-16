@@ -1868,10 +1868,10 @@ comparison, mutation/restored checks, source audits and evidence review;
 commands/source state and frozen executed children. No further profiling loop,
 new benchmark project, CI machinery or production instrumentation is retained.
 
-#### Follow-up: certified direct-visibility investigation closes at its measurement gate
+#### Follow-up: certified direct-visibility implementation and baseline reconciliation
 
 On 2026-09-15, source investigation was promoted to the
-[Certified Direct-Visibility plan](done/navigationDirectVisibilityPlan.md).
+[Certified Direct-Visibility plan](navigationDirectVisibilityPlan.md).
 The bounded negative-only proof, arithmetic cases and budget-safe continuation
 passed independent review. Actual partial discovery visits/maps 73 of 145
 candidates in the guided wall and 53 of 436 in the separate sparse scene,
@@ -1884,14 +1884,18 @@ identical-binary balanced late-blocked block medians were **265.9488 / 250.5213 
 failed at **212.7254 / 198.6892 ms** (-6.5983%). The other 14 median gates and
 all 16 P95 gates passed, but every case was required. The single correction
 allowance had already corrected a preflight-versus-formal benchmark-host hash
-pin; it did not change executable code or measurement thresholds. No additional
-retry or production candidate follows this no-go.
+pin; it did not change executable code or measurement thresholds. Those results
+describe baseline variability, not the performance of a production candidate.
 
-The archived plan consolidates the complete calibration, proof and provenance
+The active plan consolidates the complete calibration, proof and provenance
 record. Local executable-host math selection is corrected in `TRB-Issue-135`
 and `GF-Issue-009`; five replay-checked full-host controls are retained. These
-are validation improvements, not runtime speedups. A separately reviewed
-measurement scope is required before another timed attempt. `TRB-Benchmark-005`
+are validation improvements, not runtime speedups. The user rejected the
+premature no-go closeout and requires a settled baseline before implementation,
+then the same benchmark afterward. Practical experimental judgment is authorized;
+the plan now preserves all baseline variation and requires an unchanged
+post-candidate drift control instead of abandoning the feature on calibration
+alone. `TRB-Benchmark-005`
 stays active for the 2 ms allowance and acquisition/recovery bursts; the earlier
 body-interior shortcut remains withdrawn.
 

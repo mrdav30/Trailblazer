@@ -63,16 +63,15 @@ instead of burying it in notes.
     is withdrawn: matched Flow/500 gains did not satisfy the smaller-case
     non-regression gate. GridForge retains useful boundary tests and benchmark
     invocation guidance (`GF-Issue-008`), not the runtime shortcut. The subsequent
-    [Certified Direct-Visibility investigation](done/navigationDirectVisibilityPlan.md)
-    closes at its Phase 0 measurement gate. The bounded negative-only proof and
-    single-meter continuation passed independent review, but the corrected
-    identical-baseline balanced late-blocked and unphased A*/100 cases drifted
-    **5.80% / 6.60%**, outside their 5% median limit. No production shortcut was
-    implemented or measured;
-    this is a measurement-limited no-go, not proof that the design is slow.
+    [Certified Direct-Visibility investigation](navigationDirectVisibilityPlan.md)
+    is active again after the user corrected a premature Phase 0 closeout.
+    The bounded negative-only proof and single-meter continuation passed review.
+    Baseline drift of **5.80% / 6.60%** in two cases remains recorded, but is not
+    evidence against an unbuilt feature. Reconcile/freeze the baseline before
+    implementation, then compare the same benchmark and unchanged drift control.
     Local host dependency corrections (`TRB-Issue-135` / `GF-Issue-009`) and five
-    useful full-host controls remain on the review branches. The archived plan
-    owns the proof, raw-evidence locations and exhausted correction allowance.
+    useful full-host controls remain on the review branches. The active plan
+    owns the proof, baseline evidence and amended practical measurement approach.
     `TRB-Benchmark-005` retains the remaining 2 ms/recovery limits.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
@@ -110,13 +109,6 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
-
-- [Certified Direct-Visibility Investigation](done/navigationDirectVisibilityPlan.md)
-  - Closed with a reviewed Phase 0 no-go. Actual partial-discovery and exact
-    continuation proofs succeeded, but the final-harness calibration missed
-    the fixed repeatability gate. No new runtime API or speedup is claimed.
-    The validation fixes, reusable controls and condensed evidence are retained;
-    any renewed performance attempt needs a separately reviewed measurement scope.
 
 - [Deterministic LOS Phase Spreading](done/navigationLineOfSightPhasePlan.md)
   - One opt-in host-assigned phase policy spreads A*/Flow periodic checks while
@@ -203,11 +195,11 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Keep `TRB-Benchmark-005` as the performance priority, but do not resume the
-   [closed direct-visibility protocol](done/navigationDirectVisibilityPlan.md)
-   or implement its proposed API automatically. A new timed performance attempt
-   needs a separately reviewed response to the repeatability limitation. The
-   merged LOS phase-spreading runtime remains the control.
+1. Execute the [direct-visibility feature](navigationDirectVisibilityPlan.md)
+   with baseline first, implementation second and matching measurements third.
+   The user authorizes reasonable experimental judgment; timing variability
+   requires honest comparison, not automatic feature abandonment. The merged
+   LOS phase-spreading runtime remains the control.
    Exact rectangular tracing, raw-coordinate geometry and
    per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
    accounting and dependency guarantees, and keep the unphased cadence/control

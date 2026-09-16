@@ -12,7 +12,8 @@ is a measurement limitation, not a failed optimization. Preserve the existing
 baseline, settle any benchmark changes before runtime implementation, then
 compare the implemented candidate using the same setup. The user authorizes
 reasonable experimental judgment rather than rigid adherence to this plan.
-Work remains on `codex/certified-direct-visibility` in both existing checkouts;
+Work remains on `codex/certified-direct-visibility` in the existing Trailblazer,
+GridForge and Gravitas checkouts;
 no merge, push or release is authorized.
 
 **Source baseline:** Planning began at Trailblazer `5f44495` / GridForge
@@ -309,8 +310,9 @@ are the explicitly approved suffix-precedence cases; generic consumers unchanged
 
 ## Phase 3 - Measure containing frames and make the retain/withdraw decision
 
-Pending implementation. The historical calibration miss is not evidence that
-the proposed shortcut is slow.
+Production implementation and per-task reviews are complete. Candidate captures
+are next; the historical calibration miss is not evidence that the shortcut is
+slow.
 
 - [ ] Run the frozen protocol below serially with executed-child archives and
   raw observations. Report work avoided, eligibility/fallback rates and total
@@ -634,13 +636,22 @@ coverage, red controls and provenance remain under
 `artifacts/direct-visibility-phase0/task-2/`. These are local Windows results,
 not candidate timing or released-package/Linux validation.
 
-**Additional cross-stack prerequisite:** A fresh Gravitas local-stack build
-confirmed the same test/benchmark host math-resolution defect fixed earlier in
-Trailblazer and GridForge. A minimal host-only correction is in progress on its
-matching feature branch; no physics change is implied. The user permits useful
-dependency bumps, but live NuGet feeds confirm the current LSF pins already
-match the latest stable releases. Version churn cannot correct this local
-project-versus-package selection issue.
+**Additional cross-stack prerequisite:** Gravitas `GRV-Issue-071` corrects the
+same local-stack math-resolution defect fixed earlier in Trailblazer and
+GridForge, including its core `netstandard2.1` output. Three project files now
+exclude competing package compile/runtime assets only in local mode. No physics
+code or dependency version changed: live NuGet feeds confirmed the current LSF
+pins already match the latest stable releases.
+
+Both local configurations build both TFMs without warnings/errors. Full tests
+pass 3,950 Release / 3,895 Lean; each has exact coverage of 56,091 lines, 15,906
+branches and 5,340 fully covered methods. Parent rehashing verifies all twenty
+final math/GridForge provenance entries. Normal package builds also pass and
+retain byte-identical dependency/output selections. Local outputs were restored
+afterward and match the coverage-tested hashes. This certifies the direct
+benchmark parent, not generated Gravitas benchmark children; no physics timing
+claim is made. Evidence remains in
+`artifacts/direct-visibility-phase0/gravitas-host-check/`.
 
 **GridForge implementation (2026-09-15, `4a6b1bd`):** Added the completed-slab API, original
 world-stamp capture and shared geometry/admission/sort helpers. Existing eager

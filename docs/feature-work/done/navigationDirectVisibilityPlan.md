@@ -6,15 +6,13 @@
 
 **Created:** 2026-09-15
 
-**Status:** Active. Reopened on 2026-09-15 after the user corrected the premature
-Phase 0 closeout. Geometry/accounting feasibility passed; baseline variability
-is a measurement limitation, not a failed optimization. Preserve the existing
-baseline, settle any benchmark changes before runtime implementation, then
-compare the implemented candidate using the same setup. The user authorizes
-reasonable experimental judgment rather than rigid adherence to this plan.
+**Status:** Complete locally and archived on 2026-09-16. All five phases are
+implemented, measured and independently reviewed. Retain for user branch review,
+with two explicitly recorded non-regression target misses, not a blanket
+performance pass. The broader 2 ms/recovery goal remains open under
+`TRB-Benchmark-005`.
 Work remains on `codex/certified-direct-visibility` in the existing Trailblazer,
-GridForge and Gravitas checkouts;
-no merge, push or release is authorized.
+GridForge and Gravitas checkouts. No merge, push or release is authorized.
 
 **Source baseline:** Planning began at Trailblazer `5f44495` / GridForge
 `02aa2de`; the Trailblazer feature branch started from `develop` at `785b801`.
@@ -45,7 +43,7 @@ turn ordinary timing variability into evidence against an unbuilt feature.
 
 ## Why investigate this
 
-[`TRB-Benchmark-005`](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
+[`TRB-Benchmark-005`](../benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
 remains open. The prior measured-frame Flow/500 profile attributes about **45%**
 of sampled controller time to direct-heading checks. This is historical local
 attribution, not a new timing run or a prediction of recoverable time. The
@@ -53,7 +51,7 @@ body-interior experiment remains withdrawn; its mixed results do not justify
 reviving it. The 2 ms navigation allowance and mandatory recovery bursts are
 not solved by this proposal.
 
-The present pipeline is important:
+The pre-implementation pipeline explains the opportunity:
 
 1. `TrailblazerGuideService.TryGetDirectHeading` leases the graph and serialized
    immediate workspace, then starts one query meter.
@@ -64,10 +62,11 @@ The present pipeline is important:
    volume traversal has additional body certification.
 4. Success must be cost-neutral and pass final dependency/heading validation.
 
-A nearby decisive obstruction therefore does not currently spare far-segment
+A nearby decisive obstruction therefore did not spare far-segment
 candidate discovery, prism/interval evaluation, sorting or mapping. That is a
-real structural opportunity. Whether a cheap, complete negative proof can spare
-enough of it is **not established** by source inspection.
+real structural opportunity. The implementation and containing-frame measurements
+below establish the benefit within the narrow supported envelope; source
+inspection alone was not performance evidence.
 
 ### Approaches considered
 
@@ -79,8 +78,8 @@ enough of it is **not established** by source inspection.
 
 ## Global constraints
 
-Follow [AGENTS.md](../../AGENTS.md) for coding, tests, exact coverage, documentation,
-issue tracking and worktree ownership, and the [overview](feature-work-overview.md)
+Follow [AGENTS.md](../../../AGENTS.md) for coding, tests, exact coverage, documentation,
+issue tracking and worktree ownership, and the [overview](../feature-work-overview.md)
 for coordinated release gates. The user authorizes this feature branch and
 checkpoint commits, but not merging, pushing or releasing. Feature-specific
 constraints:
@@ -231,8 +230,8 @@ speculative result types or a new tracing API in advance.
 
 - [x] Capture current source identities and the unchanged complete-ray outcomes,
   meter categories, dependency evidence and controller state table. Read the
-  [benchmark README](../../tests/Trailblazer.Benchmarks/README.md),
-  [publication](../wiki/MapPublication.md) and [serialization](../wiki/Serialization.md)
+  [benchmark README](../../../tests/Trailblazer.Benchmarks/README.md),
+  [publication](../../wiki/MapPublication.md) and [serialization](../../wiki/Serialization.md)
   boundaries before touching state or lifecycle.
 - [x] Build one bounded, ignored diagnostic against the complete ray. Record
   actual candidate visits/prism evaluations, interval output/sorting and map
@@ -310,38 +309,42 @@ are the explicitly approved suffix-precedence cases; generic consumers unchanged
 
 ## Phase 3 - Measure containing frames and make the retain/withdraw decision
 
-Production implementation and per-task reviews are complete. Candidate captures
-are next; the historical calibration miss is not evidence that the shortcut is
-slow.
+Complete. All four candidate repeats and both unchanged post-candidate controls
+are retained. Independent raw-data audit confirms the comparisons. The retention
+ruling below explicitly accepts two narrow target misses under the user's amended
+experimental-judgment instruction; neither is relabeled a pass.
 
-- [ ] Run the frozen protocol below serially with executed-child archives and
-  raw observations. Report work avoided, eligibility/fallback rates and total
-  cost including inconclusive attempts, not only successful certificates.
-- [ ] Check isolated early/late/open/short and ineligible controls, then complete
+- [x] Run the frozen protocol below serially with executed-child archives and
+  raw observations. Report work avoided and certificate/complete-authority counts
+  for initial fixture queries only, not a game-wide eligibility rate. Containing
+  frames include inconclusive attempts and full continuation.
+- [x] Check isolated early/late/open/short and ineligible controls, then complete
   guided frames in original and balanced cadence. Verify exact replay within
   each contract and baseline/candidate replay where no semantic difference is
   exercised. Do not waive movement/guide validation to meet a timing threshold.
-- [ ] Measure initial checks and simultaneous invalidation/recovery separately.
+- [x] Measure initial checks and simultaneous invalidation/recovery separately.
   Keep acquisition cost visible even if visibility becomes cheaper. No pooled
   ordinary-frame percentile may conceal a recovery burst.
-- [ ] Retain only if all gates pass; otherwise withdraw the candidate and keep
-  useful behavioral tests and the concise disposition. An inconclusive capture
-  is not a pass and does not authorize an endless profiling loop.
+- [x] Record the retain/withdraw judgment against every target and mandatory
+  correctness gate. The amended execution rule supersedes the original automatic
+  withdrawal rule; retain the measured benefit with the two explicit exceptions.
+  Inconclusive differences are not passes or grounds for an endless timing loop.
 
 **Exit:** Independently audited, repeatable containing-frame benefit or a bounded
 no-change decision. Neither outcome automatically closes `TRB-Benchmark-005`.
 
 ## Phase 4 - Documentation and cross-stack closeout
 
-The prior pre-implementation verification remains evidence for that revision,
-not completion of the production feature's release gates.
+The coordinated local production matrix, final closeout review and documentation
+checks are complete. Released-package and Windows/Linux CI validation remain
+separate coordinated release gates.
 
-- [ ] Run full GridForge, Gravitas and Trailblazer Release/Lean builds/tests,
+- [x] Run full GridForge, Gravitas and Trailblazer Release/Lean builds/tests,
   both library targets, exact coverage, replay and allocation gates against
   the coordinated source stack. Include changed lower libraries if necessary.
-- [ ] Document observable direct-decision behavior in evergreen guidance/XML,
+- [x] Document observable direct-decision behavior in evergreen guidance/XML,
   complete documentation gates and independent final review.
-- [ ] Consolidate the implemented outcome here before moving the plan to `done`.
+- [x] Consolidate the implemented outcome here before moving the plan to `done`.
   Keep `TRB-Benchmark-005` open unless the full 2 ms/recovery criteria are met
   or the user approves a changed goal.
 
@@ -458,7 +461,7 @@ Use existing analysis scripts; a new telemetry or CI project is not warranted.
 These are local headless acceptance criteria, not universal frame-time promises
 or competitor comparisons. Do not increase the 2 ms goal or reduce LOS frequency.
 
-Use the [benchmark README](../../tests/Trailblazer.Benchmarks/README.md) for
+Use the [benchmark README](../../../tests/Trailblazer.Benchmarks/README.md) for
 commands, analysis and executed-child archiving. Phase 0 must record the exact
 frozen commands and artifact locations here, including inherited local-stack
 properties for generated sibling benchmarks; do not infer them from outer builds.
@@ -506,8 +509,8 @@ results do not substitute for the formal warmed timing/allocation gates.
 ## Concrete production contract
 
 Independent correctness and Ponytail reviews found no blocker in this bounded
-contract, arithmetic proof and full-host controls. GridForge's capability is
-implemented and verified below; Trailblazer's integration remains pending.
+contract, arithmetic proof and full-host controls. Both GridForge's capability
+and Trailblazer's integration are implemented and verified below.
 
 GridForge adds one synchronous `GridTracer.TryTraceRectangularSlabsInto`:
 
@@ -597,15 +600,230 @@ Trailblazer keeps this internal and direct-only:
   failure priority before that mapping failure. Completed fallback has exact
   category equality; failed partially observed attempts may have already paid
   mapping work. No reset, refund or extra direct budget is allowed.
-- Every slab maps once. If any record is admitted, the slab is not strict, or
-  proof is disarmed, continue immediately. Only an empty strict candidate runs
-  accumulated dependency validation: graph/world fence, existing validation,
-  then graph/world fence again. Graph identity-only change means continuation,
-  not manufactured stale. Commit the certificate only after the final fence;
-  the outer trace world-sequence check still applies. Ordinary full completion
-  keeps its existing final dependency validation.
+- Every slab maps once and checks the graph/world fence. If any record is
+  admitted, the slab is not strict, or proof is disarmed, continue without
+  accumulated dependency validation. Only an empty strict candidate runs that
+  validation, then checks the graph/world fence again. Graph identity-only
+  change means continuation, not manufactured stale. Commit the certificate
+  only after the final fence; the outer trace world-sequence check still applies.
+  Ordinary full completion keeps its existing final dependency validation.
+
+## Measured outcome
+
+The four candidate captures and two unchanged post-candidate baseline controls
+are complete. Independent raw-data/provenance audit confirms the figures below;
+the retention judgment accepts the two named exceptions, not a blanket pass.
+Each capture uses the frozen eight cases and 3/10/9 protocol. Every candidate
+replay matches its baseline case/cadence, and all measured frames have zero
+recorded allocation and collection overlap. Each variant's runtime remained
+frozen; workload, compiler and JIT options were identical across the comparison.
+
+Independent raw recomputation validates all 4,800 stage records, 240 successful
+child exits and 138,240 actual frames. It reconciles every summary with raw logs,
+all exact signed-Int64 replay values, 606 baseline and 613 candidate frozen
+inputs, three pinned tools, 630 child-file hashes and 670 inventory entries.
+The audit preserves every launch/block/frame and the known baseline and candidate
+variability; serial capture timestamps are not proof of an otherwise idle host.
+
+For each case/cadence, references are independently the lowest block median and
+frame P95 across Before 1, Before 2 and Post-control. Rounded table values are
+for readability; target checks use full precision. A block contains 64 complete
+moving frames, not 64 isolated ray calls.
+
+- Original Flow/500: **459.831 ms** reference versus **347.445 / 304.583 ms**,
+  a **24.44% / 33.76%** reduction.
+- Balanced Flow/500: **454.282 ms** versus **328.391 / 330.299 ms**,
+  a **27.71% / 27.29%** reduction.
+- A*/100 and Flow/100 also improve in both repeats/cadences. The separate
+  sparse and late-obstacle scenes improve; this is not only one authored wall.
+- Two strict 10% non-regression targets miss: Original Clear100 candidate 1
+  block median **+10.1025%** (repeat 2 **+5.4458%**), and Balanced Short100
+  candidate 1 frame P95 **+10.8732%** (repeat 2 **+3.8421%**). These are not
+  rounded into passes. Other block-median/P95 comparisons remain within 10%.
+  Clear, short and ineligible controls are not advertised as speedups.
+- No selected candidate case newly fails the 31.25 ms observed-frame limit.
+  Original Flow/500, Sparse500 and Late100 now stay below it in both repeats;
+  clear and ineligible controls still exceed it. Balanced Flow/500 still has
+  every measured frame above 2 ms; the broader benchmark remains open.
+
+### Original cadence
+
+Values are `64-frame block median ms / observed frame P95 ms`.
+
+| Case | Before 1 | Before 2 | Post-control | Candidate 1 | Candidate 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A*/100 | 212.725 / 20.429 | 198.689 / 19.775 | 211.459 / 20.769 | 152.596 / 5.925 | 149.035 / 5.817 |
+| Flow/100 | 88.211 / 9.914 | 85.941 / 9.576 | 90.708 / 10.219 | 62.695 / 4.285 | 59.422 / 4.156 |
+| Flow/500 | 469.215 / 46.913 | 459.831 / 45.546 | 500.175 / 49.639 | 347.445 / 20.716 | 304.583 / 19.291 |
+| Clear100 | 2271.680 / 552.488 | 2183.358 / 532.605 | 2276.499 / 554.425 | 2403.932 / 583.473 | 2302.259 / 562.659 |
+| Short100 | 101.968 / 16.103 | 100.576 / 15.781 | 103.033 / 16.264 | 105.430 / 16.692 | 101.078 / 16.214 |
+| Late100 | 648.567 / 21.088 | 622.441 / 20.486 | 673.601 / 21.779 | 112.046 / 17.079 | 105.045 / 16.524 |
+| Ineligible100 | 650.986 / 21.109 | 625.622 / 20.444 | 657.071 / 21.332 | 680.911 / 22.439 | 639.063 / 21.651 |
+| Sparse500 | 991.390 / 155.548 | 950.473 / 150.335 | 1017.511 / 160.762 | 430.539 / 18.718 | 404.477 / 18.117 |
+
+Values are `maximum ms; frames >2 ms; frames >31.25 ms`. Each capture contains 1,728 actual frames per row.
+
+| Case | Before 1 | Before 2 | Post-control | Candidate 1 | Candidate 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A*/100 | 22.725; 1421; 0 | 20.619; 543; 0 | 24.541; 1427; 0 | 7.694; 1445; 0 | 8.449; 1554; 0 |
+| Flow/100 | 12.184; 108; 0 | 12.402; 108; 0 | 13.917; 108; 0 | 5.784; 109; 0 | 4.735; 108; 0 |
+| Flow/500 | 65.031; 1728; 108 | 61.724; 1728; 108 | 70.717; 1728; 108 | 26.852; 1728; 0 | 20.907; 1728; 0 |
+| Clear100 | 595.440; 108; 108 | 562.376; 108; 108 | 611.177; 108; 108 | 624.450; 108; 108 | 597.372; 108; 108 |
+| Short100 | 17.581; 108; 0 | 17.549; 108; 0 | 19.099; 108; 0 | 18.916; 108; 0 | 17.595; 108; 0 |
+| Late100 | 562.827; 108; 27 | 538.048; 108; 27 | 656.062; 109; 27 | 20.354; 108; 0 | 17.762; 108; 0 |
+| Ineligible100 | 558.595; 108; 27 | 553.149; 108; 27 | 573.513; 108; 27 | 592.319; 109; 27 | 554.943; 108; 27 |
+| Sparse500 | 167.244; 1728; 108 | 163.482; 1728; 108 | 176.297; 1728; 108 | 22.068; 1728; 0 | 19.858; 1728; 0 |
+
+### Balanced cadence
+
+Values are `64-frame block median ms / observed frame P95 ms`.
+
+| Case | Before 1 | Before 2 | Post-control | Candidate 1 | Candidate 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A*/100 | 201.840 / 3.504 | 195.407 / 3.394 | 216.497 / 4.193 | 149.885 / 2.494 | 145.717 / 2.474 |
+| Flow/100 | 89.192 / 1.542 | 86.849 / 1.470 | 95.521 / 1.899 | 61.300 / 1.056 | 61.883 / 1.047 |
+| Flow/500 | 465.197 / 7.808 | 454.282 / 7.452 | 506.034 / 9.019 | 328.391 / 5.592 | 330.299 / 5.752 |
+| Clear100 | 2308.204 / 40.981 | 2215.237 / 39.247 | 2380.733 / 42.867 | 2381.831 / 43.035 | 2264.967 / 40.544 |
+| Short100 | 105.690 / 1.800 | 103.795 / 1.824 | 106.305 / 1.883 | 108.998 / 1.995 | 106.892 / 1.869 |
+| Late100 | 265.949 / 31.324 | 250.521 / 29.659 | 271.734 / 32.013 | 114.960 / 2.372 | 107.271 / 1.892 |
+| Ineligible100 | 265.833 / 31.120 | 252.750 / 29.882 | 276.525 / 31.846 | 275.675 / 31.723 | 263.462 / 30.866 |
+| Sparse500 | 1002.965 / 16.383 | 961.560 / 15.651 | 1050.001 / 17.996 | 421.680 / 7.306 | 415.686 / 6.945 |
+
+Values are `maximum ms; frames >2 ms; frames >31.25 ms`. Each capture contains 1,728 actual frames per row.
+
+| Case | Before 1 | Before 2 | Post-control | Candidate 1 | Candidate 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A*/100 | 5.446; 1728; 0 | 5.003; 1728; 0 | 5.327; 1728; 0 | 4.571; 1728; 0 | 4.619; 1728; 0 |
+| Flow/100 | 2.099; 2; 0 | 1.989; 0; 0 | 3.199; 69; 0 | 1.174; 0; 0 | 1.478; 0; 0 |
+| Flow/500 | 9.294; 1728; 0 | 8.115; 1728; 0 | 11.202; 1728; 0 | 6.055; 1728; 0 | 6.769; 1728; 0 |
+| Clear100 | 43.376; 1728; 1728 | 41.386; 1728; 1541 | 47.431; 1728; 1728 | 45.912; 1728; 1728 | 43.692; 1728; 1687 |
+| Short100 | 2.166; 1; 0 | 2.195; 6; 0 | 2.575; 42; 0 | 3.355; 85; 0 | 2.611; 30; 0 |
+| Late100 | 41.886; 915; 95 | 38.912; 577; 54 | 42.670; 956; 105 | 4.413; 195; 0 | 2.482; 27; 0 |
+| Ineligible100 | 41.391; 977; 79 | 39.587; 619; 55 | 43.715; 1113; 108 | 43.831; 1295; 101 | 43.668; 960; 73 |
+| Sparse500 | 17.688; 1728; 0 | 17.022; 1728; 0 | 20.484; 1728; 0 | 9.419; 1728; 0 | 8.168; 1728; 0 |
+
+### Initial-query production work counts
+
+A separate ignored diagnostic loads the archived candidate child and invokes the
+unchanged compiled fixtures' setup/cleanup. Each of the 1,600 original initial
+queries runs the production complete ray and direct entry sequentially through
+the same service workspace, with reset between them. All eight actually loaded
+archive assemblies match their saved hashes. This is deterministic counter
+evidence, not another timing run or a recreated navigation/geometry algorithm.
+
+| Case | Certificates / queries | Trace intervals complete / direct | Lookup probes saved | Covered-address admission |
+| --- | ---: | ---: | ---: | --- |
+| A*/100 | 100 / 100 | 13,060 / 5,664 | 7,396 | Unchanged |
+| Flow/100 | 100 / 100 | 13,060 / 5,664 | 7,396 | Unchanged |
+| Flow/500 | 500 / 500 | 57,424 / 24,934 | 32,490 | Unchanged |
+| Clear100 | 0 / 100 | 23,050 / 23,050 | 0 | Unchanged |
+| Short100 | 0 / 100 | 700 / 700 | 0 | Unchanged |
+| Late100 | 100 / 100 | 23,050 / 22,450 | 600 | Unchanged |
+| Ineligible100 | 0 / 100 | 23,050 / 23,050 | 0 | Unchanged |
+| Sparse500 | 500 / 500 | 200,616 / 15,085 | 185,531 | Unchanged |
+
+Every paired service-equivalent outcome matches. Non-certificate queries use
+complete authority, including ineligible eager fallback; that bucket is not an
+eligibility rate. These initial-query counts do not represent every periodic
+frame or a game-wide hit rate. Trace/lookup counters do not expose GridForge's
+per-prism candidate work, so no such count is inferred. Late100 also avoids
+canonical sorting and chain evaluation on certification: suffix mapping alone
+does not describe all avoided work.
+
+### Mandatory lifecycle work, measured separately
+
+One unchanged `guided-phase-smoke` diagnostic per frozen variant checks 40
+lifecycle records. Ray counts, live-guide counts, zero-heading retries and
+publication outcomes match exactly. These single-run observations are not
+statistical speedup claims and are not pooled with warmed formal frames.
+
+| Scenario | Baseline ms | Candidate ms | Baseline / candidate allocated bytes |
+| --- | ---: | ---: | ---: |
+| Simultaneous initial requests | 501.308 | 513.823 | 772560 / 772560 |
+| Overdue resume | 19.190 | 12.932 | 0 / 0 |
+| Same-map rebake and ordered reacquisition | 315.892 | 307.078 | 1105152 / 1105152 |
+| Pending retry/reacquisition | 253.742 | 256.072 | 771568 / 771568 |
+| Profile replacement admission | 274.193 | 265.237 | 771568 / 771568 |
+| End-to-end JSON restore preparation | 229.707 | 233.574 | 19597080 / 19645048 |
+| First admission after restore | 21.867 | 12.958 | 21600 / 21600 |
+
+JSON restore preparation recorded 47,968 additional bytes in the candidate's
+single observation; this is disclosed without assigning an unproven cause.
+Required acquisition/recovery remains expensive. No zero-allocation promise is
+made for setup, population or cold guide acquisition. The extra bounded immediate
+scratch is one integer per configured trace slot, plus a cached observer and
+value-only transient state; it is context-owned, not allocated per agent/check.
+
+### Retention judgment and remaining work
+
+**Retain the implementation for user branch review.** Every Flow/500 repeat
+exceeds the 10% improvement target against the fastest matching baseline, with
+gains in both cadences and additional blocked workloads. Source correctness,
+exact replay, bounded accounting, zero warmed allocations and exact local
+coverage pass. The original calibration failures remain historical evidence,
+not a veto on an implemented and measured feature.
+
+This is an explicit exception to the two narrow 10% non-regression targets,
+under the amended user instruction to exercise engineering judgment. Clear100
+C1 and phased Short100 C1 are not passes, and their cause is not established.
+Both repeats, all baseline controls and full-precision differences remain
+visible. Baseline/candidate variability does not prove the overhead is harmless
+or environmental. The cost of retaining this candidate is possible clear/fallback
+overhead and uncertain short-path tail cost; the user can reject that tradeoff
+when reviewing the branch.
+
+`TRB-Benchmark-005` stays open. Balanced Flow/500 remains above the 2 ms allowance,
+and mandatory acquisition/recovery remains expensive. A bounded source review
+identified two candidates for a subsequent measured slice: avoid a world-sequence
+lock on slabs already known unable to certify, while preserving both real-proof
+fences and final authority checks; and investigate whether the shared slab
+collector repeats invariant setup that could be hoisted. Neither hypothesis
+proves the observed control differences. No such unmeasured edit is mixed into
+this candidate. Further work needs its own before/after evidence, not another
+open-ended profiling loop or revived withdrawn shortcut.
+
+### Material execution rulings
+
+1. Preserve all prior baselines and use unchanged post-candidate controls rather
+   than the premature calibration-only veto. Cost if wrong: small uncertain
+   benefits remain unproven; no variability is hidden or called a speedup.
+2. Keep `CertifiedObstruction` internal and translate it only at the direct
+   service boundary to the existing `Blocked` decision. Reuse steering behavior.
+   Cost if wrong: stale/failure priority could be lost; paired ray/controller
+   tests and independent review explicitly cover that boundary.
+3. Preserve the workspace's existing terminal-result echo until `Begin`/`Reset`
+   instead of adding a mode flag for mixed entry calls. Generic evaluation never
+   creates a certificate. Cost if wrong: a future mixed-entry caller could read
+   the previous result; ownership must start/reset each request correctly.
+4. Include Gravitas's core project with its two executable hosts after the
+   `netstandard2.1` output demonstrably selected released rather than local math.
+   Cost if wrong: local dependency selection changes; both families, actual
+   hashes and unchanged normal-package outputs were verified. No version or
+   physics change was needed.
+5. Bootstrap the candidate host hash using the unchanged helper's preflight
+   switch at formal 3/10/9 settings, retaining that run as Original C1. Cost if
+   wrong: an incorrect host pin would invalidate evidence; both manifests and
+   every actual runtime/child hash were verified.
+6. Retain with the two explicit target misses above. Cost if wrong: real fallback
+   or tail overhead is accepted. Keep the controls and parent benchmark open;
+   do not claim blanket non-regression or release readiness.
 
 ## Execution record
+
+**Final closeout (2026-09-16):** Independent whole-branch correctness/Ponytail
+review and the bounded measurement/Gravitas addendum have no actionable findings.
+The independent measurement auditor confirms the raw observations and both target
+misses; retention remains the explicit parent judgment above. Fresh full
+Release/ReleaseLean solution tests pass on the final unchanged runtime: GridForge
+981/981, Gravitas 3,950/3,895, Trailblazer core 2,658/2,586 and adapter 65/65,
+with no failures or skipped tests. All eight exact coverage summaries were
+rechecked, and all 32 saved local-stack provenance entries still match after
+testing. The final Trailblazer DocFX build has zero warnings/errors; 62 local
+documentation path/heading links and `git diff --check` pass. Earlier both-TFM
+build and GridForge DocFX results remain valid for unchanged production source.
+Raw final logs are `final-<repository>-<configuration>-tests.log` and
+`final-docfx.log` under the retained artifact root. No merge, push, package
+publication or cross-platform release validation was performed.
 
 **Trailblazer implementation (2026-09-15):** Added the direct-only completed-slab
 proof and shared interval mapper, with bounded in-place canonical continuation.
@@ -687,313 +905,93 @@ mismatch. No benchmark source, workload, runtime option or analyzer change is
 needed for the resumed comparison. Baseline setup is settled before runtime
 implementation; the known variation remains visible rather than erased.
 
-The following records preserve the work and the premature closeout. On
-2026-09-15 the user required baseline-before-implementation sequencing and
-authorized practical departures from the plan. The former feature no-go is
-withdrawn; the calibration observations and useful prerequisite changes stand.
+### Condensed baseline and calibration history
 
-The final four corrected captures are complete. Each contains 216 actual,
-240 warmup and 24 diagnostic records (480 total), with 27 actual 64-frame
-blocks per case. Every actual frame allocates zero bytes, and each case's
-64-frame checksum sequence matches across launches and paired captures.
-The complete comparison is below; these are **identical-baseline comparisons,
-not optimization results**. Original means unphased. Percentage change is
-`100 * (capture2 / capture1 - 1)`; absolute agreement must be within 5% for
-block medians and 10% for observed frame P95.
+The original pre-branch guided fixture and measured math binary were unchanged.
+Earlier `edge-ray-baseline-*` captures used 3/1/3 sampling; they are historical
+context, not pooled with the frozen 3/10/9 comparison. Independent reconciliation
+matched 96 historical/current primary binaries and 103,680 shared-case frame
+checksums. No new baseline setup was needed when implementation resumed.
 
-| Cadence / case | Block median 1 / 2 (ms per 64 frames) | Change | Frame P95 1 / 2 (ms) | Change | Gate |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Original A*/100 | 212.725 / 198.689 | -6.60% | 20.429 / 19.775 | -3.20% | Fail median |
-| Original Flow/100 | 88.211 / 85.941 | -2.57% | 9.914 / 9.576 | -3.41% | Pass |
-| Original Flow/500 | 469.215 / 459.831 | -2.00% | 46.913 / 45.546 | -2.91% | Pass |
-| Original Clear100 | 2271.680 / 2183.358 | -3.89% | 552.488 / 532.605 | -3.60% | Pass |
-| Original Short100 | 101.968 / 100.576 | -1.36% | 16.103 / 15.781 | -2.00% | Pass |
-| Original Late100 | 648.567 / 622.441 | -4.03% | 21.088 / 20.486 | -2.86% | Pass |
-| Original Ineligible100 | 650.986 / 625.622 | -3.90% | 21.109 / 20.444 | -3.15% | Pass |
-| Original Sparse500 | 991.390 / 950.473 | -4.13% | 155.548 / 150.335 | -3.35% | Pass |
-| Balanced A*/100 | 201.840 / 195.407 | -3.19% | 3.504 / 3.394 | -3.13% | Pass |
-| Balanced Flow/100 | 89.192 / 86.849 | -2.63% | 1.542 / 1.470 | -4.65% | Pass |
-| Balanced Flow/500 | 465.197 / 454.282 | -2.35% | 7.808 / 7.452 | -4.56% | Pass |
-| Balanced Clear100 | 2308.204 / 2215.237 | -4.03% | 40.981 / 39.247 | -4.23% | Pass |
-| Balanced Short100 | 105.690 / 103.795 | -1.79% | 1.800 / 1.824 | +1.33% | Pass |
-| Balanced Late100 | 265.949 / 250.521 | -5.80% | 31.324 / 29.659 | -5.31% | Fail median |
-| Balanced Ineligible100 | 265.833 / 252.750 | -4.92% | 31.120 / 29.882 | -3.98% | Pass |
-| Balanced Sparse500 | 1002.965 / 961.560 | -4.13% | 16.383 / 15.651 | -4.47% | Pass |
+The final baseline is Trailblazer `e6391ee`, GridForge `be85b56`, FixedMathSharp
+`29bfa28`, SwiftCollections `4b5715b`, and Gravitas `42af506`. Its detached
+source/binary snapshot at `artifacts/dv-baseline` contains 606 immutable inputs.
+The four preserved `calibration-r1-*` captures contain all eight cases per
+cadence, with 480 stage records, 24 successful child exits and zero actual-frame
+allocation each. The tables above retain every baseline observation.
 
-Full-frame outliers remain visible below: each capture contributes 1,728 actual
-frames per case. These are existing baseline costs, not candidate regressions.
-The new long-clear control is deliberately costly; a negative-only certificate
-would still need the complete authority there. Mandatory admission is outside
-these warmed blocks; no new acquisition/recovery comparison was reached.
+Calibration missed its former 5% block-median agreement rule in two cases:
+Original A*/100 **212.7254 / 198.6892 ms** (-6.5983%) and Balanced Late100
+**265.9488 / 250.5213 ms** (-5.8009%). The other 14 median checks and all 16 P95
+checks passed. This establishes variability, not its cause. The user rejected
+the premature calibration-only no-go; implementation and unchanged before/after
+measurement superseded it without erasing the observations or claiming the old
+rule passed.
 
-| Cadence / case | Maximum 1 / 2 (ms) | Frames >2 ms, 1 / 2 | Frames >31.25 ms, 1 / 2 |
-| --- | ---: | ---: | ---: |
-| Original A*/100 | 22.725 / 20.619 | 1421 / 543 | 0 / 0 |
-| Original Flow/100 | 12.184 / 12.402 | 108 / 108 | 0 / 0 |
-| Original Flow/500 | 65.031 / 61.724 | 1728 / 1728 | 108 / 108 |
-| Original Clear100 | 595.440 / 562.376 | 108 / 108 | 108 / 108 |
-| Original Short100 | 17.581 / 17.549 | 108 / 108 | 0 / 0 |
-| Original Late100 | 562.827 / 538.048 | 108 / 108 | 27 / 27 |
-| Original Ineligible100 | 558.595 / 553.149 | 108 / 108 | 27 / 27 |
-| Original Sparse500 | 167.244 / 163.482 | 1728 / 1728 | 108 / 108 |
-| Balanced A*/100 | 5.446 / 5.003 | 1728 / 1728 | 0 / 0 |
-| Balanced Flow/100 | 2.099 / 1.989 | 2 / 0 | 0 / 0 |
-| Balanced Flow/500 | 9.294 / 8.115 | 1728 / 1728 | 0 / 0 |
-| Balanced Clear100 | 43.376 / 41.386 | 1728 / 1728 | 1728 / 1541 |
-| Balanced Short100 | 2.166 / 2.195 | 1 / 6 | 0 / 0 |
-| Balanced Late100 | 41.886 / 38.912 | 915 / 577 | 95 / 54 |
-| Balanced Ineligible100 | 41.391 / 39.587 | 977 / 619 | 79 / 55 |
-| Balanced Sparse500 | 17.688 / 17.022 | 1728 / 1728 | 0 / 0 |
+One earlier verifier correction concerned the generated benchmark-host hash:
+1/1/1 preflight and formal 3/10/9 jobs embed different deterministic PDB paths
+and module IDs. Independent inspection found identical bodies for all 657
+methods and only 77 changed metadata/debug bytes. The formal baseline host is
+`7DAAD4B43D77964B65A3BCCA326257209AA926C980C23E59846524E1AA99D17B`.
+The rejected run and its preflight manifest remain preserved; neither its timing
+nor a favorable subset replaced a formal result. Candidate repeat one instead
+bootstraps its unknown host under the actual formal settings and remains part
+of the comparison.
 
-- Final retained-change verification passes in both Release and ReleaseLean
-  using `-p:UseLocalLsfStack=true`: Trailblazer 2,576 / 2,504 core tests plus
-  65 adapter tests per family; GridForge 922 tests per family, with no failures
-  or skips. All solution builds succeed with zero warnings/errors and include
-  `netstandard2.1` and `net8.0` library targets. Exact coverage for Trailblazer
-  plus its adapter is 31,021/31,021 lines, 12,185/12,185 branches and
-  3,032/3,032 covered/fully covered methods; GridForge is 8,968/8,968 lines,
-  3,865/3,865 branches and 1,118/1,118 covered/fully covered methods. These
-  counts hold in each configuration without new coverage exclusions.
-  All ten executable-host/configuration math hashes match the current sibling
-  build; `math-host-hashes.json` records those final provenance checks.
-  The parser behavior checks, 51 local document path/anchor checks and DocFX
-  warnings-as-errors build pass. Commands, TRX, coverage summaries, build/test
-  and API logs remain under `artifacts/direct-visibility-phase0/final-validation`;
-  `verify-final.ps1` beside that directory reproduces the build/test/coverage
-  matrix. Windows local-source validation does not replace coordinated
-  Windows/Linux released-package gates. No merge, push or release was performed.
-- Independent final calibration audit reconciles all 1,920 raw stage records,
-  1,824 BDN timed measurements and 96 successful child exits. Every one of the
-  55,296 actual frames has zero recorded allocation and collection overlap.
-  All 606 frozen inputs, three tools, seven runtime-library pins, formal host
-  hash, 252 archived child files and 268 evidence-inventory entries match.
-  Command timestamps confirm serial captures; no unproved environmental cause
-  is assigned to the drift. Correctness/Ponytail review finds no actionable
-  retained-code issue; production source remains unchanged in both repositories.
-- The corrected pairs fail the predeclared repeatability gate.
-  Independent recomputation from raw frame ticks confirms late-blocked block
-  medians of 265.9488 / 250.5213 ms, a **-5.8009286%** difference against the
-  5% limit. Its frame P95 changes -5.3142%, within the separate 10% limit.
-  All other balanced cases pass both limits. Late-blocked launch medians are
-  267.6793 / 265.9488 / 262.3780 ms in the first capture and
-  251.9658 / 250.3537 / 249.9669 ms in the second: all launches shift, with no
-  basis for removing one. The completed unphased pair also fails A*/100:
-  212.7254 / 198.6892 ms, **-6.5982718%**. Its launch medians are
-  201.5776 / 212.7254 / 296.2214 versus 199.8941 / 196.3705 / 198.8561 ms;
-  the slow first-capture launch remains in the record. All 16 P95 gates pass.
-  This establishes measurement drift, not its cause. The one correction was
-  counted as consumed at that time. The subsequent no-go closeout was premature;
-  it is superseded by the user's direction and amended execution rule above.
-- The final baseline is frozen at Trailblazer `e6391ee`, GridForge `be85b56`,
-  FixedMathSharp `29bfa28`, SwiftCollections `4b5715b`, and Gravitas `42af506`.
-  `artifacts/dv-baseline/Trailblazer` is an independent detached source snapshot,
-  with binary-only sibling inputs and a source archive. The manifest records
-  606 immutable inputs, exact library hashes, SDK information and pinned
-  analysis/archive tools. Implementation remains in the original checkout.
-  The relocated eight-case generated-child preflight passes: 24 complete stage
-  records, zero actual-frame allocation, exact library hashes and a generated
-  project referencing only the frozen benchmark source. Its rebuilt benchmark
-  host hash is pinned separately from the copied launcher's hash. Evidence is
-  under `artifacts/direct-visibility-phase0/final-baseline-preflight*`.
-- The final-harness calibration order is Original-1, Balanced-1, Balanced-2,
-  Original-2. Each invocation uses the reviewed ignored `capture-final.ps1`,
-  the detached baseline root and `snapshot-manifest.json`, with default
-  `Launches=3`, `Warmups=10`, `Iterations=9`. Labels are
-  `final-calibration-original-1`, `final-calibration-balanced-1`,
-  `final-calibration-balanced-2`, and `final-calibration-original-2` under
-  `artifacts/direct-visibility-phase0`. Per-run command sidecars record exact
-  arguments, script/manifest hashes, timestamps and launcher exit codes;
-  child archives preserve generated build commands and actual runtime files.
-  Preflight timing is not calibration or candidate acceptance evidence.
-- The first formal capture completed all eight cases (216 actual, 240 warmup
-  and 24 diagnostic records), but its verifier rejected the benchmark-host
-  hash. Root cause was a provenance assumption, not different executable code:
-  the quick 1/1/1 preflight and formal 3/10/9 job have different deterministic
-  BenchmarkDotNet job names, which enter the embedded PDB path and generated
-  module ID. Independent PE inspection found identical complete bodies for all
-  657 methods and identical metadata except the module ID. Of 230,400 DLL bytes,
-  only 77 differ: deterministic timestamps, module ID, CodeView path/GUID and
-  PDB checksum. Every runtime-library hash still matches its frozen input.
-  Installed BenchmarkDotNet code and all historical/current formal job headers
-  confirm the same formal `Job-WQLAGK` identity for both cadences.
-- Use the single permitted correction for this provenance mismatch: keep the
-  preflight hash as evidence and pin the host built with the actual frozen
-  3/10/9 settings (`7DAAD4B43D77964B65A3BCCA326257209AA926C980C23E59846524E1AA99D17B`).
-  No source, compiler/runtime flags, scene, threshold, or verifier code changes.
-  The failed verifier run and its exact original manifest remain intact; it is
-  not substituted for a corrected calibration result. Repeat all four captures
-  from scratch in the same order, with labels `calibration-r1-original-1`,
-  `calibration-r1-balanced-1`, `calibration-r1-balanced-2`, and
-  `calibration-r1-original-2`. A further provenance or repeatability failure
-  originally blocked timing-based acceptance. This historical correction count
-  does not prohibit the user-authorized resumed experiment above.
-- GridForge's corresponding direct-host prerequisite is resolved as
-  `GF-Issue-009` in `be85b56`. Fresh red/green checks confirmed the same package
-  collision in both test/benchmark hosts and both configurations. Two local-only
-  project-file exclusions correct it; full local tests pass 922/922 per family
-  and both library targets build. Default package mode is unchanged. Independent
-  review and parent hash checks pass. GridForge's generated top-level benchmark
-  project still selects released math; that limitation is recorded, not hidden
-  or expanded into new infrastructure. This experiment uses Trailblazer's
-  separately verified prebuilt-child route. Raw prerequisite logs remain in
-  `GridForge/artifacts/direct-visibility-provenance`.
-- Full-host control preflight caught a fixture-sizing limit before timing:
-  the 256-by-192 late scene exhausted 320,000 evaluated edges after 13,545 of
-  49,152 nodes; ordinary Flow acquisition returned `BudgetExceeded`, not a
-  route/visibility defect. Both cadences and the matched ineligible scene agree.
-  Before any capture, scale only the new controls' edge budget to
-  `max(320000, 32 * width * length)` (1,572,864 for large controls), following
-  the existing cold-guide benchmark's per-node sizing. All other budgets and
-  the original primary fixture remain unchanged. Baseline and candidate must
-  use this same frozen sizing. Sparse's initial 4,096 dynamic-slot cap also
-  prevented its 4,798-cell baseline from materializing; its approved 8,192 cap
-  resolves that fixture limit. All controls now pass both cadences in Release
-  and Lean. Raw failed/successful smoke logs, parser red/green checks and
-  expanded BDN discovery remain under `artifacts/direct-visibility-phase0/task-0c`.
-- Before seeing any new-control timing results, freeze this protocol extension:
-  after the reviewed five-control harness is committed, create an ignored
-  baseline source/runtime snapshot and repeat identical-baseline calibration
-  for all eight selected cases per cadence (original three plus five controls).
-  The prior four passing captures remain pre-controls evidence; they do not
-  calibrate the added cases or rebuilt benchmark host. Use the same 3/10/9
-  protocol and 5% median / 10% P95 agreement gates. The one permitted correction
-  is still unused and is not reset by this scope extension. Only then run fresh
-  B1/C1/C2/B2 comparisons. This is a predeclared harness-scope extension, not a
-  response to an unfavorable candidate result. Preserve the original method in
-  unphased primary captures and pair it with the controls' explicit unphased
-  method; use balanced-phase methods for both in the other cadence.
-- Aligned validation prerequisite `TRB-Issue-135` is resolved in `a65c118`:
-  local executable hosts now select the sibling math implementation instead of
-  the competing released package asset. Full solution builds/tests pass with
-  verified local hashes: Release 2,576 core / 65 adapter, Lean 2,504 / 65,
-  both library targets, zero warnings/errors or failed/skipped tests. The
-  `direct-visibility-aligned-release[lean].trx` files and
-  `artifacts/direct-visibility-phase0/aligned-release[lean]-*.log` preserve the
-  matrix. Independent correctness/minimality review approved the three-project
-  fix; normal package selection and generated prebuilt children remain intact.
-  This is a separate validation fix, not a visibility speedup.
-- The aligned actual partial-execution spike passes 15 scenes. Guided wall
-  discovery visits/maps 73 of 145 candidates; the separate sparse oblique wall
-  visits/maps 53 of 436. Add two extreme-prism qualification checks to each.
-  Full address admission remains 5,049 / 47,244; successful certificates perform
-  no canonical sorting or chain evaluation. Late/reverse sparse walls require
-  414 visits, so no direction-aware near-start saving is claimed. Full forced
-  continuation matches all intervals/ties, mapped records, dependency sets,
-  meter categories and successful selected cost/heading. Exact-budget eligible
-  cases continue without remapping. Capacity-vs-semantic-failure priority and
-  unrelated publication after dependency validation are exercised. Deliberate
-  eager-only, remapping and missing-final-fence controls fail as intended.
-- The final arithmetic addition passes 22 rows: 16 literal one-raw-margin
-  combinations at both ends/directions, one-raw oblique slopes forward/reverse,
-  exact horizontal bypass, unrepresentable deltas forward/reverse and two
-  actual prism representation rejections. Half-raw peers round to endpoint
-  parameters but cannot certify separation. Near-zero oblique controls genuinely
-  succeed and map five intervals once; unsupported cases have zero observer
-  charges before full authority. Three deliberate weakened-guard/eager-only
-  controls fail. The 15-scene regression remains green afterward.
-  Reproduce with `dotnet build artifacts/direct-visibility-phase0/probe/Phase0Probe.csproj
-  -c Release`, then its `bin/Release/net8.0/Trailblazer.Tests.dll` with output
-  path and `--partial` or `--arithmetic`. It uses frozen calibration-child
-  references, not mutable parent outputs. Latest raw files are
-  `artifacts/direct-visibility-phase0/partial-arithmetic-regression.json`
-  (SHA256 `5EAE7FECA016381CB4F50CEEE61E312A52B91643665FC13B2BA1E20421CDC5A2`)
-  and `arithmetic.json`
-  (`9676E01C323AD6344D7243164D7366F6AD58B6986EFC667686D3DAC88C86041B`).
-  Earlier output/binary snapshots and all red logs remain preserved. Reflection,
-  diagnostic source copies and eight nullable warnings in linked benchmark
-  support make this a feasibility harness, not production/allocation/timing
-  evidence. Production tests must cover their own implementation and lifecycle.
-- 2026-09-15: User approved the plan and its deliberate unseen-suffix contract,
-  authorized implementation/checkpoint commits and requested independent reviews.
-  Created `codex/certified-direct-visibility` from clean `develop` at `785b801`,
-  using the existing checkout as requested. GridForge `02aa2de` and Gravitas
-  `42af506` also start clean. Exact geometry/accounting interfaces remain a
-  Phase 0 gate; approval does not broaden the fallback budget or tracing scope.
-- Baseline `dotnet test Trailblazer.slnx -c Release -p:UseLocalLsfStack=true
-  --logger 'trx;LogFileName=direct-visibility-baseline-release.trx'` passed:
-  2,576 core and 65 adapter tests, no failures/skips. Both library targets built.
-  TRX evidence is under each test project's ignored `TestResults` directory.
-- The same baseline command in `ReleaseLean` with
-  `direct-visibility-baseline-releaselean.trx` passed 2,504 core and 65 adapter
-  tests, no failures/skips, with both library targets built.
-- Binary audit qualifies those baseline tests: their host output contains
-  released FixedMathSharp `010be577`, whereas the measured children contain
-  sibling `29bfa28`. The core sources differ, so the baseline tests are not
-  evidence for the entire current sibling stack. The ignored diagnostic is
-  being aligned with the frozen child dependencies before its feasibility
-  results are accepted; final local-stack verification must resolve this too.
-- Initial ignored diagnostic completed 14 scenes and compared every replayed
-  interval with the real complete trace. The guided wall admits 5,049 addresses
-  but evaluates 145 actual candidates; the long sparse oblique wall admits
-  47,244 but evaluates 436. Complete provisional empty X slabs leave 72 and
-  383 candidate evaluations respectively. These are posthoc opportunities, not
-  implemented savings. Raw predecessor evidence is retained at
-  `artifacts/direct-visibility-phase0/phase0.json`, including its separate
-  runtime fingerprint. The quarter-radius oblique open control already rejects
-  at portal-pair clearance; the eighth-radius oblique and quarter-radius
-  axis-aligned open controls succeed. Do not attribute every rejection to the
-  authored wall or infer a geometry bug from that control alone.
-- Independent source correctness and Ponytail reviews support a narrower
-  prototype: exactly one matching materialized rectangular map/physical grid,
-  Solid medium, no explicit connections or seams, and the existing optimized
-  oblique X-slab path only. All unsupported cases retain the original ray.
-  Retain mapped records plus one ordinal permutation for complete fallback;
-  no cursor, general frontier, symmetric axis walker or second mapping store.
-  Before interleaving mapping, metadata must prove lookup/page/component
-  headroom. Provisional stale evidence disarms certification and finishes the
-  full authority with its original failure precedence. Actual partial-work
-  continuation, precise interfaces and adversarial proof remain open gates.
-- The earlier, three-case unchanged-binary calibration passed on its first
-  protocol attempt, before the final eight-case harness. Each
-  capture used three launches, ten warmup blocks and nine actual blocks per
-  case/launch, 32 preparation frames and 64 measured frames per operation.
-  All captures have 81 actual, 90 warmup and nine diagnostic records; actual
-  frames allocate zero bytes. Runs were serial, without competing builds,
-  tests or profiles. No correction or discarded rerun was used in that earlier
-  three-case series; it does not supersede the failed final-harness gate.
+Before baseline freeze, the five new controls received adequate edge budgets
+for their existing geometry and an 8,192-slot sparse dynamic capacity. Applied
+publication receipts required bounded maintenance catch-up. These were fixture
+corrections, not runtime fixes; the original guided fixture was untouched.
+The completed-slabs feasibility spike then proved real partial execution,
+full-authority continuation, raw endpoint margins, ties and stale fences.
+Production tests independently cover the implemented code rather than treating
+that ignored prototype as runtime evidence.
 
-  | Cadence / case | Block median 1 / 2 (ms per 64 frames) | Change | Frame P95 1 / 2 (ms) | Change |
-  | --- | ---: | ---: | ---: | ---: |
-  | Original A*/100 | 206.117 / 197.509 | -4.18% | 20.306 / 19.782 | -2.58% |
-  | Original Flow/100 | 88.419 / 86.652 | -2.00% | 10.007 / 9.763 | -2.43% |
-  | Original Flow/500 | 466.833 / 451.468 | -3.29% | 46.146 / 45.503 | -1.39% |
-  | Balanced A*/100 | 201.425 / 201.400 | -0.01% | 3.483 / 3.567 | +2.42% |
-  | Balanced Flow/100 | 87.426 / 87.861 | +0.50% | 1.477 / 1.502 | +1.68% |
-  | Balanced Flow/500 | 458.425 / 455.170 | -0.71% | 7.532 / 7.853 | +4.27% |
+Local dependency prerequisites are separately recorded as `TRB-Issue-135`,
+`GF-Issue-009` and `GRV-Issue-071`. The first two were committed before baseline
+freeze. The Gravitas correction affects validation asset selection, not the
+measured Trailblazer benchmark runtime. No dependency version was invented or
+released. Generated standalone GridForge/Gravitas benchmark children are not
+certified by their direct-parent fixes; this experiment uses Trailblazer's
+separately verified prebuilt-child route.
 
-  Exact captures use the existing ignored helper:
-  `artifacts/los-phase/capture.ps1 -Label <label> -Mode <mode>
-  -Launches 3 -Warmups 10 -Iterations 9`. Serial order was
-  `visibility-calibration-original-1` (`Original`),
-  `visibility-calibration-balanced-1` (`BalancedPhases`),
-  `visibility-calibration-balanced-2` (`BalancedPhases`), then
-  `visibility-calibration-original-2` (`Original`). Each label under
-  `artifacts/los-phase` retains its command/source JSON, source diff, raw log,
-  analyzer summary and `-children` archive/manifest. The command records contain
-  exact method filters; the existing helper selects A*/100, Flow/100 and
-  Flow/500, never A*/500. Generated children inherit
-  `/p:UseLocalLsfStack=true /p:UsePrebuiltLocalLsfStack=true /m:1`.
-  Trailblazer, GridForge, FixedMathSharp, SwiftCollections and benchmark assembly
-  hashes match across all four archives. Independent audit reproduced the six
-  comparisons, matched all 720 raw stage records to summaries and all 684
-  warmup/actual measurements to BenchmarkDotNet JSON, verified 36 successful
-  child exits, exact replay and 252 archived runtime-file hashes. Individual
-  launches still show some settling: balanced capture 2 Flow/500 launch 1's
-  early-three versus last-three block median falls 6.89%. Preserve that sequence;
-  aggregate agreement is not proof that every launch is stationary. The helper
-  checks launcher exit codes and its outer command returned zero; per-capture
-  launcher exit is not separately persisted as a JSON field. No rerun was
-  recommended. This calibration is not candidate performance evidence.
-- Initial planning, 2026-09-15: read-only source investigation and independent
-  geometry/semantics audits supported a gated negative-only feasibility spike.
-  That planning step did not add runtime APIs, tests or benchmark captures.
-- Independent correctness and Ponytail plan reviews completed. Review clarified
-  budget-safe fallback after unrelated publication and removed speculative file
-  scaffolding and duplicate guidance. Local file/anchor checks pass for all 48
-  links across this plan and its two coordination documents; `git diff --check`
-  passed for the initial documentation-only change; no build/test claim was
-  made for that planning step.
+### Reproduction and evidence
+
+All raw evidence remains ignored under `artifacts/direct-visibility-phase0`:
+
+- `calibration-r1-{original,balanced}-{1,2}`: preserved pre-implementation runs;
+- `candidate-{original,balanced}-{1,2}`: implemented candidate repeats;
+- `baseline-post-{original,balanced}`: unchanged drift controls;
+- each label's `.log`, `-command.json`, `-summary.json` and `-children` archive;
+- `comparison-original.json` / `comparison-balanced.json`: all five matching
+  observations per case, independent baseline minima and target calculations;
+- `baseline-lifecycle-smoke.log` / `candidate-lifecycle-smoke.log`: separate
+  mandatory lifecycle diagnostics;
+- `production-work-counts/production-work-counts-1.json`: paired initial-query
+  counters, actual loaded assembly identities and service-equivalent outcomes;
+- `task-2` and `gravitas-host-check`: exact tests, coverage and provenance;
+- GridForge's `artifacts/direct-visibility/task1/review-fix1`: final upstream gates.
+
+The unchanged capture command is:
+
+```powershell
+& artifacts/direct-visibility-phase0/capture-final.ps1 `
+  -RepositoryRoot <frozen-checkout> -InputManifest <frozen-manifest> `
+  -Label <unique-label> -Mode <Original-or-BalancedPhases>
+```
+
+Defaults are 3 launches, 10 warmup and 9 actual blocks. Candidate Original-1
+uses the existing `-Preflight` switch only to discover its formal host hash;
+its immutable `bootstrap-manifest.json` remains separate. Later candidate runs
+pin `83A2ED4858574791EC1714BA2AA96F4A75AED833A570C687C1AD233B59D17D57`.
+The candidate at `artifacts/dv-candidate` freezes Trailblazer `c70f51b`,
+GridForge `4a6b1bd` and 613 inputs. All captures retain the same seven runtime
+library identities within their variant and the same three original pinned
+tools. Formal sequence: Original C1, Balanced C1, Balanced C2, Original C2,
+Original post-baseline, Balanced post-baseline. No concurrent build, test or
+profile ran during those captures.
+
 - [x] Phase 0 baseline reconciliation complete under the amended rule.
 - [x] Phases 1 and 2 implemented and independently reviewed.
-- [ ] Phase 3 candidate compared against the frozen baseline; disposition recorded.
-- [ ] Phase 4 production closeout and parent/release status reconciled.
+- [x] Phase 3 final independent audit and retention disposition recorded.
+- [x] Phase 4 closeout, final review and parent/release status reconciled.

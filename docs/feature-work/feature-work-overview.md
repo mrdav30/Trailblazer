@@ -63,16 +63,21 @@ instead of burying it in notes.
     is withdrawn: matched Flow/500 gains did not satisfy the smaller-case
     non-regression gate. GridForge retains useful boundary tests and benchmark
     invocation guidance (`GF-Issue-008`), not the runtime shortcut. The subsequent
-    [Certified Direct-Visibility investigation](navigationDirectVisibilityPlan.md)
-    is active again after the user corrected a premature Phase 0 closeout.
-    The bounded negative-only proof and single-meter continuation passed review.
-    Baseline drift of **5.80% / 6.60%** in two cases remains recorded, but is not
-    evidence against an unbuilt feature. Reconcile/freeze the baseline before
-    implementation, then compare the same benchmark and unchanged drift control.
-    Local host dependency corrections (`TRB-Issue-135` / `GF-Issue-009`) and five
-    useful full-host controls remain on the review branches. The active plan
-    owns the proof, baseline evidence and amended practical measurement approach.
-    `TRB-Benchmark-005` retains the remaining 2 ms/recovery limits.
+    [Certified Direct-Visibility implementation](done/navigationDirectVisibilityPlan.md)
+    is retained for review on `codex/certified-direct-visibility`. Its bounded
+    negative proof reduces Flow/500 block cost by **24.44–33.76%** in the original
+    cadence and **27.29–27.71%** with balanced phases, against the fastest matching
+    preserved baseline. All measured original Flow/500 frames now fit 31.25 ms.
+    Two narrow 10% non-regression targets miss: clear-path median **+10.1025%**
+    and phased short-path P95 **+10.8732%**, each in the first candidate repeat.
+    Retention explicitly accepts those exceptions; their cause is not established.
+    The archived plan owns all repeated observations, post-baseline controls,
+    separate lifecycle diagnostics and independent audit. Local exact coverage,
+    replay and warmed allocation gates pass across the changed source stack.
+    Local dependency selection is corrected in `TRB-Issue-135`, `GF-Issue-009`
+    and `GRV-Issue-071`; no dependency version or Gravitas physics change was needed.
+    `TRB-Benchmark-005` retains the 2 ms/recovery limits and focused clear/fallback
+    cost follow-ups; no release readiness or game-wide performance is claimed.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
     `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate
@@ -109,6 +114,15 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
+
+- [Certified Navigator Direct-Visibility Rejection](done/navigationDirectVisibilityPlan.md)
+  - GridForge exposes bounded completed-slab observation; Trailblazer certifies
+    only a strict obstruction and otherwise continues the complete authority.
+    Existing Navigator lifecycle, public request and generic ray contracts remain
+    intact. Both cadence comparisons show substantial blocked-workload benefit.
+    The plan records the two explicit target exceptions, exact local coverage,
+    independent reviews and source-stack provenance. Branch review remains with
+    the user; the broader benchmark and coordinated release gates stay open.
 
 - [Deterministic LOS Phase Spreading](done/navigationLineOfSightPhasePlan.md)
   - One opt-in host-assigned phase policy spreads A*/Flow periodic checks while
@@ -195,11 +209,12 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Execute the [direct-visibility feature](navigationDirectVisibilityPlan.md)
-   with baseline first, implementation second and matching measurements third.
-   The user authorizes reasonable experimental judgment; timing variability
-   requires honest comparison, not automatic feature abandonment. The merged
-   LOS phase-spreading runtime remains the control.
+1. Review the completed [direct-visibility feature](done/navigationDirectVisibilityPlan.md)
+   and its two explicit control-target exceptions before merging. For the remaining
+   `TRB-Benchmark-005` work, consider the narrow per-slab fence/invariant-setup
+   candidates recorded there, with separate measurements if implemented. They
+   are hypotheses, not established causes of the control differences. Mandatory
+   acquisition/recovery remains a separate cost and ownership question.
    Exact rectangular tracing, raw-coordinate geometry and
    per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
    accounting and dependency guarantees, and keep the unphased cadence/control
@@ -248,8 +263,9 @@ The cross-stack rules apply throughout:
 
 ## Coordinated Release Gates
 
-Hardening, acquisition scheduling and LOS phase spreading are complete locally
-and archived; release readiness is a separate cross-stack checkpoint. Do not
+Hardening, acquisition scheduling, LOS phase spreading and certified direct
+visibility are complete locally and archived; release readiness is a separate
+cross-stack checkpoint. Do not
 infer these gates passed from the plans' exact local coverage or benchmark results.
 
 - [ ] After all active feature work is complete, run Windows/Linux CI in

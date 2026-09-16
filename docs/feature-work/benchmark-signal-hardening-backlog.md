@@ -1868,36 +1868,51 @@ comparison, mutation/restored checks, source audits and evidence review;
 commands/source state and frozen executed children. No further profiling loop,
 new benchmark project, CI machinery or production instrumentation is retained.
 
-#### Follow-up: certified direct-visibility implementation and baseline reconciliation
+#### Follow-up: retain certified direct-visibility rejection
 
-On 2026-09-15, source investigation was promoted to the
-[Certified Direct-Visibility plan](navigationDirectVisibilityPlan.md).
-The bounded negative-only proof, arithmetic cases and budget-safe continuation
-passed independent review. Actual partial discovery visits/maps 73 of 145
-candidates in the guided wall and 53 of 436 in the separate sparse scene,
-without sorting or chain evaluation on a valid certificate; full continuation
-retains exact complete-ray results and accounting.
+The [completed direct-visibility plan](done/navigationDirectVisibilityPlan.md)
+consolidates proof, implementation, all measurements and the corrected history
+of the premature calibration-only no-go. GridForge `4a6b1bd` adds complete slab
+observation; Trailblazer `4a1f94d` adds a narrow negative certificate with
+single-meter complete continuation. Generic ray consumers and Navigator
+production steering are unchanged. Local host math-selection prerequisites are
+resolved in `TRB-Issue-135`, `GF-Issue-009` and Gravitas `GRV-Issue-071`.
 
-The final full-host calibration failed before production implementation:
-identical-binary balanced late-blocked block medians were **265.9488 / 250.5213 ms**
-(-5.8009%), exceeding the predeclared 5% agreement limit. Unphased A*/100 also
-failed at **212.7254 / 198.6892 ms** (-6.5983%). The other 14 median gates and
-all 16 P95 gates passed, but every case was required. The single correction
-allowance had already corrected a preflight-versus-formal benchmark-host hash
-pin; it did not change executable code or measurement thresholds. Those results
-describe baseline variability, not the performance of a production candidate.
+The unchanged eight-case protocol compares two candidate repeats per cadence
+against all four preserved pre-change captures and two post-candidate baseline
+controls. Each reference uses the lowest matching baseline median/P95; no
+captures or outliers are discarded. Independently audited Flow/500 block costs
+are **459.831 ms → 347.445 / 304.583 ms** in the original cadence
+(**24.44% / 33.76%** lower), and **454.282 ms → 328.391 / 330.299 ms** with
+balanced phases (**27.71% / 27.29%** lower). Blocks contain 64 complete frames.
+Original Flow/500 maxima fall from **61.724–70.717 ms** across baselines to
+**26.852 / 20.907 ms**; phased candidate maxima are **6.055 / 6.769 ms**.
+A*/100, Flow/100 and the separate late/sparse blocked scenes also improve.
 
-The active plan consolidates the complete calibration, proof and provenance
-record. Local executable-host math selection is corrected in `TRB-Issue-135`
-and `GF-Issue-009`; five replay-checked full-host controls are retained. These
-are validation improvements, not runtime speedups. The user rejected the
-premature no-go closeout and requires a settled baseline before implementation,
-then the same benchmark afterward. Practical experimental judgment is authorized;
-the plan now preserves all baseline variation and requires an unchanged
-post-candidate drift control instead of abandoning the feature on calibration
-alone. `TRB-Benchmark-005`
-stays active for the 2 ms allowance and acquisition/recovery bursts; the earlier
-body-interior shortcut remains withdrawn.
+**Retention explicitly accepts two target misses:** original Clear100 C1 block
+median **+10.1025%**, and balanced Short100 C1 P95 **+10.8732%**, versus the 10%
+non-regression limit. Their second repeats are **+5.4458% / +3.8421%** respectively.
+Other median/P95 checks remain within 10%; these two are not rounded into passes
+or attributed to an unproven environmental cause. Clear/short/ineligible cases
+are not advertised as speedups. No selected workload newly fails 31.25 ms.
+
+All **138,240 actual frames** across ten captures preserve exact Int64 replay,
+zero recorded allocation/collection overlap and audited executed-binary hashes.
+Exact local Release/Lean coverage passes for Trailblazer, its adapter, GridForge
+and Gravitas; both library TFMs build. Separate initial-query work counts show
+32,490 fewer trace intervals/lookup probes for Flow/500 and 185,531 fewer for
+Sparse500, with unchanged covered-address admission and compatible outcomes.
+These counts are not game-wide eligibility or elapsed-time estimates.
+
+**TRB-Benchmark-005 remains open.** Every phased Flow/500 measured frame still
+exceeds 2 ms. Separate single-run startup/recovery diagnostics preserve behavior
+but remain expensive (roughly 254–514 ms for several admission/recovery events);
+their allocations are not warmed-frame regressions. The next bounded candidates
+are avoiding fences on slabs that cannot certify and examining repeated invariant
+setup in the shared collector. Their actual cost and relation to the two target
+misses are unproven; any implementation needs separate before/after evidence.
+The earlier body-interior shortcut remains withdrawn. This is local source-stack
+evidence, not Windows/Linux released-package validation or release approval.
 
 ## Closed Signals
 

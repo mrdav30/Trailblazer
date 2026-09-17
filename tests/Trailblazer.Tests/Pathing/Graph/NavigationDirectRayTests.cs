@@ -347,11 +347,13 @@ public sealed class NavigationDirectRayTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void PublicationDuringObservation_ShouldDisarmRatherThanInventStaleness(bool relevant)
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    public void PublicationDuringObservation_ShouldDisarmRatherThanInventStaleness(bool relevant, int wallKind)
     {
-        using var scene = new Scene(wallKind: 2);
+        using var scene = new Scene(wallKind: wallKind, endZ: 5);
         NavigationRayRequest request = scene.Request();
         var immediate = new NavigationImmediateRayWorkspace(1, 32, 32, 256, 256);
         Func<GridTraceSlab, bool> observer = immediate.ObserveSlab;
@@ -371,7 +373,8 @@ public sealed class NavigationDirectRayTests
         });
         immediate.WorkMeter.Reset(Scene.Budget);
         immediate.RayWork.Begin(request);
-        immediate.RayWork.AdvanceDirect(immediate).Should().Be(relevant ? NavigationRayStatus.Stale : NavigationRayStatus.Blocked);
+        immediate.RayWork.AdvanceDirect(immediate).Should().Be(relevant ? NavigationRayStatus.Stale
+            : wallKind == 0 ? NavigationRayStatus.Success : NavigationRayStatus.Blocked);
         var complete = new NavigationRayWork(new NavigationRayWorkspace(1, 32, 32, 256, 256));
         var meter = new NavigationWorkMeter(Scene.Budget);
         complete.Begin(request);
@@ -411,21 +414,9 @@ public sealed class NavigationDirectRayTests
             bool keepGoing = true;
             if (afterObserver)
                 keepGoing = observer(slab);
-            if (!changed && (!afterObserver || !keepGoing))
+            if (!changed && (afterObserver ? !keepGoing : slab.XIndex == 3))
             {
-                Exception? failure = null;
-                var mutation = new System.Threading.Thread(() =>
-                {
-                    try
-                    {
-                        scene.Grid.TryGetVoxel(new VoxelIndex(11, 0, 11), out Voxel? voxel).Should().BeTrue();
-                        scene.Grid.TryAddObstacle(voxel!, scene.Context.World.AllocateObstacleToken()).Should().BeTrue();
-                    }
-                    catch (Exception exception) { failure = exception; }
-                });
-                mutation.Start();
-                mutation.Join(TimeSpan.FromSeconds(10)).Should().BeTrue();
-                failure.Should().BeNull();
+                MutateDistantObstacle(scene);
                 changed = true;
             }
             return afterObserver ? keepGoing : observer(slab);
@@ -435,6 +426,51 @@ public sealed class NavigationDirectRayTests
         immediate.RayWork.AdvanceDirect(immediate).Should().Be(NavigationRayStatus.Stale);
         changed.Should().BeTrue();
         immediate.SourceOrdinals.Should().OnlyContain(tag => tag == 0);
+    }
+
+    [Theory]
+    [InlineData(256, 10)]
+    [InlineData(8, 0)]
+    public void WorldMutationOnAnAdmittedSlab_ShouldOverrideSuccessOrLaterGeometryFailure(int traceLimit, int mutationX)
+    {
+        using var scene = new Scene(endZ: 5);
+        var budget = new NavigationWorkBudget(65536, 4096, 4096, 65536, 4096, 0, 0, 0, traceLimit, 256, 0);
+        var immediate = new NavigationImmediateRayWorkspace(1, 32, 32, 256, 256);
+        Func<GridTraceSlab, bool> observer = immediate.ObserveSlab;
+        bool changed = false;
+        SetObserver(immediate, slab =>
+        {
+            if (slab.XIndex == mutationX)
+            {
+                // Mutate after these intervals were captured, so mapping this admitted slab
+                // cannot detect the change through its captured per-grid sequence.
+                MutateDistantObstacle(scene);
+                changed = true;
+            }
+            return observer(slab);
+        });
+        immediate.WorkMeter.Reset(budget);
+        immediate.RayWork.Begin(scene.Request());
+        immediate.RayWork.AdvanceDirect(immediate).Should().Be(NavigationRayStatus.Stale);
+        changed.Should().BeTrue();
+        immediate.SourceOrdinals.Should().OnlyContain(tag => tag == 0);
+    }
+
+    private static void MutateDistantObstacle(Scene scene)
+    {
+        Exception? failure = null;
+        var mutation = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                scene.Grid.TryGetVoxel(new VoxelIndex(11, 0, 11), out Voxel? voxel).Should().BeTrue();
+                scene.Grid.TryAddObstacle(voxel!, scene.Context.World.AllocateObstacleToken()).Should().BeTrue();
+            }
+            catch (Exception exception) { failure = exception; }
+        });
+        mutation.Start();
+        mutation.Join(TimeSpan.FromSeconds(10)).Should().BeTrue();
+        failure.Should().BeNull();
     }
 
     private static void SetObserver(NavigationImmediateRayWorkspace immediate, Func<GridTraceSlab, bool> observer) =>

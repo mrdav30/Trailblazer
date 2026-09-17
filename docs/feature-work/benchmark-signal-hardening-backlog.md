@@ -65,25 +65,20 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 ### TRB-Benchmark-005 - Guided frames spend most time in long blocked segment tracing
 
 - **Discovered:** 2026-09-10 during the representative guided-host performance pass.
-- **Status:** Active for remaining full-frame budget misses. The implemented
-  geometry, mapping and dependency improvements remain in place; their matched
-  comparisons are below. The latest page-proof experiment is withdrawn because
-  its repeated LOS gains do not establish a convincing complete-frame benefit
-  across the measured cases. The historical unchanged Flow/500 control had a
-  **57.64 ms** LOS median, with all 36 rechecks above 31.25 ms. The open-ended
-  micro-optimization sweep has ended. The completed
-  [Deterministic LOS Phase Spreading plan](done/navigationLineOfSightPhasePlan.md)
-  consolidates the opt-in contract, implementation and separate phased evidence.
-  All four phases and final reviews pass with exact local coverage; the narrow
-  `TRB-Issue-125` steering correction is also verified.
-  Repeated balanced captures now pass the relative keep gates: Flow/500 P95
-  improves **80.84% / 81.47%**, with **+2.98% / -1.07%** block-cost changes and
-  maxima **10.15 / 10.23 ms**. Every selected balanced steady frame fits
-  31.25 ms, but the 2 ms allowance still fails and synchronous recovery can
-  burst. Instrumentation, raw evidence, documentation and the exact local matrix
-  are independently checked, and final correctness/Ponytail findings are resolved.
-  The plan is archived; this signal is not closed. Keep the
-  synchronized fixture unchanged as its control.
+- **Status:** Active for the remaining 2 ms full-frame allowance and mandatory
+  acquisition/recovery bursts. Geometry, mapping, dependency, ungrouped steering,
+  [LOS phase spreading](done/navigationLineOfSightPhasePlan.md) and
+  [certified direct visibility](done/navigationDirectVisibilityPlan.md) improvements
+  are retained; the user has reviewed and merged both completed feature branches.
+  Their matched measurements, explicit control-target exceptions and independent
+  reviews remain below and in the archived plans. The latest per-slab fence
+  experiment was implemented and measured, then withdrawn because no attributable
+  complete-frame benefit was demonstrated. Its useful tests remain; production
+  source is unchanged by that follow-up. The next recommended design boundary is
+  Navigator-owned acquisition/recovery through the existing bounded scheduler,
+  not further removal of freshness checks. This is not implemented or a reason
+  to close the signal. Keep the original cadence/control and all completed
+  observations intact; do not restart an open-ended micro-optimization sweep.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -1913,6 +1908,106 @@ setup in the shared collector. Their actual cost and relation to the two target
 misses are unproven; any implementation needs separate before/after evidence.
 The earlier body-interior shortcut remains withdrawn. This is local source-stack
 evidence, not Windows/Linux released-package validation or release approval.
+
+#### Follow-up: withdraw the non-certifying-slab fence experiment
+
+After the user merged the direct-visibility work, this focused slice starts from
+Trailblazer `557bd12`, GridForge `4a6b1bd` and Gravitas `aa48f7c` on `develop`.
+Only Trailblazer changes. The previous feature's frozen **candidate** is this
+slice's pre-change runtime; its source matches the merged runtime and all 613
+saved inputs were rehashed before reuse. Earlier pre-feature baselines are not
+used to measure this new change.
+
+**Implemented, tested, measured, then withdrawn:** the candidate skipped the
+slab observer's intermediate world/graph freshness check when the certificate
+was disarmed, a cell was admitted, or the slab did not strictly separate the
+endpoints. Possible certificates retained both immediate fences and accumulated
+dependency validation; complete continuation retained the original world stamp
+and final dependency authority. No public API, budget, allocation, retained
+state, geometry arithmetic, cadence or upstream dependency was changed.
+
+The candidate could perform additional bounded mapping work after concurrent
+raw-world mutation before returning `Stale`, without authorizing a certificate
+or success. Unchanged-world and graph-only-publication outcomes and exact debits
+were preserved. The original runtime source is restored exactly: this tradeoff
+is not shipped. Retained characterization tests cover clear-path publication, mutation
+after the last admitted slab, and mutation before a later geometry ceiling.
+The certificate-mutation test now injects at the actual separating wall.
+
+**Matched evidence:** the unchanged eight-case protocol uses three launches,
+ten warmups and nine actual 64-frame blocks per launch, separately for original
+and balanced cadence. Two fresh unchanged controls and two candidate captures
+add **55,296 actual frames**. Comparisons also include the four preserved
+identical-runtime controls from the previous feature, for **110,592 actual
+frames** with exact cross-capture Int64 replay, zero recorded actual-frame
+allocation and no collection overlap. No outlier or completed capture is removed.
+
+| Flow/500 cadence | Preserved unchanged block medians (ms) | Fresh unchanged / candidate block median (ms) | Fresh unchanged / candidate frame P95 (ms) |
+| --- | ---: | ---: | ---: |
+| Original | 347.445 / 304.583 | 339.680 / 329.008 | 20.803 / 20.072 |
+| Balanced | 328.391 / 330.299 | 347.765 / 343.794 | 6.417 / 6.484 |
+
+Original Flow/500 block cost falls **3.14%** against its fresh control, but the
+unaffected Ineligible100 control falls **3.37%**. Balanced Flow/500 falls only
+**1.14%**, with a **1.05% higher P95**. Clear100 changes **-4.04% / +0.67%**
+against fresh original/balanced controls; Short100 changes **+0.41% / +0.63%**,
+and Sparse500 **-4.35% / +0.61%**. These are mixed observations, not an
+attributable full-frame improvement.
+
+All original median/P95 checks meet the 10% non-regression target against the
+best preserved matching baseline. Five balanced P95 checks do not: A*/100
+**+20.41%**, Flow/100 **+18.08%**, Flow/500 **+15.96%**, Late100 **+33.34%**
+and Sparse500 **+13.33%**. The fresh unchanged balanced control also misses
+those five comparisons, plus Short100 (**+10.56%**, versus the candidate's
+**+9.73%**). Keep the misses visible without assigning their cause
+to the candidate or an unproven environmental explanation. All balanced block
+median comparisons remain within 10%.
+
+**Decision:** no attributable benefit is demonstrated, so retain the simpler
+original runtime and the useful tests. This does not establish that skipping
+fences has no effect, nor does it establish a regression. Every measured
+Flow/500 frame still exceeds 2 ms. **TRB-Benchmark-005 remains open.**
+
+The existing sampled trace, filtered to both `RunMeasured` and `SimulateAgents`
+to exclude post-frame validation, assigns about **19%** to direct-heading work,
+**24%** to guide sampling and **58%** to other controller work (rounded shares).
+Sampling is a locator, not a lock-cost measurement or predicted saving. Source
+audits find no safe deletion of the pre-sampling lease check: it permits
+same-call reacquisition, whereas a stale sample defers retry. Moving occupant
+distance checks ahead of type checks would newly read host position getters on
+unrelated types. Neither shortcut is implemented. The collector's small
+invariant-arithmetic hoist remains unmeasured, not a proven next win.
+
+Prefer a focused design investigation of **Navigator-owned acquisition/recovery
+through the existing bounded scheduler** over further observer micro-tuning.
+Waiting movement, same-frame versus deferred retry, cancellation, publication
+and guide ownership need explicit behavior before implementation. The earlier
+hundreds-of-milliseconds recovery observations remain unresolved; scheduling
+can spread work, not eliminate its total cost or bound atomic operations.
+
+Evidence is retained under `artifacts/benchmark005-slab-refinement`; fresh
+unchanged controls use `artifacts/direct-visibility-phase0/slab-baseline-*`.
+Verified candidate binaries were copied into an isolated, hash-pinned snapshot,
+then checked against the actual BenchmarkDotNet children. The original-cadence
+capture initially failed its benchmark-host hash gate: short-preflight and full
+job PDB paths/identities differed. All 657 method bodies and the normalized whole
+assembly match; raw binaries, the original failed gate, normalization recipe and
+successful remaining checks are preserved in `host-provenance-reconciliation.md`.
+The balanced capture passes the full-job pin directly. Failed profiling-driver
+and project-discovery attempts are preserved but provide no timing evidence.
+
+**Final verification:** the same 86 focused cases pass on the original and
+candidate implementations. After restoring the runtime, full local Release
+passes **2,662 core + 65 adapter tests**, and ReleaseLean **2,590 + 65**, without
+failures or skips. Both TFMs build with zero warnings/errors. Both configurations
+retain exact **31,135 lines / 12,243 branches / 3,040 covered and fully covered
+methods** across core and adapter, without new exclusions. DocFX builds without
+warnings. All 4,227 restored Release runtime method bodies match the frozen
+pre-change binary; the informational version identifies the newer merged commit.
+Independent correctness/Ponytail and evidence reviews have no outstanding
+findings. GridForge and Gravitas remain unchanged. This is local Windows
+source-stack validation, not Linux CI, released-package validation or release
+approval. No new source defect was established, so no issue-tracker entry is added.
 
 ## Closed Signals
 

@@ -64,10 +64,11 @@ instead of burying it in notes.
     non-regression gate. GridForge retains useful boundary tests and benchmark
     invocation guidance (`GF-Issue-008`), not the runtime shortcut. The subsequent
     [Certified Direct-Visibility implementation](done/navigationDirectVisibilityPlan.md)
-    is retained for review on `codex/certified-direct-visibility`. Its bounded
-    negative proof reduces Flow/500 block cost by **24.44–33.76%** in the original
-    cadence and **27.29–27.71%** with balanced phases, against the fastest matching
-    preserved baseline. All measured original Flow/500 frames now fit 31.25 ms.
+    has been reviewed and merged into `develop` across the three repositories.
+    Its bounded negative proof reduces Flow/500 block cost by **24.44–33.76%**
+    in the original cadence and **27.29–27.71%** with balanced phases, against the
+    fastest matching preserved baseline. All measured original Flow/500 frames
+    now fit 31.25 ms.
     Two narrow 10% non-regression targets miss: clear-path median **+10.1025%**
     and phased short-path P95 **+10.8732%**, each in the first candidate repeat.
     Retention explicitly accepts those exceptions; their cause is not established.
@@ -78,6 +79,12 @@ instead of burying it in notes.
     and `GRV-Issue-071`; no dependency version or Gravitas physics change was needed.
     `TRB-Benchmark-005` retains the 2 ms/recovery limits and focused clear/fallback
     cost follow-ups; no release readiness or game-wide performance is claimed.
+  - The subsequent per-slab fence refactor was implemented and measured, then
+    withdrawn: no attributable complete-frame benefit was demonstrated. Useful
+    publication/mutation tests remain; production source is unchanged. The tracker
+    preserves the fresh controls, historical variability and five balanced P95
+    target misses. The next recommended boundary is explicit Navigator-owned
+    acquisition/recovery scheduling, not further removal of freshness checks.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
     `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate
@@ -121,8 +128,8 @@ instead of burying it in notes.
     Existing Navigator lifecycle, public request and generic ray contracts remain
     intact. Both cadence comparisons show substantial blocked-workload benefit.
     The plan records the two explicit target exceptions, exact local coverage,
-    independent reviews and source-stack provenance. Branch review remains with
-    the user; the broader benchmark and coordinated release gates stay open.
+    independent reviews and source-stack provenance. The user has reviewed and
+    merged the work; the broader benchmark and coordinated release gates stay open.
 
 - [Deterministic LOS Phase Spreading](done/navigationLineOfSightPhasePlan.md)
   - One opt-in host-assigned phase policy spreads A*/Flow periodic checks while
@@ -209,12 +216,14 @@ measurements, not permission for speculative algorithm or cache changes.
 
 The plans share evidence, not competing implementations:
 
-1. Review the completed [direct-visibility feature](done/navigationDirectVisibilityPlan.md)
-   and its two explicit control-target exceptions before merging. For the remaining
-   `TRB-Benchmark-005` work, consider the narrow per-slab fence/invariant-setup
-   candidates recorded there, with separate measurements if implemented. They
-   are hypotheses, not established causes of the control differences. Mandatory
-   acquisition/recovery remains a separate cost and ownership question.
+1. The completed [direct-visibility feature](done/navigationDirectVisibilityPlan.md)
+   and its two explicit control-target exceptions have been reviewed and merged.
+   The follow-up per-slab fence experiment is withdrawn after matched measurement;
+   the invariant-setup idea remains unmeasured, not an established opportunity.
+   For the remaining `TRB-Benchmark-005` work, prefer a focused design investigation
+   of Navigator-owned acquisition/recovery through the existing bounded scheduler.
+   Specify waiting movement, retry/cancellation and guide ownership first. This
+   is a recommendation, not an implemented contract or a steady-state speedup.
    Exact rectangular tracing, raw-coordinate geometry and
    per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
    accounting and dependency guarantees, and keep the unphased cadence/control

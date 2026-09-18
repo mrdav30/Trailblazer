@@ -80,6 +80,9 @@ These request methods finish synchronously. For large cold requests during
 gameplay, `context.Guides.Schedule(query, out request)` spreads acquisition over
 fixed frames. See the [scheduling guide](https://github.com/mrdav30/Trailblazer/wiki/Pathing#spreading-acquisition-across-fixed-frames)
 for finite capacity, result ownership and latency tradeoffs.
+Navigator hosts can opt into the same queue through
+`navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled)`;
+see [steering acquisition](https://github.com/mrdav30/Trailblazer/wiki/NavSteering#scheduled-acquisition-and-moving-origins).
 
 ## Choose a package
 

@@ -45,6 +45,8 @@ public partial class NavSteering
         _destination = destination;
 
         ReleaseNavigationGuidance();
+        if (_acquisitionState != null)
+            _acquisitionState.GraphOnlyRetry = false;
         _currentQuery = query;
 
         _repathTries = 0;

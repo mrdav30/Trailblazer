@@ -2725,9 +2725,7 @@ public sealed class NavigationOperationProcessorTests
         var processor = new NavigationOperationProcessor(CreateLimits());
         processor.ProcessFrame(0);
 
-        long before = System.GC.GetAllocatedBytesForCurrentThread();
-        processor.ProcessFrame(1);
-        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() => processor.ProcessFrame(1));
 
         allocated.Should().Be(0);
     }

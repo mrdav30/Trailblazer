@@ -7,6 +7,13 @@ Compose host-owned character controllers from `Navigator`, steering, movement
 groups, occupancy, motor and turning services, heightmap grounding, and explicit
 Chronicler records.
 
+Navigator acquisition is Immediate by default. Opt-in Scheduled steering uses
+the existing context queue and fair current-foot validation turns while ordinary
+motor/gravity/platform and commit processing continues during waiting. A moved
+A* origin rejoins its exact ordinary start anchor with an independently owned,
+capacity-accounted proof, reproved for every connector heading. Acquisition-mode
+changes preserve that adopted connector's validation obligation.
+
 Read the
 [Navigator guide](https://github.com/mrdav30/Trailblazer/wiki/Navigator) before
 integrating controller lifecycle, the

@@ -197,6 +197,8 @@ internal sealed class NavigationEndpointResolutionWork
 
         if (_pendingCandidate.Node.IsValid)
         {
+            if (lookupStepLimit == 0)
+                return Status;
             NavigationEndpointResolutionStatus candidateStatus = AdvanceCandidateRay();
             if (candidateStatus != NavigationEndpointResolutionStatus.Pending)
                 return candidateStatus;
@@ -243,7 +245,7 @@ internal sealed class NavigationEndpointResolutionWork
             _cursorBegun = true;
         }
 
-        while (lookupRemaining > 0 || candidateRemaining > 0)
+        while (lookupRemaining > 0)
         {
             bool binding = _generationInputOrdinal
                 < _workspace.CoveredAddressGenerationCount;
@@ -274,7 +276,10 @@ internal sealed class NavigationEndpointResolutionWork
             {
                 _meter.TryConsumeEndpointCandidates(1);
                 candidateRemaining--;
-                if (!ConsiderCandidate(_workspace.CoveredAddressOutput[0]))
+                int lookupBeforeCandidate = _meter.LookupProbes;
+                bool continueCandidates = ConsiderCandidate(_workspace.CoveredAddressOutput[0]);
+                NavigationAcquisitionSlice.ConsumeAtomicLookups(ref lookupRemaining, _meter, lookupBeforeCandidate);
+                if (!continueCandidates)
                     return Status;
             }
             if (cursorStatus == GridCoveredAddressCursorStatus.Complete)

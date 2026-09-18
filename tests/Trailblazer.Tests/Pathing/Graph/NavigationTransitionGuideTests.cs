@@ -23,6 +23,78 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationTransitionGuideTests
 {
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void FrozenCohort_TransitionCompletionAndMedium_ShouldBelongToEachLease(PathAlgorithm algorithm)
+    {
+        VoxelIndex from = default;
+        var to = new VoxelIndex(2, 0, 0);
+        var transition = new TraversalTransitionDefinition("cohort-takeoff", TraversalTransitionType.Takeoff,
+            from, TraversalMedium.Solid, new NavigationCellAddress("map", to), TraversalMedium.Gas, actionCost: Fixed64.One);
+        using TrailblazerWorldContext context = CreateTransitionContext(from, Cell(TraversalMedia.Solid),
+            to, Cell(TraversalMedia.Gas), transition);
+        var policy = new NavigationAreaPolicyCommitOperation(Policy, 2, context.FrameCount + 1);
+        context.Pathing.Admit(policy).Should().BeTrue();
+        GuidedPathTestScene.AdvanceUntilApplied(context, policy.Receipt);
+        NavigationWorldGraph graph = context.Pathing.NavigationGraphStore.Current;
+        Vector3d start = GetGuideAnchor(graph, Resolve(graph, from), TraversalMedium.Solid);
+        Vector3d end = GetGuideAnchor(graph, Resolve(graph, to), TraversalMedium.Gas);
+        var query = new PathQuery(new NavigationEndpoint(start, "map"), new NavigationEndpoint(end, "map"),
+            Profile(TraversalMedia.Solid | TraversalMedia.Gas), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Gas), algorithm,
+            new NavigationWorkBudget(8192, 128, 128, 4096, 4096, 4096, 4096, 0, 4096, 4096, 4096), true);
+        context.Guides.Schedule(query, out NavigationGuideRequest? leftRequest).Should().Be(NavigationGuideStatus.Pending);
+        context.Guides.Schedule(query, out NavigationGuideRequest? rightRequest).Should().Be(NavigationGuideStatus.Pending);
+        using NavigationGuideRequest left = leftRequest!;
+        using NavigationGuideRequest right = rightRequest!;
+        for (int frame = 0; frame < 4096 && right.Status == NavigationGuideStatus.Pending; frame++) context.Simulate();
+        left.Status.Should().Be(NavigationGuideStatus.Success);
+        right.Status.Should().Be(NavigationGuideStatus.Success);
+        if (algorithm == PathAlgorithm.AStar)
+        {
+            left.TryTakeGuide(out NavigationGuideLease? a).Should().BeTrue();
+            right.TryTakeGuide(out NavigationGuideLease? b).Should().BeTrue();
+            using NavigationGuideLease first = a!.Value;
+            using NavigationGuideLease second = b!.Value;
+            first.CurrentStepIndex.Should().Be(0);
+            first.TryGetCurrentStep(out NavigationGuideStep ordinaryAnchor).Should().Be(NavigationGuideStatus.Success);
+            ordinaryAnchor.HasTransition.Should().BeFalse("the first edge's action is a separate step even at the same position");
+            ordinaryAnchor.Position.Should().Be(start);
+            context.Guides.TryProveAStarConnector(query, start + Vector3d.Right * Fixed64.Quarter, first)
+                .Should().Be(NavigationGuideStatus.Success);
+            first.CurrentStepIndex.Should().Be(0, "proving a connector does not skip the ordinary anchor or the action");
+            NavigationGuideStep firstStep = GuidedPathTestScene.AdvanceToTransition(first);
+            firstStep.Position.Should().Be(ordinaryAnchor.Position);
+            first.HasConnector.Should().BeFalse();
+            NavigationGuideStep secondStep = GuidedPathTestScene.AdvanceToTransition(second);
+            second.CompletePendingTransition(firstStep.Transition).Should().Be(NavigationGuideStatus.Stale);
+            first.CompletePendingTransition(firstStep.Transition).Should().Be(NavigationGuideStatus.Success);
+            second.TryGetCurrentStep(out NavigationGuideStep secondPending).Should().Be(NavigationGuideStatus.Success);
+            first.TryGetCurrentStep(out NavigationGuideStep firstDone).Should().Be(NavigationGuideStatus.Success);
+            secondPending.Medium.Should().Be(TraversalMedium.Solid);
+            firstDone.Medium.Should().Be(TraversalMedium.Gas);
+            second.CompletePendingTransition(secondStep.Transition).Should().Be(NavigationGuideStatus.Success);
+        }
+        else
+        {
+            left.TryTakeFlowField(out NavigationFlowFieldLease? a).Should().BeTrue();
+            right.TryTakeFlowField(out NavigationFlowFieldLease? b).Should().BeTrue();
+            using NavigationFlowFieldLease first = a!.Value;
+            using NavigationFlowFieldLease second = b!.Value;
+            first.TrySample(start, GenerousSampleBudget, out NavigationFlowSample firstSample).Should().Be(NavigationGuideStatus.Success);
+            second.TrySample(start, GenerousSampleBudget, out NavigationFlowSample secondSample).Should().Be(NavigationGuideStatus.Success);
+            firstSample.HasTransition.Should().BeTrue();
+            second.CompletePendingTransition(firstSample.Transition).Should().Be(NavigationGuideStatus.Stale);
+            first.CompletePendingTransition(firstSample.Transition).Should().Be(NavigationGuideStatus.Success);
+            second.TrySample(start, GenerousSampleBudget, out NavigationFlowSample secondPending).Should().Be(NavigationGuideStatus.Success);
+            first.TrySample(end, GenerousSampleBudget, out NavigationFlowSample firstDone).Should().Be(NavigationGuideStatus.Success);
+            secondPending.Medium.Should().Be(TraversalMedium.Solid);
+            firstDone.Medium.Should().Be(TraversalMedium.Gas);
+            second.CompletePendingTransition(secondSample.Transition).Should().Be(NavigationGuideStatus.Success);
+        }
+    }
+
     private static readonly NavigationAreaPolicy Policy = new(
         new NavigationAreaPolicyKey("transition-guide", 1),
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });
@@ -146,7 +218,7 @@ public sealed class NavigationTransitionGuideTests
                  && workspace.SettledCount < 2;
                  step++)
             {
-                work.Advance(0, 1, 64, 64);
+                work.Advance(4096, 1, 64, 64);
             }
             work.Status.Should().Be(NavigationFlowFieldStatus.Pending);
             workspace.SettledCount.Should().Be(2);
@@ -160,7 +232,7 @@ public sealed class NavigationTransitionGuideTests
             baselineWorkspace))
         {
             AdvancePastSearch(baseline, baselineWorkspace);
-            baseline.Advance(0, 64, 0, 64).Should().Be(
+            baseline.Advance(4096, 64, 0, 64).Should().Be(
                 NavigationFlowFieldStatus.Pending,
                 "a zero local edge slice must stop before the selected transition replay debit");
             searchTransitionCandidateCount = baselineMeter.TransitionCandidates;
@@ -199,7 +271,7 @@ public sealed class NavigationTransitionGuideTests
             exactWorkspace);
         AdvancePastSearch(exact, exactWorkspace);
 
-        exact.Advance(0, 64, 64, 64).Should().Be(
+        exact.Advance(4096, 64, 64, 64).Should().Be(
             NavigationFlowFieldStatus.BudgetExceeded,
             "transition replay repeats candidate work after the exact search envelope");
         exactMeter.TransitionCandidates.Should().Be(searchTransitionCandidateCount);
@@ -960,22 +1032,23 @@ public sealed class NavigationTransitionGuideTests
                     out NavigationFlowSample _)
                 .Should().Be(NavigationGuideStatus.Success);
         }
-        long before = GC.GetAllocatedBytesForCurrentThread();
         bool sampled = true;
-        for (int i = 0; i < 64; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            if (Sample(
-                    inner,
-                    inner.Generation,
-                    start,
-                    GenerousSampleBudget,
-                    out NavigationFlowSample _) != NavigationGuideStatus.Success)
+            for (int i = 0; i < 64; i++)
             {
-                sampled = false;
-                break;
+                if (Sample(
+                        inner,
+                        inner.Generation,
+                        start,
+                        GenerousSampleBudget,
+                        out NavigationFlowSample _) != NavigationGuideStatus.Success)
+                {
+                    sampled = false;
+                    break;
+                }
             }
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        });
         sampled.Should().BeTrue();
         allocated.Should().Be(0);
         Vector3d radiusVector = new(profile.ArrivalRadius, Fixed64.Zero, Fixed64.Zero);

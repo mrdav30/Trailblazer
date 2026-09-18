@@ -42,6 +42,8 @@ internal sealed class NavigationAStarPayloadReservationSlot
 /// <summary>Stores a bounded concrete set of dependency-validated A* payloads.</summary>
 internal sealed class NavigationAStarPayloadCache
 {
+    internal NavigationAcquisitionDiagnostics AcquisitionDiagnostics { get; } = new();
+
     private readonly object _sync = new();
     private readonly GridWorld _world;
     private readonly NavigationAStarPayloadKey[] _keys;
@@ -203,6 +205,7 @@ internal sealed class NavigationAStarPayloadCache
         {
             if (!graphLease.Graph.IsDependencyCurrent(payload.Dependencies)
                 || !store.Current.IsDependencyCurrent(payload.Dependencies)
+                || !NavigationEndpointProofWork.IsCurrent(store, payloadLease.EndpointProof)
                 || !IsWorldCurrent(payload))
             {
                 payloadLease.Dispose();
@@ -344,6 +347,118 @@ internal sealed class NavigationAStarPayloadCache
         }
     }
 
+    internal bool TryReserveEndpointProof(long bytes)
+    {
+        lock (_sync)
+        {
+            if (bytes > _maximumActivePayloadBytes - _leasedBytes - _reservedPayloadBytes)
+                return false;
+            _reservedPayloadBytes += bytes;
+            return true;
+        }
+    }
+
+    internal bool TryAttachEndpointProof(NavigationAStarPayloadLease lease,
+        GraphDependencyStamp proof, ref long reservedBytes)
+    {
+        lock (_sync)
+        {
+            if (lease.GetOwnedEntry(this) == null)
+                return false;
+            SwiftThrowHelper.ThrowIfTrue(proof.RetainedBytes > reservedBytes,
+                message: "Endpoint proof must be reserved before attachment.");
+            _leasedBytes += proof.RetainedBytes - (lease.EndpointProof?.RetainedBytes ?? 0);
+            lease.EndpointProof = proof;
+            _reservedPayloadBytes -= reservedBytes;
+            reservedBytes = 0;
+            return true;
+        }
+    }
+
+    internal void ReleaseEndpointProof(ref long bytes)
+    {
+        lock (_sync)
+        {
+            _reservedPayloadBytes -= bytes;
+            bytes = 0;
+        }
+    }
+
+    // Connector reservations share the existing active ceiling and reservation total.
+    // Committed proof bytes are per guide, in addition to once-per-active-payload bytes.
+    internal void CommitConnectorProof(ref long reservedBytes)
+    {
+        lock (_sync)
+        {
+            _reservedPayloadBytes -= reservedBytes;
+            _leasedBytes += reservedBytes;
+            reservedBytes = 0;
+        }
+    }
+
+    internal void ReleaseConnectorProof(long bytes)
+    {
+        if (bytes == 0)
+            return;
+        lock (_sync)
+            _leasedBytes -= bytes;
+    }
+
+    internal NavigationAStarQueryStatus TryCheckoutShared(
+        NavigationWorldGraphStore store, NavigationWorldGraph expectedGraph,
+        NavigationAStarPayloadKey key, NavigationCohortSource source,
+        GraphDependencyStamp? endpointProof, out NavigationAStarPayloadLease? lease,
+        long reservedEndpointProofBytes = 0, bool preserveSourceProof = false)
+    {
+        lease = null;
+        lock (_sync)
+        {
+            NavigationAStarPayloadLease? pin = source.AStar;
+            CacheEntry? entry = pin?.Generation == source.AStarGeneration
+                ? pin!.GetOwnedEntry(this) : null;
+            if (entry == null || !entry.Payload.Key.Equals(key))
+                return NavigationAStarQueryStatus.Pending;
+            if (preserveSourceProof) endpointProof = source.AStar!.EndpointProof;
+            if (!expectedGraph.IsDependencyCurrent(entry.Payload.Dependencies)
+                || !store.Current.IsDependencyCurrent(entry.Payload.Dependencies)
+                || !IsWorldCurrent(entry.Payload)
+                || !NavigationEndpointProofWork.IsCurrent(store, source.AStar!.EndpointProof)
+                || !NavigationEndpointProofWork.IsCurrent(store, endpointProof))
+                return NavigationAStarQueryStatus.Stale;
+            long proofBytes = endpointProof?.RetainedBytes ?? 0;
+            bool transfer = source.Transfer || _activeLeaseCount + _reservedLeaseCount >= _maximumActiveLeases;
+            long replacedBytes = transfer ? source.AStar!.EndpointProof?.RetainedBytes ?? 0 : 0;
+            if (proofBytes - replacedBytes > _maximumActivePayloadBytes - _leasedBytes - _reservedPayloadBytes + reservedEndpointProofBytes)
+                return NavigationAStarQueryStatus.CapacityExceeded;
+            if (transfer)
+            {
+                lease = source.AStar;
+                source.AStar = null;
+            }
+            else
+                lease = Checkout(entry);
+            _leasedBytes -= lease!.EndpointProof?.RetainedBytes ?? 0;
+            lease.EndpointProof = endpointProof;
+            _leasedBytes += proofBytes;
+        }
+        return CompleteSharedCheckoutValidation(store, endpointProof, ref lease);
+    }
+
+    internal NavigationAStarQueryStatus CompleteSharedCheckoutValidation(
+        NavigationWorldGraphStore store, GraphDependencyStamp? endpointProof,
+        ref NavigationAStarPayloadLease? lease)
+    {
+        if (!store.Current.IsDependencyCurrent(lease!.Payload.Dependencies)
+            || !NavigationEndpointProofWork.IsCurrent(store, endpointProof)
+            || !IsWorldCurrent(lease.Payload))
+        {
+            lease.Dispose();
+            lease = null;
+            return NavigationAStarQueryStatus.Stale;
+        }
+        return NavigationAStarQueryStatus.Success;
+    }
+
     internal bool TryPublish(
         NavigationAStarPayload payload,
         NavigationWorldGraphStore store,
@@ -439,6 +554,8 @@ internal sealed class NavigationAStarPayloadCache
             return;
         lock (_sync)
         {
+            _leasedBytes -= lease.EndpointProof?.RetainedBytes ?? 0;
+            lease.EndpointProof = null;
             entry.LeaseCount--;
             _activeLeaseCount--;
             if (entry.LeaseCount == 0)
@@ -491,10 +608,16 @@ internal sealed class NavigationAStarPayloadCache
         return lease;
     }
 
-    private void RecycleLease(NavigationAStarPayloadLease lease)
+    private void RecycleLease(NavigationAStarPayloadLease lease) =>
+        RetainPayloadLeaseIfReusable(lease.Generation, lease, ref _freeLeases);
+
+    internal static void RetainPayloadLeaseIfReusable(long generation,
+        NavigationAStarPayloadLease lease, ref NavigationAStarPayloadLease? freeLeases)
     {
-        lease.NextPooled = _freeLeases;
-        _freeLeases = lease;
+        if (!NavigationGenerationCounter.CanAdvance(generation))
+            return;
+        lease.NextPooled = freeLeases;
+        freeLeases = lease;
     }
 
     private bool IsReservationCurrentUnderLock(

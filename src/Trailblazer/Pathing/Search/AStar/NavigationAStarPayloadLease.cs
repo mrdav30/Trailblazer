@@ -25,9 +25,14 @@ internal sealed class NavigationAStarPayloadLease : IDisposable
         ?? throw new ObjectDisposedException(nameof(NavigationAStarPayloadLease));
 
     internal NavigationAStarPayloadLease? NextPooled { get; set; }
+    internal GraphDependencyStamp? EndpointProof { get; set; }
+    internal long Generation { get; private set; }
+    internal NavigationAStarPayloadCache.CacheEntry? GetOwnedEntry(NavigationAStarPayloadCache owner) =>
+        ReferenceEquals(_owner, owner) ? _entry : null;
 
     internal void Bind(NavigationAStarPayloadCache.CacheEntry entry)
     {
+        Generation = NavigationGenerationCounter.Advance(Generation, "The A* payload lease generation is exhausted.");
         _entry = entry;
     }
 

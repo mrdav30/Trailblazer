@@ -1039,9 +1039,9 @@ public sealed class NavigationFlowFieldTests
             abandoned.Advance(64, 0, 64, 64).Should().Be(NavigationFlowFieldStatus.Pending);
             workspace.GetRecord(destinationSlot).Address.Should().Be(destinationAddress);
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            NavigationFlowFieldStatus status = abandoned.Advance(64, 1, 64, 64);
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            NavigationFlowFieldStatus status = default;
+            long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+                status = abandoned.Advance(64, 1, 64, 64));
 
             status.Should().Be(NavigationFlowFieldStatus.Pending);
             allocated.Should().Be(0);
@@ -1145,9 +1145,7 @@ public sealed class NavigationFlowFieldTests
         workspace.GetRecord(destinationSlot).Address = destinationAddress;
         workspace.TryRecordPage(fixture.MapId, 0).Should().BeTrue();
         workspace.TryRecordComponent(component).Should().BeTrue();
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        workspace.Reset();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(workspace.Reset);
 
         allocated.Should().Be(0);
         workspace.TryGetOrAdd(
@@ -1255,9 +1253,9 @@ public sealed class NavigationFlowFieldTests
             Resolve(store, fixture.Graph, query, origin, destination, out _),
             workspace);
         work.Advance(1, 1, 1, 1).Should().Be(NavigationFlowFieldStatus.Pending);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        NavigationFlowFieldStatus status = work.Advance(1, 1, 1, 1);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        NavigationFlowFieldStatus status = default;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+            status = work.Advance(1, 1, 1, 1));
 
         status.Should().Be(NavigationFlowFieldStatus.Pending);
         allocated.Should().Be(0);
@@ -1295,18 +1293,22 @@ public sealed class NavigationFlowFieldTests
             Resolve(warmStore, fixture.Graph, query, origin, destination, out _),
             workspace))
         {
-            warm.Advance(0, CellCount, 512, 0);
+            warm.Advance(1, CellCount, 4096, 0);
         }
 
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         using var work = new NavigationFlowFieldWork(
             world,
-            Resolve(store, fixture.Graph, query, origin, destination, out _),
+            Resolve(store, fixture.Graph, query, origin, destination, out NavigationWorkMeter meter),
             workspace);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        NavigationFlowFieldStatus status = work.Advance(0, CellCount, 512, 0);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        // Clear the reused search, expand/count every cell and replay all but the final
+        // non-transition node. The measured call then enters dependency sorting with no lookup credit.
+        work.Advance(1, CellCount * 4 - 1, 4096, 0).Should().Be(NavigationFlowFieldStatus.Pending);
+        meter.ExpandedNodes.Should().Be(CellCount);
+        NavigationFlowFieldStatus status = default;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+            status = work.Advance(0, CellCount, 512, 0));
 
         status.Should().Be(NavigationFlowFieldStatus.Pending);
         allocated.Should().Be(0);
@@ -1376,16 +1378,18 @@ public sealed class NavigationFlowFieldTests
                 rayTraceIntervalCapacity: CellCount));
 
         for (int step = 0;
-             step < CellCount + 2 && work.Status == NavigationFlowFieldStatus.Pending;
+             step < CellCount && work.Status == NavigationFlowFieldStatus.Pending;
              step++)
         {
             work.Advance(
-                lookupStepLimit: 0,
+                lookupStepLimit: 1,
                 nodeStepLimit: 1,
                 edgeStepLimit: 512,
                 connectionStepLimit: 0);
         }
         meter.ExpandedNodes.Should().Be(CellCount);
+        // Finish counting and all but the final non-transition replay node without entering sorting.
+        work.Advance(1, CellCount * 2 - 1, 512, 0).Should().Be(NavigationFlowFieldStatus.Pending);
         for (int step = 0;
              step < 4 && work.Status == NavigationFlowFieldStatus.Pending;
              step++)
@@ -1476,9 +1480,9 @@ public sealed class NavigationFlowFieldTests
             Resolve(store, fixture.Graph, query, origin, destination, out _),
             workspace,
             maximumPayloadBytes: 0);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        NavigationFlowFieldStatus status = work.Advance(64, 64, 64, 64);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        NavigationFlowFieldStatus status = default;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+            status = work.Advance(64, 64, 64, 64));
 
         status.Should().Be(NavigationFlowFieldStatus.CapacityExceeded);
         allocated.Should().Be(0);

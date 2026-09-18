@@ -83,57 +83,89 @@ public partial class NavSteering
         ISteer vessel,
         out NavigationTransitionInstruction? pendingTransition)
     {
-        pendingTransition = null;
-        CacheOwner(vessel);
+        try
+        {
+            pendingTransition = null;
+            if (_acquisitionState != null)
+                _acquisitionState.ConnectorWaiting = false;
+            CacheOwner(vessel);
+            if (_acquisitionState != null || _acquisitionMode == NavigationAcquisitionMode.Scheduled)
+            {
+                EnsureAcquisitionLifetime();
+                if (_acquisitionState != null && _acquisitionState.DeferAcquisition && !AttemptedThisFrame())
+                    _acquisitionState.DeferAcquisition = false;
+            }
 
-        if (!CanMove)
-            return Vector3d.Zero;
+            if (!CanMove)
+                return Vector3d.Zero;
 
-        if (!ShouldMove || IsAtDestination)
-            return FinalizeIdleHeading(vessel.Speed);
+            if (!ShouldMove || IsAtDestination)
+                return FinalizeIdleHeading(vessel.Speed);
 
-        if (!TryEnsureCurrentRequest(out Vector3d heading))
-            return heading;
+            if (!TryEnsureCurrentRequest(out Vector3d heading))
+                return heading;
 
-        Vector3d pathPosition = vessel.Position
-            + Vector3d.Down * vessel.BodyShape.RootToFootOffsetY;
-        UpdateMovementGroupState(vessel.Position, vessel.Radius);
+            Vector3d pathPosition = vessel.Position
+                + Vector3d.Down * vessel.BodyShape.RootToFootOffsetY;
+            UpdateMovementGroupState(vessel.Position, vessel.Radius);
 
-        if (!TryPrepareMovementPathForHeading(pathPosition))
-            return Vector3d.Zero;
+            if (!TryPrepareMovementPathForHeading(pathPosition))
+                return Vector3d.Zero;
 
-        UpdateTargetDirection(
-            vessel,
-            pathPosition,
-            out pendingTransition,
-            out bool isAStarTransitionApproach);
-        if (!ShouldMove || IsAtDestination)
-            return Vector3d.Zero;
-        if (_currentQuery.HasValue && _shouldRequestPathThisFrame)
+            UpdateTargetDirection(
+                vessel,
+                pathPosition,
+                out pendingTransition,
+                out bool isAStarTransitionApproach);
+            if (_acquisitionState != null && _acquisitionState.DeferAcquisition)
+            {
+                _targetDirection = Vector3d.Zero;
+                pendingTransition = null;
+                return Vector3d.Zero;
+            }
+            if (!ShouldMove || IsAtDestination)
+                return Vector3d.Zero;
+            if (_currentQuery.HasValue && _shouldRequestPathThisFrame)
+                return FinalizeHeadingFrame();
+
+            if (ShouldArriveWithoutNavigationGuidance())
+            {
+                Arrive();
+                return Vector3d.Zero;
+            }
+
+            if (!CheckStuckStatus(vessel.Position, vessel.Speed, vessel.StuckThresholdSpeed))
+            {
+                TrailblazerLogger.DebugChannel.Info($"Stuck agent arriving!");
+                Arrive();
+                return Vector3d.Zero;
+            }
+
+            if (UpdateNavigationGuidanceProgress(
+                    vessel.Acceleration,
+                    vessel.Speed,
+                    isAStarTransitionApproach))
+            {
+                Arrive();
+                return Vector3d.Zero;
+            }
             return FinalizeHeadingFrame();
-
-        if (ShouldArriveWithoutNavigationGuidance())
-        {
-            Arrive();
-            return Vector3d.Zero;
         }
-
-        if (!CheckStuckStatus(vessel.Position, vessel.Speed, vessel.StuckThresholdSpeed))
+        finally
         {
-            TrailblazerLogger.DebugChannel.Info($"Stuck agent arriving!");
-            Arrive();
-            return Vector3d.Zero;
+            // A virtual hook may create state after this heading has started.
+            AcquisitionState? state = _acquisitionState;
+            if (state != null)
+            {
+                if (state.AdoptionSample != null)
+                    state.AdoptionSample.Value = null;
+                state.ConnectorProofForHeading = false;
+                // Ticket adoption/cancellation releases its interest before installing
+                // a guide. Only an A* connector that has finished needs cleanup here.
+                if (_navigationGuideLease.HasValue && !HasNavigationConnector)
+                    state.ValidationInterest?.Owner?.ReleaseValidation(state.ValidationInterest);
+            }
         }
-
-        if (UpdateNavigationGuidanceProgress(
-                vessel.Acceleration,
-                vessel.Speed,
-                isAStarTransitionApproach))
-        {
-            Arrive();
-            return Vector3d.Zero;
-        }
-        return FinalizeHeadingFrame();
     }
 
     /// <summary>
@@ -145,6 +177,18 @@ public partial class NavSteering
 
     private bool ValidateGraphMovementPath(Vector3d origin)
     {
+        if (_acquisitionState != null && _acquisitionState.DeferAcquisition)
+        {
+            if (AttemptedThisFrame())
+                return true;
+            _acquisitionState.DeferAcquisition = false;
+        }
+        // Connector-owned validation/recovery runs at the charged heading boundary,
+        // before this virtual hook. Do not replace it through Immediate admission.
+        if (HasNavigationConnector)
+            return true;
+        if (_acquisitionMode == NavigationAcquisitionMode.Scheduled)
+            return ValidateScheduledMovementPath(origin);
         if (_hasLineOfSightPath)
             return true;
         if (_currentQuery!.Value.Algorithm == PathAlgorithm.FlowField)
@@ -173,6 +217,7 @@ public partial class NavSteering
         NavigationGuideStatus status = ResolveContext().Guides.RequestGuide(
             query,
             out NavigationGuideLease? lease);
+        LastAcquisitionStatus = status;
         ArmNextPhasedPathRecheck();
         if (status != NavigationGuideStatus.Success)
         {
@@ -192,7 +237,6 @@ public partial class NavSteering
 
     private bool ValidateGraphFlowMovementPath(Vector3d origin)
     {
-        PathQuery currentQuery = _currentQuery!.Value;
         NavigationGuideStatus currentStatus = _navigationFlowFieldLease?.Status
             ?? NavigationGuideStatus.Stale;
         if (_navigationFlowFieldLease != null
@@ -206,6 +250,7 @@ public partial class NavSteering
             return currentStatus == NavigationGuideStatus.Success;
 
         _shouldRequestPathThisFrame = false;
+        PathQuery currentQuery = _currentQuery!.Value;
         PathQuery query = currentQuery.WithStartState(
             origin,
             currentQuery.Traversal.StartMedium);
@@ -220,6 +265,7 @@ public partial class NavSteering
         NavigationGuideStatus status = ResolveContext().Guides.RequestFlowField(
             query,
             out NavigationFlowFieldLease? lease);
+        LastAcquisitionStatus = status;
         ArmNextPhasedPathRecheck();
         if (status != NavigationGuideStatus.Success)
         {
@@ -252,6 +298,7 @@ public partial class NavSteering
         ArmNextPhasedPathRecheck();
         if (status == NavigationRayStatus.Success)
         {
+            LastAcquisitionStatus = NavigationGuideStatus.Success;
             _hasLineOfSightPath = true;
             ReleaseNavigationGuidance();
             _pathCheckCooldown = PathRecheckCooldownFrames;
@@ -278,10 +325,13 @@ public partial class NavSteering
             targetDirection = Destination - position;
         else if (_navigationFlowFieldLease is NavigationFlowFieldLease flowGuide)
         {
-            NavigationGuideStatus status = flowGuide.TrySample(
-                position,
-                ResolveContext().Settings.GuideSampleBudget,
-                out NavigationFlowSample sample);
+            NavigationFlowSample sample;
+            NavigationGuideStatus status;
+            FlowAdoptionSample? adoptionSample = _acquisitionState?.AdoptionSample;
+            if (adoptionSample != null && adoptionSample.Value.HasValue)
+                status = SampleAdoptedFlowGuidance(adoptionSample, flowGuide, position, out sample);
+            else
+                status = flowGuide.TrySample(position, ResolveContext().Settings.GuideSampleBudget, out sample);
             targetDirection = sample.Heading;
             if (status is NavigationGuideStatus.Stale
                 or NavigationGuideStatus.CapacityExceeded)
@@ -307,7 +357,12 @@ public partial class NavSteering
         else if (_navigationGuideLease != null)
         {
             NavigationGuideLease guide = _navigationGuideLease.Value;
-            guide.TryGetCurrentStep(out NavigationGuideStep step);
+            NavigationGuideStatus status = guide.TryGetCurrentStep(position, out NavigationGuideStep step);
+            if (status != NavigationGuideStatus.Success)
+            {
+                DeferAStarHeading(status);
+                return Vector3d.Zero;
+            }
 
             if (step.HasTransition)
             {
@@ -331,7 +386,12 @@ public partial class NavSteering
                 }
 
                 guide.TryAdvanceStep();
-                guide.TryGetCurrentStep(out step);
+                status = guide.TryGetCurrentStep(position, out step);
+                if (status != NavigationGuideStatus.Success)
+                {
+                    DeferAStarHeading(status);
+                    return Vector3d.Zero;
+                }
 
                 if (step.HasTransition)
                 {
@@ -420,12 +480,26 @@ public partial class NavSteering
     {
         EnsurePhasedClockLifetime();
 
-        if (CanPathfind && !ValidateMovementPath(position))
+        bool hadConnector = HasNavigationConnector;
+        if (hadConnector && !ValidateConnectorHeading(position))
+            return false;
+
+        if ((CanPathfind || _acquisitionMode == NavigationAcquisitionMode.Scheduled) && !ValidateMovementPath(position))
         {
             HandleInvalidPath("Invalid path detected!");
             return false;
         }
 
+        if (!ShouldMove || !_currentQuery.HasValue || IsAwaitingGuidance)
+        {
+            _targetDirection = Vector3d.Zero;
+            return false;
+        }
+
+        // A guide adopted by the virtual validation hook still needs its first
+        // heading gate; an existing connector already consumed this frame's turn.
+        if (!hadConnector && _navigationGuideLease.HasValue && !ValidateConnectorHeading(position))
+            return false;
         RefreshLineOfSightState(position);
         return true;
     }
@@ -435,8 +509,8 @@ public partial class NavSteering
         if (!IsPeriodicPathRecheckDue())
             return;
 
-        if (_currentQuery is not PathQuery currentQuery)
-            return;
+        // The post-validation-hook heading gate established this session's query.
+        PathQuery currentQuery = _currentQuery!.Value;
         bool wasDirect = _hasLineOfSightPath;
         PathQuery query = currentQuery.WithStartState(
             position,
@@ -481,6 +555,9 @@ public partial class NavSteering
 
     private void EnsurePhasedClockLifetime()
     {
+        // Scheduled acquisition tracks its own lifetime before a periodic schedule is armed.
+        if (_acquisitionMode == NavigationAcquisitionMode.Scheduled)
+            return;
         if (!_pathRecheckPhase.HasValue || !_currentQuery.HasValue)
             return;
 
@@ -744,6 +821,11 @@ public partial class NavSteering
         _destination = Vector3d.Zero;
         _shouldMove = false;
         _shouldRequestPathThisFrame = false;
+        if (_acquisitionState != null)
+        {
+            _acquisitionState.DeferAcquisition = false;
+            _acquisitionState.GraphOnlyRetry = false;
+        }
         _hasLineOfSightPath = false;
         ClearPhasedPathRecheckSchedule();
         LeaveMovementGroup();

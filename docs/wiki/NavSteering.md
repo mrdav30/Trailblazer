@@ -18,14 +18,85 @@ Useful public observations include:
 - `ShouldMove`;
 - `HasLineOfSightPath`;
 - `HasNavigationGuidance`;
+- `AcquisitionMode`, `IsAwaitingGuidance`, and `LastAcquisitionStatus`;
 - `IsAtDestination`;
 - `IsStuck`;
 - `PathRecheckCooldownFrames` and `PathRecheckPhase`;
 - movement-group ID and tuning values;
 - `Events`.
 
-An active session owns at most one A* lease or one Flow lease. Direct travel can
+An active session owns at most one acquisition ticket, A* lease, or Flow lease. Direct travel can
 remain guide-free while the exact same-medium route is certified.
+
+## Scheduled Acquisition And Moving Origins
+
+Immediate acquisition remains the default. This partial host fragment assumes an
+initialized Navigator, a published query matching its current foot/profile/medium,
+and a host fixed-frame loop that advances the context before its Navigators:
+
+~~~csharp
+navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
+navigator.ApplyGuidedTrekRequest(query);
+// On each fixed host frame:
+context.Simulate();
+navigator.Simulate();
+navigator.CommitFrameMotion();
+~~~
+
+Opting in does not choose a workload-appropriate budget. Configure
+`NavigationSchedulingSettings` through the context settings for the expected
+request burst, then measure both frame cost and time to usable guidance. The
+conservative defaults bound counted work; they are not a responsiveness target
+for a large crowd. Increasing request capacity alone does not increase the work
+allowed per frame.
+
+Do not skip simulation or commit while `IsAwaitingGuidance`: only new guided
+heading is zero. Gravity, platform displacement, host collision/contact correction,
+velocity, occupancy and committed-cell reporting continue. Waiting neither arrives
+nor escalates stuck recovery. `CanMove = false` delays adoption; it does not stop
+the context scheduler. Queue acceptance and ticket completion are not usable guidance.
+
+Direct adoption proves the current foot, Flow adoption samples it once, and moved
+A* adoption proves a connector to the original lease's ordinary index-zero anchor.
+That anchor is not necessarily the submitted query position. Every subsequent
+connector heading needs a fresh addressed body/policy ray and a fair operation turn
+from the same scheduler. Missing credit yields zero without advancing or arriving.
+Old dependencies alone cannot prove a segment after gravity, platforms, or steering
+move the host. The ray certifies guidance, not the eventual combined local steering
+or physics trajectory; collision remains host owned.
+
+If an overridden hook changes the foot, graph, world or lease after Flow's first
+adoption sample, that heading waits without sampling again. The owned guide is
+retained, and ordinary dependency validation and sampling resume on the next
+context frame. An unrelated publication alone does not discard a valid route.
+A* likewise checks the retained connector at the base direction-read boundary.
+If a hook changes its proved foot or invalidates its dependencies, the heading
+waits without another proof in that frame. A still-current shared route remains
+owned; connector recovery resumes on a later charged turn.
+
+Connector proof belongs only to its lease and is released when index zero advances.
+It uses query work limits and the active A* byte ceiling, including copied dependency
+arrays and metadata. Replacement drops the old proof before reserving new storage;
+connector frames allocate proof storage. Relevant publication/raw mutation gives
+zero heading before reproof/recovery. `TotalCost` stays the original route cost,
+not the route plus connector cost. Actions remain separate exact-completion steps.
+
+Mode changes preserve adopted guidance and its connector proof/permit obligation;
+they affect future acquisition. In-flight mode changes cancel and defer restart
+until a later context frame. Stop, arrival, input, supersession, accepted profile
+replacement, successful load, rebind, reset and teardown release transient ownership.
+Rejected profile changes and failed staged loads preserve it. Unsupported/full-query
+budget failures stop and notify rather than retrying the same impossible work forever.
+These terminal failures retain the existing invalid-path event sequence:
+`OnInvalidPath`, movement stop, then `OnArrive`. Retryable waiting does not emit it.
+An unplanned actual-medium mismatch needs explicit new host intent; exact authored
+action completion remains the medium-change authority.
+
+The scheduler rotates eligible owners, including recurring connectors, so stable
+host order does not starve later owners or new adoptions. Tiny operation allowances
+intentionally add waiting frames. Counts do not bound the elapsed time of an atomic
+ray or allocation. See [Pathing](Pathing.md#spreading-acquisition-across-fixed-frames)
+for fairness, capacity and public request ownership.
 
 ## Per-Frame Heading
 
@@ -64,7 +135,7 @@ clear result always requires the full route check. This does not skip freshness
 checks on an active guide: keeping guidance still requires that guide to be
 independently current.
 
-At the start of travel, a blocked or non-neutral direct route falls back to
+In Immediate mode, a blocked or non-neutral initial direct route falls back to
 ordinary guide acquisition in the same call. During a periodic check, a blocked
 direct route does not discard an independently valid guide. If the agent was
 already travelling directly, it leaves direct mode and retries acquisition on

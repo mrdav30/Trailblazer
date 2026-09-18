@@ -10,6 +10,9 @@ namespace.
 `TrailblazerGuideService` supports synchronous acquisition and a context-owned
 scheduled FIFO. Both consume the same `PathQuery` and return the same guide
 leases; scheduled request ownership and fixed-frame work slices are explicit.
+Compatible contiguous scheduled requests form frozen cohorts. Builds remain
+oldest-first; covered followers can complete before uncovered members, with
+independent lease state and endpoint proofs under existing retention ceilings.
 
 Start with the
 [map-authoring](https://github.com/mrdav30/Trailblazer/wiki/MapAuthoring),

@@ -296,23 +296,32 @@ public sealed class NavigationFlowFieldConcurrencyTests
         cache.ReservedLeaseCount.Should().Be(0);
     }
 
-    [Fact]
-    public void DependencyMutationAfterPublication_ShouldInvalidateTheActivePayloadOnNextUse()
+    [Theory]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, true, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, true, true, true)]
+    public void DependencyMutationAfterPublication_ShouldInvalidateTheActivePayloadOnNextUse(
+        bool scheduled, bool currentAdmission, bool currentRawEpoch, bool disposed)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
         using var cache = CreateCache(fixture, maxActiveLeases: 2);
         NavigationFlowFieldPayloadLease active = Publish(cache, fixture);
         PublishChangedGraph(fixture);
+        if (disposed)
+            cache.Dispose();
 
         cache.TryCheckout(
                 fixture.Store,
-                fixture.Store.Current,
+                currentAdmission ? fixture.Store.Current : fixture.Graph,
                 fixture.Far.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease checkout,
-                out _)
-            .Should().Be(NavigationFlowFieldStatus.Stale);
+                out _, scheduled, fixture.World.ChangeSequence + (currentRawEpoch ? 0UL : 1UL))
+            .Should().Be(scheduled && currentAdmission && currentRawEpoch && !disposed
+                ? NavigationFlowFieldStatus.Pending : NavigationFlowFieldStatus.Stale);
 
         checkout.Should().Be(default(NavigationFlowFieldPayloadLease));
         cache.Count.Should().Be(0);

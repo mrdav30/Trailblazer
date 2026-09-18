@@ -111,16 +111,18 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         int edgeStepLimit,
         int connectionStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(nodeStepLimit, nameof(nodeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(edgeStepLimit, nameof(edgeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(connectionStepLimit, nameof(connectionStepLimit));
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, 0, nodeStepLimit, edgeStepLimit, connectionStepLimit);
+        return Advance(ref remaining);
+    }
+
+    internal NavigationFlowFieldStatus Advance(ref NavigationAcquisitionSlice remaining)
+    {
         if (Status != NavigationFlowFieldStatus.Pending)
             return Status;
-        int lookupRemaining = lookupStepLimit;
-        int nodeRemaining = nodeStepLimit;
-        int edgeRemaining = edgeStepLimit;
-        int connectionRemaining = connectionStepLimit;
+        ref int lookupRemaining = ref remaining.LookupRemaining;
+        ref int nodeRemaining = ref remaining.NodeRemaining;
+        ref int edgeRemaining = ref remaining.EdgeRemaining;
+        ref int connectionRemaining = ref remaining.ConnectionRemaining;
 
         while (true)
         {
@@ -148,7 +150,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                         _meter,
                         _workspace.EndpointWorkspace.Dependencies,
                         ref edgeRemaining,
-                        ref connectionRemaining);
+                        ref connectionRemaining,
+                        ref lookupRemaining);
                 CaptureWorldDependency(_incoming.RequiresWorldStamp);
                 edgeStatus = ResolvePostEnumerationStatus(
                     IsWorldCurrent(),
@@ -196,7 +199,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 NavigationFlowFieldStatus replay = AdvanceTransitionReplay(
                     ref nodeRemaining,
                     ref edgeRemaining,
-                    ref connectionRemaining);
+                    ref connectionRemaining,
+                    ref lookupRemaining);
                 if (replay != NavigationFlowFieldStatus.Pending)
                     return replay;
                 if (_stage == Stage.ReplayTransitions)
@@ -464,7 +468,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
     private NavigationFlowFieldStatus AdvanceTransitionReplay(
         ref int nodeRemaining,
         ref int edgeRemaining,
-        ref int connectionRemaining)
+        ref int connectionRemaining,
+        ref int lookupRemaining)
     {
         while (_postNodeOrdinal < _workspace.SettledCount)
         {
@@ -499,7 +504,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 _meter,
                 _workspace.EndpointWorkspace.Dependencies,
                 ref edgeRemaining,
-                ref connectionRemaining);
+                ref connectionRemaining,
+                ref lookupRemaining);
             CaptureWorldDependency(_replayEdges.RequiresWorldStamp);
             status = ResolvePostEnumerationStatus(IsWorldCurrent(), status);
             if (status == NavigationTraversalEdgeAdvanceStatus.Pending)

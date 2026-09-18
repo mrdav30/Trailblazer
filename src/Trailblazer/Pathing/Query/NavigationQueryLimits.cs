@@ -189,7 +189,7 @@ public readonly struct NavigationQueryLimits
     /// <summary>Gets the maximum bytes retained by one A* payload.</summary>
     public long MaxAStarSinglePayloadBytes { get; }
 
-    /// <summary>Gets the maximum bytes retained by active A* payloads.</summary>
+    /// <summary>Gets the maximum bytes retained by active A* payloads and lease-local endpoint and connector proofs.</summary>
     public long MaxAStarActivePayloadBytes { get; }
 
     /// <summary>Gets the maximum active and reserved A* payload lease count.</summary>
@@ -225,7 +225,7 @@ public readonly struct NavigationQueryLimits
     /// <summary>Gets the maximum bytes retained by one Flow payload.</summary>
     public long MaxFlowSinglePayloadBytes { get; }
 
-    /// <summary>Gets the maximum bytes retained by unique active Flow payloads.</summary>
+    /// <summary>Gets the maximum bytes retained by unique active Flow payloads and lease-local endpoint proofs.</summary>
     public long MaxFlowActivePayloadBytes { get; }
 
     /// <summary>Gets the maximum active and reserved Flow payload lease count.</summary>

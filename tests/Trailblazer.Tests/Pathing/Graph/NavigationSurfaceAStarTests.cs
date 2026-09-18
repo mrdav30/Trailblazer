@@ -35,6 +35,113 @@ public sealed class NavigationSurfaceAStarTests
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });
 
     [Fact]
+    public void Advance_ExhaustedLookupSlice_ShouldStopBeforeAnotherAtomicTraversal()
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = { default, new(1, 0, 0), new(0, 0, 1), new(1, 0, 1) };
+        NavigationCell gas = new(TraversalMedia.Gas, TraversalCapability.None, default,
+            Fixed64.Zero, (Fixed64)4, (Fixed64)4);
+        NavigationAStarExitTestHarness.GraphFixture fixture = NavigationAStarExitTestHarness.CreateSingleMap(
+            world, NavigationAStarExitTestHarness.RectangularLine(cells.Length), cells, "lookup-boundary",
+            new[] { gas, gas, gas, gas });
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.None);
+        PathQuery surface = fixture.CreateQuery(cells[0], cells[3], fixture.DefaultProfile);
+        var query = new PathQuery(surface.Start, surface.End, profile, surface.AreaPolicy,
+            new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas), PathAlgorithm.AStar,
+            new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 0), false);
+        using NavigationWorldGraphStore store = CreateStore(fixture.Graph);
+        var workspace = new NavigationAStarWorkspace(16, 64, 64, 8, 256, 256, 16);
+        using var admission = new NavigationQueryAdmissionWork(world, store, workspace.EndpointWorkspace,
+            workspace.RayWorkspace, PathAlgorithm.AStar);
+        admission.Begin(store.TryAcquire()!, query, TraversalMedium.Gas, TraversalMedia.Gas);
+        for (int step = 0; step < 64 && admission.Status == NavigationQueryAdmissionStatus.Pending; step++)
+            admission.Advance(64, 8);
+        admission.Status.Should().Be(NavigationQueryAdmissionStatus.Success);
+        using var search = new NavigationSurfaceAStarWork(world, store, admission.Result, workspace,
+            admission.RayWork, long.MaxValue);
+        int before = admission.Meter.LookupProbes;
+
+        search.Advance(1, 64, 64, 64).Should().Be(NavigationSurfaceAStarStatus.Pending);
+
+        admission.Meter.LookupProbes.Should().BeGreaterThan(before);
+        admission.Meter.ExpandedNodes.Should().Be(1, "one atomic traversal may overrun lookup credit, but the next must yield");
+        int exhausted = admission.Meter.LookupProbes;
+        search.Advance(0, 64, 64, 64).Should().Be(NavigationSurfaceAStarStatus.Pending);
+        admission.Meter.LookupProbes.Should().Be(exhausted);
+        for (int step = 0; step < 256 && search.Status == NavigationSurfaceAStarStatus.Pending; step++)
+            search.Advance(64, 64, 64, 64);
+        search.Status.Should().Be(NavigationSurfaceAStarStatus.Success);
+        search.Result.Cost.Should().BeGreaterThan(Fixed64.One).And.BeLessThan((Fixed64)2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TraversalLookupSlice_ShouldStopRejectedVolumeAndIncomingRescanAtAtomicBoundary(bool incoming)
+    {
+        using var world = new GridWorld();
+        var cells = new VoxelIndex[9];
+        var meanings = new NavigationCell[9];
+        for (int x = 0; x < 3; x++)
+        for (int z = 0; z < 3; z++)
+        {
+            cells[x * 3 + z] = new VoxelIndex(x, 0, z);
+            meanings[x * 3 + z] = new NavigationCell(TraversalMedia.Gas, TraversalCapability.None,
+                default, Fixed64.Zero, (Fixed64)4, (Fixed64)4);
+        }
+        NavigationAStarExitTestHarness.GraphFixture fixture = NavigationAStarExitTestHarness.CreateSingleMap(
+            world, NavigationAStarExitTestHarness.RectangularLine(3), cells, "atomic-rescan", meanings);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(incoming ? Fixed64.Quarter : Fixed64.One + Fixed64.Half,
+                Fixed64.One, Fixed64.Zero), Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
+            TraversalMedia.Gas, TraversalCapability.None);
+        fixture.Graph.TryGetNodeRef(new NavigationCellAddress(fixture.MapId, new VoxelIndex(1, 0, 1)),
+            out NavigationNodeRef source).Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(new NavigationCellAddress(fixture.MapId, new VoxelIndex(2, 0, 2)),
+            out NavigationNodeRef destination).Should().BeTrue();
+        var workspace = new NavigationRayWorkspace(16, 64, 64, 256, 256);
+        var meter = new NavigationWorkMeter(new NavigationWorkBudget(
+            4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 4096, 0));
+        var outgoing = new NavigationTraversalEdgeEnumerator(world, fixture.Graph,
+            new NavigationMediumStateRef(source, TraversalMedium.Gas), profile,
+            NavigationAStarExitTestHarness.Policy, workspace, false, -1);
+        var reverse = new NavigationIncomingTraversalEdgeEnumerator(world, fixture.Graph,
+            new NavigationMediumStateRef(destination, TraversalMedium.Gas), profile,
+            NavigationAStarExitTestHarness.Policy, workspace, false);
+        int lookup = 1;
+        int edges = 4096;
+        int connections = 4096;
+        NavigationTraversalEdgeAdvanceStatus status = NavigationTraversalEdgeAdvanceStatus.Pending;
+        for (int step = 0; step < 64 && lookup > 0; step++)
+        {
+            status = incoming
+                ? reverse.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookup)
+                : outgoing.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookup);
+        }
+        lookup.Should().Be(0);
+        status.Should().Be(NavigationTraversalEdgeAdvanceStatus.Blocked);
+        (meter.PrimaryVolumeCandidates + meter.ShortcutVolumeCandidates).Should().Be(1,
+            "neither a rejected ray nor a nonmatching incoming rescan may start the next atomic evaluation");
+        int probes = meter.LookupProbes;
+        status = incoming
+            ? reverse.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookup)
+            : outgoing.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookup);
+        status.Should().Be(NavigationTraversalEdgeAdvanceStatus.Blocked);
+        meter.LookupProbes.Should().Be(probes);
+        lookup = 4096;
+        for (int step = 0; step < 64 && meter.PrimaryVolumeCandidates + meter.ShortcutVolumeCandidates == 1; step++)
+        {
+            status = incoming
+                ? reverse.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookup)
+                : outgoing.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookup);
+        }
+        (meter.PrimaryVolumeCandidates + meter.ShortcutVolumeCandidates).Should().BeGreaterThan(1,
+            "refilling on the following frame must resume the retained enumerator");
+    }
+
+    [Fact]
     public void CoincidentGuidePoint_ShouldPreserveReplaceOrAppendByNodeOwnership()
     {
         var firstAddress = new NavigationCellAddress("first", default);
@@ -271,7 +378,7 @@ public sealed class NavigationSurfaceAStarTests
             "a zero local edge slice must retain the selected search node");
 
         for (int step = 0; step < 64 && workspace.GuidePointCount == 0; step++)
-            search.Advance(0, 1, 64, 64);
+            search.Advance(64, 1, 64, 64);
         workspace.GuidePointCount.Should().BeGreaterThan(0);
         int replayEdges = admission.Meter.EvaluatedEdges;
 
@@ -283,6 +390,8 @@ public sealed class NavigationSurfaceAStarTests
         search.Advance(0, 64, 64, 64).Should().Be(NavigationSurfaceAStarStatus.Pending);
         admission.Meter.LookupProbes.Should().Be(lookupBeforeFinalization,
             "dependency finalization must honor its local lookup slice");
+        for (int step = 0; step < 64 && workspace.GuidePointCount < baseline.Payload!.GuidePoints.Length; step++)
+            search.Advance(64, 1, 64, 64);
         workspace.GuidePointCount.Should().Be(baseline.Payload!.GuidePoints.Length);
 
         search.Advance(64, 0, 64, 64).Should().Be(NavigationSurfaceAStarStatus.Pending);
@@ -985,14 +1094,14 @@ public sealed class NavigationSurfaceAStarTests
             admission.RayWork,
             long.MaxValue);
 
-        long allocationStart = GC.GetAllocatedBytesForCurrentThread();
-        while (search.Status == NavigationSurfaceAStarStatus.Pending
-            && admission.Meter.SimplificationRays == 0)
+        long candidateAllocatedBytes = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            search.Advance(64, 64, 64, 64);
-        }
-        long candidateAllocatedBytes =
-            GC.GetAllocatedBytesForCurrentThread() - allocationStart;
+            while (search.Status == NavigationSurfaceAStarStatus.Pending
+                && admission.Meter.SimplificationRays == 0)
+            {
+                search.Advance(64, 64, 64, 64);
+            }
+        });
 
         admission.Meter.SimplificationRays.Should().Be(1);
         admission.Meter.SuccessfulDependencyMerges.Should().Be(1,
@@ -1078,6 +1187,9 @@ public sealed class NavigationSurfaceAStarTests
         workspace.GuidePointCount.Should().Be(raw.Payload!.GuidePoints.Length);
         admission.Meter.SimplificationRays.Should().Be(0,
             "the world change must occur after replay but before the optional proof begins");
+        search.Advance(0, 64, 64, 64).Should().Be(NavigationSurfaceAStarStatus.Pending);
+        admission.Meter.SimplificationRays.Should().Be(0,
+            "copy-only progress must not begin an atomic proof without lookup credit");
         GridConfiguration unrelated = new(
             new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
             new Vector3d((Fixed64)100, Fixed64.Zero, Fixed64.Zero),
@@ -1842,25 +1954,25 @@ public sealed class NavigationSurfaceAStarTests
                 .Should().Be(NavigationAStarQueryStatus.Success);
             new NavigationGuideLease(warmGuide!).Dispose();
         }
-        long beforeGuideCheckout = System.GC.GetAllocatedBytesForCurrentThread();
         bool guideCheckoutSucceeded = true;
-        for (int i = 0; i < 256; i++)
+        long guideCheckoutAllocations = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            if (!cache.TryCheckoutReserved(
-                    search.Result.Key,
-                    graph,
-                    search.Result.RetainedBytes,
-                    out NavigationAStarPayloadLease warmPayloadLease)
-                || cache.TryCreateGuide(store, warmPayloadLease, out NavigationAStarGuideLease? warmGuide)
-                    != NavigationAStarQueryStatus.Success)
+            for (int i = 0; i < 256; i++)
             {
-                guideCheckoutSucceeded = false;
-                break;
+                if (!cache.TryCheckoutReserved(
+                        search.Result.Key,
+                        graph,
+                        search.Result.RetainedBytes,
+                        out NavigationAStarPayloadLease warmPayloadLease)
+                    || cache.TryCreateGuide(store, warmPayloadLease, out NavigationAStarGuideLease? warmGuide)
+                        != NavigationAStarQueryStatus.Success)
+                {
+                    guideCheckoutSucceeded = false;
+                    break;
+                }
+                new NavigationGuideLease(warmGuide!).Dispose();
             }
-            new NavigationGuideLease(warmGuide!).Dispose();
-        }
-        long guideCheckoutAllocations =
-            System.GC.GetAllocatedBytesForCurrentThread() - beforeGuideCheckout;
+        });
         guideCheckoutSucceeded.Should().BeTrue();
         guideCheckoutAllocations.Should().Be(0,
             "warmed guide checkout and return reuse cache-owned lease shells");
@@ -2038,23 +2150,23 @@ public sealed class NavigationSurfaceAStarTests
                 .Should().BeTrue();
             warmLease.Dispose();
         }
-        long beforeCheckout = System.GC.GetAllocatedBytesForCurrentThread();
         bool checkoutSucceeded = true;
-        for (int i = 0; i < 256; i++)
+        long checkoutAllocations = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            if (!lru.TryCheckoutReserved(
-                    search.Result.Key,
-                    graph,
-                    search.Result.RetainedBytes,
-                    out NavigationAStarPayloadLease hotLease))
+            for (int i = 0; i < 256; i++)
             {
-                checkoutSucceeded = false;
-                break;
+                if (!lru.TryCheckoutReserved(
+                        search.Result.Key,
+                        graph,
+                        search.Result.RetainedBytes,
+                        out NavigationAStarPayloadLease hotLease))
+                {
+                    checkoutSucceeded = false;
+                    break;
+                }
+                hotLease.Dispose();
             }
-            hotLease.Dispose();
-        }
-        long checkoutAllocations =
-            System.GC.GetAllocatedBytesForCurrentThread() - beforeCheckout;
+        });
         checkoutSucceeded.Should().BeTrue();
         checkoutAllocations.Should().Be(0,
             "warmed cache-hit checkout and return use a cache-owned lease shell");
@@ -3352,17 +3464,20 @@ public sealed class NavigationSurfaceAStarTests
     }
 
     [Theory]
-    [InlineData(0, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 3)]
-    [InlineData(1, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 3)]
-    [InlineData(2, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 4)]
-    [InlineData(3, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 4)]
-    [InlineData(4, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 8)]
-    [InlineData(5, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 8)]
-    [InlineData(6, (int)NavigationSurfaceAStarStatus.Success, 8)]
+    [InlineData(0, 10, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 4, 0)]
+    [InlineData(1, 10, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 4, 1)]
+    [InlineData(2, 10, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 5, 2)]
+    [InlineData(3, 10, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 5, 3)]
+    [InlineData(4, 10, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 10, 4)]
+    [InlineData(5, 10, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 10, 5)]
+    [InlineData(6, 10, (int)NavigationSurfaceAStarStatus.Success, 10, 6)]
+    [InlineData(6, 9, (int)NavigationSurfaceAStarStatus.BudgetExceeded, 9, 4)]
     public void Advance_ShouldMeterEveryExplicitConnectionLeg(
         int maximumConnectionLegs,
+        int maximumEvaluatedEdges,
         int expectedStatusValue,
-        int expectedEvaluatedEdges)
+        int expectedEvaluatedEdges,
+        int expectedConnectionLegs)
     {
         NavigationSurfaceAStarStatus expectedStatus =
             (NavigationSurfaceAStarStatus)expectedStatusValue;
@@ -3488,7 +3603,10 @@ public sealed class NavigationSurfaceAStarTests
                 maxLookupProbes: 64,
                 maxEndpointCandidates: 2,
                 maxExpandedNodes: 2,
-                maxEvaluatedEdges: 8,
+                // Five candidates per pass: dormant 62, native 64, the missing
+                // owner, and two parallel connections. Route replay charges
+                // all five again; each connection evaluation costs two legs.
+                maxEvaluatedEdges: maximumEvaluatedEdges,
                 maxConnectionLegs: maximumConnectionLegs,
                 maxTransitionCandidates: 0,
                 maxTransitionPairs: 0,
@@ -3541,7 +3659,8 @@ public sealed class NavigationSurfaceAStarTests
         search.Status.Should().Be(expectedStatus);
         admission.Meter.EvaluatedEdges.Should().Be(expectedEvaluatedEdges,
             "each allowance reaches one deterministic explicit-route stage");
-        admission.Meter.ConnectionLegs.Should().Be(maximumConnectionLegs);
+        admission.Meter.ConnectionLegs.Should().Be(expectedConnectionLegs,
+            "the one-below edge allowance stops replay before its two connection legs");
         if (expectedStatus == NavigationSurfaceAStarStatus.Success)
         {
             search.Result.Cost.Should().Be(Fixed64.One / (Fixed64)2,

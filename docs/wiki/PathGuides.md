@@ -7,6 +7,8 @@ Trailblazer exposes two lease types over immutable graph payloads:
 
 The cached payload is immutable. Cursor, current medium, and pending-action state
 belong to one lease acquisition and are never shared between consumers.
+Navigator-owned current-foot connector proofs are also lease-local, never payload
+dependencies shared with another consumer.
 
 ## Acquisition
 
@@ -42,6 +44,13 @@ or background task completion order to decide when a lockstep peer applies
 navigation results.
 
 ## A* Steps
+
+Navigator hosts can opt into [scheduled acquisition](NavSteering.md#scheduled-acquisition-and-moving-origins)
+without manually owning a request ticket. A moved Navigator rejoins the exact
+ordinary index-zero anchor through a bounded current-foot connector, not a later
+waypoint. It reproves on every connector heading under the scheduler allowance,
+without changing this public guide-consumption API or advancing any action.
+`TotalCost` is the immutable route payload cost and excludes that connector.
 
 `NavigationGuideLease` exposes:
 

@@ -3510,19 +3510,20 @@ public sealed class NavigationRayTests
             work.Begin(request);
             work.Advance(ref guideMeter).Should().Be(NavigationRayStatus.Success);
         }
-        long before = System.GC.GetAllocatedBytesForCurrentThread();
         NavigationRayStatus status = default;
         NavigationRayStatus guideStatus = default;
-        for (int i = 0; i < 256; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            meter.Reset(CreateRayBudget(16, 16));
-            work.Begin(request);
-            status = work.Advance(meter);
-            guideMeter = new GuideSampleWorkMeter(guideBudget);
-            work.Begin(request);
-            guideStatus = work.Advance(ref guideMeter);
-        }
-        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int i = 0; i < 256; i++)
+            {
+                meter.Reset(CreateRayBudget(16, 16));
+                work.Begin(request);
+                status = work.Advance(meter);
+                guideMeter = new GuideSampleWorkMeter(guideBudget);
+                work.Begin(request);
+                guideStatus = work.Advance(ref guideMeter);
+            }
+        });
 
         status.Should().Be(NavigationRayStatus.Success);
         guideStatus.Should().Be(NavigationRayStatus.Success);

@@ -775,8 +775,6 @@ public abstract partial class Navigator : INavigate, IRecordable
         _lastPosition = _position;
         _position += _positionDelta + _locomotionDisplacement;
 
-        CheckVoxelOccupancy();
-
         if (_rotationDelta != FixedQuaternion.Identity)
         {
             _rotation *= _rotationDelta;
@@ -789,6 +787,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             Forward = Vector3d.Forward;
 
         CheckTrekCondition();
+        CheckVoxelOccupancy();
 
         Vector3d previousVelocity = _velocity;
         TrailblazerWorldContext context = RequireContext();
@@ -928,6 +927,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             return;
 
         _frameCondition.Medium = medium ?? _frameCondition.Medium;
+        _steering?.ValidateActualMedium(_frameCondition.Medium);
         _frameCondition.SurfaceLevel = surfaceLevel ?? _frameCondition.SurfaceLevel;
         if (replaceGroundContact)
             _frameCondition.GroundState = surfaceCondition;
@@ -961,6 +961,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             message: "Navigator must be Setup and Initialized before syncing traversal state to the motor.");
 
         _frameCondition = state.Clone();
+        _steering?.ValidateActualMedium(_frameCondition.Medium);
         if (updateMotorState)
             SyncCurrentTrekConditionToMotor();
     }

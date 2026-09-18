@@ -22,6 +22,42 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationVolumeEdgeTests
 {
+    [Theory]
+    [InlineData(TraversalMedium.Gas)]
+    [InlineData(TraversalMedium.Liquid)]
+    public void RejectedFinalVolumeCandidate_ExhaustedSliceMustPauseBeforeTransitionsWithoutRepeatingWork(TraversalMedium medium)
+    {
+        NavigationCell cell = Cell(NavigationCell.ToMedia(medium));
+        NavigationCell blocked = Cell(NavigationCell.ToMedia(medium), requiredCapabilities: TraversalCapability.Fly);
+        using var context = CreateContext(new[] { (default(VoxelIndex), cell),
+            (new VoxelIndex(1, 0, 0), blocked), (new VoxelIndex(0, 0, 1), blocked),
+            (new VoxelIndex(1, 0, 1), cell) });
+        using var snapshot = context.Pathing.TryAcquireNavigationGraph()!;
+        var workspace = new NavigationRayWorkspace(1, 16, 16, 64, 0);
+        var source = new NavigationMediumStateRef(Resolve(snapshot.Graph, default), medium);
+        var dispatcher = new NavigationTraversalEdgeEnumerator(context.World, snapshot.Graph, source,
+            Profile(NavigationCell.ToMedia(medium)), Policy, workspace, allowTransitions: true, emittedSurfaceOrdinal: -1);
+        var meter = new NavigationWorkMeter(LargeBudget());
+        int edges = 64, connections = 64, lookups = 1;
+        for (int step = 0; step < 4 && meter.ShortcutVolumeCandidates == 0; step++)
+        {
+            lookups = 1;
+            dispatcher.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookups)
+                .Should().Be(NavigationTraversalEdgeAdvanceStatus.Blocked);
+        }
+        meter.ShortcutVolumeCandidates.Should().Be(1);
+        meter.PrimaryVolumeCandidates.Should().Be(2);
+        lookups.Should().Be(0);
+        int consumed = meter.LookupProbes;
+        lookups = 4096;
+        NavigationTraversalEdgeAdvanceStatus status = NavigationTraversalEdgeAdvanceStatus.Pending;
+        for (int step = 0; step < 4 && status == NavigationTraversalEdgeAdvanceStatus.Pending; step++)
+            status = dispatcher.AdvanceOne(meter, workspace.Dependencies, ref edges, ref connections, ref lookups);
+        status.Should().Be(NavigationTraversalEdgeAdvanceStatus.Complete);
+        meter.ShortcutVolumeCandidates.Should().Be(1);
+        meter.LookupProbes.Should().Be(consumed);
+    }
+
     private static readonly NavigationAreaPolicy Policy = new(
         new NavigationAreaPolicyKey("volume-edge", 1),
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });

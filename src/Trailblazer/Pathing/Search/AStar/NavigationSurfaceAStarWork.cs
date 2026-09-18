@@ -155,18 +155,20 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         int edgeStepLimit,
         int connectionStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(nodeStepLimit, nameof(nodeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(edgeStepLimit, nameof(edgeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(connectionStepLimit, nameof(connectionStepLimit));
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, 0, nodeStepLimit, edgeStepLimit, connectionStepLimit);
+        return Advance(ref remaining);
+    }
+
+    internal NavigationSurfaceAStarStatus Advance(ref NavigationAcquisitionSlice remaining)
+    {
         if (Status != NavigationSurfaceAStarStatus.Pending)
             return Status;
         if (!IsWorldCurrent())
             return Finish(NavigationSurfaceAStarStatus.Stale);
-        int lookupRemaining = lookupStepLimit;
-        int nodeRemaining = nodeStepLimit;
-        int edgeRemaining = edgeStepLimit;
-        int connectionRemaining = connectionStepLimit;
+        ref int lookupRemaining = ref remaining.LookupRemaining;
+        ref int nodeRemaining = ref remaining.NodeRemaining;
+        ref int edgeRemaining = ref remaining.EdgeRemaining;
+        ref int connectionRemaining = ref remaining.ConnectionRemaining;
 
         while (Status == NavigationSurfaceAStarStatus.Pending)
         {
@@ -211,13 +213,16 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     _meter,
                     _workspace.EndpointWorkspace.Dependencies,
                     ref edgeRemaining,
-                    ref connectionRemaining);
+                    ref connectionRemaining,
+                    ref lookupRemaining);
                 CaptureWorldDependency(_edges);
                 edgeStatus = NavigationSearchFinalizationRules.ResolveTraversalEpochStatus(
                     edgeStatus,
                     IsWorldCurrent());
                 if (edgeStatus == NavigationTraversalEdgeAdvanceStatus.Blocked)
                 {
+                    if (lookupRemaining == 0)
+                        return Status;
                     return ApplyTerminalStatus(
                         NavigationSearchFinalizationRules.ResolveBlockedTraversalStatus(
                             _edges.RequiresConnectionProgress,
@@ -344,7 +349,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     _meter,
                     _workspace.EndpointWorkspace.Dependencies,
                     ref edgeRemaining,
-                    ref connectionRemaining);
+                    ref connectionRemaining,
+                    ref lookupRemaining);
                 CaptureWorldDependency(_edges);
                 edgeStatus = NavigationSearchFinalizationRules.ResolveTraversalEpochStatus(
                     edgeStatus,
@@ -368,6 +374,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 }
                 if (edgeStatus == NavigationTraversalEdgeAdvanceStatus.Blocked)
                 {
+                    if (lookupRemaining == 0)
+                        return Status;
                     return ApplyTerminalStatus(
                         NavigationSearchFinalizationRules.ResolveBlockedTraversalStatus(
                             _edges.RequiresConnectionProgress,
@@ -417,7 +425,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             }
 
             if (_stage == Stage.Simplify)
-                return AdvanceSimplification(ref nodeRemaining);
+                return AdvanceSimplification(ref nodeRemaining, ref lookupRemaining);
 
             if (_stage == Stage.CopyRaw)
             {
@@ -536,28 +544,37 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
     }
 
     private NavigationSurfaceAStarStatus AdvanceSimplification(
-        ref int nodeRemaining)
+        ref int nodeRemaining,
+        ref int lookupRemaining)
     {
         NavigationSurfaceAStarStatus result =
             NavigationSearchFinalizationRules.ResolveAStarEpochStatus(
                 NavigationSurfaceAStarStatus.Pending,
                 IsWorldCurrent());
-        return AdvanceSimplification(result, ref nodeRemaining);
+        return AdvanceSimplification(result, ref nodeRemaining, ref lookupRemaining);
     }
 
     internal NavigationSurfaceAStarStatus AdvanceSimplification(
         NavigationSurfaceAStarStatus result,
         ref int nodeRemaining)
     {
+        int lookupRemaining = int.MaxValue;
+        return AdvanceSimplification(result, ref nodeRemaining, ref lookupRemaining);
+    }
+
+    private NavigationSurfaceAStarStatus AdvanceSimplification(
+        NavigationSurfaceAStarStatus result, ref int nodeRemaining, ref int lookupRemaining)
+    {
         if (result == NavigationSurfaceAStarStatus.Pending)
-            result = AdvanceCurrentSimplification(ref nodeRemaining);
+            result = AdvanceCurrentSimplification(ref nodeRemaining, ref lookupRemaining);
         if (Status == NavigationSurfaceAStarStatus.Pending)
             ApplyTerminalStatus(result);
         return Status;
     }
 
     private NavigationSurfaceAStarStatus AdvanceCurrentSimplification(
-        ref int nodeRemaining)
+        ref int nodeRemaining,
+        ref int lookupRemaining)
     {
         while (_nextTransitionPathOrdinal < 0
             && _transitionBarrierScanOrdinal < _workspace.PathNodeCount)
@@ -600,6 +617,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             BeginRawCopy(copySuffix: false);
             return Status;
         }
+        if (lookupRemaining == 0)
+            return Status;
         _meter.TryConsumeSimplificationRays(1);
 
         int sourcePathOrdinal = _simplificationSourcePathOrdinal;
@@ -619,7 +638,9 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             candidate.Position,
             NavigationRayEndpointAllowance.None,
             NavigationRayChainConstraint.SeedAt(source.Address)));
+        int lookupBeforeRay = _meter.LookupProbes;
         NavigationRayStatus rayStatus = _rayWork.Advance(_meter);
+        NavigationAcquisitionSlice.ConsumeAtomicLookups(ref lookupRemaining, _meter, lookupBeforeRay);
         NavigationSurfaceAStarStatus simplificationStatus =
             rayStatus == NavigationRayStatus.Stale
                 ? NavigationSurfaceAStarStatus.Stale

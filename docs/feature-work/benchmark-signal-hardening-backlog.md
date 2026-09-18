@@ -16,7 +16,7 @@ this backlog.
 ## Intake Rules
 
 - Signal IDs use `TRB-Benchmark-NNN`. The next available ID is
-  `TRB-Benchmark-006`.
+  `TRB-Benchmark-007`.
 - Assign an ID at intake and never reuse it, including after a signal closes or
   moves into a dated plan. Check this file's Git history before advancing or
   repairing the counter.
@@ -62,6 +62,7 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 
 ## Active Signals
 
+
 ### TRB-Benchmark-005 - Guided frames spend most time in long blocked segment tracing
 
 - **Discovered:** 2026-09-10 during the representative guided-host performance pass.
@@ -76,8 +77,9 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   complete-frame benefit was demonstrated. Its useful tests remain; production
   source is unchanged by that follow-up. The next recommended design boundary is
   Navigator-owned acquisition/recovery through the existing bounded scheduler,
-  not further removal of freshness checks. This is not implemented or a reason
-  to close the signal. Keep the original cadence/control and all completed
+  not further removal of freshness checks. That work is implemented on the
+  unmerged recovery branch, but its acceptance blockers remain open; it is not
+  a reason to close this signal. Keep the original cadence/control and all completed
   observations intact; do not restart an open-ended micro-optimization sweep.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
@@ -1978,12 +1980,100 @@ distance checks ahead of type checks would newly read host position getters on
 unrelated types. Neither shortcut is implemented. The collector's small
 invariant-arithmetic hoist remains unmeasured, not a proven next win.
 
-Prefer a focused design investigation of **Navigator-owned acquisition/recovery
-through the existing bounded scheduler** over further observer micro-tuning.
-Waiting movement, same-frame versus deferred retry, cancellation, publication
-and guide ownership need explicit behavior before implementation. The earlier
-hundreds-of-milliseconds recovery observations remain unresolved; scheduling
-can spread work, not eliminate its total cost or bound atomic operations.
+The follow-up is captured in the
+[Navigator Acquisition And Recovery plan](done/navigationRecoveryPlan.md), implemented
+on `codex/navigator-recovery` and approved for squash integration on 2026-09-18.
+The user approved opt-in scheduling and requires compatible-work sharing and
+multiple requests per frame through the existing queue. Waiting movement,
+current-foot adoption, retry, cancellation and guide ownership have explicit
+design requirements. The existing four-phase minimum for each warm request is
+not acceptable population throughput; phase work must share a real remaining
+frame allowance rather than refilling it per request.
+
+The 2026-09-16 baseline lifecycle smoke passes and reproduces 514.013 ms initial
+admission, 310.131 ms rebake, 259.267 ms following-frame retry and 13.122 ms warm
+post-restore admission. These are single-run diagnostics, not comparative
+acceptance. The separate sampled later-frame root attributes about 78.75% to
+Flow search; it does not identify the number of cold/prefix builds. The design
+owns the evidence details, baseline protocol and implementation checklist.
+The reviewed recovery harness and hash-pinned immediate runtime now have two
+complete three-process captures: 270 successful actual episodes, exact replay
+and no failed/cancelled/censored original requests. The plan owns the detailed
+baseline table and build/promotion counts. Final same-build explicit-B captures
+reduce Flow/500 cold peak medians from 243.131 / 256.098 ms to 8.939 / 8.960 ms,
+but raise cumulative host-frame cost from 243.131 / 256.098 ms to
+340.051 / 341.488 ms and last-ready latency from one to 57 frames. Same-map
+rebake removes a duplicate build, lowering its cumulative cost 27.03% / 30.15%.
+Matched Flow-only C limits trade higher peaks for 28-frame cold readiness;
+defaults are unchanged and unsuitable for this crowd burst.
+
+The final Immediate guided controls expose an additional concern: median
+64-frame block costs rise 4.5% / 2.2% for A*/100, 6.5% / 4.9% for Flow/100,
+and 9.0% / 6.6% for Flow/500 against the paired frozen baseline captures.
+Within-launch trends are broadly stable. These are measured regressions without
+a source attribution, not an established new correctness defect or a reason to
+silently waive non-regression. The plan retains both captures and all first-use,
+latency, allocation and work-counter qualifications. Independent source reviews
+approve the implementation; final evidence review independently accepts these
+measurements with concerns, not unconditional performance approval. The allocation
+measurement blocker is now corrected and verified; the Immediate comparisons
+and their reviewed acceptance disposition belong to the recovery plan, not a
+standalone signal.
+Follow-up private-state, cold-path and occupancy corrections left an earlier
+complete six-arm Immediate comparison at AStar/100 +1.4–1.6%, Flow/100 +3.3–3.5%
+and Flow/500 +3.2–5.0% against both untouched develop controls; they do not clear
+the gate. A separate identical-correctness comparison puts Flow medians between
+corrected controls and AStar below both, identifying no two-sided scheduling regression
+under equal occupancy behavior without replacing the total comparison.
+Slower thin-wrapper and lease-layout experiments were reverted. Native hardware watchpoints
+now prove the exact retained 6,008-byte failure came from background-GC counter
+bookkeeping, not a managed allocation in the measured loop. Strict shared-oracle
+corrections pass fresh full Windows/Linux configurations, exact coverage and
+documentation checks in v3 without relaxed assertions. Fresh v4 verification
+also passes with additional public occupancy tests and two Scheduled semantic
+smokes. A subsequent retained Flow-entry experiment was rejected after its fixed
+five-arm comparison: a small Flow/100 gain did not extend to both Flow/500
+controls, and both Flow cases still failed original total cost. Its portable
+characterizations remain. A narrower same-root A* duplicate dependency-walk
+optimization preserves both world checks and publication boundaries. It passes
+focused Release/Lean review and tests, and its five-arm comparison improves
+AStar/100 23.2–23.6% against the parent and 21.3–22.0% against the original
+controls. It is retained, with fresh full validation still required. Flow/100
+remains 4.4–5.1% and Flow/500 3.1–5.7% slower than the originals; the plan's
+total-cost gate stays red. A lazy group-steering reciprocal was rejected after
+both Flow populations lost against both parent controls; stronger behavior tests
+remain. Public sparse-grid and publication cases expose an inherited Flow
+edge-order mismatch. The initial sampler-only correction was incomplete; reviewed
+structural numbering now aligns acquisition, sampling and constrained recovery
+rays. Three public regressions pass with 973 Release / 968 Lean focused cases.
+Reusing two already computed prisms subsequently improves Flow by 1.4–3.7%
+against that corrected parent without added state or relaxed validation. The
+prism-reuse comparison retains 23.4–23.6% AStar improvement, but Flow still
+costs 2.8–3.2% more than the originals. Fresh full Windows/Linux validation
+passes 3,046 Release / 2,968 Lean core tests and 65 adapter tests per configuration,
+with exact 100% line/branch/full-method coverage and documentation checks green.
+Subsequent GridForge world-owned occupancy tracking fixes a reproduced
+strong-reference retention bug. Its completed five-arm comparison has drifting
+controls with the candidate between both corrected parents in every case; no
+speedup, slowdown or equivalence is established. It is retained for ownership
+correctness, not claimed to close this performance gap. The recovery plan holds
+the separate original/parent comparisons and current verification evidence.
+On 2026-09-18 the user authorized committing the Trailblazer implementation for
+review and indicated that modest cost for hardened behavior is acceptable.
+Fresh Release/Lean precommit verification passes; the user completed review and
+approved squash integration on 2026-09-18. The recovery plan is archived. This
+does not establish that all cost is explained or bounded by 2–3%; the complete
+original/parent ranges and adverse observations remain in the recovery plan.
+Other historical
+failures are not individually attributed. The unchanged original baseline's
+intermittent interval-sort exception remains unresolved after a bounded native
+diagnostic non-reproduction. A live-validated occupancy-ticket experiment did
+not justify its added state and was removed; all unfavorable measurements remain.
+Current verification and diagnostic details
+remain in the [archived investigation](done/navigationRecoveryPlan.md#blocking-branch-regressions).
+**TRB-Benchmark-005 stays open**: reduce avoidable
+work, measure complete frames and useful-guidance latency, and do not treat
+deferring the same work as a total-cost improvement or a 2 ms solution.
 
 Evidence is retained under `artifacts/benchmark005-slab-refinement`; fresh
 unchanged controls use `artifacts/direct-visibility-phase0/slab-baseline-*`.
@@ -2552,3 +2642,14 @@ for navigation workloads and canonical run settings. Keep this document as the
 intake bucket for measured signals and promote broader work into a dated feature
 plan when the scope outgrows a focused patch. Physics collision-shape throughput
 belongs to Gravitas, not this navigation backlog.
+
+The user approved squashing the verified
+[recovery implementation](done/navigationRecoveryPlan.md) into `develop` on
+2026-09-18. Resume the performance investigation from that hardened baseline.
+The user is willing to accept a modest hardened-behavior
+cost; preserve the full comparisons rather than treating that judgment as proof
+of a universal 2–3% bound or exact causation. Keep the corrected allocation gate,
+resolved feature defects and unexplained original-baseline sorting observation
+in the archived plan. Resume measured
+controller/steering/sampling and useful-guidance-latency work under
+`TRB-Benchmark-005`. Its broader 2 ms goal is not complete.

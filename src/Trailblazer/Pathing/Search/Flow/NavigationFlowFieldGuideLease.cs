@@ -22,6 +22,7 @@ internal sealed class NavigationFlowFieldGuideLease
     private readonly GridCoveredAddress[] _coveredAddressOutput;
     private NavigationFlowFieldPayloadCache? _owner;
     private NavigationWorldGraphStore? _store;
+    private GraphDependencyStamp? _endpointProof;
     private NavigationCellAddress _currentSource;
     private TraversalMedium _currentMedium;
     private Fixed64 _originIntegrationCost;
@@ -56,7 +57,8 @@ internal sealed class NavigationFlowFieldGuideLease
         ulong payloadGeneration,
         NavigationCellAddress resolvedOrigin,
         TraversalMedium startMedium,
-        Fixed64 originIntegrationCost)
+        Fixed64 originIntegrationCost,
+        GraphDependencyStamp? endpointProof = null)
     {
         lock (_sync)
         {
@@ -68,6 +70,7 @@ internal sealed class NavigationFlowFieldGuideLease
                 "The flow guide generation is exhausted.");
             _owner = owner;
             _store = store;
+            _endpointProof = endpointProof;
             _payloadSlot = payloadSlot;
             _payloadGeneration = payloadGeneration;
             _currentSource = resolvedOrigin;
@@ -309,6 +312,7 @@ internal sealed class NavigationFlowFieldGuideLease
             payloadSlot = _payloadSlot;
             _owner = null;
             _store = null;
+            _endpointProof = null;
             _currentSource = default;
             _currentMedium = TraversalMedium.Unknown;
             _originIntegrationCost = Fixed64.Zero;
@@ -361,7 +365,8 @@ internal sealed class NavigationFlowFieldGuideLease
             if (_validatedGraphVersion == currentGraph.GraphVersion)
                 validatedGraph = currentGraph;
             // Cache invalidation and raw world changes remain live at every boundary.
-            if (owner.IsPayloadCurrent(currentGraph, payload, validatedGraph))
+            if (owner.IsPayloadCurrent(currentGraph, payload, validatedGraph)
+                && (_endpointProof == null || currentGraph.IsDependencyCurrent(_endpointProof)))
             {
                 _validatedGraphVersion = currentGraph.GraphVersion;
                 return true;

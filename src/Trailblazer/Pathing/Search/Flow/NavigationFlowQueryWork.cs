@@ -65,6 +65,13 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     private bool _readyToPublish;
     private bool _started;
     private bool _admissionActive;
+    private bool _diagnosticsRecorded;
+    private bool _scheduled;
+    private NavigationCohortSource? _sharedSource;
+    private NavigationEndpointProofWork _endpointProofWork;
+    private bool _endpointProofActive;
+    private NavigationFlowFieldStatus _checkoutStatus;
+    private long _endpointProofReservation;
 
     internal NavigationFlowQueryWork(
         NavigationWorldGraphStore store,
@@ -97,13 +104,19 @@ internal sealed class NavigationFlowQueryWork : IDisposable
 
     internal bool ReservationRejected { get; private set; }
 
-    internal void Begin(PathQuery query, NavigationWorldGraphLease lease)
+    internal void Begin(PathQuery query, NavigationWorldGraphLease lease, bool scheduled = false,
+        NavigationCohortSource? sharedSource = null)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
         SwiftThrowHelper.ThrowIfTrue(
             _started,
             message: "The flow query work is already active.");
         _started = true;
+        _scheduled = scheduled;
+        _sharedSource = sharedSource;
+        _endpointProofWork = default;
+        _endpointProofActive = false;
+        _diagnosticsRecorded = false;
         ReservationRejected = false;
         _resolvedOrigin = default;
         _readyStatus = NavigationFlowQueryStatus.Pending;
@@ -123,16 +136,16 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         int lookupStepLimit,
         int endpointCandidateStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(
-            endpointCandidateStepLimit,
-            nameof(endpointCandidateStepLimit));
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, endpointCandidateStepLimit);
+        return PrepareSearchOrCheckout(ref remaining);
+    }
+
+    internal NavigationFlowQueryStatus PrepareSearchOrCheckout(ref NavigationAcquisitionSlice remaining)
+    {
         if (!_started || Status != NavigationFlowQueryStatus.Pending || IsPrepared)
             return Status;
 
-        NavigationQueryAdmissionStatus admissionStatus = _admission.Advance(
-            lookupStepLimit,
-            endpointCandidateStepLimit);
+        NavigationQueryAdmissionStatus admissionStatus = _admission.Advance(ref remaining);
         if (admissionStatus == NavigationQueryAdmissionStatus.Pending)
             return Status;
         if (admissionStatus != NavigationQueryAdmissionStatus.Success)
@@ -148,16 +161,84 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             resolved.End.Address,
             resolved.StartMedium,
             resolved.TargetMedia);
-        NavigationFlowFieldStatus checkout = _cache.TryCheckout(
-            _store,
-            resolved.Graph,
-            key,
-            _resolvedOrigin,
-            out _pendingLease,
-            out _pendingProof);
-        if (checkout != NavigationFlowFieldStatus.Pending)
+        NavigationFlowFieldStatus checkout = _checkoutStatus;
+        if (!_endpointProofActive)
         {
+            NavigationFlowFieldPayload? payload;
+            if (_sharedSource != null)
+            {
+                checkout = _sharedSource.Flow.TryGetPayload(out payload);
+                if (!_sharedSource.HasFlow) checkout = NavigationFlowFieldStatus.Stale;
+            }
+            else checkout = _cache.TryCheckout(_store, resolved.Graph, key, _resolvedOrigin,
+                out _pendingLease, out payload, _scheduled, resolved.WorldChangeSequence);
+            _hasPendingLease = _sharedSource == null && checkout == NavigationFlowFieldStatus.Success;
+            if (checkout is NavigationFlowFieldStatus.Success or NavigationFlowFieldStatus.NoPath or NavigationFlowFieldStatus.CostOverflow)
+            {
+                _pendingProof = payload;
+                _endpointProofWork = new NavigationEndpointProofWork(_workspace.EndpointWorkspace, resolved, payload!.Dependencies);
+                _endpointProofActive = true;
+                _checkoutStatus = checkout;
+            }
+        }
+        if (_endpointProofActive)
+        {
+            NavigationQueryAdmissionStatus proofStatus = _endpointProofWork.AdvanceCertification(ref remaining);
+            if (proofStatus == NavigationQueryAdmissionStatus.Success && !_endpointProofWork.IsCertified)
+            {
+                if (_endpointProofReservation == 0)
+                {
+                    long bytes = GraphDependencyStamp.GetRetainedBytes(_workspace.EndpointWorkspace.ComponentCount,
+                        _workspace.EndpointWorkspace.PageCount);
+                    if (_cache.TryReserveEndpointProof(bytes)) _endpointProofReservation = bytes;
+                    else proofStatus = NavigationQueryAdmissionStatus.CapacityExceeded;
+                }
+                if (proofStatus == NavigationQueryAdmissionStatus.Success)
+                    proofStatus = _endpointProofWork.AdvanceCapture(ref remaining);
+            }
+            if (proofStatus == NavigationQueryAdmissionStatus.Pending)
+                return Status;
+            if (proofStatus != NavigationQueryAdmissionStatus.Success)
+            {
+                _pendingLease.Dispose();
+                _pendingLease = default;
+                _hasPendingLease = false;
+                _pendingProof = null;
+                resolved.Dispose();
+                DisposeAdmission();
+                MarkReady(MapAdmissionStatus(proofStatus));
+                return Status;
+            }
+            if (_sharedSource != null)
+                checkout = _cache.TryCheckoutShared(_store, resolved.Graph, key, _resolvedOrigin,
+                    _sharedSource, _endpointProofWork.Proof, out _pendingLease, out _pendingProof, _endpointProofReservation);
+            else if (_hasPendingLease && !_endpointProofWork.IsCertified
+                     && !_cache.TryAttachEndpointProof(_pendingLease, _endpointProofWork.Proof,
+                         ref _endpointProofReservation))
+            {
+                _pendingLease.Dispose();
+                _pendingLease = default;
+                _pendingProof = null;
+                checkout = NavigationFlowFieldStatus.Stale;
+            }
+            if (checkout is not NavigationFlowFieldStatus.NoPath and not NavigationFlowFieldStatus.CostOverflow)
+            {
+                _cache.ReleaseEndpointProof(ref _endpointProofReservation);
+                _endpointProofWork = default;
+                _endpointProofActive = false;
+            }
+            if (_sharedSource != null && checkout == NavigationFlowFieldStatus.Success)
+                _cache.AcquisitionDiagnostics.RecordSharedFollowerCheckout();
+            else if (_sharedSource != null && checkout == NavigationFlowFieldStatus.Pending)
+                _cache.AcquisitionDiagnostics.RecordSharedCoverageMiss();
+        }
+        if (checkout != NavigationFlowFieldStatus.Pending || _sharedSource != null)
+        {
+            if (checkout == NavigationFlowFieldStatus.Pending)
+                _pendingProof = null;
             _hasPendingLease = checkout == NavigationFlowFieldStatus.Success;
+            if (_hasPendingLease && _sharedSource == null)
+                _cache.AcquisitionDiagnostics.RecordCacheCheckoutHit();
             resolved.Dispose();
             DisposeAdmission();
             if (checkout == NavigationFlowFieldStatus.CapacityExceeded)
@@ -185,6 +266,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             MarkReady(NavigationFlowQueryStatus.CapacityExceeded);
             return Status;
         }
+        _cache.AcquisitionDiagnostics.RecordBuildStart();
         _search = new NavigationFlowFieldWork(
             _cache.World,
             resolved,
@@ -202,20 +284,18 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         int edgeStepLimit,
         int connectionStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(nodeStepLimit, nameof(nodeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(edgeStepLimit, nameof(edgeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(connectionStepLimit, nameof(connectionStepLimit));
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, 0, nodeStepLimit, edgeStepLimit, connectionStepLimit);
+        return AdvanceSearch(ref remaining);
+    }
+
+    internal NavigationFlowQueryStatus AdvanceSearch(ref NavigationAcquisitionSlice remaining)
+    {
         if (Status != NavigationFlowQueryStatus.Pending || IsReadyToPublish)
             return Status;
         if (_search == null)
             return Status;
 
-        NavigationFlowFieldStatus searchStatus = _search.Advance(
-            lookupStepLimit,
-            nodeStepLimit,
-            edgeStepLimit,
-            connectionStepLimit);
+        NavigationFlowFieldStatus searchStatus = _search.Advance(ref remaining);
         if (searchStatus != NavigationFlowFieldStatus.Pending)
             MarkReady(MapFlowStatus(searchStatus));
         return Status;
@@ -238,11 +318,16 @@ internal sealed class NavigationFlowQueryWork : IDisposable
                 _readyStatus == NavigationFlowQueryStatus.NoPath
                     ? NavigationFlowFieldStatus.NoPath
                     : NavigationFlowFieldStatus.CostOverflow;
-            if (!_cache.IsExactProofCurrent(
+            bool current = _sharedSource != null
+                ? _cache.IsPayloadCurrent(_store.Current, _pendingProof)
+                    && NavigationEndpointProofWork.IsCurrent(_store, _endpointProofWork.Proof)
+                : _cache.IsExactProofCurrent(
                     _store,
                     _pendingProof,
                     _resolvedOrigin,
-                    expected))
+                    expected)
+                    && NavigationEndpointProofWork.IsCurrent(_store, _endpointProofWork.Proof);
+            if (!current)
             {
                 return Finish(NavigationFlowQueryStatus.Stale);
             }
@@ -276,6 +361,13 @@ internal sealed class NavigationFlowQueryWork : IDisposable
 
     public void Dispose()
     {
+        RecordDiagnostics();
+        _cache.ReleaseEndpointProof(ref _endpointProofReservation);
+        if (_sharedSource != null || _endpointProofActive)
+            _admission.Result.Dispose();
+        _sharedSource = null;
+        _endpointProofWork = default;
+        _endpointProofActive = false;
         DisposeAdmission();
         _search?.Dispose();
         _search = null;
@@ -305,6 +397,11 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     {
         NavigationFlowFieldStatus leaseStatus = lease.TryGetPayload(
             out NavigationFlowFieldPayload payload);
+        if (!_cache.IsEndpointProofCurrent(lease, _store.Current))
+        {
+            lease.Dispose();
+            return Finish(NavigationFlowQueryStatus.Stale);
+        }
         if (leaseStatus != NavigationFlowFieldStatus.Success
             || (!_store.Current.IsDependencyCurrent(payload.Dependencies)
                 || !_cache.IsWorldCurrent(payload)))
@@ -327,6 +424,10 @@ internal sealed class NavigationFlowQueryWork : IDisposable
 
     private NavigationFlowQueryStatus Finish(NavigationFlowQueryStatus status)
     {
+        RecordDiagnostics();
+        _cache.ReleaseEndpointProof(ref _endpointProofReservation);
+        _endpointProofWork = default;
+        _endpointProofActive = false;
         _pendingProof = null;
         Status = status;
         Volatile.Write(ref _readyToPublish, false);
@@ -343,6 +444,14 @@ internal sealed class NavigationFlowQueryWork : IDisposable
             return;
         _admission.Dispose();
         _admissionActive = false;
+    }
+
+    private void RecordDiagnostics()
+    {
+        if (!_started || _diagnosticsRecorded)
+            return;
+        _cache.AcquisitionDiagnostics.RecordCompletedQuery(_admission.Meter);
+        _diagnosticsRecorded = true;
     }
 
     private static NavigationFlowQueryStatus MapAdmissionStatus(

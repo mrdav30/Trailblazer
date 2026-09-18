@@ -31,7 +31,10 @@ internal static class NavigatorOccupancyTracker
         if (!voxelFound)
             return;
 
-        if (curGrid!.TryAddVoxelOccupant(curVoxel!, navigator) == false)
+        // Moving within a cell keeps its existing ticket. Still retire the previous
+        // cell below when the host already registered the destination independently.
+        if (!GridOccupantManager.TryGetOccupancyTicket(world, navigator, curVoxel!.WorldIndex, out _)
+            && !curGrid!.TryAddVoxelOccupant(curVoxel, navigator))
         {
             TrailblazerLogger.Channel.Warn($"Navigator {navigator.GlobalId} failed to register occupancy in voxel {curVoxel!.Index} of grid {curGrid} at position {position}.");
             return;

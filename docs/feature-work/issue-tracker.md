@@ -2,12 +2,14 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-136`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-146`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
-- Add new items when feature work uncovers a suspected bug, stale doc, test
-  smell, performance anomaly, or correctness risk.
+- Add new items when feature work uncovers a pre-existing bug, stale doc, test
+  smell, performance anomaly, or correctness risk outside that feature's own
+  implementation. Track regressions introduced on a feature branch in its active
+  plan, including their fixes and verification; do not defer them into this tracker.
 - Keep each item scoped tightly enough to fix and verify independently.
 - Record the date on the item, not in this filename.
 - Move an item to `Resolved Issues` only after the fix has tests or documented
@@ -22,6 +24,7 @@
   here until they have been investigated and confirmed as runtime defects.
 
 ## Active Issues
+
 
 ### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 
@@ -216,6 +219,72 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-144 - Identical ordinary A* cache hits dropped newly admitted endpoint dependencies
+
+- **Discovered:** 2026-09-17 during Navigator recovery coverage verification.
+- **Evidence:** Seed a nearest-endpoint A* route with only its selected map
+  published, then publish an overlapping map over already-existing physical
+  grids. The identical query/key still resolves to the same route, but its new
+  admission reads the overlap too. An ordinary hit discarded those extra reads;
+  removing that overlap left the returned public guide `Success` instead of
+  `Stale`. Shared-cohort admission correctly retained its independent proof.
+  This is distinct from Issue136's Flow defect and the prior A* characterization
+  involving different strict/nearest query keys.
+- **Resolution:** Ordinary A* hits use the existing counted endpoint certificate
+  comparison and, only when needed, reserved lease-local proof capture. Proof
+  attachment and accounting use the cache lock; publication and guide freshness
+  still validate both route and endpoint proofs. Certified hits retain no proof
+  allocation, and no query budget, queue, or workspace is added.
+- **Verification:** Public-status RED1/4 in `task-6-astar-overlap-status-red.log`;
+  focused admission/scheduler GREEN133 and proof/boundary/warm-allocation GREEN10
+  in `task-6-astar-proof-green.log` and `task-6-astar-proof-boundaries.log` under
+  `.superpowers/sdd/navigationRecoveryPlan`. Controls cover ordinary/shared
+  publication, exact304/one-below303 active proof bytes, cancellation during
+  sliced capture, retained leader isolation, and existing zero-allocation warm
+  public acquisition. Full final configuration/platform gates are separate.
+
+### TRB-Issue-138 - Motion commit refreshed occupancy before host contact correction
+
+- **Discovered:** 2026-09-17 during scheduled Flow recovery smoke.
+- **Evidence:** At recovery frame 1242, agent 0 retained physical ticket `(2,0,2)`
+  while its committed cell was `(2,0,3)`. Before host contact correction its root
+  was `(2,-0.5095703124534339,2.5000000074505806)`; the final foot/root was
+  `(2,-0.5,2.5000000074505806)`. It had usable guidance and was not waiting.
+  The temporary below-prism position prevented occupancy admission before the
+  host restored ground support. This predates scheduled acquisition.
+- **Resolution:** `CommitFrameMotion` refreshes occupancy after `CheckTrekCondition`,
+  matching the final position used for velocity and committed-cell resolution.
+  Existing host overrides do not depend on intermediate occupancy.
+- **Verification:** `CommitAfterHostGroundCorrection_ShouldMoveOccupancyWhileWaitingOrIdle`
+  failed 2/2 with the old cell ticket, then passed 2/2 after the ordering fix.
+  Full recovery/core regression remains part of the feature acceptance gate.
+
+### TRB-Issue-136 - Ordinary Flow cache hits discard follower endpoint proof
+
+- **Discovered / resolved locally:** 2026-09-17 during frozen-cohort implementation.
+- **Reproduction:** `SharedFlowEndpointProof_OverlapRemovalShouldInvalidateOnlyFollower`
+  failed on ordinary checkout at publication, public conversion and later use: removing
+  `a-overlap` left the nearest-origin lease incorrectly `Success`, while the strict
+  zero-distance source payload on `z-candidate` remained legitimately current.
+- **Fix:** Ordinary Flow hits and shared followers use one metered, version-aware
+  endpoint-subset certificate. Covered admissions retain no new proof; extra dependencies
+  retain their own fully reserved lease-local stamp. Publication/conversion/use reject
+  follower-only staleness without invalidating the source. Source cloning preserves the
+  proof; slot transfer balances the old and new charges. The scheduled-only stale-cache
+  miss optimization remains scheduled-only; Immediate now fails safely for the defect.
+- **Evidence:** The ordinary/shared overlap lifetime matrix is green, including unrelated
+  publication and source clone/transfer. `CachedEndpointProof_ExactBytesAndCancellation_ShouldDrainOwnership`
+  checks 304-byte exact / 303-byte failure, cancellation, worker reuse and capacity-one
+  sharing. `ScheduledCachedLeader_ExtraEndpointProof_ShouldSurviveCloneAndTransfer` uses
+  real cached leader acquisition and verifies context reset during extra-proof capture.
+  Certification tests check one-lookup slices, exact / one-below total budgets, component
+  and page versions, policy and transition requirements. The corresponding A* strict to
+  nearest query builds a distinct payload because its key includes the full endpoint policy.
+- **Limits:** Different replacement proofs can transiently require both old and new
+  proof bytes. No generic retry, redundant cold build or source-proof index was added.
+  Full-solution, exact coverage, DocFX, Linux and matched timing gates remain separate;
+  the scoped report records the precise locally executed Release/Lean evidence.
 
 ### TRB-Issue-135 - Local-stack test hosts execute the released math dependency
 

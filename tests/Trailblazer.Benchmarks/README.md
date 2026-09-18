@@ -33,6 +33,7 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-cold-guide` | `NavigationColdGuideBenchmarks` |
 | `navigation-cold-frame` | `NavigationColdFrameBenchmarks` |
 | `navigation-guided-frame` | `NavigationGuidedFrameBenchmarks` |
+| `navigation-recovery` | `NavigationRecoveryBenchmarks` |
 | `navigation-scheduled-frame` | `NavigationScheduledFrameBenchmarks` |
 | `navigation-a-star-contention` | `NavigationAStarContentionBenchmarks` |
 | `navigation-flow-field` | `NavigationFlowFieldBenchmarks` and the promotion, agent, mutation, and articulation cases |
@@ -53,6 +54,34 @@ dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj 
 Do not treat short-run results as canonical measurements.
 
 ## Accepting a capture
+
+### Recovery candidate acquisition controls
+
+The recovery harness explicitly selects `Immediate` (control) or `Scheduled`.
+For example, `recovery-smoke Flow100 Scheduled Default` exercises all five
+episodes twice; `recovery-capture 1 Scheduled Default Flow` selects Flow100 and
+Flow500 for a deliberately scoped diagnostic launch. Omit `Flow` for the full
+15-case acquisition/recovery matrix. Cold/warm cases configure the selected mode
+initially. Lifecycle cases always prepare 32 moving frames in Immediate mode,
+then change policy without releasing already-adopted guidance; restore records
+the selected durable policy before population.
+
+`Default` means **default work limits with workload-sized request/lease
+retention**, not all public defaults. An explicit tuning argument contains six
+positive limits in `lookup,candidate,node,edge,connection,operation` order, for
+example `32768,64,2048,4096,64,128`. Such runs retain the exact settings and a
+distinct work-limit label; they do not change runtime defaults. Candidate records
+retain containing frames, operation turns, waiting/readiness outcomes and separate
+ordinary cache-hit/follower-checkout/build/promotion counters. Warm reuse requires
+zero builds and exactly one successful reuse per agent, counting distinct
+ordinary hits plus follower checkouts. Its raw record is exported before any
+acceptance failure is raised.
+
+The recovery analyzer defaults to all populations and three complete launches.
+Use `-ExpectedPopulations Flow` (or `Flow100`, `Flow500`, `AStar100`) and
+`-ExpectedDirectLaunches 1` only for explicitly labeled diagnostic subsets.
+Use `-Smoke` for smoke logs. Replay groups distinguish acquisition mode and work
+limits; failed/censored raw records remain diagnostic evidence, never acceptance.
 
 Verify the full log against the expected cases, child launches and measurement
 stages before using a result. The launcher returns `1` for critical validation
@@ -335,6 +364,165 @@ A quick preflight with different launch/warmup/iteration counts can produce a
 different generated job directory and embedded debug metadata, even with identical
 method bodies. Preserve that preflight separately; subsequent identical-job
 captures must still match their formal host and runtime-library hashes exactly.
+
+### Navigator acquisition and recovery episodes
+
+`NavigationRecoveryBenchmarks` keeps the guided benchmark's 100x100 wall-gap,
+query/start order, profile, budgets, one search workspace, and balanced interval-16
+LOS phases. It selects only `AStar100`, `Flow100`, and `Flow500`, crossed with
+`ColdInitial`, `WarmCompatible`, `SameMapRebake`, `ProfileReplacement`, and `Restore`.
+Existing guided methods and records are unchanged. The frozen 15-case baseline
+is synchronous. Current candidate runs also use the now-implemented
+`ConfigureAcquisitionMode` hook for opt-in Scheduled acquisition; the frozen
+baseline binaries and records remain unchanged.
+
+Each invocation creates a fresh context outside timing, publishes the same map,
+and proves both payload caches empty. Thus even the actual invocation following
+warmup is genuinely cache cold. This also recreates context-owned workspaces;
+it is not the older cold-guide benchmark's retained-workspace protocol. The warm
+case explicitly acquires the original ordered queries, releases them, then
+checks exact A* keys or compatible Flow origin coverage without rebuilding.
+Recovery cases prepare 32 moving guided frames before the trigger. The restore
+case populates new shells in the same context, retaining its compatible cache;
+JSON serialize/reset/construct/prepare/populate/assert work is separately reported.
+Profile replacement and map admission occur outside the frame timer; the first
+measured frame includes the next context publication and all affected controllers.
+
+Every measured frame includes `context.Simulate()`, every `Navigator.Simulate()`,
+and every motion commit in original order. Continue until every eligible original
+agent has actually produced a nonzero guided heading and movement, or a validated
+arrival, with a 10,000-frame censor limit. First success and first failure are
+disjoint latched outcomes of each original request; later live guide/LOS changes
+cannot revoke success or count that request as censored. A direct-first heading
+qualifies only after an untimed current-foot direct-ray proof; that validation
+ray is not repeated for an already completed original request.
+This fixture authors no actions and
+rejects a spurious pending action. A lease alone is not readiness. Fresh graph/cell
+versions, occupancy tickets and physical-cell agreement, body/wall bounds,
+movement, and complete position/velocity/readiness replay are validated outside
+the nested timer. Failure/censor records are exported before failing acceptance.
+No cancellations are issued by these five immediate-mode workloads.
+
+The ordinary 15-case arms preconfigure scheduler retention for the population: 100/500 requests
+and `max(65536, agents * 512)` descriptor bytes (65536/256000), compared with the
+runtime default of eight requests. Existing default counted slices are unchanged:
+8192 lookups, 1 endpoint candidate, 256 nodes, 256 edges, 64 connection legs.
+The record contains concrete scheduler settings, query limits and query budgets.
+No changed candidate slice configuration can be silently treated as this baseline.
+
+The `NAVIGATION_RECOVERY_SAMPLES` JSON records contain one whole episode: raw
+frame ticks, allocations, process-wide GC overlap masks, replay hashes, readiness
+frame per original agent (one-based; -1 if never ready), failures/cancellations/
+censored remainder, and process CPU delta. Process CPU is process-wide, includes
+untimed per-frame validation, excludes preparation/export, and may be zero for
+short episodes due to OS accounting granularity. It is not summed frame CPU.
+The whole-operation BDN timing also includes validation; nested ticks are the
+full-host frame measurement. Export runs outside both timing scopes.
+
+Internal cumulative counters distinguish actual query-worker build starts
+(including failed builds), existing-payload checkout hits, and accepted Flow
+prefix promotions. Per-episode snapshot differences exclude preparation and
+diagnostic cache inspection. Ordinary query-meter totals are aggregated once
+on completion/cancellation, including failed admitted work. They exclude active
+unfinalized work, gate-rejected requests, immediate LOS/guide sampling, and
+unmetered clearing/copy work; they are not a complete frame-work allowance.
+`completedQueries` includes cancelled queries finalized by disposal. In the
+frozen synchronous baseline there was no in-flight cohort, and
+`coalescedRequests` was null. Current candidate records alias that field to
+`sharedFollowerCheckouts`, including followers of an already cached leader;
+it is neither the number of cold searches eliminated nor proof of cold-build
+sharing by itself. Read it alongside builds, ordinary hits, coverage misses,
+and promotions.
+
+Build and run semantic/replay smoke (two episodes per case; not timing evidence):
+
+```powershell
+dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -p:UseLocalLsfStack=true
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-smoke Flow100
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-smoke Flow500
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-smoke AStar100
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-readiness-smoke
+```
+
+The existing BDN protocol can run all 15 cases, each in three fresh child launches,
+one warmup and three actual complete episodes:
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-recovery --filter '*RecoverUntilUsable*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/navigator-recovery/bdn
+```
+
+**Frozen reruns must not rebuild against live sources.** The normal BDN launcher
+generates a build whose local-stack references resolve live sibling `bin` paths.
+Preserve the exact executed generated child and its `Execute` command if using
+BDN for a frozen rerun. Alternatively, copy the complete Release benchmark output
+directory to an immutable evidence directory, retain its SHA256 manifest and
+source identities, then run this direct protocol from that copy (no MSBuild):
+
+```powershell
+# Replace with the already frozen complete output directory; do not copy over it later.
+$frozenHost = 'artifacts/navigator-recovery/baseline-frozen/Trailblazer.Benchmarks.dll'
+1..3 | ForEach-Object {
+    dotnet $frozenHost recovery-capture $_
+    if ($LASTEXITCODE -ne 0) { throw "Recovery launch $_ failed." }
+} 2>&1 | Tee-Object artifacts/navigator-recovery/baseline-capture.log
+```
+
+Each direct process runs all 15 cases, with exactly one explicitly tagged warmup
+and three actual episodes per case, using the identical scenario/frame loop.
+Three processes provide three fresh launches for every case, though unlike BDN
+the cases share each launch's process history in the fixed population/episode
+order above. Do not mix these two process-isolation protocols in a comparison.
+Use separate logs for repeat captures and preserve failures. The terminal marker
+asserts all 15 cases / 15 warmup / 45 actual records completed in that launch.
+
+```powershell
+& tests/Trailblazer.Benchmarks/AnalyzeRecoveryFrames.ps1 -LogPath artifacts/navigator-recovery/baseline-capture.log -OutputPath artifacts/navigator-recovery/baseline-summary.json
+# Direct smoke logs require -Smoke and are never labeled Actual.
+& tests/Trailblazer.Benchmarks/AnalyzeRecoveryFrames.ps1 -LogPath artifacts/navigator-recovery/task1/smoke-flow100.log -OutputPath artifacts/navigator-recovery/task1/smoke-summary.json -Smoke
+& tests/Trailblazer.Benchmarks/TestRecoveryFrameAnalysis.ps1
+```
+
+The analyzer retains raw records and separates Warmup, Actual, Pilot, Jitting,
+Diagnostic and Smoke. BDN overhead operations do not run the episode and are ignored;
+`WorkloadResult` repeats actuals and is not another observation. Monitoring uses
+one invocation per iteration; a nonmatching/multi-operation record fails pairing.
+Formal direct logs require launches 1,2,3, all 180 records, and each launch to
+contain all 15 cases at 1+3 records. An intentional prefix investigation may use
+`-ExpectedDirectLaunches 1` or `2`; the summary labels it `BoundedDiagnostic`, not
+a formal capture. `recovery-readiness-smoke` exercises real leased-to-direct,
+direct-first, post-success invalid-path and sticky original-failure lifecycles
+while other original requests are waiting.
+Cross-launch replay is checked for each exact mode/algorithm/count/episode. Check
+the reported launch list has exactly 1,2,3 and BDN JSON independently when used.
+The report exposes per-episode observed median/P95/P99/max, total frame time,
+counts above 2/31.25 ms, allocation, GC overlap, CPU and completion delay; correlated
+nested frames and tiny episode counts do not justify universal tail guarantees.
+
+The separate `recovery-diagnostic <launch>` command runs six fixed Flow/100 cold
+controls in order: mixed A/B/A/B destinations in Immediate and Scheduled,
+uncovered first origin in both modes, then Scheduled retention 8 and 100. It
+keeps the original map, profile, budgets, 32 Hz, B limits
+`65536,128,4096,8192,64,256`, and the 10,000-frame cap. Each control has one
+warmup and three Actual episodes. Diagnostic records carry their own identity,
+per-original-agent start/destination mapping and readiness; pressure records
+also carry per-frame retained requests, per-frame sticky `CapacityExceeded`
+status observations and the number of distinct agents observed with that
+status. Status observations are not rejected-attempt counts. The command
+exports each failed/censored episode before rejecting it. These candidate-only
+controls have no historical baseline and must not be pooled with the 15-case
+matrix. Two local launches are semantic/replay checks only; root owns the later
+uncontended three-launch, two-capture timing protocol on frozen binaries.
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-diagnostic 1 2>&1 | Tee-Object -FilePath artifacts/navigator-recovery/diagnostic.log
+if ($LASTEXITCODE -ne 0) { throw 'Recovery diagnostic failed; inspect the retained log.' }
+& tests/Trailblazer.Benchmarks/AnalyzeRecoveryFrames.ps1 -LogPath artifacts/navigator-recovery/diagnostic.log -OutputPath artifacts/navigator-recovery/diagnostic-summary.json -DiagnosticControls -ExpectedDirectLaunches 1
+```
+
+For ordinary direct logs, pass `-ExpectedMode` and `-ExpectedWorkLimits` for
+non-default arms; the analyzer verifies the exact selected case set and concrete
+budget, scheduler and query-limit identity before accepting records. It remains
+compatible with the frozen baseline's older settings shape.
 
 ### Direct-visibility full-host controls
 

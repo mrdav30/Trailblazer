@@ -375,6 +375,110 @@ public sealed class NavigationAStarConcurrencyTests
         cache.ActiveLeaseCount.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GuidePublicationDuringWorldValidation_ShouldRevalidateTheCurrentRoot(
+        bool changeDependency)
+    {
+        using var world = new GridWorld();
+        VoxelIndex[] cells = CreateLine(3);
+        NavigationAStarExitTestHarness.GraphFixture fixture =
+            NavigationAStarExitTestHarness.CreateSingleMap(
+                world, NavigationAStarExitTestHarness.RectangularLine(3), cells,
+                "guide-publication");
+        PathQuery query = new(
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[0]), fixture.MapId),
+            new NavigationEndpoint(
+                NavigationAStarExitTestHarness.GetFoot(fixture.Binding, cells[^1]), fixture.MapId),
+            fixture.DefaultProfile,
+            NavigationAStarExitTestHarness.Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar,
+            new NavigationWorkBudget(8_192, 32, 128, 1_024, 1_024, 0, 0, 0, 128, 128, 1),
+            allowTransitions: false);
+        NavigationAStarPayload payload = NavigationAStarExitTestHarness
+            .RunAStar(world, fixture.Graph, query).Payload!;
+        ulong worldSequence = world.ChangeSequence;
+        payload.WorldChangeSequence.Should().Be(worldSequence,
+            "real simplification must stamp the payload so validation reaches the world lock");
+        using NavigationWorldGraphStore store =
+            NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
+        NavigationAStarPayloadCache cache = CreateCache(world, payload.RetainedBytes);
+        cache.TryReservePayload(payload.RetainedBytes, out var reservation).Should().BeTrue();
+        cache.TryPublish(payload, store, ref reservation, out var payloadLease).Should().BeTrue();
+        payloadLease.EndpointProof.Should().BeNull(
+            "an extra endpoint proof must not mask missing payload-dependency revalidation");
+        cache.TryCreateGuide(store, payloadLease, out NavigationAStarGuideLease? inner)
+            .Should().Be(NavigationAStarQueryStatus.Success);
+        using var guide = new NavigationGuideLease(inner!);
+        object worldSync = typeof(GridWorld)
+            .GetProperty("ChangeSyncRoot", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(world)!;
+        using var readerStarted = new ManualResetEventSlim();
+        NavigationGuideStatus status = default;
+        NavigationGuideStep step = default;
+        Exception? readerError = null;
+        var reader = new Thread(() =>
+        {
+            readerStarted.Set();
+            try { status = guide.TryGetCurrentStep(out step); }
+            catch (Exception error) { readerError = error; }
+        }) { IsBackground = true };
+
+        Monitor.Enter(worldSync);
+        try
+        {
+            reader.Start();
+            readerStarted.Wait(5_000, TestContext.Current.CancellationToken).Should().BeTrue();
+            SpinWait.SpinUntil(
+                    () => (reader.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                    TimeSpan.FromSeconds(5))
+                .Should().BeTrue("the guide must pause at world validation after checking its leased graph");
+            store.ActiveLeaseCount.Should().Be(1);
+            NavigationWorldGraph changed = changeDependency
+                ? fixture.Graph.WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+                : fixture.Graph;
+            store.TryPublish(changed.WithGraphVersion(fixture.Graph.GraphVersion + 1))
+                .Should().Be(NavigationCandidatePublication.Published);
+            world.ChangeSequence.Should().Be(worldSequence);
+        }
+        finally
+        {
+            Monitor.Exit(worldSync);
+            reader.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
+        }
+
+        readerError.Should().BeNull();
+        world.ChangeSequence.Should().Be(worldSequence);
+        status.Should().Be(changeDependency ? NavigationGuideStatus.Stale : NavigationGuideStatus.Success);
+        if (changeDependency)
+        {
+            step.Should().Be(default(NavigationGuideStep));
+            store.TryPublish(fixture.Graph.WithGraphVersion(fixture.Graph.GraphVersion + 2))
+                .Should().Be(NavigationCandidatePublication.Published);
+            guide.Status.Should().Be(NavigationGuideStatus.Stale);
+            guide.TryGetCurrentStep(out NavigationGuideStep retryStep).Should().Be(NavigationGuideStatus.Stale);
+            retryStep.Should().Be(default(NavigationGuideStep));
+        }
+        else
+        {
+            step.Address.Should().Be(new NavigationCellAddress(fixture.MapId, cells[0]));
+            step.Position.Should().Be(query.Start.Position);
+            step.Medium.Should().Be(TraversalMedium.Solid);
+            step.HasTransition.Should().BeFalse();
+            guide.CurrentStepIndex.Should().Be(0);
+            guide.Status.Should().Be(NavigationGuideStatus.Success);
+        }
+        guide.Dispose();
+        store.ActiveLeaseCount.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
     private static void Prepare(NavigationAStarQueryWork work)
     {
         for (int step = 0;

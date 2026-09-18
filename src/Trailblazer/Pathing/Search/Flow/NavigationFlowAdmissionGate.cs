@@ -78,7 +78,9 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
 
     internal NavigationFlowQueryStatus Begin(
         PathQuery query,
-        out NavigationFlowBatchWork work)
+        out NavigationFlowBatchWork work,
+        bool scheduled = false,
+        NavigationCohortSource? sharedSource = null)
     {
         lock (_sync)
         {
@@ -88,7 +90,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
                 return NavigationFlowQueryStatus.CapacityExceeded;
             }
             _descriptors[0] = new BatchDescriptor(0, 0, query);
-            return BeginCore(1, out work);
+            return BeginCore(1, out work, scheduled, sharedSource);
         }
     }
 
@@ -154,7 +156,9 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
 
     private NavigationFlowQueryStatus BeginCore(
         int count,
-        out NavigationFlowBatchWork work)
+        out NavigationFlowBatchWork work,
+        bool scheduled = false,
+        NavigationCohortSource? sharedSource = null)
     {
         int candidateCount = _coordinator.TryReservePrefix(
             PathAlgorithm.FlowField,
@@ -165,7 +169,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         for (int i = 0; i < leased; i++)
         {
             _descriptors[i].SlotIndex = i;
-            _queries[i].Begin(_descriptors[i].Query, _leases[i]!);
+            _queries[i].Begin(_descriptors[i].Query, _leases[i]!, scheduled, sharedSource);
             _leases[i] = null;
         }
         _generation = unchecked(_generation + 1UL);
@@ -243,15 +247,19 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         int lookupStepLimit,
         int endpointCandidateStepLimit)
     {
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, endpointCandidateStepLimit);
+        AdvanceAdmission(work, ref remaining);
+    }
+
+    internal void AdvanceAdmission(NavigationFlowBatchWork work, ref NavigationAcquisitionSlice remaining)
+    {
         lock (_sync)
         {
             EnsureActive(work);
             while (_nextAdmission < _activeAdmittedCount)
             {
                 NavigationFlowQueryWork query = _queries[_nextAdmission];
-                query.PrepareSearchOrCheckout(
-                    lookupStepLimit,
-                    endpointCandidateStepLimit);
+                query.PrepareSearchOrCheckout(ref remaining);
                 if (!query.IsPrepared)
                     return;
                 if (query.ReservationRejected)
@@ -272,6 +280,13 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         int edgeStepLimit,
         int connectionStepLimit)
     {
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, 0, nodeStepLimit, edgeStepLimit, connectionStepLimit);
+        return AdvanceSearch(work, inputIndex, ref remaining);
+    }
+
+    internal NavigationFlowQueryStatus AdvanceSearch(
+        NavigationFlowBatchWork work, int inputIndex, ref NavigationAcquisitionSlice remaining)
+    {
         BatchDescriptor descriptor;
         NavigationFlowQueryWork query;
         lock (_sync)
@@ -288,11 +303,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         }
         try
         {
-            return query.AdvanceSearch(
-                lookupStepLimit,
-                nodeStepLimit,
-                edgeStepLimit,
-                connectionStepLimit);
+            return query.AdvanceSearch(ref remaining);
         }
         finally
         {

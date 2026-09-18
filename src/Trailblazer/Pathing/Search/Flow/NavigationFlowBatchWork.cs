@@ -37,6 +37,12 @@ internal readonly struct NavigationFlowBatchWork : IDisposable
     internal void AdvanceAdmission(int lookupStepLimit, int endpointCandidateStepLimit) =>
         Owner.AdvanceAdmission(this, lookupStepLimit, endpointCandidateStepLimit);
 
+    internal void AdvanceAdmission(ref NavigationAcquisitionSlice remaining) =>
+        Owner.AdvanceAdmission(this, ref remaining);
+
+    internal NavigationFlowQueryStatus AdvanceSearch(int inputIndex, ref NavigationAcquisitionSlice remaining) =>
+        Owner.AdvanceSearch(this, inputIndex, ref remaining);
+
     internal NavigationFlowQueryStatus AdvanceSearch(
         int inputIndex,
         int lookupStepLimit,

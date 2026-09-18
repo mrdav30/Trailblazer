@@ -253,16 +253,18 @@ public sealed class NavigationDirectRayTests
             immediate.RayWork.AdvanceDirect(immediate);
             immediate.RayWork.Reset();
         }
-        long before = GC.GetAllocatedBytesForCurrentThread();
         NavigationRayStatus status = default;
-        for (int i = 0; i < 16; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            immediate.WorkMeter.Reset(Scene.Budget);
-            immediate.RayWork.Begin(request);
-            status = immediate.RayWork.AdvanceDirect(immediate);
-            immediate.RayWork.Reset();
-        }
-        (GC.GetAllocatedBytesForCurrentThread() - before).Should().Be(0);
+            for (int i = 0; i < 16; i++)
+            {
+                immediate.WorkMeter.Reset(Scene.Budget);
+                immediate.RayWork.Begin(request);
+                status = immediate.RayWork.AdvanceDirect(immediate);
+                immediate.RayWork.Reset();
+            }
+        });
+        allocated.Should().Be(0);
         status.Should().Be(blocked ? NavigationRayStatus.CertifiedObstruction : NavigationRayStatus.Success);
         immediate.SourceOrdinals.Length.Should().Be(256);
         immediate.SourceOrdinals.Should().OnlyContain(tag => tag == 0);

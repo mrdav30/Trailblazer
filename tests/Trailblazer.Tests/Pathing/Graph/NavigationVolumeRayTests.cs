@@ -664,17 +664,18 @@ public sealed class NavigationVolumeRayTests
             Assert.Equal(NavigationRayStatus.Success, work.Advance(meter));
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 64; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            meter.Reset(Budget());
-            work.Begin(request);
-            if (work.Advance(meter) != NavigationRayStatus.Success)
-                throw new Xunit.Sdk.XunitException("Warmed volume ray did not complete.");
-        }
-        long after = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 64; i++)
+            {
+                meter.Reset(Budget());
+                work.Begin(request);
+                if (work.Advance(meter) != NavigationRayStatus.Success)
+                    throw new Xunit.Sdk.XunitException("Warmed volume ray did not complete.");
+            }
+        });
 
-        Assert.Equal(0, after - before);
+        Assert.Equal(0, allocated);
     }
 
     [Fact]

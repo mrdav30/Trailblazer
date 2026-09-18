@@ -3,6 +3,7 @@ using System.Linq;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Running;
 using Trailblazer.Benchmarks.Pathing;
+using Trailblazer.Navigation.Steering;
 
 namespace Trailblazer.Benchmarks;
 
@@ -18,6 +19,26 @@ internal static class Program
         }
 
         string command = args[0];
+
+        if (string.Equals(command, "recovery-readiness-smoke", StringComparison.OrdinalIgnoreCase)
+            && args.Length == 1)
+            return NavigationRecoveryScenario.RunReadinessRegression();
+
+        if (string.Equals(command, "recovery-capture", StringComparison.OrdinalIgnoreCase)
+            && args.Length >= 2 && args.Length <= 5)
+            return NavigationRecoveryBenchmarks.RunCapture(int.Parse(args[1]),
+                args.Length >= 3 ? Enum.Parse<NavigationAcquisitionMode>(args[2]) : NavigationAcquisitionMode.Immediate,
+                args.Length >= 4 ? args[3] : "Default", args.Length >= 5 ? args[4] : "All");
+
+        if (string.Equals(command, "recovery-diagnostic", StringComparison.OrdinalIgnoreCase)
+            && args.Length == 2)
+            return NavigationRecoveryBenchmarks.RunDiagnosticCapture(int.Parse(args[1]));
+
+        if (string.Equals(command, "recovery-smoke", StringComparison.OrdinalIgnoreCase)
+            && args.Length <= 4)
+            return NavigationRecoveryBenchmarks.RunSmoke(args.Length >= 2 ? args[1] : "Flow100",
+                args.Length >= 3 ? Enum.Parse<NavigationAcquisitionMode>(args[2]) : NavigationAcquisitionMode.Immediate,
+                args.Length >= 4 ? args[3] : "Default");
 
         if (string.Equals(command, "direct-visibility-smoke", StringComparison.OrdinalIgnoreCase)
             && args.Length == 1)

@@ -30,6 +30,8 @@ internal readonly struct NavigationFlowFieldReservation
 /// <summary>Stores bounded destination-centric canonical flow-field prefixes.</summary>
 internal sealed class NavigationFlowFieldPayloadCache : IDisposable
 {
+    internal NavigationAcquisitionDiagnostics AcquisitionDiagnostics { get; } = new();
+
     internal enum LeaseSlotState : byte
     {
         Free = 0,
@@ -195,6 +197,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         ulong generation = 0;
         FixedMathSharp.Fixed64 originIntegrationCost = FixedMathSharp.Fixed64.Zero;
         NavigationWorldGraph? validatedGraph = null;
+        GraphDependencyStamp? endpointProof = null;
         lock (_sync)
         {
             if (!_disposed
@@ -207,6 +210,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     && !leaseSlot.Entry.IsInvalidated)
                 {
                     payload = leaseSlot.Entry.Payload;
+                    endpointProof = leaseSlot.EndpointProof;
                     NavigationWorldGraph current = store.Current;
                     if (current.MapCount > _guideMapCapacity)
                     {
@@ -215,6 +219,10 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     else if (!IsPayloadCurrent(current, payload))
                     {
                         leaseSlot.Entry.IsInvalidated = true;
+                    }
+                    else if (endpointProof != null && !current.IsDependencyCurrent(endpointProof))
+                    {
+                        status = NavigationGuideStatus.Stale;
                     }
                     else if (!payload.TryGetNode(
                             result.ResolvedOrigin,
@@ -251,11 +259,13 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             generation,
             result.ResolvedOrigin,
             activePayload.Key.StartMedium,
-            originIntegrationCost);
+            originIntegrationCost,
+            endpointProof);
         guide = new NavigationFlowFieldLease(activeGuide);
         bool currentAfterBind = IsBoundGuideCurrent(
             TryGetGuidePayload(slot, generation, out _),
-            IsPayloadCurrent(store.Current, activePayload, validatedGraph));
+            IsPayloadCurrent(store.Current, activePayload, validatedGraph)
+                && NavigationEndpointProofWork.IsCurrent(store, endpointProof));
         return ResolveBoundGuideValidation(currentAfterBind, ref guide);
     }
 
@@ -329,7 +339,9 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowFieldPayloadKey key,
         NavigationCellAddress requiredOrigin,
         out NavigationFlowFieldPayloadLease lease,
-        out NavigationFlowFieldPayload? proof)
+        out NavigationFlowFieldPayload? proof,
+        bool scheduled = false,
+        ulong requestWorldChangeSequence = 0)
     {
         SwiftThrowHelper.ThrowIfNull(store, nameof(store));
         SwiftThrowHelper.ThrowIfNull(expectedGraph, nameof(expectedGraph));
@@ -349,8 +361,14 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             NavigationWorldGraph graph = store.Current;
             if (!IsPayloadCurrent(graph, entry.Payload))
             {
+                bool currentQueryMiss = scheduled
+                    && ReferenceEquals(graph, expectedGraph)
+                    && _world.IsActive
+                    && _world.ChangeSequence == requestWorldChangeSequence
+                    && IsWorldCurrent(entry.Payload)
+                    && !graph.IsDependencyCurrent(entry.Payload.Dependencies);
                 RemoveAt(slot, invalidate: true);
-                return NavigationFlowFieldStatus.Stale;
+                return currentQueryMiss ? NavigationFlowFieldStatus.Pending : NavigationFlowFieldStatus.Stale;
             }
             validatedGraph = graph;
             if (!IsPayloadCurrent(expectedGraph, entry.Payload, validatedGraph))
@@ -387,6 +405,118 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowFieldPayload payload) => status == NavigationFlowFieldStatus.Stale
         ? null
         : payload;
+
+    internal bool TryReserveEndpointProof(long bytes)
+    {
+        lock (_sync)
+        {
+            if (_disposed || bytes > _maximumActivePayloadBytes - _leasedBytes - _reservedPayloadBytes)
+                return false;
+            _reservedPayloadBytes += bytes;
+            return true;
+        }
+    }
+
+    internal void ReleaseEndpointProof(ref long bytes)
+    {
+        lock (_sync)
+        {
+            _reservedPayloadBytes -= bytes;
+            bytes = 0;
+        }
+    }
+
+    internal bool TryAttachEndpointProof(NavigationFlowFieldPayloadLease lease,
+        GraphDependencyStamp? proof, ref long reservedBytes)
+    {
+        lock (_sync)
+        {
+            if (!lease.IsOwnedBy(this, out int slot, out ulong generation)) return false;
+            ref LeaseSlot owned = ref _leaseSlots[slot];
+            if (owned.Generation != generation || owned.State != LeaseSlotState.ActivePayload
+                || owned.Entry == null || owned.Entry.IsInvalidated) return false;
+            SwiftThrowHelper.ThrowIfTrue((proof?.RetainedBytes ?? 0) > reservedBytes,
+                message: "Endpoint proof must be reserved before attachment.");
+            _leasedBytes += (proof?.RetainedBytes ?? 0) - (owned.EndpointProof?.RetainedBytes ?? 0);
+            owned.EndpointProof = proof;
+            _reservedPayloadBytes -= reservedBytes;
+            reservedBytes = 0;
+            return true;
+        }
+    }
+
+    internal NavigationFlowFieldStatus TryCheckoutShared(
+        NavigationWorldGraphStore store, NavigationWorldGraph expectedGraph,
+        NavigationFlowFieldPayloadKey key, NavigationCellAddress origin,
+        NavigationCohortSource source, GraphDependencyStamp? endpointProof,
+        out NavigationFlowFieldPayloadLease lease, out NavigationFlowFieldPayload? proof,
+        long reservedEndpointProofBytes = 0, bool preserveSourceProof = false)
+    {
+        lease = default;
+        proof = null;
+        NavigationFlowFieldStatus status;
+        lock (_sync)
+        {
+            if (_disposed || !source.HasFlow
+                || !source.Flow.IsOwnedBy(this, out int slot, out ulong generation))
+                return NavigationFlowFieldStatus.Stale;
+            ref LeaseSlot pin = ref _leaseSlots[slot];
+            CacheEntry? entry = pin.Entry;
+            if (pin.Generation != generation || pin.State != LeaseSlotState.ActivePayload
+                || entry == null || entry.IsInvalidated)
+                return NavigationFlowFieldStatus.Stale;
+            if (!entry.Payload.Key.Equals(key))
+                return NavigationFlowFieldStatus.Pending;
+            if (preserveSourceProof) endpointProof = pin.EndpointProof;
+            if (!IsPayloadCurrent(expectedGraph, entry.Payload)
+                || !IsPayloadCurrent(store.Current, entry.Payload)
+                || !NavigationEndpointProofWork.IsCurrent(store, pin.EndpointProof)
+                || !NavigationEndpointProofWork.IsCurrent(store, endpointProof))
+                return NavigationFlowFieldStatus.Stale;
+            proof = entry.Payload;
+            status = ClassifyCoverage(proof, origin);
+            if (status == NavigationFlowFieldStatus.Success)
+            {
+                long proofBytes = endpointProof?.RetainedBytes ?? 0;
+                bool transfer = source.Transfer || _freeLeaseCount == 0;
+                long replacedBytes = transfer ? pin.EndpointProof?.RetainedBytes ?? 0 : 0;
+                if (proofBytes - replacedBytes > _maximumActivePayloadBytes - _leasedBytes - _reservedPayloadBytes + reservedEndpointProofBytes)
+                {
+                    proof = null;
+                    return NavigationFlowFieldStatus.CapacityExceeded;
+                }
+                if (source.Transfer || !TryCheckout(entry, out lease))
+                {
+                    lease = source.Flow;
+                    source.Flow = default;
+                    source.HasFlow = false;
+                }
+                lease.IsOwnedBy(this, out int targetSlot, out _);
+                _leasedBytes -= _leaseSlots[targetSlot].EndpointProof?.RetainedBytes ?? 0;
+                _leaseSlots[targetSlot].EndpointProof = endpointProof;
+                _leasedBytes += proofBytes;
+            }
+        }
+        return CompleteSharedCheckoutValidation(store, endpointProof, status, ref lease, ref proof);
+    }
+
+    internal NavigationFlowFieldStatus CompleteSharedCheckoutValidation(
+        NavigationWorldGraphStore store, GraphDependencyStamp? endpointProof,
+        NavigationFlowFieldStatus status, ref NavigationFlowFieldPayloadLease lease,
+        ref NavigationFlowFieldPayload? proof)
+    {
+        status = CompletePostLockValidation(store, proof!, status, ref lease);
+        if (!NavigationEndpointProofWork.IsCurrent(store, endpointProof))
+        {
+            lease.Dispose();
+            lease = default;
+            proof = null;
+            return NavigationFlowFieldStatus.Stale;
+        }
+        if (status is NavigationFlowFieldStatus.Pending or NavigationFlowFieldStatus.Stale)
+            proof = null;
+        return status;
+    }
 
     internal bool IsExactProofCurrent(
         NavigationWorldGraphStore store,
@@ -477,6 +607,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                         reservationSlot,
                         ref reservation,
                         out lease);
+                    AcquisitionDiagnostics.RecordPromotion();
                 }
             }
             else
@@ -522,6 +653,18 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         return NavigationFlowFieldStatus.Stale;
     }
 
+    internal bool IsEndpointProofCurrent(NavigationFlowFieldPayloadLease lease, NavigationWorldGraph graph)
+    {
+        lock (_sync)
+        {
+            if (!lease.IsOwnedBy(this, out int slot, out ulong generation))
+                return false;
+            ref LeaseSlot owned = ref _leaseSlots[slot];
+            return owned.Generation == generation && owned.State == LeaseSlotState.ActivePayload
+                && (owned.EndpointProof == null || graph.IsDependencyCurrent(owned.EndpointProof));
+        }
+    }
+
     internal NavigationFlowFieldStatus TryGetGuidePayload(
         int slot,
         ulong generation,
@@ -557,6 +700,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 return;
             }
             CacheEntry entry = leaseSlot.Entry!;
+            _leasedBytes -= leaseSlot.EndpointProof?.RetainedBytes ?? 0;
             entry.LeaseCount--;
             _activeLeaseCount--;
             if (entry.LeaseCount == 0)
@@ -578,6 +722,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         {
             ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
             CacheEntry entry = leaseSlot.Entry!;
+            _leasedBytes -= leaseSlot.EndpointProof?.RetainedBytes ?? 0;
             entry.LeaseCount--;
             _activeLeaseCount--;
             if (entry.LeaseCount == 0)
@@ -1088,6 +1233,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     {
         ref LeaseSlot leaseSlot = ref _leaseSlots[slot];
         leaseSlot.Entry = null;
+        leaseSlot.EndpointProof = null;
         leaseSlot.MaximumBytes = 0;
         leaseSlot.State = RecycleLeaseSlotIdentity(
             leaseSlot.Generation,
@@ -1248,6 +1394,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
     private struct LeaseSlot
     {
         internal CacheEntry? Entry;
+        internal GraphDependencyStamp? EndpointProof;
         internal long MaximumBytes;
         internal ulong Generation;
         internal LeaseSlotState State;

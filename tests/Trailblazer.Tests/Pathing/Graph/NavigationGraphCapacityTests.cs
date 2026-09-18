@@ -880,10 +880,11 @@ public sealed class NavigationGraphCapacityTests
             ingress.Enqueue(events[i]);
         ingress.Reset();
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < events.Length; i++)
-            ingress.Enqueue(events[i]);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+        {
+            for (int i = 0; i < events.Length; i++)
+                ingress.Enqueue(events[i]);
+        });
 
         allocated.Should().Be(0);
         ingress.IndexCapacity.Should().Be(indexCapacity);
@@ -905,15 +906,16 @@ public sealed class NavigationGraphCapacityTests
             runtime.TryAcquire()!.Dispose();
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
         bool allCheckedOut = true;
-        for (int frame = 34; frame < 134; frame++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            runtime.Maintain(frame);
-            using NavigationWorldGraphLease? graphLease = runtime.TryAcquire();
-            allCheckedOut &= graphLease != null;
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int frame = 34; frame < 134; frame++)
+            {
+                runtime.Maintain(frame);
+                using NavigationWorldGraphLease? graphLease = runtime.TryAcquire();
+                allCheckedOut &= graphLease != null;
+            }
+        });
 
         allCheckedOut.Should().BeTrue();
         allocated.Should().Be(0);

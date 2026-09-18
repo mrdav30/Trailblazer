@@ -22,11 +22,16 @@ public partial class NavSteering
         int movementGroupId = _movementGroupSession.GroupId;
         int pathRecheckCooldownFrames = _pathRecheckCooldownFrames;
         int? pathRecheckPhase = _pathRecheckPhase;
+        NavigationAcquisitionMode acquisitionMode = _acquisitionMode;
 
         RecordValues.Look(chronicler, ref pathRecheckCooldownFrames, "PathRecheckCooldownFrames", DefaultPathRecheckCooldown);
         RecordValues.Look(chronicler, ref pathRecheckPhase, "PathRecheckPhase", null);
+        RecordValues.Look(chronicler, ref acquisitionMode, "AcquisitionMode", NavigationAcquisitionMode.Immediate);
         if (chronicler.Mode == SerializationMode.Loading)
+        {
             ValidatePathRecheckConfiguration(pathRecheckCooldownFrames, pathRecheckPhase);
+            ValidateAcquisitionMode(acquisitionMode);
+        }
 
         RecordValues.Look(chronicler, ref CanPathfind, "CanPathfind", true);
         RecordValues.Look(chronicler, ref _destination, "Destination", Vector3d.Zero);
@@ -55,6 +60,7 @@ public partial class NavSteering
         if (chronicler.Mode == SerializationMode.Loading)
         {
             _pathRecheckCooldownFrames = pathRecheckCooldownFrames;
+            _acquisitionMode = acquisitionMode;
             _pathRecheckPhase = pathRecheckPhase;
             ClearPhasedPathRecheckSchedule();
             if (_context != null)
@@ -68,6 +74,8 @@ public partial class NavSteering
             }
 
             _currentQuery = null;
+            if (_acquisitionState != null)
+                _acquisitionState.GraphOnlyRetry = false;
             _pendingCommittedAreaPolicy = null;
             _shouldRequestPathThisFrame = false;
             MovementGroupID = movementGroupId;
@@ -79,6 +87,8 @@ public partial class NavSteering
 
     internal void RestoreQueryFromLoadedSession(PathQuery? query)
     {
+        if (_acquisitionState != null)
+            _acquisitionState.GraphOnlyRetry = false;
         _pendingCommittedAreaPolicy = null;
         _currentQuery = query;
         ReleaseNavigationGuidance();
@@ -87,7 +97,7 @@ public partial class NavSteering
             return;
 
         _requestedDestination = query.Value.End.Position;
-        if (_pathRecheckPhase.HasValue)
+        if (_pathRecheckPhase.HasValue || _acquisitionMode == NavigationAcquisitionMode.Scheduled)
         {
             _hasLineOfSightPath = false;
             _shouldRequestPathThisFrame = _shouldMove;
@@ -99,6 +109,7 @@ public partial class NavSteering
 
     private void ReleaseNavigationGuidance()
     {
+        CancelAcquisition();
         _navigationGuideLease?.Dispose();
         _navigationGuideLease = null;
         _navigationFlowFieldLease?.Dispose();

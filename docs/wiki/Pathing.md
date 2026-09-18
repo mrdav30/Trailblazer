@@ -117,7 +117,7 @@ or other host-owned work where that latency is acceptable.
 For frame-spread acquisition, submit the same `PathQuery` with
 `context.Guides.Schedule(query, out request)`. Acceptance returns `Pending` and
 a disposable `NavigationGuideRequest`; a capacity or invalid-profile rejection
-returns no request. The context advances one acquisition phase per `Simulate()`
+returns no request. The context advances acquisition within shared frame allowances per `Simulate()`
 after graph maintenance and before simulation hooks. Never loop over extra
 `Simulate()` calls merely to drain the queue in a real game frame.
 
@@ -170,41 +170,146 @@ the take operation can change a previously successful result to `Stale`.
 
 ### Ordering, capacity and latency
 
-The scheduler is one FIFO with one active acquisition across A* and Flow.
-Queued entries retain query intent only; they observe the graph when activated.
+The scheduler is one FIFO with one active single-query continuation across A* and Flow.
+It freezes a bounded contiguous cohort of compatible requests before beginning
+the oldest build. Formation has a fixed submission horizon; arrivals cannot keep
+extending it across frames. An unrelated pending query ends the cohort.
+Queued entries retain query intent only; each admission observes its acquired graph.
 Submit and cancel in deterministic host order. A request submitted from a
 simulation hook first advances on a later fixed frame. A large request delays
-later requests; there are no priority overrides, automatic retries or worker
+unrelated requests; there are no priority overrides, automatic retries or worker
 threads.
 
-`NavigationSchedulingSettings` separates per-frame continuation slices from
+A* sharing requires the exact admitted request. Flow sharing requires the complete
+destination payload key, including resolved destination, profile, media, policy,
+budget and options; each origin is admitted independently. A covered follower can
+finish before an earlier uncovered member of the same cohort. Same-pass successes
+are published in submission order; uncovered members build oldest-first before
+the next unrelated cohort. Coverage includes `ExtraIntegrationCost`, not merely
+presence of an origin node. A follower coverage miss does not start a search during
+fan-out, and no member enlarges the original build's extent or total budget.
+
+Every successful member has an independent lease, cursor, medium and pending action.
+Ordinary A*/Flow cache hits and pinned followers certify their independently admitted
+endpoints against the immutable payload's exact dependency versions. Certification
+uses the query's lookup budget (and the shared frame allowance when scheduled).
+Certified hits retain no additional proof and preserve the warmed zero-allocation
+path. Extra endpoint dependencies require a lease-local proof, checked on publication,
+transfer and use; invalidating that proof does not invalidate an otherwise-current
+source payload. The scheduler's temporary payload pin consumes ordinary active lease/byte
+capacity, including for detached or nonreusable payloads; endpoint proof storage is
+reserved before capture and charged under the same active-byte ceiling. A source-slot
+transfer preserves its member's proof or replaces and releases the old proof charge.
+Capturing a different replacement can temporarily require capacity for both old and
+new proofs, returning `CapacityExceeded` when that bounded storage cannot fit. If an extra
+lease slot cannot fit, the oldest eligible member takes the original source slot and
+pinned fan-out ends. Remaining members use ordinary bounded acquisition/capacity
+outcomes. Cancelling one member does not cancel an already-started build while a
+frozen member is still interested; cancelling the last interested member releases it.
+
+`NavigationSchedulingSettings` separates shared per-frame counted-work allowances from
 `PathQuery.Budget`, which remains the total-query limit. Configure it through
 the `scheduling` argument of `TrailblazerWorldContextSettings`. Retained request
 count and logical descriptor bytes include queued, active and completed-but-
 unclaimed requests. Take or dispose completed requests promptly: leaving them
 unclaimed can exhaust capacity even when no search is running.
 
+Lookup, endpoint-candidate, node, edge and connection credits are shared across
+all phases, requests and algorithms in a frame; they are never refilled by a
+phase change or cache hit. Node credits include reused Flow-record clearing,
+reconstruction, replay and payload copying, not just search expansions. Several
+requests can complete in one frame when the remaining allowances permit.
+
+Tune these allowances for both response latency and containing-frame cost, not
+just successful completion. Each request still needs endpoint admission, so a
+small endpoint-candidate allowance can delay a large burst even when guides are
+already cached. More retained request slots do not add processing credit. The
+defaults are conservative work limits, not a promise that a crowd becomes ready
+within a particular number of frames.
+
+`OperationStepLimit` (default 64) separately caps FIFO inspection/activation and
+cohort formation, follower admission/checkout, search and publication operations,
+including cache-hit completion.
+Scanning retains its place across frames; completed, unclaimed tickets cannot
+force an endless prefix rescan. A pending operation with no counted or phase
+progress yields until the next frame.
+
 An active scheduled request holds the existing algorithm gate and graph lease.
 Synchronous acquisition of that algorithm can therefore return
 `CapacityExceeded`. Graph snapshot retention limits still apply. The scheduler
 does not bypass these ceilings to make progress.
 
-Scheduling is explicit at the guide-service boundary. It does not automatically
-convert Navigator-owned acquisition or direct-heading checks into queued work.
-The headless benchmark uses input-driven Navigators, not 100 simultaneous cold
-guided-controller starts; measure that host workload separately if you need it.
+Navigator steering defaults to `NavigationAcquisitionMode.Immediate`. Opt in with
+`navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled)`.
+Both A* and Flow then queue mandatory initial/recovery acquisition, including the
+initial direct-heading check; public `Guides.Schedule` still returns graph leases.
+`IsAwaitingGuidance` reports waiting intent and `LastAcquisitionStatus` reports the
+latest attempted acquisition/adoption outcome. Waiting supplies zero new guided
+heading, but hosts must continue motor/contact and `CommitFrameMotion` processing.
+Changing policy cancels pending acquisition and defers restart until a later
+context frame; it preserves already usable guidance. The mode is durable save data,
+while tickets, samples, validation turns and queue position are not.
+
+Adoption uses current-foot validation: direct results are reproved and Flow results
+are sampled once for that heading call. Moved-foot A* results require a bounded,
+addressed connector to the lease's exact ordinary index-zero anchor (which may
+differ from the submitted start position). Every connector heading reproves the
+actual foot-to-anchor segment, using the ordinary query budget for Solid, Gas or
+Liquid and one fair validation turn. No turn means zero new heading and no cursor,
+arrival or stuck progress; repeated same-frame calls do not repeat this work.
+Transient capacity, stale and local-recovery
+outcomes wait/retry without synchronous fallback. An unplanned actual-medium change
+stops scheduled intent and requires an explicit new request; authored transition
+completion remains the authority for planned medium changes.
+
+The connector owns a separate bounded dependency stamp and raw-world epoch; it
+never changes a shared route payload or skips a semantic action. Relevant local
+proof invalidation yields zero heading before bounded reproof/recovery. Unrelated
+semantic pages remain reusable. Proof arrays are replaced on each successful
+connector heading, so these headings are not allocation-free. Old proof storage
+is dropped before reserving replacement storage; failure supplies no heading.
+`MaxAStarActivePayloadBytes` includes every lease-local proof and metadata in
+addition to active route payload and endpoint-proof bytes. Proof size is bounded
+by the immediate ray's page/component capacities and the active-byte ceiling.
+`TotalCost` remains the immutable route cost, excluding the connector's traversal
+cost; positive-cost passable connectors are allowed, not a new optimal-route claim.
+The connector lasts until index zero advances or the guide/session is released.
+Changing acquisition mode preserves this proof obligation. Neither proof nor turn
+ownership is serialized. See [NavSteering](NavSteering.md#scheduled-acquisition-and-moving-origins).
+
+The same `OperationStepLimit` covers scheduler work and granted validation turns.
+A bounded ownership-interest ring rotates in registration order; it stores no jobs
+or query continuations. With both queue work and validation interests, at most
+half the operation limit rounded up is granted to validation; at limit one,
+queue and validation alternate. With no queue work, validation may use the full
+limit. Unused turns (for example a paused host) expire that frame without refund,
+so diagnostics count granted turns, not necessarily executed rays/samples.
+New interests wait until a subsequent context frame. The ring capacity is derived
+from retained-request plus active A*/Flow payload-lease capacities, allowing later
+adopters and recurring owned-guide validators to coexist without a second queue.
+Normal periodic LOS checks remain governed by their existing cadence/phase policy.
+See the recovery benchmark harness for explicit acquisition-mode and work-limit
+controls; counted limits alone are not timing claims.
 
 Scheduled acquisition fails `Stale` if the raw GridWorld change sequence changes
-from activation through result transfer, even for an unrelated change. Exact
+from cohort activation through result transfer, including followers admitted later,
+even for an unrelated change. Exact
 published dependency validation also remains in place. Decide in the host
 whether and when to submit fresh intent; the scheduler never silently restarts.
 Context or pathing reset cancels pending requests and releases unclaimed
 results. Request handles and continuations are runtime-only, not save data.
 
+A fresh scheduled Flow query can evict an unused dependency-stale cached incumbent
+and continue as a cache miss within the same admission and budget. This narrow case
+requires the admitted graph and request raw epoch still be current and the old
+payload's raw stamp still match. It does not retry a stale checked-out proof or
+publication failure. Immediate and existing batch acquisition keep their existing
+stale-incumbent behavior.
+
 ### What a slice does not guarantee
 
 Slice counts are deterministic work allowances, not a millisecond deadline.
-Some operations remain atomic: endpoint/simplification rays, allocation,
+Some operations remain atomic: traversal evaluations, endpoint/simplification rays, allocation,
 dependency checks and payload publication. Reused Flow search records are
 cleared incrementally against the node slice; explicit reset/teardown can still
 drain retained work synchronously. The finite
@@ -212,6 +317,11 @@ query/capacity limits still apply, but they can cost more than an ordinary
 search slice. Measure full frames, including activation and result transfer,
 with representative endpoints, body shapes and maps. A smaller slice reduces
 ordinary per-frame work while increasing request latency in simulated frames.
+
+An atomic traversal or ray may exceed its remaining frame lookup credit. Its
+actual query-meter lookup usage saturates that credit at zero before another
+evaluation can begin; total query budgets remain authoritative. The operation
+ceiling bounds repetition, not the duration of any individual operation.
 
 Prepare large shared fields during loading or submit them well ahead of use.
 Conservative slices can make a very large cold field take seconds or minutes

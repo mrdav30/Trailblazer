@@ -443,14 +443,17 @@ public class NavigatorTests : IDisposable
     }
 
     [Theory]
-    [InlineData(PathAlgorithm.AStar)]
-    [InlineData(PathAlgorithm.FlowField)]
-    public void Simulate_ShouldHoldAndCompleteTheExactAuthoredTransition(PathAlgorithm algorithm)
+    [InlineData(PathAlgorithm.AStar, false)]
+    [InlineData(PathAlgorithm.FlowField, false)]
+    [InlineData(PathAlgorithm.AStar, true)]
+    [InlineData(PathAlgorithm.FlowField, true)]
+    public void Simulate_ShouldHoldAndCompleteTheExactAuthoredTransition(PathAlgorithm algorithm, bool scheduled)
     {
         (Vector3d start, Vector3d end, _) = PublishTransitionGraph();
         NavigationAgentProfile profile = PathTestFactory.DefaultNavigationProfile;
         Vector3d startRoot = start + Vector3d.Up * profile.Shape.RootToFootOffsetY;
         var navigator = CreateNavigator(startRoot, profile: profile);
+        if (scheduled) navigator.Steering!.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
         var query = new PathQuery(
             new NavigationEndpoint(start, "navigator-transition"),
             new NavigationEndpoint(end, "navigator-transition"),
@@ -473,6 +476,7 @@ public class NavigatorTests : IDisposable
             allowTransitions: true);
         navigator.ApplyGuidedTrekRequest(query, rate: TrekRate.Moderate);
 
+        AwaitScheduled();
         navigator.Simulate();
 
         navigator.PendingTransition.Should().NotBeNull();
@@ -487,6 +491,17 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
+        int plannedTransitionInvalidations = 0;
+        navigator.Steering!.Events.OnInvalidPath += () => plannedTransitionInvalidations++;
+        if (scheduled)
+        {
+            navigator.SetTrekCondition(medium: TraversalMedium.Gas, updateMotorState: false);
+            navigator.PendingTransition.Should().Be(pending);
+            navigator.Steering.ShouldMove.Should().BeTrue();
+            navigator.Steering.HasNavigationGuidance.Should().BeTrue();
+            plannedTransitionInvalidations.Should().Be(0, "the host-reported medium belongs to the held exact action");
+        }
+
         navigator.CompletePendingTransition(default)
             .Should().Be(NavigationGuideStatus.Stale);
         navigator.PendingTransition.Should().Be(pending);
@@ -499,7 +514,15 @@ public class NavigatorTests : IDisposable
         TestRequire.NotNull(navigator.Steering).CurrentQuery!.Value
             .Traversal.StartMedium.Should().Be(TraversalMedium.Gas);
 
+        plannedTransitionInvalidations.Should().Be(0);
+        if (scheduled)
+        {
+            navigator.Steering!.StopMove();
+            navigator.SetTrekCondition(medium: TraversalMedium.Solid, updateMotorState: false);
+        }
+
         navigator.ApplyGuidedTrekRequest(query, rate: TrekRate.Moderate);
+        AwaitScheduled();
         navigator.Simulate();
         navigator.PendingTransition.Should().NotBeNull();
 
@@ -507,6 +530,19 @@ public class NavigatorTests : IDisposable
 
         navigator.PendingTransition.Should().BeNull();
         TestRequire.NotNull(navigator.Steering).CurrentQuery.Should().BeNull();
+
+        void AwaitScheduled()
+        {
+            if (!scheduled) return;
+            if (navigator.Motor!.TraversalInProgress) navigator.Motor.AbortTraversalFrame();
+            for (int frame = 0; frame < 256; frame++)
+            {
+                TestWorld.Context.Simulate();
+                navigator.Steering!.GetHeading(navigator, out NavigationTransitionInstruction? instruction);
+                if (instruction.HasValue) return;
+            }
+            throw new InvalidOperationException("Scheduled action acquisition did not become ready.");
+        }
     }
 
     [Theory]
@@ -2643,6 +2679,37 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void ReplaceTrekCondition_UninitializedShellMustCloneWithoutCreatingControllers()
+    {
+        var navigator = new TestNavigator(TestWorld.Context);
+        var condition = new TrekCondition { Medium = TraversalMedium.Gas, SurfaceLevel = (Fixed64)4 };
+        navigator.ReplaceTrekCondition(condition, updateMotorState: false);
+        condition.Medium = TraversalMedium.Liquid;
+        condition.SurfaceLevel = (Fixed64)9;
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Gas);
+        navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)4);
+        navigator.Steering.Should().BeNull();
+        navigator.Motor.Should().BeNull();
+        navigator.IsActive.Should().BeFalse();
+        navigator.Reset();
+    }
+
+    [Fact]
+    public void SetTrekCondition_ActiveMotorOnlyShellMustSynchronizeWithoutCreatingSteering()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.ConfigurePartialControllerShell(includeSteering: false, includeTurning: false, includeMotor: true);
+        navigator.IsActive.Should().BeTrue();
+        navigator.Steering.Should().BeNull();
+        navigator.SetTrekCondition(medium: TraversalMedium.Liquid, surfaceLevel: (Fixed64)3, updateMotorState: true);
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Liquid);
+        navigator.Motor!.CurrentState.Medium.Should().Be(TraversalMedium.Liquid);
+        navigator.Motor.CurrentState.SurfaceLevel.Should().Be((Fixed64)3);
+        navigator.Steering.Should().BeNull();
+        navigator.Reset();
+    }
+
+    [Fact]
     public void SetTrekCondition_ShouldPreserveExistingSurfaceState_WhenOptionalArgumentsAreOmitted()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -3020,10 +3087,11 @@ public class NavigatorTests : IDisposable
             currentCellFrames = 0;
             notifications = 0;
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int frame = 0; frame < measuredFrames; frame++)
-                AdvanceFrame(frame);
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+            {
+                for (int frame = 0; frame < measuredFrames; frame++)
+                    AdvanceFrame(frame);
+            });
 
             movedFrames.Should().Be(measuredFrames);
             currentCellFrames.Should().Be(measuredFrames);
@@ -3069,13 +3137,14 @@ public class NavigatorTests : IDisposable
             ResolveExpectedCell();
 
         int correctResolutions = 0;
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < resolutions; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            if (ResolveExpectedCell())
-                correctResolutions++;
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int i = 0; i < resolutions; i++)
+            {
+                if (ResolveExpectedCell())
+                    correctResolutions++;
+            }
+        });
 
         correctResolutions.Should().Be(resolutions, "outer-half resolution must retain the current physical cell identity");
         allocated.Should().Be(0, "live cell resolution must not construct offline topology instances");

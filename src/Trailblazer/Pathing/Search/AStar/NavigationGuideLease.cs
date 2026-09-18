@@ -32,8 +32,19 @@ public readonly struct NavigationGuideLease : IDisposable
     /// <summary>Gets the immutable number of movement and action steps in the leased route.</summary>
     public int StepCount => _inner?.GetWaypointCount(_generation) ?? 0;
 
-    /// <summary>Gets the immutable exact fixed-point cost of the complete route.</summary>
+    /// <summary>Gets the immutable exact route payload cost, excluding any Navigator current-foot connector.</summary>
     public Fixed64 TotalCost => _inner?.GetTotalCost(_generation) ?? Fixed64.Zero;
+
+    internal bool HasConnector => _inner?.HasConnector(_generation) ?? false;
+
+    internal NavigationGuideStatus BeginConnector(out NavigationGuideStep step)
+    {
+        step = default;
+        return _inner?.BeginConnector(_generation, out step) ?? NavigationGuideStatus.Stale;
+    }
+
+    internal NavigationGuideStatus InstallConnector(NavigationAStarConnectorProof proof, ref long reservation) =>
+        _inner?.InstallConnector(_generation, proof, ref reservation) ?? NavigationGuideStatus.Stale;
 
     /// <summary>Gets the current dependency-validated movement or action step.</summary>
     public NavigationGuideStatus TryGetCurrentStep(out NavigationGuideStep step)
@@ -49,6 +60,12 @@ public readonly struct NavigationGuideLease : IDisposable
             inner.TryGetCurrentStep(
                 _generation,
                 out step));
+    }
+
+    internal NavigationGuideStatus TryGetCurrentStep(Vector3d connectorOrigin, out NavigationGuideStep step)
+    {
+        step = default;
+        return _inner?.TryGetCurrentStep(_generation, connectorOrigin, out step) ?? NavigationGuideStatus.Stale;
     }
 
     /// <summary>Advances one ordinary movement step; a pending action cannot be crossed.</summary>
@@ -74,6 +91,17 @@ public readonly struct NavigationGuideLease : IDisposable
 
 internal static class NavigationGuideStatusMapper
 {
+    internal static NavigationGuideStatus ToPublic(NavigationFlowFieldStatus status) => status switch
+    {
+        NavigationFlowFieldStatus.Success => NavigationGuideStatus.Success,
+        NavigationFlowFieldStatus.Pending => NavigationGuideStatus.Pending,
+        NavigationFlowFieldStatus.NoPath => NavigationGuideStatus.NoPath,
+        NavigationFlowFieldStatus.BudgetExceeded => NavigationGuideStatus.BudgetExceeded,
+        NavigationFlowFieldStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
+        NavigationFlowFieldStatus.CapacityExceeded => NavigationGuideStatus.CapacityExceeded,
+        _ => NavigationGuideStatus.Stale
+    };
+
     internal static NavigationGuideStatus ToPublic(NavigationAStarQueryStatus status) => status switch
     {
         NavigationAStarQueryStatus.Success => NavigationGuideStatus.Success,

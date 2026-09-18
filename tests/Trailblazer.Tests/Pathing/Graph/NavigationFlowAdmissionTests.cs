@@ -112,9 +112,7 @@ public sealed class NavigationFlowAdmissionTests
         RunSuccessfulQuery(gate, query);
         RunSuccessfulQuery(gate, query);
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        RunSuccessfulQuery(gate, query);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() => RunSuccessfulQuery(gate, query));
 
         allocated.Should().Be(0);
     }

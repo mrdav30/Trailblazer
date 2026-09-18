@@ -143,15 +143,17 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         int lookupStepLimit,
         int endpointCandidateStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(
-            endpointCandidateStepLimit,
-            nameof(endpointCandidateStepLimit));
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, endpointCandidateStepLimit);
+        return Advance(ref remaining);
+    }
+
+    internal NavigationQueryAdmissionStatus Advance(ref NavigationAcquisitionSlice remaining)
+    {
         if (Status != NavigationQueryAdmissionStatus.Pending)
             return Status;
 
-        int lookupRemaining = lookupStepLimit;
-        int candidateRemaining = endpointCandidateStepLimit;
+        ref int lookupRemaining = ref remaining.LookupRemaining;
+        ref int candidateRemaining = ref remaining.EndpointCandidateRemaining;
         while (Status == NavigationQueryAdmissionStatus.Pending)
         {
             if (_stage == Stage.ResolvePolicy)

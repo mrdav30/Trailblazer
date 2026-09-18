@@ -439,7 +439,15 @@ public partial class NavSteering : IRecordable
             && _shouldMove
             && !_isAtDestination;
         if (_context != null)
+        {
+            if ((_acquisitionMode == NavigationAcquisitionMode.Scheduled || HasNavigationConnector)
+                && _currentQuery.HasValue)
+            {
+                _hasLineOfSightPath = false;
+                PreparePathRetry();
+            }
             _context.Navigation.MovementGroups.Remove(_movementGroupSession);
+        }
 
         _context = context;
         if (_pathRecheckPhase.HasValue)

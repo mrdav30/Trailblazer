@@ -232,8 +232,8 @@ public sealed class TrailblazerWorldContext : IDisposable
     }
 
     /// <summary>
-    /// Advances the deterministic clock, maintains the navigation graph, advances at most one
-    /// scheduled guide-acquisition phase, and invokes ordered simulate hooks in that order.
+    /// Advances the deterministic clock, maintains the navigation graph, advances
+    /// scheduled guide acquisition within shared frame allowances, and invokes ordered simulate hooks in that order.
     /// </summary>
     public void Simulate()
     {

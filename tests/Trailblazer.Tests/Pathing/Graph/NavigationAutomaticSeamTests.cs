@@ -92,17 +92,18 @@ public sealed class NavigationAutomaticSeamTests
                 0);
         }
         GC.KeepAlive(last);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            last = new NavigationAutomaticSeamRefreshWork(
-                world,
-                NavigationWorldGraph.Empty,
-                NavigationWorldGraph.Empty,
-                changes,
-                0);
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int i = 0; i < Iterations; i++)
+            {
+                last = new NavigationAutomaticSeamRefreshWork(
+                    world,
+                    NavigationWorldGraph.Empty,
+                    NavigationWorldGraph.Empty,
+                    changes,
+                    0);
+            }
+        });
         GC.KeepAlive(last);
 
         long expected = NavigationAutomaticSeamRefreshWork.FixedRetainedBytes * Iterations;
@@ -138,16 +139,17 @@ public sealed class NavigationAutomaticSeamTests
                 0);
         }
         GC.KeepAlive(last);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < Iterations; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            last = new NavigationAutomaticSeamLifecycleWork(
-                world,
-                NavigationWorldGraph.Empty,
-                events,
-                0);
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int i = 0; i < Iterations; i++)
+            {
+                last = new NavigationAutomaticSeamLifecycleWork(
+                    world,
+                    NavigationWorldGraph.Empty,
+                    events,
+                    0);
+            }
+        });
         GC.KeepAlive(last);
 
         long expectedPerWork =

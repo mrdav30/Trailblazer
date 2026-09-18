@@ -48,6 +48,21 @@ Benchmark commands and evidence rules live in
 6. Call out map publication, cache invalidation, action ownership, serialized
    schema, or package-family changes explicitly; these are high-risk boundaries.
 
+For scheduled Navigator changes, verify moving-foot adoption and waiting motion,
+not just ticket completion. A* connector proofs belong to one lease and consume
+the existing active-byte ceiling and fair scheduler validation turns. Include
+shared-payload isolation, repeated host movement, mode changes, transactional
+loads, and reset/disposal in lifecycle tests. See
+[NavSteering](docs/wiki/NavSteering.md#scheduled-acquisition-and-moving-origins).
+
+For short, synchronous current-thread allocation assertions, use
+[`AllocationTestUtility`](tests/Trailblazer.Tests/Support/AllocationTestUtility.cs).
+It drains pending collection before admission and verifies an active no-GC region
+to prevent background collection from distorting the byte counter. Real allocations
+still count, and admission or region failure fails the test without retries. Keep
+warmups and assertions outside the measured action. Do not apply this test setup
+to performance benchmarks or asynchronous/global allocation measurements.
+
 ## Documentation expectations
 
 - Keep the root README concise and safe for both GitHub and NuGet rendering.

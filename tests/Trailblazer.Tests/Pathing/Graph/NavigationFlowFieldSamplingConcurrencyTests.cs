@@ -170,7 +170,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
     }
 
     [Fact]
-    public void DependencyPublicationAfterGenerationValidation_ShouldFailStickyStale()
+    public void DependencyPublicationWhileRejoinWaits_ShouldFailStickyStale()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
@@ -182,9 +182,8 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             .Should().BeTrue();
         fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
             .Should().BeTrue();
-        object cacheSync = typeof(NavigationFlowFieldPayloadCache)
-            .GetField("_sync", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(cache)!;
+        Vector3d actualFoot = source.FootAnchor
+            + Vector3d.Forward * ((Fixed64)3 / (Fixed64)4);
         using var sampleStarted = new ManualResetEventSlim();
         NavigationGuideStatus sampleStatus = default;
         Vector3d heading = default;
@@ -195,7 +194,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             try
             {
                 sampleStatus = guide.TrySampleHeading(
-                    source.FootAnchor,
+                    actualFoot,
                     GenerousBudget,
                     out heading);
             }
@@ -208,8 +207,7 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
             IsBackground = true
         };
 
-        Monitor.Enter(cacheSync);
-        try
+        lock (cache.ImmediateRayWorkspace.SyncRoot)
         {
             sampleThread.Start();
             sampleStarted.Wait(5_000, TestContext.Current.CancellationToken)
@@ -218,16 +216,12 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
                     () => (sampleThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
                     TimeSpan.FromSeconds(5))
                 .Should().BeTrue(
-                    "sampling must hold the guide generation while waiting at payload validation");
+                    "the rejoin must hold its guide generation after payload and graph validation");
             NavigationWorldGraph changed = fixture.Graph.WithSurfaceComponents(
                 NavigationSurfaceComponentIndex.Empty).WithGraphVersion(
                 fixture.Graph.GraphVersion + 1);
             fixture.Store.TryPublish(changed)
                 .Should().Be(NavigationCandidatePublication.Published);
-        }
-        finally
-        {
-            Monitor.Exit(cacheSync);
         }
         sampleThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
 
@@ -313,8 +307,11 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         cache.ActiveLeaseCount.Should().Be(0);
     }
 
-    [Fact]
-    public void ExactPayloadInvalidationWhileRejoinWaits_ShouldFailStickyStale()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void CacheInvalidationWhileRejoinWaits_ShouldFailStickyStale(int invalidation)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
@@ -355,7 +352,12 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
                     () => (sampleThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
                     TimeSpan.FromSeconds(5))
                 .Should().BeTrue("the rejoin must pause after its payload and graph validation");
-            cache.RemoveExact(fixture.Far);
+            switch (invalidation)
+            {
+                case 0: cache.RemoveExact(fixture.Far); break;
+                case 1: cache.Reset(); break;
+                case 2: cache.Dispose(); break;
+            }
         }
         sampleThread.Join(TimeSpan.FromSeconds(5)).Should().BeTrue();
 
@@ -365,6 +367,55 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         guide.Status.Should().Be(NavigationGuideStatus.Stale);
         guide.Dispose();
         cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.DetachedBytes.Should().Be(0);
+        fixture.Store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void RepublishingSamePayload_ShouldNotReviveAnInvalidatedGuide()
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World, 1, fixture.Far.RetainedBytes, fixture.Far.RetainedBytes,
+            checked(fixture.Far.RetainedBytes * 2), 2, 8,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        using NavigationFlowFieldLease oldGuide = CreateGuide(cache, fixture);
+        NavigationFlowFieldLease oldAlias = oldGuide;
+        fixture.Graph.TryGetNodeRef(fixture.FarOrigin, out NavigationNodeRef sourceRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+
+        cache.RemoveExact(fixture.Far);
+        // CreateGuide republishes this same fixture payload object into a new entry.
+        // Do not observe the old guide until after publication: sticky status alone
+        // must not hide an incorrectly revived retained entry.
+        using NavigationFlowFieldLease currentGuide = CreateGuide(cache, fixture);
+
+        oldGuide.TrySampleHeading(source.FootAnchor, GenerousBudget, out Vector3d oldHeading)
+            .Should().Be(NavigationGuideStatus.Stale);
+        oldHeading.Should().Be(Vector3d.Zero);
+        oldAlias.Status.Should().Be(NavigationGuideStatus.Stale);
+        currentGuide.TrySampleHeading(source.FootAnchor, GenerousBudget, out Vector3d currentHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        currentHeading.Should().Be(Vector3d.Left);
+        cache.ActiveLeaseCount.Should().Be(2);
+        cache.DetachedBytes.Should().Be(fixture.Far.RetainedBytes);
+
+        oldGuide.Dispose();
+        oldAlias.Dispose();
+        cache.ActiveLeaseCount.Should().Be(1);
+        cache.LeasedBytes.Should().Be(fixture.Far.RetainedBytes);
+        cache.DetachedBytes.Should().Be(0);
+        currentGuide.TrySampleHeading(source.FootAnchor, GenerousBudget, out currentHeading)
+            .Should().Be(NavigationGuideStatus.Success);
+        currentHeading.Should().Be(Vector3d.Left);
+
+        currentGuide.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        fixture.Store.ActiveLeaseCount.Should().Be(0);
     }
 
     [Fact]
@@ -468,12 +519,13 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         using NavigationFlowFieldPayloadCache cache = CreateCache(fixture);
         NavigationFlowFieldPayloadLease payloadLease = Publish(cache, fixture);
 
-        long before = System.GC.GetAllocatedBytesForCurrentThread();
-        NavigationGuideStatus status = cache.TryCreateGuide(
-            fixture.Store,
-            new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
-            out NavigationFlowFieldLease guide);
-        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+        NavigationGuideStatus status = default;
+        NavigationFlowFieldLease guide = default;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+            status = cache.TryCreateGuide(
+                fixture.Store,
+                new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
+                out guide));
 
         status.Should().Be(NavigationGuideStatus.Success);
         allocated.Should().Be(0);
@@ -547,20 +599,24 @@ public sealed class NavigationFlowFieldSamplingConcurrencyTests
         out bool succeeded)
     {
         succeeded = true;
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < iterationCount; i++)
+        bool measurementSucceeded = true;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            NavigationFlowFieldLease guide = CreateGuideUnchecked(cache, fixture, ref succeeded);
-            if (!succeeded)
-                break;
-            if (guide.TrySampleHeading(sourceFoot, GenerousBudget, out _)
-                != NavigationGuideStatus.Success)
+            for (int i = 0; i < iterationCount; i++)
             {
-                succeeded = false;
+                NavigationFlowFieldLease guide = CreateGuideUnchecked(cache, fixture, ref measurementSucceeded);
+                if (!measurementSucceeded)
+                    break;
+                if (guide.TrySampleHeading(sourceFoot, GenerousBudget, out _)
+                    != NavigationGuideStatus.Success)
+                {
+                    measurementSucceeded = false;
+                }
+                guide.Dispose();
             }
-            guide.Dispose();
-        }
-        return GC.GetAllocatedBytesForCurrentThread() - before;
+        });
+        succeeded = measurementSucceeded;
+        return allocated;
     }
 
     private static GuideSampleWorkBudget GenerousBudget => new(

@@ -96,7 +96,7 @@ Admission only enters bounded storage. `context.Simulate()` advances graph
 maintenance and publishes eligible work atomically at a fixed-step boundary.
 Receipts expose the terminal result and actual publication frame.
 
-After maintenance, the context advances one scheduled guide-acquisition phase,
+After maintenance, the context advances scheduled guide acquisition within shared frame allowances,
 then invokes host simulation hooks. Queue submission does not run a search.
 See [Pathing](Pathing.md#spreading-acquisition-across-fixed-frames) for request
 ownership, cancellation, capacity and the distinction between deterministic

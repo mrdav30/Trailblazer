@@ -123,7 +123,8 @@ internal static class NavigationGraphBenchmarkScenario
         int concurrentQueries,
         int cacheEntries = 128,
         int? activeLeaseCapacity = null,
-        int? dynamicCellSlotsPerMap = null)
+        int? dynamicCellSlotsPerMap = null,
+        NavigationSchedulingSettings scheduling = null)
     {
         // Held guides do not require one search workspace per consumer.
         int activeLeases = activeLeaseCapacity ?? concurrentQueries;
@@ -185,7 +186,8 @@ internal static class NavigationGraphBenchmarkScenario
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
             Math.Max(defaults.MaxConcurrentSnapshotLeases, Math.Max(concurrentQueries, activeLeases)),
-            queryLimits);
+            queryLimits,
+            scheduling: scheduling);
     }
 
     internal static TrailblazerWorldContextSettings CreateArticulationSettings(

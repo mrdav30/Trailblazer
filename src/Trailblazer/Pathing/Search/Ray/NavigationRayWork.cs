@@ -35,6 +35,14 @@ internal sealed partial class NavigationRayWork
 
     internal NavigationRayResult Result { get; private set; }
 
+    // Valid only until Reset, while the owning immediate workspace is exclusively held.
+    internal bool TryGetSuccessfulDependencies(out NavigationDependencyWorkspace dependencies, out ulong worldSequence)
+    {
+        dependencies = _workspace.Dependencies;
+        worldSequence = _worldChangeSequence;
+        return Status == NavigationRayStatus.Success;
+    }
+
     private TraversalMedium Medium => _request.Medium;
 
     internal void Begin(in NavigationRayRequest request)
@@ -489,7 +497,11 @@ internal sealed partial class NavigationRayWork
         graph.TryGetNodeAddress(
             sourceRecord.Node,
             out NavigationCellAddress sourceAddress);
-        NavigationSurfaceEdgeEnumerator edges = graph.EnumerateSurfaceEdges(sourceRecord.Node);
+        // A retained selected-edge ordinal includes dormant authored neighbors.
+        NavigationSurfaceEdgeEnumerator edges =
+            _request.ChainConstraint.Kind == NavigationRayChainConstraintKind.SelectedEdge
+                ? graph.EnumerateStructuralSurfaceEdges(sourceRecord.Node)
+                : graph.EnumerateSurfaceEdges(sourceRecord.Node);
         int edgeSteps = int.MaxValue;
         while (true)
         {

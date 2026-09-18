@@ -172,9 +172,18 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         ref int edgeStepRemaining,
         ref int connectionStepRemaining)
     {
+        int lookupRemaining = int.MaxValue;
+        return AdvanceOne(meter, dependencies, ref edgeStepRemaining, ref connectionStepRemaining, ref lookupRemaining);
+    }
+
+    internal NavigationTraversalEdgeAdvanceStatus AdvanceOne(
+        NavigationWorkMeter meter, NavigationDependencyWorkspace dependencies,
+        ref int edgeStepRemaining, ref int connectionStepRemaining, ref int lookupRemaining)
+    {
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         SwiftThrowHelper.ThrowIfNegative(edgeStepRemaining, nameof(edgeStepRemaining));
+        SwiftThrowHelper.ThrowIfNegative(lookupRemaining, nameof(lookupRemaining));
         SwiftThrowHelper.ThrowIfNegative(
             connectionStepRemaining,
             nameof(connectionStepRemaining));
@@ -199,6 +208,8 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
 
         while (true)
         {
+            if (lookupRemaining == 0)
+                return NavigationTraversalEdgeAdvanceStatus.Blocked;
             if (!_rescanActive)
             {
                 if (!_baseComplete)
@@ -227,7 +238,8 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
                 meter,
                 dependencies,
                 ref edgeStepRemaining,
-                ref connectionStepRemaining);
+                ref connectionStepRemaining,
+                ref lookupRemaining);
             if (_outgoing.RequiresWorldStamp)
                 RequiresWorldStamp = true;
             if (status == NavigationTraversalEdgeAdvanceStatus.Complete)

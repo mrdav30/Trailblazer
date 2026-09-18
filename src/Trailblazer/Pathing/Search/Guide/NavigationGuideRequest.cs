@@ -46,7 +46,8 @@ public sealed class NavigationGuideRequest : IDisposable
         return owner != null && owner.TryTakeFlowField(this, out result);
     }
 
-    /// <summary>Cancels pending work and releases retained capacity and any unclaimed lease. Completed outcomes are preserved.</summary>
+    /// <summary>Cancels this member's interest and releases retained capacity and any unclaimed lease. Completed outcomes are preserved.</summary>
+    /// <remarks>A frozen cohort can retain an already-started build for its other members.</remarks>
     public void Dispose() => Owner?.Release(this);
 
     internal NavigationGuideScheduler? Owner { get; set; }
@@ -58,4 +59,9 @@ public sealed class NavigationGuideRequest : IDisposable
     internal NavigationGuideRequestPhase Phase { get; set; }
     internal NavigationGuideLease? Guide { get; set; }
     internal NavigationFlowFieldLease? FlowField { get; set; }
+    internal long SubmissionSequence { get; set; }
+    internal bool InCohort { get; set; }
+    internal NavigationGuideRequestFlavor Flavor { get; set; }
+    internal bool DirectChecked { get; set; }
+    internal bool IsDirect { get; set; }
 }

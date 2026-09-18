@@ -99,8 +99,10 @@ internal struct NavigationTraversalEdgeEnumerator
             "Traversal enumerators own a valid source from their immutable graph.");
         _graph = graph;
         _source = source;
+        // Retained edge ordinals must not depend on which authored cells are materialized.
+        // Evaluation rejects absent cells after their dependency pages are recorded.
         _surfaceEdges = source.Medium == TraversalMedium.Solid
-            ? graph.EnumerateSurfaceEdges(source.Node)
+            ? graph.EnumerateStructuralSurfaceEdges(source.Node)
             : default;
         _surfaceEvaluator = source.Medium == TraversalMedium.Solid
             ? new TraversalEvaluator(graph, profile, areaPolicy, TraversalMedium.Solid)
@@ -227,27 +229,39 @@ internal struct NavigationTraversalEdgeEnumerator
         ref int edgeStepRemaining,
         ref int connectionStepRemaining)
     {
+        int lookupRemaining = int.MaxValue;
+        return AdvanceOne(meter, dependencies, ref edgeStepRemaining, ref connectionStepRemaining, ref lookupRemaining);
+    }
+
+    internal NavigationTraversalEdgeAdvanceStatus AdvanceOne(
+        NavigationWorkMeter meter, NavigationDependencyWorkspace dependencies,
+        ref int edgeStepRemaining, ref int connectionStepRemaining, ref int lookupRemaining)
+    {
         SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
         SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
         SwiftThrowHelper.ThrowIfNegative(edgeStepRemaining, nameof(edgeStepRemaining));
+        SwiftThrowHelper.ThrowIfNegative(lookupRemaining, nameof(lookupRemaining));
         SwiftThrowHelper.ThrowIfNegative(
             connectionStepRemaining,
             nameof(connectionStepRemaining));
         System.Diagnostics.Debug.Assert(_graph != null,
             "Traversal enumerators must be initialized with an immutable graph source.");
+        if (lookupRemaining == 0 && !HasCurrentSurfacePoint)
+            return NavigationTraversalEdgeAdvanceStatus.Blocked;
         if (_baseComplete)
-            return AdvanceTransition(meter, dependencies, ref edgeStepRemaining);
+            return AdvanceTransition(meter, dependencies, ref edgeStepRemaining, ref lookupRemaining);
         if (_source.Medium == TraversalMedium.Gas
             || _source.Medium == TraversalMedium.Liquid)
         {
-            return AdvanceVolume(meter, dependencies, ref edgeStepRemaining);
+            return AdvanceVolume(meter, dependencies, ref edgeStepRemaining, ref lookupRemaining);
         }
         if (_surfaceRouteActive)
         {
             return AdvanceSurfaceRoute(
                 meter,
                 dependencies,
-                ref connectionStepRemaining);
+                ref connectionStepRemaining,
+                ref lookupRemaining);
         }
 
         NavigationSurfaceEdgeAdvanceStatus status = _surfaceEdges.AdvanceOne(
@@ -256,7 +270,7 @@ internal struct NavigationTraversalEdgeEnumerator
         if (status == NavigationSurfaceEdgeAdvanceStatus.Complete)
         {
             _baseComplete = true;
-            return AdvanceTransition(meter, dependencies, ref edgeStepRemaining);
+            return AdvanceTransition(meter, dependencies, ref edgeStepRemaining, ref lookupRemaining);
         }
         if (status == NavigationSurfaceEdgeAdvanceStatus.Blocked)
         {
@@ -293,14 +307,16 @@ internal struct NavigationTraversalEdgeEnumerator
             ? AdvanceSurfaceRoute(
                 meter,
                 dependencies,
-                ref connectionStepRemaining)
+                ref connectionStepRemaining,
+                ref lookupRemaining)
             : MapSurfaceRoute(begin);
     }
 
     private NavigationTraversalEdgeAdvanceStatus AdvanceVolume(
         NavigationWorkMeter meter,
         NavigationDependencyWorkspace dependencies,
-        ref int edgeStepRemaining)
+        ref int edgeStepRemaining,
+        ref int lookupRemaining)
     {
         while (TrySelectNextVolumeCandidate(
             out int directionOrdinal,
@@ -309,6 +325,8 @@ internal struct NavigationTraversalEdgeEnumerator
             out NavigationAutomaticSeamRef seam,
             out bool hasSeam))
         {
+            if (lookupRemaining == 0)
+                return NavigationTraversalEdgeAdvanceStatus.Blocked;
             if (edgeStepRemaining == 0)
             {
                 return meter.RemainingEvaluatedEdges == 0
@@ -331,6 +349,7 @@ internal struct NavigationTraversalEdgeEnumerator
                 _visitedVolumeDirections |= 1U << directionOrdinal;
             }
             _volumeEdgeOrdinal++;
+            int lookupBefore = meter.LookupProbes;
             NavigationVolumeEdgeStatus status = _volumeEvaluator.Evaluate(
                 _source,
                 target,
@@ -340,6 +359,7 @@ internal struct NavigationTraversalEdgeEnumerator
                 meter,
                 dependencies,
                 out Fixed64 cost);
+            NavigationAcquisitionSlice.ConsumeAtomicLookups(ref lookupRemaining, meter, lookupBefore);
             if (status == NavigationVolumeEdgeStatus.BudgetExceeded)
                 return NavigationTraversalEdgeAdvanceStatus.BudgetExceeded;
             if (status == NavigationVolumeEdgeStatus.CapacityExceeded)
@@ -360,16 +380,19 @@ internal struct NavigationTraversalEdgeEnumerator
             return NavigationTraversalEdgeAdvanceStatus.Edge;
         }
         _baseComplete = true;
-        return AdvanceTransition(meter, dependencies, ref edgeStepRemaining);
+        return AdvanceTransition(meter, dependencies, ref edgeStepRemaining, ref lookupRemaining);
     }
 
     private NavigationTraversalEdgeAdvanceStatus AdvanceTransition(
         NavigationWorkMeter meter,
         NavigationDependencyWorkspace dependencies,
-        ref int edgeStepRemaining)
+        ref int edgeStepRemaining,
+        ref int lookupRemaining)
     {
         if (!_allowTransitions)
             return Complete();
+        if (lookupRemaining == 0)
+            return NavigationTraversalEdgeAdvanceStatus.Blocked;
         if (!_transitionStarted)
         {
             dependencies.RecordTransitionDependency();
@@ -426,6 +449,7 @@ internal struct NavigationTraversalEdgeEnumerator
         NavigationTransitionEdgeStatus status;
         NavigationMediumStateRef target;
         NavigationTransitionEdgeEvidence evidence;
+        int lookupBefore = meter.LookupProbes;
         if (isRule)
         {
             target = ruleTarget;
@@ -447,6 +471,7 @@ internal struct NavigationTraversalEdgeEnumerator
                 out target,
                 out evidence);
         }
+        NavigationAcquisitionSlice.ConsumeAtomicLookups(ref lookupRemaining, meter, lookupBefore);
         if (status == NavigationTransitionEdgeStatus.BudgetExceeded)
             return NavigationTraversalEdgeAdvanceStatus.BudgetExceeded;
         if (status == NavigationTransitionEdgeStatus.CapacityExceeded)
@@ -871,11 +896,14 @@ internal struct NavigationTraversalEdgeEnumerator
     private NavigationTraversalEdgeAdvanceStatus AdvanceSurfaceRoute(
         NavigationWorkMeter meter,
         NavigationDependencyWorkspace dependencies,
-        ref int connectionStepRemaining)
+        ref int connectionStepRemaining,
+        ref int lookupRemaining)
     {
+        int lookupBefore = meter.LookupProbes;
         NavigationSurfaceEdgeRouteStatus status = _surfaceRouteWork.Advance(
             meter,
             ref connectionStepRemaining);
+        NavigationAcquisitionSlice.ConsumeAtomicLookups(ref lookupRemaining, meter, lookupBefore);
         if (_surfaceRouteWork.TryTakeDependencyNode(out NavigationNodeRef dependencyNode))
         {
             bool foundDependencyAddress = _graph!.TryGetNodeAddress(

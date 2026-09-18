@@ -205,17 +205,27 @@ public class NavSteeringTests : IDisposable
         grid!.TryRemoveVoxelOccupant(neighbor);
     }
 
-    [Fact]
-    public void ComputeCombinedSteering_ShouldApplySeparationForRegisteredGroupNeighbor()
+    [Theory]
+    [InlineData(2, -1)]
+    [InlineData(-2, -3)]
+    public void ComputeCombinedSteering_ShouldApplyExactSeparationForRegisteredGroupNeighbors(
+        int groupFactor,
+        int expectedHalfUnits)
     {
         var owner = new MockSteerAgent(Vector3d.Zero)
         {
             Velocity = Vector3d.Right,
-            Speed = Fixed64.One
+            Speed = Fixed64.One,
+            Size = (Fixed64)2
         };
         var neighbor = new MockSteerAgent(Vector3d.Right)
         {
             Velocity = Vector3d.Right,
+            Speed = Fixed64.One
+        };
+        var secondNeighbor = new MockSteerAgent(Vector3d.Forward)
+        {
+            Velocity = Vector3d.Forward,
             Speed = Fixed64.One
         };
         PathQuery query = new(
@@ -229,15 +239,21 @@ public class NavSteeringTests : IDisposable
             allowTransitions: false);
         var ownerSteering = new NavSteering(TestWorld.Context)
         {
+            GroupFactor = (Fixed64)groupFactor,
+            AvoidFactor = (Fixed64)3,
             BehaviorWeights = new GroupBehaviorWeights { Separation = Fixed64.One }
         };
         var neighborSteering = new NavSteering(TestWorld.Context);
+        var secondNeighborSteering = new NavSteering(TestWorld.Context);
         ownerSteering.ApplyPathQuery(query, groupId: 7);
         neighborSteering.ApplyPathQuery(query, groupId: 7);
+        secondNeighborSteering.ApplyPathQuery(query, groupId: 7);
         ownerSteering.PrewarmMovementGroup(owner);
         neighborSteering.PrewarmMovementGroup(neighbor);
+        secondNeighborSteering.PrewarmMovementGroup(secondNeighbor);
         TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
         grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(secondNeighbor).Should().BeTrue();
 
         Vector3d force = ownerSteering.ComputeCombinedSteering(
             owner.Position,
@@ -246,9 +262,11 @@ public class NavSteeringTests : IDisposable
             owner.Radius,
             owner.GlobalId);
 
-        force.X.Should().BeLessThan(Fixed64.Zero);
+        Fixed64 expectedComponent = Fixed64.FromFraction(expectedHalfUnits, 2);
+        force.Should().Be(new Vector3d(expectedComponent, Fixed64.Zero, expectedComponent));
 
         grid!.TryRemoveVoxelOccupant(neighbor).Should().BeTrue();
+        grid!.TryRemoveVoxelOccupant(secondNeighbor).Should().BeTrue();
     }
 
     [Fact]
@@ -507,10 +525,10 @@ public class NavSteeringTests : IDisposable
         for (int i = 0; i < 128; i++)
             grid!.TryAddVoxelOccupant(new MockSteerAgent(new Vector3d(2, 0, 0))).Should().BeTrue();
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        Vector3d force = steer.ComputeCombinedSteering(
-            owner.Position, owner.Velocity, owner.Speed, owner.Radius, owner.GlobalId);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Vector3d force = default;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+            force = steer.ComputeCombinedSteering(
+                owner.Position, owner.Velocity, owner.Speed, owner.Radius, owner.GlobalId));
 
         force.Should().Be(Vector3d.Forward);
         allocated.Should().Be(0, "irrelevant occupants must not grow the retained steering results");
@@ -566,18 +584,18 @@ public class NavSteeringTests : IDisposable
             GC.Collect();
 
             const int iterations = 256;
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < iterations; i++)
+            long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
             {
-                _ = steer.ComputeCombinedSteering(
-                    agent.Position,
-                    agent.Velocity,
-                    agent.Speed,
-                    agent.Size,
-                    agent.GlobalId);
-            }
-
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                for (int i = 0; i < iterations; i++)
+                {
+                    _ = steer.ComputeCombinedSteering(
+                        agent.Position,
+                        agent.Velocity,
+                        agent.Speed,
+                        agent.Size,
+                        agent.GlobalId);
+                }
+            });
 
             allocated.Should().BeLessThan(512);
         }
@@ -631,11 +649,11 @@ public class NavSteeringTests : IDisposable
             GC.Collect();
 
             const int iterations = 256;
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < iterations; i++)
-                GridScanManager.ScanRadiusInto<ISteer>(world, new Vector3d(4, 0, 2), (Fixed64)5, results, scratch);
-
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+            {
+                for (int i = 0; i < iterations; i++)
+                    GridScanManager.ScanRadiusInto<ISteer>(world, new Vector3d(4, 0, 2), (Fixed64)5, results, scratch);
+            });
 
             allocated.Should().BeLessThan(512);
         }
@@ -695,14 +713,13 @@ public class NavSteeringTests : IDisposable
             GC.WaitForPendingFinalizers();
             GC.Collect();
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            _ = steer.ComputeCombinedSteering(
-                agent.Position,
-                agent.Velocity,
-                agent.Speed,
-                agent.Size,
-                agent.GlobalId);
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+                _ = steer.ComputeCombinedSteering(
+                    agent.Position,
+                    agent.Velocity,
+                    agent.Speed,
+                    agent.Size,
+                    agent.GlobalId));
 
             allocated.Should().BeLessThan(512);
         }

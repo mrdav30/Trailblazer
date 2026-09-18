@@ -15,9 +15,10 @@ instead of burying it in notes.
    - Measured allocation or runtime-cost signals must be reproduced, resolved,
      or closed with a documented no-change decision.
 2. [`Issue Tracker`](issue-tracker.md)
-   - Bugs, correctness risks, documentation defects, and feature-work-discovered
-     issues should be triaged, tested, and committed independently from feature
-     design plans.
+   - Pre-existing bugs, correctness risks, documentation defects, and issues
+     outside the current feature should be triaged and verified independently.
+     Regressions introduced by a feature branch belong in that feature's active
+     plan, including their fixes and verification; they are not deferred here.
 
 ## Active Coordination
 
@@ -83,8 +84,85 @@ instead of burying it in notes.
     withdrawn: no attributable complete-frame benefit was demonstrated. Useful
     publication/mutation tests remain; production source is unchanged. The tracker
     preserves the fresh controls, historical variability and five balanced P95
-    target misses. The next recommended boundary is explicit Navigator-owned
-    acquisition/recovery scheduling, not further removal of freshness checks.
+    target misses. The next boundary is the
+    [Navigator Acquisition And Recovery plan](done/navigationRecoveryPlan.md),
+    completed and user-approved for squash into `develop` on 2026-09-18. Opt-in
+    Navigator ownership uses the existing shared-work scheduler, with waiting,
+    current-foot adoption, cancellation and independent guide ownership.
+    Earlier source correctness/Ponytail reviews are approved; a refreshed review
+    found a connector-only publication gap inside A* direction hooks. Its three
+    RED cases now pass after a same-lock freshness correction, with independent
+    re-review approval and 307 Release / 293 Lean focused cases passing. Independent evidence
+    review accepts the measurements with concerns. Repeated same-build Flow/500
+    cold peak medians fall
+    **96.32% / 96.50%** with explicit B work limits, but cumulative host-frame
+    cost rises **39.86% / 33.34%** and last-ready latency becomes 57 frames.
+    Same-map rebake avoids a duplicate build and lowers that cumulative cost
+    **27.03% / 30.15%**. A matched Flow-only larger allowance reaches 28 frames
+    with higher peaks; runtime defaults are unchanged. Immediate guided-frame
+    block medians initially increased **2.2–9.0%** across repeated controls;
+    an earlier complete final-source comparison, including corrected occupancy
+    ownership, leaves AStar/100 **1.4–1.6%**, Flow/100 **3.3–3.5%** and Flow/500
+    **3.2–5.0%** slower than both untouched develop controls.
+    A separate identical-correctness comparison places Flow medians between
+    corrected controls and AStar below both, identifying no two-sided scheduling regression
+    under equal occupancy behavior; it does not replace the total comparison.
+    Slower thin-wrapper and lease-layout experiments were reverted. Native hardware watchpoints now attribute the exact
+    retained 6,008-byte Release failure to background-GC counter bookkeeping,
+    with no managed allocation in the measured loop. The shared allocation
+    measurement is corrected without relaxing assertions; both full normal
+    Windows configurations and exact coverage pass. A standalone runtime probe
+    then reproduced successful-but-inactive no-GC admission. The corrected test
+    setup drains pending collection and validates admission without retries or
+    relaxed counters; fresh Windows/Linux Release/Lean suites, exact coverage
+    and documentation checks all pass. The final timing sequence stopped before
+    the candidate ran: unchanged develop threw inside interval sorting during
+    A* setup. Twelve bounded native-debugger launches did not reproduce that
+    retained, unresolved failure. A separate six-arm fixed-protocol comparison
+    completed cleanly but still fails original total cost. A live-validated
+    occupancy-ticket hint also failed its five-arm comparison and was removed;
+    useful public occupancy tests remain and fresh v4 validation passes.
+    Independent source review found no safe local deletion of the remaining
+    callback/publication boundary checks. A retained Flow-entry experiment was
+    also rejected: its small 100-agent gain did not extend to both 500-agent
+    controls. Portable behavior tests remain. A narrower A* same-root dependency
+    walk optimization retains both world checks and the live graph boundary.
+    Its reviewed implementation passes focused Release/Lean checks, and the
+    five-arm comparison improves AStar/100 **23.2–23.6%** against the parent and
+    **21.3–22.0%** against the originals. It is retained; fresh full validation
+    remains required. Flow/100 still costs **4.4–5.1%** more and Flow/500
+    **3.1–5.7%** more than the original controls. A lazy group-steering reciprocal
+    was rejected after both Flow populations were slower than both parent controls;
+    its stronger signed-group tests remain. A public sparse-grid regression now
+    reproduces an inherited edge-order mismatch: successful Flow guidance can
+    point away from its destination when an authored neighbor is physically absent.
+    The initial sampler-only correction was incomplete across physical publication.
+    Reviewed structural numbering now aligns acquisition, sampling and constrained
+    recovery rays; three public regressions and 973 Release / 968 Lean focused
+    cases pass. Subsequent reuse of already computed Flow prisms improves the
+    corrected parent by **1.4–3.7%**, with no added state or relaxed checks. The
+    prism-reuse comparison retains **23.4–23.6%** AStar improvement, but
+    Flow remains **2.8–3.2% slower** than the originals. Fresh Windows/Linux
+    validation passes **3,046 Release / 2,968 Lean** core tests and 65 adapter
+    tests per configuration, with exact 100% line/branch/full-method coverage
+    and documentation checks green. Subsequent approved GridForge hardening
+    moves occupancy tracking onto its owning world, fixing a reproduced
+    strong-reference retention bug. Its five-arm timing is inconclusive: all
+    candidate medians fall between drifting corrected-parent controls. It is
+    retained for ownership correctness, not claimed as a speedup or performance
+    equivalence; full costs and validation status remain in the recovery plan.
+    On 2026-09-18 the user authorized Trailblazer feature-branch commits for review
+    and indicated that modest cost for hardened behavior is acceptable. Recovery
+    implementation is complete and fresh Release/Lean precommit suites pass;
+    the user has now reviewed and approved the squash, and the plan is archived.
+    This does
+    not prove that every observed difference is caused by fixes or bounded by
+    2–3%; the latest drifting original comparisons are wider and remain in the
+    plan. The original-baseline sorting exception remains unexplained, without
+    an established recovery-change cause or a claimed fix. Other historical
+    guard failures are not individually attributed. `TRB-Benchmark-005` resumes
+    from the hardened implementation and retains the broader frame-cost and
+    useful-guidance-latency work. No push or release is authorized.
   - Earlier `TRB-Benchmark-002/003/004` and `GF-Benchmark-003` slices are closed
     locally. `GF-Benchmark-005` remains a withdrawn per-edge experiment.
     `TRB-Issue-119`, `GF-Issue-006` and `FMS-Issue-018` retain their separate

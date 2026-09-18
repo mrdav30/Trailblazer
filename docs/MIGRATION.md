@@ -176,10 +176,20 @@ Use a stable, nonnegative host ordinal. See the evergreen
 for disabled countdown behavior, phase boundaries, lifecycle resets, and burst
 caveats.
 
-The outer Navigator record is schema version 6. It retains the earlier explicit
-surface-normal and controlled-descent fields and adds the periodic direct-LOS
-interval and nullable phase. Earlier outer schemas reject transactionally; they
-are not read through renamed-field, missing-normal, or timing defaults.
+The outer Navigator record is schema version 7. It retains the explicit
+surface-normal, controlled-descent and periodic direct-LOS interval/phase fields,
+and adds the durable `NavSteering.AcquisitionMode`. Earlier outer schemas,
+including version 6, reject transactionally rather than supplying defaults.
+
+Immediate acquisition remains the default. Opt in per Navigator using
+`navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled)`.
+Keep calling motor/host motion and commit while `IsAwaitingGuidance`; waiting
+means zero new guided heading, not a frozen physical body. Moved-origin A* adoption
+rejoins the exact ordinary start anchor and reproves that connector every heading
+under the same scheduler allowance. Changing mode does not bypass an adopted
+connector. Active A* byte limits include connector proofs; `TotalCost` remains
+the original route cost. Requests, proofs, validation turns and queue position
+are not saved. See [steering acquisition](wiki/NavSteering.md#scheduled-acquisition-and-moving-origins).
 
 ## Current v2 Guides
 

@@ -2059,20 +2059,21 @@ public sealed class NavigationEndpointResolutionTests
                 out _)
             .Should().Be(NavigationVolumeAnchorStatus.Success);
 
-        long before = System.GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 256; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            workspace.Reset();
-            meter.Reset(budget);
-            _ = evaluator.Evaluate(
-                node,
-                TraversalMedia.Gas,
-                meter,
-                workspace.Dependencies,
-                out _,
-                out _);
-        }
-        long allocated = System.GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int i = 0; i < 256; i++)
+            {
+                workspace.Reset();
+                meter.Reset(budget);
+                _ = evaluator.Evaluate(
+                    node,
+                    TraversalMedia.Gas,
+                    meter,
+                    workspace.Dependencies,
+                    out _,
+                    out _);
+            }
+        });
 
         allocated.Should().Be(0);
     }
@@ -3005,7 +3006,15 @@ public sealed class NavigationEndpointResolutionTests
             Profile());
 
         for (int step = 0; step < 64 && !work.Result.Node.IsValid; step++)
+        {
+            int probesBeforeYield = meter.LookupProbes;
+            int candidatesBeforeYield = meter.EndpointCandidates;
+            work.Advance(lookupStepLimit: 0, endpointCandidateStepLimit: 0)
+                .Should().Be(NavigationEndpointResolutionStatus.Pending);
+            meter.LookupProbes.Should().Be(probesBeforeYield);
+            meter.EndpointCandidates.Should().Be(candidatesBeforeYield);
             work.Advance(lookupStepLimit: 1, endpointCandidateStepLimit: 1);
+        }
 
         work.Status.Should().Be(NavigationEndpointResolutionStatus.Pending,
             "the completed candidate ray yields before the cursor publishes its final status");
@@ -3152,6 +3161,759 @@ public sealed class NavigationEndpointResolutionTests
             profile,
             Policy,
             TraversalMedia.Solid);
+    }
+
+    [Theory]
+    [InlineData("AfterGuideCreation", true)]
+    [InlineData("BeforeGuideCreation", true)]
+    [InlineData("BeforeQueryPublication", true)]
+    [InlineData("AfterGuideCreation", false)]
+    [InlineData("BeforeGuideCreation", false)]
+    [InlineData("BeforeQueryPublication", false)]
+    [InlineData("CloneProof", false)]
+    [InlineData("TransferProof", false)]
+    [InlineData("ReplaceWithCertifiedProof", false)]
+    [InlineData("UnrelatedPublication", false)]
+    [InlineData("SharedFinalization", true)]
+    [InlineData("InvalidatePayloadDuringCapture", false)]
+    public void SharedFlowEndpointProof_OverlapRemovalShouldInvalidateOnlyFollower(string scenario, bool shared)
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance overlap = CreateInstance(world, "a-overlap",
+            CreateAlternateOverlapConfiguration(), physicallyPresent: true);
+        GridConfiguration configuration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(overlap, candidate);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        Vector3d point = GuidedPathTestScene.Anchor(binding, default);
+        var budget = new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0);
+        var leaderQuery = new PathQuery(new NavigationEndpoint(point, "z-candidate"),
+            new NavigationEndpoint(point, "z-candidate"), PointProfile(), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.FlowField, budget, false);
+        var followerQuery = new PathQuery(new NavigationEndpoint(point, "z-candidate",
+                EndpointResolutionPolicy.NearestNavigable, (Fixed64)4), leaderQuery.End,
+            leaderQuery.Agent, leaderQuery.AreaPolicy, leaderQuery.Traversal, leaderQuery.Algorithm, budget, false);
+        using var gate = new NavigationFlowAdmissionGate(world, store, NavigationQueryLimits.Default,
+            new NavigationQueryAdmissionCoordinator(1), NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        gate.Begin(leaderQuery, out NavigationFlowBatchWork leader).Should().Be(NavigationFlowQueryStatus.Pending);
+        DrainFlowQuery(leader);
+        NavigationFlowQueryResult original = leader.TakeResult(0);
+        leader.Dispose();
+        using var source = new NavigationCohortSource { Flow = original.PayloadLease, HasFlow = true };
+        source.Flow.TryGetPayload(out NavigationFlowFieldPayload payload).Should().Be(NavigationFlowFieldStatus.Success);
+        payload.Dependencies.Pages.Should().NotContain(page => page.MapId == "a-overlap");
+        gate.Begin(followerQuery, out NavigationFlowBatchWork follower, sharedSource: shared ? source : null)
+            .Should().Be(NavigationFlowQueryStatus.Pending);
+        using (follower)
+        {
+            var revised = new NavigationWorldGraph(graph.GraphVersion + 1, new[] { candidate },
+                areaCatalog: graph.AreaCatalog, surfaceComponents: graph.SurfaceComponents);
+            if (scenario == "InvalidatePayloadDuringCapture")
+            {
+                for (int i = 0; i < 4096 && gate.PayloadCache.ReservedPayloadBytes == 0; i++)
+                    follower.AdvanceAdmission(1, 1);
+                gate.PayloadCache.ReservedPayloadBytes.Should().Be(304);
+                follower.IsAdmissionComplete.Should().BeFalse();
+                gate.PayloadCache.ActiveLeaseCount.Should().Be(2);
+                store.TryPublish(new NavigationWorldGraph(graph.GraphVersion + 1,
+                    Array.Empty<NavigationMapInstance>(), areaCatalog: graph.AreaCatalog,
+                    surfaceComponents: graph.SurfaceComponents)).Should().Be(NavigationCandidatePublication.Published);
+                gate.PayloadCache.TryCreateGuide(store, original, out _).Should().Be(NavigationGuideStatus.Stale);
+                for (int i = 0; i < 4096 && !follower.IsAdmissionComplete; i++) follower.AdvanceAdmission(1, 1);
+                follower.IsReadyToPublish(0).Should().BeTrue();
+                follower.PublishReadyPrefix(1);
+                follower.GetStatus(0).Should().Be(NavigationFlowQueryStatus.Stale);
+                gate.PayloadCache.ReservedPayloadBytes.Should().Be(0);
+                gate.PayloadCache.LeasedBytes.Should().Be(0);
+                gate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+                gate.PayloadCache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+                return;
+            }
+            if (scenario == "BeforeQueryPublication")
+            {
+                for (int i = 0; i < 4096 && !follower.IsAdmissionComplete; i++) follower.AdvanceAdmission(4096, 4096);
+                follower.IsReadyToPublish(0).Should().BeTrue();
+                store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+                follower.PublishReadyPrefix(1);
+                follower.GetStatus(0).Should().Be(NavigationFlowQueryStatus.Stale);
+                source.Flow.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Success);
+                return;
+            }
+            DrainFlowQuery(follower);
+            using NavigationFlowQueryResult result = follower.TakeResult(0);
+            if (scenario == "SharedFinalization")
+            {
+                using var proofSource = new NavigationCohortSource { Flow = result.PayloadLease, HasFlow = true };
+                var capture = new NavigationDependencyStampWork(graph, Policy,
+                    Array.Empty<NavigationSurfaceComponentKey>(), 0,
+                    new[] { new GraphPageDependencyAddress("a-overlap", 0) }, 1);
+                capture.Advance(new NavigationWorkMeter(budget), 4096).Should().BeTrue();
+                capture.IsValid.Should().BeTrue();
+                GraphDependencyStamp endpointProof = capture.Result;
+                gate.PayloadCache.TryCheckoutShared(store, graph, payload.Key, original.ResolvedOrigin,
+                    proofSource, endpointProof, out var checkedOut, out var returnedProof)
+                    .Should().Be(NavigationFlowFieldStatus.Success);
+                gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes + 304 + endpointProof.RetainedBytes);
+                store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+                gate.PayloadCache.CompleteSharedCheckoutValidation(store, endpointProof,
+                    NavigationFlowFieldStatus.Success, ref checkedOut, ref returnedProof)
+                    .Should().Be(NavigationFlowFieldStatus.Stale);
+                checkedOut.Should().Be(default(NavigationFlowFieldPayloadLease));
+                returnedProof.Should().BeNull();
+                gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes + 304);
+                source.Flow.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Success);
+                proofSource.Dispose();
+                gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes);
+                gate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+                return;
+            }
+            if (scenario is "CloneProof" or "TransferProof" or "ReplaceWithCertifiedProof")
+            {
+                const long proofBytes = 304;
+                gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes + proofBytes);
+                using var cachedSource = new NavigationCohortSource
+                {
+                    Flow = result.PayloadLease, HasFlow = true, Transfer = scenario != "CloneProof"
+                };
+                gate.PayloadCache.TryCheckoutShared(store, graph, payload.Key, original.ResolvedOrigin,
+                    cachedSource, null, out NavigationFlowFieldPayloadLease member, out _,
+                    preserveSourceProof: scenario != "ReplaceWithCertifiedProof").Should().Be(NavigationFlowFieldStatus.Success);
+                gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes
+                    + (scenario == "CloneProof" ? 2 * proofBytes : scenario == "TransferProof" ? proofBytes : 0));
+                gate.PayloadCache.TryCreateGuide(store, new NavigationFlowQueryResult(original.ResolvedOrigin, member),
+                    out NavigationFlowFieldLease memberGuide).Should().Be(NavigationGuideStatus.Success);
+                using (memberGuide)
+                {
+                    store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+                    memberGuide.Status.Should().Be(scenario == "ReplaceWithCertifiedProof" ? NavigationGuideStatus.Success : NavigationGuideStatus.Stale);
+                    revised.IsDependencyCurrent(payload.Dependencies).Should().BeTrue();
+                }
+                cachedSource.Dispose();
+                gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes);
+                gate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+                return;
+            }
+            if (scenario == "BeforeGuideCreation")
+            {
+                store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+                gate.PayloadCache.TryCreateGuide(store, result, out _).Should().Be(NavigationGuideStatus.Stale);
+                source.Flow.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Success,
+                    "a follower-only endpoint proof must not invalidate the shared payload");
+                return;
+            }
+            gate.PayloadCache.TryCreateGuide(store, result, out NavigationFlowFieldLease lease)
+                .Should().Be(NavigationGuideStatus.Success);
+            using (lease)
+            {
+                if (scenario == "UnrelatedPublication")
+                {
+                    var unrelated = new NavigationWorldGraph(graph.GraphVersion + 1, new[] { overlap, candidate },
+                        areaCatalog: graph.AreaCatalog, surfaceComponents: graph.SurfaceComponents);
+                    store.TryPublish(unrelated).Should().Be(NavigationCandidatePublication.Published);
+                    lease.Status.Should().Be(NavigationGuideStatus.Success);
+                    return;
+                }
+                store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+                revised.IsDependencyCurrent(payload.Dependencies).Should().BeTrue();
+                lease.Status.Should().Be(NavigationGuideStatus.Stale);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    public void ScheduledCachedLeader_ExtraEndpointProof_ShouldSurviveCloneAndTransfer(bool hasFollower, bool resetDuringCapture, bool clonePressure)
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance overlap = CreateInstance(world, "a-overlap",
+            CreateAlternateOverlapConfiguration(), physicallyPresent: true);
+        GridConfiguration configuration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        TrailblazerWorldContextSettings d = TrailblazerWorldContextSettings.Default;
+        var settings = new TrailblazerWorldContextSettings(d.OperationLimits, d.MaintenanceBudget,
+            d.GuideSampleBudget, d.MovementGroupPadding, d.MaxIngressEntries, d.MaxIngressBytes,
+            d.MaxActiveSnapshots, d.MaxActiveSnapshotBytes, d.MaxRetiredSnapshots, d.MaxRetiredSnapshotBytes,
+            d.MaxPersistentGraphPages, d.MaxDynamicCellSlotsPerMap, d.MaxDynamicCellSlots, d.NavigationAreaCount,
+            d.MaxAreaPolicies, d.MaxAreaRulesPerPolicy, d.MaxAreaRules, d.MaxConcurrentSnapshotLeases,
+            d.QueryLimits, new NavigationSchedulingSettings(lookupStepLimit: 1, operationStepLimit: 1));
+        using var context = TrailblazerWorldContext.Attach(world, settings: settings);
+        GuidedPathTestScene.PublishMapAndPolicy(context, candidate.Map, 1, OverlayReplacementPolicy.Clear, 1, Policy, 2);
+        var publishOverlap = new NavigationMapCommitOperation(new PreparedNavigationMap(overlap.Map, 1),
+            OverlayReplacementPolicy.Clear, 3, context.FrameCount + 1);
+        context.Pathing.Admit(publishOverlap).Should().BeTrue();
+        for (int i = 0; i < 4096 && publishOverlap.Receipt.Status == NavigationOperationStatus.Pending; i++) context.Simulate();
+        publishOverlap.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        Vector3d point = GuidedPathTestScene.Anchor(binding, default);
+        var budget = new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0);
+        var strict = new PathQuery(new NavigationEndpoint(point, "z-candidate"),
+            new NavigationEndpoint(point, "z-candidate"), PointProfile(), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.FlowField, budget, false);
+        var nearest = new PathQuery(new NavigationEndpoint(point, "z-candidate",
+                EndpointResolutionPolicy.NearestNavigable, (Fixed64)4), strict.End,
+            strict.Agent, strict.AreaPolicy, strict.Traversal, strict.Algorithm, budget, false);
+        context.Guides.RequestFlowField(strict, out NavigationFlowFieldLease? originalResult).Should().Be(NavigationGuideStatus.Success);
+        using (NavigationFlowFieldLease original = originalResult!.Value)
+        {
+            var cache = context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
+            long payloadBytes = cache.LeasedBytes;
+            context.Guides.Schedule(nearest, out NavigationGuideRequest? scheduled).Should().Be(NavigationGuideStatus.Pending);
+            using NavigationGuideRequest leader = scheduled!;
+            if (resetDuringCapture)
+            {
+                for (int i = 0; i < 4096 && cache.ReservedPayloadBytes == 0; i++) context.Simulate();
+                cache.ReservedPayloadBytes.Should().Be(304);
+                leader.Phase.Should().Be(NavigationGuideRequestPhase.Admission);
+                context.Pathing.Reset();
+                leader.Status.Should().Be(NavigationGuideStatus.Cancelled);
+                cache.ReservedPayloadBytes.Should().Be(0);
+                cache.ActiveLeaseCount.Should().Be(1, "only the externally retained original guide remains");
+                context.Pathing.NavigationGraphStore.ActiveLeaseCount.Should().Be(0);
+                return;
+            }
+            NavigationGuideRequest? follower = null;
+            if (hasFollower) context.Guides.Schedule(nearest, out follower).Should().Be(NavigationGuideStatus.Pending);
+            using (follower)
+            {
+                if (clonePressure)
+                {
+                    for (int i = 0; i < 4096 && leader.Phase != NavigationGuideRequestPhase.Publication; i++) context.Simulate();
+                    leader.Phase.Should().Be(NavigationGuideRequestPhase.Publication);
+                    cache.LeasedBytes.Should().Be(payloadBytes + 304);
+                    long pressure = context.Settings.QueryLimits.MaxFlowActivePayloadBytes
+                        - cache.LeasedBytes - cache.ReservedPayloadBytes;
+                    cache.TryReserveEndpointProof(pressure).Should().BeTrue();
+                    try
+                    {
+                        context.Simulate();
+                        leader.Status.Should().Be(NavigationGuideStatus.CapacityExceeded);
+                        leader.TryTakeFlowField(out _).Should().BeFalse();
+                        cache.LeasedBytes.Should().Be(payloadBytes + 304, "the follower still owns the source pin");
+                    }
+                    finally { cache.ReleaseEndpointProof(ref pressure); }
+                    for (int i = 0; i < 4096 && follower!.Status == NavigationGuideStatus.Pending; i++) context.Simulate();
+                    follower!.Status.Should().Be(NavigationGuideStatus.Success);
+                    follower.TryTakeFlowField(out var acquiredFollower).Should().BeTrue();
+                    using (acquiredFollower!.Value)
+                        acquiredFollower.Value.Status.Should().Be(NavigationGuideStatus.Success);
+                    cache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+                    cache.LeasedBytes.Should().Be(payloadBytes);
+                    cache.ActiveLeaseCount.Should().Be(1);
+                    cache.ReservedPayloadBytes.Should().Be(0);
+                    return;
+                }
+                for (int i = 0; i < 4096 && (leader.Status == NavigationGuideStatus.Pending
+                    || follower?.Status == NavigationGuideStatus.Pending); i++) context.Simulate();
+                leader.Status.Should().Be(NavigationGuideStatus.Success);
+                leader.TryTakeFlowField(out NavigationFlowFieldLease? acquired).Should().BeTrue();
+                using (NavigationFlowFieldLease lease = acquired!.Value)
+                {
+                    NavigationFlowFieldLease? followerLease = null;
+                    if (follower != null) follower.TryTakeFlowField(out followerLease).Should().BeTrue();
+                    using (followerLease)
+                    {
+                        cache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+                        cache.LeasedBytes.Should().Be(payloadBytes + (hasFollower ? 608 : 304));
+                        var remove = new NavigationMapRemoveOperation("a-overlap", 4, context.FrameCount + 1);
+                        context.Pathing.Admit(remove).Should().BeTrue();
+                        for (int i = 0; i < 4096 && remove.Receipt.Status == NavigationOperationStatus.Pending; i++) context.Simulate();
+                        remove.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+                        lease.Status.Should().Be(NavigationGuideStatus.Stale);
+                        if (hasFollower) followerLease!.Value.Status.Should().Be(NavigationGuideStatus.Stale);
+                        original.Status.Should().Be(NavigationGuideStatus.Success);
+                    }
+                }
+                cache.LeasedBytes.Should().Be(payloadBytes);
+            }
+        }
+    }
+
+    [Fact]
+    public void AStarEndpointProof_DifferentResolutionPolicy_ShouldNotReuseStrictPayload()
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance overlap = CreateInstance(world, "a-overlap",
+            CreateAlternateOverlapConfiguration(), physicallyPresent: true);
+        GridConfiguration configuration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(overlap, candidate);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        Vector3d point = GuidedPathTestScene.Anchor(binding, default);
+        var budget = new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0);
+        var strict = new PathQuery(new NavigationEndpoint(point, "z-candidate"),
+            new NavigationEndpoint(point, "z-candidate"), PointProfile(), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.AStar, budget, false);
+        var nearest = new PathQuery(new NavigationEndpoint(point, "z-candidate",
+                EndpointResolutionPolicy.NearestNavigable, (Fixed64)4), strict.End,
+            strict.Agent, strict.AreaPolicy, strict.Traversal, strict.Algorithm, budget, false);
+        using var gate = new NavigationAStarAdmissionGate(world, store, NavigationQueryLimits.Default,
+            new NavigationQueryAdmissionCoordinator(1));
+        gate.Begin(strict, out NavigationAStarBatchWork seed).Should().Be(NavigationAStarQueryStatus.Pending);
+        DrainAStarQuery(seed);
+        using NavigationAStarPayloadLease original = seed.TakeResult(0);
+        seed.Dispose();
+        using var incompatibleSource = new NavigationCohortSource { AStar = original };
+        gate.Begin(nearest, out NavigationAStarBatchWork incompatible, incompatibleSource)
+            .Should().Be(NavigationAStarQueryStatus.Pending);
+        using (incompatible)
+        {
+            for (int i = 0; i < 4096 && !incompatible.IsAdmissionComplete; i++) incompatible.AdvanceAdmission(4096, 4096);
+            incompatible.IsReadyToPublish(0).Should().BeTrue();
+            incompatible.PublishReadyPrefix(1);
+            incompatible.GetStatus(0).Should().Be(NavigationAStarQueryStatus.Pending,
+                "an incompatible pin is a coverage miss to promote, never a reusable result");
+            gate.PayloadCache.AcquisitionDiagnostics.SharedCoverageMisses.Should().Be(1);
+            gate.PayloadCache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+            gate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+            gate.PayloadCache.ReservedPayloadBytes.Should().Be(0);
+        }
+        gate.Begin(nearest, out NavigationAStarBatchWork follower).Should().Be(NavigationAStarQueryStatus.Pending);
+        DrainAStarQuery(follower);
+        using NavigationAStarPayloadLease result = follower.TakeResult(0);
+        follower.Dispose();
+        result.Payload.Should().NotBeSameAs(original.Payload);
+        result.Payload.Dependencies.Pages.Should().Contain(page => page.MapId == "a-overlap");
+        gate.PayloadCache.AcquisitionDiagnostics.BuildStarts.Should().Be(2);
+        var revised = new NavigationWorldGraph(graph.GraphVersion + 1, new[] { candidate },
+            areaCatalog: graph.AreaCatalog, surfaceComponents: graph.SurfaceComponents);
+        store.TryPublish(revised).Should().Be(NavigationCandidatePublication.Published);
+        revised.IsDependencyCurrent(original.Payload.Dependencies).Should().BeTrue();
+        gate.PayloadCache.TryCreatePublicGuide(store, result, out _).Should().Be(NavigationGuideStatus.Stale);
+    }
+
+    [Fact]
+    public void ScheduledAStar_UnhintedEndpointPublicationMustPromoteChangedAddressInsteadOfFailingPendingFollower()
+    {
+        using var world = new GridWorld();
+        var configuration = CreateCandidateOverlapConfiguration();
+        var candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        var overlapConfiguration = new GridConfiguration(Vector3d.Zero, new Vector3d(4, 2, 4),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular((Fixed64)4, (Fixed64)2, (Fixed64)4),
+            storageKind: GridStorageKind.Sparse);
+        var overlap = CreateInstance(world, "a-overlap", overlapConfiguration, physicallyPresent: true);
+        var expanded = CreateAdmissionGraph(overlap, candidate);
+        var d = TrailblazerWorldContextSettings.Default;
+        var settings = new TrailblazerWorldContextSettings(d.OperationLimits, d.MaintenanceBudget,
+            d.GuideSampleBudget, d.MovementGroupPadding, d.MaxIngressEntries, d.MaxIngressBytes,
+            d.MaxActiveSnapshots, d.MaxActiveSnapshotBytes, d.MaxRetiredSnapshots, d.MaxRetiredSnapshotBytes,
+            d.MaxPersistentGraphPages, d.MaxDynamicCellSlotsPerMap, d.MaxDynamicCellSlots, d.NavigationAreaCount,
+            d.MaxAreaPolicies, d.MaxAreaRulesPerPolicy, d.MaxAreaRules, d.MaxConcurrentSnapshotLeases,
+            d.QueryLimits, new NavigationSchedulingSettings(operationStepLimit: 1));
+        using var context = TrailblazerWorldContext.Attach(world, settings: settings);
+        var store = context.Pathing.NavigationGraphStore;
+        store.TryPublish(new NavigationWorldGraph(1, new[] { candidate },
+            areaCatalog: expanded.AreaCatalog, surfaceComponents: expanded.SurfaceComponents))
+            .Should().Be(NavigationCandidatePublication.Published);
+        configuration.TryNormalize(out var binding).Should().BeTrue();
+        var point = GuidedPathTestScene.Anchor(binding, default);
+        var endpoint = new NavigationEndpoint(point, resolution: EndpointResolutionPolicy.NearestNavigable,
+            maxResolutionDistance: (Fixed64)4);
+        var query = new PathQuery(endpoint, endpoint, PointProfile(), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.AStar,
+            new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0), false);
+        context.Guides.Schedule(query, out var first).Should().Be(NavigationGuideStatus.Pending);
+        context.Guides.Schedule(query, out var second).Should().Be(NavigationGuideStatus.Pending);
+        using var leader = first!;
+        using var follower = second!;
+        for (int i = 0; i < 4096 && leader.Status == NavigationGuideStatus.Pending; i++) context.Simulate();
+        leader.TryTakeGuide(out var leaderResult).Should().BeTrue();
+        using var firstGuide = leaderResult!.Value;
+        firstGuide.TryGetCurrentStep(out var firstStep).Should().Be(NavigationGuideStatus.Success);
+        firstStep.Address.MapId.Should().Be("z-candidate");
+        follower.Status.Should().Be(NavigationGuideStatus.Pending);
+        ulong worldSequence = world.ChangeSequence;
+        store.TryPublish(new NavigationWorldGraph(2, new[] { overlap, candidate },
+            areaCatalog: expanded.AreaCatalog, surfaceComponents: expanded.SurfaceComponents))
+            .Should().Be(NavigationCandidatePublication.Published);
+        world.ChangeSequence.Should().Be(worldSequence);
+        firstGuide.Status.Should().Be(NavigationGuideStatus.Success);
+        for (int i = 0; i < 4096 && follower.Status == NavigationGuideStatus.Pending; i++) context.Simulate();
+        follower.Status.Should().Be(NavigationGuideStatus.Success);
+        follower.TryTakeGuide(out var followerResult).Should().BeTrue();
+        using var secondGuide = followerResult!.Value;
+        secondGuide.TryGetCurrentStep(out var secondStep).Should().Be(NavigationGuideStatus.Success);
+        secondStep.Address.MapId.Should().Be("a-overlap");
+        var cache = context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
+        cache.AcquisitionDiagnostics.SharedCoverageMisses.Should().Be(1);
+        cache.AcquisitionDiagnostics.BuildStarts.Should().Be(2);
+        firstGuide.Status.Should().Be(NavigationGuideStatus.Success);
+        firstGuide.Dispose();
+        secondGuide.Dispose();
+        leader.Dispose();
+        follower.Dispose();
+        for (int i = 0; i < 16; i++) context.Simulate();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+        store.ActiveLeaseCount.Should().Be(0);
+        context.Guides.Scheduler.RetainedRequestCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void ScheduledAStarCachedLeader_ProofClonePressureMustPreservePinForFollower()
+    {
+        using var world = new GridWorld();
+        var overlap = CreateInstance(world, "a-overlap", CreateAlternateOverlapConfiguration(), physicallyPresent: true);
+        var configuration = CreateCandidateOverlapConfiguration();
+        var candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        var expanded = CreateAdmissionGraph(overlap, candidate);
+        var d = TrailblazerWorldContextSettings.Default;
+        var settings = new TrailblazerWorldContextSettings(d.OperationLimits, d.MaintenanceBudget,
+            d.GuideSampleBudget, d.MovementGroupPadding, d.MaxIngressEntries, d.MaxIngressBytes,
+            d.MaxActiveSnapshots, d.MaxActiveSnapshotBytes, d.MaxRetiredSnapshots, d.MaxRetiredSnapshotBytes,
+            d.MaxPersistentGraphPages, d.MaxDynamicCellSlotsPerMap, d.MaxDynamicCellSlots, d.NavigationAreaCount,
+            d.MaxAreaPolicies, d.MaxAreaRulesPerPolicy, d.MaxAreaRules, d.MaxConcurrentSnapshotLeases,
+            d.QueryLimits, new NavigationSchedulingSettings(operationStepLimit: 1, lookupStepLimit: 1));
+        using var context = TrailblazerWorldContext.Attach(world, settings: settings);
+        var store = context.Pathing.NavigationGraphStore;
+        var graph = new NavigationWorldGraph(1, new[] { candidate },
+            areaCatalog: expanded.AreaCatalog, surfaceComponents: expanded.SurfaceComponents);
+        store.TryPublish(graph).Should().Be(NavigationCandidatePublication.Published);
+        configuration.TryNormalize(out var binding).Should().BeTrue();
+        Vector3d point = GuidedPathTestScene.Anchor(binding, default);
+        var budget = new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0);
+        var query = new PathQuery(new NavigationEndpoint(point, "z-candidate", EndpointResolutionPolicy.NearestNavigable, (Fixed64)4),
+            new NavigationEndpoint(point, "z-candidate"), PointProfile(), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.AStar, budget, false);
+        context.Guides.RequestGuide(query, out var originalResult).Should().Be(NavigationGuideStatus.Success);
+        using var original = originalResult!.Value;
+        var cache = context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
+        long payloadBytes = cache.LeasedBytes;
+        store.TryPublish(new NavigationWorldGraph(2, new[] { overlap, candidate },
+            areaCatalog: expanded.AreaCatalog, surfaceComponents: expanded.SurfaceComponents))
+            .Should().Be(NavigationCandidatePublication.Published);
+        original.Status.Should().Be(NavigationGuideStatus.Success);
+        context.Guides.Schedule(query, out var leaderResult).Should().Be(NavigationGuideStatus.Pending);
+        context.Guides.Schedule(query, out var followerResult).Should().Be(NavigationGuideStatus.Pending);
+        using var leader = leaderResult!;
+        using var follower = followerResult!;
+        for (int i = 0; i < 4096 && leader.Phase != NavigationGuideRequestPhase.Publication; i++) context.Simulate();
+        leader.Phase.Should().Be(NavigationGuideRequestPhase.Publication);
+        cache.LeasedBytes.Should().Be(payloadBytes + 304);
+        long pressure = settings.QueryLimits.MaxAStarActivePayloadBytes - cache.LeasedBytes - cache.ReservedPayloadBytes;
+        cache.TryReserveEndpointProof(pressure).Should().BeTrue();
+        try
+        {
+            context.Simulate();
+            leader.Status.Should().Be(NavigationGuideStatus.CapacityExceeded);
+            leader.TryTakeGuide(out _).Should().BeFalse();
+            cache.LeasedBytes.Should().Be(payloadBytes + 304);
+        }
+        finally { cache.ReleaseEndpointProof(ref pressure); }
+        for (int i = 0; i < 4096 && follower.Status == NavigationGuideStatus.Pending; i++) context.Simulate();
+        follower.Status.Should().Be(NavigationGuideStatus.Success);
+        follower.TryTakeGuide(out var acquired).Should().BeTrue();
+        using (acquired!.Value) acquired.Value.Status.Should().Be(NavigationGuideStatus.Success);
+        cache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+        cache.LeasedBytes.Should().Be(payloadBytes);
+        cache.ActiveLeaseCount.Should().Be(1);
+        cache.ReservedPayloadBytes.Should().Be(0);
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(false, "None")]
+    [InlineData(false, "Endpoint")]
+    [InlineData(false, "Payload")]
+    [InlineData(true, "None")]
+    [InlineData(true, "Endpoint")]
+    [InlineData(true, "Payload")]
+    public void CachedFlowNegativeCoverage_ExtraEndpointProofMustRemainCurrentUntilPublication(bool shared, string invalidation)
+    {
+        using var world = new GridWorld();
+        var overlap = CreateInstance(world, "a-overlap", CreateAlternateOverlapConfiguration(), physicallyPresent: true);
+        var configuration = CreateCandidateOverlapConfiguration();
+        var candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        var graph = CreateAdmissionGraph(overlap, candidate);
+        using var store = CreateStore(graph);
+        configuration.TryNormalize(out var binding).Should().BeTrue();
+        Vector3d point = GuidedPathTestScene.Anchor(binding, default);
+        var budget = new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0);
+        var leaderQuery = new PathQuery(new NavigationEndpoint(point, "z-candidate"),
+            new NavigationEndpoint(point, "z-candidate"), PointProfile(), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.FlowField, budget, false);
+        var followerQuery = new PathQuery(new NavigationEndpoint(point, "a-overlap", EndpointResolutionPolicy.NearestNavigable, (Fixed64)4),
+            leaderQuery.End, leaderQuery.Agent, leaderQuery.AreaPolicy, leaderQuery.Traversal,
+            leaderQuery.Algorithm, budget, false);
+        using var gate = new NavigationFlowAdmissionGate(world, store, NavigationQueryLimits.Default,
+            new NavigationQueryAdmissionCoordinator(1), NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        gate.Begin(leaderQuery, out var leader).Should().Be(NavigationFlowQueryStatus.Pending);
+        DrainFlowQuery(leader);
+        using var original = leader.TakeResult(0);
+        leader.Dispose();
+        original.PayloadLease.TryGetPayload(out var payload).Should().Be(NavigationFlowFieldStatus.Success);
+        payload.IsComplete.Should().BeTrue();
+        using var source = new NavigationCohortSource { Flow = original.PayloadLease, HasFlow = true };
+        gate.Begin(followerQuery, out var follower, sharedSource: shared ? source : null)
+            .Should().Be(NavigationFlowQueryStatus.Pending);
+        using (follower)
+        {
+            for (int i = 0; i < 4096 && !follower.IsAdmissionComplete; i++) follower.AdvanceAdmission(4096, 4096);
+            follower.IsReadyToPublish(0).Should().BeTrue();
+            gate.PayloadCache.ReservedPayloadBytes.Should().BeGreaterThan(0);
+            if (invalidation == "Endpoint")
+                store.TryPublish(new NavigationWorldGraph(graph.GraphVersion + 1, new[] { candidate },
+                    areaCatalog: graph.AreaCatalog, surfaceComponents: graph.SurfaceComponents))
+                    .Should().Be(NavigationCandidatePublication.Published);
+            else if (invalidation == "Payload")
+                store.TryPublish(graph.WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+                    .WithGraphVersion(graph.GraphVersion + 1)).Should().Be(NavigationCandidatePublication.Published);
+            follower.PublishReadyPrefix(1);
+            follower.GetStatus(0).Should().Be(invalidation != "None" ? NavigationFlowQueryStatus.Stale : NavigationFlowQueryStatus.NoPath);
+            gate.PayloadCache.ReservedPayloadBytes.Should().Be(0);
+            gate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+            gate.PayloadCache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+            if (invalidation == "Payload")
+                gate.PayloadCache.IsPayloadCurrent(store.Current, payload).Should().BeFalse();
+            else
+                original.PayloadLease.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Success);
+        }
+    }
+
+    [Theory]
+    [InlineData("InvalidateBeforePublication", true)]
+    [InlineData("InvalidateAfterGuideCreation", true)]
+    [InlineData("ProofCapacityPressure", true)]
+    [InlineData("InvalidateAfterGuideCreation", false)]
+    [InlineData("InvalidateBeforePublication", false)]
+    [InlineData("ProofExactBytes", false)]
+    [InlineData("ProofOneBelow", false)]
+    [InlineData("CancelDuringCapture", false)]
+    [InlineData("CancelDuringCapture", true)]
+    [InlineData("SharedFinalization", true)]
+    public void SharedAStarEndpointProof_NewOverlapMustRemainLeaseLocal(string scenario, bool shared)
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance overlap = CreateInstance(world, "a-overlap",
+            CreateAlternateOverlapConfiguration(), physicallyPresent: true);
+        GridConfiguration configuration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        NavigationWorldGraph expanded = CreateAdmissionGraph(overlap, candidate);
+        var originalGraph = new NavigationWorldGraph(expanded.GraphVersion, new[] { candidate },
+            areaCatalog: expanded.AreaCatalog, surfaceComponents: expanded.SurfaceComponents);
+        using NavigationWorldGraphStore store = CreateStore(originalGraph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        Vector3d point = GuidedPathTestScene.Anchor(binding, default);
+        var budget = new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0);
+        var query = new PathQuery(new NavigationEndpoint(point, "z-candidate",
+                EndpointResolutionPolicy.NearestNavigable, (Fixed64)4), new NavigationEndpoint(point, "z-candidate"),
+            PointProfile(), Policy.Key, new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.AStar, budget, false);
+        using var gate = new NavigationAStarAdmissionGate(world, store, NavigationQueryLimits.Default,
+            new NavigationQueryAdmissionCoordinator(1));
+        gate.Begin(query, out NavigationAStarBatchWork seed).Should().Be(NavigationAStarQueryStatus.Pending);
+        DrainAStarQuery(seed);
+        using var source = new NavigationCohortSource { AStar = seed.TakeResult(0) };
+        seed.Dispose();
+        NavigationAStarPayload payload = source.AStar.Payload;
+        payload.Dependencies.Pages.Should().NotContain(page => page.MapId == "a-overlap");
+        var withOverlap = new NavigationWorldGraph(originalGraph.GraphVersion + 1, new[] { overlap, candidate },
+            areaCatalog: expanded.AreaCatalog, surfaceComponents: expanded.SurfaceComponents);
+        store.TryPublish(withOverlap).Should().Be(NavigationCandidatePublication.Published);
+        withOverlap.IsDependencyCurrent(payload.Dependencies).Should().BeTrue();
+        long pressure = 0;
+        if (scenario == "ProofCapacityPressure")
+        {
+            pressure = NavigationQueryLimits.Default.MaxAStarActivePayloadBytes - gate.PayloadCache.LeasedBytes;
+            gate.PayloadCache.TryReserveEndpointProof(pressure).Should().BeTrue();
+        }
+        try
+        {
+            gate.Begin(query, out NavigationAStarBatchWork follower, shared ? source : null).Should().Be(NavigationAStarQueryStatus.Pending);
+            using (follower)
+            {
+                int frames = 0;
+                bool pausedCapture = false;
+                while (!follower.IsAdmissionComplete && frames++ < 4096)
+                {
+                    follower.AdvanceAdmission(1, 1);
+                    if (scenario is "ProofExactBytes" or "ProofOneBelow"
+                        && pressure == 0 && gate.PayloadCache.ActiveLeaseCount == 2)
+                    {
+                        const long proofBytes = 304;
+                        pressure = NavigationQueryLimits.Default.MaxAStarActivePayloadBytes
+                            - gate.PayloadCache.LeasedBytes - gate.PayloadCache.ReservedPayloadBytes
+                            - proofBytes + (scenario == "ProofOneBelow" ? 1 : 0);
+                        gate.PayloadCache.TryReserveEndpointProof(pressure).Should().BeTrue();
+                    }
+                    if (scenario == "CancelDuringCapture" && gate.PayloadCache.ReservedPayloadBytes == 304)
+                    {
+                        pausedCapture = true;
+                        break;
+                    }
+                }
+                if (scenario == "CancelDuringCapture")
+                {
+                    pausedCapture.Should().BeTrue("the independently accounted stamp must be owned across a sliced capture");
+                    follower.IsAdmissionComplete.Should().BeFalse();
+                    follower.Dispose();
+                    gate.PayloadCache.ReservedPayloadBytes.Should().Be(0);
+                    gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes);
+                    store.ActiveLeaseCount.Should().Be(0);
+                    return;
+                }
+                follower.IsReadyToPublish(0).Should().BeTrue();
+                var removed = new NavigationWorldGraph(withOverlap.GraphVersion + 1, new[] { candidate },
+                    areaCatalog: expanded.AreaCatalog, surfaceComponents: expanded.SurfaceComponents);
+                if (scenario == "InvalidateBeforePublication")
+                    store.TryPublish(removed).Should().Be(NavigationCandidatePublication.Published);
+                follower.PublishReadyPrefix(1);
+                if (scenario is "ProofCapacityPressure" or "ProofOneBelow")
+                    follower.GetStatus(0).Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
+                else if (scenario == "InvalidateBeforePublication")
+                    follower.GetStatus(0).Should().Be(NavigationAStarQueryStatus.Stale);
+                else
+                {
+                    follower.GetStatus(0).Should().Be(NavigationAStarQueryStatus.Success);
+                    using var result = follower.TakeResult(0);
+                    result.Payload.Should().BeSameAs(payload);
+                    gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes + 304);
+                    if (scenario == "SharedFinalization")
+                    {
+                        using var proofSource = new NavigationCohortSource { AStar = result };
+                        gate.PayloadCache.TryCheckoutShared(store, withOverlap, payload.Key, proofSource,
+                            null, out var checkedOut, preserveSourceProof: true).Should().Be(NavigationAStarQueryStatus.Success);
+                        gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes + 608);
+                        store.TryPublish(removed).Should().Be(NavigationCandidatePublication.Published);
+                        gate.PayloadCache.CompleteSharedCheckoutValidation(store, checkedOut!.EndpointProof, ref checkedOut)
+                            .Should().Be(NavigationAStarQueryStatus.Stale);
+                        checkedOut.Should().BeNull();
+                        gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes + 304);
+                        gate.PayloadCache.TryCreatePublicGuide(store, source.AStar, out var originalGuide)
+                            .Should().Be(NavigationGuideStatus.Success);
+                        using (originalGuide!.Value)
+                            originalGuide.Value.Status.Should().Be(NavigationGuideStatus.Success);
+                        source.AStar = null;
+                        proofSource.Dispose();
+                        gate.PayloadCache.LeasedBytes.Should().Be(0);
+                        gate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+                        return;
+                    }
+                    gate.PayloadCache.TryCreatePublicGuide(store, result, out var acquired).Should().Be(NavigationGuideStatus.Success);
+                    using var guide = acquired!.Value;
+                    store.TryPublish(removed).Should().Be(NavigationCandidatePublication.Published);
+                    guide.Status.Should().Be(NavigationGuideStatus.Stale);
+                    removed.IsDependencyCurrent(payload.Dependencies).Should().BeTrue();
+                }
+            }
+        }
+        finally { gate.PayloadCache.ReleaseEndpointProof(ref pressure); }
+        gate.PayloadCache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+        gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes);
+        gate.PayloadCache.ActiveLeaseCount.Should().Be(1);
+        gate.PayloadCache.ReservedPayloadBytes.Should().Be(0);
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    private static void DrainAStarQuery(NavigationAStarBatchWork work)
+    {
+        for (int i = 0; i < 4096 && !work.IsAdmissionComplete; i++) work.AdvanceAdmission(4096, 4096);
+        for (int i = 0; i < 4096 && !work.IsReadyToPublish(0); i++) work.AdvanceSearch(0, 4096, 4096, 4096, 4096);
+        work.PublishReadyPrefix(1);
+        work.GetStatus(0).Should().Be(NavigationAStarQueryStatus.Success);
+    }
+
+    [Theory]
+    [InlineData(false, false, 0)]
+    [InlineData(false, false, 1)]
+    [InlineData(false, true, 0)]
+    [InlineData(true, false, 0)]
+    [InlineData(true, false, 1)]
+    [InlineData(true, true, 0)]
+    public void CachedEndpointProof_ExactBytesAndCancellation_ShouldDrainOwnership(bool shared, bool cancel, int missingBytes)
+    {
+        using var world = new GridWorld();
+        NavigationMapInstance overlap = CreateInstance(world, "a-overlap",
+            CreateAlternateOverlapConfiguration(), physicallyPresent: true);
+        GridConfiguration configuration = CreateCandidateOverlapConfiguration();
+        NavigationMapInstance candidate = CreateInstance(world, "z-candidate", configuration, physicallyPresent: true);
+        NavigationWorldGraph graph = CreateAdmissionGraph(overlap, candidate);
+        using NavigationWorldGraphStore store = CreateStore(graph);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        Vector3d point = GuidedPathTestScene.Anchor(binding, default);
+        var budget = new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 4096, 4096, 0);
+        var query = new PathQuery(new NavigationEndpoint(point, "z-candidate"),
+            new NavigationEndpoint(point, "z-candidate"), PointProfile(), Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.FlowField, budget, false);
+        var follower = new PathQuery(new NavigationEndpoint(point, "z-candidate",
+                EndpointResolutionPolicy.NearestNavigable, (Fixed64)4), query.End,
+            query.Agent, query.AreaPolicy, query.Traversal, query.Algorithm, budget, false);
+        using var gate = new NavigationFlowAdmissionGate(world, store, NavigationQueryLimits.Default,
+            new NavigationQueryAdmissionCoordinator(1), NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        gate.Begin(query, out NavigationFlowBatchWork seed).Should().Be(NavigationFlowQueryStatus.Pending);
+        DrainFlowQuery(seed);
+        using NavigationFlowQueryResult seedResult = seed.TakeResult(0);
+        seed.Dispose();
+        seedResult.PayloadLease.TryGetPayload(out NavigationFlowFieldPayload payload).Should().Be(NavigationFlowFieldStatus.Success);
+
+        // The nearest proof consumes both map pages and both Solid components.
+        const long proofBytes = 304;
+        using var cache = new NavigationFlowFieldPayloadCache(world, 1, payload.RetainedBytes,
+            payload.RetainedBytes, payload.RetainedBytes + proofBytes - missingBytes, shared ? 1 : 2, 2,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(payload.RetainedBytes, out NavigationFlowFieldReservation reservation).Should().BeTrue();
+        cache.TryPublishOrPromote(store, payload, seedResult.ResolvedOrigin, ref reservation,
+            out NavigationFlowFieldPayloadLease pin).Should().Be(NavigationFlowFieldStatus.Success);
+        using var source = new NavigationCohortSource { Flow = pin, HasFlow = true };
+        var workspace = new NavigationFlowFieldWorkspace(2, 4, 4, 4, 64, 64);
+        using var work = new NavigationFlowQueryWork(store, workspace, cache);
+        work.Begin(follower, store.TryAcquire()!, sharedSource: shared ? source : null);
+        for (int i = 0; i < 4096 && !work.IsPrepared; i++)
+        {
+            var slice = new NavigationAcquisitionSlice(1, 1);
+            work.PrepareSearchOrCheckout(ref slice);
+            slice.LookupRemaining.Should().BeInRange(0, 1);
+            if (cancel && cache.ReservedPayloadBytes > 0)
+            {
+                cache.ReservedPayloadBytes.Should().Be(proofBytes);
+                work.Dispose();
+                cache.ReservedPayloadBytes.Should().Be(0);
+                cache.ActiveLeaseCount.Should().Be(1);
+                cache.LeasedBytes.Should().Be(payload.RetainedBytes);
+                store.ActiveLeaseCount.Should().Be(0);
+                // Reuse the cancelled worker and returned ordinary lease slot.
+                work.Begin(follower, store.TryAcquire()!, sharedSource: shared ? source : null);
+                for (int step = 0; step < 4096 && !work.IsPrepared; step++) work.PrepareSearchOrCheckout(1, 1);
+                work.Publish().Should().Be(NavigationFlowQueryStatus.Success);
+                work.TakeResult().Dispose();
+                source.Dispose();
+                cache.LeasedBytes.Should().Be(0);
+                cache.ReservedPayloadBytes.Should().Be(0);
+                store.ActiveLeaseCount.Should().Be(0);
+                return;
+            }
+        }
+        cancel.Should().BeFalse("cancellation must reach a genuinely retained extra proof capture");
+        workspace.EndpointWorkspace.ComponentCount.Should().Be(2);
+        workspace.EndpointWorkspace.PageCount.Should().Be(2);
+        work.IsReadyToPublish.Should().BeTrue();
+        work.Publish().Should().Be(missingBytes == 0 ? NavigationFlowQueryStatus.Success : NavigationFlowQueryStatus.CapacityExceeded);
+        cache.ReservedPayloadBytes.Should().Be(0);
+        if (missingBytes == 0)
+        {
+            using NavigationFlowQueryResult result = work.TakeResult();
+            cache.LeasedBytes.Should().Be(payload.RetainedBytes + proofBytes);
+        }
+        source.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    private static void DrainFlowQuery(NavigationFlowBatchWork work)
+    {
+        for (int i = 0; i < 4096 && !work.IsAdmissionComplete; i++)
+            work.AdvanceAdmission(4096, 4096);
+        for (int i = 0; i < 4096 && !work.IsReadyToPublish(0); i++)
+            work.AdvanceSearch(0, 4096, 4096, 4096, 4096);
+        work.PublishReadyPrefix(1);
+        work.GetStatus(0).Should().Be(NavigationFlowQueryStatus.Success);
     }
 
     private static NavigationMapInstance CreateInstance(

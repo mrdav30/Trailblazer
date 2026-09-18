@@ -13,7 +13,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Context-owned API for actionable A* and flow-field guide acquisition.
 /// </summary>
-public sealed class TrailblazerGuideService
+public sealed partial class TrailblazerGuideService
 {
     private readonly TrailblazerWorldContext _context;
     private readonly NavigationGuideScheduler _scheduler;
@@ -25,9 +25,13 @@ public sealed class TrailblazerGuideService
 
     /// <summary>Queues immutable query intent for deterministic frame-spread acquisition.</summary>
     /// <remarks>Pending means accepted. Dispose the returned request or take its successful typed lease.
-    /// Each context Simulate advances at most one FIFO acquisition phase before host hooks.
+    /// Each context Simulate advances FIFO acquisition before host hooks, sharing counted-work and operation
+    /// allowances across phases and requests. Several requests can complete in one frame.
+    /// Contiguous compatible requests form a frozen cohort. Builds remain oldest-first; covered followers
+    /// can complete before earlier uncovered members. Each result owns independent cursor and endpoint proof.
+    /// Cancelling a building member preserves its original work while another frozen member remains interested.
     /// Queued intent observes the graph when activated. Any raw GridWorld change between activation and transfer
-    /// makes that acquisition stale. Completed unclaimed requests retain capacity; counted slices do not promise
+    /// makes the entire activated cohort stale. Completed unclaimed requests retain capacity; counted slices do not promise
     /// elapsed-time deadlines. An active acquisition holds its algorithm's gate, so a synchronous request of the
     /// same family can return CapacityExceeded until the scheduled acquisition completes or is disposed.</remarks>
     public NavigationGuideStatus Schedule(PathQuery query, out NavigationGuideRequest? request)

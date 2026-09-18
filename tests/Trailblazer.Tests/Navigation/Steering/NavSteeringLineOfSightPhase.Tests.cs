@@ -457,13 +457,13 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
         }
 
         int rightHeadings = 0;
+        Vector3d heading = default;
+        Action measureHeading = () => heading = steering.GetHeading(navigator, out _);
         long allocated = 0;
         for (int frame = 0; frame < measuredFrames; frame++)
         {
             TestWorld.Context.Simulate();
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            Vector3d heading = steering.GetHeading(navigator, out _);
-            allocated += GC.GetAllocatedBytesForCurrentThread() - before;
+            allocated += AllocationTestUtility.MeasureAllocatedBytes(measureHeading);
             if (heading == Vector3d.Right)
                 rightHeadings++;
         }

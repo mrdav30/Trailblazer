@@ -159,8 +159,8 @@ internal static class NavigationSelectedEdgeProgressWork
             graph.TryGetNodeState(
                 sourceRef,
                 medium,
-                out NavigationNodeState sourceState);
-            graph.TryGetSeamPrism(currentSource, out GridCellPrism sourcePrism);
+                out NavigationNodeState sourceState,
+                out GridCellPrism sourcePrism);
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             bool sourceContains = sourcePrism.Contains(actualFootPosition);
@@ -235,9 +235,7 @@ internal static class NavigationSelectedEdgeProgressWork
             graph.TryGetNodeState(
                 edge.Target,
                 medium,
-                out NavigationNodeState targetState);
-            graph.TryGetSeamPrism(
-                node.SelectedEdge.Target,
+                out NavigationNodeState targetState,
                 out GridCellPrism targetPrism);
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
@@ -420,6 +418,7 @@ internal static class NavigationSelectedEdgeProgressWork
         ref GuideSampleWorkMeter meter,
         out NavigationGraphEdge edge)
     {
+        // Replay the same structural edge ordering that assigned the payload ordinal.
         NavigationSurfaceEdgeEnumerator edges = graph.EnumerateStructuralSurfaceEdges(source);
         int edgeStepRemaining = int.MaxValue;
         while (true)

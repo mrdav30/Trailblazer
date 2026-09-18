@@ -633,6 +633,256 @@ public sealed class NavigationFlowFieldGuideTests
     }
 
     [Fact]
+    public void SparsePhysicalGapBeforeSource_ShouldSampleTowardTheAuthoredDestination()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(3, 1, 1),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        var source = new VoxelIndex(1, 0, 0);
+        var destination = new VoxelIndex(2, 0, 0);
+        context.World.TryAddGrid(configuration, new[] { source, destination }, out _)
+            .Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            NavigationAStarExitTestHarness.Policy,
+            1,
+            context.FrameCount + 1);
+        context.Pathing.Admit(policyOperation).Should().BeTrue();
+        SimulateUntilTerminal(context, policyOperation.Receipt);
+        policyOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        var mapOperation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(
+                new NavigationMapBuilder("sparse-guide", binding)
+                    .AddCell(default, NavigationAStarExitTestHarness.Cell)
+                    .AddCell(source, NavigationAStarExitTestHarness.Cell)
+                    .AddCell(destination, NavigationAStarExitTestHarness.Cell)
+                    .Build(),
+                bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            1,
+            context.FrameCount + 1);
+        context.Pathing.Admit(mapOperation).Should().BeTrue();
+        SimulateUntilTerminal(context, mapOperation.Receipt);
+        mapOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        Vector3d sourceFoot = NavigationAStarExitTestHarness.GetFoot(binding, source);
+        Vector3d destinationFoot = NavigationAStarExitTestHarness.GetFoot(binding, destination);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        var query = new PathQuery(
+            new NavigationEndpoint(sourceFoot, "sparse-guide"),
+            new NavigationEndpoint(destinationFoot, "sparse-guide"),
+            profile,
+            NavigationAStarExitTestHarness.Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.FlowField,
+            new NavigationWorkBudget(8192, 32, 128, 1024, 1024, 0, 0, 0, 128, 128, 0),
+            allowTransitions: false,
+            new FlowFieldQueryOptions(Fixed64.Zero));
+
+        NavigationGuideStatus status = context.Guides.RequestFlowField(query, out var result);
+        using NavigationFlowFieldLease? ownedResult = result;
+        status.Should().Be(NavigationGuideStatus.Success);
+        NavigationFlowFieldLease guide = TestRequire.NotNull(result);
+
+        guide.TrySample(sourceFoot, context.Settings.GuideSampleBudget, out NavigationFlowSample sample)
+            .Should().Be(NavigationGuideStatus.Success);
+
+        sample.Heading.Should().Be(Vector3d.Right);
+        sample.Target.Should().Be(destinationFoot);
+        sample.Medium.Should().Be(TraversalMedium.Solid);
+        sample.HasTransition.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SparseNeighborPublication_ShouldInvalidateTheRetainedGuideAndAllowFreshAcquisition()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        const string MapId = "sparse-guide-publication";
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(66, 1, 1),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        var source = new VoxelIndex(64, 0, 0);
+        var destination = new VoxelIndex(65, 0, 0);
+        var neighboringCell = new VoxelIndex(63, 0, 0);
+        context.World.TryAddGrid(configuration, new[] { source, destination }, out ushort gridIndex)
+            .Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        var builder = new NavigationMapBuilder(MapId, binding);
+        for (int x = 0; x < 66; x++)
+            builder.AddCell(new VoxelIndex(x, 0, 0), NavigationAStarExitTestHarness.Cell);
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            NavigationAStarExitTestHarness.Policy, 1, context.FrameCount + 1);
+        context.Pathing.Admit(policyOperation).Should().BeTrue();
+        SimulateUntilTerminal(context, policyOperation.Receipt);
+        policyOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        var mapOperation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(builder.Build(), bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            1,
+            context.FrameCount + 1);
+        context.Pathing.Admit(mapOperation).Should().BeTrue();
+        SimulateUntilTerminal(context, mapOperation.Receipt);
+        mapOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        Vector3d sourceFoot = NavigationAStarExitTestHarness.GetFoot(binding, source);
+        Vector3d destinationFoot = NavigationAStarExitTestHarness.GetFoot(binding, destination);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        var query = new PathQuery(
+            new NavigationEndpoint(sourceFoot, MapId),
+            new NavigationEndpoint(destinationFoot, MapId),
+            profile,
+            NavigationAStarExitTestHarness.Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.FlowField,
+            new NavigationWorkBudget(8192, 32, 128, 1024, 1024, 0, 0, 0, 128, 128, 0),
+            allowTransitions: false,
+            new FlowFieldQueryOptions(Fixed64.Zero));
+        NavigationGuideStatus status = context.Guides.RequestFlowField(query, out var result);
+        using NavigationFlowFieldLease? ownedResult = result;
+        status.Should().Be(NavigationGuideStatus.Success);
+        NavigationFlowFieldLease guide = TestRequire.NotNull(result);
+        guide.Status.Should().Be(NavigationGuideStatus.Success);
+        guide.TrySample(sourceFoot, context.Settings.GuideSampleBudget, out NavigationFlowSample before)
+            .Should().Be(NavigationGuideStatus.Success);
+        before.Heading.Should().Be(Vector3d.Right);
+        before.Target.Should().Be(destinationFoot);
+        before.Medium.Should().Be(TraversalMedium.Solid);
+        before.HasTransition.Should().BeFalse();
+        NavigationGraphDiagnosticsSnapshot original = context.Pathing.GetNavigationGraphDiagnostics();
+        original.Maps[0].Cells[63].Index.Should().Be(neighboringCell);
+        original.Maps[0].Cells[63].IsPresent.Should().BeFalse();
+
+        TestRequire.Grid(context, gridIndex).TryAddVoxel(neighboringCell, out _).Should().BeTrue();
+        NavigationGraphDiagnosticsSnapshot published = original;
+        for (int frame = 0; frame < 256; frame++)
+        {
+            context.Simulate();
+            published = context.Pathing.GetNavigationGraphDiagnostics();
+            if (published.Maps[0].Cells[63].IsPresent
+                && context.Pathing.RetainedCompositionWorkCount == 0)
+            {
+                break;
+            }
+        }
+        published.GraphVersion.Should().BeGreaterThan(original.GraphVersion);
+        published.Maps[0].Cells[63].IsPresent.Should().BeTrue();
+        context.Pathing.RetainedCompositionWorkCount.Should().Be(0);
+
+        guide.Status.Should().Be(NavigationGuideStatus.Stale);
+        guide.TrySample(sourceFoot, context.Settings.GuideSampleBudget, out NavigationFlowSample stale)
+            .Should().Be(NavigationGuideStatus.Stale);
+        stale.Should().Be(default(NavigationFlowSample));
+
+        NavigationGuideStatus evictionStatus = context.Guides.RequestFlowField(query, out var evicted);
+        using NavigationFlowFieldLease? ownedEvicted = evicted;
+        evictionStatus.Should().Be(NavigationGuideStatus.Stale);
+        evicted.Should().BeNull();
+        guide.Dispose();
+        context.Simulate();
+
+        NavigationGuideStatus replacementStatus = context.Guides.RequestFlowField(query, out var replacement);
+        using NavigationFlowFieldLease? ownedReplacement = replacement;
+        replacementStatus.Should().Be(NavigationGuideStatus.Success);
+        NavigationFlowFieldLease freshGuide = TestRequire.NotNull(replacement);
+        freshGuide.TrySample(sourceFoot, context.Settings.GuideSampleBudget, out NavigationFlowSample fresh)
+            .Should().Be(NavigationGuideStatus.Success);
+        fresh.Heading.Should().Be(Vector3d.Right);
+        fresh.Target.Should().Be(destinationFoot);
+        fresh.Medium.Should().Be(TraversalMedium.Solid);
+        fresh.HasTransition.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SparseWeightedSelectedEdgeRejoin_ShouldReachTheSelectedPortalAfterSourceRayIsBlocked()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        const string MapId = "sparse-weighted-rejoin";
+        GridConfiguration configuration = new(
+            Vector3d.Zero,
+            new Vector3d(3, 1, 1),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Sparse);
+        var source = new VoxelIndex(1, 0, 0);
+        var destination = new VoxelIndex(2, 0, 0);
+        context.World.TryAddGrid(configuration, new[] { source, destination }, out _)
+            .Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding)
+            .Should().BeTrue();
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            NavigationAStarExitTestHarness.Policy, 1, context.FrameCount + 1);
+        context.Pathing.Admit(policyOperation).Should().BeTrue();
+        SimulateUntilTerminal(context, policyOperation.Receipt);
+        policyOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        var mapOperation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(
+                new NavigationMapBuilder(MapId, binding)
+                    .AddCell(default, NavigationAStarExitTestHarness.Cell)
+                    .AddCell(source, NavigationAStarExitTestHarness.Cell)
+                    .AddCell(destination, NavigationAStarExitTestHarness.ExpensiveCell)
+                    .Build(),
+                bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            1,
+            context.FrameCount + 1);
+        context.Pathing.Admit(mapOperation).Should().BeTrue();
+        SimulateUntilTerminal(context, mapOperation.Receipt);
+        mapOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        Vector3d sourceFoot = NavigationAStarExitTestHarness.GetFoot(binding, source);
+        Vector3d destinationFoot = NavigationAStarExitTestHarness.GetFoot(binding, destination);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+        var query = new PathQuery(
+            new NavigationEndpoint(sourceFoot, MapId),
+            new NavigationEndpoint(destinationFoot, MapId),
+            profile,
+            NavigationAStarExitTestHarness.Policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
+            PathAlgorithm.FlowField,
+            new NavigationWorkBudget(8192, 32, 128, 1024, 1024, 0, 0, 0, 128, 128, 0),
+            allowTransitions: false,
+            new FlowFieldQueryOptions(Fixed64.Zero));
+        NavigationGuideStatus status = context.Guides.RequestFlowField(query, out var result);
+        using NavigationFlowFieldLease? ownedResult = result;
+        status.Should().Be(NavigationGuideStatus.Success);
+        NavigationFlowFieldLease guide = TestRequire.NotNull(result);
+        Vector3d actualFoot = sourceFoot + Vector3d.Left + Vector3d.Backward;
+        Vector3d selectedPortal = sourceFoot + (destinationFoot - sourceFoot) * Fixed64.Half;
+
+        guide.TrySample(actualFoot, context.Settings.GuideSampleBudget, out NavigationFlowSample sample)
+            .Should().Be(NavigationGuideStatus.Success);
+
+        sample.Heading.Should().Be((selectedPortal - actualFoot).Normalized);
+        sample.Target.Should().Be(destinationFoot);
+        sample.Medium.Should().Be(TraversalMedium.Solid);
+        sample.HasTransition.Should().BeFalse();
+    }
+
+    [Fact]
     public void CacheTransfer_ShouldSampleNativeSelectedEdgeFromActualFoot()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
@@ -2999,9 +3249,14 @@ public sealed class NavigationFlowFieldGuideTests
                 new NavigationFlowQueryResult(fixture.FarOrigin, payloadLease),
                 out NavigationFlowFieldLease guide)
             .Should().Be(NavigationGuideStatus.Success);
+        using NavigationFlowFieldLease ownedGuide = guide;
         fixture.Graph.TryGetNodeRef(fixture.FarOrigin, out NavigationNodeRef sourceRef)
             .Should().BeTrue();
         fixture.Graph.TryGetNodeState(sourceRef, out NavigationNodeState source)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(fixture.MarginOrigin, out NavigationNodeRef targetRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(targetRef, out NavigationNodeState target)
             .Should().BeTrue();
         var limits = new[] { 3, 2, 0, 1, 2, 2, 0 };
         limits[category] = allowance;
@@ -3017,13 +3272,15 @@ public sealed class NavigationFlowFieldGuideTests
         guide.TrySampleHeading(source.FootAnchor, budget, out Vector3d blockedHeading)
             .Should().Be(NavigationGuideStatus.BudgetExceeded);
         blockedHeading.Should().Be(Vector3d.Zero);
-        guide.TrySampleHeading(
+        guide.TrySample(
                 source.FootAnchor,
-                GenerousSampleBudget,
-                out Vector3d retryHeading)
+                new GuideSampleWorkBudget(3, 2, 0, 1, 2, 2, 0),
+                out NavigationFlowSample sample)
             .Should().Be(NavigationGuideStatus.Success);
-        retryHeading.Should().NotBe(Vector3d.Zero);
-        guide.Dispose();
+        sample.Heading.Should().Be(Vector3d.Left);
+        sample.Target.Should().Be(target.FootAnchor);
+        sample.Medium.Should().Be(TraversalMedium.Solid);
+        sample.HasTransition.Should().BeFalse();
     }
 
     [Theory]

@@ -15,6 +15,79 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed class TrailblazerGuideServiceTests
 {
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void AcquisitionDiagnostics_ShouldDistinguishColdBuildFromWarmCheckout(PathAlgorithm algorithm)
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery original);
+        PathQuery query = WithAlgorithm(ResolveDirectRoute(context, original), algorithm);
+        NavigationAcquisitionDiagnostics counters = algorithm == PathAlgorithm.AStar
+            ? context.Pathing.NavigationAStarAdmissionGate.PayloadCache.AcquisitionDiagnostics
+            : context.Pathing.NavigationFlowAdmissionGate.PayloadCache.AcquisitionDiagnostics;
+        RequestAndDispose(query).Should().Be(NavigationGuideStatus.Success);
+        counters.BuildStarts.Should().Be(1);
+        counters.CacheCheckoutHits.Should().Be(0);
+        counters.CompletedQueries.Should().Be(1);
+        counters.ExpandedNodes.Should().BeGreaterThan(0);
+        // Foot anchors lie on a vertical prism boundary: two physical candidates per endpoint.
+        counters.EndpointCandidates.Should().Be(4);
+        long nodes = counters.ExpandedNodes;
+        RequestAndDispose(query).Should().Be(NavigationGuideStatus.Success);
+        counters.BuildStarts.Should().Be(1);
+        counters.CacheCheckoutHits.Should().Be(1);
+        counters.CompletedQueries.Should().Be(2, "query Finish and Dispose must not both count it");
+        counters.ExpandedNodes.Should().Be(nodes, "warm reuse performs no search expansion");
+        counters.EndpointCandidates.Should().Be(8, "every acquisition still admits its own endpoints");
+        counters.Promotions.Should().Be(0);
+
+        NavigationGuideStatus RequestAndDispose(PathQuery request)
+        {
+            if (algorithm == PathAlgorithm.AStar)
+            {
+                NavigationGuideStatus status = context.Guides.RequestGuide(request, out var lease);
+                lease?.Dispose();
+                return status;
+            }
+            else
+            {
+                NavigationGuideStatus status = context.Guides.RequestFlowField(request, out var lease);
+                lease?.Dispose();
+                return status;
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void AcquisitionDiagnostics_ShouldCountBudgetFailedBuilds(PathAlgorithm algorithm)
+    {
+        using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery original);
+        var query = new PathQuery(original.Start, original.End, original.Agent, original.AreaPolicy,
+            original.Traversal, algorithm, new NavigationWorkBudget(4096, 16, 1, 4096, 0, 0, 0, 0, 0, 0, 0),
+            allowTransitions: false);
+        NavigationAcquisitionDiagnostics counters = algorithm == PathAlgorithm.AStar
+            ? context.Pathing.NavigationAStarAdmissionGate.PayloadCache.AcquisitionDiagnostics
+            : context.Pathing.NavigationFlowAdmissionGate.PayloadCache.AcquisitionDiagnostics;
+        NavigationGuideStatus status;
+        if (algorithm == PathAlgorithm.AStar)
+        {
+            status = context.Guides.RequestGuide(query, out var lease);
+            lease.Should().BeNull();
+        }
+        else
+        {
+            status = context.Guides.RequestFlowField(query, out var lease);
+            lease.Should().BeNull();
+        }
+        status.Should().Be(NavigationGuideStatus.BudgetExceeded);
+        counters.BuildStarts.Should().Be(1, "a failed search still consumed real build work");
+        counters.CacheCheckoutHits.Should().Be(0);
+        counters.CompletedQueries.Should().Be(1);
+        counters.ExpandedNodes.Should().Be(1);
+    }
+
     [Fact]
     public void TryGetDirectHeading_ClearCostNeutralSurfaceRay_ShouldReturnExactHeading()
     {
@@ -162,15 +235,16 @@ public sealed class TrailblazerGuideServiceTests
 
         NavigationRayStatus status = default;
         Vector3d heading = default;
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < measurementCount; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            status = context.Guides.TryGetDirectHeading(
-                query,
-                query.Start.Position,
-                out heading);
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int i = 0; i < measurementCount; i++)
+            {
+                status = context.Guides.TryGetDirectHeading(
+                    query,
+                    query.Start.Position,
+                    out heading);
+            }
+        });
 
         status.Should().Be(NavigationRayStatus.Success);
         heading.Should().Be(Vector3d.Right);
@@ -320,19 +394,20 @@ public sealed class TrailblazerGuideServiceTests
         NavigationGuideStatus requestStatus = default;
         NavigationGuideStatus sampleStatus = default;
         NavigationGuideStep sampledStep = default;
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 256; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            requestStatus = context.Guides.RequestGuide(
-                query,
-                out NavigationGuideLease? guide);
-            if (!guide.HasValue)
-                break;
-            NavigationGuideLease activeGuide = guide.Value;
-            sampleStatus = activeGuide.TryGetCurrentStep(out sampledStep);
-            activeGuide.Dispose();
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            for (int i = 0; i < 256; i++)
+            {
+                requestStatus = context.Guides.RequestGuide(
+                    query,
+                    out NavigationGuideLease? guide);
+                if (!guide.HasValue)
+                    break;
+                NavigationGuideLease activeGuide = guide.Value;
+                sampleStatus = activeGuide.TryGetCurrentStep(out sampledStep);
+                activeGuide.Dispose();
+            }
+        });
 
         requestStatus.Should().Be(NavigationGuideStatus.Success);
         sampleStatus.Should().Be(NavigationGuideStatus.Success);

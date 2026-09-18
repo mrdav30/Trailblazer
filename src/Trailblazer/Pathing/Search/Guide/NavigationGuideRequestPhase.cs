@@ -10,6 +10,7 @@ namespace Trailblazer.Pathing;
 internal enum NavigationGuideRequestPhase : byte
 {
     Queued,
+    Direct,
     Admission,
     Search,
     Publication,

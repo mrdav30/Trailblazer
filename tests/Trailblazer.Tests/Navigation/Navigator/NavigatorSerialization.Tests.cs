@@ -56,7 +56,7 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(6);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(7);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
     }
@@ -89,6 +89,29 @@ public class NavigatorSerializationTests : IDisposable
         ground.SurfaceNormal.Should().Be(surfaceNormal);
         ground.Platform.Transform.Up.Should().Be(Vector3d.Up);
         TestRequire.NotNull(target.Motor).CurrentState.SurfaceNormal.Should().Be(surfaceNormal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldPreserveScheduledPolicyAndRejectOldOrInvalidPolicyTransactionally(bool useMemoryPack)
+    {
+        var source = CreateNavigator(Vector3d.Zero);
+        source.Steering!.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = CreateNavigator(Vector3d.Zero, profile: source.NavigationProfile);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+        target.Steering!.AcquisitionMode.Should().Be(NavigationAcquisitionMode.Scheduled);
+        target.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Immediate);
+        object old = SerializationUtility.SetPayloadValue(payload, useMemoryPack, 6, "SchemaVersion");
+        Action oldLoad = () => SerializationUtility.PopulateRecord(target, old, useMemoryPack);
+        oldLoad.Should().Throw<InvalidOperationException>();
+        object invalid = SerializationUtility.SetPayloadValue(payload, useMemoryPack, 99, "Steering", "AcquisitionMode");
+        Action invalidLoad = () => SerializationUtility.PopulateRecord(target, invalid, useMemoryPack);
+        invalidLoad.Should().Throw<ArgumentOutOfRangeException>();
+        target.Steering.AcquisitionMode.Should().Be(NavigationAcquisitionMode.Immediate);
     }
 
     [Theory]

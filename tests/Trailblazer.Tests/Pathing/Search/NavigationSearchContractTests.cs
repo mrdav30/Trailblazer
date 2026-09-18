@@ -1323,6 +1323,21 @@ public sealed class NavigationSearchContractTests
     }
 
     [Theory]
+    [InlineData((int)NavigationFlowFieldStatus.Success, NavigationGuideStatus.Success)]
+    [InlineData((int)NavigationFlowFieldStatus.Pending, NavigationGuideStatus.Pending)]
+    [InlineData((int)NavigationFlowFieldStatus.NoPath, NavigationGuideStatus.NoPath)]
+    [InlineData((int)NavigationFlowFieldStatus.BudgetExceeded, NavigationGuideStatus.BudgetExceeded)]
+    [InlineData((int)NavigationFlowFieldStatus.CostOverflow, NavigationGuideStatus.CostOverflow)]
+    [InlineData((int)NavigationFlowFieldStatus.CapacityExceeded, NavigationGuideStatus.CapacityExceeded)]
+    [InlineData((int)NavigationFlowFieldStatus.Stale, NavigationGuideStatus.Stale)]
+    [InlineData(255, NavigationGuideStatus.Stale)]
+    public void SharedFlowStatusMapper_ShouldPreserveTerminalFailureAndPendingOutcomes(
+        int statusValue, NavigationGuideStatus expected)
+    {
+        NavigationGuideStatusMapper.ToPublic((NavigationFlowFieldStatus)statusValue).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData((int)NavigationRayStatus.Blocked, NavigationGuideStatus.LocalRecoveryRequired)]
     [InlineData((int)NavigationRayStatus.BudgetExceeded, NavigationGuideStatus.BudgetExceeded)]
     [InlineData((int)NavigationRayStatus.CostOverflow, NavigationGuideStatus.CostOverflow)]
@@ -1407,6 +1422,27 @@ public sealed class NavigationSearchContractTests
 
         NavigationAStarPayloadCache.RetainGuideIfReusable(1, guide, ref freeGuides);
         freeGuides.Should().BeSameAs(guide);
+    }
+
+    [Fact]
+    public void AStarPayloadPool_ExhaustedReturnMustPreserveOtherReusableLease()
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.One);
+        var payload = AStarPayload(fixture);
+        var cache = new NavigationAStarPayloadCache(fixture.World, 1, payload.RetainedBytes,
+            payload.RetainedBytes, payload.RetainedBytes, 1);
+        var previous = new NavigationAStarPayloadLease(cache);
+        var returned = new NavigationAStarPayloadLease(cache);
+        NavigationAStarPayloadLease? pool = previous;
+        NavigationAStarPayloadCache.RetainPayloadLeaseIfReusable(long.MaxValue, returned, ref pool);
+        pool.Should().BeSameAs(previous);
+        returned.NextPooled.Should().BeNull();
+        NavigationAStarPayloadCache.RetainPayloadLeaseIfReusable(long.MaxValue - 1, returned, ref pool);
+        pool.Should().BeSameAs(returned);
+        pool!.NextPooled.Should().BeSameAs(previous);
+        previous.NextPooled.Should().BeNull();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
     }
 
     [Fact]

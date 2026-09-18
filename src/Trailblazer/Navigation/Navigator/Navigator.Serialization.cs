@@ -18,7 +18,7 @@ namespace Trailblazer.Navigation;
 
 public abstract partial class Navigator
 {
-    private const int CurrentSerializationSchemaVersion = 6;
+    private const int CurrentSerializationSchemaVersion = 7;
 
     #region Serialization
 

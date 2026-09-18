@@ -22,6 +22,216 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed class NavigationAStarAdmissionTests
 {
+    [Fact]
+    public void EndpointProof_AttachmentMustAccountReplacementAndRejectForeignOrReleasedOwnership()
+    {
+        using var world = new GridWorld();
+        var graph = CreateLineGraph(world, out var start, out var end);
+        using var store = CreateStore(graph, 2);
+        var cache = new NavigationAStarPayloadCache(world, 0, 0, 100_000, 100_000, 3);
+        var foreign = new NavigationAStarPayloadCache(world, 0, 0, 100_000, 100_000, 3);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        using var seed = BeginReservedQuery(world, store, Query(start, end, 2), workspace, cache);
+        DrainQuery(seed);
+        using var lease = seed.TakeResult();
+        var proof = lease.Payload.Dependencies;
+        long baseline = cache.LeasedBytes;
+        long reservation = 0;
+        foreign.TryAttachEndpointProof(lease, proof, ref reservation).Should().BeFalse();
+        Action unreserved = () => cache.TryAttachEndpointProof(lease, proof, ref reservation);
+        unreserved.Should().Throw<InvalidOperationException>();
+        for (int replacement = 0; replacement < 2; replacement++)
+        {
+            reservation = proof.RetainedBytes;
+            cache.TryReserveEndpointProof(reservation).Should().BeTrue();
+            cache.TryAttachEndpointProof(lease, proof, ref reservation).Should().BeTrue();
+            cache.LeasedBytes.Should().Be(baseline + proof.RetainedBytes);
+            cache.ReservedPayloadBytes.Should().Be(0);
+        }
+        lease.Dispose();
+        cache.TryAttachEndpointProof(lease, proof, ref reservation).Should().BeFalse();
+        cache.LeasedBytes.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void SharedCheckoutFinalization_StalePayloadMustReleaseOnlyCheckedOutOwnership()
+    {
+        using var world = new GridWorld();
+        NavigationWorldGraph graph = CreateLineGraph(world, out Vector3d start, out Vector3d end);
+        using NavigationWorldGraphStore store = CreateStore(graph, 2);
+        var cache = new NavigationAStarPayloadCache(world, 0, 0, 100_000, 100_000, 3);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        using NavigationAStarQueryWork seed = BeginReservedQuery(world, store,
+            Query(start, end, maxExpandedNodes: 2), workspace, cache);
+        DrainQuery(seed);
+        using var source = new NavigationCohortSource { AStar = seed.TakeResult() };
+        NavigationAStarPayload payload = source.AStar.Payload;
+        cache.TryCheckoutShared(store, graph, payload.Key, source, null, out var checkout)
+            .Should().Be(NavigationAStarQueryStatus.Success);
+        cache.ActiveLeaseCount.Should().Be(2);
+        store.TryPublish(graph.WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+            .WithGraphVersion(graph.GraphVersion + 1)).Should().Be(NavigationCandidatePublication.Published);
+        cache.CompleteSharedCheckoutValidation(store, null, ref checkout)
+            .Should().Be(NavigationAStarQueryStatus.Stale);
+        checkout.Should().BeNull();
+        cache.ActiveLeaseCount.Should().Be(1);
+        cache.LeasedBytes.Should().Be(payload.RetainedBytes);
+        source.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void SharedAStarCheckout_ShouldPreserveSourceProofAcrossCloneAndTransfer(bool transfer, bool staleProof)
+    {
+        using var world = new GridWorld();
+        NavigationWorldGraph graph = CreateLineGraph(world, out Vector3d start, out Vector3d end);
+        using NavigationWorldGraphStore store = CreateStore(graph, 2);
+        var cache = new NavigationAStarPayloadCache(world, 0, 0, 100_000, 100_000, 3);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        using NavigationAStarQueryWork seed = BeginReservedQuery(world, store,
+            Query(start, end, maxExpandedNodes: 2), workspace, cache);
+        DrainQuery(seed);
+        using var source = new NavigationCohortSource { AStar = seed.TakeResult(), Transfer = true };
+        NavigationAStarPayload payload = source.AStar.Payload;
+        GraphDependencyStamp proof = payload.Dependencies;
+        cache.TryCheckoutShared(store, graph, payload.Key, source, proof, out var first)
+            .Should().Be(NavigationAStarQueryStatus.Success);
+        source.AStar = first;
+        source.Transfer = transfer;
+        long bytes = cache.LeasedBytes;
+        GraphDependencyStamp? supplied = staleProof
+            ? new GraphDependencyStamp(new NavigationAreaPolicyKey("missing", 1),
+                Array.Empty<GraphComponentDependency>(), Array.Empty<GraphPageDependency>()) : null;
+        cache.TryCheckoutShared(store, graph, payload.Key, source, supplied, out var second,
+            preserveSourceProof: !staleProof).Should().Be(staleProof
+                ? NavigationAStarQueryStatus.Stale : NavigationAStarQueryStatus.Success);
+        if (staleProof)
+        {
+            second.Should().BeNull();
+            cache.LeasedBytes.Should().Be(bytes);
+            cache.ActiveLeaseCount.Should().Be(1);
+        }
+        else
+        {
+            cache.LeasedBytes.Should().Be(bytes + (transfer ? 0 : proof.RetainedBytes));
+            cache.ActiveLeaseCount.Should().Be(transfer ? 1 : 2);
+            second!.EndpointProof.Should().BeSameAs(proof);
+            cache.TryCreatePublicGuide(store, second, out var acquired).Should().Be(NavigationGuideStatus.Success);
+            using var guide = acquired!.Value;
+            source.Dispose();
+            guide.Status.Should().Be(NavigationGuideStatus.Success);
+            guide.TryGetCurrentStep(out var step).Should().Be(NavigationGuideStatus.Success);
+            step.Address.Should().Be(payload.Key.Start);
+        }
+        source.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void SharedAStarAdmission_ReleasedSourceMustFailStaleWithoutStartingAnotherBuild()
+    {
+        using var world = new GridWorld();
+        NavigationWorldGraph graph = CreateLineGraph(world, out Vector3d start, out Vector3d end);
+        using NavigationWorldGraphStore store = CreateStore(graph, 2);
+        var cache = new NavigationAStarPayloadCache(world, 0, 0, 100_000, 100_000, 2);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        PathQuery query = Query(start, end, maxExpandedNodes: 2);
+        using NavigationAStarQueryWork seed = BeginReservedQuery(world, store, query, workspace, cache);
+        DrainQuery(seed);
+        using var source = new NavigationCohortSource { AStar = seed.TakeResult() };
+        seed.Dispose();
+        using var follower = new NavigationAStarQueryWork(world, store, workspace, cache);
+        NavigationAStarPayloadReservation reservation = default;
+        follower.BeginReserved(query, store.TryAcquire()!, ref reservation, source);
+        source.Dispose();
+        DrainQuery(follower);
+        follower.Status.Should().Be(NavigationAStarQueryStatus.Stale);
+        cache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
+        cache.AcquisitionDiagnostics.SharedFollowerCheckouts.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+        store.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void SharedAStarSource_ExpiredGeneration_ShouldNotCheckoutOrReleaseReplacement()
+    {
+        using var world = new GridWorld();
+        NavigationWorldGraph graph = CreateLineGraph(world, out Vector3d start, out Vector3d end);
+        using NavigationWorldGraphStore store = CreateStore(graph, 2);
+        var cache = new NavigationAStarPayloadCache(world, 0, 0, 100_000, 100_000, 2);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        using NavigationAStarQueryWork seed = BeginReservedQuery(world, store,
+            Query(start, end, maxExpandedNodes: 2), workspace, cache);
+        DrainQuery(seed);
+        NavigationAStarPayloadLease expired = seed.TakeResult();
+        NavigationAStarPayload payload = expired.Payload;
+        using var source = new NavigationCohortSource { AStar = expired };
+        expired.Dispose();
+        cache.TryReservePayload(payload.RetainedBytes, out NavigationAStarPayloadReservation reservation).Should().BeTrue();
+        cache.TryPublish(payload, store, ref reservation, out NavigationAStarPayloadLease replacement).Should().BeTrue();
+        using (replacement)
+        {
+            cache.TryCheckoutShared(store, graph, payload.Key, source, null, out _).Should().Be(NavigationAStarQueryStatus.Pending);
+            source.Dispose();
+            cache.ActiveLeaseCount.Should().Be(1, "the expired source generation does not own the pooled replacement");
+            replacement.Payload.Should().BeSameAs(payload);
+            cache.TryCheckoutShared(store, graph, payload.Key, source, null, out var afterRelease)
+                .Should().Be(NavigationAStarQueryStatus.Pending);
+            afterRelease.Should().BeNull();
+            cache.ActiveLeaseCount.Should().Be(1);
+            cache.LeasedBytes.Should().Be(payload.RetainedBytes);
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(2, 0)]
+    [InlineData(2, 1)]
+    public void SharedAStarCheckout_ShouldChargeProofAndTransferOrCloneDetachedPayload(int slots, int missingBytes)
+    {
+        using var world = new GridWorld();
+        NavigationWorldGraph graph = CreateLineGraph(world, out Vector3d start, out Vector3d end);
+        using NavigationWorldGraphStore store = CreateStore(graph, 2);
+        var seedCache = new NavigationAStarPayloadCache(world, 0, 0, 100_000, 100_000, 1);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2, 2, 2, 3);
+        using NavigationAStarQueryWork seed = BeginReservedQuery(world, store,
+            Query(start, end, maxExpandedNodes: 2), workspace, seedCache);
+        DrainQuery(seed);
+        using NavigationAStarPayloadLease seedLease = seed.TakeResult();
+        NavigationAStarPayload payload = seedLease.Payload;
+        GraphDependencyStamp proof = payload.Dependencies;
+        var cache = new NavigationAStarPayloadCache(world, 0, 0, payload.RetainedBytes,
+            payload.RetainedBytes + proof.RetainedBytes - missingBytes, slots);
+        cache.TryReservePayload(payload.RetainedBytes, out NavigationAStarPayloadReservation reservation).Should().BeTrue();
+        cache.TryPublish(payload, store, ref reservation, out NavigationAStarPayloadLease pin).Should().BeTrue();
+        using var source = new NavigationCohortSource { AStar = pin };
+        cache.TryCheckoutShared(store, graph, payload.Key, source, proof, out NavigationAStarPayloadLease? shared)
+            .Should().Be(missingBytes == 0 ? NavigationAStarQueryStatus.Success : NavigationAStarQueryStatus.CapacityExceeded);
+        if (missingBytes == 0)
+        {
+            cache.ActiveLeaseCount.Should().Be(slots);
+            cache.LeasedBytes.Should().Be(payload.RetainedBytes + proof.RetainedBytes);
+            cache.TryCreatePublicGuide(store, shared!, out NavigationGuideLease? result).Should().Be(NavigationGuideStatus.Success);
+            using NavigationGuideLease guide = result!.Value;
+            source.Dispose();
+            guide.Status.Should().Be(NavigationGuideStatus.Success);
+            guide.Dispose();
+        }
+        source.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.DetachedBytes.Should().Be(0);
+    }
+
     private static readonly NavigationAreaPolicy Policy = new(
         new NavigationAreaPolicyKey("batch", 1),
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });

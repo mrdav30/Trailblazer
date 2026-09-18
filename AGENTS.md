@@ -83,7 +83,7 @@ The normal host lifecycle is:
    revisions;
 4. admit maps, policies, removals, and overlays through `context.Pathing`;
 5. call `context.Simulate()` once per deterministic fixed frame to advance graph
-   publication, one scheduled acquisition phase, and ordered simulation hooks;
+   publication, scheduled acquisition within shared frame allowances, and ordered simulation hooks;
 6. acquire A* or Flow leases through `context.Guides`, synchronously or by
    polling an owned scheduled request after each fixed frame;
 7. drive `Navigator.Simulate()` and `Navigator.CommitFrameMotion()` for
@@ -100,12 +100,23 @@ cross an action by advancing an ordinary step; execute the host action once and
 complete its exact `NavigationTransitionInstruction`.
 
 Scheduled acquisition is one bounded FIFO across both algorithms. Preserve
+frozen contiguous cohorts, oldest-first builds, independently admitted follower
+endpoint proofs, and capacity-accounted source-pin/lease ownership. Covered
+followers may finish before uncovered members within that frozen cohort. Preserve
 deterministic submission order, query total budgets, exactly-once result
 transfer and cancellation before pathing reset/disposal. Completed unclaimed
 results consume retention capacity. Counted slices do not bound atomic ray,
 allocation or publication time; measure full containing frames before making
 timing claims. The canonical contract is in
 [`Pathing.md`](docs/wiki/Pathing.md#spreading-acquisition-across-fixed-frames).
+
+Navigator defaults to Immediate acquisition; Scheduled is explicit durable policy.
+Waiting yields zero guided heading but must preserve motor/gravity/platform and
+commit processing. Moved-origin A* adoption must prove the exact ordinary index-zero
+anchor, reprove from the current foot on every connector heading under the existing
+fair validation turn, and retain/account proof only on that lease. Mode changes
+control future acquisition, not permission to bypass an adopted connector. Release
+its proof/interest on advancement and every session/reset/teardown boundary.
 
 ## Determinism Rules
 

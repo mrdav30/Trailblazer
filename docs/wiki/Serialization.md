@@ -61,11 +61,12 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 6. The nested path-session and
-standalone `PathQueryRecord` schemas remain version 1. Version 6 retains the
+The outer Navigator record is schema version 7. The nested path-session and
+standalone `PathQueryRecord` schemas remain version 1. Version 7 retains the
 earlier explicit world-space ground `SurfaceNormal` and controlled-descent
-request, configuration, and active fall state. It adds the periodic direct-LOS
-interval and nullable phase. Earlier outer Navigator schemas reject
+request, configuration, active fall state, and periodic direct-LOS interval and
+nullable phase. It adds the durable `NavSteering.AcquisitionMode` policy.
+Earlier outer Navigator schemas, including version 6, reject
 transactionally rather than supplying a derived or default contract through a
 compatibility path.
 
@@ -82,14 +83,15 @@ Navigator does not serialize or restore:
 - a pending transition instruction;
 - private completion stamps;
 - dependency snapshots or cache slots;
+- current-foot connector proofs, raw epochs, or proof-byte reservations;
 - the context logical clock, clock lifetime, or a phased due marker;
 - `LastCommittedCell` or committed-cell notifications.
 
-With a configured phase, restore discards serialized direct-LOS trust and
+With a configured phase or Scheduled acquisition mode, restore discards serialized direct-LOS trust and
 requires a fresh admission decision on the next eligible steering update,
 whether loading into the same context or a new one. It does not acquire a guide
 during population. With no phase, the established direct/countdown restore
-behavior remains unchanged. Navigator population does not restore or advance
+behavior remains unchanged in Immediate mode. Navigator population does not restore or advance
 the context clock.
 
 ## Transactional Load
@@ -107,7 +109,7 @@ This keeps the host body and navigation envelope consistent before the next
 fixed frame.
 
 Malformed early or late nested data must preserve the previous shell, active
-query, guide lease, pending instruction, LOS configuration, and timing state.
+query, guide lease, pending instruction, acquisition ticket and mode, LOS configuration, and timing state.
 This applies to JSON in both package families and to MemoryPack in the standard
 package. A failed load does not partially stop the current session, replace
 controller tuning, or release guidance. It also preserves the shell's existing
@@ -189,8 +191,12 @@ boundary.
 - heightmap sample data/layer registration;
 - engine objects, physics state, animation state, or host callbacks.
 
-Scheduled guide requests, their FIFO position, continuations and unclaimed
-results are runtime-only. Record host query intent if it must be replayed;
+Scheduled guide requests, their FIFO position, continuations, validation turns,
+adoption samples, connector ownership and unclaimed results are runtime-only. Navigator records its
+durable acquisition mode and guided intent, but never this transient ownership.
+Successful population clears prior session retry flavor and proof/turn ownership;
+failed staged population preserves the live session unchanged.
+Record host query intent if using the guide service directly;
 restore maps/policies first, then resubmit that intent in deterministic order.
 Do not serialize `NavigationGuideRequest` or assume a reset preserves pending
 work. See

@@ -6,6 +6,8 @@
 //=======================================================================
 
 using System;
+using System.Reflection;
+using System.Threading;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -21,6 +23,270 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationFlowFieldCacheTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void GuideBinding_InvalidationWhileReusingDetachedGuideMustRefuseAndDrainItsLease(
+        int invalidation)
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using var cache = new NavigationFlowFieldPayloadCache(fixture.World, 4,
+            fixture.Near.RetainedBytes + fixture.Far.RetainedBytes, fixture.Far.RetainedBytes,
+            fixture.Near.RetainedBytes + fixture.Far.RetainedBytes, 4, fixture.Graph.MapCount,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        using var first = Publish(cache, fixture, fixture.Far, fixture.FarOrigin);
+        cache.TryCreateGuide(fixture.Store, new NavigationFlowQueryResult(fixture.FarOrigin, first), out var oldGuide)
+            .Should().Be(NavigationGuideStatus.Success);
+        object inner = typeof(NavigationFlowFieldLease).GetField("_inner", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(oldGuide)!;
+        object sync = typeof(NavigationFlowFieldGuideLease).GetField("_sync", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(inner)!;
+        oldGuide.Dispose();
+        using var payload = Publish(cache, fixture, fixture.Far, fixture.FarOrigin);
+        using var started = new ManualResetEventSlim();
+        Exception? failure = null;
+        NavigationGuideStatus? result = null;
+        NavigationFlowFieldLease acquired = default;
+        var worker = new Thread(() =>
+        {
+            started.Set();
+            try { result = cache.TryCreateGuide(fixture.Store, new NavigationFlowQueryResult(fixture.FarOrigin, payload), out acquired); }
+            catch (Exception exception) { failure = exception; }
+        }) { IsBackground = true };
+        try
+        {
+            lock (sync)
+            {
+                worker.Start();
+                started.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken).Should().BeTrue();
+                SpinWait.SpinUntil(() => (worker.ThreadState & ThreadState.WaitSleepJoin) != 0, 10_000)
+                    .Should().BeTrue("the only conflicting monitor is the detached pooled guide's Bind lock");
+                switch (invalidation)
+                {
+                    case 0:
+                        fixture.Store.TryPublish(fixture.Graph.WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+                            .WithGraphVersion(fixture.Graph.GraphVersion + 1))
+                            .Should().Be(NavigationCandidatePublication.Published);
+                        break;
+                    case 1: cache.Reset(); break;
+                    case 2: cache.Dispose(); break;
+                    case 3: cache.RemoveExact(fixture.Far); break;
+                }
+            }
+            worker.Join(10_000).Should().BeTrue();
+            failure.Should().BeNull();
+            result.Should().Be(NavigationGuideStatus.Stale);
+            acquired.Status.Should().Be(NavigationGuideStatus.Stale);
+            oldGuide.Status.Should().Be(NavigationGuideStatus.Stale);
+            cache.ActiveLeaseCount.Should().Be(0);
+            cache.LeasedBytes.Should().Be(0);
+            cache.DetachedBytes.Should().Be(0);
+            cache.ReservedPayloadBytes.Should().Be(0);
+            fixture.Store.ActiveLeaseCount.Should().Be(0);
+        }
+        finally
+        {
+            worker.Join(10_000).Should().BeTrue();
+            acquired.Dispose();
+        }
+    }
+
+    [Fact]
+    public void EndpointProof_AttachmentMustAccountReplacementAndRejectForeignOrReleasedOwnership()
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using var cache = CreateCache(fixture);
+        using var foreign = CreateCache(fixture);
+        using var lease = Publish(cache, fixture, fixture.Far, fixture.FarOrigin);
+        GraphDependencyStamp proof = fixture.Far.Dependencies;
+        long payloadBytes = cache.LeasedBytes;
+        long reservation = 0;
+        Action unreserved = () => cache.TryAttachEndpointProof(lease, proof, ref reservation);
+        unreserved.Should().Throw<InvalidOperationException>();
+        cache.LeasedBytes.Should().Be(payloadBytes);
+        foreign.IsEndpointProofCurrent(lease, fixture.Graph).Should().BeFalse();
+        foreign.TryAttachEndpointProof(lease, proof, ref reservation).Should().BeFalse();
+        for (int replacement = 0; replacement < 2; replacement++)
+        {
+            reservation = proof.RetainedBytes;
+            cache.TryReserveEndpointProof(reservation).Should().BeTrue();
+            cache.TryAttachEndpointProof(lease, proof, ref reservation).Should().BeTrue();
+            cache.LeasedBytes.Should().Be(payloadBytes + proof.RetainedBytes);
+            cache.ReservedPayloadBytes.Should().Be(0);
+            cache.IsEndpointProofCurrent(lease, fixture.Graph).Should().BeTrue();
+            cache.IsEndpointProofCurrent(lease, NavigationWorldGraph.Empty).Should().BeFalse();
+        }
+        cache.TryAttachEndpointProof(lease, null, ref reservation).Should().BeTrue();
+        cache.LeasedBytes.Should().Be(payloadBytes);
+        lease.Dispose();
+        cache.IsEndpointProofCurrent(lease, fixture.Graph).Should().BeFalse();
+        cache.LeasedBytes.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("Released")]
+    [InlineData("ForeignCache")]
+    [InlineData("WrongKey")]
+    [InlineData("StaleEndpointProof")]
+    [InlineData("StaleSourceProof")]
+    [InlineData("StaleExpectedGraph")]
+    [InlineData("StaleCurrentGraph")]
+    [InlineData("DisposedCache")]
+    public void SharedCheckout_RefusedSourceMustNotCreateLeaseOrLeakProof(string scenario)
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using var cache = CreateCache(fixture);
+        using var foreign = CreateCache(fixture);
+        using var source = new NavigationCohortSource
+            { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
+        var staleProof = new GraphDependencyStamp(new NavigationAreaPolicyKey("missing", 1),
+            Array.Empty<GraphComponentDependency>(), Array.Empty<GraphPageDependency>());
+        if (scenario == "StaleSourceProof")
+        {
+            long reserved = staleProof.RetainedBytes;
+            cache.TryReserveEndpointProof(reserved).Should().BeTrue();
+            cache.TryAttachEndpointProof(source.Flow, staleProof, ref reserved).Should().BeTrue();
+            reserved.Should().Be(0);
+        }
+        if (scenario == "Released") source.Flow.Dispose();
+        if (scenario == "DisposedCache") cache.Dispose();
+        if (scenario == "StaleCurrentGraph")
+            fixture.Store.TryPublish(new NavigationWorldGraph(fixture.Graph.GraphVersion + 1,
+                Array.Empty<NavigationMapInstance>())).Should().Be(NavigationCandidatePublication.Published);
+        NavigationFlowFieldPayloadCache target = scenario == "ForeignCache" ? foreign : cache;
+        long before = target.LeasedBytes;
+        int leases = target.ActiveLeaseCount;
+        var key = scenario == "WrongKey"
+            ? new NavigationFlowFieldPayloadKey(fixture.FarQuery, new NavigationCellAddress("other", default),
+                TraversalMedium.Solid, TraversalMedia.Solid) : fixture.Far.Key;
+        target.TryCheckoutShared(fixture.Store, scenario == "StaleExpectedGraph" ? NavigationWorldGraph.Empty : fixture.Graph,
+            key, fixture.FarOrigin, source, scenario == "StaleEndpointProof" ? staleProof : null,
+            out var result, out var proof).Should().Be(scenario == "WrongKey"
+                ? NavigationFlowFieldStatus.Pending : NavigationFlowFieldStatus.Stale);
+        proof.Should().BeNull();
+        result.TryGetPayload(out _).Should().Be(NavigationFlowFieldStatus.Stale);
+        target.ActiveLeaseCount.Should().Be(leases);
+        target.LeasedBytes.Should().Be(before);
+        target.ReservedPayloadBytes.Should().Be(0);
+        source.Dispose();
+        cache.LeasedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void AttachEndpointProof_ReleasedLeaseMustLeaveReservationForCallerCleanup()
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        using var cache = CreateCache(fixture);
+        var released = Publish(cache, fixture, fixture.Far, fixture.FarOrigin);
+        released.Dispose();
+        long reservation = fixture.Far.Dependencies.RetainedBytes;
+        cache.TryReserveEndpointProof(reservation).Should().BeTrue();
+        try
+        {
+            cache.TryAttachEndpointProof(released, fixture.Far.Dependencies, ref reservation).Should().BeFalse();
+            cache.ReservedPayloadBytes.Should().Be(reservation);
+            cache.LeasedBytes.Should().Be(0);
+        }
+        finally { cache.ReleaseEndpointProof(ref reservation); }
+        reservation.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(2, 0)]
+    [InlineData(2, 1)]
+    public void SharedCheckout_SourceProofPreservation_ShouldChargeCloneButCreditTransfer(int slots, int missingBytes)
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        GraphDependencyStamp proof = fixture.Far.Dependencies;
+        long payloadBytes = fixture.Far.RetainedBytes;
+        using var cache = new NavigationFlowFieldPayloadCache(fixture.World, 0, 0, payloadBytes,
+            payloadBytes + slots * proof.RetainedBytes - missingBytes, slots, 1,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        using var source = new NavigationCohortSource
+            { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
+        long reservation = proof.RetainedBytes;
+        cache.TryReserveEndpointProof(reservation).Should().BeTrue();
+        cache.TryAttachEndpointProof(source.Flow, proof, ref reservation).Should().BeTrue();
+        reservation.Should().Be(0);
+        NavigationFlowFieldStatus status = cache.TryCheckoutShared(fixture.Store, fixture.Graph, fixture.Far.Key,
+            fixture.FarOrigin, source, null, out NavigationFlowFieldPayloadLease result, out _, preserveSourceProof: true);
+        status.Should().Be(missingBytes == 0 ? NavigationFlowFieldStatus.Success : NavigationFlowFieldStatus.CapacityExceeded);
+        cache.LeasedBytes.Should().Be(payloadBytes + (missingBytes == 0 ? slots : 1) * proof.RetainedBytes);
+        result.Dispose();
+        source.Dispose();
+        cache.LeasedBytes.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+        cache.ActiveLeaseCount.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(2, 0)]
+    [InlineData(2, 1)]
+    public void SharedCheckout_ShouldChargeEndpointProofBytesAndPreserveDetachedOwnership(int slots, int missingBytes)
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.Zero);
+        GraphDependencyStamp proof = fixture.Far.Dependencies;
+        long payloadBytes = fixture.Far.RetainedBytes;
+        using var cache = new NavigationFlowFieldPayloadCache(fixture.World, 0, 0, payloadBytes,
+            payloadBytes + proof.RetainedBytes - missingBytes, slots, 1,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        using var source = new NavigationCohortSource
+            { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
+        NavigationFlowFieldStatus status = cache.TryCheckoutShared(fixture.Store, fixture.Graph,
+            fixture.Far.Key, fixture.NearOrigin, source, proof, out NavigationFlowFieldPayloadLease shared,
+            out NavigationFlowFieldPayload? checkedProof);
+        status.Should().Be(missingBytes == 0 ? NavigationFlowFieldStatus.Success : NavigationFlowFieldStatus.CapacityExceeded);
+        if (missingBytes != 0)
+        {
+            checkedProof.Should().BeNull("capacity failure is not an admitted negative result");
+            source.HasFlow.Should().BeTrue();
+            cache.ActiveLeaseCount.Should().Be(1);
+            cache.LeasedBytes.Should().Be(payloadBytes);
+        }
+        else
+        {
+            source.HasFlow.Should().Be(slots > 1);
+            cache.ActiveLeaseCount.Should().Be(slots);
+            cache.LeasedBytes.Should().Be(payloadBytes + proof.RetainedBytes);
+            cache.TryCreateGuide(fixture.Store, new NavigationFlowQueryResult(fixture.NearOrigin, shared),
+                out NavigationFlowFieldLease guide).Should().Be(NavigationGuideStatus.Success);
+            using (guide)
+            {
+                source.Dispose();
+                guide.Status.Should().Be(NavigationGuideStatus.Success);
+                cache.LeasedBytes.Should().Be(payloadBytes + proof.RetainedBytes);
+            }
+        }
+        shared.Dispose();
+        source.Dispose();
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.DetachedBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public void SharedCheckout_ShouldDistinguishPresentInsufficientAndCompleteAbsentOrigins()
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.One);
+        using var cache = CreateCache(fixture);
+        using var source = new NavigationCohortSource
+            { Flow = Publish(cache, fixture, fixture.Near, fixture.NearOrigin), HasFlow = true };
+        fixture.Near.TryGetNode(fixture.MarginOrigin, fixture.Near.Key.StartMedium, out _).Should().BeTrue();
+        cache.TryCheckoutShared(fixture.Store, fixture.Graph, fixture.Near.Key, fixture.MarginOrigin,
+            source, null, out _, out _).Should().Be(NavigationFlowFieldStatus.Pending);
+        source.Dispose();
+        source.Flow = Publish(cache, fixture, fixture.Complete, fixture.FarOrigin);
+        source.HasFlow = true;
+        cache.TryCheckoutShared(fixture.Store, fixture.Graph, fixture.Complete.Key,
+            new NavigationCellAddress("absent", default), source, null, out _, out _)
+            .Should().Be(NavigationFlowFieldStatus.NoPath);
+    }
+
     [Theory]
     [InlineData(false, false, true)]
     [InlineData(false, true, true)]
@@ -457,6 +723,7 @@ public sealed class NavigationFlowFieldCacheTests
             fixture.NearOrigin);
         cache.CachedBytes.Should().Be(fixture.Near.RetainedBytes);
         cache.LeasedBytes.Should().Be(fixture.Near.RetainedBytes);
+        cache.AcquisitionDiagnostics.Promotions.Should().Be(0, "a cold publication is not a promotion");
 
         NavigationFlowFieldPayloadLease farLease = Publish(
             cache,
@@ -465,6 +732,7 @@ public sealed class NavigationFlowFieldCacheTests
             fixture.FarOrigin);
 
         cache.Count.Should().Be(1);
+        cache.AcquisitionDiagnostics.Promotions.Should().Be(1);
         cache.CachedBytes.Should().Be(fixture.Far.RetainedBytes);
         cache.LeasedBytes.Should().Be(activeBytes);
         cache.DetachedBytes.Should().Be(fixture.Near.RetainedBytes);
@@ -479,6 +747,73 @@ public sealed class NavigationFlowFieldCacheTests
         cache.DetachedBytes.Should().Be(0);
         farLease.Dispose();
         cache.LeasedBytes.Should().Be(0);
+        using NavigationFlowFieldPayloadLease reused = Publish(cache, fixture, fixture.Near, fixture.NearOrigin);
+        cache.AcquisitionDiagnostics.Promotions.Should().Be(1, "reusing a longer incumbent is not a promotion");
+    }
+
+    [Fact]
+    public void ActiveGuide_PromotionAndExactRemoval_ShouldPreserveTheOtherGuide()
+    {
+        using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.One);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World, 1, fixture.Far.RetainedBytes, fixture.Far.RetainedBytes,
+            checked(fixture.Near.RetainedBytes + fixture.Far.RetainedBytes),
+            2, fixture.Graph.MapCount,
+            NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        var budget = new GuideSampleWorkBudget(128, 128, 8, 32, 32, 32, 1);
+        fixture.Graph.TryGetNodeRef(fixture.NearOrigin, out NavigationNodeRef nearRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(nearRef, out NavigationNodeState nearNode)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeRef(fixture.FarOrigin, out NavigationNodeRef farRef)
+            .Should().BeTrue();
+        fixture.Graph.TryGetNodeState(farRef, out NavigationNodeState farNode)
+            .Should().BeTrue();
+        using NavigationFlowFieldPayloadLease nearPayload = Publish(
+            cache, fixture, fixture.Near, fixture.NearOrigin);
+        cache.TryCreateGuide(fixture.Store,
+                new NavigationFlowQueryResult(fixture.NearOrigin, nearPayload), out var nearGuide)
+            .Should().Be(NavigationGuideStatus.Success);
+        using (nearGuide)
+        {
+            nearGuide.TrySampleHeading(nearNode.FootAnchor, budget, out Vector3d nearHeading)
+                .Should().Be(NavigationGuideStatus.Success);
+            nearHeading.Should().Be(Vector3d.Left);
+            using NavigationFlowFieldPayloadLease farPayload = Publish(
+                cache, fixture, fixture.Far, fixture.FarOrigin);
+            cache.TryCreateGuide(fixture.Store,
+                    new NavigationFlowQueryResult(fixture.FarOrigin, farPayload), out var farGuide)
+                .Should().Be(NavigationGuideStatus.Success);
+            using (farGuide)
+            {
+                cache.AcquisitionDiagnostics.Promotions.Should().Be(1);
+                cache.DetachedBytes.Should().Be(fixture.Near.RetainedBytes);
+                nearGuide.TrySampleHeading(nearNode.FootAnchor, budget, out nearHeading)
+                    .Should().Be(NavigationGuideStatus.Success,
+                        "promotion detaches the smaller prefix without invalidating its active guide");
+                nearHeading.Should().Be(Vector3d.Left);
+                farGuide.TrySampleHeading(farNode.FootAnchor, budget, out Vector3d farHeading)
+                    .Should().Be(NavigationGuideStatus.Success);
+                farHeading.Should().Be(Vector3d.Left);
+
+                cache.RemoveExact(fixture.Near);
+                nearGuide.TrySampleHeading(nearNode.FootAnchor, budget, out nearHeading)
+                    .Should().Be(NavigationGuideStatus.Stale);
+                nearHeading.Should().Be(Vector3d.Zero);
+                farGuide.TrySampleHeading(farNode.FootAnchor, budget, out farHeading)
+                    .Should().Be(NavigationGuideStatus.Success,
+                        "removing the detached near entry must not invalidate the same-key far entry");
+                farHeading.Should().Be(Vector3d.Left);
+                nearGuide.Dispose();
+                cache.ActiveLeaseCount.Should().Be(1);
+                cache.DetachedBytes.Should().Be(0);
+                cache.LeasedBytes.Should().Be(fixture.Far.RetainedBytes);
+            }
+        }
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.DetachedBytes.Should().Be(0);
+        fixture.Store.ActiveLeaseCount.Should().Be(0);
     }
 
     [Fact]
@@ -1219,8 +1554,10 @@ public sealed class NavigationFlowFieldCacheTests
         cache.ReleasePayloadReservation(ref reservation);
     }
 
-    [Fact]
-    public void WorldStampedPayload_ShouldBeRejectedAfterGridWorldMutation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WorldStampedPayload_ShouldBeRejectedAfterGridWorldMutation(bool scheduled)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
@@ -1249,7 +1586,7 @@ public sealed class NavigationFlowFieldCacheTests
                 stamped.Key,
                 fixture.FarOrigin,
                 out NavigationFlowFieldPayloadLease lease,
-                out _)
+                out _, scheduled, fixture.World.ChangeSequence)
             .Should().Be(NavigationFlowFieldStatus.Stale);
 
         lease.Should().Be(default(NavigationFlowFieldPayloadLease));
@@ -1257,10 +1594,12 @@ public sealed class NavigationFlowFieldCacheTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
     public void PostLockValidation_StaleDependencyShouldReleaseTheExactLeaseAccounting(
-        bool rawWorldChange)
+        bool rawWorldChange, bool sharedFinalization)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
@@ -1295,13 +1634,17 @@ public sealed class NavigationFlowFieldCacheTests
                 .Should().Be(NavigationCandidatePublication.Published);
         }
 
-        cache.CompletePostLockValidation(
+        NavigationFlowFieldPayload? returnedProof = payload;
+        (sharedFinalization ? cache.CompleteSharedCheckoutValidation(fixture.Store, null,
+                NavigationFlowFieldStatus.Success, ref lease, ref returnedProof)
+            : cache.CompletePostLockValidation(
                 fixture.Store,
                 payload,
                 NavigationFlowFieldStatus.Success,
                 ref lease,
-                fixture.Graph)
+                fixture.Graph))
             .Should().Be(NavigationFlowFieldStatus.Stale);
+        if (sharedFinalization) returnedProof.Should().BeNull();
 
         lease.Should().Be(default(NavigationFlowFieldPayloadLease));
         cache.Count.Should().Be(0);
@@ -1681,6 +2024,59 @@ public sealed class NavigationFlowFieldCacheTests
     }
 
     [Fact]
+    public void ResetReservationSlotReuse_ShouldPreserveNewReservationWhenStaleCopyIsReleased()
+    {
+        using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
+            NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
+        fixture.Near.RetainedBytes.Should().BeLessThan(fixture.Far.RetainedBytes);
+        using var cache = new NavigationFlowFieldPayloadCache(
+            fixture.World,
+            maxEntries: 1,
+            maxReusableBytes: fixture.Far.RetainedBytes,
+            maxSinglePayloadBytes: fixture.Far.RetainedBytes,
+            maxActivePayloadBytes: fixture.Far.RetainedBytes,
+            maxActiveLeases: 1,
+            guideMapCapacity: 0,
+            immediateRayWorkspace: NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
+        cache.TryReservePayload(
+                fixture.Near.RetainedBytes,
+                out NavigationFlowFieldReservation nearReservation)
+            .Should().BeTrue();
+        NavigationFlowFieldReservation staleCopy = nearReservation;
+        cache.Reset();
+        cache.TryReservePayload(
+                fixture.Far.RetainedBytes,
+                out NavigationFlowFieldReservation farReservation)
+            .Should().BeTrue();
+
+        cache.ReleasePayloadReservation(ref staleCopy);
+
+        cache.ReservedLeaseCount.Should().Be(1);
+        cache.ReservedPayloadBytes.Should().Be(fixture.Far.RetainedBytes);
+        cache.TryPublishOrPromote(
+                fixture.Store,
+                fixture.Far,
+                fixture.FarOrigin,
+                ref farReservation,
+                out NavigationFlowFieldPayloadLease lease)
+            .Should().Be(NavigationFlowFieldStatus.Success);
+        using (lease)
+        {
+            lease.TryGetPayload(out NavigationFlowFieldPayload payload)
+                .Should().Be(NavigationFlowFieldStatus.Success);
+            payload.Should().BeSameAs(fixture.Far);
+            cache.ReservedLeaseCount.Should().Be(0);
+            cache.ReservedPayloadBytes.Should().Be(0);
+            cache.ActiveLeaseCount.Should().Be(1);
+            cache.LeasedBytes.Should().Be(fixture.Far.RetainedBytes);
+        }
+        cache.ActiveLeaseCount.Should().Be(0);
+        cache.LeasedBytes.Should().Be(0);
+        cache.ReservedLeaseCount.Should().Be(0);
+        cache.ReservedPayloadBytes.Should().Be(0);
+    }
+
+    [Fact]
     public void WarmReset_ShouldClearCountersAndLruWithoutAllocating()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
@@ -1693,9 +2089,7 @@ public sealed class NavigationFlowFieldCacheTests
         }
         Publish(cache, fixture, fixture.Far, fixture.FarOrigin).Dispose();
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        cache.Reset();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(cache.Reset);
 
         allocated.Should().Be(0);
         cache.Count.Should().Be(0);
@@ -1735,26 +2129,27 @@ public sealed class NavigationFlowFieldCacheTests
             warm.Dispose();
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
         bool succeeded = true;
-        for (int i = 0; i < 256; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            if (cache.TryCheckout(
-                    fixture.Store,
-                    fixture.Store.Current,
-                    fixture.Far.Key,
-                    fixture.FarOrigin,
-                    out NavigationFlowFieldPayloadLease lease,
-                    out _)
-                != NavigationFlowFieldStatus.Success
-                || lease.TryGetPayload(out _) != NavigationFlowFieldStatus.Success)
+            for (int i = 0; i < 256; i++)
             {
-                succeeded = false;
-                break;
+                if (cache.TryCheckout(
+                        fixture.Store,
+                        fixture.Store.Current,
+                        fixture.Far.Key,
+                        fixture.FarOrigin,
+                        out NavigationFlowFieldPayloadLease lease,
+                        out _)
+                    != NavigationFlowFieldStatus.Success
+                    || lease.TryGetPayload(out _) != NavigationFlowFieldStatus.Success)
+                {
+                    succeeded = false;
+                    break;
+                }
+                lease.Dispose();
             }
-            lease.Dispose();
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        });
 
         succeeded.Should().BeTrue();
         allocated.Should().Be(0);
@@ -2280,20 +2675,21 @@ public sealed class NavigationFlowFieldCacheTests
             cache.ReleasePayloadReservation(ref warm);
         }
 
-        long before = GC.GetAllocatedBytesForCurrentThread();
         bool succeeded = true;
-        for (int i = 0; i < 256; i++)
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            if (!cache.TryReservePayload(
-                    fixture.Far.RetainedBytes,
-                    out NavigationFlowFieldReservation reservation))
+            for (int i = 0; i < 256; i++)
             {
-                succeeded = false;
-                break;
+                if (!cache.TryReservePayload(
+                        fixture.Far.RetainedBytes,
+                        out NavigationFlowFieldReservation reservation))
+                {
+                    succeeded = false;
+                    break;
+                }
+                cache.ReleasePayloadReservation(ref reservation);
             }
-            cache.ReleasePayloadReservation(ref reservation);
-        }
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        });
 
         succeeded.Should().BeTrue();
         allocated.Should().Be(0);

@@ -47,6 +47,11 @@ internal sealed class NavigationAStarQueryWork : IDisposable
     private bool _readyToPublish;
     private bool _started;
     private bool _admissionActive;
+    private bool _diagnosticsRecorded;
+    private NavigationCohortSource? _sharedSource;
+    private NavigationEndpointProofWork _endpointProofWork;
+    private bool _endpointProofActive;
+    private long _endpointProofReservation;
 
     internal NavigationAStarQueryWork(
         GridWorld world,
@@ -82,17 +87,22 @@ internal sealed class NavigationAStarQueryWork : IDisposable
     internal void BeginReserved(
         PathQuery query,
         NavigationWorldGraphLease lease,
-        ref NavigationAStarPayloadReservation reservation)
+        ref NavigationAStarPayloadReservation reservation,
+        NavigationCohortSource? sharedSource = null)
     {
         SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
         SwiftThrowHelper.ThrowIfArgument(
-            !reservation.HasLeaseSlot,
+            !reservation.HasLeaseSlot && sharedSource == null,
             paramName: nameof(reservation),
             message: "A batch query requires one payload reservation.");
         SwiftThrowHelper.ThrowIfTrue(
             _started,
             message: "The A* query work is already active.");
         _started = true;
+        _sharedSource = sharedSource;
+        _endpointProofWork = default;
+        _endpointProofActive = false;
+        _diagnosticsRecorded = false;
         Volatile.Write(ref _readyToPublish, false);
         _readyStatus = NavigationAStarQueryStatus.Pending;
         Status = NavigationAStarQueryStatus.Pending;
@@ -112,16 +122,16 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         int lookupStepLimit,
         int endpointCandidateStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(
-            endpointCandidateStepLimit,
-            nameof(endpointCandidateStepLimit));
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, endpointCandidateStepLimit);
+        return PrepareSearchOrCheckout(ref remaining);
+    }
+
+    internal NavigationAStarQueryStatus PrepareSearchOrCheckout(ref NavigationAcquisitionSlice remaining)
+    {
         if (!_started || Status != NavigationAStarQueryStatus.Pending || IsPrepared)
             return Status;
 
-        NavigationQueryAdmissionStatus admissionStatus = _admission.Advance(
-            lookupStepLimit,
-            endpointCandidateStepLimit);
+        NavigationQueryAdmissionStatus admissionStatus = _admission.Advance(ref remaining);
         if (admissionStatus == NavigationQueryAdmissionStatus.Pending)
             return Status;
         if (admissionStatus != NavigationQueryAdmissionStatus.Success)
@@ -137,20 +147,81 @@ internal sealed class NavigationAStarQueryWork : IDisposable
             resolved.End.Address,
             resolved.StartMedium,
             resolved.TargetMedia);
-        bool cacheHit = _cache.TryCheckoutReserved(
-            key,
-            resolved.Graph,
-            ref _payloadReservation,
-            out _pendingLease);
-        if (cacheHit)
+        // Even an identical key may admit additional endpoint dependencies after
+        // publication. Certify every cached admission, not only cohort followers.
+        bool cached = _pendingLease != null;
+        if (_sharedSource == null && !cached)
+            cached = _cache.TryCheckoutReserved(key, resolved.Graph, ref _payloadReservation, out _pendingLease);
+        if (_sharedSource != null || cached)
         {
+            if (!_endpointProofActive)
+            {
+                NavigationAStarPayloadLease? pin = _sharedSource?.AStar;
+                NavigationAStarPayloadCache.CacheEntry? sourceEntry = _sharedSource == null
+                    ? _pendingLease!.GetOwnedEntry(_cache)
+                    : pin?.Generation == _sharedSource.AStarGeneration
+                        ? pin!.GetOwnedEntry(_cache) : null;
+                if (sourceEntry == null)
+                {
+                    resolved.Dispose();
+                    DisposeAdmission();
+                    MarkReady(NavigationAStarQueryStatus.Stale);
+                    return Status;
+                }
+                _endpointProofWork = new NavigationEndpointProofWork(_workspace.EndpointWorkspace, resolved,
+                    sourceEntry.Payload.Dependencies);
+                _endpointProofActive = true;
+            }
+            NavigationQueryAdmissionStatus proofStatus = _endpointProofWork.AdvanceCertification(ref remaining);
+            if (proofStatus == NavigationQueryAdmissionStatus.Success && !_endpointProofWork.IsCertified)
+            {
+                if (_endpointProofReservation == 0)
+                {
+                    long bytes = GraphDependencyStamp.GetRetainedBytes(_workspace.EndpointWorkspace.ComponentCount,
+                        _workspace.EndpointWorkspace.PageCount);
+                    if (_cache.TryReserveEndpointProof(bytes)) _endpointProofReservation = bytes;
+                    else proofStatus = NavigationQueryAdmissionStatus.CapacityExceeded;
+                }
+                if (proofStatus == NavigationQueryAdmissionStatus.Success)
+                    proofStatus = _endpointProofWork.AdvanceCapture(ref remaining);
+            }
+            if (proofStatus == NavigationQueryAdmissionStatus.Pending)
+                return Status;
+            NavigationAStarQueryStatus sharedStatus = MapAdmissionStatus(proofStatus);
+            if (proofStatus == NavigationQueryAdmissionStatus.Success)
+            {
+                if (_sharedSource != null)
+                    sharedStatus = _cache.TryCheckoutShared(_store, resolved.Graph, key, _sharedSource,
+                        _endpointProofWork.Proof, out _pendingLease, _endpointProofReservation);
+                else
+                {
+                    // The gate owns this private checkout until publication or serialized cancellation.
+                    if (!_endpointProofWork.IsCertified)
+                        _cache.TryAttachEndpointProof(_pendingLease!, _endpointProofWork.Proof!, ref _endpointProofReservation);
+                    _cache.AcquisitionDiagnostics.RecordCacheCheckoutHit();
+                    sharedStatus = MapSearchStatus(_pendingLease!.Payload.Status);
+                }
+            }
+            if (sharedStatus is not NavigationAStarQueryStatus.Success and not NavigationAStarQueryStatus.NoPath)
+            {
+                _pendingLease?.Dispose();
+                _pendingLease = null;
+            }
+            _cache.ReleaseEndpointProof(ref _endpointProofReservation);
+            _endpointProofWork = default;
+            _endpointProofActive = false;
+            if (_sharedSource != null && sharedStatus == NavigationAStarQueryStatus.Success)
+                _cache.AcquisitionDiagnostics.RecordSharedFollowerCheckout();
+            else if (_sharedSource != null && sharedStatus == NavigationAStarQueryStatus.Pending)
+                _cache.AcquisitionDiagnostics.RecordSharedCoverageMiss();
             resolved.Dispose();
             DisposeAdmission();
-            MarkReady(MapSearchStatus(_pendingLease.Payload.Status));
+            MarkReady(sharedStatus);
             return Status;
         }
         NavigationRayWork rayWork = _admission.RayWork;
         DisposeAdmission();
+        _cache.AcquisitionDiagnostics.RecordBuildStart();
         _search = new NavigationSurfaceAStarWork(
             _cache.World,
             _store,
@@ -167,20 +238,18 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         int edgeStepLimit,
         int connectionStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(nodeStepLimit, nameof(nodeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(edgeStepLimit, nameof(edgeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(connectionStepLimit, nameof(connectionStepLimit));
+        var remaining = new NavigationAcquisitionSlice(lookupStepLimit, 0, nodeStepLimit, edgeStepLimit, connectionStepLimit);
+        return AdvanceSearch(ref remaining);
+    }
+
+    internal NavigationAStarQueryStatus AdvanceSearch(ref NavigationAcquisitionSlice remaining)
+    {
         if (Status != NavigationAStarQueryStatus.Pending || IsReadyToPublish)
             return Status;
         if (_search == null)
             return Status;
 
-        NavigationSurfaceAStarStatus searchStatus = _search.Advance(
-            lookupStepLimit,
-            nodeStepLimit,
-            edgeStepLimit,
-            connectionStepLimit);
+        NavigationSurfaceAStarStatus searchStatus = _search.Advance(ref remaining);
         if (searchStatus != NavigationSurfaceAStarStatus.Pending)
             MarkReady(MapSearchStatus(searchStatus));
         return Status;
@@ -233,6 +302,13 @@ internal sealed class NavigationAStarQueryWork : IDisposable
 
     public void Dispose()
     {
+        RecordDiagnostics();
+        _cache.ReleaseEndpointProof(ref _endpointProofReservation);
+        if (_sharedSource != null || _endpointProofActive)
+            _admission.Result.Dispose();
+        _sharedSource = null;
+        _endpointProofWork = default;
+        _endpointProofActive = false;
         DisposeAdmission();
         _search?.Dispose();
         _search = null;
@@ -254,6 +330,11 @@ internal sealed class NavigationAStarQueryWork : IDisposable
     private NavigationAStarQueryStatus FinishCached(
         NavigationAStarPayloadLease lease)
     {
+        if (!NavigationEndpointProofWork.IsCurrent(_store, lease.EndpointProof))
+        {
+            lease.Dispose();
+            return Finish(NavigationAStarQueryStatus.Stale);
+        }
         if (!_store.Current.IsDependencyCurrent(lease.Payload.Dependencies)
             || !_cache.IsWorldCurrent(lease.Payload))
         {
@@ -284,6 +365,7 @@ internal sealed class NavigationAStarQueryWork : IDisposable
 
     private NavigationAStarQueryStatus Finish(NavigationAStarQueryStatus status)
     {
+        RecordDiagnostics();
         Status = status;
         Volatile.Write(ref _readyToPublish, false);
         DisposeAdmission();
@@ -299,6 +381,14 @@ internal sealed class NavigationAStarQueryWork : IDisposable
             return;
         _admission.Dispose();
         _admissionActive = false;
+    }
+
+    private void RecordDiagnostics()
+    {
+        if (!_started || _diagnosticsRecorded)
+            return;
+        _cache.AcquisitionDiagnostics.RecordCompletedQuery(_admission.Meter);
+        _diagnosticsRecorded = true;
     }
 
     private static NavigationAStarQueryStatus MapAdmissionStatus(

@@ -246,25 +246,42 @@ public class NavTurningTests
         turning.TargetReached.Should().BeTrue();
     }
 
-    [Fact]
-    public void SimulateTurn_WithMaxInterpolation_JumpsDirectlyToTarget()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(7)]
+    public void SimulateTurn_WithMaxInterpolation_ReturnsCanonicalForwardRotation(int targetScale)
     {
         var turning = new NavTurning(TestWorld.Context, Fixed64.One);
-        var nav = new MockTurnAgent
-        {
-            Position = Vector3d.Zero,
-            LastPosition = Vector3d.Zero,
-            Forward = Vector3d.Right,
-            Rotation = FixedQuaternion.Identity
-        };
+        // A half-turn faces -Z. Zero and positive scaled +Z targets resolve to identity.
+        var rotation = new FixedQuaternion(Fixed64.Zero, Fixed64.One, Fixed64.Zero, Fixed64.Zero);
+        var target = new Vector3d(0, 0, targetScale);
 
-        // Request a 90° turn with interpolation = 1 ⇒ instant snap
-        turning.RequestTurnDirection(nav.Forward, Vector3d.Forward, interpolation: Fixed64.One);
-        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
+        turning.RequestTurnDirection(Vector3d.Backward, target, interpolation: Fixed64.One);
 
-        // After the one call, we should have TargetReached = true and rotation == target
+        turning.TrySimulateTurn(
+                Vector3d.Zero, Vector3d.Zero, Vector3d.Backward, rotation, out FixedQuaternion applied)
+            .Should().BeTrue();
+        applied.Should().Be(FixedQuaternion.Identity);
+        turning.TargetRotation.Should().Be(FixedQuaternion.Identity);
         turning.TargetReached.Should().BeTrue();
-        nav.Rotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Forward));
+    }
+
+    [Fact]
+    public void RequestTurnDirection_RejectedRequestPreservesBufferedTargetAndInterpolation()
+    {
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
+        var rotation = new FixedQuaternion(Fixed64.Zero, Fixed64.One, Fixed64.Zero, Fixed64.Zero);
+
+        turning.RequestTurnDirection(Vector3d.Backward, Vector3d.Forward, interpolation: Fixed64.One);
+        turning.RequestTurnDirection(Vector3d.Backward, Vector3d.Backward, interpolation: Fixed64.Half);
+
+        turning.TrySimulateTurn(
+                Vector3d.Zero, Vector3d.Zero, Vector3d.Backward, rotation, out FixedQuaternion applied)
+            .Should().BeTrue();
+        applied.Should().Be(FixedQuaternion.Identity,
+            "the rejected request must preserve both the pending target and its full interpolation");
+        turning.TargetReached.Should().BeTrue();
     }
 
     [Fact]

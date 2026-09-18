@@ -84,9 +84,10 @@ instead of burying it in notes.
     withdrawn: no attributable complete-frame benefit was demonstrated. Useful
     publication/mutation tests remain; production source is unchanged. The tracker
     preserves the fresh controls, historical variability and five balanced P95
-    target misses. The next boundary is the
+    target misses. The next boundary was addressed by the
     [Navigator Acquisition And Recovery plan](done/navigationRecoveryPlan.md),
-    completed and user-approved for squash into `develop` on 2026-09-18. Opt-in
+    completed and squashed into `develop` as `f5d53a5` on 2026-09-18 after user
+    review. Opt-in
     Navigator ownership uses the existing shared-work scheduler, with waiting,
     current-foot adoption, cancellation and independent guide ownership.
     Earlier source correctness/Ponytail reviews are approved; a refreshed review
@@ -298,10 +299,16 @@ The plans share evidence, not competing implementations:
    and its two explicit control-target exceptions have been reviewed and merged.
    The follow-up per-slab fence experiment is withdrawn after matched measurement;
    the invariant-setup idea remains unmeasured, not an established opportunity.
-   For the remaining `TRB-Benchmark-005` work, prefer a focused design investigation
-   of Navigator-owned acquisition/recovery through the existing bounded scheduler.
-   Specify waiting movement, retry/cancellation and guide ownership first. This
-   is a recommendation, not an implemented contract or a steady-state speedup.
+   [Navigator-owned acquisition/recovery](done/navigationRecoveryPlan.md) is
+   complete and was squashed into `develop` as `f5d53a5`. Its bounded scheduling
+   addresses acquisition/recovery spikes, not steady-state tracing costs.
+   For the remaining `TRB-Benchmark-005` work, the post-recovery profile points to
+   world-change and guide-payload validation synchronization. Investigate whether
+   repeated work can be reduced without weakening mutation, publication, lease
+   generation or invalidation guarantees. The measured turn-target reuse
+   experiment was withdrawn; see the [benchmark backlog](benchmark-signal-hardening-backlog.md)
+   for its comparison and the fresh profile. These samples identify a next
+   investigation, not an established speedup.
    Exact rectangular tracing, raw-coordinate geometry and
    per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
    accounting and dependency guarantees, and keep the unphased cadence/control

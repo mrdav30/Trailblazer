@@ -2099,6 +2099,100 @@ findings. GridForge and Gravitas remain unchanged. This is local Windows
 source-stack validation, not Linux CI, released-package validation or release
 approval. No new source defect was established, so no issue-tracker entry is added.
 
+#### 2026-09-18 — Recovery integrated; turn-target reuse experiment withdrawn
+
+The user-reviewed recovery branch was squashed into local `develop` as
+`f5d53a5`; its plan is archived. Nothing was pushed or released. Fresh merged-tree
+tests passed in Release (**3,046 core + 65 adapter**) and ReleaseLean
+(**2,968 + 65**), with code/test inputs identical to the reviewed feature.
+
+The first resumed performance experiment reused the target quaternion already
+computed by `NavTurning.NeedsTurn` when accepting a turn request. A private
+`out` helper removed the second pure conversion without changing public APIs,
+arithmetic, thresholds, pending-state semantics or navigation work. Source review
+found no correctness issue, and candidate Release/Lean tests and exact coverage
+passed. It nevertheless did not establish a convincing whole-frame benefit.
+
+A fresh committed-stack baseline was captured **before** implementation. The
+fixed baseline-before / candidate / same-baseline-after protocol used three fresh
+processes per arm, each with the unchanged balanced A*/100, Flow/100 and Flow/500
+cases, ten warmup / thirty Actual / one diagnostic 64-frame blocks. Candidate
+runtime changes were limited to Trailblazer DLL/PDB; all upstream and benchmark
+bytes were identical. The initial old-binary hash stop was resolved before any
+timing: unchanged source/build inputs had new commit-specific informational
+versions and SourceLink metadata. No older binary was silently substituted.
+
+| Case | Before / candidate / after median 64-frame block (ms) | Candidate vs before / after |
+| --- | ---: | ---: |
+| A*/100 | 108.24030 / 108.81220 / 112.41350 | +0.53% / -3.20% |
+| Flow/100 | 64.39215 / 63.09800 / 63.50245 | -2.01% / -0.64% |
+| Flow/500 | 340.44790 / 334.43430 / 335.20625 | -1.77% / -0.23% |
+
+Lower is faster. The near-after Flow differences are small relative to process
+variation. More importantly, one candidate A* process sustained a **145.79720 ms**
+block median throughout its Actual phase; this was not a single outlier. Candidate
+A* frame P99 was **2.418441 ms**, versus **1.933582 / 2.147232 ms** in the controls;
+frames over 2 ms were **1,928**, versus **33 / 412**. The later unchanged control
+also had a slower process, but that does not explain away the worse candidate
+observation or prove its cause. No process, frame or unfavorable result was
+excluded, and no benchmark was retried. This is not a confirmed source regression.
+
+All **1,107** records retained identical checksum/ray/allocation/GC arrays. The
+checksums cover position, velocity and committed cells, not quaternion components.
+Nested frame allocations/GC masks were zero; broader BDN diagnostics separately
+reported **1,296 B/op for both Flow cases**, unchanged across all arms. All Flow/500
+Actual frames still exceeded 2 ms; none of the measured cases exceeded 31.25 ms.
+
+**Decision:** withdraw the runtime change and its private helper. Production source
+is exactly the accepted squash again. Keep the useful test improvements: the old
+snap test asserted an untouched mock rotation; its replacement checks the returned
+rotation for zero/unit/scaled targets, and another test verifies that a rejected
+request preserves both the pending target and interpolation. All four new cases
+failed under an intentional wrong-target mutation, which was removed before
+candidate verification. Independent correctness/Ponytail and evidence reviews
+support this bounded no-performance-claim disposition. No new issue-tracker entry
+is warranted.
+
+Raw controls, candidate evidence and the rejected implementation diff remain under
+`artifacts/benchmark005-post-recovery/turn-target-reuse`; `COMPARISON.md` retains
+per-process distributions, tails, stage separation and integrity evidence. The
+broader `TRB-Benchmark-005` goal remains open.
+
+Final restored-source validation passes in Windows Release (**3,049 core + 65
+adapter**) and ReleaseLean (**2,971 + 65**), including both library target
+frameworks with no build warnings or errors. Windows exact coverage remains
+**32,108/32,108 lines, 13,164/13,164 branches and 3,158/3,158 methods** for core,
+and **186/186, 28/28 and 11/11** for the adapter, in both configurations; full
+method coverage also remains exact. All four suites pass on Linux using exact
+copies of those Windows outputs, with no skipped tests. This is Linux execution,
+not a separate Linux build or coverage collection. Source/runtime integrity
+checks pass; `restored-verification` retains the results and final manifest.
+
+After withdrawing the experiment, one **20-second PID-attached diagnostic profile** used the unchanged
+frozen Flow/500 baseline, not the rejected candidate. It retained **5,992 scoped
+managed samples**, with no lost/truncated events or stacks. All 41 benchmark
+records matched the unprofiled baseline's replay/ray/allocation/GC arrays. Sample
+scope includes only instrumented host-frame stacks, not acquisition preparation
+or outside-frame validation; it spans benchmark phases rather than being an
+Actual-only timing comparison.
+
+Current locators are `GridWorld.ChangeSequence` (**1,157 exclusive samples**),
+Flow payload lookup (**807 exclusive**), occupancy ticket lookup (**772 exclusive**)
+and Flow guide status (**770 inclusive / 764 exclusive**). Turn requests occupy
+only **92 inclusive samples**. Inclusive counts overlap, and these are sampling
+locations—not additive time, guaranteed savings or a before/after comparison
+with the older trace. Evidence: `restored-profile/restored-stacks.json` and its
+verification record under the same experiment directory.
+
+**Next focus:** investigate synchronization around world-change and guide-payload
+validation. The world-sequence getter currently takes the committed-change lock;
+replacing that with an unchecked read would change its synchronization guarantee.
+Any experiment must preserve in-progress mutation, graph publication, lease
+generation and invalidation boundaries, including reentrant host hooks. Previously
+rejected fence-batching and retained-entry experiments remain rejected; a new
+attempt needs a distinct, justified mechanism and matched complete-frame evidence.
+No such runtime change has been made in this slice.
+
 ## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion

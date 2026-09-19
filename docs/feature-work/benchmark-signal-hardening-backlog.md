@@ -76,10 +76,12 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   and recovery is completed and merged as `f5d53a5`; its timing and latency
   tradeoffs remain in the [recovery plan](done/navigationRecoveryPlan.md).
   Subsequent fence, turning, and scan-distance experiments were withdrawn when
-  their matched evidence did not justify retention. The current follow-up retains
+  their matched evidence did not justify retention. The latest retained follow-up uses
   bounded, per-guide reuse of immutable native-edge geometry without removing
   freshness, body, or work-budget checks. Final matched Flow/500 blocks improve
   11.53%, with a 4.50 ms median complete frame; the 2 ms allowance is still unmet.
+  The subsequent lockstep-preserving scan, occupancy, and ray-cleanup experiments
+  were implemented, measured, and withdrawn; their tests and evidence remain below.
   Keep the original cadence/control and
   all completed observations intact; this signal is not closed by a partial gain.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
@@ -2454,6 +2456,109 @@ The verified source/tests and updated tracker are brought back to the existing
 all frozen runtimes, raw logs, exact-coverage results, and failed mutation evidence.
 All seven transferred files match the validated worktree; a fresh Release solution
 build and all **316 focused Flow tests** also pass in the existing checkout.
+
+#### Follow-up: lockstep-preserving scan, occupancy, and ray cleanup
+
+On 2026-09-19, investigation continued from Trailblazer `6e4124a`, GridForge
+`9c712ec`, and SwiftCollections `4b5715b` in the isolated sibling worktree
+`Trailblazer-trb005-spatial` (`codex/trb005-spatial`). The user clarified that
+lockstep operation is a stack-wide contract, not an optional navigation mode.
+Every experiment preserves fixed-frame ordering, sequential per-agent simulate/
+commit, live scan getter/filter order, callbacks, publication checks, budgets,
+LOS cadence, and phase assignment. No frame snapshot, parallel simulation,
+extra cache, benchmark project, or CI mechanism was introduced.
+
+**Withdrawn candidates.** These were implemented and measured, not rejected
+from a source-only estimate:
+
+| Candidate | Flow/500 median 64-frame block, control / candidate (ms) | Change | Decision |
+| --- | ---: | ---: | --- |
+| Remove redundant metric normalization and enumerate dictionary values directly | 322.59 / 323.37 | +0.24% | Withdrawn; no repeatable improvement |
+| Skip discarded nearest-voxel distance arithmetic | 316.53 / 321.56 | +1.59% | Withdrawn; no repeatable improvement |
+| Skip the previous-cell prism when occupancy cannot change | 324.43 / 321.60 | -0.87% | Withdrawn; too small and one process pair slower |
+| Reuse rectangular opposite corners for bounds and skip a second terminal-ray reference-clear scan | 322.02 / 322.70 | +0.21% | Withdrawn; no repeatable combined improvement |
+
+The same predeclared keep gate applies to each matched comparison: at least
+2% lower pooled Flow/500 block median, improvement in each corresponding process
+pair, no selected-case pooled frame-P95 increase above 5%, identical replay/
+ray/workload metadata, and zero nested-frame allocations/GC. All four fail
+the improvement gates; all pass the tail and semantic/allocation gates. Their
+three Flow/500 process-pair changes are respectively **+4.21%, +0.14%, -0.81%**;
+**-0.35%, +3.22%, +0.96%**; **+0.60%, -2.50%, -1.46%**; and
+**+2.98%, -2.13%, +0.01%**. A prior
+normalization-only pilot improves 1.81% against its preceding control, below
+the keep threshold; it is not used to override the interleaved result.
+These observations do not establish a portable regression or a cause for host
+variation. All candidate runtime changes above, including the proposed new
+SwiftCollections enumerator factory, are removed.
+
+Scan-cell deduplication removal was also source-reviewed but not implemented:
+caller-owned result lists can override `Add`, and a shortcut would need a more
+complete ownership argument than assuming collection is unobservable. No
+unsupported concurrent-use scenario is recorded as a confirmed product bug.
+
+Useful behavior tests remain for exact nearest-cell/tie/distance selection,
+noncanonical-but-valid metric fields, scan order and live registration changes,
+same-cell tickets, sparse-hole containment, and grid replacement during occupancy
+callbacks. The occupancy tests also protect existing invalid-index diagnostics.
+Initial test constructor/discard compile errors were corrected before baseline
+execution; they were not runtime failures or flaky-test retries.
+
+**Measurement protocol.** Each matched comparison uses six fresh processes in
+control/candidate, candidate/control, control/candidate order. Each process runs
+A*/100, Flow/100, and Flow/500 with 10 warmup, 30 actual, and one diagnostic block
+per case. A block retains the existing 32 untimed preparation frames and 64
+complete measured frames at 32 Hz. Together, the two arms contain 738 exported
+stage records,
+540 actual blocks, and 34,560 actual frames; frames within a block are correlated.
+The comparison checks all six literal arrays: checksums, periodic rays,
+preparation rays, phase assignments, frame allocation bytes, and GC masks.
+Only candidate library binaries, symbols, and corresponding XML documentation
+differ in copies of the same
+57-file frozen runtime. No build, test, or profiler runs during capture. Outer
+BenchmarkDotNet allocation is outside the nested zero-allocation claim.
+
+Raw captures, analyses, source-validation logs, and recursive SHA-256 manifests
+are retained under `artifacts/trb005-spatial` in the isolated worktree. `confirm-*`
+is the withdrawn normalization/enumerator pair (`final-runtime` is its historical
+artifact name, not an accepted final runtime); `distance-*` and `occupancy-*`
+identify the other withdrawn comparisons. Absolute timings from this session
+must not be compared causally with the preceding session's 4.50 ms result.
+
+`ray-bounds-*` is the final combined experiment, not independent per-patch
+attribution. The seven new prism-bound cases cover exact unequal dimensions,
+translated coordinates, raw-unit and representable-limit bounds, both hex
+orientations, and default prisms. Existing real-corridor, exception, terminal
+reset, and reuse tests cover the ray lifetime invariant without synthetic
+interruption state. Independent source/Ponytail reviews accepted both changes'
+correctness; that did not substitute for the failed performance gate.
+
+**Disposition:** stop this bounded local pass. All runtime experiments from
+this follow-up are withdrawn; no performance gain is claimed. The prior accepted
+native-edge/node reuse remains intact. Final control and candidate Flow/500
+median frames are both about 4.90 ms, and all 5,760 actual Flow/500 frames in each
+arm still exceed 2 ms. `TRB-Benchmark-005` remains active. Further work should
+first establish a larger repeatable cost reduction, with an explicit ownership
+and observation-order contract if spatial queries or controller work are shared.
+Lockstep compatibility does not authorize silently changing those semantics.
+
+**Final verification:** restored production source and the retained behavior
+tests pass Windows local-stack Release and ReleaseLean builds for both
+`netstandard2.1` and `net8.0`, with zero warnings/errors. GridForge passes
+**1,038 tests in each configuration**, with exact **9,104 lines / 3,953 branches /
+1,132 fully covered methods**. Trailblazer passes **3,093 / 3,015 core tests**
+plus **65 adapter tests** per configuration. Core coverage is exactly
+**32,167 lines / 13,198 branches / 3,163 fully covered methods**; the adapter adds
+**186 / 28 / 11**, respectively. Every total is fully covered, with no new
+exclusion or weakened gate. Logs and reports are under `verification` in the
+artifact root. Linux, CI, DocFX, and released-package validation were not rerun;
+no public API, serialization, wiki, or API-site source changed.
+
+Independent measurement review reparsed all 24 matched logs and 2,952 stage
+records, reproduced the summaries and gate failures, and verified runtime
+manifests and interleaved process order. The four retained Trailblazer files
+were copied back to `develop` with matching SHA-256 hashes; all nine new
+occupancy cases also pass in that checkout. Nothing was staged or committed.
 
 ## Closed Signals
 

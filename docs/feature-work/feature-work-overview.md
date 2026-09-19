@@ -30,6 +30,13 @@ instead of burying it in notes.
     costs while preserving deterministic replay, budgets and the default LOS
     cadence. The tracker retains the matched comparisons and their limitations;
     withdrawn experiments are not counted as shipped savings.
+  - The 2026-09-19 lockstep-preserving scan, occupancy, and ray-cleanup follow-up
+    from `6e4124a` is closed with no runtime change. Four implemented matched
+    comparisons fail the same repeatability/improvement gate; useful ordering,
+    lifetime, and exact-geometry tests and the full evidence remain in the tracker.
+    The preceding accepted native-edge/node reuse is intact. This bounded local
+    pass did not close the 2 ms allowance; larger work needs an explicit
+    observation-order and ownership contract, not a silently changed frame model.
   - The open-ended micro-optimization sweep has ended; the last page-proof
     experiment remains withdrawn. Its tests and the preceding dependency-key
     and byte-accounting corrections are retained in the historical tracker.

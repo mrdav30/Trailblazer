@@ -314,6 +314,52 @@ public sealed class NavigatorOccupancyDiagnosticsTests : IDisposable
     }
 
     [Fact]
+    public void SameCellResolution_AfterAddCallbackCorruptsVoxelIndex_ShouldRetainGridDiagnostic()
+    {
+        Vector3d start = new(Fixed64.Zero,
+            PathTestFactory.DefaultNavigationProfile.Shape.RootToFootOffsetY, Fixed64.Zero);
+        TestNavigator navigator = CreateNavigator(start, SharedOccupancyId);
+        (VoxelGrid grid, Voxel voxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, start);
+        WorldVoxelIndex originalAddress = voxel.WorldIndex;
+        DiagnosticLevel originalLevel = GridForgeLogger.MinimumLevel;
+        Action<DiagnosticLevel, string, string> originalHandler = GridForgeLogger.LogHandler;
+        var messages = new List<(DiagnosticLevel Level, string Message)>();
+        int additions = 0;
+        Action<OccupantEventInfo> corruptIdentity = ignoredEvent =>
+        {
+            additions++;
+            WorldVoxelIndex malformed = originalAddress;
+            malformed.VoxelIndex = new VoxelIndex(-1, originalAddress.VoxelIndex.y, originalAddress.VoxelIndex.z);
+            voxel.WorldIndex = malformed;
+        };
+        try
+        {
+            grid.TryRemoveVoxelOccupant(voxel, navigator).Should().BeTrue();
+            GridForgeLogger.MinimumLevel = DiagnosticLevel.Info;
+            GridForgeLogger.LogHandler = (level, message, _) => messages.Add((level, message));
+            voxel.OnOccupantAdded += corruptIdentity;
+
+            NavigatorOccupancyTracker.Update(TestWorld.World, navigator,
+                start + Vector3d.Right * Fixed64.FromFraction(1, 8), start, init: false);
+
+            additions.Should().Be(1);
+            voxel.Index.x.Should().Be(-1);
+            messages.Should().ContainSingle();
+            messages[0].Level.Should().Be(DiagnosticLevel.Info);
+            messages[0].Message.Should().Contain($"(-1, {originalAddress.VoxelIndex.y}, {originalAddress.VoxelIndex.z})");
+            GridOccupantManager.GetOccupiedIndices(TestWorld.World, navigator).Should().Equal(originalAddress);
+        }
+        finally
+        {
+            voxel.OnOccupantAdded -= corruptIdentity;
+            voxel.WorldIndex = originalAddress;
+            GridForgeLogger.MinimumLevel = originalLevel;
+            GridForgeLogger.LogHandler = originalHandler;
+            navigator.Reset();
+        }
+    }
+
+    [Fact]
     public void ResetAfterRemovalCallbackRefreshesOccupancy_ShouldRegisterReactivatedIdentity()
     {
         Vector3d start = new(Fixed64.Zero,

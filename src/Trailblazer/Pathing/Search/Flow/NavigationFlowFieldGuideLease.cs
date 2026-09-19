@@ -32,6 +32,7 @@ internal sealed class NavigationFlowFieldGuideLease
     private ulong _generation;
     private long _sampleOrdinal;
     private long _validatedGraphVersion = -1;
+    private NavigationSelectedEdgeResolver _selectedEdgeResolver;
     private bool _hasPendingTransition;
 
     internal NavigationFlowFieldGuideLease(int coveredAddressGenerationCapacity)
@@ -78,6 +79,7 @@ internal sealed class NavigationFlowFieldGuideLease
             _originIntegrationCost = originIntegrationCost;
             _sampleOrdinal = 0;
             _validatedGraphVersion = -1;
+            _selectedEdgeResolver = default;
             _hasPendingTransition = false;
             _status = NavigationGuideStatus.Success;
         }
@@ -151,6 +153,7 @@ internal sealed class NavigationFlowFieldGuideLease
                         _currentMedium,
                         actualFootPosition,
                         ref meter,
+                        ref _selectedEdgeResolver,
                         _coveredAddressCursor,
                         _coveredAddressGenerations,
                         _coveredAddressOutput,
@@ -318,6 +321,7 @@ internal sealed class NavigationFlowFieldGuideLease
             _originIntegrationCost = Fixed64.Zero;
             _sampleOrdinal = 0;
             _validatedGraphVersion = -1;
+            _selectedEdgeResolver = default;
             _hasPendingTransition = false;
             _status = NavigationGuideStatus.Stale;
             _payloadSlot = -1;
@@ -379,6 +383,7 @@ internal sealed class NavigationFlowFieldGuideLease
 
     private NavigationGuideStatus MarkStaleUnderLock()
     {
+        _selectedEdgeResolver = default;
         _status = NavigationGuideStatus.Stale;
         return _status;
     }

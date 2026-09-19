@@ -1328,6 +1328,7 @@ public sealed class NavigationFlowFieldGuideTests
             .Should().BeTrue();
         var meter = new GuideSampleWorkMeter(GenerousSampleBudget);
 
+        NavigationSelectedEdgeResolver selectedEdgeResolver = default;
         NavigationSelectedEdgeProgressWork.TrySample(
                 dependencyCurrent: false,
                 fixture.World,
@@ -1338,6 +1339,7 @@ public sealed class NavigationFlowFieldGuideTests
                 TraversalMedium.Solid,
                 source.FootAnchor,
                 ref meter,
+                ref selectedEdgeResolver,
                 new GridCoveredAddressCursor(1),
                 new GridCoveredAddressGeneration[1],
                 new GridCoveredAddress[8],

@@ -72,15 +72,16 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   [certified direct visibility](done/navigationDirectVisibilityPlan.md) improvements
   are retained; the user has reviewed and merged both completed feature branches.
   Their matched measurements, explicit control-target exceptions and independent
-  reviews remain below and in the archived plans. The latest per-slab fence
-  experiment was implemented and measured, then withdrawn because no attributable
-  complete-frame benefit was demonstrated. Its useful tests remain; production
-  source is unchanged by that follow-up. The next recommended design boundary is
-  Navigator-owned acquisition/recovery through the existing bounded scheduler,
-  not further removal of freshness checks. That work is implemented on the
-  unmerged recovery branch, but its acceptance blockers remain open; it is not
-  a reason to close this signal. Keep the original cadence/control and all completed
-  observations intact; do not restart an open-ended micro-optimization sweep.
+  reviews remain below and in the archived plans. Navigator-owned acquisition
+  and recovery is completed and merged as `f5d53a5`; its timing and latency
+  tradeoffs remain in the [recovery plan](done/navigationRecoveryPlan.md).
+  Subsequent fence, turning, and scan-distance experiments were withdrawn when
+  their matched evidence did not justify retention. The current follow-up retains
+  bounded, per-guide reuse of immutable native-edge geometry without removing
+  freshness, body, or work-budget checks. Final matched Flow/500 blocks improve
+  11.53%, with a 4.50 ms median complete frame; the 2 ms allowance is still unmet.
+  Keep the original cadence/control and
+  all completed observations intact; this signal is not closed by a partial gain.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -2192,6 +2193,267 @@ generation and invalidation boundaries, including reentrant host hooks. Previous
 rejected fence-batching and retained-entry experiments remain rejected; a new
 attempt needs a distinct, justified mechanism and matched complete-frame evidence.
 No such runtime change has been made in this slice.
+
+#### Follow-up: validation-cost audit and scan-distance experiment
+
+On 2026-09-18, the next pass started from Trailblazer `3658197` and GridForge
+`9c712ec`. **No runtime optimization is retained.** The synchronization audit
+found no safe small removal: the world-change getter waits for in-progress
+mutation and publication ordering; Flow checks protect generation, invalidation,
+and reentrant host boundaries. Raw sequence reads, fence batching, and retained
+cache-entry shortcuts remain unjustified.
+
+The previous managed profile is a locator, not a CPU-time breakdown. All 5,992
+scoped samples are marked Managed, but the leading world/cache/status leaves
+map near `Monitor.Enter` calls in interpolated managed IL; native instructions
+were not captured. That does not measure the helper's cost or establish a
+percentage available to optimize. One native WPR
+attempt failed to start with `0xc5585011` (system-performance profiling privilege);
+no recording or policy change resulted.
+
+Two process-local diagnostics used copies of the existing frozen runtime:
+
+- The world-sequence getter measured 14.46–15.05 ns per call over seven
+  million-call observations. A separately counter-instrumented 64-frame block
+  counted **152,000 reads**, or 2,348–2,417 per frame. Multiplying those separate
+  measurements gives about 35 microseconds per frame as an illustrative scale,
+  **not a full-frame measurement, upper bound, or predicted saving**.
+- Entry/exit timers around existing components preserved replay and 2,000
+  periodic rays in each of five 64-frame blocks. In the final detailed block,
+  occupant scanning accounts for about 0.82 ms, Flow sampling 1.28 ms, and
+  direct-heading work 1.03 ms of the instrumented frame. Sampling includes
+  structural edge resolution (0.28 ms) and body geometry (0.34 ms); these nested
+  values must not be added again. Instrumentation changes execution and these
+  observations are diagnostic, not accepted uninstrumented performance.
+
+**Implemented experiment:** GridForge's shared 3D scan-distance predicate
+rejected after the X square when it already exceeded the squared radius.
+Nonnegative saturated sums make that rejection exact, including scalar extremes.
+The candidate preserved the original remaining arithmetic, one live-position
+read, type/filter order and all synchronization. No API, cache or 2D change was
+introduced. Independent correctness and Ponytail review found no source defect.
+
+Use the unchanged `capture-steady.ps1` / `analyze-steady.ps1` helpers under
+`.superpowers/sdd/navigationRecoveryPlan`. Each arm ran three fresh processes,
+the existing balanced A*/100, Flow/100 and Flow/500 cases, ten warmups, thirty
+actuals and one diagnostic block. The candidate cloned the same frozen runtime
+and replaced only GridForge DLL/PDB/XML; no benchmark or other runtime was rebuilt
+inside a capture. All captures ran serially, without task-owned builds, tests or
+profilers overlapping them.
+
+| Case | Before / candidate / after block median (ms) | Before / candidate / after frame P95 (ms) |
+| --- | ---: | ---: |
+| A*/100 | 108.12 / 107.65 / 110.84 | 1.811 / 1.967 / 1.860 |
+| Flow/100 | 64.61 / 63.15 / 64.28 | 1.124 / 1.094 / 1.101 |
+| Flow/500 | 346.51 / 336.04 / 343.21 | 6.105 / 5.985 / 6.028 |
+
+Flow/500 pooled block medians improve **3.02% / 2.09%**, but launch medians
+overlap: 342.95–355.12 ms before, 332.72–348.00 ms candidate, and 332.39–351.55 ms
+after. A*/100 P95 worsens **8.63% / 5.74%**, failing the predeclared maximum 5%
+increase against both controls. Retain all observations, including the slower
+third candidate A* launch. **Withdraw the runtime candidate**: this is insufficient
+evidence to keep it, not proof of a portable regression or an environmental cause.
+
+All **1,107 stage records / 810 actual blocks / 51,840 actual frames** are
+retained. The 738 candidate/after-to-before record comparisons match literal
+checksums, phase assignments, preparation/periodic rays, allocations and GC masks.
+Every measured frame has zero allocated bytes and zero GC-overlap mask. Both
+59-file frozen runtime inventories remain unchanged. The restored GridForge
+Release DLL exactly matches the baseline hash. GridForge retains **17 meaningful
+typed/untyped scan cases** for equality, independent product rounding, saturated
+squares/sums, and live positions with saturated subtraction; its
+`GF-Benchmark-011` records the upstream disposition.
+
+**Restored-state validation:** Windows Release and ReleaseLean solution builds
+cover both `netstandard2.1` and `net8.0` without warnings/errors. GridForge passes
+**1,003 tests** in each configuration; Trailblazer passes **3,049 / 2,971 core**
+tests plus **65 adapter** tests in each. No tests fail or skip. Exact coverage
+remains **9,104 lines / 3,953 branches / 1,132 methods** for GridForge,
+**32,108 / 13,164 / 3,158** for Trailblazer, and **186 / 28 / 11** for its adapter,
+all fully covered in both configurations with no new exclusions. Linux execution,
+CI, standalone Gravitas suites and released-package validation were not rerun.
+
+Evidence lives under `artifacts/benchmark005-validation-costs`: diagnostic
+scripts and copied runtimes, raw captures, fixed protocol, candidate patch,
+per-process distributions and `comparison-audit.json`. This does not close
+`TRB-Benchmark-005`: every Flow/500 actual frame still exceeds 2 ms.
+
+**Next distinct target:** assess reuse of resolved selected-edge geometry while
+the exact graph root, guide binding, source and medium are unchanged. Today each
+Flow sample repeats structural enumeration and immutable node/prism extraction.
+The existing proof-version field cannot certify geometry because `GetStatus`
+updates it independently. Any design must preserve exact budget exhaustion and
+remaining-meter behavior, within-call rebases, transition completion, freshness
+fences, and accounted per-guide retention. This has not been implemented or timed;
+do not infer a win from the diagnostic 0.28 ms resolver cost or revive target-only
+edge lookup. Broader reuse needs a bounded design, not another lock shortcut.
+
+#### Follow-up: per-guide native-edge geometry reuse
+
+On 2026-09-18, implementation continued from `3658197` in the isolated sibling
+worktree `Trailblazer-trb005`, branch `codex/trb005-resolved-flow`. Existing
+checkout and upstream changes were preserved. Local-stack dependency versions,
+the benchmark source, LOS cadence, work budgets, and frame composition are unchanged.
+
+The implementation keeps one native structural edge, its source/target node
+states and cell prisms, and the corresponding Flow payload node inside each
+guide. Edge/geometry reuse requires the exact graph version, source node, and
+canonical outgoing ordinal. The node lookup also requires the exact address;
+each binding pins its original immutable payload even after same-key cache
+promotion. Binding/stale/disposal
+boundaries clear the memo. Graph-store versions increase strictly, so the key
+does not need to retain a graph root. Solid sampling alone uses these cached
+node states; Gas/Liquid retain their existing volume path. Explicit connections
+and automatic seams retain their existing resolution, avoiding references to
+graph-owned portal pages or seam objects.
+
+Every sample still validates current guide/world freshness, checks the actual
+body position, and performs portal, heading, recovery, and transition work.
+The cache records the **actual structural enumeration debit**, including merge
+prefetch and rejected candidates, and that node's exact binary-search debit.
+A warm hit consumes the same debit. If the allowance is too small, the original
+enumeration or binary search consumes its original partial prefix before failure.
+Lookup accounting is captured separately for each within-call source rebase.
+Warm reuse therefore does not change sample status,
+cursor progress, or any remaining work-meter category.
+
+Thirty-five new cases cover warm/cold outputs and complete-meter equality, exact
+budget boundaries and retries, mixed incident candidates, moved feet and source
+rebasing, sparse pointy/flat hex grids, compatible publication, and pooled reuse
+against different geometry. Changed-root and changed-ordinal resolver cases
+assert independently specified targets and debits. Same-key payload promotion
+and a rebased node with a different lookup depth have exact/one-below checks.
+Deliberately removing graph
+identity fails three cases; removing ordinal identity fails two; replacing the
+actual debit with ordinal-plus-one fails all six mixed-candidate cases. Replacing
+the node lookup debit with one fails all five new promotion/rebase cases. The
+correct implementation is restored. Independent correctness and Ponytail
+reviews found no remaining source defect.
+
+The fixed memory tradeoff is **856 additional bytes per preallocated Flow guide**
+on this Windows x64 .NET 8 runtime (construction at map capacity one: 1,176 to
+2,032 bytes, measured over 1,000 retained shells). That is 428,000 bytes for 500
+configured guide slots, including idle slots, not a per-frame allocation or a
+graph-retention increase. The copied node contains value fields and map-ID strings,
+not payload arrays, maps, or graph roots. Payload byte counters do not count these existing
+guide shells and are not presented as total memory. The edge-only prototype
+added 168 bytes; the geometry-only version added 784 bytes. Their separate
+captures remain available for comparison.
+
+Windows local-stack Release and ReleaseLean build both `netstandard2.1` and
+`net8.0`. The retained core passes **3,084 / 3,006 tests**, with **65 adapter tests**
+in each configuration. Exact merged coverage remains **32,353 lines / 13,226
+branches / 3,174 methods**, all fully covered, with no exclusions added. The
+initial return-to-Release command incorrectly reused Lean restore assets;
+restoring the Release graph corrected that command failure without a source
+change. Linux, CI, standalone upstream suites, and released-package validation
+were not rerun for this slice.
+
+Measurement evidence is retained in the isolated worktree under
+`artifacts/trb005-resolved-flow`: baseline, edge-only, node/prism, and final
+frozen runtimes; full logs and manifests; construction-size observations;
+mutation logs; exact coverage; and matched capture analyses.
+
+**Geometry-only confirmation.** The original baseline and native-geometry candidate
+use the same frozen benchmark/dependency files. Recursive inventories each
+contain 57 files; only `Trailblazer.dll`, `.pdb`, and `.xml` differ. The unchanged
+three cases run in six fresh processes, ordered baseline/candidate,
+candidate/baseline, baseline/candidate. Each process uses 10 warmup, 30 actual,
+and one diagnostic block per case, with the established in-process frozen
+assembly runner. No builds, tests, or profilers run during timing.
+
+| Case | Median 64-frame block, baseline / candidate (ms) | Change | Median complete frame, baseline / candidate (ms) | Frame P95 change |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 control | 108.41 / 110.08 | +1.54% | 1.69 / 1.70 | +1.49% |
+| Flow/100 | 63.70 / 57.63 | -9.53% | 0.98 / 0.89 | -8.84% |
+| Flow/500 | 335.51 / 305.36 | -8.99% | 5.14 / 4.66 | -9.12% |
+
+Flow/500 process block medians are **334.14 / 340.62 / 334.20 ms** for the
+baseline and **303.23 / 305.18 / 307.45 ms** for the candidate. This is a
+repeatable roughly 9% local improvement, not a claim of portable precision or
+independent samples for every correlated nested frame. Earlier baseline/edge-only/
+returning-baseline captures and the first node/prism capture remain archived;
+this establishes the geometry-only contribution. The final combined comparison
+below is the primary result, not the larger gain against the earliest, slower
+baseline.
+
+Both arms together contain 738 exported stage records, including 540 actual
+blocks and 34,560 actual complete frames. Literal checksums, periodic ray counts,
+preparation counts, phase assignments, frame allocations, and frame GC masks
+match across arms and all stages. All measured nested frames allocate zero
+current-thread bytes and have zero collection-change masks. This does **not**
+mean the outer BenchmarkDotNet operation allocates zero: its separate diagnostics
+report 960/1,296/1,296 bytes for Flow/500 control processes and 1,296 bytes for
+each candidate process. No causal allocation attribution is established outside
+the measured host-frame boundary.
+
+Flow/500 P99 improves from 6.07 to 5.52 ms and the observed maximum from 7.78 to
+6.76 ms. A*/100's small measured increase remains visible and within the existing
+5% P95 guard; its runtime path is unchanged. Every Flow/500 actual frame still
+exceeds the 2 ms allowance. **This is retained progress, not closure of
+`TRB-Benchmark-005`.**
+
+**Incremental node-lookup reuse.** A diagnostic-only copy of the geometry
+candidate placed about 0.16 ms/frame in the repeated Flow-node binary search
+for Flow/500. This inclusive, instrumented observation selected the next target;
+it is not acceptance timing or an additive CPU-cost breakdown. Reusing that
+binding-local node and source reference adds 72 bytes per guide and still charges
+its exact lookup debit. Before capture, the incremental keep gate required at
+least 2% improvement in Flow/500 block median, improvement in every corresponding
+process pair, and no greater than 5% pooled P95 regression in any control.
+
+The same six-process interleaved protocol passes that gate: geometry-only to
+lookup candidate is **304.32 to 295.92 ms/block (-2.76%)** for Flow/500, with
+process pairs **308.82 / 297.94**, **304.39 / 296.79**, and **301.80 / 293.39 ms**.
+P95 improves **5.31 to 5.14 ms (-3.18%)**. Flow/100 improves **2.78%** per block
+and **3.28%** at P95; A*/100 changes **+0.86% / +0.93%**, respectively. All six
+literal arrays still match, with zero nested allocation/GC. Outer BDN allocation
+is 0 bytes for A* and 1,296 bytes for Flow in every process for this comparison.
+Independent source/Ponytail and raw-evidence reviews accept the bounded addition.
+The `selection-*` captures retain this comparison separately from the original
+baseline so its contribution is not inferred by multiplying percentages.
+
+**Final combined result.** After the node-lookup addition and restored mutation
+checks, a further six-process interleaved capture compares the complete retained
+candidate directly against the original baseline. The newly built standard
+runtime hashes match the frozen timed candidate exactly. This comparison uses
+the same unchanged fixture, stages, cases, budgets, and local dependencies.
+
+| Case | Median 64-frame block, original / retained (ms) | Block change | Median complete frame, original / retained (ms) | Complete-frame P95, original / retained (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 control | 107.88 / 110.61 | +2.53% | 1.68 / 1.72 | 1.82 / 1.85 |
+| Flow/100 | 62.92 / 55.46 | -11.85% | 0.97 / 0.86 | 1.08 / 0.96 |
+| Flow/500 | 333.23 / 294.79 | **-11.53%** | **5.10 / 4.50** | **5.78 / 5.11** |
+
+Flow/500's three process block medians are **329.93 / 334.11 / 337.08 ms**
+for the original and **295.76 / 295.20 / 291.62 ms** for the retained candidate.
+Its observed P95 improves **11.58%**, P99 from **6.15 to 5.43 ms**, and maximum
+from **6.93 to 6.39 ms**. All 738 exported stage records preserve the six exact
+arrays; all nested frame allocations and GC masks remain zero. Outer BDN
+allocation is 1,296 bytes for all Flow/500 launches and most Flow/100 launches;
+Flow/100 control launch one reports 960 bytes versus the candidate's 1,296 bytes.
+This outside-frame difference is retained without causal attribution. A*/100's
+**+2.53% block / +1.91% P95** observation remains explicit, within the 5% P95
+guard, rather than being reported as a zero-cost control. Frames are correlated,
+and these headless measurements exclude preparation, initial acquisition,
+post-frame validation, physics, rendering, and network work.
+
+**Disposition:** retain the small binding-local refactor and its behavior tests.
+No public contract, ray cadence, phase assignment, mutable-world fence, or body
+check changed. Diagnostic review of the remaining direct-ray, neighbour-scan,
+and commit/controller work found no further small safe deletion: scan filters,
+live-position getter order, and publication fencing remain observable behavior.
+No upstream runtime change, new benchmark project, or CI mechanism is needed.
+This slice has an implemented and independently verified gain; the benchmark
+signal remains active because **all 5,760 final Flow/500 actual frames still
+exceed 2 ms**. The retained improvement must not be presented as meeting that
+allowance or as closing acquisition/recovery latency concerns.
+
+The verified source/tests and updated tracker are brought back to the existing
+`develop` checkout without staging or committing. The isolated worktree retains
+all frozen runtimes, raw logs, exact-coverage results, and failed mutation evidence.
+All seven transferred files match the validated worktree; a fresh Release solution
+build and all **316 focused Flow tests** also pass in the existing checkout.
 
 ## Closed Signals
 

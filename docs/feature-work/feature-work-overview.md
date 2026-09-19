@@ -302,13 +302,18 @@ The plans share evidence, not competing implementations:
    [Navigator-owned acquisition/recovery](done/navigationRecoveryPlan.md) is
    complete and was squashed into `develop` as `f5d53a5`. Its bounded scheduling
    addresses acquisition/recovery spikes, not steady-state tracing costs.
-   For the remaining `TRB-Benchmark-005` work, the post-recovery profile points to
-   world-change and guide-payload validation synchronization. Investigate whether
-   repeated work can be reduced without weakening mutation, publication, lease
-   generation or invalidation guarantees. The measured turn-target reuse
-   experiment was withdrawn; see the [benchmark backlog](benchmark-signal-hardening-backlog.md)
-   for its comparison and the fresh profile. These samples identify a next
-   investigation, not an established speedup.
+   For the remaining `TRB-Benchmark-005` work, validation audits found no safe small
+   synchronization deletion; the managed sample shares are not lock-cost estimates.
+   Both turn-target reuse and the measured scan-distance early-rejection experiment
+   were withdrawn. Binding-local reuse of one native Flow edge, its immutable
+   node/prism geometry, and its exact payload lookup is now implemented, with
+   unchanged freshness/body checks and complete work-meter behavior. The final
+   interleaved comparison reduces Flow/500 blocks by **11.53%** and its median
+   complete frame from **5.10 to 4.50 ms**, at **856 additional bytes per guide**.
+   A*/100's measured +2.53% block / +1.91% P95 control remains explicit. See the
+   [benchmark backlog](benchmark-signal-hardening-backlog.md) for matched evidence,
+   mutation-tested boundaries, memory accounting, and independent reviews. This
+   is retained progress, not closure: the **2 ms** Flow/500 allowance is still unmet.
    Exact rectangular tracing, raw-coordinate geometry and
    per-sample Flow proof reuse are already implemented. Preserve their arithmetic,
    accounting and dependency guarantees, and keep the unphased cadence/control

@@ -103,6 +103,7 @@ internal static class NavigationSelectedEdgeProgressWork
         TraversalMedium medium,
         Vector3d actualFootPosition,
         ref GuideSampleWorkMeter meter,
+        ref NavigationSelectedEdgeResolver selectedEdgeResolver,
         GridCoveredAddressCursor coveredAddressCursor,
         GridCoveredAddressGeneration[] coveredAddressGenerations,
         GridCoveredAddress[] coveredAddressOutput,
@@ -139,15 +140,19 @@ internal static class NavigationSelectedEdgeProgressWork
         bool allowRecovery = true;
         while (true)
         {
-            NavigationFlowNodeLookupStatus lookup = TryGetNode(
-                payload,
+            int initialNodeAllowance = meter.GetCurrentNodeLookupAllowance();
+            bool reuseNode = selectedEdgeResolver.TryGetNode(
+                graph,
                 currentSource,
-                medium,
                 ref meter,
-                out NavigationFlowFieldNode node);
-            if (lookup != NavigationFlowNodeLookupStatus.Success)
+                out NavigationFlowFieldNode node,
+                out NavigationNodeRef sourceRef);
+            if (!reuseNode)
             {
-                return MapNodeLookupStatus(lookup, required: true);
+                NavigationFlowNodeLookupStatus lookup = TryGetNode(
+                    payload, currentSource, medium, ref meter, out node);
+                if (lookup != NavigationFlowNodeLookupStatus.Success)
+                    return MapNodeLookupStatus(lookup, required: true);
             }
             currentNode = node;
             if (node.TransitionInstructionOrdinal >= 0)
@@ -155,12 +160,18 @@ internal static class NavigationSelectedEdgeProgressWork
                 nextSourceAddress = currentSource;
                 return NavigationGuideStatus.Success;
             }
-            graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef);
-            graph.TryGetNodeState(
+            if (!reuseNode)
+                graph.TryGetNodeRef(currentSource, out sourceRef);
+            bool reuseNodeStates = selectedEdgeResolver.TryGetSourceState(
+                graph,
                 sourceRef,
-                medium,
+                node.SelectedEdge.CanonicalOutgoingOrdinal,
                 out NavigationNodeState sourceState,
                 out GridCellPrism sourcePrism);
+            if (!reuseNodeStates)
+            {
+                graph.TryGetNodeState(sourceRef, medium, out sourceState, out sourcePrism);
+            }
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             bool sourceContains = sourcePrism.Contains(actualFootPosition);
@@ -224,19 +235,30 @@ internal static class NavigationSelectedEdgeProgressWork
                 continue;
             }
 
-            NavigationGuideStatus edgeStatus = TryResolveSelectedEdge(
+            NavigationGuideStatus edgeStatus = selectedEdgeResolver.TryResolve(
                 graph,
                 sourceRef,
-                node.SelectedEdge,
+                node.SelectedEdge.CanonicalOutgoingOrdinal,
                 ref meter,
                 out NavigationGraphEdge edge);
             if (edgeStatus != NavigationGuideStatus.Success)
                 return edgeStatus;
-            graph.TryGetNodeState(
-                edge.Target,
-                medium,
-                out NavigationNodeState targetState,
-                out GridCellPrism targetPrism);
+            NavigationNodeState targetState;
+            GridCellPrism targetPrism;
+            if (reuseNodeStates)
+            {
+                selectedEdgeResolver.GetTargetState(out targetState, out targetPrism);
+            }
+            else
+            {
+                graph.TryGetNodeState(edge.Target, medium, out targetState, out targetPrism);
+                if (edge.Kind == NavigationGraphEdgeKind.Native)
+                {
+                    selectedEdgeResolver.RememberNodeStates(
+                        node, initialNodeAllowance - meter.GetCurrentNodeLookupAllowance(),
+                        sourceState, sourcePrism, targetState, targetPrism);
+                }
+            }
             if (!meter.TryConsumePrismChecks(1))
                 return NavigationGuideStatus.BudgetExceeded;
             bool targetContains = targetPrism.Contains(actualFootPosition);
@@ -408,36 +430,6 @@ internal static class NavigationSelectedEdgeProgressWork
             if (!meter.TryConsumeCursorRebases(1))
                 return NavigationGuideStatus.BudgetExceeded;
             currentSource = node.SelectedEdge.Target;
-        }
-    }
-
-    private static NavigationGuideStatus TryResolveSelectedEdge(
-        NavigationWorldGraph graph,
-        NavigationNodeRef source,
-        NavigationSelectedEdgeRef selected,
-        ref GuideSampleWorkMeter meter,
-        out NavigationGraphEdge edge)
-    {
-        // Replay the same structural edge ordering that assigned the payload ordinal.
-        NavigationSurfaceEdgeEnumerator edges = graph.EnumerateStructuralSurfaceEdges(source);
-        int edgeStepRemaining = int.MaxValue;
-        while (true)
-        {
-            NavigationSurfaceEdgeAdvanceStatus status = edges.AdvanceOne(
-                ref meter,
-                ref edgeStepRemaining);
-            NavigationGuideStatus mappedStatus = MapStructuralEdgeStatus(status);
-            if (mappedStatus != NavigationGuideStatus.Success)
-            {
-                edge = default;
-                return mappedStatus;
-            }
-            if (status == NavigationSurfaceEdgeAdvanceStatus.Pending)
-                continue;
-            if (edges.CurrentOrdinal != selected.CanonicalOutgoingOrdinal)
-                continue;
-            edge = edges.Current;
-            return NavigationGuideStatus.Success;
         }
     }
 

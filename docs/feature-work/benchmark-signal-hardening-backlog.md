@@ -62,32 +62,47 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 
 ## Active Signals
 
+None. The completed investigations and their evidence remain below.
+
+## Closed Signals
 
 ### TRB-Benchmark-005 - Guided frames spend most time in long blocked segment tracing
 
 - **Discovered:** 2026-09-10 during the representative guided-host performance pass.
-- **Status:** Active for the remaining 2 ms full-frame allowance and mandatory
-  acquisition/recovery bursts. Geometry, mapping, dependency, ungrouped steering,
-  [LOS phase spreading](done/navigationLineOfSightPhasePlan.md) and
-  [certified direct visibility](done/navigationDirectVisibilityPlan.md) improvements
-  are retained; the user has reviewed and merged both completed feature branches.
-  Their matched measurements, explicit control-target exceptions and independent
-  reviews remain below and in the archived plans. Navigator-owned acquisition
-  and recovery is completed and merged as `f5d53a5`; its timing and latency
-  tradeoffs remain in the [recovery plan](done/navigationRecoveryPlan.md).
-  Subsequent fence, turning, and scan-distance experiments were withdrawn when
-  their matched evidence did not justify retention. An earlier retained follow-up uses
-  bounded, per-guide reuse of immutable native-edge geometry without removing
-  freshness, body, or work-budget checks. Final matched Flow/500 blocks improve
-  11.53%, with a 4.50 ms median complete frame; the 2 ms allowance is still unmet.
-  The subsequent lockstep-preserving scan, occupancy, and ray-cleanup experiments
-  were implemented, measured, and withdrawn; their tests and evidence remain below.
-  A further structural-mapping and FixedMathSharp binary-power division pass
-  improves matched Flow/500 blocks by 7.28%, with a 4.39 ms median complete frame.
-  This is a fresh paired comparison, not a causal comparison with the earlier
-  session's similar absolute timing. The 2 ms target remains unmet.
-  Keep the original cadence/control and
-  all completed observations intact; this signal is not closed by a partial gain.
+- **Status:** Closed on 2026-09-20 by explicit user acceptance of a reasonable
+  stopping point. This closes the optimization campaign, not a claim that every
+  original performance target passed.
+- **Accepted result:** The final paired comparison reduces Flow/500 measured
+  block cost by **7.28%**, with a **4.39 ms median / 5.01 ms P95 / 5.53 ms maximum**
+  complete headless navigation frame for all 500 agents. All measured frames fit
+  the **31.25 ms** simulation-tick budget at 32 Hz on the tested Windows/.NET 8
+  host. This is not a per-agent time, a whole-game timing, or a portable guarantee.
+  All agents update each tick; periodic LOS checks use balanced 16-frame phases.
+  See the [final comparison](#follow-up-exact-binary-power-division-and-bounded-structural-mapping-reuse)
+  for exact workload, binaries, distributions, replay and coverage evidence.
+- **Deferred target:** The **2 ms navigation allowance remains unmet**. Reaching
+  it from the final median would require about **2.39 ms, or 54%**, more reduction.
+  The user accepts the current result; further pursuit is evidence-gated, not
+  an active task or a reason to repeat withdrawn experiments. No benchmark gate
+  is relaxed and no historical miss is relabelled as a pass.
+- **Retained limits:** Acquisition/recovery latency and total-work tradeoffs,
+  explicit control-target exceptions, and unexplained setup failures remain
+  recorded in this tracker, the [recovery plan](done/navigationRecoveryPlan.md),
+  and their owning issue entries. This steady-state result does not measure
+  cold acquisition, physics, rendering or networking. Coordinated release gates
+  remain pending; closure does not establish release readiness.
+- **Reopen when:** A representative integrated workload misses its agreed budget
+  on target hardware; a repeatable regression appears under matched conditions;
+  or profiling identifies a concrete opportunity whose measured benefit justifies
+  the implementation and ownership cost. Preserve lockstep ordering, exact math,
+  freshness, work accounting and the existing benchmark/control identities.
+
+**Historical record:** The dated checkpoints below preserve their results and
+then-current dispositions. This accepted closeout supersedes earlier directions
+to keep the signal open; it does not rewrite their measurements or exceptions.
+
+#### Original discovery and reproduction
+
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
   a wall on a 100x100 grid. Each operation has 32 untimed preparation frames and
   64 measured frames at 32 Hz. Agents start together and retain the default
@@ -2740,8 +2755,9 @@ still matches the final measured hash. Transfer logs and TRX are under
 changed files, GridForge two test/documentation files, and Gravitas and
 SwiftCollections remain source-clean.
 
-**Disposition.** Retain this reproducible improvement and its behavior tests.
-`TRB-Benchmark-005` remains active: the final Flow/500 median is **4.39 ms**, about
+**Disposition at the 2026-09-19 checkpoint.** Retain this reproducible improvement
+and its behavior tests. `TRB-Benchmark-005` remained active at this checkpoint:
+the final Flow/500 median is **4.39 ms**, about
 **2.39 ms above the 2 ms target**. This pass did not establish another substantial
 safe reduction without changing the live-observation, callback, commit, or
 freshness contracts. That is not a proven lower bound or a claim that 2 ms is
@@ -2754,8 +2770,6 @@ diagnostic binaries, and analyses remain in `artifacts/trb005-structural` in the
 isolated worktree. Failed setup attempts are retained separately and are not
 substituted into accepted timing evidence. No benchmark project or CI mechanism
 was added.
-
-## Closed Signals
 
 ### TRB-Benchmark-004 - Tiny cold Flow protocol has an iteration-position excursion
 
@@ -3299,13 +3313,11 @@ intake bucket for measured signals and promote broader work into a dated feature
 plan when the scope outgrows a focused patch. Physics collision-shape throughput
 belongs to Gravitas, not this navigation backlog.
 
-The user approved squashing the verified
-[recovery implementation](done/navigationRecoveryPlan.md) into `develop` on
-2026-09-18. Resume the performance investigation from that hardened baseline.
-The user is willing to accept a modest hardened-behavior
-cost; preserve the full comparisons rather than treating that judgment as proof
-of a universal 2–3% bound or exact causation. Keep the corrected allocation gate,
-resolved feature defects and unexplained original-baseline sorting observation
-in the archived plan. Resume measured
-controller/steering/sampling and useful-guidance-latency work under
-`TRB-Benchmark-005`. Its broader 2 ms goal is not complete.
+On 2026-09-20 the user accepted closure of `TRB-Benchmark-005` at the measured
+stopping point, with the unmet 2 ms allowance explicitly deferred. Keep the
+existing fixtures, controls, failed experiments and raw evidence. Do not continue
+the open-ended performance campaign without one of its documented reopening
+triggers. Return to the remaining work in the
+[feature-work overview](feature-work-overview.md#recommended-execution-order).
+Separate correctness issues and coordinated release verification remain governed
+by their own evidence and gates, not waived by this performance disposition.

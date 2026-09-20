@@ -2,6 +2,12 @@
 
 **Created:** 2026-09-16
 
+**Subsequent benchmark disposition (2026-09-20):** The user closed
+[TRB-Benchmark-005](../benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
+as an accepted stopping point, with the unmet 2 ms target explicitly deferred.
+This supersedes the historical directions below to resume or keep that campaign
+open; measurements, exceptions, unresolved failures and release gates are unchanged.
+
 **Status:** Complete, user-reviewed and archived on 2026-09-18. The user approved
 squashing the reviewed `e5d29e0` feature into `develop` and resuming
 `TRB-Benchmark-005`. The squash commit containing this archive is the accepted

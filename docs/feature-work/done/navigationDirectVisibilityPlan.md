@@ -6,6 +6,12 @@
 
 **Created:** 2026-09-15
 
+**Subsequent benchmark disposition (2026-09-20):** The user closed
+[TRB-Benchmark-005](../benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing)
+as an accepted stopping point, with the unmet 2 ms target explicitly deferred.
+This supersedes the historical directions below to resume or keep that campaign
+open; measurements, exceptions, unresolved failures and release gates are unchanged.
+
 **Status:** Complete locally and archived on 2026-09-16. All five phases are
 implemented, measured and independently reviewed. Retain for user branch review,
 with two explicitly recorded non-regression target misses, not a blanket

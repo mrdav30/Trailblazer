@@ -56,6 +56,8 @@ internal sealed partial class NavigationRayWork
             int gridLimit = Math.Min(_workspace.MapCapacity, meter.RemainingLookupProbes);
             int addressLimit = Math.Min(_workspace.CoveredAddressCapacity, meter.RemainingCoveredVoxelIntervals);
             long candidateWorkLimit = meter.RemainingGridCandidateWork;
+            _activeMappingMemo = immediate.MappingMemo.TryPrepare(_request)
+                ? immediate.MappingMemo : null;
             immediate.CertificateArmed = true;
             if (!GridTracer.TryTraceRectangularSlabsInto(
                     _request.World, _request.Start, _request.End, generation,
@@ -64,6 +66,7 @@ internal sealed partial class NavigationRayWork
                     gridLimit, addressLimit, outputLimit, candidateWorkLimit,
                     out GridTraceIntervalReport report))
             {
+                _activeMappingMemo = null;
                 return Advance(meter);
             }
 
@@ -97,6 +100,7 @@ internal sealed partial class NavigationRayWork
         }
         finally
         {
+            _activeMappingMemo = null;
             immediate.ClearDirect();
         }
     }

@@ -76,12 +76,16 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
   and recovery is completed and merged as `f5d53a5`; its timing and latency
   tradeoffs remain in the [recovery plan](done/navigationRecoveryPlan.md).
   Subsequent fence, turning, and scan-distance experiments were withdrawn when
-  their matched evidence did not justify retention. The latest retained follow-up uses
+  their matched evidence did not justify retention. An earlier retained follow-up uses
   bounded, per-guide reuse of immutable native-edge geometry without removing
   freshness, body, or work-budget checks. Final matched Flow/500 blocks improve
   11.53%, with a 4.50 ms median complete frame; the 2 ms allowance is still unmet.
   The subsequent lockstep-preserving scan, occupancy, and ray-cleanup experiments
   were implemented, measured, and withdrawn; their tests and evidence remain below.
+  A further structural-mapping and FixedMathSharp binary-power division pass
+  improves matched Flow/500 blocks by 7.28%, with a 4.39 ms median complete frame.
+  This is a fresh paired comparison, not a causal comparison with the earlier
+  session's similar absolute timing. The 2 ms target remains unmet.
   Keep the original cadence/control and
   all completed observations intact; this signal is not closed by a partial gain.
 - **Reproduction:** `navigation-guided-frame` follows real A*/Flow guides around
@@ -2559,6 +2563,197 @@ records, reproduced the summaries and gate failures, and verified runtime
 manifests and interleaved process order. The four retained Trailblazer files
 were copied back to `develop` with matching SHA-256 hashes; all nine new
 occupancy cases also pass in that checkout. Nothing was staged or committed.
+
+#### Follow-up: exact binary-power division and bounded structural mapping reuse
+
+On 2026-09-19, work continued from clean Trailblazer `develop` `0bc60b2`,
+GridForge `b288586`, FixedMathSharp `29bfa28`, and SwiftCollections `4b5715b`
+in `Trailblazer-trb005-structural` (`codex/trb005-structural`). The frozen
+baseline has the same runtime source as those commits; intervening changes
+from its Trailblazer `6e4124a` / GridForge `9c712ec` builds were tests and docs.
+Lockstep ordering, sequential agent simulate/commit, live getter/filter/callback
+observations, exact arithmetic, publication fences, and work budgets stay intact.
+
+**Implemented changes.** FixedMathSharp recognizes binary-power divisors in its
+existing unsigned-magnitude division routine. Exact shifts plus the existing
+nearest-even right-shift primitive preserve signs, saturation, fractional bits,
+and the full unsigned internal dividend range. All other divisors use the
+unchanged algorithm. This is portable integer arithmetic, not a .NET 8-only
+intrinsic or a relaxed `Fast*` path.
+
+Trailblazer's context-owned immediate-ray workspace retains at most 1,024
+immutable mapping facts for qualified single-map Solid direct rays. The key is
+the owning graph store, its monotonically increasing published version, and the
+exact voxel index; collisions replace entries rather than weakening identity.
+A hit reuses node/component/physical lookup facts, not passability or a ray
+result. Each attempt still validates live intervals, charges the original work,
+records page then component dependencies, reads the effective cell, and applies
+the current profile and policy. General rays retain the original path.
+Reset and disposal clear the entries, as does the next qualified attempt that
+observes a changed published version; publication does not clear them eagerly.
+No graph or map root is retained. The measured .NET 8 x64 construction cost is
+**65,600 bytes per world context**, including the memo object and its 1,024-entry
+array; snapshots are 64 bytes on this runtime and the array remains below the
+default large-object threshold.
+There is no new public API, serialized state, cadence, or parallel execution.
+
+**Measured selection, not source intuition.** Diagnostic-only copied assemblies
+counted 2,332,368 magnitude divisions per 64-frame Flow/500 block, of which
+1,666,000 had a binary-power divisor. Separate mapping counters showed 27.43%,
+40.33%, and 67.57% hits at 256, 512, and 1,024 entries. These counts select
+experiments; they are not CPU shares or predicted speedups. Timed acceptance
+uses uninstrumented binaries. Removing the cached `NavigationCell` permits the
+larger lookup table without a large-object allocation or a second cell copy.
+
+The one-process pilots also rejected plausible changes: prepared rectangular
+slab arithmetic improved only 0.81%; forced multiplication inlining regressed
+4.35%; a positive-One multiplication shortcut regressed 4.11%; and a zero-product
+shortcut changed only -0.40%. These are diagnostic observations, not established
+portable regressions or full acceptance failures. Those runtime edits are all
+withdrawn. Seven literal GridForge geometry rows and independent multiplication
+boundary/oracle tests remain useful without the rejected implementations.
+
+**Final combined comparison.** After the reachable-code cleanup described below,
+the unchanged three-case fixture runs in six fresh
+processes, control/candidate, candidate/control, control/candidate. Each process
+retains 10 warmup, 30 actual, and one diagnostic block per case; each block has
+32 untimed preparation and 64 measured complete host frames at 32 Hz. No build,
+test, or profiler runs concurrently. Only FixedMathSharp and Trailblazer DLL,
+PDB, and XML files differ in the 57-file frozen runtimes. All observations,
+including slow tails, are retained; nested frames are correlated, not independent
+replicates. The predeclared keep gate remains at least 2% lower pooled Flow/500
+block median, improvement in all three process pairs, and no selected-case P95
+regression above 5%.
+
+| Case | Median 64-frame block, control / candidate (ms) | Block change | Median complete frame, control / candidate (ms) | Complete-frame P95, control / candidate (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| A*/100 | 114.17 / 104.37 | -8.58% | 1.78 / 1.64 | 1.93 / 1.79 |
+| Flow/100 | 55.94 / 49.27 | -11.93% | 0.87 / 0.76 | 0.96 / 0.85 |
+| Flow/500 | 306.18 / 283.88 | **-7.28%** | **4.73 / 4.39** | **5.32 / 5.01** |
+
+The Flow/500 process medians are **308.45 / 306.65 / 304.72 ms** for the control
+and **283.46 / 288.79 / 281.52 ms** for the candidate: every pair improves
+(8.10%, 5.82%, 7.61%). Its frame P99 improves **5.44 to 5.15 ms**, and maximum
+**5.72 to 5.53 ms**. All 369 paired stage records match the six literal replay,
+ray, phase, allocation, and GC arrays plus workload metadata. Every measured
+frame has zero current-thread allocation and no collection-count change.
+All **5,760 actual Flow/500 frames in each arm still exceed 2 ms**; none exceeds
+31.25 ms. Preparation, first acquisition, post-frame validation/export, physics,
+rendering, networking, and recovery episodes are outside this timing claim.
+The unchanged short Flow/100 blocks emit BenchmarkDotNet's minimum-iteration-
+time warning; it is retained, not suppressed. Outer BDN allocation is separate;
+no within-frame allocation claim is inferred from those outer measurements.
+In the final capture, all six Flow/500 launches report 1,296 B/op outside that
+inner frame bracket. Flow/100 control launches report 1,296 / 1,296 / 1,296 B/op
+and candidate launches 1,296 / 960 / 960 B/op; A*/100 reports zero. Outer GC
+counts also remain zero. The independent audit rehashed all 57 files in each
+executed runtime, checked all 738 stage records and 540 outer actual values
+against their exports, and reproduced the result without dropping observations.
+Timing is not uniformly flat: candidate Flow/500 launch two's early-ten to
+late-ten block median rises **287.05 to 290.97 ms**, while its complete process
+still improves. A*/100's maximum rises slightly **2.9246 to 2.9373 ms**, despite
+better median, P95, and P99; no claim that every tail improves is made.
+
+The earlier pre-cleanup `acceptance-*` comparison is retained separately:
+Flow/500 **319.28 to 290.56 ms/block (-8.99%)**, frame median **4.90 to 4.49 ms**,
+P95 **5.56 to 5.14 ms**, with all three process pairs improving and identical
+replay/allocation checks. It measured a different math binary, so it is not the
+final result and is not averaged with the `final-*` confirmation. Different
+absolute timings across captures do not establish a cleanup-specific gain.
+
+**Incremental cache acceptance.** A separate pre-cleanup six-process comparison uses
+division-only FixedMathSharp in both arms and changes only Trailblazer's mapping
+memo. Flow/500 blocks improve **297.12 to 290.22 ms (-2.32%)**; corresponding
+process pairs improve **2.89%, 2.43%, and 1.42%**. P95 improves **5.20 to 5.13 ms**.
+A*/100 and Flow/100 blocks improve **3.52% and 6.61%**, with P95 improvements of
+**3.54% and 6.83%**. This independently passes the same keep gate and justifies
+the bounded storage addition; its percentages are not added to the combined
+result. Every stage again preserves the six exact arrays and metadata, with
+zero nested frame allocation/GC. The `selection-*` artifacts retain this
+comparison separately, including all slow observations.
+
+**Behavioral proof and reachable-code cleanup.** Removing the memo's exact
+voxel key, published-version invalidation, and store-identity rejection one at
+a time makes the corresponding behavior test fail. The failures detect wrong
+admission results or a changed lookup/dependency prefix, not just whether the
+cache was populated. All three mutations were restored and the 22 focused reuse
+cases pass again. The tests also cover profile/policy changes, dense/sparse maps,
+physical-grid replacement, reset/republish, budgets and scratch capacities,
+allocation-free warm use, and exact construction storage. Tight budgets can
+select the generic fallback; those rows prove observable contract parity, not
+that every attempted query hits the memo.
+
+The first full FixedMathSharp coverage run passed all tests but exposed one
+uncovered line and three branch outcomes in the old generic divider's final
+rounding-carry guard. Independent arithmetic review proved that the sole input
+pair is full-width dividend `ulong.MaxValue` with divisor `2^33`, now owned by
+the binary-power path. The redundant guard was removed at this call only;
+the shared rounding helper and its other callers keep overflow handling.
+Six literal signed-result cases cover that divisor and its nearest non-power
+neighbors. The original red coverage report remains evidence; no exclusion,
+invalid-domain test, or weakened gate is used to make it green.
+
+**Final-source validation.** Windows local-stack Release and ReleaseLean builds
+pass for `net8.0` and `netstandard2.1` with zero warnings and errors. Trailblazer
+passes **3,115 / 3,037** core tests (Release / Lean), plus **65** Gravitas-adapter
+tests in each configuration. Separate coverage runs pass the same counts.
+Both configurations retain exact **32,213 lines / 13,220 branches / 3,169 fully
+covered methods** for Trailblazer and **186 / 28 / 11** for its adapter.
+
+FixedMathSharp passes **2,754 / 2,733** core tests and **8** Chronicler tests per
+configuration. Its existing coverage collection, including the FluentAssertions
+assembly, is exact **47,872 / 8,852 / 3,453** in Release and
+**47,965 / 8,852 / 3,449** in Lean (lines / branches / fully covered methods).
+Four independent division-oracle Facts also execute against each actual
+`netstandard2.1` math DLL on the local .NET host, with loaded assembly, target,
+dependency family, and SHA-256 checks. This is not Mono/Unity or universal
+cross-platform certification. Two portable-host setup/audit failures remain
+recorded: an incompatible net8 MemoryPack dependency in the first copied host,
+and an audit that incorrectly expected the unused Lean attribute shim already
+loaded. Correcting those ignored harnesses required no runtime-source change.
+
+Downstream verification also passes in both configurations. GridForge has
+**1,045 tests** per configuration and exact **9,104 / 3,953 / 1,132** coverage.
+Unmodified Gravitas passes **3,950 / 3,895 tests**, with exact
+**56,093 / 15,906 / 5,341** in Release and **56,091 / 15,906 / 5,340** in Lean.
+All counts are lines / branches / fully covered methods; no tests failed or
+were skipped. Both downstream solution builds are warning/error-free.
+Their raw TRX, collector outputs, summaries, and build logs are under
+`verification/<repository>-<configuration>` in the same artifact root.
+Duplicate collector/TRX coverage attachments have identical hashes within
+each run; they are not retries or independent coverage observations.
+
+The final measured Release binaries match the full Trailblazer validation:
+Trailblazer SHA-256 `34E8268AE917D317176E9F669FAAE1B0EC2A0557A2D7C48993F023400BFBB25A`,
+FixedMathSharp `AE79553F4E98D579FFCCA47F1CD4F41E0418D414151B4370C09A022D7E20192B`.
+Independent correctness and simplicity review found no outstanding source
+findings; a separate measurement audit reproduced the final result from raw
+records and manifests. No test retry or new coverage exclusion was needed for
+the final full matrix. Linux, CI, released packages, and DocFX were not rerun.
+
+The nine retained Trailblazer files were transferred back to clean `develop`
+`0bc60b2` with matching SHA-256 hashes. A fresh Release solution build in that
+checkout passes with zero warnings/errors, followed by all **3,115 core + 65
+adapter tests**, with none failed or skipped. The rebuilt upstream math DLL
+still matches the final measured hash. Transfer logs and TRX are under
+`main-transfer`; nothing was staged or committed. FixedMathSharp has three
+changed files, GridForge two test/documentation files, and Gravitas and
+SwiftCollections remain source-clean.
+
+**Disposition.** Retain this reproducible improvement and its behavior tests.
+`TRB-Benchmark-005` remains active: the final Flow/500 median is **4.39 ms**, about
+**2.39 ms above the 2 ms target**. This pass did not establish another substantial
+safe reduction without changing the live-observation, callback, commit, or
+freshness contracts. That is not a proven lower bound or a claim that 2 ms is
+impossible. Acquisition and recovery performance are not measured by this
+steady-state comparison, and are not closed by it.
+
+Raw pilots, full `acceptance-*`, `selection-*`, and `final-*` logs, frozen runtimes,
+SHA-256 manifests, copied
+diagnostic binaries, and analyses remain in `artifacts/trb005-structural` in the
+isolated worktree. Failed setup attempts are retained separately and are not
+substituted into accepted timing evidence. No benchmark project or CI mechanism
+was added.
 
 ## Closed Signals
 

@@ -23,6 +23,7 @@ internal sealed partial class NavigationRayWork
     private ulong _worldChangeSequence;
     private bool _meterBlocked;
     private bool _begun;
+    private NavigationRayMappingMemo? _activeMappingMemo;
 
     internal NavigationRayWork(NavigationRayWorkspace workspace)
     {
@@ -72,6 +73,7 @@ internal sealed partial class NavigationRayWork
         _worldChangeSequence = 0;
         _meterBlocked = false;
         _begun = false;
+        _activeMappingMemo = null;
     }
 
     internal NavigationRayStatus Advance(NavigationWorkMeter meter)
@@ -262,36 +264,61 @@ internal sealed partial class NavigationRayWork
         if (!interval.IsPhysicallyPresent)
             return NavigationRayStatus.Pending;
 
-        var address = new NavigationCellAddress(mapId, interval.Cell.VoxelIndex);
-        if (!graph.TryGetNodeRef(address, out NavigationNodeRef node))
-            return NavigationRayStatus.Pending;
+        NavigationRayMappingSnapshot snapshot = default;
+        bool cached = _activeMappingMemo != null
+            && _activeMappingMemo.TryGet(interval.Cell.VoxelIndex, out snapshot);
+        NavigationNodeRef node = snapshot.Node;
+        NavigationCellAddress address = default;
+        if (!cached)
+        {
+            address = new NavigationCellAddress(mapId, interval.Cell.VoxelIndex);
+            if (!graph.TryGetNodeRef(address, out node))
+                return NavigationRayStatus.Pending;
+        }
         if (!_workspace.Dependencies.TryRecordPage(
                 mapId,
                 node.CellSlot / NavigationSemanticPage.SlotCount))
         {
             return NavigationRayStatus.CapacityExceeded;
         }
-        if (!graph.TryGetSurfaceComponent(
+        NavigationSurfaceComponentKey component = snapshot.Component;
+        if (!cached && !graph.TryGetSurfaceComponent(
                 address,
                 Medium,
-                out NavigationSurfaceComponentKey component,
+                out component,
                 out _))
         {
             return NavigationRayStatus.Pending;
         }
         if (!_workspace.Dependencies.TryRecordComponent(component))
             return NavigationRayStatus.CapacityExceeded;
-        // The current trace interval already proves representable cell geometry.
-        // Mapping only needs the published physical and semantic admission state.
-        if (graph.IsSurfaceComponentClosed(component))
+        // The trace proves representable geometry. Reuse structural lookup facts,
+        // but read the effective cell directly rather than retaining a second copy.
+        if (!cached && graph.IsSurfaceComponentClosed(component))
             return NavigationRayStatus.Pending;
         bool hasCell = instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell);
         System.Diagnostics.Debug.Assert(hasCell,
             "an open structural component contains only effective cells supporting its medium");
-        bool hasPhysicalState = instance.TryGetPhysicalState(
-            node.CellSlot, out bool isPresent, out byte obstacleCount);
-        System.Diagnostics.Debug.Assert(hasPhysicalState && isPresent,
-            "a present trace interval with the exact captured grid identity and sequence has published physical state");
+        byte obstacleCount = snapshot.ObstacleCount;
+        if (!cached)
+        {
+            bool hasPhysicalState = instance.TryGetPhysicalState(
+                node.CellSlot, out bool isPresent, out obstacleCount);
+            System.Diagnostics.Debug.Assert(hasPhysicalState && isPresent,
+                "a present trace interval with the exact captured grid identity and sequence has published physical state");
+            if (_activeMappingMemo != null)
+            {
+                _activeMappingMemo.GetSlot(interval.Cell.VoxelIndex) = new NavigationRayMappingSnapshot
+                {
+                    Index = interval.Cell.VoxelIndex,
+                    Node = node,
+                    Component = component,
+                    ObstacleCount = obstacleCount,
+                    IsValid = true
+                };
+            }
+        }
+        // Positive immutable facts never cache this request's passability decision.
         if (obstacleCount != 0 || !_evaluator.IsCellPassable(cell, out _))
             return NavigationRayStatus.Pending;
 

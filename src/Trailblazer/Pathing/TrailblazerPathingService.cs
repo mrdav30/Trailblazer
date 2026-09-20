@@ -205,6 +205,8 @@ public sealed class TrailblazerPathingService
         _context.Guides.ResetScheduled();
         _navigationAStarAdmissionGate.CancelActive();
         _navigationFlowAdmissionGate.CancelActive();
+        lock (_immediateRayWorkspace.SyncRoot)
+            _immediateRayWorkspace.MappingMemo.Clear();
         _navigationGraph.Reset();
     }
 
@@ -213,6 +215,8 @@ public sealed class TrailblazerPathingService
         _context.World.OnChangeCommitted -= HandleCommittedChange;
         _navigationAStarAdmissionGate.Dispose();
         _navigationFlowAdmissionGate.Dispose();
+        lock (_immediateRayWorkspace.SyncRoot)
+            _immediateRayWorkspace.MappingMemo.Dispose();
         _navigationGraph.Dispose();
         _disposed = true;
     }

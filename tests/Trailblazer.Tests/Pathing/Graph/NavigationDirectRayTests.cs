@@ -19,7 +19,7 @@ using Xunit;
 namespace Trailblazer.Tests.Pathing.Graph;
 
 [Collection("PathingCollection")]
-public sealed class NavigationDirectRayTests
+public sealed partial class NavigationDirectRayTests
 {
     [Theory]
     [InlineData(false, 1, 3, false)]
@@ -729,16 +729,16 @@ public sealed class NavigationDirectRayTests
             new NavigationAreaPolicyKey("direct", 1),
             new[] { new NavigationAreaRule(true, Fixed64.Zero) });
 
-        internal Scene(bool sparse = false, int wallKind = 0, int wallX = 3, int endZ = 10)
+        internal Scene(bool sparse = false, int wallKind = 0, int wallX = 3, int endZ = 10, int maxX = 11)
         {
             var world = new GridWorld();
             Context = TrailblazerWorldContext.Attach(world, takeOwnership: true);
-            var configuration = new GridConfiguration(Vector3d.Zero, new Vector3d(11, 0, 11),
+            var configuration = new GridConfiguration(Vector3d.Zero, new Vector3d(maxX, 0, 11),
                 topologyKind: GridTopologyKind.RectangularPrism,
                 topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
                 storageKind: sparse ? GridStorageKind.Sparse : GridStorageKind.Dense);
             var indexes = new List<VoxelIndex>();
-            for (int x = 0; x < 12; x++)
+            for (int x = 0; x <= maxX; x++)
             for (int z = 0; z < 12; z++)
                 if (wallKind != 3 || x != wallX || z == 11)
                     indexes.Add(new VoxelIndex(x, 0, z));
@@ -746,7 +746,7 @@ public sealed class NavigationDirectRayTests
             Grid = world.ActiveGrids[gridIndex];
             configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
             var builder = new NavigationMapBuilder("direct", binding);
-            for (int x = 0; x < 12; x++)
+            for (int x = 0; x <= maxX; x++)
             for (int z = 0; z < 12; z++)
             {
                 var index = new VoxelIndex(x, 0, z);

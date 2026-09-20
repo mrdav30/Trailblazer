@@ -30,6 +30,7 @@ internal sealed class NavigationImmediateRayWorkspace
         RayWork = new NavigationRayWork(workspace);
         WorkMeter = new NavigationWorkMeter(default);
         SourceOrdinals = new int[traceIntervalCapacity];
+        MappingMemo = new NavigationRayMappingMemo();
         ObserveSlab = slab => RayWork.ObserveDirectSlab(this, slab);
     }
 
@@ -40,6 +41,8 @@ internal sealed class NavigationImmediateRayWorkspace
     internal NavigationWorkMeter WorkMeter { get; }
 
     internal int[] SourceOrdinals { get; }
+
+    internal NavigationRayMappingMemo MappingMemo { get; }
 
     internal Func<GridTraceSlab, bool> ObserveSlab { get; }
 

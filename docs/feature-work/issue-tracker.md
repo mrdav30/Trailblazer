@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-146`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-150`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -24,7 +24,6 @@
   here until they have been investigated and confirmed as runtime defects.
 
 ## Active Issues
-
 
 ### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 
@@ -219,6 +218,68 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-146 - Guided action approaches can oscillate across exact entry
+
+- **Resolved:** 2026-09-20 after both package-family gates and independent review.
+- **Discovered:** 2026-09-20, Gravitas integration Phase 2, before changing approach behavior.
+- **Evidence:** Both A* and Flow failed to expose the ladder instruction within
+  512 real adapter frames. Ordinary arrival tolerance does not authorize an
+  action. The earlier core ladder fixture masked crossing by replacing the
+  accepted position with the exact entry.
+- **Fix:** Explicit action-approach metadata reaches the
+  motor, which bounds only controlled displacement at a crossing. Gravity,
+  jumping, platform carry, and collision acceptance remain independent. The
+  artificial core-fixture docking was removed. Both core and real-adapter
+  ladder sequences pass, including blocked entry, retry, and exact action ownership.
+- **Evidence record:** [Joint Phase 2 record](gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening).
+
+### TRB-Issue-147 - Navigator restore discards pending and active turning
+
+- **Resolved:** 2026-09-20 after both package-family gates and independent review.
+- **Discovered:** 2026-09-20, changed-posture rotating-platform replay.
+- **Evidence:** JSON and MemoryPack restore preserved the current quaternion
+  but changed `TargetReached` from false to true. The resumed platform trace
+  diverged because `NavTurning` recorded only configuration and Navigator load
+  reinitialized its continuation.
+- **Fix:** Navigator schema 8 records queued/active targets,
+  interpolation, and the collision latch. Loading refreshes the profile radius
+  without resetting continuation; callbacks/context stay shell-owned. Exact
+  resumed platform and focused turn traces pass in both transports.
+
+### TRB-Issue-148 - Adapter population leaves a discarded prepared frame live
+
+- **Resolved:** 2026-09-20 after both package-family gates and independent review.
+- **Discovered:** 2026-09-20, body-first Navigator restore between prepare and commit.
+- **Evidence:** Base Navigator population aborted motor traversal and discarded
+  queued motion, but the adapter retained its prepared-frame flag and request.
+  The obsolete commit remained admissible and another prepare could be rejected.
+- **Fix:** Successful population clears adapter-local contact
+  and preparation state after base validation/commit. Failed population leaves
+  the live prepared frame intact. Both outcomes have JSON/MemoryPack behavioral
+  regressions. This is not whole-world
+  rollback: hosts still restore authoritative physics/world state in order.
+
+### TRB-Issue-149 - Slope direction is reversed and projected velocity is flipped
+
+- **Resolved:** 2026-09-20 after both package-family gates and independent review.
+- **Discovered:** 2026-09-20, real collision-accepted uphill/downhill walks.
+- **Evidence:** On the plane `y = 3x/4`, the outward normal is `(-3/5,4/5,0)`.
+  Positive X was classified downhill. A later Y-sign adjustment reversed the
+  already-correct surface projection, so uphill requests entered the support
+  and stalled; downhill requests moved away from it. Two historical test
+  expectations encoded the same reversed directions.
+- **Fix:** Classify horizontal travel from its exact normal
+  projection and retain the surface-projected velocity without a second sign
+  rewrite. Idle remains gravity-biased; contour travel retains the surface
+  inclination for slope limits. Analytic sign tests and repeated real uphill/
+  downhill traces pass, including support-plane approach limiting.
+
+All four fixes pass the final local-stack matrix: 3,164/3,081 core and 84/80
+adapter tests in Release/ReleaseLean, with exact 100% line, branch, and fully
+covered method coverage in both assemblies. The shared
+[Phase 2 evidence record](gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening)
+retains commands, traces, cross-library verification, and review findings.
 
 ### TRB-Issue-144 - Identical ordinary A* cache hits dropped newly admitted endpoint dependencies
 

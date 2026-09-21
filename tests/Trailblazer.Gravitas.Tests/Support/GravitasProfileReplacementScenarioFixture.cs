@@ -13,8 +13,7 @@ internal sealed class GravitasProfileReplacementScenarioFixture
         bool addSupport = false)
         : base(
             addWall: false,
-            addSupport: addSupport,
-            supportCenterY: addSupport ? -Fixed64.Quarter : null)
+            addSupport: addSupport)
     {
     }
 

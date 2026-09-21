@@ -63,6 +63,10 @@ Its CPU-cost improvements and full-lifecycle measurements are retained in the
 - Retain each shared scenario result once, with its exact adapter/library
   revisions and inputs. Link the evidence from both plans, but close their
   checkboxes only when each plan's own acceptance criteria are met.
+- The subsequent [joint movement hardening record](../gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening)
+  retains the real collision-resolved ladder/dismount, low/high-speed contact,
+  slope, push, platform replay, and shared raw-motion traces. It extends these
+  archived scenarios without reopening the accepted performance campaign.
 
 ## Global constraints
 

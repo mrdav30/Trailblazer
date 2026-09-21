@@ -324,6 +324,25 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
     protected void AddFixtureCollider(LSCuboidCollider collider) =>
         _fixtureColliders.Add(collider);
 
+    internal LSCuboidCollider AddBox(
+        Vector3d center,
+        Vector3d size,
+        FixedQuaternion? rotation = null,
+        int layer = 1)
+    {
+        var collider = new LSCuboidCollider
+        {
+            Size = size,
+            Layer = new PhysicsLayer(layer),
+            Material = PhysicsMaterial.Frictionless
+        };
+        collider.InitializeWithNoBody(new GravitasFixtureMatterAgent(
+            Gravitas,
+            new FixedTransform(center, rotation ?? FixedQuaternion.Identity, Vector3d.One)));
+        AddFixtureCollider(collider);
+        return collider;
+    }
+
     protected virtual LSCollider CreateActorCollider(
         NavigationAgentProfile profile) => new LSSphereCollider
     {

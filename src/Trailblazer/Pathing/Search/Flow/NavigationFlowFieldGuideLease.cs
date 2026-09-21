@@ -441,7 +441,8 @@ internal sealed class NavigationFlowFieldGuideLease
                     generation,
                     candidateSampleOrdinal)
                 : default,
-            hasTransition);
+            hasTransition,
+            isTransitionApproach: !hasTransition);
         return NavigationGuideStatus.Success;
     }
 }

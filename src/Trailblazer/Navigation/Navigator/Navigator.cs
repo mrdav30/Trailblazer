@@ -732,6 +732,8 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         if (Motor!.TryTraversal(
                 _frameRequest,
+                IsGuided && !_pendingTransition.HasValue
+                    ? Steering!.TransitionApproachTarget : null,
                 out Vector3d locomotionDisplacement,
                 out Vector3d platformDisplacement,
                 out FixedQuaternion platformRotationDelta))

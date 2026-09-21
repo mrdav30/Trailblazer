@@ -116,19 +116,21 @@ public class TransitState
     /// <returns>
     /// The signed slope angle in degrees.
     /// A negative value indicates movement downhill, and a positive value indicates movement uphill.
-    /// Returns zero if the surface is flat.
+    /// Returns zero if the surface is flat. Contour travel retains the positive
+    /// surface inclination so support and slope-speed limits still apply.
     /// </returns>
     public Fixed64 GetSignedSlopeAngle(Vector3d moveDirection)
     {
         if (SlopeAngle == Fixed64.Zero)
             return Fixed64.Zero;
 
-        // Treat downhill as gravity-biased when idle
+        // Treat downhill as gravity-biased when idle.
         if (moveDirection == Vector3d.Zero)
-            moveDirection = Vector3d.Backward;
+            return -SlopeAngle;
 
-        bool isDownhill = Vector3d.Dot(moveDirection.Normalized, SurfaceNormal) < Fixed64.Zero;
-        return isDownhill ? -SlopeAngle : SlopeAngle;
+        moveDirection.Y = Fixed64.Zero;
+        int projection = Vector3d.CompareProjection(moveDirection, Vector3d.Zero, SurfaceNormal);
+        return projection > 0 ? -SlopeAngle : SlopeAngle;
     }
 
     /// <summary>

@@ -358,10 +358,10 @@ public class MoveLocomotionTests : IDisposable
         var velocity = displacement * TestWorld.Context.InvDeltaTime;
         agent.Motor.CurrentState.SurfaceNormal.Should().Be(surfaceNormal);
         agent.Motor.CurrentState.SlopeAngle.Should().Be(Fixed64.FromRaw(158355005278L));
-        agent.Motor.FrameSlopeAngle.Should().Be(Fixed64.FromRaw(-158355005278L));
+        agent.Motor.FrameSlopeAngle.Should().Be(Fixed64.FromRaw(158355005278L));
         velocity.Should().Be(new Vector3d(
             Fixed64.Zero,
-            Fixed64.FromRaw(-257698048L),
+            Fixed64.FromRaw(257698048L),
             Fixed64.FromRaw(343597376L)));
         if (coreOnly)
             agent.Motor.Handler.Slide.Should().BeNull();
@@ -382,7 +382,8 @@ public class MoveLocomotionTests : IDisposable
             surfaceNormal: surfaceNormal);
         agent.Motor.Handler.Move.ModifySpeedOnSlope = false;
         agent.Motor.Handler.Forces.GravityForce = Fixed64.Zero;
-        agent.FrameRequest.Direction = Vector3d.Backward;
+        // This normal describes a plane that rises toward +Z.
+        agent.FrameRequest.Direction = Vector3d.Forward;
         agent.FrameRequest.Rate = TrekRate.Slow;
 
         agent.Motor.TryTraversal(
@@ -398,7 +399,7 @@ public class MoveLocomotionTests : IDisposable
             velocity,
             agent.Motor.FrameSlopeAngle,
             agent.Motor.Handler.Slide!.IsSliding);
-        velocity.Z.Should().BeLessThan(Fixed64.Zero);
+        velocity.Z.Should().BeGreaterThan(Fixed64.Zero);
         agent.Motor.AbortTraversalFrame();
     }
 

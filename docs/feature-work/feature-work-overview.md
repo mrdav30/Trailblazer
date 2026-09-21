@@ -28,11 +28,15 @@ instead of burying it in notes.
     Unity observation host. Gravitas's working tree now declares and passes its
     full matrix against the aligned 7.1.0/9.1.0 stack without a new physics API.
     Phase 1 supplies the independently owned fixed-profile adapter without a
-    core-to-core dependency. The profile/collider replacement slice of
-    integration Phase 2 is now complete, including stand/crouch/compact cycles,
-    blocked growth, platform-attached mutation, restore/replay, and a post-commit
-    notification boundary that prevents cross-library split state. Integration
-    Phase 2 remains in progress for its broader movement scenarios.
+    core-to-core dependency. Phase 2 is complete: real-body stairs, ladders,
+    portals/groups, airborne movement, wall/corner/slope controls, dynamic pushes,
+    posture changes, rotating-platform replay, and restore/teardown are verified.
+    Owning fixes address exact action entry, slope projection, turn/prepared-frame
+    restore, invariant round-shape rotation, and CCD contact/uncertainty handling.
+    Both package families pass exact coverage and independent review; the
+    [shared evidence record](gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening)
+    retains tests, traces, and limits. Phase 3 packaging and executable-consumer
+    documentation are next; released-package and cross-platform gates remain.
     `TRB-Issue-102` provides the explicit serialized support-normal contract used
     by the adapter.
     `TRB-Issue-103` is resolved in the coordinated working trees through
@@ -189,23 +193,22 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is unchanged:
 
-1. Complete the remaining shared movement scenarios in Gravitas integration
-   Phase 2 on the reviewed replacement boundary.
-2. Close the 3D adapter's package, documentation, and joint-verification gates.
+1. Complete Gravitas integration Phase 3: the 3D adapter's package,
+   executable-consumer documentation, and joint-verification gates.
    Reference the same deterministic scenario evidence from both owning plans.
-3. Execute the dedicated 2D plan after its contract review, using the reviewed
+2. Execute the dedicated 2D plan after its contract review, using the reviewed
    motion and replacement boundaries. Add the planar adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.
-4. After every active feature-work plan is complete, release any changed
+3. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.
 
 Runtime implementation includes the Gravitas adapter and complete hardening
 Phases 1 and 2. Phase 3 itself added measurement rather than a new runtime API;
 its separately approved scheduling follow-up now adds explicit frame-spread
-guide acquisition. The broader Gravitas integration Phase 2 and first-class 2D
-work remain incomplete; drafting or reviewing a plan does not mark
-runtime checkboxes complete.
+guide acquisition. Gravitas integration Phase 2 now completes the joint movement
+evidence. Integration Phase 3 and first-class 2D work remain incomplete;
+drafting or reviewing a plan does not mark implementation checkboxes complete.
 The cross-stack rules apply throughout:
 
 1. Keep the benchmark backlog and issue tracker as intake buckets; promote new

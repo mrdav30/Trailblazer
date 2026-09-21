@@ -194,7 +194,6 @@ public sealed class NavigationLadderAcceptanceTests
             navigator.Simulate();
             if (navigator.PendingTransition.HasValue)
                 return frame;
-            ResolveAcceptedCrossingAt(navigator, scenario.SourceRoot);
             navigator.CommitFrameMotion();
         }
 
@@ -224,20 +223,6 @@ public sealed class NavigationLadderAcceptanceTests
             maxFrames,
             navigator.Position);
         return maxFrames;
-    }
-
-    private static void ResolveAcceptedCrossingAt(
-        TestNavigator navigator,
-        Vector3d exactPoint)
-    {
-        Fixed64 currentOffset = exactPoint.X - navigator.Position.X;
-        Fixed64 requestedOffset = exactPoint.X - navigator.RequestedFramePosition.X;
-        bool crossedPoint = currentOffset == Fixed64.Zero
-            || requestedOffset == Fixed64.Zero
-            || currentOffset < Fixed64.Zero && requestedOffset > Fixed64.Zero
-            || currentOffset > Fixed64.Zero && requestedOffset < Fixed64.Zero;
-        if (crossedPoint)
-            navigator.ResolveAcceptedFramePosition(exactPoint);
     }
 
     private static Vector3d ExpectedClimbPosition(

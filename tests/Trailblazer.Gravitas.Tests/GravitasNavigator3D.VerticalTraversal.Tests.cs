@@ -13,6 +13,10 @@ namespace Trailblazer.Gravitas.Tests;
 
 public sealed class GravitasNavigator3DVerticalTraversalTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public GravitasNavigator3DVerticalTraversalTests(ITestOutputHelper output) => _output = output;
+
     [Theory]
     [InlineData(PathAlgorithm.AStar)]
     [InlineData(PathAlgorithm.FlowField)]
@@ -41,11 +45,15 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
         Fixed64 previousAcceptedSurface = fixture.StartFoot.Y;
         int acceptedStepCount = 0;
         var observationTail = new string[8];
+        _output.WriteLine("Stairs motion trace (Fixed64 raw X,Y,Z): frame|navigator-request|host-request|accepted-position|accepted-velocity");
 
         for (int frame = 1; frame <= 512; frame++)
         {
             fixture.Prepare(actor);
             fixture.Resolve(actor);
+            GravitasMotionTrace.WriteFrame(_output, frame,
+                actor.NavigatorRequestedPosition, actor.HostRequestedPosition,
+                actor.Navigator.Position, actor.Navigator.Velocity);
             if (!firstBlockedFrame.HasValue
                 && actor.HostRequestedPosition != actor.Body.Position3d)
             {
@@ -95,6 +103,8 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
         actor.Navigator.LastCommittedCell!.Value.Address.Should().Be(
             expectedAddress);
         actor.Navigator.IsGuided.Should().BeFalse();
+        invalidPathCount.Should().Be(0);
+        arriveCount.Should().Be(1);
         acceptedStepCount.Should().Be(3,
             "Gravitas must accept each authored rise before the actor reaches the landing");
     }
@@ -108,6 +118,10 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
         using var fixture = GravitasNavigatorScenarioFixture.CreateStackedFloors();
         using GravitasNavigatorActor actor = fixture.CreateActor();
         PathQuery query = fixture.CreateQuery(algorithm);
+        int invalidPathCount = 0;
+        int arriveCount = 0;
+        actor.Navigator.Steering!.Events.OnInvalidPath += () => invalidPathCount++;
+        actor.Navigator.Steering.Events.OnArrive += () => arriveCount++;
         actor.Navigator.ApplyGuidedTrekRequest(query, TrekRate.Fast);
 
         var committedAddresses = new List<NavigationCellAddress>();
@@ -123,9 +137,13 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
             "gravitas-upper",
             new VoxelIndex(2, 0, 0));
         int? arrivalFrame = null;
+        _output.WriteLine("Stacked-floor motion trace (Fixed64 raw X,Y,Z): frame|navigator-request|host-request|accepted-position|accepted-velocity");
         for (int frame = 1; frame <= 256; frame++)
         {
             fixture.Step(actor);
+            GravitasMotionTrace.WriteFrame(_output, frame,
+                actor.NavigatorRequestedPosition, actor.HostRequestedPosition,
+                actor.Navigator.Position, actor.Navigator.Velocity);
             actor.Navigator.Position.Should().Be(actor.Body.Position3d);
             if ((actor.Navigator.FootPosition - fixture.EndFoot).Magnitude
                     <= actor.Navigator.NavigationProfile.ArrivalRadius
@@ -148,6 +166,8 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
             .BeLessThanOrEqualTo(actor.Navigator.NavigationProfile.ArrivalRadius);
         actor.Navigator.LastCommittedCell!.Value.Address.Should().Be(expectedAddress);
         actor.Navigator.IsGuided.Should().BeFalse();
+        invalidPathCount.Should().Be(0);
+        arriveCount.Should().Be(1);
         committedAddresses.Should().OnlyContain(
             address => address.MapId == "gravitas-upper",
             "the explicit query endpoints must keep occupancy on the upper map even when vertically aligned maps overlap");
@@ -300,7 +320,7 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
     public void OffAxisFlowCorridor_ShouldProduceBoundedAcceptedMotionForGroup() =>
         AssertOffAxisFlowCorridor(radiusEighths: 1, useGroup: true);
 
-    private static void AssertOffAxisFlowCorridor(
+    private void AssertOffAxisFlowCorridor(
         int radiusEighths,
         bool useGroup)
     {
@@ -391,6 +411,8 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
         int? completionFrame = null;
         bool observedGroupSteeringInfluence = false;
         var observationTail = new string[8];
+        _output.WriteLine("Off-axis motion trace (Fixed64 raw X,Y,Z): frame|first.navigator-request|first.host-request|first.accepted-position|first.accepted-velocity"
+            + (second == null ? string.Empty : "|second.navigator-request|second.host-request|second.accepted-position|second.accepted-velocity"));
         const int frameBudget = 384;
         for (int frame = 1; frame <= frameBudget; frame++)
         {
@@ -415,6 +437,20 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
             }
 
             fixture.Step(actors);
+            if (second == null)
+            {
+                GravitasMotionTrace.WriteFrame(_output, frame,
+                    first.NavigatorRequestedPosition, first.HostRequestedPosition,
+                    first.Navigator.Position, first.Navigator.Velocity);
+            }
+            else
+            {
+                GravitasMotionTrace.WriteFrame(_output, frame,
+                    first.NavigatorRequestedPosition, first.HostRequestedPosition,
+                    first.Navigator.Position, first.Navigator.Velocity,
+                    second.NavigatorRequestedPosition, second.HostRequestedPosition,
+                    second.Navigator.Position, second.Navigator.Velocity);
+            }
             if (hasLocalSteering
                 && sampledPathHeading != Vector3d.Zero
                 && first.Navigator.Steering!.TargetDirection != Vector3d.Zero)

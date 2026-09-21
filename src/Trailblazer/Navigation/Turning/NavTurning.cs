@@ -289,5 +289,17 @@ public partial class NavTurning : IRecordable
     {
         RecordValues.Look(chronicler, ref CanTurn, "CanTurn", true);
         RecordValues.Look(chronicler, ref TurnRate, "TurnRate", DefaultTurnRate);
+        bool targetReached = TargetReached;
+        FixedQuaternion targetRotation = TargetRotation;
+        RecordValues.Look(chronicler, ref targetReached, "TargetReached", true);
+        RecordValues.Look(chronicler, ref targetRotation, "TargetRotation", FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref _pendingTarget, "PendingTarget", null);
+        RecordValues.Look(chronicler, ref _pendingInterpolation, "PendingInterpolation", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref _isColliding, "IsColliding", false);
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            TargetReached = targetReached;
+            TargetRotation = targetRotation;
+        }
     }
 }

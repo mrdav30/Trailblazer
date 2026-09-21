@@ -33,15 +33,23 @@ public partial class NavMotor
         out Vector3d locomotionDisplacement,
         out Vector3d platformDisplacement,
         out FixedQuaternion platformRotationDelta)
+        => TryTraversal(request, null, out locomotionDisplacement, out platformDisplacement, out platformRotationDelta);
+
+    internal bool TryTraversal(
+        TrekRequest request,
+        Vector3d? approachTarget,
+        out Vector3d locomotionDisplacement,
+        out Vector3d platformDisplacement,
+        out FixedQuaternion platformRotationDelta)
     {
         ResetTraversalOutputs(out locomotionDisplacement, out platformDisplacement, out platformRotationDelta);
         if (!TryBeginTraversalFrame())
             return false;
 
         PrepareTraversalState(request);
-        ResolveTraversalForces(request);
+        Vector3d approachCorrection = ResolveTraversalForces(request, approachTarget);
 
-        locomotionDisplacement = ResolveLocomotionDisplacement();
+        locomotionDisplacement = ResolveLocomotionDisplacement() + approachCorrection;
         ResolvePlatformTraversal(request, ref platformDisplacement, ref platformRotationDelta);
         return true;
     }
@@ -104,9 +112,10 @@ public partial class NavMotor
 
     #region Traversal Force Resolution
 
-    private void ResolveTraversalForces(TrekRequest request)
+    private Vector3d ResolveTraversalForces(TrekRequest request, Vector3d? approachTarget)
     {
         ComputeMovementForces(request);
+        Vector3d approachCorrection = ResolveApproachCorrection(request, approachTarget);
 
         // Reset this before applying gravity.
         if (JumpModule != null && (!request.IsRequestingJump || !JumpModule.CanJump))
@@ -114,6 +123,43 @@ public partial class NavMotor
 
         ApplyEnvironmentalForces();
         ApplyJumpForce(request);
+        return approachCorrection;
+    }
+
+    private Vector3d ResolveApproachCorrection(TrekRequest request, Vector3d? approachTarget)
+    {
+        if (!approachTarget.HasValue || !Handler.IsInControl)
+            return Vector3d.Zero;
+
+        Vector3d remaining = approachTarget.Value - (request.FootPosition ?? request.Origin);
+        Vector3d movement = ResolveLocomotionDisplacement();
+        bool horizontalApproach = !IsFlying && !IsClimbing && WaterModule?.IsSwimming != true;
+        if (horizontalApproach)
+        {
+            remaining.Y = Fixed64.Zero;
+            movement.Y = Fixed64.Zero;
+        }
+
+        // Bound only controlled approach motion at an exact action entry. Keep
+        // the correction in displacement units: velocity round-tripping loses
+        // low bits. Gravity, jumping and platform carry are applied independently.
+        if (remaining == Vector3d.Zero
+            || Vector3d.CompareProjection(movement, remaining, remaining) < 0)
+        {
+            return Vector3d.Zero;
+        }
+
+        Vector3d correction = remaining - movement;
+        Vector3d normal = CurrentState.SurfaceNormal;
+        if (horizontalApproach && IsOnSolid && normal.Y > Fixed64.Zero)
+        {
+            // Lift the horizontal correction along the sampled support plane,
+            // not toward target Y. Divide first to preserve tiny slope steps.
+            Vector3d slope = new(normal.X / normal.Y, Fixed64.Zero, normal.Z / normal.Y);
+            correction.Y = -Vector3d.Dot(slope, correction);
+        }
+
+        return correction;
     }
 
     /// <summary>
@@ -510,11 +556,9 @@ public partial class NavMotor
         }
 
         Vector3d sideways = Vector3d.Cross(Vector3d.Up, desiredVelocity);
-        Vector3d adjustedVelocity = Vector3d.Cross(sideways, CurrentState.SurfaceNormal).Normalized * desiredVelocity.Magnitude;
-        if (Fixed64.Sign(adjustedVelocity.Y) != Fixed64.Sign(FrameSlopeAngle))
-            adjustedVelocity.Y *= -1;
-
-        return adjustedVelocity;
+        // The surface projection already owns the vertical sign, including
+        // carrier-transfer velocity that opposes the original input direction.
+        return Vector3d.Cross(sideways, CurrentState.SurfaceNormal).Normalized * desiredVelocity.Magnitude;
     }
 
     private bool TryApplyStationaryGroundFriction(Vector3d desiredDirection)

@@ -56,7 +56,7 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(7);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(8);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
     }
@@ -230,6 +230,41 @@ public class NavigatorSerializationTests : IDisposable
         populate.Should().Throw<InvalidOperationException>();
         target.Position.Should().Be(shellPosition);
         TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+#endif
+    public void Populate_ShouldPreserveBufferedShellTurnWhenSchema7OrLateMotorValidationFails(
+        bool useMemoryPack,
+        bool retiredSchema)
+    {
+        var source = CreateNavigator(new Vector3d(4, 0, 4));
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = retiredSchema
+            ? SerializationUtility.SetPayloadValue(payload, useMemoryPack, 7, "SchemaVersion")
+            : SerializationUtility.SetPayloadValue(payload, useMemoryPack, -Fixed64.One,
+                "Motor", "Handler", "Move", "MaxFastSpeed");
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        NavTurning turning = TestRequire.NotNull(target.Turning);
+        turning.RequestTurnDirection(target.Forward, Vector3d.Left, interpolation: Fixed64.One);
+        Vector3d shellPosition = target.Position;
+        FixedQuaternion shellRotation = target.Rotation;
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.Position.Should().Be(shellPosition);
+        target.Rotation.Should().Be(shellRotation);
+        target.Turning.Should().BeSameAs(turning);
+        turning.TrySimulateTurn(target.Position, target.LastPosition, target.Forward,
+            target.Rotation, out FixedQuaternion applied).Should().BeTrue();
+        applied.Should().Be(FixedQuaternion.FromDirection(Vector3d.Left));
+        turning.TargetReached.Should().BeTrue();
     }
 
     [Theory]
@@ -444,18 +479,14 @@ public class NavigatorSerializationTests : IDisposable
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
 #endif
-    public void RoundTrip_ShouldRebuildTurningRuntimeState_OnLoad(bool useMemoryPack)
+    public void RoundTrip_ShouldContinueActiveTurningAfterNavigatorLoad(bool useMemoryPack)
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
         NavTurning sourceTurning = TestRequire.NotNull(source.Turning);
-        sourceTurning.TurnRate = (Fixed64)0.35f;
+        sourceTurning.TurnRate = Fixed64.FromFraction(7, 20);
         sourceTurning.RequestTurnDirection(source.Forward, Vector3d.Right, interpolation: Fixed64.Half);
-        sourceTurning.TrySimulateTurn(
-            source.Position,
-            source.LastPosition,
-            source.Forward,
-            source.Rotation,
-            out _).Should().BeTrue();
+        source.Simulate();
+        source.CommitFrameMotion();
 
         sourceTurning.TargetReached.Should().BeFalse();
         sourceTurning.TargetRotation.Should().NotBe(FixedQuaternion.Identity);
@@ -464,10 +495,21 @@ public class NavigatorSerializationTests : IDisposable
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
         NavTurning targetTurning = TestRequire.NotNull(target.Turning);
 
-        targetTurning.CanTurn.Should().Be(sourceTurning.CanTurn);
-        targetTurning.TurnRate.Should().Be(sourceTurning.TurnRate);
-        targetTurning.TargetReached.Should().BeTrue();
-        targetTurning.TargetRotation.Should().Be(FixedQuaternion.Identity);
+        AssertTurningStateMatches(sourceTurning, targetTurning);
+        target.Rotation.Should().Be(source.Rotation);
+        FixedQuaternion restoredRotation = target.Rotation;
+        for (int frame = 0; frame < 6; frame++)
+        {
+            source.Simulate();
+            source.CommitFrameMotion();
+            target.Simulate();
+            target.CommitFrameMotion();
+
+            target.Rotation.Should().Be(source.Rotation, "turn continuation must replay exactly at frame {0}", frame);
+            target.Forward.Should().Be(source.Forward);
+            AssertTurningStateMatches(sourceTurning, targetTurning);
+        }
+        target.Rotation.Should().NotBe(restoredRotation, "restoring an active turn must not leave it idle");
     }
 
     [Theory]
@@ -1203,7 +1245,7 @@ public class NavigatorSerializationTests : IDisposable
     {
         actual.CanTurn.Should().Be(expected.CanTurn);
         actual.TurnRate.Should().Be(expected.TurnRate);
-        actual.TargetReached.Should().BeTrue();
-        actual.TargetRotation.Should().Be(FixedQuaternion.Identity);
+        actual.TargetReached.Should().Be(expected.TargetReached);
+        actual.TargetRotation.Should().Be(expected.TargetRotation);
     }
 }

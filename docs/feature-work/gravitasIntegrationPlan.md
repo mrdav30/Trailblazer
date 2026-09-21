@@ -8,11 +8,11 @@
 
 **Created:** 2026-09-03
 
-**Status:** Phase 0 and the Phase 1 fixed-profile adapter proof are complete in
-the coordinated working trees, including independent architecture and test-
-quality review. Phase 2 is in progress: its coordinated collider/profile
-replacement slice is complete, while the broader joint movement evidence
-remains. Release and released-package validation are intentionally deferred
+**Status:** Phases 0, 1, and 2 are complete in the coordinated working trees,
+including real-body movement, shape changes, restore/replay, exact coverage,
+and independent correctness/test-quality review. Phase 3 packaging, executable
+consumer documentation, and release-validation gates remain. Release and
+released-package validation are intentionally deferred
 until the active feature-work overview is complete. Trailblazer resolves
 [`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation),
 and solution-wide local-source validation is green after resolving
@@ -168,7 +168,7 @@ authoritative frame, not a locally recoverable movement result.
 | --- | --- | --- | --- |
 | 0 | Dependency, ownership, and package contract | Complete | Compatible target stack, exact frame order, file/API map, viewer choice, and prerequisites recorded |
 | 1 | Fixed-profile 3D adapter proof | Complete | Wall-clipped pose, contacts, velocity, occupancy, and guide state agree |
-| 2 | Shared hardening and shape-change evidence | In progress | Collider/profile mutation and its restore/replay boundary are verified; broader joint movement scenarios remain |
+| 2 | Shared hardening and shape-change evidence | Complete | Real-body movement, mutation, restore/replay, teardown, exact coverage, and independent review verified |
 | 3 | Package and documentation closeout | Not started | Runnable consumer, full matrix, coverage, and independent review |
 
 ## Phase 0 - Integration Preflight
@@ -447,16 +447,16 @@ input capture never become a second collision or navigation implementation.
 
 ## Phase 2 - Joint Movement And Shape Changes
 
-- [ ] **Run the hardening worlds through the actual adapter.** Reuse stairs,
+- [x] **Run the hardening worlds through the actual adapter.** Reuse stairs,
   ladders, stacked floors, portals/groups, and airborne scenarios from the
   [hardening acceptance table](done/navigationHardeningPlan.md#acceptance-scenarios).
   Preserve action completion and actual contact/medium reporting.
-- [ ] **Prove collision-controller behavior.** Cover a wall and corner, slopes,
+- [x] **Prove collision-controller behavior.** Cover a wall and corner, slopes,
   steps, thin blockers at high speed, dynamic-body pushes, and translating/
   rotating platforms. Establish the intended stop/slide/step behavior before
   judging results. Conditional CCD clipping alone is not proof of a finished
   character controller; inspect low-speed as well as high-speed motion.
-- [ ] **Capture deterministic movement-quality evidence.** Record accepted-
+- [x] **Capture deterministic movement-quality evidence.** Record accepted-
   motion traces and deterministic inputs for the shared scenarios. Track
   sticking, oscillation, sliding, platform drift, and unexpected replanning.
   Retain one evidence record referenced by both plans. Defer visual/game-engine
@@ -466,12 +466,12 @@ input capture never become a second collision or navigation implementation.
   and platform-attached mutation. Validate before changing either side; rejection
   must preserve both live shapes, foot anchor, destination, and bindings. Include
   guided flight loss/recovery without confusing capability with physical medium.
-- [ ] **Verify restore, replay, and teardown.** Restore body/collider and
+- [x] **Verify restore, replay, and teardown.** Restore body/collider and
   navigation shells before resuming movement; cover changed posture and platform
   state. Rebuild transient contacts/guidance rather than serializing live handles.
   Verify JSON and standard-package MemoryPack, deterministic repeated input,
   disposed leases, and no leaked context/body registrations.
-- [ ] **Resolve and review joint findings.** Put defects in their owning library,
+- [x] **Resolve and review joint findings.** Put defects in their owning library,
   add a focused regression, rerun both affected consumers, and link the evidence.
   Do not duplicate physics solvers or locomotion rules in the bridge.
 
@@ -780,3 +780,181 @@ dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -
   parallel local-stack solution builds race duplicate Trailblazer/adapter output
   nodes. Fresh no-incremental `Release` and `ReleaseLean` builds and their full
   test runs are warning-free; no serialized-build workaround remains necessary.
+
+### 2026-09-20 - Joint movement hardening
+
+This is the shared Phase 2 evidence record, also referenced by the archived
+[hardening plan](done/navigationHardeningPlan.md#related-plans-and-shared-evidence).
+The execution baseline was Trailblazer `39e4c69`, Gravitas `aa48f7c`, GridForge
+`2f37202`, FixedMathSharp `5170166`, and SwiftCollections `4b5715b`. Changes in
+this pass are confined to Trailblazer and Gravitas on their existing `develop`
+checkouts. All verification uses `UseLocalLsfStack=true`; no release, package
+consumer, engine adapter, or cross-platform certification is implied.
+
+#### Controller behavior and deterministic inputs
+
+The shared fixture advances both contexts at 32 Hz in the documented
+prepare/resolve/commit order. Actors are kinematic Continuous bodies with
+Gravitas gravity disabled; Trailblazer owns gravity and platform carry. Each
+scenario explicitly selects physical collision and support-query layers.
+Support-only fixtures do not establish physical grounding; the slope-walking,
+ladder, and platform-replay controls enable physical support collision.
+
+| Scenario and test file under `tests/Trailblazer.Gravitas.Tests` | Inputs and accepted outcome |
+| --- | --- |
+| `GravitasNavigator3D.VerticalTraversal.Tests.cs` | Reuses the authored three-rise stair world, stacked floors, and off-axis single/group portals. A*/Flow stairs reach map `gravitas-stair-3` within 512 frames with exactly three accepted rises, one arrival, and zero invalid-path events. Stacked routes remain on the explicit upper map within 256 frames. Existing radius/clearance controls remain active. |
+| `GravitasNavigator3D.LadderAcceptance.Tests.cs` | Real sphere radius `1/8`, height `1/4`: walk to foot `(1,-1/2,0)`, then four host-authored `1/2`-unit climbs and 32 `1/32`-unit sideways dismounts to foot `(2,3/2,0)`. A*/Flow expose the exact action, retain it until accepted dismount, complete once, and continue to `(3,3/2,0)`. A ceiling blocks accepted ascent. A separate entry blocker prevents any action; removing it and retrying from the current foot succeeds. |
+| `GravitasNavigator3D.CollisionAcceptance.Tests.cs` | Sphere radius `1/2` approaches a `1/32`-thick wall using `1/64` or `1` unit/frame; both stop at X=`1/16` and accept retreat. A corner rejects eight inward requests, then accepts an explicitly requested tangent and retreat. Repeated 32-frame walks up/down a 22.5-degree slope retain physical support and make positive progress. |
+| `GravitasNavigator3D.DynamicPush.Tests.cs` | One initial `1/64` or `1`-unit kinematic request, then seven inertia frames, pushes a frictionless dynamic sphere of radius `1/4`, mass 1, initial X=`13/16`. Two fresh worlds produce exactly equal position/velocity sequences for both bodies. |
+| `GravitasNavigator3D.AirborneTraversal.Tests.cs` | Reuses the full drop, landing, ascent-time extra jump, flight recovery/loss, flight-plus-jump, and controlled-descent sequences. Loss by request, capability, and module remains distinct from physical Gas. Paired flight/descent runs compare accepted fixed-point traces. |
+| `GravitasNavigator3D.PlatformReplay.Tests.cs` | Change to radius `1/4`, height `1/2` on carrier 71. Move the carrier by `1/32` unit and yaw `pi/128` per frame. Save after eight moving frames, restore body then Navigator in a matching host world, and compare the next 32 frames exactly: pose, velocity, turn continuation, sampled platform transform, and local attachment. After carry is consumed, eight idle frames have zero drift. Both JSON and MemoryPack run. |
+| `GravitasNavigator3D.ProfileReplacement.Tests.cs` and `GravitasNavigator3D.RestoreLifecycle.Tests.cs` | Existing posture/rejection controls remain. Both transports restore a compact body before Navigator, rebuild guidance, finish a low passage, and grow back to standing. Successful population discards obsolete prepared motion; failed population preserves its valid pending commit. Body registrations return to zero, and disposing a pending ladder owner leaves every public Flow lease slot reusable. |
+
+The intended collision contract is **stop, accept explicit tangent, and resolve
+host-authored step/action motion**. This is not an automatic wall-slide or
+general-purpose step-up solver. The existing stair host submits bounded legal
+rises; Gravitas accepts or clips them. The adapter never rewrites an accepted
+pose to make a test arrive, and action completion remains a host assertion
+withheld when physical motion is blocked. This keeps collision solving in
+Gravitas, locomotion in Trailblazer, and authored gameplay actions in the host.
+
+`GravitasMotionTrace.WriteFrame` writes invariant raw Q32.32 vectors into the
+existing TRX test output, with a per-scenario header naming columns. Inputs are
+the versioned fixture/test source above, not a second JSON scenario system.
+The traces include Navigator request, host request, accepted pose/velocity, and
+scenario-specific normal, dynamic-body, or attachment values. Exact repeated
+and restored traces are assertions, not visual judgments. The executable
+consumer/scenario format remains Phase 3 work.
+
+#### Owning fixes and review findings
+
+- `TRB-Issue-146`: controlled action-entry movement now bounds a crossing in
+  displacement units. Core and adapter ladders reach entry without fake docking.
+  Gravity, jump, carry, and accepted collision pose remain independent.
+- `TRB-Issue-147`: Navigator schema 8 retains active/queued turn continuation
+  and the collision latch. Loading refreshes radius without resetting turns.
+- `TRB-Issue-148`: successful Navigator population clears adapter-local
+  preparation/contact state only after base population succeeds.
+- `TRB-Issue-149`: correct uphill/downhill classification and remove the
+  second Y-sign rewrite of already projected ground velocity.
+- Gravitas `GRV-Issue-072`: exactly centered spheres/circles retain actual
+  rotation without treating that invariant geometry as angular sweep. A
+  non-closing contact on a supported convex primitive does not freeze tangent
+  movement when a nearby rotating obstacle admits rotational sampling.
+  Offset shapes, closing obstacles, and conservative compound handling remain.
+- Gravitas `GRV-Issue-073`: real earliest-contact controls exposed an existing
+  reversed normal in same-dimensional rotational stops. Convert the narrow-
+  phase A-to-B normal into target-to-source before removing closing velocity;
+  preserve the already-correct mixed signs. The controls separate CCD from
+  subsequent discrete contact impulses instead of masking the latter with a
+  loose final-velocity tolerance.
+- Independent review found and reproduced two issues in the new work before
+  closeout: slope approach limiting retained excess controlled height, and
+  centered sources could miss opposite-dimensional rotating Discrete targets.
+  The corrections follow the sampled support tangent and reuse existing mixed
+  candidate/ownership admission respectively. These implementation findings
+  stay here, not in the evergreen issue tracker.
+- A lifecycle follow-up checks that releasing guidance also releases its
+  frame-local action-approach target, including same-frame stuck recovery.
+- The complete Gravitas suite caught a dispatch change in two older mixed
+  refinement fixtures. Opposite-dimensional rotating targets now correctly
+  enter rotational arbitration. A diagnostic trace proved that these cases
+  stopped at a zero-progress unresolved frontier (one/two refinements), not
+  the 12-refinement ceiling. The old terminal branch used a later contact's
+  normal as though it were a current response, discarding momentum. The fix
+  distinguishes an earliest witnessed contact from an uncertainty boundary:
+  preserve dynamic momentum, publish the stationary remainder, and report a
+  conservative limit when time remains. Translation-only, geometrically
+  separated mixed controls retain coverage of the original bounded path.
+  The 3D rotational frontier differs from the former translational fixture by
+  one raw unit because it integrates from the original segment anchor rather
+  than accumulating rounded slices. This dispatch regression and its correction
+  remain part of this implementation record.
+- Re-review also caught a one-raw-unit time-accounting boundary in the new
+  3D kinematic limit report. With 513 raw units remaining and a half-frame
+  frontier, nearest-even multiplication consumes 256 and leaves 257; computing
+  the remainder with a second multiplication instead produces 256. Reporting
+  now subtracts the actual consumed time, matching the retained trajectory and
+  the other arbiters. Epsilon guards remain because supported high frame rates
+  can legitimately leave at most epsilon time.
+- Coverage review removed one genuinely redundant Gravitas normal check, not a
+  safety exclusion: the sealed primitive whitelist and real overlap/sweep
+  producers guarantee a nonzero outward surface normal after the existing hit
+  admission. Overlap repeats the same sampled normal; sphere sweeps retain an
+  exact positive-radius surface anchor, and unrepresentable anchors retain the
+  admitted normal. Independent review checked minimum-radius and coordinate-
+  boundary cases. The whitelist and initial unknown-normal rejection remain.
+
+#### Final verification and Phase 2 closeout
+
+The complete Windows local-stack matrix passes. Coverage below is exact in
+**both** package configurations, including fully covered methods; the existing
+generated-code filters are unchanged.
+
+| Assembly | Release tests | ReleaseLean tests | Covered/total lines | Covered/total branches | Fully covered/total methods |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Trailblazer | 3,164 | 3,081 | 32,252/32,252 | 13,250/13,250 | 3,171/3,171 |
+| Trailblazer.Gravitas | 84 | 80 | 192/192 | 30/30 | 13/13 |
+| Gravitas | 4,021 | 3,966 | 56,196/56,196 | 16,020/16,020 | 5,346/5,346 |
+
+- Both complete solutions build in Release and ReleaseLean, including the
+  `netstandard2.1` and `net8.0` library targets and benchmark projects, with zero
+  warnings/errors. Both DocFX sites build with `--warningsAsErrors` and zero
+  warnings/errors. No benchmark timing claim is made by this phase.
+- The final adapter executables match all eight local-source assembly hashes
+  in each configuration: Trailblazer, adapter, Gravitas, GridForge, FixedMathSharp,
+  its Chronicler bridge, SwiftCollections, and its FixedMathSharp bridge.
+- The Release TRX contains 19 trace-bearing cases and 2,722 raw-vector rows.
+  All 18 trace-bearing cases shared with Lean match exactly. The Release trace
+  fingerprint is unchanged after the final Gravitas fixes:
+  `0d840796cf2e544977a089407c1fea611e2c43e3690793561e4ea775c1c5bbd7`.
+  This is SHA-256 of UTF-8 `testName + LF + StdOut` records, sorted by ordinal
+  test name, joined with LF, with CRLF normalized to LF in `StdOut`.
+- Independent final review found no remaining material correctness, hollow-test,
+  or scope findings, including the unresolved/witnessed CCD distinction, normal
+  direction, restore staging, and real adapter scenarios. The five revised
+  angular expectations now require preserved momentum and stationary tails;
+  real-shape cases prove separation, while existing unsupported-pair controls
+  explicitly test uncertainty and are not physical acceptance evidence.
+- `TRB-Issue-146` through `TRB-Issue-149` and Gravitas `GRV-Issue-072`/`073`
+  are resolved with the owning fixes and this verification. Regressions found
+  in this implementation remain in the record above. No staging, commits,
+  pushes, or publication were performed.
+
+All artifacts are under ignored `artifacts/gravitas-integration/` in their
+owning repository. The final core runs are `coverage/core-release-final` and
+`coverage/core-releaselean-final`; final adapter runs are
+`coverage/adapter-release-verified` and `coverage/adapter-releaselean-verified`;
+Gravitas runs are `coverage/release-verified` and `coverage/releaselean-verified`.
+Each contains the TRX, individual fresh coverage XML, and `report/Summary.txt`
+plus `Summary.json`. Earlier failing/control runs remain as diagnostic evidence,
+not inputs merged into the final coverage totals.
+
+Commands used, from the owning repository root (repeat the build/test commands
+with `ReleaseLean`; retain `UseLocalLsfStack=true`):
+
+```powershell
+# Trailblazer
+dotnet build Trailblazer.slnx -c Release -p:UseLocalLsfStack=true
+dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c Release -p:UseLocalLsfStack=true --settings tests/Trailblazer.Tests/coverlet.runsettings --collect 'XPlat Code Coverage'
+dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -p:UseLocalLsfStack=true --no-build --collect 'XPlat Code Coverage'
+
+# Gravitas
+dotnet build Gravitas.slnx -c Release -p:UseLocalLsfStack=true
+dotnet test tests/Gravitas.Tests/Gravitas.Tests.csproj -c Release -p:UseLocalLsfStack=true --settings tests/Gravitas.Tests/coverlet.runsettings --collect 'XPlat Code Coverage'
+
+# Each repository, after its Release build
+dotnet tool restore
+dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
+```
+
+The recorded runs additionally set unique `--logger 'trx;LogFileName=...'` and
+`--results-directory` destinations listed above. ReportGenerator consumes each
+individual XML with `-reporttypes:TextSummary;JsonSummary`; core/Gravitas reports
+retain `-filefilters:-**/MemoryPack.Generator/**;-**/*.g.cs;-**/obj/**`.
+Restore on configuration switches rather than reusing another family's assets.
+
+This closes **Phase 2 only**. Phase 3's executable consumer, package integration,
+released-package and Windows/Linux validation remain separate. Engine-specific
+visual playtesting stays deferred, and TRB-Benchmark-005 remains closed at its
+accepted stopping point. The integration plan stays active for Phase 3.

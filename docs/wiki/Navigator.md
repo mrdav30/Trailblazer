@@ -183,6 +183,15 @@ when presenting fixed-step motion in an engine.
 
 ## Pending Transition
 
+Before an action becomes pending, guided movement approaches its exact source
+anchor. Navigator bounds the motor's controlled approach displacement when that
+frame would cross the anchor, avoiding fixed-step overshoot and oscillation.
+Ground movement follows the sampled support tangent; flight, swimming, and
+climbing approach in three dimensions. Gravity, jumping, and platform carry stay
+independent. This is a movement request, not a snap: the host must still resolve
+collisions, and a blocked body does not acquire the action just because the
+requested pose reached its source. Arrival tolerance does not skip this boundary.
+
 `PendingTransition` is the single surfaced action owned by Navigator. While it
 has a value:
 
@@ -215,6 +224,10 @@ Completion is the host assertion that the action happened. Trailblazer advances
 the guide and updates durable query start-medium intent from the exact completed
 instruction, but it does not rewrite the host's `TrekCondition`, teleport a
 body, run animation, or change engine physics.
+
+Only assert completion after the host has accepted the action's outcome. A
+blocked ladder or dismount remains pending; requested height alone is not
+evidence of a completed climb.
 
 ## Failure Semantics
 

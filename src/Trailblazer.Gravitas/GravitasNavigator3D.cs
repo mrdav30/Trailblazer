@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using Chronicler;
 using FixedMathSharp;
 using Gravitas;
 using Gravitas.Colliders;
@@ -229,12 +230,27 @@ public sealed class GravitasNavigator3D : Navigator
         _positionDelta = Vector3d.Zero;
         _locomotionDisplacement = Vector3d.Zero;
         _rotationDelta = FixedQuaternion.Identity;
+        ClearPreparedMotion();
+        base.Reset();
+    }
+
+    /// <inheritdoc/>
+    public override void RecordData(IChronicler chronicler)
+    {
+        base.RecordData(chronicler);
+        // A rejected base population must leave the live prepared frame intact.
+        // The body is restored by the host; do not sample or mutate it here.
+        if (chronicler.Mode == SerializationMode.Loading)
+            ClearPreparedMotion();
+    }
+
+    private void ClearPreparedMotion()
+    {
         _contact = default;
         _requestedPosition = Vector3d.Zero;
         _requestedRotation = FixedQuaternion.Identity;
         _hasPreparedFrame = false;
         _preparedFrame = -1;
-        base.Reset();
     }
 
     private void ValidateBody()

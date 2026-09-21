@@ -176,10 +176,19 @@ Use a stable, nonnegative host ordinal. See the evergreen
 for disabled countdown behavior, phase boundaries, lifecycle resets, and burst
 caveats.
 
-The outer Navigator record is schema version 7. It retains the explicit
+The outer Navigator record is schema version 8. It retains the explicit
 surface-normal, controlled-descent and periodic direct-LOS interval/phase fields,
-and adds the durable `NavSteering.AcquisitionMode`. Earlier outer schemas,
-including version 6, reject transactionally rather than supplying defaults.
+plus the durable `NavSteering.AcquisitionMode`. It now preserves active and
+buffered turning: target rotation/completion, pending target, interpolation
+factor, and collision auto-turn signal. Earlier outer schemas, including
+version 7, reject transactionally rather than supplying defaults. Re-record
+existing Navigator snapshots and replay fixtures for this schema.
+
+Population no longer resets turning to idle. Restore the authoritative rotation
+and resume with the same deterministic timestep. Context bindings, body-radius
+thresholds, and host `CanTurnOnCollision` callbacks still belong to the initialized
+shell, not the record; guide leases, pending navigation actions, and acquisition
+requests remain transient. See [serialization](wiki/Serialization.md).
 
 Immediate acquisition remains the default. Opt in per Navigator using
 `navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled)`.

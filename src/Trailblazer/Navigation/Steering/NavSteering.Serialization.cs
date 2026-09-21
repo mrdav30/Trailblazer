@@ -109,6 +109,7 @@ public partial class NavSteering
 
     private void ReleaseNavigationGuidance()
     {
+        TransitionApproachTarget = null;
         CancelAcquisition();
         _navigationGuideLease?.Dispose();
         _navigationGuideLease = null;

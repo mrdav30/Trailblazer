@@ -17,13 +17,15 @@ public readonly struct NavigationFlowSample
         Vector3d target,
         TraversalMedium medium,
         NavigationTransitionInstruction transition,
-        bool hasTransition)
+        bool hasTransition,
+        bool isTransitionApproach = false)
     {
         Heading = heading;
         Target = target;
         Medium = medium;
         Transition = transition;
         HasTransition = hasTransition;
+        IsTransitionApproach = isTransitionApproach;
     }
 
     /// <summary>Gets the deterministic ordinary movement heading, or zero for a pending action.</summary>
@@ -40,4 +42,6 @@ public readonly struct NavigationFlowSample
 
     /// <summary>Gets whether this sample requires explicit semantic-action completion.</summary>
     public bool HasTransition { get; }
+
+    internal bool IsTransitionApproach { get; }
 }

@@ -994,6 +994,96 @@ public class NavSteeringTests : IDisposable
         steer.IsStuck.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void GetHeading_StuckActionApproachRetry_ShouldReleaseEntryTargetBeforeReacquiringGuidance(
+        PathAlgorithm algorithm)
+    {
+        var configuration = new GridConfiguration(
+            new Vector3d(-4, -4, -4),
+            new Vector3d(8, 8, 8));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        var sourceIndex = new VoxelIndex(4, 4, 4);
+        var destinationIndex = new VoxelIndex(5, 4, 4);
+        Vector3d start = GuidedPathTestScene.Anchor(binding, sourceIndex);
+        Vector3d entry = start + Vector3d.Right * Fixed64.Quarter;
+        Vector3d end = GuidedPathTestScene.Anchor(binding, destinationIndex);
+        var policy = new NavigationAreaPolicy(
+            new NavigationAreaPolicyKey("steering-action-retry", 1),
+            new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+        NavigationMap map = new NavigationMapBuilder("steering-action-retry", binding)
+            .AddCell(sourceIndex, new NavigationCell(
+                TraversalMedia.Solid, TraversalCapability.None, default,
+                Fixed64.Zero, (Fixed64)4, (Fixed64)4))
+            .AddCell(destinationIndex, new NavigationCell(
+                TraversalMedia.Gas, TraversalCapability.None, default,
+                Fixed64.Zero, (Fixed64)4, (Fixed64)4))
+            .AddTransition(new TraversalTransitionDefinition(
+                "climb-out",
+                TraversalTransitionType.Climb,
+                sourceIndex,
+                TraversalMedium.Solid,
+                new NavigationCellAddress("steering-action-retry", destinationIndex),
+                TraversalMedium.Gas,
+                actionCost: Fixed64.One,
+                locomotionHints: TraversalTransitionLocomotionHints.RequestClimb,
+                sourcePointOverride: entry,
+                hasSourcePointOverride: true))
+            .Build();
+        GuidedPathTestScene.PublishMapAndPolicy(
+            TestWorld.Context, map, 1, OverlayReplacementPolicy.Clear, 1, policy, 2);
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.FromFraction(1, 8), Fixed64.One, Fixed64.Quarter),
+            Fixed64.One,
+            Fixed64.One,
+            Fixed64.Half,
+            TraversalMedia.Solid | TraversalMedia.Gas,
+            TraversalCapability.Climb);
+        var agent = new MockSteerAgent(start + Vector3d.Up * profile.Shape.RootToFootOffsetY)
+        {
+            NavigationProfile = profile
+        };
+        var steer = new TestableNavSteering();
+        steer.ApplyPathQuery(new PathQuery(
+            new NavigationEndpoint(start),
+            new NavigationEndpoint(end),
+            profile,
+            policy.Key,
+            new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Gas),
+            algorithm,
+            new NavigationWorkBudget(8_192, 128, 1_024, 8_192, 1_024, 1_024, 1_024, 128, 1_024, 1_024, 1_024),
+            allowTransitions: true));
+
+        for (int frame = 0; frame < TestWorld.Context.FrameRate / 4; frame++)
+        {
+            TestWorld.Context.Simulate();
+            steer.GetHeading(agent, out NavigationTransitionInstruction? pending).Should().Be(Vector3d.Right);
+            pending.Should().BeNull();
+            steer.TransitionApproachTarget.Should().Be(entry);
+            steer.HasNavigationGuidance.Should().BeTrue();
+        }
+
+        TestWorld.Context.Simulate();
+        steer.GetHeading(agent, out NavigationTransitionInstruction? retryTransition).Should().Be(Vector3d.Zero);
+        retryTransition.Should().BeNull();
+        steer.ShouldMove.Should().BeTrue();
+        steer.PathRetryRequested.Should().BeTrue();
+        steer.HasNavigationGuidance.Should().BeFalse();
+        steer.TransitionApproachTarget.Should().BeNull(
+            "the motor must not cap same-frame residual motion against a released action entry");
+
+        agent.Speed = agent.StuckThresholdSpeed;
+        agent.Acceleration = Vector3d.Right * (Fixed64)64;
+        TestWorld.Context.Simulate();
+        steer.GetHeading(agent, out NavigationTransitionInstruction? reacquiredTransition).Should().Be(Vector3d.Right);
+        reacquiredTransition.Should().BeNull();
+        steer.PathRetryRequested.Should().BeFalse();
+        steer.HasNavigationGuidance.Should().BeTrue();
+        steer.TransitionApproachTarget.Should().Be(entry);
+        steer.StopMove();
+    }
+
     [Fact]
     public void GetHeading_ShouldArriveAfterBoundedStuckRecoveryIsExhausted()
     {

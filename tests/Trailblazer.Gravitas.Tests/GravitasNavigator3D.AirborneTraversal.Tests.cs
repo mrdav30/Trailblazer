@@ -10,6 +10,10 @@ namespace Trailblazer.Gravitas.Tests;
 
 public sealed class GravitasNavigator3DAirborneTraversalTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public GravitasNavigator3DAirborneTraversalTests(ITestOutputHelper output) => _output = output;
+
     private const int FlightLossRelease = 0;
     private const int FlightLossCapability = 1;
     private const int FlightLossModule = 2;
@@ -273,8 +277,8 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
     [Fact]
     public void ControlledDescent_ShouldBoundFallRetainSteeringAndReplayExactly()
     {
-        DescentTrace first = RunDescentTrace();
-        DescentTrace replay = RunDescentTrace();
+        DescentTrace first = RunDescentTrace("first");
+        DescentTrace replay = RunDescentTrace("replay");
 
         replay.Frames.Should().Equal(first.Frames);
         first.ControlledAdvantageObserved.Should().BeTrue();
@@ -313,7 +317,7 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
             .BeLessThanOrEqualTo(Fixed64.FromFraction(1, 512));
     }
 
-    private static FlightTrace RunActiveFlightTrace(bool requestJump)
+    private FlightTrace RunActiveFlightTrace(bool requestJump)
     {
         using var fixture = new GravitasAirborneScenarioFixture();
         using GravitasNavigatorActor actor = fixture.CreateAirborneActor(
@@ -322,8 +326,10 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
         int jumpEvents = 0;
         motor.Events.OnStartJump += _ => jumpEvents++;
 
+        _output.WriteLine($"Active-flight motion trace (requestJump={requestJump}; Fixed64 raw X,Y,Z): frame|accepted-position|accepted-velocity");
         actor.Navigator.ApplyInputTrekRequest(isRequestingFlight: true);
         fixture.Step(actor);
+        GravitasMotionTrace.WriteFrame(_output, 0, actor.Navigator.Position, actor.Navigator.Velocity);
 
         var frames = new List<FlightFrame>(12);
         for (int frame = 0; frame < 12; frame++)
@@ -339,6 +345,7 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
                 isRequestingFlight: true,
                 isRequestingJump: requestJump);
             fixture.Step(actor);
+            GravitasMotionTrace.WriteFrame(_output, frame + 1, actor.Navigator.Position, actor.Navigator.Velocity);
             frames.Add(new FlightFrame(
                 actor.Navigator.Position,
                 actor.Navigator.Velocity,
@@ -354,7 +361,7 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
             jumpEvents);
     }
 
-    private static DescentTrace RunDescentTrace()
+    private DescentTrace RunDescentTrace(string traceLabel)
     {
         using var fixture = new GravitasAirborneScenarioFixture();
         using GravitasNavigatorActor free = fixture.CreateAirborneActor(
@@ -414,6 +421,7 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
         Fixed64 controlledLateralPosition = Fixed64.Zero;
         Fixed64 preCancellationSpeed = Fixed64.Zero;
         Fixed64 cancellationSpeed = Fixed64.Zero;
+        _output.WriteLine($"Controlled-descent motion trace ({traceLabel}; Fixed64 raw X,Y,Z): frame|free.accepted-position|free.accepted-velocity|controlled.accepted-position|controlled.accepted-velocity");
         for (int frame = 0; frame < 192; frame++)
         {
             bool deploying = (frame >= 4 && frame < 12) || frame >= 15;
@@ -427,6 +435,9 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
                 rate: controlledAirborne ? TrekRate.Fast : TrekRate.Stationary,
                 isRequestingControlledDescent: controlledAirborne && deploying);
             fixture.Step(free, controlled);
+            GravitasMotionTrace.WriteFrame(_output, frame,
+                free.Navigator.Position, free.Navigator.Velocity,
+                controlled.Navigator.Position, controlled.Navigator.Velocity);
 
             if (frame >= 5 && frame < 12
                 && controlled.Navigator.Velocity.Y > free.Navigator.Velocity.Y)

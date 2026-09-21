@@ -15,6 +15,9 @@ namespace Trailblazer.Navigation.Steering;
 
 public partial class NavSteering
 {
+    // Valid only for the current heading; never persists a lease/action token.
+    internal Vector3d? TransitionApproachTarget { get; private set; }
+
     #region Simulation Lifecycle
 
     /// <summary>
@@ -22,6 +25,7 @@ public partial class NavSteering
     /// </summary>
     protected virtual void OnInitialize()
     {
+        TransitionApproachTarget = null;
         LeaveMovementGroup();
 
         _stoppedFrameCount = 0;
@@ -83,6 +87,7 @@ public partial class NavSteering
         ISteer vessel,
         out NavigationTransitionInstruction? pendingTransition)
     {
+        TransitionApproachTarget = null;
         try
         {
             pendingTransition = null;
@@ -348,6 +353,11 @@ public partial class NavSteering
                 pendingTransition = sample.Transition;
                 return Vector3d.Zero;
             }
+            if (sample.IsTransitionApproach)
+            {
+                TransitionApproachTarget = sample.Target;
+                targetDirection = sample.Target - position;
+            }
             if (targetDirection == Vector3d.Zero)
             {
                 Arrive();
@@ -366,6 +376,7 @@ public partial class NavSteering
 
             if (step.HasTransition)
             {
+                TransitionApproachTarget = step.Position;
                 targetDirection = step.Position - position;
                 if (targetDirection == Vector3d.Zero)
                 {
@@ -395,6 +406,7 @@ public partial class NavSteering
 
                 if (step.HasTransition)
                 {
+                    TransitionApproachTarget = step.Position;
                     targetDirection = step.Position - position;
                     if (targetDirection == Vector3d.Zero)
                     {

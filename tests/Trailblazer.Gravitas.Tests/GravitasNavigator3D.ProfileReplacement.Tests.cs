@@ -1,5 +1,4 @@
 using System;
-using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
@@ -326,8 +325,12 @@ public sealed class GravitasNavigator3DProfileReplacementTests
         compactCollider.LocalOffset.Should().Be(Vector3d.Zero);
     }
 
-    [Fact]
-    public void CompactPostureRestore_ShouldLoadTheBodyBeforeNavigatorAndFinishThePassage()
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void CompactPostureRestore_ShouldLoadTheBodyBeforeNavigatorAndFinishThePassage(bool memoryPack)
     {
         using var fixture = new GravitasProfileReplacementScenarioFixture(
             addSupport: true);
@@ -353,12 +356,8 @@ public sealed class GravitasNavigator3DProfileReplacementTests
         source.Navigator.ApplyGuidedTrekRequest(
             fixture.CreateQueryForProfile(PathAlgorithm.AStar, compact),
             TrekRate.Fast);
-        string bodyPayload = JsonRecordSerializer.Serialize(
-            source.Body,
-            writeIndented: true);
-        string navigatorPayload = JsonRecordSerializer.Serialize(
-            source.Navigator,
-            writeIndented: true);
+        object bodyPayload = GravitasRecordSnapshot.Save(source.Body, memoryPack);
+        object navigatorPayload = GravitasRecordSnapshot.Save(source.Navigator, memoryPack);
         source.Navigator.Reset();
         source.Body.Deactivate();
 
@@ -366,8 +365,8 @@ public sealed class GravitasNavigator3DProfileReplacementTests
             position: fixture.EndFoot
                 + Vector3d.Up * compact.Shape.RootToFootOffsetY,
             profile: compact);
-        JsonRecordSerializer.Populate(restored.Body, bodyPayload);
-        JsonRecordSerializer.Populate(restored.Navigator, navigatorPayload);
+        GravitasRecordSnapshot.Load(restored.Body, bodyPayload);
+        GravitasRecordSnapshot.Load(restored.Navigator, navigatorPayload);
 
         restored.Navigator.NavigationProfile.Should().Be(compact);
         restored.Navigator.FootPosition.Should().Be(fixture.StartFoot);
@@ -396,6 +395,8 @@ public sealed class GravitasNavigator3DProfileReplacementTests
             - Vector3d.Up * standing.Shape.RootToFootOffsetY);
         collider.Radius.Should().Be(standing.Shape.Radius);
         collider.Size.Y.Should().Be(standing.Shape.Height);
+        restored.Dispose();
+        fixture.Gravitas.Physics.BodyCount.Should().Be(0);
     }
 
     [Theory]

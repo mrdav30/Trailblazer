@@ -18,7 +18,7 @@ namespace Trailblazer.Navigation;
 
 public abstract partial class Navigator
 {
-    private const int CurrentSerializationSchemaVersion = 7;
+    private const int CurrentSerializationSchemaVersion = 8;
 
     #region Serialization
 
@@ -148,7 +148,7 @@ public abstract partial class Navigator
             _motor?.BindContext(context);
 
             _turning?.BindContext(context);
-            _turning?.OnInitialize(Radius);
+            _turning?.UpdateRadius(Radius);
 
             CheckVoxelOccupancy(init: true);
             _lastCommittedCell = null;

@@ -183,6 +183,12 @@ Grounded movement applies acceleration, friction, slope projection, and a small
 downward ground-stick bias. Slopes above the configured limit can enter the
 slide module when it is installed and enabled.
 
+Horizontal movement along the support normal's horizontal component is downhill;
+movement against it is uphill. The motor projects ground velocity onto the
+support plane once, without flipping its vertical component afterward. Contour
+movement still uses the surface's inclination for slope limits. Idle slope
+handling retains the downhill bias used by gravity and sliding.
+
 `GroundCondition.SurfaceNormal` is the exact host-provided world-space support
 normal. It is independent of `PlatformSnapshot.Transform`: the normal describes
 collision geometry, while the transform describes carrier movement. Use

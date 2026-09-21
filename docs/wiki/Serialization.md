@@ -61,14 +61,29 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 7. The nested path-session and
-standalone `PathQueryRecord` schemas remain version 1. Version 7 retains the
+The outer Navigator record is schema version 8. The nested path-session and
+standalone `PathQueryRecord` schemas remain version 1. Version 8 retains the
 earlier explicit world-space ground `SurfaceNormal` and controlled-descent
 request, configuration, active fall state, and periodic direct-LOS interval and
-nullable phase. It adds the durable `NavSteering.AcquisitionMode` policy.
-Earlier outer Navigator schemas, including version 6, reject
+nullable phase, plus the durable `NavSteering.AcquisitionMode` policy. It adds
+turn continuation: the active target rotation and completion state, buffered
+target, interpolation factor, and pending collision auto-turn signal.
+Earlier outer Navigator schemas, including version 7, reject
 transactionally rather than supplying a derived or default contract through a
 compatibility path.
+
+Loading preserves active and buffered turns instead of resetting turning to
+idle. The host must resume from the recorded authoritative rotation with the
+same deterministic timestep. The turning controller's context, body-radius
+threshold, and `CanTurnOnCollision` predicate remain shell-owned; the callback
+is not serialized. Restoring a collision signal does not bypass that predicate.
+
+For a Gravitas-backed Navigator, restore the authoritative body before the
+Navigator. Successful population discards adapter-local prepared motion and its
+cached contact; the next complete prepare/resolve/commit frame samples support
+again. Rejected population preserves the prepared frame so it can still commit.
+This is not a world rollback: hosts reconstruct world time, maps, policies,
+platform transforms, and matching body/profile shells before resuming.
 
 Controlled descent restores only when its loaded fall and motor state can admit
 it. Loading clears the active flag when the agent is not falling in Gas, when
@@ -109,7 +124,8 @@ This keeps the host body and navigation envelope consistent before the next
 fixed frame.
 
 Malformed early or late nested data must preserve the previous shell, active
-query, guide lease, pending instruction, acquisition ticket and mode, LOS configuration, and timing state.
+query, guide lease, pending instruction, acquisition ticket and mode, LOS configuration,
+timing state, and active or buffered turn continuation.
 This applies to JSON in both package families and to MemoryPack in the standard
 package. A failed load does not partially stop the current session, replace
 controller tuning, or release guidance. It also preserves the shell's existing
@@ -133,7 +149,8 @@ The recorded Navigator branch includes:
 - current frame condition/request;
 - durable path-session intent;
 - steering settings/session state;
-- turning settings/state;
+- turning settings, active target/completion, buffered target/interpolation,
+  and collision auto-turn signal;
 - motor and built-in locomotion state;
 - heightmap-grounding settings;
 - occupancy group identity.

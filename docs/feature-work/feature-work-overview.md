@@ -28,9 +28,12 @@ instead of burying it in notes.
     `TRB-Issue-150` is fixed with owning regressions; the repeated native preflight
     and analytic slope-anchor probe pass. Circle/top-down and upright-capsule/
     side-view envelopes are proposed, with nominal feet separate from physical
-    contact points. Shared search/scheduler ownership is retained; bounded
-    planar geometry, support queries, posture transactions and exact public
-    signatures still need proof and contract review before implementation.
+    contact points. The [upstream prerequisite proposal](twoDimensionalNavigationPlan.md#proposed-upstream-prerequisite-contract)
+    now specifies native strict capsule math, layer-bound GridForge coverage,
+    indexed bounded support queries and atomic 2D posture replacement. Existing
+    primitive probes identify the necessary boundaries; these new APIs are not
+    implemented yet. Shared search/scheduler ownership is retained; final native
+    controller/map/record signatures and acceptance still need contract review.
     Fixed-height projection is not the deliverable.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,

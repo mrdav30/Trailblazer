@@ -149,10 +149,270 @@ Planned responsibility boundaries, not files to scaffold ahead of the contract:
 | Optional Gravitas adapter and joint tests | `SolidBody2D` target/accepted-pose bridge and native planar collision scenarios |
 | Wiki, API documentation, behavioral tests | Top-down/platformer guidance linked to tested host fixtures, with explicit coordinates and ownership; no separate sample project |
 
-Phase 0 must replace this responsibility map with exact proposed file paths and
-public signatures before runtime work. A dedicated 2D surface is the direction;
-this draft does not pretend that its type names or graph representation have
-already passed design review.
+The upstream proposal below supplies the next concrete file/API boundary.
+Phase 0 must still finish the native controller, map and record signatures and
+their acceptance proofs before Phase 1. Proposed signatures are not current
+APIs and have not been implemented merely by appearing in this plan.
+
+## Proposed upstream prerequisite contract
+
+This is the next reviewable implementation slice, grounded in the
+[bounded-primitive investigation](#2026-09-21---bounded-planar-primitive-investigation).
+Keep the existing 3D APIs and behavior intact. Reuse graph/search ownership,
+GridForge's exact prism/address machinery, and Gravitas's collider identity;
+do not rotate 2D inputs into the 3D navigation controller.
+
+### 1. Exact planar clearance: FixedMathSharp, then GridForge
+
+**Selected approach:** one native strict swept-capsule relation in
+FixedMathSharp, consumed by one layer-bound GridForge body trace. Reuse existing
+trace result/evidence types and scratch where their semantics match. Rejected
+alternatives are a copied Trailblazer geometry solver, radius-expanded boxes
+(false rejection at rounded corners), and two end-circle sweeps (misses against
+the capsule's middle). Closed first-contact distance is not a strict-overlap
+predicate: both exact tangency and initial penetration can return zero.
+
+Proposed additions, **not runnable current API examples**:
+
+```csharp
+// FixedMathSharp.Geometry.FixedConvex2dRelations
+public static bool IntersectsSweptUprightCapsuleStrict(
+    Vector2d startCenter, Vector2d endCenter,
+    Fixed64 axisLength, Fixed64 radius,
+    Vector2d convexOrigin, ReadOnlySpan<Vector2d> convexVertexOffsets);
+
+// GridForge.Utility.GridTracer
+public static GridNavigationBodyTraceReport TracePlanarNavigationBodyInto(
+    GridWorld world, ReadOnlySpan<GridPlanarLayer> eligibleLayers,
+    Fixed64 embeddingY, WorldVoxelIndex source, WorldVoxelIndex target,
+    Vector2d startCenter, Vector2d endCenter,
+    Fixed64 axisLength, Fixed64 radius,
+    SwiftList<GridNavigationBodyTraceCell> results,
+    GridNavigationBodyTraceScratch scratch,
+    int gridCandidateLimit, int addressCandidateLimit,
+    int outputLimit, long candidateWorkLimit);
+```
+
+`GridPlanarLayer` is an immutable pair of `GridCoveredAddressGeneration
+Generation` and `int LayerIndex`, with a validating constructor. Entries are
+strictly ordered by durable configuration identity, one selected layer per
+generation. Source/target must belong to those exact selected generations and
+layers. Every selected layer must contain the declared embedding Y; topology
+layer height is **not** planar character height. The native adapter's preserved
+host world Y is independent of this navigation embedding in pure TwoD physics.
+
+The math relation uses a capsule axis parallel to `Vector2d.Forward`; axis
+length zero is a circle. Total height is `axisLength + 2*radius`. Reject negative
+dimensions and invalid polygon inputs. Boundary-only contact returns false;
+strict overlap at either endpoint or anywhere between returns true. Zero radius
+uses strict footprint entry by the swept axis, not positive capsule area.
+Use wide existing math internally: do not narrow conceptual half-axis endpoints,
+normalize a rounded travel vector, or infer penetration by comparing rounded
+first-hit parameters. Odd-raw axis lengths and full-domain chords are explicit
+tests, not reasons to silently change the shape.
+
+The GridForge operation traces **one ordinary planar graph leg**: the same
+footprint or one immediate neighbor in the source planar lattice, including a
+congruent neighbor in another eligible grid. It is not an arbitrary long-chord
+operation. Longer navigation rays retain selected-edge progression and prove
+each leg. Rectangular diagonal legs retain both side-cell closure requirements;
+hex legs retain their planar neighbor closure. Compare planar footprints here,
+not 3D prism heights; selected layers still have to contain the embedding Y.
+
+Require **positive radius** at the GridForge boundary. A zero-radius axis can
+leave a grid along cell boundaries without entering any neighbor's strict
+interior; the positive-overlap closure below cannot certify that degenerate
+body. This restriction does not change the math relation's zero-radius behavior.
+Even an adjacent leg can sweep a body spanning many cells: certify its **entire
+swept footprint union**, not just the endpoint cells or intersecting addresses.
+The trace's responsibilities are:
+
+1. Check bounds arithmetic; fail with `ArithmeticOverflow`, never saturated
+   bounds or a smaller body. Validate source/target closed contact separately
+   from strict cell-interior coverage.
+2. Enumerate only eligible layers and preserve missing sparse addresses.
+   Canonical ordering and exact generation/run stamps remain mandatory.
+3. Close every positive-overlap planar lattice neighbor, including virtual
+   neighbors outside a grid's bounds. A missing neighbor must fail coverage;
+   a completed address cursor alone cannot certify an outer boundary or hole.
+   Reuse the existing congruent-cell union rule across aligned grids. Arbitrary
+   overlapping incompatible lattices do not gain a new success path.
+4. Keep selected physical cells and missing coincident alternatives as distinct
+   evidence, following `RequiredCoverage` and `PhysicalAlternativeDependency`.
+   A physically coincident alternative cannot bypass Trailblazer map-domain or
+   semantic admission. Any overlapping unselected navigation domain stays out.
+5. Preserve the report's units: `CandidateWorkCount` is exactly grid plus
+   address candidate work, **not** an exact total-work counter. Charge before
+   each generation/address inspection, including eligible-layer validation;
+   do not scan the entire supplied span before applying its ceiling. Closure,
+   congruent-alternative lookup and sorting must have a documented derived
+   bound over the admitted candidate count and fixed planar neighbor degree.
+   Establish that bound in implementation/tests; no world-wide scan or storage
+   growth may occur outside it.
+6. Treat existing scratch/output capacities as hard ceilings for this new
+   entry point, even though their lists can grow in other operations. Before
+   an insertion would grow storage, return `GridCandidateLimitExceeded` for
+   grid scratch, `AddressLimitExceeded` for address/union scratch, or
+   `OutputLimitExceeded` for results. The corresponding caller limit can fail
+   earlier. Reuse `CandidateWorkLimitExceeded` for the combined counter. Clear
+   scratch on exit. Limit/invalid/arithmetic failures clear results; never
+   publish a partial proof. `IncompletePhysicalCoverage` may retain the complete
+   canonical negative evidence, as in the existing report contract, but never
+   certifies passable coverage.
+7. Use `InvalidOrUnrepresentableGeometry` for stale/missing eligible generations,
+   invalid/duplicate/unsorted layer bindings, wrong-layer endpoints,
+   non-neighbor legs and nonpositive radius. The reused report has no `Stale`
+   status; do not imply covered-address cursor statuses carry through unchanged.
+   Preserve ordinary null/negative-budget argument validation separately.
+
+This entry point has deterministic candidate ceilings and bounded derived
+closure work, not a new continuation service or a wall-clock guarantee. Reuse
+the existing scheduler at the caller.
+Internal helper extraction must retain existing 3D work counts and performance
+controls; no generic dimension framework or unrelated tracer cleanup is needed.
+
+Proposed files: FixedMathSharp
+`Geometry/Primitives/Relations/FixedConvex2dRelations.PlanarSweep.cs` plus its
+owning internal wide-math partial; GridForge
+`Utility/GridTracer.PlanarNavigationBody.cs`,
+`Grids/Topology/GridPlanarLayer.cs`, and focused helpers beside
+`GridCellGeometry.NavigationBodySegment.cs`. Add matching math and GridForge
+behavior tests; do not scaffold types before implementing their tests.
+
+### 2. Bounded native support queries: Gravitas
+
+Add one support-specific operation to `GravitasQuery2DService`, not a new
+general-purpose all-shape query API:
+
+```csharp
+public Physics2DSupportQueryStatus QuerySupport(
+    in Physics2DSupportQuery request, in Physics2DQueryBudget budget,
+    Physics2DQueryScratch scratch,
+    out Physics2DSupportHit support, out Physics2DQueryWork consumed);
+```
+
+Proposed value/storage contracts:
+
+| Type | Required fields / behavior |
+| --- | --- |
+| `Physics2DSupportQuery` | Registered source collider, probe center, positive radius/distance, upward direction, minimum upward-normal dot in `(0,1]`, include-layer mask. The constructor explicitly normalizes the nonzero upward direction using FixedMathSharp and rejects unrepresentable normalization. Initial Trailblazer side-view supplies Forward. |
+| `Physics2DQueryBudget` | Independent nonnegative `LookupProbes`, `AddressProbes`, `ColliderVisits`, `GeometryWork` ceilings; zero means no work in that category, never unlimited. |
+| `Physics2DQueryWork` | Consumed counters in the same units, including failed attempts; never exceed the supplied ceilings. |
+| `Physics2DQueryScratch` | Caller-owned preallocated generation/cursor storage, constructed with `generationCapacity`; reset on entry/exit, no growth or retained live collider ownership during a query. Charge duplicate membership visits rather than adding an unbounded deduplication cache. |
+| `Physics2DSupportHit` | Existing `Physics2DHit` plus captured owner registration lifetime and sampled frame; `IsCurrentLifetime` is false for default or recycled registrations. It does not promise geometric freshness. |
+| `Physics2DSupportQueryStatus` | `Found`, `NoSupport`, `BudgetExceeded`, `CapacityExceeded`, `WorldNotReady`, `Unrepresentable`. Only the first two certify complete examination; all others clear the usable hit. |
+
+Validate arguments before work. Operate at a stable between-frame boundary;
+reject reentrancy/active resolution. Traverse the existing spatial index with
+explicit lookup/address quotas, then visit existing `PhysicsPartition2D`
+memberships directly. Include generation discovery, filtered candidates,
+duplicate memberships and compound/convex work in the ceilings. Reuse the
+covered-address cursor only after proving equivalence to existing padded
+partition discovery. Physics partitions use **world Y = 0**, not the navigation
+embedding or actor host Y. Do not allocate a complete candidate list, copy/sort
+all IDs, or trigger query-stamp rollover scans before applying the budget.
+
+Deferred index refresh must return `WorldNotReady`, not run an unbounded global
+refresh inside this operation. The normal owning world lifecycle must make the
+index ready at the documented sampling barrier; a permanently-not-ready query
+is not an acceptable implementation. Feature-size loops in existing kernels
+need metering or a verified conservative `GeometryWork` precharge before entry.
+Record those units and overflow handling in implementation tests. A direct scan
+of all registered colliders is a prototype oracle only, not the shipped default.
+
+Use the real source collider and full `RequireCollisionPair` admission, including
+both ignore masks, layer matrix, siblings and linked-joint exclusions. Reject
+triggers/dynamic supports; permit bodyless, static and kinematic supports.
+Filter each candidate **and compound part** for support eligibility before
+nearest-hit reduction. Rank by distance, owner ID, authored part index, then
+stable feature order. A rejected wall part must not hide an eligible floor part.
+No partial best-so-far result may become grounded state after budget exhaustion.
+
+Keep the existing rigid-frame hit anchor; no new witness representation.
+The adapter still resolves a host-owned stable carrier key with explicit
+lifetime, derives a carrier-local anchor, and samples accepted planar carrier
+pose. Collider IDs and a captured anchor origin are not durable carrier bindings.
+
+Proposed files are `Queries/2D/GravitasQuery2DService.SupportQuery.cs`, one file
+per new public value/status/scratch type beside it, and a focused internal
+indexed-work partial beside `Core/2D/GravitasCollision2DService.cs`.
+
+### 3. Atomic native posture replacement: Gravitas
+
+```csharp
+// Proposed SolidBody2D operation; no change to the existing SolidBody overload.
+public ColliderReconfigurationStatus TryReconfigureCollider(
+    ColliderShapeDefinition2D definition, Vector2d localOffset, Vector2d position,
+    in Physics2DQueryBudget clearanceBudget, Physics2DQueryScratch scratch,
+    out Physics2DQueryWork consumed, out LSCollider2D? blocker,
+    out Exception? notificationException,
+    Action? publishSynchronizedState = null);
+```
+
+Reuse `Applied`, `Unchanged`, `Blocked`; append `BudgetExceeded`,
+`CapacityExceeded`, `WorldNotReady` without changing existing enum values or 3D
+behavior. Invalid family/definition, unsafe lifecycle and unrepresentable
+candidate/host pose retain the existing 3D exception conventions. Support only
+circle-to-circle and capsule-to-capsule initially, in pure TwoD mode; reject
+mixed mode rather than silently skip 3D blockers. A compact side-view body is
+still the same capsule with height `2r`, not a new collider identity.
+
+Reuse native exact collision detection and detached shape staging to prove
+the **whole** replacement collider. No public capsule overlap API is needed.
+Dynamic colliders remain eligible blockers even though they are not supported
+carriers. Exact zero-depth touch is allowed; positive penetration rejects.
+Certify clearance under the indexed budgets above and choose a deterministic
+blocker. Gravitas preflights host pose, shape, mass properties and partition
+capacity before mutation. The coordinating Trailblazer caller must finish its
+own fallible navigation preparation **before** invoking the transaction;
+Gravitas cannot inspect navigation state. The publisher only publishes that
+prepared state. Rejection preserves every live physical/controller/session
+field; it neither queues a replacement nor calls the publisher.
+
+On acceptance, publish collider/body/host XZ together, preserving world Y,
+rotation and runtime identities; invalidate CCD/constraint caches, synchronize
+partition membership, publish navigation once, then finish pair retirement.
+`Unchanged` retains the existing once-only publisher semantics. Post-commit
+publisher/separation failures are returned separately and do not roll back an
+accepted transaction. The clearance budget does not bound atomic publication
+or arbitrary host-callback time.
+
+Do not reuse 2D teardown pair removal: it clears runtime relationships and is
+not exception-safe reconfiguration. Add the focused counterpart of 3D
+lifetime-tokened pair retirement, retaining hierarchy/filter relationships and
+continuing cleanup when callbacks throw or deactivate/reinitialize objects.
+Put the transaction in `Core/2D/SolidBody2D.ColliderReconfiguration.cs`; extend
+existing shape/pair lifecycle partials only where required.
+
+Trailblazer's eventual replacement preserves the nominal foot and durable
+destination, not the old physical surface contact. Fresh support follows an
+accepted replacement. Radius growth on a slope may be blocked despite reduced
+height; do not move the body silently to make it fit.
+
+### Implementation order and acceptance gate
+
+1. Implement/test the strict FixedMathSharp relation, including exact tangent,
+   one-raw penetration/separation, stationary/vertical/diagonal sweeps, zero/odd
+   axis lengths, containment, middle-only collision and scalar-domain limits.
+2. Implement/test GridForge layer-bound union proof: wide bodies, sparse holes,
+   world edges, both hex orientations, aligned multi-grid seams, diagonal closure,
+   non-neighbor and zero-radius boundary-axis rejection, explicit wrong
+   layer/domain rejection, missing alternatives, stale generations, every
+   exact/one-below work/scratch/output capacity and checked arithmetic failure.
+3. Implement/test Gravitas indexed support and the native posture transaction,
+   preserving 3D behavior. Include compound wall/floor ordering, symmetric
+   filters, dirty index, huge compound/polygon work, duplicate memberships,
+   rejected growth, unchanged publication, callback failure and recycled pairs.
+4. Bind native top-down and side-view map/action examples to those primitives;
+   finish support corners/slopes/steps and the controller/map/record signatures.
+   Then obtain the full Phase 0 contract review before Navigator2D runtime work.
+
+These are prerequisite features, not unresolved bug tickets. Use the existing
+test projects, standard/Lean and both library targets, exact changed-path
+coverage, and independent source review. Shared hot-path changes require the
+existing matched performance controls; do not introduce another benchmark
+project. Probes below establish why these boundaries are needed, not that the
+proposed operations already work.
 
 ## Progress dashboard
 
@@ -612,3 +872,59 @@ One evidence-wording correction clarified the probe's comparison tolerance;
 the separate observed-zero-error result is retained. Review approves these
 owning fixes and the partial Phase 0 evidence, not the unimplemented controller
 or final dimensional API contract. Upstream publication remains deferred.
+
+### 2026-09-21 - Bounded planar primitive investigation
+
+Baseline: Trailblazer `a2f2453`, Gravitas `e9aee10`; other upstream revisions are
+unchanged from the preceding record. This pass changes the proposed contract,
+not production source. The proposal above turns the remaining upstream work
+into three concrete boundaries rather than starting a speculative Navigator2D.
+
+An ignored public-API probe passes **45 assertions** on Windows and Ubuntu/WSL,
+with identical output. Its Release build is warnings-as-errors clean:
+
+| Input | Observed result / design consequence |
+| --- | --- |
+| Capsule radius `1/2`, axis length `2`, center `(0,0)`, sweep Right for `4`; box centered `(2,0)`, half-extents `1/8` | Whole capsule hits at `11/8` (raw `5905580032`); both end-circle sweeps miss. Full body proof cannot use only the caps. |
+| Capsule axis length `1`, radius `1/2`, center `(1,0)` or `(1 - 1 raw,0)` against a centered unit box; upward sweep | Existing closed sweeps return distance zero for both exact touch and penetration. This API is not a strict-overlap predicate. |
+| Sparse grid centers `(0,0,0)` through `(2,0,0)`; only endpoints materialized; one lookup/address/output per call | Three calls emit all three canonical addresses including the missing middle. Completion means enumeration completed, not physical coverage. Filling the hole invalidates a prior run with `Stale`, zero output and an empty run stamp. |
+| Single rectangular / flat-hex / pointy-hex cell; bounds of a radius-4 body | Each cursor completes after emitting that one cell. Four/six-vertex footprints are accepted by the native convex kernel, but outside-body coverage is not certified. A separate union-closure proof is necessary. |
+| Body bounds require `MaxValue + 1/2` | Checked arithmetic rejects it; do not substitute saturated bounds. |
+
+These tests exercise existing primitives and counterexamples. They do **not**
+implement or prove the proposed strict capsule relation, complete footprint
+union, per-query support budgets, or posture transaction. The sparse cursor
+probe uses an allocated baseline capture during setup; it is not a model for
+per-frame generation discovery or a zero-allocation claim.
+
+A second public query probe passes **11 assertions** on both operating systems,
+also with identical traces and a warnings-as-errors build. A compound has a wall
+`x=[1/2,3/2], v=[-1,2]` and floor `x=[-2,2], v=[-1,0]`. A radius-`1/2` probe
+sweeps from `(0,1/2)` to `(0,-1/2)`. Both parts initially touch. Wall-first
+authoring returns normal `(-1,0)`; floor-first returns `(0,1)` with point `(0,0)`.
+Post-filtering the single result by `normal.Y >= 1/2` loses the usable floor
+when the wall is first. This is the generic query's documented tie behavior,
+not a newly filed defect; the proposed support operation must filter before
+reducing parts.
+
+Source review also confirms that whole-capsule posture clearance can reuse
+Gravitas's native narrowphase; a public all-shape clearance framework is not
+needed. Its current teardown pair removal is not a reconfiguration transaction:
+relationship preservation and exception-safe retirement need the focused 2D
+counterpart of the existing 3D path. The proposed indexed support path avoids
+both unbounded all-hit collection and an every-agent/every-collider scan.
+
+Independent correctness/simplicity review tightened the proposal to positive
+radius and same/neighbor planar legs, preserved existing report units, made
+no-growth storage failures explicit, and kept navigation preflight with the
+Trailblazer caller. The zero-radius boundary-axis case is a design counterexample
+to be covered by the future implementation tests, not a newly executed probe.
+The targeted recheck found no remaining blockers to this prerequisite proposal;
+that approval does not certify unimplemented geometry, query or transaction
+behavior and does not close Phase 0.
+
+No upstream source, package references, releases or tracked sample projects are
+changed. Full library suites/coverage and performance controls from the prior
+fix are historical evidence, not rerun or claimed as verification of these
+unimplemented APIs. Phase 0 remains open for final controller/map/record
+signatures and executable native navigation acceptance.

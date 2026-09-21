@@ -32,7 +32,9 @@ jobs:
         id: setup-dotnet
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
           dotnet-quality: ga
 
       - name: Pin workflow .NET SDK
@@ -128,6 +130,9 @@ jobs:
             -p:GitVersion_InformationalVersion="$INFORMATIONAL_VERSION" \
             -p:PackageOutputPath="$NUGET_OUTPUT"
 
+      - name: Run ReleaseLean tests
+        run: dotnet test Trailblazer.slnx --configuration ReleaseLean --no-build --verbosity normal
+
       - name: Validate package artifacts
         shell: bash
         env:
@@ -138,6 +143,8 @@ jobs:
           expected_ids=(
             "Trailblazer"
             "Trailblazer.Lean"
+            "Trailblazer.Gravitas"
+            "Trailblazer.Gravitas.Lean"
           )
 
           for package_id in "${expected_ids[@]}"; do
@@ -153,8 +160,8 @@ jobs:
 
           mapfile -t packages < <(find "$NUGET_OUTPUT" -maxdepth 1 -type f \( -name "*.nupkg" -o -name "*.snupkg" \) -printf "%f\n" | sort)
 
-          if [[ "${#packages[@]}" -ne 4 ]]; then
-            echo "::error::Expected 4 NuGet package artifacts, but found ${#packages[@]}."
+          if [[ "${#packages[@]}" -ne 8 ]]; then
+            echo "::error::Expected 8 NuGet package artifacts, but found ${#packages[@]}."
             printf '%s\n' "${packages[@]}"
             exit 1
           fi

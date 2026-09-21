@@ -246,6 +246,7 @@ instructions after the host performs the action.
 ## Next steps
 
 - [Technical Overview](Overview.md) — understand ownership and lifecycle.
+- [Gravitas integration](Gravitas.md) — use an optional collision-backed 3D Navigator.
 - [Map Authoring](MapAuthoring.md) — build useful maps from host data.
 - [Map Publication](MapPublication.md) — publish deterministic runtime changes.
 - [Pathing](Pathing.md) — choose endpoints, profiles, budgets, and algorithms.

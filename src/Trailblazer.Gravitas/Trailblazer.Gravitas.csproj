@@ -6,8 +6,45 @@
 		<ImplicitUsings>disable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-		<IsPackable>false</IsPackable>
+		<!-- Keep the resolved dependency closure beside the DLL for binary DocFX metadata. -->
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<Deterministic>true</Deterministic>
+		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<GravitasPackageVersion Condition="'$(GravitasPackageVersion)' == ''">1.1.0</GravitasPackageVersion>
 		<DisableTransitiveProjectReferences Condition="'$(UseLocalLsfStack)' == 'true'">true</DisableTransitiveProjectReferences>
+	</PropertyGroup>
+	<PropertyGroup>
+		<SemVer Condition="'$(GitVersion_FullSemVer)' != ''">$(GitVersion_FullSemVer)</SemVer>
+		<SemVer Condition="'$(UseLocalLsfStack)' == 'true' And '$(SemVer)' == ''">2.0.0</SemVer>
+		<SemVer Condition="'$(SemVer)' == ''">0.0.0</SemVer>
+		<InfoVer Condition="'$(GitVersion_InformationalVersion)' != ''">$(GitVersion_InformationalVersion)</InfoVer>
+		<InfoVer Condition="'$(InfoVer)' == ''">$(SemVer)</InfoVer>
+		<AssemblySemVer Condition="'$(GitVersion_AssemblySemVer)' != ''">$(GitVersion_AssemblySemVer)</AssemblySemVer>
+		<AssemblySemVer Condition="'$(UseLocalLsfStack)' == 'true' And '$(AssemblySemVer)' == ''">2.0.0.0</AssemblySemVer>
+		<AssemblySemVer Condition="'$(AssemblySemVer)' == ''">$(SemVer).0</AssemblySemVer>
+		<AssemblySemFileVer Condition="'$(GitVersion_AssemblySemFileVer)' != ''">$(GitVersion_AssemblySemFileVer)</AssemblySemFileVer>
+		<AssemblySemFileVer Condition="'$(AssemblySemFileVer)' == ''">$(AssemblySemVer)</AssemblySemFileVer>
+		<Version>$(SemVer)</Version>
+		<AssemblyVersion>$(AssemblySemVer)</AssemblyVersion>
+		<FileVersion>$(AssemblySemFileVer)</FileVersion>
+		<InformationalVersion>$(InfoVer)</InformationalVersion>
+		<Authors>mrdav30</Authors>
+		<Description>Engine-agnostic Gravitas-backed 3D kinematic navigation for Trailblazer. Commits collision-accepted motion through an explicit deterministic prepare/resolve/commit host loop.</Description>
+		<PackageTags>navigation;kinematic;gravitas;trailblazer;deterministic;lockstep;fixed-point</PackageTags>
+		<RepositoryUrl>https://github.com/mrdav30/Trailblazer</RepositoryUrl>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<PackageIcon>icon.png</PackageIcon>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)' == 'ReleaseLean'">
+		<DisableMemoryPack>true</DisableMemoryPack>
+	</PropertyGroup>
+	<PropertyGroup>
+		<PackageId>Trailblazer.Gravitas</PackageId>
+		<PackageId Condition="'$(DisableMemoryPack)' == 'true'">Trailblazer.Gravitas.Lean</PackageId>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'ReleaseLean'">
 		<Optimize>true</Optimize>
@@ -15,19 +52,28 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Trailblazer\Trailblazer.csproj"
 			AdditionalProperties="Configuration=$(Configuration)" />
-		<ProjectReference Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
+		<ProjectReference Condition="'$(UseLocalLsfStack)' == 'true'" Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=1.1.0;AssemblySemVer=1.1.0.0" />
 	</ItemGroup>
+	<ItemGroup Condition="'$(UseLocalLsfStack)' != 'true'">
+		<PackageReference Include="Gravitas" Version="$(GravitasPackageVersion)" Condition="'$(DisableMemoryPack)' != 'true'" />
+		<PackageReference Include="Gravitas.Lean" Version="$(GravitasPackageVersion)" Condition="'$(DisableMemoryPack)' == 'true'" />
+	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
-		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
+		<!-- Compile against the coordinated sources without publishing extra direct dependencies. -->
+		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
-		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj"
+		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
-		<ProjectReference Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
+		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0;AssemblySemVer=7.0.0.0" />
-		<ProjectReference Include="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\SwiftCollections.FixedMathSharp.csproj"
+		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\SwiftCollections.FixedMathSharp.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
-		<ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
+		<ProjectReference PrivateAssets="all" Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=9.1.0;AssemblySemVer=9.1.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="/" />
+		<None Include="../../LICENSE;../../NOTICE;../../COPYRIGHT;../../icon.png" Pack="true" PackagePath="/" />
 	</ItemGroup>
 </Project>

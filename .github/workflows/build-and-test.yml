@@ -61,7 +61,7 @@ jobs:
         run: |
           echo "Version: ${{ steps.gitversion.outputs.fullSemVer }}"
           echo "Assembly Version: ${{ steps.gitversion.outputs.assemblySemFileVer }}"
-          dotnet build Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-restore
+          dotnet build Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-restore -p:GitVersion_FullSemVer=${{ steps.gitversion.outputs.fullSemVer }} -p:GitVersion_AssemblySemVer=${{ steps.gitversion.outputs.assemblySemVer }} -p:GitVersion_AssemblySemFileVer=${{ steps.gitversion.outputs.assemblySemFileVer }}
 
       - name: Run Tests
         if: matrix.os == 'windows-latest'
@@ -69,7 +69,9 @@ jobs:
 
       - name: Run Tests with coverage
         if: matrix.os == 'ubuntu-latest'
-        run: dotnet test Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-build --verbosity normal --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage
+        run: |
+          dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --verbosity normal --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage/core
+          dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --verbosity normal --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage/adapter
 
       - name: Install ReportGenerator
         if: matrix.os == 'ubuntu-latest'
@@ -91,6 +93,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           jq -e '
+            ([.coverage.assemblies[].name] | sort) == ["Trailblazer", "Trailblazer.Gravitas"] and
+            (all(.coverage.assemblies[]; .coverage > 0)) and
             .summary.coveredlines == .summary.coverablelines and
             .summary.coveredbranches == .summary.totalbranches and
             .summary.coveredmethods == .summary.totalmethods and

@@ -232,7 +232,7 @@
   jumping, platform carry, and collision acceptance remain independent. The
   artificial core-fixture docking was removed. Both core and real-adapter
   ladder sequences pass, including blocked entry, retry, and exact action ownership.
-- **Evidence record:** [Joint Phase 2 record](gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening).
+- **Evidence record:** [Joint Phase 2 record](done/gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening).
 
 ### TRB-Issue-147 - Navigator restore discards pending and active turning
 
@@ -278,7 +278,7 @@
 All four fixes pass the final local-stack matrix: 3,164/3,081 core and 84/80
 adapter tests in Release/ReleaseLean, with exact 100% line, branch, and fully
 covered method coverage in both assemblies. The shared
-[Phase 2 evidence record](gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening)
+[Phase 2 evidence record](done/gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening)
 retains commands, traces, cross-library verification, and review findings.
 
 ### TRB-Issue-144 - Identical ordinary A* cache hits dropped newly admitted endpoint dependencies

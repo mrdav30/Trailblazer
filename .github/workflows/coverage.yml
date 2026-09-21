@@ -56,7 +56,9 @@ jobs:
         run: dotnet build Trailblazer.slnx --configuration Release --no-restore
 
       - name: Run tests with coverage
-        run: dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --no-build --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage
+        run: |
+          dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --no-build --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage/core
+          dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration Release --no-build --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage/adapter
 
       - name: Restore local tools
         run: dotnet tool restore
@@ -70,6 +72,7 @@ jobs:
           test -f docs/api/obj/_site/api/Trailblazer.html
           test -f docs/api/obj/_site/api/Trailblazer.Pathing.html
           test -f docs/api/obj/_site/api/Trailblazer.Navigation.html
+          test -f docs/api/obj/_site/api/Trailblazer.Navigation.GravitasNavigator3D.html
           test -f docs/api/obj/_site/api/Trailblazer.Heightmaps.html
           test -f docs/api/obj/_site/assets/icon_128x128.png
           test -f docs/api/obj/_site/public/main.css
@@ -135,6 +138,8 @@ jobs:
       - name: Enforce exact coverage
         run: |
           jq -e '
+            ([.coverage.assemblies[].name] | sort) == ["Trailblazer", "Trailblazer.Gravitas"] and
+            (all(.coverage.assemblies[]; .coverage > 0)) and
             .summary.coveredlines == .summary.coverablelines and
             .summary.coveredbranches == .summary.totalbranches and
             .summary.coveredmethods == .summary.totalmethods and

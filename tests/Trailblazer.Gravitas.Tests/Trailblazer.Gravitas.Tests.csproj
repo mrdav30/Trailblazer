@@ -19,7 +19,7 @@
       AdditionalProperties="Configuration=$(Configuration)" />
     <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj"
       AdditionalProperties="Configuration=$(Configuration)" />
-    <ProjectReference Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
+    <ProjectReference Condition="'$(UseLocalLsfStack)' == 'true'" Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
       AdditionalProperties="Configuration=$(Configuration);SemVer=1.1.0;AssemblySemVer=1.1.0.0" />
     <PackageReference Include="FluentAssertions" Version="8.10.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />

@@ -61,7 +61,7 @@ authored source. Never edit or commit generated `docs/api/obj` output.
 | [`src/Trailblazer/Pathing/Map`](src/Trailblazer/Pathing/Map)       | Immutable maps, cells, connections, transitions, overlays, and publication operations |
 | [`src/Trailblazer/Pathing/Graph`](src/Trailblazer/Pathing/Graph)   | Immutable graph composition, dependencies, topology traversal, and diagnostics        |
 | [`src/Trailblazer/Pathing/Query`](src/Trailblazer/Pathing/Query)   | Public query, endpoint, profile, budget, status, and medium contracts                 |
-| [`src/Trailblazer/Pathing/Search`](src/Trailblazer/Pathing/Search) | Endpoint admission, A*, Flow, guide leases, and internal navigation rays              |
+| [`src/Trailblazer/Pathing/Search`](src/Trailblazer/Pathing/Search) | Endpoint admission, A\*, Flow, guide leases, and internal navigation rays             |
 | [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation)         | Navigator, steering, turning, motor, locomotion, occupancy, and controller records    |
 | [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps)         | Context-owned deterministic ground-height storage and sampling                        |
 | [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)               | xUnit v3 behavior, determinism, allocation, serialization, and API coverage           |
@@ -71,6 +71,11 @@ authored source. Never edit or commit generated `docs/api/obj` output.
 | [`docs/feature-work`](docs/feature-work)                           | Active plans plus evergreen issue and benchmark-signal trackers                       |
 
 ## Runtime Architecture
+
+The optional `src/Trailblazer.Gravitas` project packages `GravitasNavigator3D`.
+Core must not acquire a Gravitas dependency. Follow
+[Gravitas.md](docs/wiki/Gravitas.md) for the shared-world all-prepare /
+one-resolve / all-commit barrier.
 
 One `TrailblazerWorldContext` owns one active GridForge `GridWorld` binding and
 all Trailblazer state for that world.
@@ -83,14 +88,15 @@ The normal host lifecycle is:
    revisions;
 4. admit maps, policies, removals, and overlays through `context.Pathing`;
 5. call `context.Simulate()` once per deterministic fixed frame to advance graph
-   publication, scheduled acquisition within shared frame allowances, and ordered simulation hooks;
-6. acquire A* or Flow leases through `context.Guides`, synchronously or by
+   publication, scheduled acquisition within shared frame allowances, and
+   ordered simulation hooks;
+6. acquire A\* or Flow leases through `context.Guides`, synchronously or by
    polling an owned scheduled request after each fixed frame;
 7. drive `Navigator.Simulate()` and `Navigator.CommitFrameMotion()` for
    controller-owned movement;
 8. dispose leases, Navigators, and then the context.
 
-`PathQuery` is the only public A*/Flow request. Search state is an exact
+`PathQuery` is the only public A\*/Flow request. Search state is an exact
 `NavigationCellAddress` plus `TraversalMedium`. Solid, Gas, and Liquid movement
 share one graph, cost model, dependency system, and guide contract.
 
@@ -102,21 +108,22 @@ complete its exact `NavigationTransitionInstruction`.
 Scheduled acquisition is one bounded FIFO across both algorithms. Preserve
 frozen contiguous cohorts, oldest-first builds, independently admitted follower
 endpoint proofs, and capacity-accounted source-pin/lease ownership. Covered
-followers may finish before uncovered members within that frozen cohort. Preserve
-deterministic submission order, query total budgets, exactly-once result
-transfer and cancellation before pathing reset/disposal. Completed unclaimed
-results consume retention capacity. Counted slices do not bound atomic ray,
-allocation or publication time; measure full containing frames before making
-timing claims. The canonical contract is in
+followers may finish before uncovered members within that frozen cohort.
+Preserve deterministic submission order, query total budgets, exactly-once
+result transfer and cancellation before pathing reset/disposal. Completed
+unclaimed results consume retention capacity. Counted slices do not bound atomic
+ray, allocation or publication time; measure full containing frames before
+making timing claims. The canonical contract is in
 [`Pathing.md`](docs/wiki/Pathing.md#spreading-acquisition-across-fixed-frames).
 
-Navigator defaults to Immediate acquisition; Scheduled is explicit durable policy.
-Waiting yields zero guided heading but must preserve motor/gravity/platform and
-commit processing. Moved-origin A* adoption must prove the exact ordinary index-zero
-anchor, reprove from the current foot on every connector heading under the existing
-fair validation turn, and retain/account proof only on that lease. Mode changes
-control future acquisition, not permission to bypass an adopted connector. Release
-its proof/interest on advancement and every session/reset/teardown boundary.
+Navigator defaults to Immediate acquisition; Scheduled is explicit durable
+policy. Waiting yields zero guided heading but must preserve
+motor/gravity/platform and commit processing. Moved-origin A\* adoption must
+prove the exact ordinary index-zero anchor, reprove from the current foot on
+every connector heading under the existing fair validation turn, and
+retain/account proof only on that lease. Mode changes control future
+acquisition, not permission to bypass an adopted connector. Release its
+proof/interest on advancement and every session/reset/teardown boundary.
 
 ## Determinism Rules
 
@@ -228,6 +235,13 @@ The library generates packages during build. Keep standard and Lean dependency
 families consistent; do not mix package families in one validation run.
 
 ## Test Design
+
+Use separate core and adapter coverage settings: the adapter's include filter is
+`[Trailblazer.Gravitas]*`. Reports must contain both assemblies, not merely show
+100% for whichever assembly was instrumented. During coordinated feature work
+use `UseLocalLsfStack=true` for source tests; unpublished private-feed consumers
+use the normal package graph, an isolated cache, and source mapping. Do not
+treat source-mode nuspecs or fixture versions as release artifacts.
 
 Use the existing context-first fixtures:
 

@@ -34,13 +34,25 @@ Benchmark commands and evidence rules live in
 
 ## Pull request process
 
+For coordinated unreleased LSF changes, add `-p:UseLocalLsfStack=true` to
+restore/build/test and use matching sibling checkouts. Published dependencies do
+not include those fixes. The
+[adapter README](src/Trailblazer.Gravitas/README.md) lists focused test/coverage
+commands. Final validation against released dependencies remains a separate
+gate.
+
+Core and adapter coverage use separate runsettings. Never override the adapter
+with the core-only include filter. CI requires both assemblies to be present and
+fully covered. DocFX consumes both Release DLL/XML pairs.
+
 1. Keep the change focused and preserve deterministic, engine-agnostic runtime
    behavior.
 2. Add or update tests for meaningful behavior changes. Cover exact ordering,
    fixed-point cost, boundaries, failure status, and serialization where they
    are part of the contract.
-3. Update public XML comments, the root README, the matching wiki page, generated
-   API-site authored guidance, and migration guidance when their contract changes.
+3. Update public XML comments, the root README, the matching wiki page,
+   generated API-site authored guidance, and migration guidance when their
+   contract changes.
 4. Run focused checks first, then the full applicable `Release` and
    `ReleaseLean` matrix. Describe the exact results in the pull request.
 5. Do not manually bump package versions. Release workflows derive versions
@@ -49,7 +61,7 @@ Benchmark commands and evidence rules live in
    schema, or package-family changes explicitly; these are high-risk boundaries.
 
 For scheduled Navigator changes, verify moving-foot adoption and waiting motion,
-not just ticket completion. A* connector proofs belong to one lease and consume
+not just ticket completion. A\* connector proofs belong to one lease and consume
 the existing active-byte ceiling and fair scheduler validation turns. Include
 shared-payload isolation, repeated host movement, mode changes, transactional
 loads, and reset/disposal in lifecycle tests. See
@@ -57,11 +69,12 @@ loads, and reset/disposal in lifecycle tests. See
 
 For short, synchronous current-thread allocation assertions, use
 [`AllocationTestUtility`](tests/Trailblazer.Tests/Support/AllocationTestUtility.cs).
-It drains pending collection before admission and verifies an active no-GC region
-to prevent background collection from distorting the byte counter. Real allocations
-still count, and admission or region failure fails the test without retries. Keep
-warmups and assertions outside the measured action. Do not apply this test setup
-to performance benchmarks or asynchronous/global allocation measurements.
+It drains pending collection before admission and verifies an active no-GC
+region to prevent background collection from distorting the byte counter. Real
+allocations still count, and admission or region failure fails the test without
+retries. Keep warmups and assertions outside the measured action. Do not apply
+this test setup to performance benchmarks or asynchronous/global allocation
+measurements.
 
 ## Documentation expectations
 

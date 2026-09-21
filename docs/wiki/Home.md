@@ -32,6 +32,7 @@ New to Trailblazer? Follow this path:
 | Route through Gas or Liquid                      | [Volume Traversal](VolumeTraversal.md)                        |
 | Add ladders, jumps, takeoff, or teleporters      | [Transitions](Transitions.md)                                 |
 | Drive a complete controller                      | [Navigator](Navigator.md)                                     |
+| Resolve controller motion through Gravitas       | [Gravitas integration](Gravitas.md)                           |
 | Customize steering or facing                     | [NavSteering](NavSteering.md) and [NavTurning](NavTurning.md) |
 | Configure movement, jumping, water, or platforms | [NavMotor](NavMotor.md) and [Gravity](Gravity.md)             |
 | Use deterministic ground-height data             | [Heightmaps](HeightMaps.md)                                   |

@@ -8,15 +8,17 @@
 
 **Created:** 2026-09-03
 
-**Status:** Phases 0, 1, and 2 are complete in the coordinated working trees,
-including real-body movement, shape changes, restore/replay, exact coverage,
-and independent correctness/test-quality review. Phase 3 packaging, executable
-consumer documentation, and release-validation gates remain. Release and
-released-package validation are intentionally deferred
-until the active feature-work overview is complete. Trailblazer resolves
-[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation),
+**Status:** Complete locally and archived on 2026-09-21. All four phases include
+real-body movement, shape changes, restore/replay, optional standard/Lean packages,
+behavioral test examples, Windows/Linux verification, exact coverage,
+and independent review. Publication and final released-dependency validation
+remain explicitly pending in the
+[coordinated release gates](../feature-work-overview.md#coordinated-release-gates)
+until all active feature work is complete. Private-package evidence below does
+not substitute for those gates. Trailblazer resolves
+[`TRB-Issue-102`](../issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation),
 and solution-wide local-source validation is green after resolving
-[`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
+[`TRB-Issue-103`](../issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
 
 **Source baselines:** Trailblazer `609beaaf9b3058b6e6881094ccc91ae5c383331d`;
 Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`; GridForge
@@ -46,13 +48,13 @@ retain the approved direction and the pre-implementation decisions in this plan.
 1. Establish compatible dependencies, world ownership, and fixed-frame order.
 2. Prove one fixed-profile 3D Navigator against actual Gravitas collisions.
 3. Reuse that adapter in the vertical and movement-quality scenarios from
-   [Navigation Hardening](done/navigationHardeningPlan.md).
+   [Navigation Hardening](navigationHardeningPlan.md).
 4. Integrate coordinated physical shape changes after hardening Phase 2 defines
    the profile-replacement contract; verify replay, loading, and teardown.
 5. Package and document the verified integration with executable examples.
 
 The first 3D slice is intentionally independent of profile replacement and
-first-class 2D. The [2D plan](twoDimensionalNavigationPlan.md) owns the later
+first-class 2D. The [2D plan](../twoDimensionalNavigationPlan.md) owns the later
 `SolidBody2D` adapter extension and planar acceptance cases. Finishing this 3D
 plan does not imply that 2D support exists, and 2D does not gate its closeout.
 
@@ -73,9 +75,9 @@ plan does not imply that 2D support exists, and 2D does not gate its closeout.
   gates or manufacture tests that only check type/member existence.
 - Package references are the release-validation path. Use local sibling source
   only for explicit coordinated validation, then revalidate released packages.
-- Record discovered defects in [issue-tracker.md](issue-tracker.md) with the
+- Record discovered defects in [issue-tracker.md](../issue-tracker.md) with the
   owning library and a reproducer. Keep unproven integration questions here;
-  record measured costs in the [benchmark backlog](benchmark-signal-hardening-backlog.md).
+  record measured costs in the [benchmark backlog](../benchmark-signal-hardening-backlog.md).
 - Preserve worktree ownership. Staging, commits, sibling edits, publishing, and
   external playground creation require their corresponding user authorization.
 
@@ -83,17 +85,17 @@ plan does not imply that 2D support exists, and 2D does not gate its closeout.
 
 Existing Trailblazer source and tests to reuse:
 
-- [Navigator.cs](../../src/Trailblazer/Navigation/Navigator/Navigator.cs): protected
+- [Navigator.cs](../../../src/Trailblazer/Navigation/Navigator/Navigator.cs): protected
   pending motion, virtual simulation/commit, occupancy, and committed-cell state.
-- [NavMotor.Traversal.cs](../../src/Trailblazer/Navigation/Motor/NavMotor.Traversal.cs)
-  and [NavMotor.Finalization.cs](../../src/Trailblazer/Navigation/Motor/NavMotor.Finalization.cs):
+- [NavMotor.Traversal.cs](../../../src/Trailblazer/Navigation/Motor/NavMotor.Traversal.cs)
+  and [NavMotor.Finalization.cs](../../../src/Trailblazer/Navigation/Motor/NavMotor.Finalization.cs):
   requested displacement and same-frame accepted-motion finalization.
-- [GroundCondition.cs](../../src/Trailblazer/Navigation/Motor/Surface/GroundCondition.cs)
-  and [PlatformSnapshot.cs](../../src/Trailblazer/Navigation/Motor/Surface/PlatformSnapshot.cs):
+- [GroundCondition.cs](../../../src/Trailblazer/Navigation/Motor/Surface/GroundCondition.cs)
+  and [PlatformSnapshot.cs](../../../src/Trailblazer/Navigation/Motor/Surface/PlatformSnapshot.cs):
   contact normal, stable surface identity, carry, and transfer semantics.
-- [Navigator tests](../../tests/Trailblazer.Tests/Navigation/Navigator),
-  [GuidedPathTestScene.cs](../../tests/Trailblazer.Tests/Support/GuidedPathTestScene.cs),
-  [Navigator guide](../wiki/Navigator.md), and [motor guide](../wiki/NavMotor.md).
+- [Navigator tests](../../../tests/Trailblazer.Tests/Navigation/Navigator),
+  [GuidedPathTestScene.cs](../../../tests/Trailblazer.Tests/Support/GuidedPathTestScene.cs),
+  [Navigator guide](../../wiki/Navigator.md), and [motor guide](../../wiki/NavMotor.md).
 
 In the Gravitas checkout, read `AGENTS.md`, `docs/wiki/HOST_INTEGRATION.md`,
 `docs/wiki/DIMENSIONS.md`, and `docs/wiki/SERIALIZATION.md`, then inspect:
@@ -111,9 +113,10 @@ FixedMathSharp.Chronicler 7.0.0, SwiftCollections.FixedMathSharp 7.0.0, and
 GridForge 9.0.0. Trailblazer declares the corresponding 7.1.0, 7.1.0, 7.1.0,
 and 9.1.0 packages. Phase 0 aligned and verified the Gravitas working tree and a
 joint source-project probe against the higher 7.1.0/9.1.0 stack in both package
-families. Those results are not released-package evidence. The active user scope
-keeps the adapter on the coherent local-source stack and defers package-backed
-validation until all captured feature work is complete.
+families. Those results are not released-package evidence. Phase 3 additionally
+verifies normal package references through an isolated private feed containing
+the coordinated source snapshots. Final released-package validation remains
+deferred until all captured feature work is complete.
 
 Phase 0 selected the following Phase 1 additions:
 
@@ -121,12 +124,13 @@ Phase 0 selected the following Phase 1 additions:
 | --- | --- |
 | `src/Trailblazer.Gravitas/` | Optional adapter project, one 3D Navigator subclass, and internal contact translation |
 | `tests/Trailblazer.Gravitas.Tests/` | Real-body joint behavior, replay, shape-change, and teardown tests; no duplicate core unit suite |
-| `samples/Trailblazer.Gravitas.HeadlessSample/` | Runnable deterministic consumer, scenario inputs, trace output, and bounded failure results |
 | Adapter README and Gravitas wiki guide | Setup, supported collision behavior, frame order, limitations, and presentation-only observation |
 
-The Phase 1 adapter and test directories now exist. The headless sample and
-adapter guide remain Phase 3 deliverables; do not add empty projects or a second
-adapter implementation just to reserve future 2D space.
+The adapter, tests, and guides are retained. The standalone sample was exercised
+during Phase 3 verification but removed before commit by user decision; existing
+behavioral tests are the executable examples. Its historical evidence below is
+not a reference to a maintained project or runner. No empty project or second
+adapter implementation reserves future 2D space.
 
 ## Motion contract
 
@@ -155,10 +159,9 @@ after it:
    once. Observe committed cells and events after this late phase; only then
    expose presentation snapshots.
 
-Phase 0 source review confirms that the subclass seam can express this order;
-it does not prove an adapter. Phase 1 must test rotation already changed by
-turning during `Simulate()` and prove that contact refresh cannot overwrite the
-accepted pose. Heightmap projection remains disabled until a later test chooses
+Phases 1 and 2 verify this order, including rotation already changed by turning
+during `Simulate()` and contact refresh that cannot overwrite the accepted pose.
+Heightmap projection remains disabled until a later test chooses
 it as the sole snap owner. A discarded or failed physics step is an aborted
 authoritative frame, not a locally recoverable movement result.
 
@@ -169,7 +172,7 @@ authoritative frame, not a locally recoverable movement result.
 | 0 | Dependency, ownership, and package contract | Complete | Compatible target stack, exact frame order, file/API map, viewer choice, and prerequisites recorded |
 | 1 | Fixed-profile 3D adapter proof | Complete | Wall-clipped pose, contacts, velocity, occupancy, and guide state agree |
 | 2 | Shared hardening and shape-change evidence | Complete | Real-body movement, mutation, restore/replay, teardown, exact coverage, and independent review verified |
-| 3 | Package and documentation closeout | Not started | Runnable consumer, full matrix, coverage, and independent review |
+| 3 | Package and documentation closeout | Complete locally | Behavioral test examples, Windows/Linux matrix, exact coverage, DocFX, and independent review; historical private-package proof retained, final released-chain gates separate |
 
 ## Phase 0 - Integration Preflight
 
@@ -311,7 +314,7 @@ Trailblazer now preserves the real support normal independently of the carrier
 transform through the explicit serialized `GroundCondition.SurfaceNormal`
 contract. The focused identity-carrier slope, independent carrier/contact
 refresh, and transport regressions resolved
-[`TRB-Issue-102`](issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation)
+[`TRB-Issue-102`](../issue-tracker.md#trb-issue-102---ground-contact-conflates-the-support-normal-with-platform-orientation)
 without adding Gravitas types to Trailblazer core. Package-backed slope support
 still requires a Trailblazer release containing that contract and the real
 static/moving Gravitas slope scenarios in this plan.
@@ -327,7 +330,7 @@ static/moving Gravitas slope scenarios in this plan.
 | `tests/Trailblazer.Gravitas.Tests/Support/GravitasNavigatorScenarioFixture.cs` | Shared-world setup and bounded stable-order frame driver used only by tests |
 | `tests/Trailblazer.Gravitas.Tests/GravitasNavigator3D.AcceptedMotion.Tests.cs` | First red accepted-motion wall proof |
 | `tests/Trailblazer.Gravitas.Tests/GravitasNavigator3D.CollisionTurning.Tests.cs` | Isolated public collision-turn timeline with no ordinary turn request |
-| `samples/Trailblazer.Gravitas.HeadlessSample/` | Runnable package consumer using the same versioned scenarios and emitting deterministic traces |
+| Behavioral test suite | Executable integration examples; the proposed standalone sample was not retained after user review |
 | `docs/wiki/Gravitas.md` | Verified setup, frame order, ownership, supported behavior, and limitations |
 
 `GravitasNavigator3D.Simulate()` is the prepare operation and
@@ -449,7 +452,7 @@ input capture never become a second collision or navigation implementation.
 
 - [x] **Run the hardening worlds through the actual adapter.** Reuse stairs,
   ladders, stacked floors, portals/groups, and airborne scenarios from the
-  [hardening acceptance table](done/navigationHardeningPlan.md#acceptance-scenarios).
+  [hardening acceptance table](navigationHardeningPlan.md#acceptance-scenarios).
   Preserve action completion and actual contact/medium reporting.
 - [x] **Prove collision-controller behavior.** Cover a wall and corner, slopes,
   steps, thin blockers at high speed, dynamic-body pushes, and translating/
@@ -477,25 +480,29 @@ input capture never become a second collision or navigation implementation.
 
 ## Phase 3 - Packaging, Documentation, And Verification
 
-- [ ] **Integrate the approved adapter project into build/test/coverage.** Keep
+- [x] **Integrate the approved adapter project into build/test/coverage.** Keep
   standard and Lean dependency families aligned, target the agreed portable
   frameworks, and ensure core-only consumers do not pull in Gravitas.
-- [ ] **Provide an executable consumer example.** Demonstrate world creation,
+- [x] **Document executable behavioral examples.** Demonstrate world creation,
   body/collider setup, map publication, one guided movement sequence, correct
   prepare/resolve/commit order, and disposal. Document collision settings,
   supported shapes, contact limitations, and presentation separation. Compile
-  and execute every example presented as runnable.
-- [ ] **Run the release-validation matrix without publishing.** Run the
-  [Trailblazer matrix](done/navigationHardeningPlan.md#verification-and-closeout),
+  and execute every example presented as runnable. User review selected the
+  existing real-body test suite and its fixtures instead of retaining a separate
+  sample application and runner.
+- [x] **Run the non-publishing integration matrix.** Run the
+  [Trailblazer matrix](navigationHardeningPlan.md#verification-and-closeout),
   adapter tests, and relevant Gravitas tests in Release and ReleaseLean; record
-  Windows/Linux evidence and exact adapter/core coverage. Verify released package
-  references, allocation/lifetime behavior, and deterministic replay.
-- [ ] **Record exact implementation commands for the selected projects.** Include adapter
+  Windows/Linux evidence and exact adapter/core coverage. Verify normal package
+  references through isolated private snapshots, allocation/lifetime behavior,
+  and deterministic replay. Final released-package validation is transferred to
+  the overview's unchecked coordinated release gates, honoring the release deferral.
+- [x] **Record exact implementation commands for the selected projects.** Include adapter
   restore/build/test/coverage commands in its README and this execution record
   as the projects are added. Reuse each repository's actual scripts/settings;
   do not copy unverified coverage switches or silently omit the adapter assembly.
-- [ ] **Obtain final independent review.** Resolve blocking findings, update
-  [feature-work-overview.md](feature-work-overview.md), and archive only after
+- [x] **Obtain final independent review.** Resolve blocking findings, update
+  [feature-work-overview.md](../feature-work-overview.md), and archive only after
   the 3D deliverables and shared evidence are complete. Package publication
   remains a separate user-authorized operation.
 
@@ -539,7 +546,7 @@ scenario inputs, results, artifact locations, linked issues, and next steps.
   validation first read stale configuration-less `obj` metadata from a prior
   isolated NuGet cache; after that generated state was repaired, it exposed the
   distinct duplicate SwiftCollections assembly-version defect recorded as
-  [`TRB-Issue-103`](issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
+  [`TRB-Issue-103`](../issue-tracker.md#trb-issue-103---local-source-graph-can-build-swiftcollections-with-two-assembly-versions).
   That convenience path is not used to claim success. The exact direct source/
   test validation below and the joint probe passed without an authored lower-
   stack change. The unnecessary experiment that substituted the test-only
@@ -784,7 +791,7 @@ dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -
 ### 2026-09-20 - Joint movement hardening
 
 This is the shared Phase 2 evidence record, also referenced by the archived
-[hardening plan](done/navigationHardeningPlan.md#related-plans-and-shared-evidence).
+[hardening plan](navigationHardeningPlan.md#related-plans-and-shared-evidence).
 The execution baseline was Trailblazer `39e4c69`, Gravitas `aa48f7c`, GridForge
 `2f37202`, FixedMathSharp `5170166`, and SwiftCollections `4b5715b`. Changes in
 this pass are confined to Trailblazer and Gravitas on their existing `develop`
@@ -958,3 +965,191 @@ This closes **Phase 2 only**. Phase 3's executable consumer, package integration
 released-package and Windows/Linux validation remain separate. Engine-specific
 visual playtesting stays deferred, and TRB-Benchmark-005 remains closed at its
 accepted stopping point. The integration plan stays active for Phase 3.
+
+### 2026-09-21 - Package and consumer closeout
+
+**Historical verification record:** The sample and validation runner described
+in this milestone were executed during verification, then removed before commit
+by user decision. They are not maintained deliverables or current CI steps.
+The retained test suite and linked fixtures provide executable examples. Keep
+the measurements below as evidence of that run, not instructions to execute a
+missing sample. Final package-dependency and core-only isolation checks remain
+release responsibilities without requiring a permanent consumer application.
+
+Phase 3 adds packaging, an executable consumer, documentation, and verification;
+it does not change a production movement algorithm, serialized schema, or public
+runtime signature. Baselines are Trailblazer `2117f64`, Gravitas `df19151`,
+GridForge `2f37202`, FixedMathSharp `5170166`, and SwiftCollections `4b5715b`.
+Only Trailblazer authored files changed. Existing `develop` checkouts were
+preserved, with no staging, commit, push, or package publication.
+
+#### Deliverables and decisions
+
+- `Trailblazer.Gravitas` / `.Lean` are packable for `netstandard2.1` and
+  `net8.0`, with matching Trailblazer version metadata, README, license, icon,
+  XML, and symbols. Normal-mode nuspecs depend directly only on matching-family
+  Trailblazer and Gravitas. Core-only package consumers do not resolve Gravitas.
+- Gravitas sibling references are conditional on `UseLocalLsfStack`; normal
+  adapter/test builds use packages. Local lower-stack compiler references do
+  not become extra adapter package dependencies.
+- The executable `samples/Trailblazer.Gravitas.HeadlessSample` is intentionally
+  outside the solution: its package inputs are solution outputs. CI validates
+  it after building via `.assets/scripts/validate-gravitas-package.ps1`. The
+  script uses fresh consumer/cache directories, source mapping, actual package
+  content checks, real movement, repeated traces, and a core-only consumer.
+- Scenario inputs are versioned source constants, not a parallel JSON scenario
+  framework. The bounded `v1` sample reproduces the existing open/wall A*/Flow
+  contracts. Raw requested/accepted pose, accepted velocity, support state, and
+  committed cell are observable. This replaces the draft's prospective JSON
+  format; engine-host observation remains separately deferred.
+- The evergreen Gravitas wiki guide documents frame ownership, supported
+  shapes, stop/explicit-tangent behavior, host-owned steps/actions, support
+  query limits, coordinated capsule replacement, body-first restore, and
+  teardown. Adapter/sample READMEs contain executable development commands.
+  README, contributor guidance, API routes, and namespace content link it.
+- Coverage CI now instruments core and adapter separately, requires both
+  assemblies in the report, and retains exact line/branch/fully-covered-method
+  gates. A 100% core-only report was explicitly rejected by the revised gate.
+  Release workflow preparation includes all four package IDs/eight artifacts,
+  the .NET 8 test runtime, Lean tests, and package consumers. No workflow was
+  dispatched and no external CI result is claimed.
+- DocFX consumes both assemblies. Its first run exposed an unresolved Gravitas
+  reference; the adapter now copies its resolved dependency closure beside the
+  binary. Clean Linux validation then exposed the same existing gap in core's
+  net8.0 output (its copy setting had covered only netstandard2.1). Both projects
+  now provide that closure explicitly; no copied-DLL workaround or warning
+  suppression is used.
+- Independent package-boundary audit and final whole-change correctness/
+  simplicity review found no remaining actionable issues. Final matrix evidence
+  is verified separately; the review is not treated as a substitute for tests.
+
+#### Package provenance, not a release
+
+The exact PowerShell block in the sample README was executed successfully in
+both configurations. It builds the normal package graph in dependency order,
+with private fixture identities: FixedMathSharp and bridge 7.1.0;
+SwiftCollections 7.0.0 and bridge 7.1.0; GridForge 9.1.0; Gravitas 1.1.0;
+Trailblazer and adapter 2.0.0. These are **unpublished snapshots**, not the public
+packages bearing those numbers. Runtime-family source mapping and fresh caches
+prevent fallback to the old public bits. Unchanged external dependencies and
+the test-only FixedMathSharp FluentAssertions helpers still use NuGet.org.
+
+Initial source-mode packing exposed `0.0.0` dependency metadata on cross-repo
+project references. Those artifacts were rejected as package evidence. Building
+bottom-up through normal package references produces the actual intended
+dependency graph; no hand-edited nuspec, copied replacement DLL, upstream
+versioning workaround, or global-cache replacement was used. All eight runtime
+DLLs in each Windows sample consumer match the corresponding private nupkg
+entries by SHA-256.
+
+The first sample restore failed with NU1101 before the adapter package existed.
+Both configurations now build and execute all four cases twice. Open movement
+reaches `(2,0,0)`; the wall clips first on zero-based frame 88 and stops at
+`(11/8,0,0)` in the middle cell. Invalid scenario input exits 2. The sample
+deliberately has no floor, disables both gravity contributions, and reports
+airborne; it makes no generalized controller or timing claim.
+
+#### Verification commands and artifacts
+
+The now-retired sample README supplied the private-feed build/consumer command
+used for this run. The feed lives at `artifacts/gravitas-integration/package-feed` and
+each sample run retains its private cache/assets and traces under
+`artifacts/gravitas-integration/package-consumer/<configuration>-<unique-id>`.
+The exact README execution log is
+`artifacts/gravitas-integration/phase3-readme-package-build.log`.
+
+The full Windows Trailblazer matrix used the mapped private package chain:
+
+```powershell
+$config = (Resolve-Path .assets/NuGet.local-stack.config).Path
+$cache = Join-Path $PWD 'artifacts/gravitas-integration/phase3/windows-test-packages'
+dotnet build Trailblazer.slnx -c Release -p:UseLocalLsfStack=false -p:SemVer=2.0.0 -p:AssemblySemVer=2.0.0.0 "-p:RestoreConfigFile=$config" "-p:RestorePackagesPath=$cache"
+dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c Release --no-build --no-restore --settings tests/Trailblazer.Tests/coverlet.runsettings --logger trx --results-directory artifacts/gravitas-integration/phase3/windows-Release-Trailblazer.Tests
+dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release --no-build --no-restore --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --logger trx --results-directory artifacts/gravitas-integration/phase3/windows-Release-Trailblazer.Gravitas.Tests
+```
+
+Repeat with `ReleaseLean` and distinct result directories. Fresh individual
+coverage XML from each test project feeds ReportGenerator `TextSummary;JsonSummary`
+with the existing generated-code filters unchanged. Windows combined summaries
+are in `phase3/windows-Release-report` and `phase3/windows-ReleaseLean-report`.
+Both core suites include their existing allocation/lifetime/serialization/replay
+gates; console tracing is not counted as an allocation benchmark.
+
+Gravitas's complete solution builds and test runs use the same private lower
+chain, `UseLocalLsfStack=false`, `SemVer=1.1.0`, and
+`AssemblySemVer=1.1.0.0`; its Windows TRX/build logs are in
+`phase3/gravitas-Release` / `phase3/gravitas-ReleaseLean` and
+`phase3/gravitas-build-<configuration>.log`. Results are 4,021/4,021 and
+3,966/3,966 tests. No Gravitas authored file changed.
+
+The coordinated source path also builds the complete Trailblazer solution in
+both configurations with zero warnings/errors and passes 84/80 adapter tests:
+
+```powershell
+dotnet build Trailblazer.slnx -c Release -p:UseLocalLsfStack=true
+dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -p:UseLocalLsfStack=true --no-build --no-restore
+dotnet tool restore
+dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
+python .github/scripts/rewrite_wiki_links_for_github_wiki_tests.py
+```
+
+Repeat source build/test with `ReleaseLean`. Windows DocFX and its local-link
+checker pass with zero warnings/errors, and the wiki rewrite helper passes all
+four tests. The existing generated API output stays ignored.
+
+#### Final matrix and closeout
+
+The normal-package Trailblazer solution builds both library targets with zero
+warnings/errors in every row. No test failed or was skipped:
+
+| Host | Configuration | Core tests | Adapter tests |
+| --- | --- | ---: | ---: |
+| Windows | Release | 3,164 | 84 |
+| Windows | ReleaseLean | 3,081 | 80 |
+| Linux | Release | 3,164 | 84 |
+| Linux | ReleaseLean | 3,081 | 80 |
+
+Windows used .NET SDK 10.0.302/runtime 8.0.29. The clean Linux snapshot used
+Ubuntu 24.04 in WSL, SDK 10.0.203/runtime 8.0.26 and PowerShell 7.6.1, with no
+sibling checkout or inherited build output. Fresh caches and source-mapping
+audits verified the private runtime inputs. Linux logs, coverage, hashes,
+reproducible commands, and traces are retained under
+`artifacts/gravitas-integration/phase3-linux-results`; its README indexes the
+evidence. The snapshot remains at `/tmp/trb-phase3.jnwsL4`.
+
+Exact non-generated coverage matches on both hosts in both configurations:
+
+| Assembly | Covered lines | Covered branches | Fully covered methods |
+| --- | ---: | ---: | ---: |
+| Trailblazer | 32,252 / 32,252 | 13,250 / 13,250 | 3,171 / 3,171 |
+| Trailblazer.Gravitas | 192 / 192 | 30 / 30 | 13 / 13 |
+| Combined | 32,444 / 32,444 | 13,280 / 13,280 | 3,184 / 3,184 |
+
+All four consumer cases pass twice in each family on each host. UTF-8/LF trace
+SHA-256 values match across Windows/Linux and Release/ReleaseLean:
+
+| Scenario | SHA-256 |
+| --- | --- |
+| open/astar | `C8BB365DDF62002E9C296F7229802B833D2C4DE9F02E2794BBB6F2A17AAF5918` |
+| open/flow | `6B645973F3F4F417BDB78889AAEB6D970B71A67CDE83D23E288F89C05F41B8EB` |
+| wall/astar | `7383BAACF9F5A58827E442338F338DD9E8C5C2298C9B2BD0B30B0E5E2FC73935` |
+| wall/flow | `D59CF7562D3819396258183D2DAA96FFAE5ED6CC5752EC8D93374BB2272FAA38` |
+
+These bounded inputs establish repeatability for these scenarios, not a
+universal cross-platform or performance guarantee. Both hosts also pass Lean
+dependency isolation and the core-only consumer without Gravitas.
+
+After fixing the clean-output dependency-copy gaps, final Windows full builds
+and tests pass again in both configurations. Linux repeats its full Release
+build/tests and ReleaseLean build; both Lean library targets are byte-identical
+to the binaries already tested and covered. Windows runtime binaries likewise
+match the package-tested artifacts. DocFX with `--warningsAsErrors` passes on
+both hosts with zero warnings/errors and emits the adapter API page. The Linux
+red DocFX log is preserved beside the green result; no failure is suppressed.
+
+Phase 3 and the 3D integration plan are complete locally. The overview now
+hands off to the dedicated 2D contract review. Final upstream version selection,
+released-dependency references, release-commit CI, and package publication remain
+separate unchecked release gates. The private fixture version numbers above are
+not final release pins. No engine-specific host, new runtime API, automatic
+step/slide solver, or benchmark claim was added to complete packaging.

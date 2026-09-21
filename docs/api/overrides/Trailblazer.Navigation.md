@@ -7,6 +7,11 @@ Compose host-owned character controllers from `Navigator`, steering, movement
 groups, occupancy, motor and turning services, heightmap grounding, and explicit
 Chronicler records.
 
+The optional `Trailblazer.Gravitas` assembly adds `GravitasNavigator3D` without
+coupling the core libraries. Read the
+[Gravitas integration guide](https://github.com/mrdav30/Trailblazer/wiki/Gravitas)
+for shared-world ownership, prepare/resolve/commit ordering, and supported shapes.
+
 Navigator acquisition is Immediate by default. Opt-in Scheduled steering uses
 the existing context queue and fair current-foot validation turns while ordinary
 motor/gravity/platform and commit processing continues during waiting. A moved

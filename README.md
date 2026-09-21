@@ -78,11 +78,13 @@ dependencies, and action-completion contract.
 
 These request methods finish synchronously. For large cold requests during
 gameplay, `context.Guides.Schedule(query, out request)` spreads acquisition over
-fixed frames. See the [scheduling guide](https://github.com/mrdav30/Trailblazer/wiki/Pathing#spreading-acquisition-across-fixed-frames)
-for finite capacity, result ownership and latency tradeoffs.
-Navigator hosts can opt into the same queue through
+fixed frames. See the
+[scheduling guide](https://github.com/mrdav30/Trailblazer/wiki/Pathing#spreading-acquisition-across-fixed-frames)
+for finite capacity, result ownership and latency tradeoffs. Navigator hosts can
+opt into the same queue through
 `navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled)`;
-see [steering acquisition](https://github.com/mrdav30/Trailblazer/wiki/NavSteering#scheduled-acquisition-and-moving-origins).
+see
+[steering acquisition](https://github.com/mrdav30/Trailblazer/wiki/NavSteering#scheduled-acquisition-and-moving-origins).
 
 ## Choose a package
 
@@ -94,6 +96,13 @@ see [steering acquisition](https://github.com/mrdav30/Trailblazer/wiki/NavSteeri
 Do not mix standard and Lean LSF packages in one dependency graph.
 
 ## Built on the LSF stack
+
+For collision-backed 3D movement, the optional `Trailblazer.Gravitas` and
+`Trailblazer.Gravitas.Lean` adapters connect Navigator to host-owned Gravitas
+bodies without coupling the core libraries. See the
+[integration guide](https://github.com/mrdav30/Trailblazer/wiki/Gravitas).
+Repository development currently requires the coordinated unreleased dependency
+stack; see the [adapter development guide](https://github.com/mrdav30/Trailblazer/blob/develop/src/Trailblazer.Gravitas/README.md).
 
 - [FixedMathSharp](https://github.com/mrdav30/FixedMathSharp) supplies
   deterministic fixed-point math.

@@ -39,7 +39,7 @@ signatures and file responsibilities before production implementation.
 - A* and Flow guidance, explicit action completion, invalidation, occupancy,
   safe profile replacement, persistence, and deterministic replay for 2D agents.
 - A `SolidBody2D` adapter extension built on the ownership lessons from the
-  [Gravitas integration plan](gravitasIntegrationPlan.md).
+  [Gravitas integration plan](done/gravitasIntegrationPlan.md).
 - Runnable host examples and actual movement-quality observations, not only
   compile-time API checks or a 3D scene viewed by an orthographic camera.
 

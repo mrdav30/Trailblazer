@@ -22,6 +22,8 @@ items:
         href: https://github.com/mrdav30/Trailblazer/wiki/Transitions
       - name: Navigator
         href: https://github.com/mrdav30/Trailblazer/wiki/Navigator
+      - name: Gravitas Integration
+        href: https://github.com/mrdav30/Trailblazer/wiki/Gravitas
       - name: Serialization
         href: https://github.com/mrdav30/Trailblazer/wiki/Serialization
   - name: Resources
@@ -32,5 +34,5 @@ items:
         href: https://github.com/mrdav30/Trailblazer/blob/main/docs/MIGRATION.md
       - name: Source
         href: https://github.com/mrdav30/Trailblazer
-      - name: Core Test Coverage
+      - name: Core and Adapter Test Coverage
         href: https://mrdav30.github.io/Trailblazer/coverage/

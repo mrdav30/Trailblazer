@@ -234,6 +234,12 @@ dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Rel
 The library generates packages during build. Keep standard and Lean dependency
 families consistent; do not mix package families in one validation run.
 
+For coordinated source development, use `UseLocalLsfStack=true` as a command-line
+global property or the environment of a freshly launched IDE. A repo-only local
+property may not reach sibling NuGet restores. See
+[CONTRIBUTING.md](CONTRIBUTING.md#coordinated-source-development-and-ide-restore).
+Keep package mode the default; never infer release readiness from source builds.
+
 ## Test Design
 
 Use separate core and adapter coverage settings: the adapter's include filter is

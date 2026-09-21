@@ -32,11 +32,47 @@ dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
 Benchmark commands and evidence rules live in
 [`tests/Trailblazer.Benchmarks/README.md`](tests/Trailblazer.Benchmarks/README.md).
 
+### Coordinated source development and IDE restore
+
+For coordinated unreleased LSF changes, use matching `FixedMathSharp`,
+`SwiftCollections`, `GridForge`, and `Gravitas` sibling checkouts. Published
+dependencies do not include those fixes. Command-line invocations can pass
+`-p:UseLocalLsfStack=true` to restore/build/test.
+
+For VS Code design-time restore, fully exit **all VS Code windows** first, then
+run the following from an external PowerShell terminal at the Trailblazer root:
+
+```powershell
+$env:UseLocalLsfStack = 'true'
+dotnet restore Trailblazer.slnx -p:Configuration=Debug
+dotnet build Trailblazer.slnx -c Debug --no-restore
+code .
+```
+
+MSBuild reads this process environment property in every project, including
+sibling repositories during NuGet restore. Newly launched VS Code services and
+terminals inherit it. An existing VS Code process does not acquire a new
+environment from `code .`, `--new-window`, or a terminal opened inside it; a
+window reload alone is not sufficient. Repeat this launch when returning to
+coordinated source work. This does not set a persistent user/machine variable or
+change ordinary package-mode checkouts.
+
+An `NU1102` for an unreleased Gravitas version means the IDE restore is still
+selecting packages. A terminal-only `-p:UseLocalLsfStack=true` does not configure
+its parent design-time service. Use the same mode for restore and build. For
+package validation in a source-enabled shell, pass `-p:UseLocalLsfStack=false`
+explicitly; for a package-mode IDE, exit it and relaunch from a shell without the
+environment variable. Do not lower package pins, hide unpublished fixtures in
+the global NuGet cache, or treat source-mode packages as release artifacts.
+
+Do not substitute a Trailblazer-only `Directory.Build.props` assignment for the
+environment/global property. NuGet evaluates referenced sibling projects
+separately: build-time reference metadata alone does not make their restore
+graph select the same source stack.
+
 ## Pull request process
 
-For coordinated unreleased LSF changes, add `-p:UseLocalLsfStack=true` to
-restore/build/test and use matching sibling checkouts. Published dependencies do
-not include those fixes. The
+The
 [adapter README](src/Trailblazer.Gravitas/README.md) lists focused test/coverage
 commands. Final validation against released dependencies remains a separate
 gate.

@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-150`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-151`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -24,6 +24,34 @@
   here until they have been investigated and confirmed as runtime defects.
 
 ## Active Issues
+
+### TRB-Issue-150 - Gravitas2D exact-touch circle sweeps return the probe center as the surface point
+
+- **Discovered:** 2026-09-21 during the native 2D navigation preflight.
+- **Status:** Open; confirmed pre-existing Gravitas query defect. No workaround
+  or source fix has been introduced.
+- **Owner:** Gravitas `src/Gravitas/Queries/2D/QueryDetection2D.cs`,
+  `TrySweepCircle` initial-overlap branch. At Gravitas
+  `df1915142ec9c8c7937ee7aa8aa6d25a99cee4cd`, it constructs the hit from `start`
+  rather than the overlap's surface witness. `docs/wiki/QUERY_SERVICES.md`
+  documents `Physics2DHit` points as surface witnesses.
+- **Reproduction:** Pure TwoD context; bodyless AABB centered at `(0,-1/2)` with
+  size `(12,1)`. Call `Query2D.SweepCircleAll` from `(0,1/2)` to `(0,0)` with
+  radius `1/2`, all layers and no triggers. The single hit has the correct
+  collider, distance zero and normal `(0,1)`, but `Point` is `(0,1/2)` instead
+  of the floor surface `(0,0)`. The same input arises after landing a circle or
+  probing a capsule's lower cap. Two fresh probe executions reproduced both
+  failures with loaded LSF hashes matching source Release outputs; the
+  [2D execution record](twoDimensionalNavigationPlan.md#2026-09-21---source-development-and-native-2d-preflight)
+  retains revisions, setup and limitations.
+- **Impact:** A native adapter cannot safely use that point as the physical
+  support or moving-platform anchor. Correct hit ordering/normal does not make
+  the witness correct. This is not a failure of the existing 3D adapter.
+- **Next scope:** Add owning regression tests, then preserve or reconstruct the
+  actual target-surface witness with correct rigid-frame/representability
+  semantics. Cover exact touch, initial overlap, ordinary non-overlapping sweep
+  and applicable target/compound shapes. Do not subtract a radius in Trailblazer
+  or treat the issue as permission to replace query geometry with a host guess.
 
 ### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 

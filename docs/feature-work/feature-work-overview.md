@@ -24,11 +24,14 @@ instead of burying it in notes.
 
 - [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
   - Phase 0 is in progress for native top-down and side-view controllers and the
-    Gravitas `SolidBody2D` adapter. The native preflight verifies basic accepted
-    motion/coordinates and exposes the upstream surface-witness defect
-    `TRB-Issue-150`. Shared search/scheduler ownership is retained; exact planar
-    geometry, support and posture APIs still require proof and contract review
-    before implementation. Fixed-height projection is not the deliverable.
+    Gravitas `SolidBody2D` adapter. The upstream surface-witness defect
+    `TRB-Issue-150` is fixed with owning regressions; the repeated native preflight
+    and analytic slope-anchor probe pass. Circle/top-down and upright-capsule/
+    side-view envelopes are proposed, with nominal feet separate from physical
+    contact points. Shared search/scheduler ownership is retained; bounded
+    planar geometry, support queries, posture transactions and exact public
+    signatures still need proof and contract review before implementation.
+    Fixed-height projection is not the deliverable.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are

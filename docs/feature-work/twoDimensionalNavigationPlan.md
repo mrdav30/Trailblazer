@@ -473,7 +473,7 @@ The next work is narrow and ordered:
 
 | Gate | Owner and required evidence |
 | --- | --- |
-| Correct surface witnesses | Fix TRB-Issue-150 in Gravitas with exact-touch, initial-overlap and ordinary-sweep regressions; repeat the native probe. |
+| Correct surface witnesses | Implemented in Gravitas; the follow-up below records the regressions, repeated probe and verification boundary. |
 | Body, support and slope/step contract | Choose one finite planar envelope consistent with the real collider. A box's bottom-center placed on a slope penetrates; define the actual contact/anchor convention and prove it, including step paths and maximum slope, before approving signatures. Circle/capsule wall clipping alone does not decide this. |
 | Native bounded geometry | GridForge exposes planar prism vertices and bounded covered-address enumeration; FixedMathSharp supplies planar sweep primitives. Its current navigation body-segment proof is world-Y-specific. Establish a small GridForge-owned planar proof or reviewed composition, including wide bodies, holes, exact touching, overflow and complete dependency capture. Do not duplicate physical geometry authority in Trailblazer. |
 | Support query work and identity | Gravitas public all-hit circle queries have no candidate/hit budget and can grow buffers. Decide a real bounded support-query boundary and stable carrier lifetime; one call per frame or truncating returned hits is not a work bound. |
@@ -487,3 +487,128 @@ coordinated release gates deferred as agreed.
 Independent final source/documentation and simplicity review found no blocking
 findings in this partial preflight. That review approves the evidence and scope
 record, not the still-open Phase 0 API contract or entry into Phase 1.
+
+### 2026-09-21 - Correct witnesses and slope-anchor proof
+
+This follow-up starts at Trailblazer `1e96da4` and Gravitas `df19151`, with the
+same FixedMathSharp, SwiftCollections and GridForge revisions recorded above.
+The owning source change is in Gravitas; Trailblazer has no new runtime code.
+
+#### Owning fixes
+
+`TRB-Issue-150` is owned by Gravitas `GRV-Issue-074`: the initial-overlap circle
+sweep now carries the overlap's rigid-frame target anchor while independently
+reporting zero sweep travel. It neither substitutes the probe center nor
+materializes an absolute point that might exceed the scalar range.
+
+Regression work also exposed `GRV-Issue-075`. A circle probe centered on a
+capsule's axis could receive an inward/opposite-side witness or an axial offset
+inside the capsule. The shared circle/capsule overlap path now uses a consistent
+radial fallback: world +X for coincident circles, capsule-local +X for a
+centerline tie. It reuses the capsule's cached axis and the existing contact
+kernel; no additional geometry solver or public API is introduced.
+
+The new owning test file, Gravitas's
+`tests/Gravitas.Tests/Physics2D/Physics2DSweepWitnessTests.cs`, contains 32 cases.
+It covers touch, penetration and ordinary entry against circle, capsule, box,
+polygon and compound targets; stable compound ties; witnesses beyond either
+scalar face; and upright/rotated/degenerate centerline cases. Expected points
+come from explicit target geometry, not another call to the same overlap code.
+Two old expectations that asserted the probe center were corrected.
+
+The original disposable native probe was rerun against the updated source-stack
+Release binaries: **52 checks passed, zero unresolved witness gaps**. Both floor
+queries now return `(0,0)`. This closes the previously recorded witness failures,
+not the unimplemented 2D controller's acceptance gates.
+
+#### Executed slope check and proposed shape convention
+
+A second ignored probe uses the same pure TwoD/60 Hz world, host Y `7` and
+bodyless obstacle Y `99`. The triangle `(-8,-8), (8,-8), (8,8)` has the support
+edge `v = x`. Each continuous kinematic body moves vertically from `(0,4)`
+toward `(0,-1)`:
+
+| Body | Analytic accepted center | Observed Q32.32 center |
+| --- | --- | --- |
+| Upright box, width 1 / height 2 | `(0, 3/2)` | `(0, 6442450944 raw)` |
+| Upright capsule, radius 1/2 / height 2 | `(0, 1/2 + sqrt(2)/2)` | `(0, 5184484148 raw)` |
+
+Both accepted centers match the fixed-point analytic result exactly and preserve
+the host/body pose and embedding Y. The capsule support sweep returns point
+`(1518500250,1518500250)` raw and outward normal
+`(-3037000500,3037000500)` raw. They reconstruct the accepted center exactly.
+All **15 assertions** pass. The probe allows 16 raw units in final-coordinate
+comparisons, including accepted center and witness-based center reconstruction;
+the observed errors are zero. This is not a clearance tolerance or permission
+to admit penetration.
+
+For upright capsule radius `r`, total height `h >= 2r`, upward unit vector `u`,
+support point `p`, and outward support normal `n`:
+
+```text
+body center       = p + r*n + (h/2 - r)*u
+nominal foot      = body center - (h/2)*u = p + r*(n - u)
+lower-cap center  = body center - (h/2 - r)*u
+```
+
+These relations describe tangency on a single supporting face, not an arbitrary
+corner/contact manifold. On flat ground `n = u`, so the nominal foot and surface
+point coincide. On a slope they do not. Never place the capsule by treating the
+physical surface witness as its nominal bottom-center; never manufacture a
+surface witness from a root-height subtraction.
+
+The proposed first controller envelope is a **circle for top-down movement and
+an upright capsule for side-view movement**, matching real Gravitas colliders.
+A capsule of height `2r` gives the compact circular posture. This avoids a
+rotating-box clearance framework in the first increment; it is a contract
+proposal, not an already-approved restriction or a public API addition.
+Side-view physical orientation stays upright while scalar facing/presentation
+is separate. Existing 3D behavior remains unchanged.
+
+Keep nominal foot/root offset and the physical contact/carrier anchor separate.
+For posture replacement, preserve the nominal foot as the established hardening
+contract requires, then certify the **entire** proposed collider transactionally.
+A radius change on a slope may fail clearance even when height shrinks; do not
+silently move the body to preserve a different contact. After accepted
+replacement, obtain fresh support. The current probe does not test replacement.
+
+Before approving the final API, still prove slope limits, corners, crest/valley
+support, and bounded step paths with that shape. Slope admission must use a
+fixed-point normal/up comparison; an upward-facing contact alone is not a
+walkable slope. A step needs separate lift, full-body forward clearance, and
+supported landing checks, not only an endpoint or lower-cap sweep. The native
+bounded GridForge proof, Gravitas query-work bound and atomic 2D posture
+transaction remain the next concrete prerequisites. No extra Phase 0 checkbox
+is complete solely because the physics probe is green, and Phase 1 has not
+started.
+
+#### Verification boundary
+
+Fresh Windows source-stack solution builds pass in Release and ReleaseLean,
+including `netstandard2.1` and `net8.0`, with zero warnings/errors:
+
+| Suite | Release | ReleaseLean |
+| --- | ---: | ---: |
+| Gravitas | 4,053 | 3,998 |
+| Trailblazer core | 3,164 | 3,081 |
+| Trailblazer Gravitas adapter | 84 | 80 |
+
+Gravitas retains exact **56,196/56,196 lines, 16,018/16,018 branches and
+5,346/5,346 fully covered methods** in both Windows configurations. The two
+removed branches were the inconsistent center-normal override, not exclusions.
+Coverage reports are under Gravitas `artifacts/issue150/`. This pass reran the
+unchanged downstream suites; it does not claim a new downstream coverage audit.
+
+All three suites also pass with the same counts in both configurations when
+those managed test outputs run on Ubuntu/WSL with .NET 8.0.26. Both Release probes
+produce identical Windows and Linux traces; all six probe LSF DLL hashes match
+the freshly built adapter test output. These are Linux execution checks, not a
+separate Linux restore/build or released-package verification. Gravitas and
+Trailblazer DocFX builds pass with warnings-as-errors. No performance change is
+claimed.
+
+Independent read-only correctness/simplicity review found no source blockers.
+One evidence-wording correction clarified the probe's comparison tolerance;
+the separate observed-zero-error result is retained. Review approves these
+owning fixes and the partial Phase 0 evidence, not the unimplemented controller
+or final dimensional API contract. Upstream publication remains deferred.

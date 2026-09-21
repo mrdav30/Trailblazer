@@ -25,34 +25,6 @@
 
 ## Active Issues
 
-### TRB-Issue-150 - Gravitas2D exact-touch circle sweeps return the probe center as the surface point
-
-- **Discovered:** 2026-09-21 during the native 2D navigation preflight.
-- **Status:** Open; confirmed pre-existing Gravitas query defect. No workaround
-  or source fix has been introduced.
-- **Owner:** Gravitas `src/Gravitas/Queries/2D/QueryDetection2D.cs`,
-  `TrySweepCircle` initial-overlap branch. At Gravitas
-  `df1915142ec9c8c7937ee7aa8aa6d25a99cee4cd`, it constructs the hit from `start`
-  rather than the overlap's surface witness. `docs/wiki/QUERY_SERVICES.md`
-  documents `Physics2DHit` points as surface witnesses.
-- **Reproduction:** Pure TwoD context; bodyless AABB centered at `(0,-1/2)` with
-  size `(12,1)`. Call `Query2D.SweepCircleAll` from `(0,1/2)` to `(0,0)` with
-  radius `1/2`, all layers and no triggers. The single hit has the correct
-  collider, distance zero and normal `(0,1)`, but `Point` is `(0,1/2)` instead
-  of the floor surface `(0,0)`. The same input arises after landing a circle or
-  probing a capsule's lower cap. Two fresh probe executions reproduced both
-  failures with loaded LSF hashes matching source Release outputs; the
-  [2D execution record](twoDimensionalNavigationPlan.md#2026-09-21---source-development-and-native-2d-preflight)
-  retains revisions, setup and limitations.
-- **Impact:** A native adapter cannot safely use that point as the physical
-  support or moving-platform anchor. Correct hit ordering/normal does not make
-  the witness correct. This is not a failure of the existing 3D adapter.
-- **Next scope:** Add owning regression tests, then preserve or reconstruct the
-  actual target-surface witness with correct rigid-frame/representability
-  semantics. Cover exact touch, initial overlap, ordinary non-overlapping sweep
-  and applicable target/compound shapes. Do not subtract a radius in Trailblazer
-  or treat the issue as permission to replace query geometry with a host guess.
-
 ### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 
 - **Discovered:** 2026-09-14 while reviewing the narrow zero-radius steering fix.
@@ -246,6 +218,30 @@
   repeating this investigation. Closure does not waive future allocation failures.
 
 ## Resolved Issues
+
+### TRB-Issue-150 - Gravitas2D exact-touch circle sweeps return the probe center as the surface point
+
+- **Discovered / resolved:** 2026-09-21 during the native 2D navigation preflight.
+- **Owner:** Gravitas `GRV-Issue-074`,
+  `src/Gravitas/Queries/2D/QueryDetection2D.cs`, `TrySweepCircle`.
+- **Reproduction:** At Gravitas `df1915142ec9c8c7937ee7aa8aa6d25a99cee4cd`,
+  a pure TwoD bodyless AABB centered at `(0,-1/2)` with size `(12,1)` receives
+  `SweepCircleAll` from `(0,1/2)` to `(0,0)`, radius `1/2`, all layers, no
+  triggers. The hit has the correct collider, zero distance and `(0,1)` normal,
+  but returns the probe center `(0,1/2)` instead of the floor point `(0,0)`.
+  Both a landed circle and capsule lower-cap query reproduced the defect.
+- **Fix:** Carry the overlap's actual rigid-frame target anchor into the sweep
+  result, retaining zero travel and honest point representability. No
+  Trailblazer workaround or radius subtraction was added. Regression work also
+  corrected the related centerline fallback inconsistency in `GRV-Issue-075`.
+- **Verification:** 32 new owning behavioral cases cover initial contact,
+  penetration, ordinary sweeps, compound ties, scalar faces and rotated capsule
+  centerlines. Full Gravitas Release/ReleaseLean tests and exact 100%
+  line/branch/method coverage pass. The repeated native preflight now passes all
+  52 checks with zero witness gaps. This resolves the query defect, not the
+  remaining 2D geometry/controller gates or package-release verification.
+- **Evidence:** [Original reproduction](twoDimensionalNavigationPlan.md#2026-09-21---source-development-and-native-2d-preflight)
+  and [fix/slope follow-up](twoDimensionalNavigationPlan.md#2026-09-21---correct-witnesses-and-slope-anchor-proof).
 
 ### TRB-Issue-146 - Guided action approaches can oscillate across exact entry
 

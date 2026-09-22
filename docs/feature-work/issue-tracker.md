@@ -38,6 +38,14 @@
   effective frames. Both guards exist at the feature branch base `5367f5a`.
   Clock/index tests can cross the boundary internally, but that does not
   establish successful whole-world simulation across it.
+- **Reproduced (2026-09-22):** At `fd6b484`, queue two one-rule area policies
+  effective at `int.MaxValue`, with dependency work limited to five. The first
+  publishes there; the second remains pending. The next public `Simulate()`
+  throws `ArgumentException` from `NavigationOperationProcessor.ProcessFrame`
+  after `FrameCount` has become `int.MinValue`, leaving the second receipt
+  pending. The identical two-operation scenario starting at zero succeeds.
+  Chronicler's timing plan retains Phase 0 probe source/output under
+  `artifacts/timing/phase0`; Phase 5 owns the permanent regression and fix.
 - **Impact:** A continuously running context eventually reaches the signed
   publication limit (about 2.1 years of simulated time at 32 Hz; accelerated
   simulation can reach it sooner in wall-clock time). The failing call has

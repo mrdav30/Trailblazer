@@ -131,6 +131,12 @@ package. A failed load does not partially stop the current session, replace
 controller tuning, or release guidance. It also preserves the shell's existing
 GridForge occupancy registration and committed-cell state.
 
+Steering range factors use the same non-negative domain at runtime and on load.
+Negative `GroupFactor` or `AvoidFactor` records reject with
+`InvalidOperationException`; neither factor is applied before both validate.
+Their wire names and canonical defaults (10 and 3) are unchanged, and zero is
+valid. The full transactional guarantee above applies to Navigator population.
+
 After all staged data validates, population removes the shell's old occupancy
 registration before applying the restored identity/position, registers the new
 position exactly once, and silently rebuilds `LastCommittedCell` against the

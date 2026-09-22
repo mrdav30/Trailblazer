@@ -23,6 +23,8 @@ public partial class NavSteering
         int pathRecheckCooldownFrames = _pathRecheckCooldownFrames;
         int? pathRecheckPhase = _pathRecheckPhase;
         NavigationAcquisitionMode acquisitionMode = _acquisitionMode;
+        Fixed64 groupFactor = _groupFactor;
+        Fixed64 avoidFactor = _avoidFactor;
 
         RecordValues.Look(chronicler, ref pathRecheckCooldownFrames, "PathRecheckCooldownFrames", DefaultPathRecheckCooldown);
         RecordValues.Look(chronicler, ref pathRecheckPhase, "PathRecheckPhase", null);
@@ -51,14 +53,22 @@ public partial class NavSteering
         RecordValues.Look(chronicler, ref _repathTries, "RepathTries", 0);
         RecordValues.Look(chronicler, ref _stuckFrameCount, "StuckFrameCount", 0);
         RecordValues.Look(chronicler, ref _waypointTolerance, "WaypointTolerance", DefaultWaypointTolerance);
-        RecordValues.Look(chronicler, ref GroupFactor, "GroupFactor", DefaultGroupFactor);
-        RecordValues.Look(chronicler, ref AvoidFactor, "AvoidFactor", DefaultAvoidFactor);
+        RecordValues.Look(chronicler, ref groupFactor, "GroupFactor", DefaultGroupFactor);
+        RecordValues.Look(chronicler, ref avoidFactor, "AvoidFactor", DefaultAvoidFactor);
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            SwiftThrowHelper.ThrowIfTrue(
+                groupFactor < Fixed64.Zero || avoidFactor < Fixed64.Zero,
+                message: "Serialized steering range factors must be non-negative.");
+        }
         RecordValues.Look(chronicler, ref BehaviorWeights, "BehaviorWeights", DefaultBehaviorWeights);
         RecordValues.Look(chronicler, ref BrakingPower, "BrakingPower", DefaultBrakingPower);
         RecordValues.Look(chronicler, ref movementGroupId, "MovementGroupId", 0);
         RecordValues.Look(chronicler, ref _movementGroupMode, "MovementGroupMode", MovementGroupTravelMode.None);
         if (chronicler.Mode == SerializationMode.Loading)
         {
+            _groupFactor = groupFactor;
+            _avoidFactor = avoidFactor;
             _pathRecheckCooldownFrames = pathRecheckCooldownFrames;
             _acquisitionMode = acquisitionMode;
             _pathRecheckPhase = pathRecheckPhase;

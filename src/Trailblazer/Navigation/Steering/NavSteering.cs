@@ -25,12 +25,12 @@ public partial class NavSteering : IRecordable
     #region Constants & Defaults
 
     /// <summary>
-    /// Default range to scan for other agents when calculating steering behaviors.
+    /// Default body-radius multiplier for the group-neighbor search range.
     /// </summary>
     protected static readonly Fixed64 DefaultGroupFactor = (Fixed64)10;
 
     /// <summary>
-    /// Default padding radius used to maintain space between nearby agents.
+    /// Default body-radius multiplier for the avoidance search range.
     /// </summary>
     protected static readonly Fixed64 DefaultAvoidFactor = (Fixed64)3;
 
@@ -368,14 +368,38 @@ public partial class NavSteering : IRecordable
     }
 
     /// <summary>
-    /// How far to look for group neighbors (separation/alignment/cohesion).
+    /// Gets or sets the non-negative body-radius multiplier used to find group
+    /// neighbors for separation, alignment, and cohesion. Zero disables grouping forces.
     /// </summary>
-    public Fixed64 GroupFactor = DefaultGroupFactor;
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+    public Fixed64 GroupFactor
+    {
+        get => _groupFactor;
+        set
+        {
+            SwiftThrowHelper.ThrowIfArgumentOutOfRange(value < Fixed64.Zero, null, nameof(value));
+            _groupFactor = value;
+        }
+    }
+
+    private Fixed64 _groupFactor = DefaultGroupFactor;
 
     /// <summary>
-    /// How far to look for obstacles to avoid.
+    /// Gets or sets the non-negative body-radius multiplier used to find nearby
+    /// steering occupants to avoid. Zero disables avoidance forces.
     /// </summary>
-    public Fixed64 AvoidFactor = DefaultAvoidFactor;
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+    public Fixed64 AvoidFactor
+    {
+        get => _avoidFactor;
+        set
+        {
+            SwiftThrowHelper.ThrowIfArgumentOutOfRange(value < Fixed64.Zero, null, nameof(value));
+            _avoidFactor = value;
+        }
+    }
+
+    private Fixed64 _avoidFactor = DefaultAvoidFactor;
 
     /// <summary>
     /// Weights for separating, aligning, and cohesion in group behavior.

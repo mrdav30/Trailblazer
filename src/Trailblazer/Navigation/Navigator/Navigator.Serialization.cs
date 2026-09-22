@@ -165,9 +165,7 @@ public abstract partial class Navigator
             RecordDeep.Look(chronicler, ref steering, "Steering");
             SwiftThrowHelper.ThrowIfTrue(
                 steering.BrakingPower < Fixed64.Zero
-                || steering.WaypointTolerance < Fixed64.Zero
-                || steering.GroupFactor < Fixed64.Zero
-                || steering.AvoidFactor < Fixed64.Zero,
+                || steering.WaypointTolerance < Fixed64.Zero,
                 message: "Serialized steering limits must be non-negative.");
         }
 

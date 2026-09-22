@@ -1722,6 +1722,11 @@ negative-radius behavior, and unwanted result-buffer growth. Adding 128
 outside-avoidance occupants after warming reproduced **4,088 bytes** of growth
 before the change and **zero** afterwards, with the same exact avoidance force.
 
+**2026-09-22 correctness follow-up:** `TRB-Issue-129` now rejects negative
+steering factors and direct body-radius arguments at their owning boundaries.
+The signed-radius compatibility branch and its test were removed; valid-range
+scan ordering and allocation tests remain. This is not a new timing claim.
+
 **Matched evidence:** eight captures with nonoverlapping benchmark-child runs
 cover original and balanced cadence, each in baseline/candidate/candidate/baseline
 order. One wrapper's post-run analysis overlapped the next wrapper's build,

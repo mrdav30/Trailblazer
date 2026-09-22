@@ -314,8 +314,6 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData("Steering", "BrakingPower")]
     [InlineData("Steering", "WaypointTolerance")]
-    [InlineData("Steering", "GroupFactor")]
-    [InlineData("Steering", "AvoidFactor")]
     [InlineData("Turning", "TurnRate")]
     [InlineData("Motor", "MaxSlowSpeed")]
     [InlineData("Motor", "MaxModerateSpeed")]
@@ -375,6 +373,89 @@ public class NavigatorSerializationTests : IDisposable
         move.MaxBackwardsSpeed.Should().Be(maxBackwardsSpeed);
         move.MaxGroundAcceleration.Should().Be(maxGroundAcceleration);
         move.MaxAirAcceleration.Should().Be(maxAirAcceleration);
+    }
+
+    [Theory]
+    [InlineData(false, "GroupFactor")]
+    [InlineData(false, "AvoidFactor")]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, "GroupFactor")]
+    [InlineData(true, "AvoidFactor")]
+#endif
+    public void Populate_ShouldRejectNegativeSteeringFactorsTransactionally(
+        bool useMemoryPack,
+        string member)
+    {
+        var source = CreateNavigator(new Vector3d(4, 0, 4));
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.SetPayloadValue(
+            payload, useMemoryPack, Fixed64.FromRaw(-1), "Steering", member);
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        NavSteering steering = TestRequire.NotNull(target.Steering);
+        steering.GroupFactor = (Fixed64)2;
+        steering.AvoidFactor = (Fixed64)4;
+        ApplyGuidedRequest(target);
+        PathQuery? query = steering.CurrentQuery;
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.Position.Should().Be(new Vector3d(-3, 0, -3));
+        target.Steering.Should().BeSameAs(steering);
+        steering.GroupFactor.Should().Be((Fixed64)2);
+        steering.AvoidFactor.Should().Be((Fixed64)4);
+        steering.CurrentQuery.Should().Be(query);
+        steering.ShouldMove.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false, 0L, 4L << 32)]
+    [InlineData(false, 2L << 32, 0L)]
+    [InlineData(false, long.MaxValue, long.MaxValue)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, 0L, 4L << 32)]
+    [InlineData(true, 2L << 32, 0L)]
+    [InlineData(true, long.MaxValue, long.MaxValue)]
+#endif
+    public void RoundTrip_ShouldPreserveValidSteeringFactors(
+        bool useMemoryPack,
+        long rawGroupFactor,
+        long rawAvoidFactor)
+    {
+        var source = CreateNavigator(Vector3d.Zero);
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.GroupFactor = Fixed64.FromRaw(rawGroupFactor);
+        sourceSteering.AvoidFactor = Fixed64.FromRaw(rawAvoidFactor);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        NavSteering restored = TestRequire.NotNull(target.Steering);
+        restored.GroupFactor.Should().Be(Fixed64.FromRaw(rawGroupFactor));
+        restored.AvoidFactor.Should().Be(Fixed64.FromRaw(rawAvoidFactor));
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void Populate_ShouldRestoreCanonicalDefaultsForOmittedSteeringFactors(bool useMemoryPack)
+    {
+        var source = CreateNavigator(Vector3d.Zero);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering", "GroupFactor");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering", "AvoidFactor");
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        NavSteering steering = TestRequire.NotNull(target.Steering);
+        steering.GroupFactor = Fixed64.Zero;
+        steering.AvoidFactor = Fixed64.Zero;
+
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        steering.GroupFactor.Should().Be((Fixed64)10);
+        steering.AvoidFactor.Should().Be((Fixed64)3);
     }
 
     [Theory]

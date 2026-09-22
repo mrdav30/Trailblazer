@@ -146,6 +146,24 @@ normal for slopes, or `Vector3d.Zero` when no normal was sampled. Keep
 `PlatformSnapshot.Transform` as the carrier transform; do not rotate it merely
 to encode collision geometry.
 
+### Steering range validation
+
+`NavSteering.GroupFactor` and `AvoidFactor` are now guarded properties instead of
+public fields. Ordinary reads, assignments, compound assignments, and object
+initializers keep their syntax. Field-specific `ref`/`out` access and reflection
+must be updated; existing compiled consumers must be rebuilt.
+
+Both factors must be non-negative. Negative assignments throw
+`ArgumentOutOfRangeException` without changing the previous value. Zero remains
+valid and disables the corresponding local steering forces. Defaults remain 10
+for grouping and 3 for avoidance. `ComputeCombinedSteering(...)` also rejects a
+negative body radius, even when speed is nonpositive; zero radius remains valid.
+No clamping or signed-radius compatibility path is provided.
+
+Serialized field names and defaults are unchanged, so this correction does not
+require a schema change. Negative saved factors reject rather than entering
+live steering, and failed Navigator population remains transactional.
+
 ### Periodic line-of-sight rechecks
 
 The v2 source workstream intentionally replaces the writable cooldown field

@@ -206,8 +206,9 @@ public class NavSteeringTests : IDisposable
     }
 
     [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 0)]
     [InlineData(2, -1)]
-    [InlineData(-2, -3)]
     public void ComputeCombinedSteering_ShouldApplyExactSeparationForRegisteredGroupNeighbors(
         int groupFactor,
         int expectedHalfUnits)
@@ -240,7 +241,7 @@ public class NavSteeringTests : IDisposable
         var ownerSteering = new NavSteering(TestWorld.Context)
         {
             GroupFactor = (Fixed64)groupFactor,
-            AvoidFactor = (Fixed64)3,
+            AvoidFactor = Fixed64.Zero,
             BehaviorWeights = new GroupBehaviorWeights { Separation = Fixed64.One }
         };
         var neighborSteering = new NavSteering(TestWorld.Context);
@@ -482,24 +483,91 @@ public class NavSteeringTests : IDisposable
         }
     }
 
-    [Fact]
-    public void ComputeCombinedSteering_ShouldPreserveScanRangeForNegativeAvoidanceFactor()
+    [Theory]
+    [InlineData(true, -1L)]
+    [InlineData(false, -1L)]
+    [InlineData(true, long.MinValue)]
+    [InlineData(false, long.MinValue)]
+    public void SteeringFactors_ShouldRejectNegativeAssignmentsWithoutChangingSettings(
+        bool groupFactor,
+        long rawValue)
     {
-        var neighbor = new MockSteerAgent(new Vector3d(2, 0, 0));
-        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
-        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
         var steer = new NavSteering(TestWorld.Context)
         {
             GroupFactor = (Fixed64)2,
-            AvoidFactor = (Fixed64)(-8)
+            AvoidFactor = (Fixed64)4
         };
 
-        Vector3d force = steer.ComputeCombinedSteering(
-            Vector3d.Zero, Vector3d.Right, Fixed64.One, Fixed64.Half, Guid.Empty);
+        Action assign = () =>
+        {
+            if (groupFactor)
+                steer.GroupFactor = Fixed64.FromRaw(rawValue);
+            else
+                steer.AvoidFactor = Fixed64.FromRaw(rawValue);
+        };
 
-        // Live negative assignments remain admitted (TRB-Issue-129). Preserve
-        // the old max(1, -4) scan instead of expanding it to magnitude 4.
+        assign.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("value");
+        steer.GroupFactor.Should().Be((Fixed64)2);
+        steer.AvoidFactor.Should().Be((Fixed64)4);
+    }
+
+    [Theory]
+    [InlineData(0, -1L)]
+    [InlineData(1, -1L)]
+    [InlineData(0, long.MinValue)]
+    [InlineData(1, long.MinValue)]
+    public void ComputeCombinedSteering_ShouldRejectNegativeRadiusEvenWhenStopped(
+        int speed,
+        long rawRadius)
+    {
+        var steer = new NavSteering(TestWorld.Context);
+
+        Action compute = () => steer.ComputeCombinedSteering(
+            Vector3d.Zero, Vector3d.Right, (Fixed64)speed, Fixed64.FromRaw(rawRadius), Guid.Empty);
+
+        compute.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("radius");
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldKeepZeroRadiusValidWithNearbyOccupants()
+    {
+        var neighbor = new MockSteerAgent(Vector3d.Right);
+        TestWorld.World.TryGetGrid(neighbor.Position, out VoxelGrid? grid).Should().BeTrue();
+        grid!.TryAddVoxelOccupant(neighbor).Should().BeTrue();
+        var steer = new NavSteering(TestWorld.Context);
+
+        Vector3d force = steer.ComputeCombinedSteering(
+            Vector3d.Zero, Vector3d.Right, Fixed64.One, Fixed64.Zero, Guid.Empty);
+
         force.Should().Be(Vector3d.Zero);
+    }
+
+    [Theory]
+    [InlineData(false, "GroupFactor")]
+    [InlineData(false, "AvoidFactor")]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, "GroupFactor")]
+    [InlineData(true, "AvoidFactor")]
+#endif
+    public void SteeringFactors_ShouldRejectNegativeRecordsBeforeApplyingEitherFactor(
+        bool useMemoryPack,
+        string member)
+    {
+        var source = new NavSteering(TestWorld.Context);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.SetPayloadValue(
+            payload, useMemoryPack, Fixed64.FromRaw(-1), member);
+        var target = new NavSteering(TestWorld.Context)
+        {
+            GroupFactor = (Fixed64)2,
+            AvoidFactor = (Fixed64)4
+        };
+
+        Action populate = () => SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        populate.Should().Throw<InvalidOperationException>();
+        target.GroupFactor.Should().Be((Fixed64)2);
+        target.AvoidFactor.Should().Be((Fixed64)4);
     }
 
     [Fact]

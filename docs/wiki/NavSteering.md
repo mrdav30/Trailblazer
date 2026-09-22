@@ -253,6 +253,19 @@ Relevant changes reacquire; unrelated changes can reuse the cached payload.
 
 ## Movement Groups
 
+`GroupFactor` and `AvoidFactor` are non-negative multipliers of the agent's body
+radius, not world-space distances. Their defaults are 10 and 3 respectively.
+Both can be changed at runtime; assigning a negative value throws
+`ArgumentOutOfRangeException` and preserves the previous value. Values are never
+silently clamped.
+
+Zero `GroupFactor` disables separation, alignment, and cohesion forces without
+disabling avoidance or leaving the movement group. Zero `AvoidFactor` disables
+avoidance without disabling group forces. Ungrouped agents scan only their
+avoidance range. If calling `ComputeCombinedSteering(...)` directly, supply a
+non-negative world-space body radius: zero produces no local steering force;
+a negative radius throws even when speed is zero.
+
 Movement groups shape ordinary destinations/headings after path selection. They
 do not modify medium-state graph connectivity and do not merge semantic action
 ownership. `PrewarmMovementGroup(...)` can restore coordinator membership after

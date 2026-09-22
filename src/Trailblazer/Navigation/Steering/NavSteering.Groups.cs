@@ -21,6 +21,10 @@ public partial class NavSteering
     /// Computes a combined steering vector—
     /// Separation, Alignment, Cohesion, plus single-nearest obstacle avoidance.
     /// </summary>
+    /// <remarks>The body radius is a non-negative world-space distance. Zero produces no local steering force.</remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="radius"/> is negative, including when speed is nonpositive.
+    /// </exception>
     public Vector3d ComputeCombinedSteering(
         Vector3d position,
         Vector3d velocity,
@@ -28,6 +32,8 @@ public partial class NavSteering
         Fixed64 radius,
         Guid id)
     {
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(radius < Fixed64.Zero, null, nameof(radius));
+
         if (speed <= Fixed64.Zero)
             return Vector3d.Zero;
 
@@ -40,9 +46,8 @@ public partial class NavSteering
             ? Fixed64.Zero
             : Fixed64.One / groupRadius;
         Fixed64 avoidRadius = radius * AvoidFactor;
-        // Ungrouped agents only use avoidance; retain legacy signed-radius
-        // behavior for negative inputs until their public validation changes.
-        Fixed64 scanRadius = !IsInGroup && avoidRadius >= Fixed64.Zero
+        // Ungrouped agents only use avoidance.
+        Fixed64 scanRadius = !IsInGroup
             ? avoidRadius
             : FixedMath.Max(groupRadius, avoidRadius);
         Fixed64 groupRadiusSq = groupRadius * groupRadius;

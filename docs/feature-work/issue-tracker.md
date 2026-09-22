@@ -26,28 +26,6 @@
 
 ## Active Issues
 
-### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
-
-- **Discovered:** 2026-09-14 while reviewing the narrow zero-radius steering
-  fix.
-- **Status:** Open; confirmed API/validation asymmetry, not a reproduced new
-  performance or determinism failure.
-- **Evidence:** `NavSteering.GroupFactor` and `AvoidFactor` are public mutable
-  fields, so runtime assignment accepts negative values. Navigator nested-load
-  validation rejects either field below zero. The same authored settings can
-  therefore enter live steering but fail a later round trip. This predates the
-  phase-spreading and zero-denominator changes.
-- **Performance follow-up:** The ungrouped-scan optimization preserves the
-  existing maximum-radius path for negative computed avoidance radii. A focused
-  regression protects that behavior: passing a negative radius directly to
-  GridForge would expand the scan by its magnitude. Remove that compatibility
-  condition and revise its test only when this issue settles live validation.
-- **Next scope:** Reproduce runtime assignment and rejected round-trip behavior,
-  then settle consistent nonnegative range validation at the owning public
-  boundary. Review the source-compatibility effect before changing fields to
-  guarded properties. Do not silently clamp values or expand the zero-radius fix
-  into a general tuning API redesign.
-
 ### TRB-Issue-124 - World publication cannot advance across signed frame-count wrap
 
 - **Discovered:** 2026-09-14 while testing LOS phase clock boundaries.
@@ -224,6 +202,38 @@
   failures.
 
 ## Resolved Issues
+
+### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
+
+- **Discovered:** 2026-09-14; **resolved locally:** 2026-09-22.
+- **Cause:** Public mutable `NavSteering.GroupFactor` and `AvoidFactor` fields
+  admitted negative runtime values that Navigator's nested-load validation
+  rejected. Direct steering-record population also bypassed that validation.
+- **Fix:** Same-named non-negative properties reject before mutation through
+  `SwiftThrowHelper`. Steering records stage and validate both factors before
+  applying either; Navigator retains its full staged-load guarantee. Defaults
+  remain 10/3, zero remains valid, and wire keys/order/schema are unchanged.
+  `ComputeCombinedSteering` rejects negative body radii even when stopped, so
+  the signed-radius scan fallback and its compatibility tests are removed.
+  No silent clamping, wrappers, or general tuning redesign was introduced.
+- **Compatibility:** Normal assignment and initializer syntax is unchanged.
+  Field-specific references/reflection need migration and compiled consumers
+  need rebuilding; see [steering range validation](../MIGRATION.md#steering-range-validation).
+- **Regression evidence:** Before the fix, 12 new cases failed because negative
+  assignments, direct radius arguments, and standalone JSON/MemoryPack loads
+  were accepted. The replacement tests cover rejection without factor mutation,
+  stopped/moving callers, zero and positive grouping/avoidance, valid round
+  trips, omitted defaults, and transactional Navigator rejection.
+- **Validation:** Source-stack Windows Release passes 3,187 core + 84 adapter
+  tests; ReleaseLean passes 3,096 + 80. Both configurations retain exact combined
+  coverage for `Trailblazer` and `Trailblazer.Gravitas`: 32,459/32,459 lines,
+  13,278/13,278 branches, and 3,188/3,188 covered and fully covered methods.
+  The same four managed test suites pass under Linux/WSL with .NET 8.0.26
+  (execution of the built assemblies, not a separate Linux build). Full solution
+  builds pass both `netstandard2.1` and `net8.0` in Release and ReleaseLean;
+  DocFX passes with warnings as errors. Independent correctness/simplicity
+  review found no actionable issues.
+  Raw red/focused/full-suite evidence and reports are under `artifacts/issue129`.
 
 ### TRB-Issue-152 - Legacy hex inverse disagrees with the quantized forward lattice
 

@@ -1,5 +1,4 @@
 using System;
-using System.Runtime;
 using FluentAssertions;
 using Xunit;
 
@@ -10,12 +9,13 @@ public class AllocationTestUtilityTests
     [Fact]
     public void MeasureAllocatedBytes_ShouldReportZeroForNonAllocatingWork()
     {
-        GCLatencyMode measuredMode = default;
-        long allocated = AllocationTestUtility.MeasureAllocatedBytes(
-            () => measuredMode = GCSettings.LatencyMode);
+        GC.GetConfigurationVariables()["ConcurrentGC"].Should().Be(false,
+            "the test host must disable background GC for reliable allocation counters");
+        int calls = 0;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() => calls++);
 
         allocated.Should().Be(0);
-        measuredMode.Should().Be(GCLatencyMode.NoGCRegion);
+        calls.Should().Be(1);
     }
 
     [Fact]
@@ -36,44 +36,49 @@ public class AllocationTestUtilityTests
         GC.KeepAlive(retained);
     }
 
-    [Fact]
-    public void MeasureAllocatedBytes_ShouldRejectACollectionDuringMeasurement()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1024)]
+    public void MeasureAllocatedBytes_ShouldPreserveCountsAcrossBlockingCollection(int allocationSize)
     {
-        Action measure = () => AllocationTestUtility.MeasureAllocatedBytes(
-            static () => GC.Collect(0, GCCollectionMode.Forced, blocking: true));
-
-        measure.Should().Throw<InvalidOperationException>();
-        GCSettings.LatencyMode.Should().NotBe(GCLatencyMode.NoGCRegion);
-    }
-
-    [Fact]
-    public void MeasureAllocatedBytes_ShouldReleaseRegionWhenWorkThrows()
-    {
-        var expected = new InvalidOperationException("Measured work failed.");
-
-        Exception? actual = Record.Exception(() =>
-            AllocationTestUtility.MeasureAllocatedBytes(() => throw expected));
-
-        actual.Should().BeSameAs(expected);
-        GCSettings.LatencyMode.Should().NotBe(GCLatencyMode.NoGCRegion);
-        AllocationTestUtility.MeasureAllocatedBytes(static () => { }).Should().Be(0);
-    }
-
-    [Fact]
-    public void MeasureAllocatedBytes_ShouldRejectNestingWithoutEndingTheOuterRegion()
-    {
-        Action work = static () => { };
-        Action measure = () => AllocationTestUtility.MeasureAllocatedBytes(work);
-        Exception? exception = null;
-        bool outerRegionStillActive = false;
-
-        AllocationTestUtility.MeasureAllocatedBytes(() =>
+        byte[]? retained = null;
+        int calls = 0;
+        int collectionsBefore = GC.CollectionCount(0);
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
         {
-            exception = Record.Exception(measure);
-            outerRegionStillActive = GCSettings.LatencyMode == GCLatencyMode.NoGCRegion;
+            calls++;
+            if (allocationSize > 0)
+                retained = new byte[allocationSize];
+            GC.Collect(0, GCCollectionMode.Forced, blocking: true);
         });
 
-        exception.Should().BeOfType<InvalidOperationException>();
-        outerRegionStillActive.Should().BeTrue();
+        calls.Should().Be(1);
+        GC.CollectionCount(0).Should().BeGreaterThan(collectionsBefore);
+        if (allocationSize == 0)
+            allocated.Should().Be(0);
+        else
+        {
+            retained.Should().HaveCount(allocationSize);
+            allocated.Should().BeGreaterThanOrEqualTo(allocationSize);
+        }
+        GC.KeepAlive(retained);
+    }
+
+    [Fact]
+    public void MeasureAllocatedBytes_ShouldPropagateWorkExceptionWithoutRetry()
+    {
+        var expected = new InvalidOperationException("Measured work failed.");
+        int calls = 0;
+
+        Exception? actual = Record.Exception(() =>
+            AllocationTestUtility.MeasureAllocatedBytes(() =>
+            {
+                calls++;
+                GC.Collect(0, GCCollectionMode.Forced, blocking: true);
+                throw expected;
+            }));
+
+        actual.Should().BeSameAs(expected);
+        calls.Should().Be(1);
     }
 }

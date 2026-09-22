@@ -105,12 +105,14 @@ loads, and reset/disposal in lifecycle tests. See
 
 For short, synchronous current-thread allocation assertions, use
 [`AllocationTestUtility`](tests/Trailblazer.Tests/Support/AllocationTestUtility.cs).
-It drains pending collection before admission and verifies an active no-GC
-region to prevent background collection from distorting the byte counter. Real
-allocations still count, and admission or region failure fails the test without
-retries. Keep warmups and assertions outside the measured action. Do not apply
-this test setup to performance benchmarks or asynchronous/global allocation
-measurements.
+The core test executable sets `ConcurrentGarbageCollection=false` so .NET 8
+background-GC allocation-context accounting cannot inflate the byte counter.
+Keep that test-host setting enabled. The non-inlined helper measures exactly
+one invocation; it does not warm up, retry, force collection or reserve a no-GC
+region. Callers own warmup and keep assertions outside the measured action.
+Real allocations still count across blocking collections, and action exceptions
+propagate unchanged. This setup does not change library/consumer or benchmark
+GC settings and is not suitable for asynchronous/global allocation measurements.
 
 ## Documentation expectations
 

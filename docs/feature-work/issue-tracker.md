@@ -9,7 +9,8 @@
 - Add new items when feature work uncovers a pre-existing bug, stale doc, test
   smell, performance anomaly, or correctness risk outside that feature's own
   implementation. Track regressions introduced on a feature branch in its active
-  plan, including their fixes and verification; do not defer them into this tracker.
+  plan, including their fixes and verification; do not defer them into this
+  tracker.
 - Keep each item scoped tightly enough to fix and verify independently.
 - Record the date on the item, not in this filename.
 - Move an item to `Resolved Issues` only after the fix has tests or documented
@@ -27,7 +28,8 @@
 
 ### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 
-- **Discovered:** 2026-09-14 while reviewing the narrow zero-radius steering fix.
+- **Discovered:** 2026-09-14 while reviewing the narrow zero-radius steering
+  fix.
 - **Status:** Open; confirmed API/validation asymmetry, not a reproduced new
   performance or determinism failure.
 - **Evidence:** `NavSteering.GroupFactor` and `AvoidFactor` are public mutable
@@ -43,8 +45,8 @@
 - **Next scope:** Reproduce runtime assignment and rejected round-trip behavior,
   then settle consistent nonnegative range validation at the owning public
   boundary. Review the source-compatibility effect before changing fields to
-  guarded properties. Do not silently clamp values or expand the zero-radius
-  fix into a general tuning API redesign.
+  guarded properties. Do not silently clamp values or expand the zero-radius fix
+  into a general tuning API redesign.
 
 ### TRB-Issue-124 - World publication cannot advance across signed frame-count wrap
 
@@ -53,15 +55,15 @@
   phase-spreading regression. No fix is claimed.
 - **Evidence:** `TrailblazerWorldContext.Simulate()` advances its clock before
   passing signed `FrameCount` to `MaintainNavigationGraph`. The operation
-  processor requires `frame > _lastProcessedFrame`; wrapping from
-  `int.MaxValue` to `int.MinValue` therefore rejects. Operation authoring also
-  rejects negative effective frames. Both guards exist at the feature branch
-  base `5367f5a`. Clock/index tests can cross the boundary internally, but that
-  does not establish successful whole-world simulation across it.
+  processor requires `frame > _lastProcessedFrame`; wrapping from `int.MaxValue`
+  to `int.MinValue` therefore rejects. Operation authoring also rejects negative
+  effective frames. Both guards exist at the feature branch base `5367f5a`.
+  Clock/index tests can cross the boundary internally, but that does not
+  establish successful whole-world simulation across it.
 - **Impact:** A continuously running context eventually reaches the signed
   publication limit (about 2.1 years of simulated time at 32 Hz; accelerated
-  simulation can reach it sooner in wall-clock time). The failing call has already
-  advanced clock state before graph maintenance rejects; it is not a
+  simulation can reach it sooner in wall-clock time). The failing call has
+  already advanced clock state before graph maintenance rejects; it is not a
   transactional whole-world exhaustion boundary. A wider internal LOS index
   alone does not remove this limitation.
 - **Next scope:** Review one explicit frame-lifetime contract across context,
@@ -71,61 +73,61 @@
   timestamps locally without accounting for pending operations and ordering.
   This broader clock/publication change is outside periodic LOS phase spreading.
 
-### TRB-Issue-119 - Guided A* setup reported an exception in wide geometry
+### TRB-Issue-119 - Guided A\* setup reported an exception in wide geometry
 
 - **Discovered:** 2026-09-10 during guided-host performance measurement.
-- **Status:** Open. One historical BenchmarkDotNet A*100 setup failure has not
-  reproduced in the bounded follow-ups below. No fix or runtime attribution
-  is claimed.
+- **Status:** Open. One historical BenchmarkDotNet A\*100 setup failure has not
+  reproduced in the bounded follow-ups below. No fix or runtime attribution is
+  claimed.
 - **Failure:** `NullReferenceException` in
-  `WideConvex2dRelations.GetRotatedOffset` at ProjectionMath.cs:477, reached from
-  `ContainsPoint` through GridForge's planar segment interval calculation and
-  Trailblazer's A* simplification. The fixture fails during untimed
+  `WideConvex2dRelations.GetRotatedOffset` at ProjectionMath.cs:477, reached
+  from `ContainsPoint` through GridForge's planar segment interval calculation
+  and Trailblazer's A* simplification. The fixture fails during untimed
   `Setup -> Prepare -> Navigator.Simulate -> RequestGuide`; no A* timing result
   exists for that failed launch.
 - **Boundary:** The new wall-detour fixture permits 1,024 simplification rays;
-  historical cold A* cases disable simplification. The reported helper and its
+  historical cold A\* cases disable simplification. The reported helper and its
   inspected arithmetic inputs are value types, with no obvious nullable-object
   dereference. Optimized source mapping, code generation, provenance and other
   corruption are hypotheses, not established causes. Do not add a null guard,
   swallow/retry the exception, or disable simplification as a purported fix.
 - **Provenance:** Trailblazer `4a02250` plus the new benchmark-only fixture;
-  GridForge `7179cce`, SwiftCollections `4b5715b`, local-stack Release,
-  .NET 8.0.29. Retained failure stack:
-  `artifacts/benchmark004/guided-sizing-2.log`. The generated child, source,
-  runtime configuration and dependencies are frozen in `failed-guided-child`,
-  with `failed-guided-child-hashes.json`. The passing standalone run is
-  `astar100-probe.log`; it changes the hosting harness and does not erase the
-  failed BenchmarkDotNet evidence. `guided-baseline.log` retains the three
-  subsequent passing launches with their original preparation order; their
-  nine actual blocks pass replay and lifetime checks. The pre-optimization
-  benchmark binaries are separately frozen in `guided-baseline-bin`.
-  The optimized candidate subsequently passes another three A* launches with
-  identical captured replay hashes. This does not identify or fix the earlier
-  exception: the performance change avoids some disjoint-candidate math calls.
-- **Follow-up watch (2026-09-11 UTC):** Four frozen generated-runner A*/100 controls
-  complete without the exception (two per GridForge version, same shared
-  runtime). Fresh parent-driven guided baseline and FixedMathSharp-candidate
-  captures each pass all three A* launches. Logs and executed-child snapshots
-  are under
-  `artifacts/benchmark005`. Historical parent-output hashes are not a substitute
-  for the executed child's binaries; new captures preserve both the actual
-  child runtime and generated source. These clean runs are additional evidence,
-  not a fix or a reason to discard the original failure.
-  The containment optimization removes a redundant query-point transform;
-  polygon transforms still use the reported helper. Neither fewer calls nor
-  successful runs establish the cause of the original exception.
+  GridForge `7179cce`, SwiftCollections `4b5715b`, local-stack Release, .NET
+  8.0.29. Retained failure stack: `artifacts/benchmark004/guided-sizing-2.log`.
+  The generated child, source, runtime configuration and dependencies are frozen
+  in `failed-guided-child`, with `failed-guided-child-hashes.json`. The passing
+  standalone run is `astar100-probe.log`; it changes the hosting harness and
+  does not erase the failed BenchmarkDotNet evidence. `guided-baseline.log`
+  retains the three subsequent passing launches with their original preparation
+  order; their nine actual blocks pass replay and lifetime checks. The
+  pre-optimization benchmark binaries are separately frozen in
+  `guided-baseline-bin`. The optimized candidate subsequently passes another
+  three A\* launches with identical captured replay hashes. This does not
+  identify or fix the earlier exception: the performance change avoids some
+  disjoint-candidate math calls.
+- **Follow-up watch (2026-09-11 UTC):** Four frozen generated-runner A*/100
+  controls complete without the exception (two per GridForge version, same
+  shared runtime). Fresh parent-driven guided baseline and
+  FixedMathSharp-candidate captures each pass all three A* launches. Logs and
+  executed-child snapshots are under `artifacts/benchmark005`. Historical
+  parent-output hashes are not a substitute for the executed child's binaries;
+  new captures preserve both the actual child runtime and generated source.
+  These clean runs are additional evidence, not a fix or a reason to discard the
+  original failure. The containment optimization removes a redundant query-point
+  transform; polygon transforms still use the reported helper. Neither fewer
+  calls nor successful runs establish the cause of the original exception.
 - **Separate later failure:** The next tracing slice's unchanged-runtime
   pointy-hex strict-miss microbenchmark reports a null-reference exception in
   generated `WorkloadActionUnroll` after 13 actual iterations. GridForge tracks
   it as `GF-Issue-006`, with the actual child/source/hash snapshot under
-  `artifacts/benchmark005/planar-edge-baseline-children`. This is not an A* setup
-  failure; its normal path exits before containment. Neither a shared cause
-  nor a relationship to the original wide-helper stack has been established.
+  `artifacts/benchmark005/planar-edge-baseline-children`. This is not an A\*
+  setup failure; its normal path exits before containment. Neither a shared
+  cause nor a relationship to the original wide-helper stack has been
+  established.
 - **Upstream investigation (2026-09-11):** `GF-Issue-006` remains open after
   seven additional unchanged-child probes: one console-host replay and six
   acknowledged-pipe replays, three with first-chance capture attached. All exit
-  zero; none is a replay of this A* setup failure or a repair of the incomplete
+  zero; none is a replay of this A\* setup failure or a repair of the incomplete
   planar baseline. Evidence and a validated native-fault capture procedure are
   retained upstream and locally under `artifacts/gf-issue006`. A separate null
   control showed that name-only exception collection missed a caught NRE;
@@ -140,20 +142,21 @@
   agent index and exact simplification ray/prism inputs before reducing it to
   the public math boundary. Repeated clean runs are not a root-cause diagnosis.
   Preserve pre-change artifacts when testing optimizations; avoiding calls on
-  disjoint candidates must not be described as a fix for this exception.
-  This is distinct from the closed `TRB-Benchmark-004` protocol watch and does
-  not meet `TRB-Issue-114`'s allocation-guard reopening criteria.
+  disjoint candidates must not be described as a fix for this exception. This is
+  distinct from the closed `TRB-Benchmark-004` protocol watch and does not meet
+  `TRB-Issue-114`'s allocation-guard reopening criteria.
 - **Separate containment micro failure (2026-09-13 UTC):** FixedMathSharp now
-  tracks `FMS-Issue-018`: two unchanged-runtime `Outside(4 vertices, 30 degrees)`
-  captures fail in launch 2. The first exits with native access violation
-  `0xC0000005` after six actual iterations, without a managed stack; the second
-  reports an NRE in `GetWorldPoint` after four. Windows event/log and executed-
-  child archives are preserved under `artifacts/benchmark005/fms-vertex-baseline*`.
-  Both incomplete captures are excluded from comparison. Neither is an A* setup
-  failure, and no common cause or fix is established. The subsequent guided
-  baseline/candidate each complete all three A* launches with matching replay;
-  endpoint reuse removes the reported helper from this containment path, so
-  clean candidate runs cannot establish a fix.
+  tracks `FMS-Issue-018`: two unchanged-runtime
+  `Outside(4 vertices, 30 degrees)` captures fail in launch 2. The first exits
+  with native access violation `0xC0000005` after six actual iterations, without
+  a managed stack; the second reports an NRE in `GetWorldPoint` after four.
+  Windows event/log and executed- child archives are preserved under
+  `artifacts/benchmark005/fms-vertex-baseline*`. Both incomplete captures are
+  excluded from comparison. Neither is an A* setup failure, and no common cause
+  or fix is established. The subsequent guided baseline/candidate each complete
+  all three A* launches with matching replay; endpoint reuse removes the
+  reported helper from this containment path, so clean candidate runs cannot
+  establish a fix.
 
 ## Closed Investigations
 
@@ -165,45 +168,47 @@
   inconclusive, with no confirmed production defect or allocator fix.
   Warmup/measurement consistency has been improved, but the allocation source
   has not been attributed. Passing runs are not a root-cause resolution.
-- **Evidence:** The initial Phase 3 full covered `Release` run passed 2,394 tests
-  and failed `WarmAttachSampleDispose_ShouldAllocateZeroBytes` with 616 bytes
-  instead of zero. The unchanged test then passed alone (1/1) and with its class
-  (9/9). The measured allocator has not been attributed; no runtime allocation
-  defect or 16-cycle storage-growth threshold has been established.
+- **Evidence:** The initial Phase 3 full covered `Release` run passed 2,394
+  tests and failed `WarmAttachSampleDispose_ShouldAllocateZeroBytes` with 616
+  bytes instead of zero. The unchanged test then passed alone (1/1) and with its
+  class (9/9). The measured allocator has not been attributed; no runtime
+  allocation defect or 16-cycle storage-growth threshold has been established.
 - **Earlier mitigation:** Aligned warmup with the adjacent guards at 256
-  iterations. The [acquisition cost audit](done/navigationSchedulingPlan.md#issue-114---separate-allocation-guard-investigation)
+  iterations. The
+  [acquisition cost audit](done/navigationSchedulingPlan.md#issue-114---separate-allocation-guard-investigation)
   records the earlier passing matrices and separates this covered
   acquire/attach/sample/dispose signal from acquisition-only timing.
 - **2026-09-10 investigation:** Temporary preallocated phase counters reproduced
   7,552 bytes in one sample after 16 warmups, 5,192 bytes in a sample after 256
   warmups, and 5,640 bytes in acquisition after 16 warmups. The bursts did not
-  identify a stable allocation site. These diagnostic builds changed code layout;
-  they do not establish that the same allocator produced the historical 616
-  bytes, or that the unmodified 256-warmup guard has the same failure.
+  identify a stable allocation site. These diagnostic builds changed code
+  layout; they do not establish that the same allocator produced the historical
+  616 bytes, or that the unmodified 256-warmup guard has the same failure.
   Source review found the warmed payload/guide/graph-lease pools already primed,
   with no ordinary per-cycle construction on the successful path. No constructor
   or exhausted pool was tied to a failing window.
-- **Attribution limits:** Fully decoded small-allocation traces retained six measured
-  windows without lost events, but all six measured zero bytes. Seven full
-  covered runs with caller-thread JIT counters also passed; the three traced
-  counter runs recorded no caller-thread compilation in the measured phases.
-  Three tiering-disabled runs passed, but this does not establish tiering as the
-  cause. Independent .NET-only probes measured 8.4 million lock windows with
-  allocation churn and forced/concurrent collections without a nonzero delta.
-  Neither a runtime-accounting defect nor a JIT allocation has been established.
+- **Attribution limits:** Fully decoded small-allocation traces retained six
+  measured windows without lost events, but all six measured zero bytes. Seven
+  full covered runs with caller-thread JIT counters also passed; the three
+  traced counter runs recorded no caller-thread compilation in the measured
+  phases. Three tiering-disabled runs passed, but this does not establish
+  tiering as the cause. Independent .NET-only probes measured 8.4 million lock
+  windows with allocation churn and forced/concurrent collections without a
+  nonzero delta. Neither a runtime-accounting defect nor a JIT allocation has
+  been established.
 - **Guard improvement:** Warmup and measurement now call the same assertion-free
   helper, kept separate from the test by `NoInlining`. Both still use 256
   iterations. Successful sampling, drained leases and exactly zero measured
   bytes remain mandatory; there are no retries, tolerances or runtime-setting
-  changes. The separate first-attach guard is unchanged. All temporary production
-  probes and tracing hooks were removed. This is a test-harness improvement,
-  not evidence that the historical allocator was fixed.
+  changes. The separate first-attach guard is unchanged. All temporary
+  production probes and tracing hooks were removed. This is a test-harness
+  improvement, not evidence that the historical allocator was fixed.
 - **Verification:** Four fresh covered core `Release` runs passed 2,455/2,455
   each after the extraction. A temporary 64-byte array allocation on every
-  iteration made the exact guard fail at 22,528 bytes; that mutation was removed.
-  The final local-source matrices passed `Release` (2,455 core + 65 adapter)
-  and `ReleaseLean` (2,393 core + 65 adapter), with zero build warnings/errors.
-  Both merged reports have exact coverage: 30,841/30,841 lines,
+  iteration made the exact guard fail at 22,528 bytes; that mutation was
+  removed. The final local-source matrices passed `Release` (2,455 core + 65
+  adapter) and `ReleaseLean` (2,393 core + 65 adapter), with zero build
+  warnings/errors. Both merged reports have exact coverage: 30,841/30,841 lines,
   12,087/12,087 branches and 3,009/3,009 fully covered methods. These results
   verify the guard's sensitivity and current gates, not allocation attribution.
 - **Closure decision:** Stop the investigation rather than continue speculative
@@ -215,7 +220,8 @@
   production build, or new evidence identifies a concrete allocating branch or
   allocation type/stack. Preserve the failing commit, configuration, runtime,
   coverage settings and logs so follow-up starts from new evidence rather than
-  repeating this investigation. Closure does not waive future allocation failures.
+  repeating this investigation. Closure does not waive future allocation
+  failures.
 
 ## Resolved Issues
 
@@ -236,8 +242,9 @@
   round trips, authored/non-authored bounds normalization, dense lookup and
   coverage, and sparse stationary interval/3D-body endpoint checks. Full
   GridForge suites pass 1,162 tests in each configuration; downstream Gravitas,
-  Trailblazer and adapter suites also pass against the source-built dependencies.
-  See the [cross-stack verification record](twoDimensionalNavigationPlan.md#2026-09-22---upstream-contact-and-hex-defects-resolved).
+  Trailblazer and adapter suites also pass against the source-built
+  dependencies. See the
+  [cross-stack verification record](twoDimensionalNavigationPlan.md#2026-09-22---upstream-contact-and-hex-defects-resolved).
 - **Boundary:** The inverse requires unsaturated intermediate arithmetic.
   Previously affected inputs can produce corrected dimensions/configuration
   keys; rebuild derived data from authored inputs. Native planar tracing keeps
@@ -247,12 +254,13 @@
 ### TRB-Issue-151 - Generalized capsule contact classification loses exact corner touch
 
 - **Discovered / resolved:** 2026-09-21 / 2026-09-22.
-- **Owner:** FixedMathSharp `FMS-Issue-020`; corrected in `d53bf28`, with related
-  side-contact witness correction in `da6b6f1`.
-- **Reproduction:** `FixedSegment2d.TryGetCenteredCapsuleConvexMinimumTranslation`
-  rejected a zero-axis capsule at `(3,4)`, radius `5`, against polygon
-  `(-1,-1),(0,-1),(0,0),(-1,0)`, despite exact 3-4-5 corner tangency. Scales
-  1, 10, 100 and 1000 reproduced. Rounded normalized axes were used for
+- **Owner:** FixedMathSharp `FMS-Issue-020`; corrected in `d53bf28`, with
+  related side-contact witness correction in `da6b6f1`.
+- **Reproduction:**
+  `FixedSegment2d.TryGetCenteredCapsuleConvexMinimumTranslation` rejected a
+  zero-axis capsule at `(3,4)`, radius `5`, against polygon
+  `(-1,-1),(0,-1),(0,0),(-1,0)`, despite exact 3-4-5 corner tangency. Scales 1,
+  10, 100 and 1000 reproduced. Rounded normalized axes were used for
   classification while assuming an exact unit radial extent.
 - **Fix:** Retain exact unnormalized axes and radial extents through contact
   classification and minimum-depth ordering; round the selected output only
@@ -267,16 +275,17 @@
   source-DLL checks are recorded in the
   [verification record](twoDimensionalNavigationPlan.md#2026-09-22---upstream-contact-and-hex-defects-resolved).
 - **Boundary:** This closes the contact defect, not the remaining bounded
-  support/posture implementation, native controller acceptance or package-release
-  gates.
+  support/posture implementation, native controller acceptance or
+  package-release gates.
 
 ### TRB-Issue-150 - Gravitas2D exact-touch circle sweeps return the probe center as the surface point
 
-- **Discovered / resolved:** 2026-09-21 during the native 2D navigation preflight.
+- **Discovered / resolved:** 2026-09-21 during the native 2D navigation
+  preflight.
 - **Owner:** Gravitas `GRV-Issue-074`,
   `src/Gravitas/Queries/2D/QueryDetection2D.cs`, `TrySweepCircle`.
-- **Reproduction:** At Gravitas `df1915142ec9c8c7937ee7aa8aa6d25a99cee4cd`,
-  a pure TwoD bodyless AABB centered at `(0,-1/2)` with size `(12,1)` receives
+- **Reproduction:** At Gravitas `df1915142ec9c8c7937ee7aa8aa6d25a99cee4cd`, a
+  pure TwoD bodyless AABB centered at `(0,-1/2)` with size `(12,1)` receives
   `SweepCircleAll` from `(0,1/2)` to `(0,0)`, radius `1/2`, all layers, no
   triggers. The hit has the correct collider, zero distance and `(0,1)` normal,
   but returns the probe center `(0,1/2)` instead of the floor point `(0,0)`.
@@ -291,64 +300,73 @@
   line/branch/method coverage pass. The repeated native preflight now passes all
   52 checks with zero witness gaps. This resolves the query defect, not the
   remaining 2D geometry/controller gates or package-release verification.
-- **Evidence:** [Original reproduction](twoDimensionalNavigationPlan.md#2026-09-21---source-development-and-native-2d-preflight)
-  and [fix/slope follow-up](twoDimensionalNavigationPlan.md#2026-09-21---correct-witnesses-and-slope-anchor-proof).
+- **Evidence:**
+  [Original reproduction](twoDimensionalNavigationPlan.md#2026-09-21---source-development-and-native-2d-preflight)
+  and
+  [fix/slope follow-up](twoDimensionalNavigationPlan.md#2026-09-21---correct-witnesses-and-slope-anchor-proof).
 
 ### TRB-Issue-146 - Guided action approaches can oscillate across exact entry
 
-- **Resolved:** 2026-09-20 after both package-family gates and independent review.
-- **Discovered:** 2026-09-20, Gravitas integration Phase 2, before changing approach behavior.
-- **Evidence:** Both A* and Flow failed to expose the ladder instruction within
+- **Resolved:** 2026-09-20 after both package-family gates and independent
+  review.
+- **Discovered:** 2026-09-20, Gravitas integration Phase 2, before changing
+  approach behavior.
+- **Evidence:** Both A\* and Flow failed to expose the ladder instruction within
   512 real adapter frames. Ordinary arrival tolerance does not authorize an
   action. The earlier core ladder fixture masked crossing by replacing the
   accepted position with the exact entry.
-- **Fix:** Explicit action-approach metadata reaches the
-  motor, which bounds only controlled displacement at a crossing. Gravity,
-  jumping, platform carry, and collision acceptance remain independent. The
-  artificial core-fixture docking was removed. Both core and real-adapter
-  ladder sequences pass, including blocked entry, retry, and exact action ownership.
-- **Evidence record:** [Joint Phase 2 record](done/gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening).
+- **Fix:** Explicit action-approach metadata reaches the motor, which bounds
+  only controlled displacement at a crossing. Gravity, jumping, platform carry,
+  and collision acceptance remain independent. The artificial core-fixture
+  docking was removed. Both core and real-adapter ladder sequences pass,
+  including blocked entry, retry, and exact action ownership.
+- **Evidence record:**
+  [Joint Phase 2 record](done/gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening).
 
 ### TRB-Issue-147 - Navigator restore discards pending and active turning
 
-- **Resolved:** 2026-09-20 after both package-family gates and independent review.
+- **Resolved:** 2026-09-20 after both package-family gates and independent
+  review.
 - **Discovered:** 2026-09-20, changed-posture rotating-platform replay.
-- **Evidence:** JSON and MemoryPack restore preserved the current quaternion
-  but changed `TargetReached` from false to true. The resumed platform trace
+- **Evidence:** JSON and MemoryPack restore preserved the current quaternion but
+  changed `TargetReached` from false to true. The resumed platform trace
   diverged because `NavTurning` recorded only configuration and Navigator load
   reinitialized its continuation.
-- **Fix:** Navigator schema 8 records queued/active targets,
-  interpolation, and the collision latch. Loading refreshes the profile radius
-  without resetting continuation; callbacks/context stay shell-owned. Exact
-  resumed platform and focused turn traces pass in both transports.
+- **Fix:** Navigator schema 8 records queued/active targets, interpolation, and
+  the collision latch. Loading refreshes the profile radius without resetting
+  continuation; callbacks/context stay shell-owned. Exact resumed platform and
+  focused turn traces pass in both transports.
 
 ### TRB-Issue-148 - Adapter population leaves a discarded prepared frame live
 
-- **Resolved:** 2026-09-20 after both package-family gates and independent review.
-- **Discovered:** 2026-09-20, body-first Navigator restore between prepare and commit.
+- **Resolved:** 2026-09-20 after both package-family gates and independent
+  review.
+- **Discovered:** 2026-09-20, body-first Navigator restore between prepare and
+  commit.
 - **Evidence:** Base Navigator population aborted motor traversal and discarded
   queued motion, but the adapter retained its prepared-frame flag and request.
   The obsolete commit remained admissible and another prepare could be rejected.
-- **Fix:** Successful population clears adapter-local contact
-  and preparation state after base validation/commit. Failed population leaves
-  the live prepared frame intact. Both outcomes have JSON/MemoryPack behavioral
-  regressions. This is not whole-world
-  rollback: hosts still restore authoritative physics/world state in order.
+- **Fix:** Successful population clears adapter-local contact and preparation
+  state after base validation/commit. Failed population leaves the live prepared
+  frame intact. Both outcomes have JSON/MemoryPack behavioral regressions. This
+  is not whole-world rollback: hosts still restore authoritative physics/world
+  state in order.
 
 ### TRB-Issue-149 - Slope direction is reversed and projected velocity is flipped
 
-- **Resolved:** 2026-09-20 after both package-family gates and independent review.
+- **Resolved:** 2026-09-20 after both package-family gates and independent
+  review.
 - **Discovered:** 2026-09-20, real collision-accepted uphill/downhill walks.
 - **Evidence:** On the plane `y = 3x/4`, the outward normal is `(-3/5,4/5,0)`.
   Positive X was classified downhill. A later Y-sign adjustment reversed the
-  already-correct surface projection, so uphill requests entered the support
-  and stalled; downhill requests moved away from it. Two historical test
+  already-correct surface projection, so uphill requests entered the support and
+  stalled; downhill requests moved away from it. Two historical test
   expectations encoded the same reversed directions.
-- **Fix:** Classify horizontal travel from its exact normal
-  projection and retain the surface-projected velocity without a second sign
-  rewrite. Idle remains gravity-biased; contour travel retains the surface
-  inclination for slope limits. Analytic sign tests and repeated real uphill/
-  downhill traces pass, including support-plane approach limiting.
+- **Fix:** Classify horizontal travel from its exact normal projection and
+  retain the surface-projected velocity without a second sign rewrite. Idle
+  remains gravity-biased; contour travel retains the surface inclination for
+  slope limits. Analytic sign tests and repeated real uphill/ downhill traces
+  pass, including support-plane approach limiting.
 
 All four fixes pass the final local-stack matrix: 3,164/3,081 core and 84/80
 adapter tests in Release/ReleaseLean, with exact 100% line, branch, and fully
@@ -356,7 +374,7 @@ covered method coverage in both assemblies. The shared
 [Phase 2 evidence record](done/gravitasIntegrationPlan.md#2026-09-20---joint-movement-hardening)
 retains commands, traces, cross-library verification, and review findings.
 
-### TRB-Issue-144 - Identical ordinary A* cache hits dropped newly admitted endpoint dependencies
+### TRB-Issue-144 - Identical ordinary A\* cache hits dropped newly admitted endpoint dependencies
 
 - **Discovered:** 2026-09-17 during Navigator recovery coverage verification.
 - **Evidence:** Seed a nearest-endpoint A* route with only its selected map
@@ -367,14 +385,15 @@ retains commands, traces, cross-library verification, and review findings.
   `Stale`. Shared-cohort admission correctly retained its independent proof.
   This is distinct from Issue136's Flow defect and the prior A* characterization
   involving different strict/nearest query keys.
-- **Resolution:** Ordinary A* hits use the existing counted endpoint certificate
-  comparison and, only when needed, reserved lease-local proof capture. Proof
-  attachment and accounting use the cache lock; publication and guide freshness
-  still validate both route and endpoint proofs. Certified hits retain no proof
-  allocation, and no query budget, queue, or workspace is added.
-- **Verification:** Public-status RED1/4 in `task-6-astar-overlap-status-red.log`;
-  focused admission/scheduler GREEN133 and proof/boundary/warm-allocation GREEN10
-  in `task-6-astar-proof-green.log` and `task-6-astar-proof-boundaries.log` under
+- **Resolution:** Ordinary A\* hits use the existing counted endpoint
+  certificate comparison and, only when needed, reserved lease-local proof
+  capture. Proof attachment and accounting use the cache lock; publication and
+  guide freshness still validate both route and endpoint proofs. Certified hits
+  retain no proof allocation, and no query budget, queue, or workspace is added.
+- **Verification:** Public-status RED1/4 in
+  `task-6-astar-overlap-status-red.log`; focused admission/scheduler GREEN133
+  and proof/boundary/warm-allocation GREEN10 in `task-6-astar-proof-green.log`
+  and `task-6-astar-proof-boundaries.log` under
   `.superpowers/sdd/navigationRecoveryPlan`. Controls cover ordinary/shared
   publication, exact304/one-below303 active proof bytes, cancellation during
   sliced capture, retained leader isolation, and existing zero-allocation warm
@@ -383,48 +402,60 @@ retains commands, traces, cross-library verification, and review findings.
 ### TRB-Issue-138 - Motion commit refreshed occupancy before host contact correction
 
 - **Discovered:** 2026-09-17 during scheduled Flow recovery smoke.
-- **Evidence:** At recovery frame 1242, agent 0 retained physical ticket `(2,0,2)`
-  while its committed cell was `(2,0,3)`. Before host contact correction its root
-  was `(2,-0.5095703124534339,2.5000000074505806)`; the final foot/root was
-  `(2,-0.5,2.5000000074505806)`. It had usable guidance and was not waiting.
-  The temporary below-prism position prevented occupancy admission before the
-  host restored ground support. This predates scheduled acquisition.
-- **Resolution:** `CommitFrameMotion` refreshes occupancy after `CheckTrekCondition`,
-  matching the final position used for velocity and committed-cell resolution.
-  Existing host overrides do not depend on intermediate occupancy.
-- **Verification:** `CommitAfterHostGroundCorrection_ShouldMoveOccupancyWhileWaitingOrIdle`
-  failed 2/2 with the old cell ticket, then passed 2/2 after the ordering fix.
-  Full recovery/core regression remains part of the feature acceptance gate.
+- **Evidence:** At recovery frame 1242, agent 0 retained physical ticket
+  `(2,0,2)` while its committed cell was `(2,0,3)`. Before host contact
+  correction its root was `(2,-0.5095703124534339,2.5000000074505806)`; the
+  final foot/root was `(2,-0.5,2.5000000074505806)`. It had usable guidance and
+  was not waiting. The temporary below-prism position prevented occupancy
+  admission before the host restored ground support. This predates scheduled
+  acquisition.
+- **Resolution:** `CommitFrameMotion` refreshes occupancy after
+  `CheckTrekCondition`, matching the final position used for velocity and
+  committed-cell resolution. Existing host overrides do not depend on
+  intermediate occupancy.
+- **Verification:**
+  `CommitAfterHostGroundCorrection_ShouldMoveOccupancyWhileWaitingOrIdle` failed
+  2/2 with the old cell ticket, then passed 2/2 after the ordering fix. Full
+  recovery/core regression remains part of the feature acceptance gate.
 
 ### TRB-Issue-136 - Ordinary Flow cache hits discard follower endpoint proof
 
-- **Discovered / resolved locally:** 2026-09-17 during frozen-cohort implementation.
-- **Reproduction:** `SharedFlowEndpointProof_OverlapRemovalShouldInvalidateOnlyFollower`
-  failed on ordinary checkout at publication, public conversion and later use: removing
-  `a-overlap` left the nearest-origin lease incorrectly `Success`, while the strict
-  zero-distance source payload on `z-candidate` remained legitimately current.
-- **Fix:** Ordinary Flow hits and shared followers use one metered, version-aware
-  endpoint-subset certificate. Covered admissions retain no new proof; extra dependencies
-  retain their own fully reserved lease-local stamp. Publication/conversion/use reject
-  follower-only staleness without invalidating the source. Source cloning preserves the
-  proof; slot transfer balances the old and new charges. The scheduled-only stale-cache
-  miss optimization remains scheduled-only; Immediate now fails safely for the defect.
-- **Evidence:** The ordinary/shared overlap lifetime matrix is green, including unrelated
-  publication and source clone/transfer. `CachedEndpointProof_ExactBytesAndCancellation_ShouldDrainOwnership`
-  checks 304-byte exact / 303-byte failure, cancellation, worker reuse and capacity-one
-  sharing. `ScheduledCachedLeader_ExtraEndpointProof_ShouldSurviveCloneAndTransfer` uses
-  real cached leader acquisition and verifies context reset during extra-proof capture.
-  Certification tests check one-lookup slices, exact / one-below total budgets, component
-  and page versions, policy and transition requirements. The corresponding A* strict to
-  nearest query builds a distinct payload because its key includes the full endpoint policy.
-- **Limits:** Different replacement proofs can transiently require both old and new
-  proof bytes. No generic retry, redundant cold build or source-proof index was added.
-  Full-solution, exact coverage, DocFX, Linux and matched timing gates remain separate;
-  the scoped report records the precise locally executed Release/Lean evidence.
+- **Discovered / resolved locally:** 2026-09-17 during frozen-cohort
+  implementation.
+- **Reproduction:**
+  `SharedFlowEndpointProof_OverlapRemovalShouldInvalidateOnlyFollower` failed on
+  ordinary checkout at publication, public conversion and later use: removing
+  `a-overlap` left the nearest-origin lease incorrectly `Success`, while the
+  strict zero-distance source payload on `z-candidate` remained legitimately
+  current.
+- **Fix:** Ordinary Flow hits and shared followers use one metered,
+  version-aware endpoint-subset certificate. Covered admissions retain no new
+  proof; extra dependencies retain their own fully reserved lease-local stamp.
+  Publication/conversion/use reject follower-only staleness without invalidating
+  the source. Source cloning preserves the proof; slot transfer balances the old
+  and new charges. The scheduled-only stale-cache miss optimization remains
+  scheduled-only; Immediate now fails safely for the defect.
+- **Evidence:** The ordinary/shared overlap lifetime matrix is green, including
+  unrelated publication and source clone/transfer.
+  `CachedEndpointProof_ExactBytesAndCancellation_ShouldDrainOwnership` checks
+  304-byte exact / 303-byte failure, cancellation, worker reuse and capacity-one
+  sharing.
+  `ScheduledCachedLeader_ExtraEndpointProof_ShouldSurviveCloneAndTransfer` uses
+  real cached leader acquisition and verifies context reset during extra-proof
+  capture. Certification tests check one-lookup slices, exact / one-below total
+  budgets, component and page versions, policy and transition requirements. The
+  corresponding A\* strict to nearest query builds a distinct payload because
+  its key includes the full endpoint policy.
+- **Limits:** Different replacement proofs can transiently require both old and
+  new proof bytes. No generic retry, redundant cold build or source-proof index
+  was added. Full-solution, exact coverage, DocFX, Linux and matched timing
+  gates remain separate; the scoped report records the precise locally executed
+  Release/Lean evidence.
 
 ### TRB-Issue-135 - Local-stack test hosts execute the released math dependency
 
-- **Discovered / resolved:** 2026-09-15 during direct-visibility binary verification.
+- **Discovered / resolved:** 2026-09-15 during direct-visibility binary
+  verification.
 - **Cause:** The three executable test/benchmark hosts selected released math
   `010be577` through transitive package assets despite `UseLocalLsfStack=true`.
   Generated prebuilt benchmark children correctly selected sibling `29bfa28`.
@@ -433,17 +464,18 @@ retains commands, traces, cross-library verification, and review findings.
 - **Fix:** Exclude competing math compile/runtime package assets only in local
   host builds, with explicit sibling project references where missing. Standard
   and Lean families remain separate; prebuilt children and normal package-mode
-  dependency selection are unchanged. No runtime source or copied-DLL workaround.
+  dependency selection are unchanged. No runtime source or copied-DLL
+  workaround.
 - **Verification:** Captured a failing three-host hash assertion before the fix.
   All local hosts now execute sibling revision `29bfa28`: Release SHA256
-  `8B125CBF3E70BF6C3731638510A33AECA1F79C43EC990CDBA08BA03721F7A4AB`,
-  Lean `BF21DA9A746A603E382D6C81E84E69210B85ED237017EDD8A84809E772FC9283`.
-  Manifests select reference runtime assets; host traces resolve those DLLs.
-  Full aligned solution builds and tests pass: Release 2,576 core / 65 adapter,
-  Lean 2,504 / 65, no failures/skips or build warnings; both library targets build.
-  Commands: `dotnet build Trailblazer.slnx -c <configuration>
-  -p:UseLocalLsfStack=true`, then `dotnet test Trailblazer.slnx
-  -c <configuration> -p:UseLocalLsfStack=true --no-build --no-restore`.
+  `8B125CBF3E70BF6C3731638510A33AECA1F79C43EC990CDBA08BA03721F7A4AB`, Lean
+  `BF21DA9A746A603E382D6C81E84E69210B85ED237017EDD8A84809E772FC9283`. Manifests
+  select reference runtime assets; host traces resolve those DLLs. Full aligned
+  solution builds and tests pass: Release 2,576 core / 65 adapter, Lean 2,504 /
+  65, no failures/skips or build warnings; both library targets build. Commands:
+  `dotnet build Trailblazer.slnx -c <configuration> -p:UseLocalLsfStack=true`,
+  then
+  `dotnet test Trailblazer.slnx -c <configuration> -p:UseLocalLsfStack=true --no-build --no-restore`.
   Both benchmark parents pass the 40-record lifecycle smoke. One generated
   Release child executed with the intended hash; both prebuilt families retain
   zero project/math package references. All six normal package-mode host builds
@@ -465,14 +497,15 @@ retains commands, traces, cross-library verification, and review findings.
   construction and stable explicit logical IDs, phase assignments and simulation
   order. Equivalent restored executions reuse the same saved intent and compare
   twelve per-frame position/LOS/guidance snapshots across multiple phase slots.
-  Restored runs compare with restored runs, not uninterrupted execution.
-  The default-timing file now reuses the same partial fixture, removing copied
+  Restored runs compare with restored runs, not uninterrupted execution. The
+  default-timing file now reuses the same partial fixture, removing copied
   setup/helpers while retaining all five characterizations.
-- **Verification:** Focused Release passes 58/58 (six fresh/restored A*/Flow
+- **Verification:** Focused Release passes 58/58 (six fresh/restored A\*/Flow
   replay rows); ReleaseLean passes 49/49 (four applicable rows). JSON is covered
   in both configurations and MemoryPack in Release. Independent scoped review
   approves both the proof and fixture cleanup. Evidence is in
-  `artifacts/los-phase/final-fix`; production and benchmark source are unchanged.
+  `artifacts/los-phase/final-fix`; production and benchmark source are
+  unchanged.
 
 ### TRB-Issue-123 - Navigator migration and restore guidance disagree with current records
 
@@ -483,23 +516,25 @@ retains commands, traces, cross-library verification, and review findings.
 - **Fix:** Document implemented outer schema 6 and nested schema 1, persisted
   configuration versus non-persisted runtime schedule, enabled fresh admission
   versus preserved unphased behavior, and the corrected evergreen link. The
-  migration shows an unphased replacement before separately labeled phase opt-in.
+  migration shows an unphased replacement before separately labeled phase
+  opt-in.
 - **Evidence:** Independent documentation review approves. Three current host
   fragments execute verbatim; DocFX builds with zero warnings/errors. Four wiki
   helper tests and changed-document/site link checks pass. Evidence is under
-  `artifacts/los-phase/doc-snippet-final.log`, `docfx-final.log` and wiki/link logs.
-  No default runtime behavior was changed to match the stale prose.
+  `artifacts/los-phase/doc-snippet-final.log`, `docfx-final.log` and wiki/link
+  logs. No default runtime behavior was changed to match the stale prose.
 
 ### TRB-Issue-133 - Candidate LOS evidence loses per-agent check identity
 
-- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate
+  timing.
 - **Failure:** Fleet counts hid agent identity, so exchanged slots or missing
-  work masked by another agent could pass. The instrumented loop also copied
-  the original post-frame semantic/hash safeguards.
-- **Fix:** Preallocated observations retain each agent's actual check. Validation
-  outside the timer verifies assigned frames and four measured checks per agent.
-  Both variants share the post-timer semantic/hash helper; the original simulation
-  loop remains uninstrumented.
+  work masked by another agent could pass. The instrumented loop also copied the
+  original post-frame semantic/hash safeguards.
+- **Fix:** Preallocated observations retain each agent's actual check.
+  Validation outside the timer verifies assigned frames and four measured checks
+  per agent. Both variants share the post-timer semantic/hash helper; the
+  original simulation loop remains uninstrumented.
 - **Evidence:** A temporary swap of equal-population observation slots leaves
   aggregate counts unchanged but fails at frame 12, agent 0. The injection was
   removed. Clean Release build, parser suite, balanced lifecycle and unbalanced
@@ -508,20 +543,23 @@ retains commands, traces, cross-library verification, and review findings.
 
 ### TRB-Issue-132 - Candidate benchmark requires an ignored local baseline
 
-- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
-- **Failure:** Original/Unphased setup required an ignored local control summary,
-  making normal benchmark use fail on a clean checkout.
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate
+  timing.
+- **Failure:** Original/Unphased setup required an ignored local control
+  summary, making normal benchmark use fail on a clean checkout.
 - **Fix:** Remove the capture-specific reader and ancestor probing. Reusable
-  setup retains self-contained replay validation; explicit cross-capture analysis
-  owns exact frozen-control comparison.
+  setup retains self-contained replay validation; explicit cross-capture
+  analysis owns exact frozen-control comparison.
 - **Evidence:** Copied Release output outside the repository runs exactly the
-  original and Unphased A*/100 cases successfully, with no baseline file to
-  discover. Independent review approves; `round1-original-unphased-no-artifact.log`
-  retains the run. This portability correction does not waive replay acceptance.
+  original and Unphased A\*/100 cases successfully, with no baseline file to
+  discover. Independent review approves;
+  `round1-original-unphased-no-artifact.log` retains the run. This portability
+  correction does not waive replay acceptance.
 
 ### TRB-Issue-131 - Candidate analyzer can accept an unfinished case or extra launch
 
-- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate
+  timing.
 - **Failure:** Launchless case headers could disappear from completeness checks;
   extra or out-of-order launch indices could also pass.
 - **Fix:** Register every declared case, reject repeated/unfinished headers, and
@@ -533,7 +571,8 @@ retains commands, traces, cross-library verification, and review findings.
 
 ### TRB-Issue-130 - Candidate guided-frame analyzer pools unscaled ticks
 
-- **Discovered / resolved locally:** 2026-09-14, before accepted candidate timing.
+- **Discovered / resolved locally:** 2026-09-14, before accepted candidate
+  timing.
 - **Failure:** Pooling raw ticks and applying the final sample's frequency
   distorted valid captures containing different stopwatch frequencies.
 - **Fix:** Convert each sample with its own frequency before pooling. Exact
@@ -541,14 +580,15 @@ retains commands, traces, cross-library verification, and review findings.
 - **Evidence:** Two launches with equal real duration and different tick
   frequencies reproduce the defect, then pass. The full parser suite and frozen
   control reparse pass; independent review approves. Raw evidence:
-  `artifacts/los-phase/phase2/parser-frequency-red.log` and `round1-parser-green.log`.
+  `artifacts/los-phase/phase2/parser-frequency-red.log` and
+  `round1-parser-green.log`.
 
 ### TRB-Issue-125 - Local steering divides by zero for an admitted zero-radius body
 
 - **Discovered / resolved locally:** 2026-09-14 during phased movement testing.
 - **Failure:** At positive vessel speed, local steering eagerly calculated
-  `1 / (radius * GroupFactor)`. Radius zero is a valid admitted body shape;
-  zero `GroupFactor` reaches the same denominator. The defect predates `5367f5a`.
+  `1 / (radius * GroupFactor)`. Radius zero is a valid admitted body shape; zero
+  `GroupFactor` reaches the same denominator. The defect predates `5367f5a`.
 - **Fix:** A computed zero group radius uses a zero reciprocal. Group range
   already excludes all group neighbors there, while independent avoidance stays
   active. All nonzero arithmetic and evaluation order remain unchanged.
@@ -557,26 +597,28 @@ retains commands, traces, cross-library verification, and review findings.
   frame; the other asserts exact avoidance with zero group factor. Independent
   spec/quality review passes. Full Release 2,568 core + 65 adapter and Lean
   2,498 + 65 pass, both targets build clean, and each configuration has exact
-  31,019 lines, 12,181 branches and 3,032 covered/fully covered methods.
-  Raw evidence: `artifacts/los-phase/issue125` and `verification-issue125`.
+  31,019 lines, 12,181 branches and 3,032 covered/fully covered methods. Raw
+  evidence: `artifacts/los-phase/issue125` and `verification-issue125`.
 - **Separate follow-up:** `TRB-Issue-129` records runtime/load validation
   asymmetry; this fix does not redesign public tuning fields.
 
 ### TRB-Issue-128 - New-request initialization changes the legacy stale-ray cadence
 
-- **Discovered / resolved locally:** 2026-09-14, before committing the LOS feature.
+- **Discovered / resolved locally:** 2026-09-14, before committing the LOS
+  feature.
 - **Failure:** Unconditionally clearing the countdown for a replacement query
   caused an extra same-heading ray when initial admission returned `Stale`.
 - **Fix:** Only enabled new sessions clear timing debt. Disabled replacement
   preserves the previous completed-heading countdown.
 - **Evidence:** A real-graph regression observes the exact later clear-path
-  switch. Independent runtime review passes; Release 2,566 core + 65 adapter
-  and Lean 2,496 + 65 pass with exact 100% line/branch/method coverage.
-  Raw RED and final matrix logs remain under `artifacts/los-phase`.
+  switch. Independent runtime review passes; Release 2,566 core + 65 adapter and
+  Lean 2,496 + 65 pass with exact 100% line/branch/method coverage. Raw RED and
+  final matrix logs remain under `artifacts/los-phase`.
 
 ### TRB-Issue-127 - Phasing prevents initial direct-only travel
 
-- **Discovered / resolved locally:** 2026-09-14, before committing the LOS feature.
+- **Discovered / resolved locally:** 2026-09-14, before committing the LOS
+  feature.
 - **Failure:** Enabled `CanPathfind=false` requests could remain motionless or
   wait for a phase before initial admission. Reconfiguration could hide pending
   admission after new request, clock reset, successful restore or active rebind.
@@ -590,14 +632,17 @@ retains commands, traces, cross-library verification, and review findings.
 
 ### TRB-Issue-126 - Reconfiguration can discard reset identity before invalidating direct travel
 
-- **Discovered / resolved locally:** 2026-09-14, before committing the LOS feature.
+- **Discovered / resolved locally:** 2026-09-14, before committing the LOS
+  feature.
 - **Failure:** Disabling or repeatedly changing enabled phases after context
-  reset could erase the old clock identity while retaining its direct-path trust.
+  reset could erase the old clock identity while retaining its direct-path
+  trust.
 - **Fix:** Invalidate direct travel and prepare admission when the lifetime
   change is detected, before replacing configuration or clearing its identity.
 - **Evidence:** Both sequences fail before the fix and pass against a changed
   weighted map afterward. Independent runtime review and the full Release/Lean
-  matrix pass with exact 100% coverage; no old direct trust is restored by timing.
+  matrix pass with exact 100% coverage; no old direct trust is restored by
+  timing.
 
 ### TRB-Issue-122 - Component dependency byte accounting omits the medium slot
 
@@ -610,38 +655,38 @@ retains commands, traces, cross-library verification, and review findings.
 - **Resolution:** Charge 40 bytes per component in the shared retained-byte
   formula, which feeds A* and Flow payload accounting. Raise the default single
   payload ceilings by 4,096 bytes each to cover their existing 512-component
-  workspaces: A* is 1,163,576 bytes and Flow is 1,016,120 bytes. This restores the
-  same admitted workspace envelope; custom host limits remain explicit. No new
-  retained fields or runtime-dependent budget calculation are introduced.
+  workspaces: A* is 1,163,576 bytes and Flow is 1,016,120 bytes. This restores
+  the same admitted workspace envelope; custom host limits remain explicit. No
+  new retained fields or runtime-dependent budget calculation are introduced.
 - **Verification:** The existing payload-layout test now checks actual struct
   sizes and derives the dependency-array charge from those sizes. Before the
   fix, it expects 416 bytes for two components/four pages and observes 400;
-  downstream A* payload expectations increase by the same 16 bytes. The Flow
+  downstream A\* payload expectations increase by the same 16 bytes. The Flow
   exact-fit/one-byte-short test moves from 768/767 to 776/775 bytes for one
   component. The first full run exposes the stale default ceilings; correcting
   them restores the semantic-actions and culture-invariance tests without
   changing their budgets or canonical digests. All 11 focused fallout checks
   pass. The full Release/ReleaseLean matrix documented in `TRB-Issue-121` also
-  passes; no budget assertions or determinism digests are relaxed.
-  Evidence: `component-byte-accounting-red.log`,
-  `continuation-final-verification` and `dependency-accounting-fallout-green.log`
-  under `artifacts/benchmark005`.
+  passes; no budget assertions or determinism digests are relaxed. Evidence:
+  `component-byte-accounting-red.log`, `continuation-final-verification` and
+  `dependency-accounting-fallout-green.log` under `artifacts/benchmark005`.
 
 ### TRB-Issue-121 - Dependency workspace merges components from different media
 
 - **Discovered:** 2026-09-14 during `TRB-Benchmark-005` source review.
 - **Status:** Resolved locally on 2026-09-14.
 - **Failure:** Component dependency accumulation deduplicated the representative
-  cell address but omitted the traversal medium. Solid, Gas and Liquid components
-  can share an address without sharing membership or generation. Recording one
-  could silently discard the others, undercount capacity/merge work, and let a
-  guide retain a stale component proof.
-- **Reproduction:** A map has one Solid/Gas cell and a long Gas-only continuation.
-  A short Solid-to-Gas A* guide and bounded Flow field both incorrectly report
-  `Success` after a distant Gas cell is suppressed. The Gas component changes,
-  while the Solid component, local semantic/physical/transition page, transition
-  rules and native world sequence remain unchanged. Eight focused regression
-  cases fail on the original implementation, including both public guide checks.
+  cell address but omitted the traversal medium. Solid, Gas and Liquid
+  components can share an address without sharing membership or generation.
+  Recording one could silently discard the others, undercount capacity/merge
+  work, and let a guide retain a stale component proof.
+- **Reproduction:** A map has one Solid/Gas cell and a long Gas-only
+  continuation. A short Solid-to-Gas A\* guide and bounded Flow field both
+  incorrectly report `Success` after a distant Gas cell is suppressed. The Gas
+  component changes, while the Solid component, local
+  semantic/physical/transition page, transition rules and native world sequence
+  remain unchanged. Eight focused regression cases fail on the original
+  implementation, including both public guide checks.
 - **Resolution:** A fixed-capacity generation-stamped set now uses the complete
   `NavigationSurfaceComponentKey` in recording, full-capacity duplicate checks
   and dependency-union preflight. Insertion order, lookup charging and atomic
@@ -650,14 +695,16 @@ retains commands, traces, cross-library verification, and review findings.
 - **Verification:** All eight regression cases pass after the fix. Both local
   Release/ReleaseLean solution builds pass with zero warnings/errors, including
   `netstandard2.1` and `net8.0`. Core tests pass 2,501 / 2,439 cases, plus 65
-  Gravitas-adapter cases per configuration: 5,070 total, no failures/skips.
-  Both configurations retain exact configured coverage of 30,883/30,883 lines,
+  Gravitas-adapter cases per configuration: 5,070 total, no failures/skips. Both
+  configurations retain exact configured coverage of 30,883/30,883 lines,
   12,109/12,109 branches and 3,017/3,017 fully covered methods, with unchanged
   exclusions. Independent correctness and Ponytail review finds no blocker.
   These are local Windows source-stack checks, not Linux CI or released-package
-  validation. Evidence is under `artifacts/benchmark005/medium-dependency-red.log`,
-  `medium-green-scalar-characterization.log` and `dependency-final-verification`;
-  tests are in `NavigationDependencyMediumTests.cs`.
+  validation. Evidence is under
+  `artifacts/benchmark005/medium-dependency-red.log`,
+  `medium-green-scalar-characterization.log` and
+  `dependency-final-verification`; tests are in
+  `NavigationDependencyMediumTests.cs`.
 
 ### TRB-Issue-120 - Benchmark launcher discards failure status
 
@@ -676,8 +723,8 @@ retains commands, traces, cross-library verification, and review findings.
   failure in either group while both still ran. Result-model checks covered
   validation/build failures and unknown exits. Local Windows `Release` and
   `ReleaseLean` builds passed without warnings/errors, with 2,467 core + 65
-  adapter and 2,405 core + 65 adapter tests respectively. Production DLLs returned
-  `1` for invalid invocation/unroll settings and `0` for help/list.
+  adapter and 2,405 core + 65 adapter tests respectively. Production DLLs
+  returned `1` for invalid invocation/unroll settings and `0` for help/list.
 - **Scope (2026-09-12):** Retain the launcher fix and documented evidence only.
   The temporary verification projects and their CI additions were removed at
   maintainer review; no permanent benchmark-tooling test system is introduced.
@@ -694,31 +741,32 @@ retains commands, traces, cross-library verification, and review findings.
 ### TRB-Issue-118 - Rebase/rejoin allocation guards use different warmup and measurement bodies
 
 - **Discovered:** 2026-09-10 during `TRB-Benchmark-003` full validation.
-- **Area:** `NavigationFlowFieldSamplingConcurrencyTests` test-harness consistency.
+- **Area:** `NavigationFlowFieldSamplingConcurrencyTests` test-harness
+  consistency.
 - **Status:** Resolved locally on 2026-09-10 for harness consistency only. Fresh
   Release (2,467 core + 65 adapter) and Lean (2,405 core + 65 adapter) matrices
   pass with exact 100% line/branch/method coverage. No runtime allocation defect
   or source for the observed burst has been established.
-- **Evidence:** The first covered local-stack Release run passed 2,466 tests
-  and failed `WarmExactNodeRebaseSample_ShouldAllocateZeroBytes` with 1,992 bytes
+- **Evidence:** The first covered local-stack Release run passed 2,466 tests and
+  failed `WarmExactNodeRebaseSample_ShouldAllocateZeroBytes` with 1,992 bytes
   instead of zero. The unchanged class then passed 9/9 in isolation. That pass
-  is not evidence that the allocator was fixed. The failed binaries, hashes,
-  TRX and coverage/logs are retained under `artifacts/benchmark003`.
+  is not evidence that the allocator was fixed. The failed binaries, hashes, TRX
+  and coverage/logs are retained under `artifacts/benchmark003`.
 - **Confirmed harness inconsistency:** Exact-node and rejoin guards warm with
   assertion-bearing `CreateGuide` loops, then measure separate unchecked loops.
   The neighboring attach guard already uses one shared, assertion-free,
-  non-inlined helper. The two duplicate bodies now use that same existing
-  helper with their original destination/displaced feet, budget and 256
-  iterations. Successful samples, fully drained leases and exactly zero bytes
-  remain mandatory. No retries, tolerances, extra warmups, runtime settings,
-  exclusions or production changes were introduced to address this failure.
+  non-inlined helper. The two duplicate bodies now use that same existing helper
+  with their original destination/displaced feet, budget and 256 iterations.
+  Successful samples, fully drained leases and exactly zero bytes remain
+  mandatory. No retries, tolerances, extra warmups, runtime settings, exclusions
+  or production changes were introduced to address this failure.
 - **Sensitivity:** The aligned class passes 9/9. Temporarily allocating a
-  64-byte array each helper iteration makes the exact-node guard fail at
-  22,528 bytes; the mutation was removed before final validation. Existing
-  guide tests separately protect exact destination heading, rebase budget and
-  displaced rejoin behavior. Independent review confirms that helper reuse
-  removes no measured navigation work. A second fresh covered Release core
-  confirmation also passes 2,467/2,467; all original failures remain retained.
+  64-byte array each helper iteration makes the exact-node guard fail at 22,528
+  bytes; the mutation was removed before final validation. Existing guide tests
+  separately protect exact destination heading, rebase budget and displaced
+  rejoin behavior. Independent review confirms that helper reuse removes no
+  measured navigation work. A second fresh covered Release core confirmation
+  also passes 2,467/2,467; all original failures remain retained.
 - **Limits:** This resolves duplicated/inconsistent test setup, not allocation
   attribution or proof that flakiness is cured. `TRB-Issue-114` remains closed;
   its aligned attach guard did not fail here. Preserve any future failure with
@@ -728,19 +776,20 @@ retains commands, traces, cross-library verification, and review findings.
 
 - **Discovered:** 2026-09-08
 - **Area:** native surface traversal at extreme GridForge coordinate spans
-- **Status:** Resolved; forward/reverse regressions and both covered matrices pass.
+- **Status:** Resolved; forward/reverse regressions and both covered matrices
+  pass.
 - **Evidence:** An admitted rectangular binding with X bounds
   `[-1073741824, 1073741824]` and cell width `1073741824` has three addresses.
   The intermediate `index * spacing` saturates at the last address. Its center
   is one raw unit short of the expected spacing even though all final corner
-  prisms are representable. The neighboring prisms overlap instead of sharing
-  a face, so GridForge rejects portal compilation. The existing evaluator
-  ignored that failure in Release and reported `Passable`.
+  prisms are representable. The neighboring prisms overlap instead of sharing a
+  face, so GridForge rejects portal compilation. The existing evaluator ignored
+  that failure in Release and reported `Passable`.
 - **Resolution:** Reuse rectangular native templates only for matching actual
-  displacement. Other native edges use checked GridForge compilation, and
-  actual portal profile resolution is authoritative. Compilation/profile
-  failures return `Impassable`. Hex clipping remains on direct compilation;
-  no upstream coordinate-generation change is included.
+  displacement. Other native edges use checked GridForge compilation, and actual
+  portal profile resolution is authoritative. Compilation/profile failures
+  return `Impassable`. Hex clipping remains on direct compilation; no upstream
+  coordinate-generation change is included.
 - **Verification:** The real published-world regression fails against both the
   original direct-compilation path and the initial unconditional reuse.
   Forward/reverse rejection now passes. Covered Release passes 2,405 core + 65
@@ -752,19 +801,22 @@ retains commands, traces, cross-library verification, and review findings.
 
 - **Discovered:** 2026-09-08
 - **Area:** acquisition investigation and diagnostic artifact identity
-- **Status:** Resolved by explicit parent/probe versus measured-child provenance.
-- **Evidence:** The temporary profiling probe copied the benchmark parent output,
-  including released FixedMathSharp 7.1.0, while the BenchmarkDotNet child selects
-  the sibling source build. A matching `Trailblazer.dll` hash alone did not
-  establish the claimed build origin of the whole stack. Both FixedMathSharp
-  assemblies report 7.1.0.0, but have different informational versions and hashes.
-- **Resolution:** Corrected the [investigation record](done/navigationSchedulingPlan.md#source-and-diagnostic-boundary),
+- **Status:** Resolved by explicit parent/probe versus measured-child
+  provenance.
+- **Evidence:** The temporary profiling probe copied the benchmark parent
+  output, including released FixedMathSharp 7.1.0, while the BenchmarkDotNet
+  child selects the sibling source build. A matching `Trailblazer.dll` hash
+  alone did not establish the claimed build origin of the whole stack. Both
+  FixedMathSharp assemblies report 7.1.0.0, but have different informational
+  versions and hashes.
+- **Resolution:** Corrected the
+  [investigation record](done/navigationSchedulingPlan.md#source-and-diagnostic-boundary),
   recorded separate parent/child fingerprints, and qualified the historical
-  baseline's missing complete binary manifest. The FixedMathSharp core source
-  is unchanged between the two commits and all 3,570 normalized method bodies
-  match; no different geometry implementation or runtime defect is inferred.
-  The measured child matches the intended sibling output. No build-resolution
-  change was mixed into the performance patch.
+  baseline's missing complete binary manifest. The FixedMathSharp core source is
+  unchanged between the two commits and all 3,570 normalized method bodies
+  match; no different geometry implementation or runtime defect is inferred. The
+  measured child matches the intended sibling output. No build-resolution change
+  was mixed into the performance patch.
 
 ### TRB-Issue-115 - Release executes assertion-only surface geometry calculations
 
@@ -781,14 +833,15 @@ retains commands, traces, cross-library verification, and review findings.
 - **Resolution:** Guarded the complete diagnostic calculations with `DEBUG`,
   preserving Debug's original assertion order. Runtime portal compilation,
   profile resolution and all five explicit-corridor segment rejection calls
-  remain unchanged. The temporary compiled-call check fails before the patch
-  and passes afterward in Release/ReleaseLean, with Debug diagnostics retained.
+  remain unchanged. The temporary compiled-call check fails before the patch and
+  passes afterward in Release/ReleaseLean, with Debug diagnostics retained.
 - **Verification:** Focused Release 191/191 and Debug 61/61; covered Release
   2,395 core + 65 adapter and ReleaseLean 2,333 core + 65 adapter pass. Both
   configurations retain exact 100% line/branch/method coverage. The
   [follow-up execution record](done/navigationSchedulingPlan.md#issue-115---diagnostic-work-removal)
-  records the bounded remeasurement. The broader `TRB-Benchmark-001` subsequently
-  closed with the completed scheduling scope and its explicit timing limits.
+  records the bounded remeasurement. The broader `TRB-Benchmark-001`
+  subsequently closed with the completed scheduling scope and its explicit
+  timing limits.
 
 ### TRB-Issue-113 - Benchmark backlog documented a nonexistent physics workload
 
@@ -800,8 +853,9 @@ retains commands, traces, cross-library verification, and review findings.
   `continuous-collision-evidence`, which is absent from Trailblazer's benchmark
   catalog, and recommended concave collision-shape authoring owned by Gravitas.
 - **Resolution:** Replaced the stale commands with the actual benchmark catalog
-  and public guide-service smoke selection, identified the unreleased local-stack
-  build requirement, and removed the unrelated physics recommendation.
+  and public guide-service smoke selection, identified the unreleased
+  local-stack build requirement, and removed the unrelated physics
+  recommendation.
 
 ### TRB-Issue-112 - Parallel local-stack solution builds could race identical project outputs
 
@@ -809,12 +863,13 @@ retains commands, traces, cross-library verification, and review findings.
 - **Area:** local-source project graph and Trailblazer/adapter assembly identity
 - **Status:** Resolved; verified by fresh parallel no-incremental `Release` and
   `ReleaseLean` solution builds.
-- **Evidence:** `dotnet build Trailblazer.slnx -c Release
-  -p:UseLocalLsfStack=true` scheduled `Trailblazer` and
-  `Trailblazer.Gravitas` through direct solution entries and project references
-  carrying different version global-property sets. Separate graph nodes then
-  wrote the same `obj` path concurrently, producing a reproducible `MSB3101`
-  cache-file warning and one observed `CS2012` assembly-file failure.
+- **Evidence:**
+  `dotnet build Trailblazer.slnx -c Release -p:UseLocalLsfStack=true` scheduled
+  `Trailblazer` and `Trailblazer.Gravitas` through direct solution entries and
+  project references carrying different version global-property sets. Separate
+  graph nodes then wrote the same `obj` path concurrently, producing a
+  reproducible `MSB3101` cache-file warning and one observed `CS2012`
+  assembly-file failure.
 - **Impact:** A correct local-source tree could fail or produce a warning based
   on parallel scheduling. Serializing MSBuild avoided the race but concealed an
   incoherent project graph and weakened the documented zero-warning gate.
@@ -862,9 +917,9 @@ retains commands, traces, cross-library verification, and review findings.
   Returning that exception closed the interrupted commit, but independent review
   then proved the callback itself could still observe the new physical envelope
   alongside Trailblazer's previous profile, root, occupancy, and guidance.
-- **Impact:** One accepted operation could leave the resized Gravitas body paired
-  with Trailblazer's previous navigation envelope and lease state. A retry would
-  be unsafe because the physical change had already committed.
+- **Impact:** One accepted operation could leave the resized Gravitas body
+  paired with Trailblazer's previous navigation envelope and lease state. A
+  retry would be unsafe because the physical change had already committed.
 - **Expected:** A physical transaction result and later host notifications are
   distinct. Both libraries finish their accepted state transition before any
   post-commit observer runs or a notification failure reaches the caller.
@@ -888,10 +943,10 @@ retains commands, traces, cross-library verification, and review findings.
   an active climb could receive its required stop notification.
 - **Impact:** The new profile, position, occupancy, and physical body were
   already committed, but host-observable capability-loss cleanup could be
-  incomplete. Treating that exception as a rejected operation and retrying
-  would then repeat an already accepted physical change.
-- **Expected:** Replacement callbacks are a documented post-commit boundary.
-  A committed-cell callback exception may propagate, but the climb-stop
+  incomplete. Treating that exception as a rejected operation and retrying would
+  then repeat an already accepted physical change.
+- **Expected:** Replacement callbacks are a documented post-commit boundary. A
+  committed-cell callback exception may propagate, but the climb-stop
   notification is still attempted and the caller must not retry the accepted
   replacement as though it had been rejected.
 - **Resolution:** Capability-loss notification now runs from a `finally` around
@@ -909,8 +964,7 @@ retains commands, traces, cross-library verification, and review findings.
   Gravitas collider definition is interpreted through its owner's transform
   scale. The adapter originally forwarded a replacement without first proving
   exact unit world scale; a non-unit owner could therefore throw from the
-  physical layer or represent an envelope different from the navigation
-  profile.
+  physical layer or represent an envelope different from the navigation profile.
 - **Impact:** Expected physical-fit rejection could escape as an exception, and
   accepting scale-aware geometry without an explicit conversion contract would
   let collision and navigation clearance disagree.
@@ -944,8 +998,8 @@ retains commands, traces, cross-library verification, and review findings.
   reject unsafe accepted motion.
 - **Verification:** Focused steering regressions cover partial and exact
   opposition. The Gravitas-backed Flow scenario proves nonzero group influence,
-  changed heading, bounded accepted displacement, no overlap-dependent start,
-  no invalid/stuck events, and bounded arrival for both actors in `Release` and
+  changed heading, bounded accepted displacement, no overlap-dependent start, no
+  invalid/stuck events, and bounded arrival for both actors in `Release` and
   `ReleaseLean`. The complete instrumented matrices pass with exact reachable
   line, branch, method, and fully-covered-method totals in both configurations.
 
@@ -967,8 +1021,8 @@ retains commands, traces, cross-library verification, and review findings.
   for one frame after losing support during a surface route.
 - **Expected:** Project only the implicit surface and falling facing direction
   onto the world X/Z plane. Preserve an explicit host-facing direction exactly,
-  and retain three-dimensional default facing during active flight, climbing,
-  or swimming. Apply the same ownership rule to accepted-motion turning.
+  and retain three-dimensional default facing during active flight, climbing, or
+  swimming. Apply the same ownership rule to accepted-motion turning.
 - **Verification:** Focused Navigator and Gravitas collision-turning regressions
   cover grounded, newly airborne, explicit-facing, and volumetric locomotion.
   Transition-frame regressions also cover flight, climb, and swim admission;
@@ -984,25 +1038,25 @@ retains commands, traces, cross-library verification, and review findings.
 - **Status:** Resolved; verified by the 2026-09-06 focused and full package
   matrices.
 - **Evidence:** A four-map stair world publishes adjacent clearance prisms whose
-  foot anchors rise by three quarters of a unit per step. Both A* and Flow
-  accept the
-  profile and produce a forward/upward sampled heading. `NavMotor` then
-  unconditionally clamps the grounded non-flight velocity Y component to zero,
-  so Gravitas receives a horizontal request into the first riser and resolves
-  the actor at the step face for every bounded frame.
-- **Impact:** `NavigationAgentProfile.MaxStepUp` can admit a valid route that the
-  standard Navigator/motor/host lifecycle cannot attempt. The same clamp also
-  prevents a projected uphill surface velocity from reaching a collision host.
+  foot anchors rise by three quarters of a unit per step. Both A\* and Flow
+  accept the profile and produce a forward/upward sampled heading. `NavMotor`
+  then unconditionally clamps the grounded non-flight velocity Y component to
+  zero, so Gravitas receives a horizontal request into the first riser and
+  resolves the actor at the step face for every bounded frame.
+- **Impact:** `NavigationAgentProfile.MaxStepUp` can admit a valid route that
+  the standard Navigator/motor/host lifecycle cannot attempt. The same clamp
+  also prevents a projected uphill surface velocity from reaching a collision
+  host.
 - **Expected:** Preserve the bounded upward component of an otherwise valid
   grounded surface-movement request so the host can accept or reject it against
   physical geometry. Pure vertical ground input must not become powered ascent,
   and accepted host motion remains authoritative. Prove the focused motor rule
-  and complete the A*/Flow stair world through real Gravitas collision/contact
+  and complete the A\*/Flow stair world through real Gravitas collision/contact
   refresh before resolving this issue.
 - **Verification:** Focused motor regressions preserve legal uphill surface
   velocity while rejecting flat-ground powered ascent. The Gravitas-backed
   four-map stair world accepts all three rises and reaches the exact upper
-  address under A* and Flow in `Release` and `ReleaseLean`. The complete
+  address under A\* and Flow in `Release` and `ReleaseLean`. The complete
   instrumented matrices retain exact reachable coverage.
 
 ### TRB-Issue-104 - Falling has no fall-preserving controlled-descent contract
@@ -1044,12 +1098,12 @@ retains commands, traces, cross-library verification, and review findings.
 - **Status:** Resolved; verified by the 2026-09-04 clean local-source and
   package-backed matrices.
 - **Evidence:** After restoring the affected generated assets to the default
-  package cache, `dotnet build Gravitas.slnx --configuration Release --no-restore
-  --property:UseLocalLsfStack=true` reached compilation and failed with `CS1704`
-  for two `SwiftCollections` assemblies. (A preceding `NETSDK1064` was unrelated
-  stale generated metadata from an isolated NuGet cache.) GridForge's local
-  stack directly pins `SwiftCollections.csproj`
-  to assembly version 7.0.0.0 and also references
+  package cache,
+  `dotnet build Gravitas.slnx --configuration Release --no-restore --property:UseLocalLsfStack=true`
+  reached compilation and failed with `CS1704` for two `SwiftCollections`
+  assemblies. (A preceding `NETSDK1064` was unrelated stale generated metadata
+  from an isolated NuGet cache.) GridForge's local stack directly pins
+  `SwiftCollections.csproj` to assembly version 7.0.0.0 and also references
   `SwiftCollections.FixedMathSharp.csproj` as version 7.1.0.0. That bridge's
   unqualified nested project reference can propagate the bridge's
   `SemVer`/`AssemblySemVer` into a second SwiftCollections project instance,
@@ -1062,20 +1116,20 @@ retains commands, traces, cross-library verification, and review findings.
 - **Impact:** A contributor following the solution-wide local-stack workflow
   could receive either a duplicate-assembly compile error or a runtime load
   failure even though every released package family was aligned.
-- **Expected:** Local-stack solution builds retain their requested configuration;
-  the SwiftCollections FixedMathSharp bridge uses core 7.0.0 explicitly; and test
-  or benchmark entry points consume direct, versioned lower-stack references
-  instead of rebuilding unqualified transitive instances. Do not add a binary-
-  copy workaround or compatibility package path.
-- **Verification:** Clean `UseLocalLsfStack=true` restore/build/test matrices pass
-  in `Release` and `ReleaseLean`: GridForge 819/819 tests in each mode, Gravitas
-  3,930/3,875, and Trailblazer 2,291/2,241. Every build reports zero warnings.
-  The resolved Lean output contains one `SwiftCollections.dll` at 7.0.0.0,
-  `SwiftCollections.FixedMathSharp.dll` at 7.1.0.0, FixedMathSharp at 7.1.0.0,
-  and GridForge at 9.1.0.0. Normal owner matrices also pass for FixedMathSharp
-  (2,708/2,687 tests) and SwiftCollections (1,133/1,105), while package-backed
-  GridForge, Gravitas, and Trailblazer repeat the same downstream counts with
-  zero build warnings.
+- **Expected:** Local-stack solution builds retain their requested
+  configuration; the SwiftCollections FixedMathSharp bridge uses core 7.0.0
+  explicitly; and test or benchmark entry points consume direct, versioned
+  lower-stack references instead of rebuilding unqualified transitive instances.
+  Do not add a binary- copy workaround or compatibility package path.
+- **Verification:** Clean `UseLocalLsfStack=true` restore/build/test matrices
+  pass in `Release` and `ReleaseLean`: GridForge 819/819 tests in each mode,
+  Gravitas 3,930/3,875, and Trailblazer 2,291/2,241. Every build reports zero
+  warnings. The resolved Lean output contains one `SwiftCollections.dll` at
+  7.0.0.0, `SwiftCollections.FixedMathSharp.dll` at 7.1.0.0, FixedMathSharp at
+  7.1.0.0, and GridForge at 9.1.0.0. Normal owner matrices also pass for
+  FixedMathSharp (2,708/2,687 tests) and SwiftCollections (1,133/1,105), while
+  package-backed GridForge, Gravitas, and Trailblazer repeat the same downstream
+  counts with zero build warnings.
 
 ### TRB-Issue-102 - Ground contact conflates the support normal with platform orientation
 
@@ -1088,18 +1142,18 @@ retains commands, traces, cross-library verification, and review findings.
   `GroundCondition.GroundNormal` only as `Platform.Transform.Up`, then used that
   value for slope angle, projection, sliding, and ground-jump direction. On an
   identity-transformed wedge or mesh face, the honest platform transform yielded
-  `Up` even when the physical contact normal was sloped. Rotating the snapshot to
-  encode the contact normal corrupted moving-platform attachment and carry.
+  `Up` even when the physical contact normal was sloped. Rotating the snapshot
+  to encode the contact normal corrupted moving-platform attachment and carry.
 - **Impact:** A host could not preserve both collision geometry and carrier
   motion. Trailblazer could classify a real slope as flat or move an attached
   actor from a fabricated carrier orientation.
 - **Expected:** Replace the derived-only `GroundNormal` contract with one
   explicit, serialized `GroundCondition.SurfaceNormal` world-space value that is
   independent of `PlatformSnapshot.Transform`. `Vector3d.Zero` is the sole
-  no-sample value; the runtime must not infer `Platform.Transform.Up`. A host that
-  wants flat-ground behavior supplies `Vector3d.Up`. Update `SetGroundContact`,
-  cloning, motor behavior, XML, and wiki guidance without exposing a compatibility
-  alias. Keep Trailblazer core free of Gravitas types.
+  no-sample value; the runtime must not infer `Platform.Transform.Up`. A host
+  that wants flat-ground behavior supplies `Vector3d.Up`. Update
+  `SetGroundContact`, cloning, motor behavior, XML, and wiki guidance without
+  exposing a compatibility alias. Keep Trailblazer core free of Gravitas types.
 - **Verification:** `SetGroundContact` now requires the normal, heightmap
   grounding supplies `Up`, and motor fixtures author slope normals explicitly.
   An identity-platform traversal asserts the exact sampled normal, slope angle,
@@ -1141,11 +1195,12 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Coverage hardening added direct exception construction at 24
   ordinary guard sites, retained the same pattern at older guards, expressed one
-  bounded scope lookup as `while (true)`, and preserved an A* double-bind test
+  bounded scope lookup as `while (true)`, and preserved an A\* double-bind test
   that bypassed the guide cache's detach-before-rent protocol.
 - **Impact:** Mixed guard conventions obscured which checks remain required in
   Release, the unconditional loop hid its deterministic scope bound, and the
-  internal-abuse test made an impossible pool state look like supported behavior.
+  internal-abuse test made an impossible pool state look like supported
+  behavior.
 - **Expected:** Route exact public, lifecycle, serialization, and corruption
   guards through `SwiftThrowHelper`; retain direct throws only where the helper
   cannot preserve the exception contract or terminal control flow; keep proven
@@ -1153,9 +1208,10 @@ coverage hardening and code-quality follow-up passes.
   explicit bound; and remove the hollow double-bind test.
 - **Verification:** Ninety-three exact guard sites now use `SwiftThrowHelper`,
   the 37 remaining direct throws have documented semantic reasons, scope removal
-  performs one allocation-free bounded scan, and supported A* pooling remains
+  performs one allocation-free bounded scan, and supported A\* pooling remains
   covered. Full `Release` passes 2,287 tests, full `ReleaseLean` passes 2,238,
-  and both aggregates cover all 30,067 lines, 11,761 branches, and 2,952 methods.
+  and both aggregates cover all 30,067 lines, 11,761 branches, and 2,952
+  methods.
 
 ### TRB-Issue-099 - Transition enumeration assertion checks validity, not ownership
 
@@ -1193,12 +1249,12 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Flow recovery and traversal status mapping
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Mapper theories passed pending, success, edge, blocked, and raw
-  undefined statuses even though both production callers handle or exclude
-  those states before mapping.
+  undefined statuses even though both production callers handle or exclude those
+  states before mapping.
 - **Impact:** Unsupported test inputs made impossible mapper defaults look like
   public behavior and obscured the exact terminal-status contract.
-- **Expected:** Test only reachable terminal statuses and assert the caller-owned
-  input invariant inside each mapper.
+- **Expected:** Test only reachable terminal statuses and assert the
+  caller-owned input invariant inside each mapper.
 - **Verification:** The focused search contract suite and both exact coverage
   aggregates pass with six hollow rows removed.
 
@@ -1207,9 +1263,9 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Topology lifecycle safety and operation reconciliation
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** A post-snapshot dynamic-slot capacity rejection could occur after
-  an unrelated topology removal requested a full seam rebuild but before the
-  computed all-close graph published.
+- **Evidence:** A post-snapshot dynamic-slot capacity rejection could occur
+  after an unrelated topology removal requested a full seam rebuild but before
+  the computed all-close graph published.
 - **Impact:** Without materialized work owning an all-closed source, readers
   could acquire an affected-only graph containing stale unaffected topology.
 - **Expected:** Mark the graph store safety-pending until an exact physical and
@@ -1228,8 +1284,9 @@ coverage hardening and code-quality follow-up passes.
   reopenable even when `_automaticSeamFullRebuildPending` owned that closure.
 - **Impact:** Release builds could reopen structural scopes before topology seam
   rebuilding completed, violating the fail-closed lifecycle contract.
-- **Expected:** Transfer rejected-operation rollback to the pending full rebuild;
-  expose only no graph or an all-closed graph until exact topology publication.
+- **Expected:** Transfer rejected-operation rollback to the pending full
+  rebuild; expose only no graph or an all-closed graph until exact topology
+  publication.
 - **Verification:** The retained-composition overflow regression proves the
   terminal graph stays fail-closed and later reopens without leaking the
   rejected slot.
@@ -1242,8 +1299,8 @@ coverage hardening and code-quality follow-up passes.
 - **Evidence:** `Serialization_ShouldPreservePerInstanceForceOverrides` includes
   its MemoryPack theory row unconditionally, while `ReleaseLean` intentionally
   removes that transport and the shared utility rejects its use.
-- **Impact:** The full Lean suite fails before its independent coverage result can
-  represent the supported Lean package surface.
+- **Impact:** The full Lean suite fails before its independent coverage result
+  can represent the supported Lean package surface.
 - **Expected:** Keep JSON coverage in both configurations and compile the
   MemoryPack row only when the transport is present.
 - **Verification:** Run the focused theory and exact aggregate in Release and
@@ -1254,15 +1311,16 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Automatic-seam lifecycle completion
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** `MaintainAutomaticSeamLifecycle` calls `RevalidateForPublication`
-  immediately after `AdvanceOne` reports complete on the same deterministic
-  maintenance boundary. Earlier world changes are returned as stale by the
-  worker; only an unsupported concurrent mutation between the two calls can make
-  the completion revalidation fail.
+- **Evidence:** `MaintainAutomaticSeamLifecycle` calls
+  `RevalidateForPublication` immediately after `AdvanceOne` reports complete on
+  the same deterministic maintenance boundary. Earlier world changes are
+  returned as stale by the worker; only an unsupported concurrent mutation
+  between the two calls can make the completion revalidation fail.
 - **Impact:** The Release restart arm is unreachable through ordered context
   simulation and would require a probabilistic race test to cover.
 - **Expected:** Keep same-boundary revalidation as a diagnostic ownership
-  assertion and publish the completed result through the singular lifecycle path.
+  assertion and publish the completed result through the singular lifecycle
+  path.
 - **Verification:** Preserve stale-before-completion restart tests and run exact
   Release and ReleaseLean coverage.
 
@@ -1272,16 +1330,17 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Chunked default-baseline capacity lifecycle
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `AdvanceCoveredBaselineRebuilds` skips retained rebuilds marked
-  capacity-blocked, but runtime-owned rebuilds are rejected, replaced, or removed
-  at the capacity boundary before a later scan can observe that terminal flag.
-  The one-below integration fixture retains an incomplete rebuild with a blocked
-  count of zero, while direct worker tests already own the local flag behavior.
+  capacity-blocked, but runtime-owned rebuilds are rejected, replaced, or
+  removed at the capacity boundary before a later scan can observe that terminal
+  flag. The one-below integration fixture retains an incomplete rebuild with a
+  blocked count of zero, while direct worker tests already own the local flag
+  behavior.
 - **Impact:** The runtime condition suggests a terminal owner can persist into a
   later maintenance scan even though lifecycle ownership prevents that state.
-- **Expected:** Remove the impossible runtime skip while retaining direct bounded-
-  worker capacity behavior.
-- **Verification:** Run the focused graph-capacity fixture and include it in exact
-  Release and ReleaseLean coverage.
+- **Expected:** Remove the impossible runtime skip while retaining direct
+  bounded- worker capacity behavior.
+- **Verification:** Run the focused graph-capacity fixture and include it in
+  exact Release and ReleaseLean coverage.
 
 ### TRB-Issue-091 - Completed seam work rechecks its proven capacity allowance
 
@@ -1289,14 +1348,14 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Automatic-seam lifecycle completion
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `NavigationAutomaticSeamLifecycleWork.AdvanceOne` receives the
-  exact remaining retained-work allowance, yet completion reclassifies the result
-  as restart if the same graph-level capacity check fails.
+  exact remaining retained-work allowance, yet completion reclassifies the
+  result as restart if the same graph-level capacity check fails.
 - **Impact:** The second predicate models an impossible divergence between the
   bounded worker and its caller and leaves an unreachable completion branch.
 - **Expected:** Keep the invariant as a diagnostic assertion and let publication
   revalidation alone choose complete versus restart.
-- **Verification:** Run automatic-seam capacity/lifecycle tests and exact Release
-  and ReleaseLean coverage.
+- **Verification:** Run automatic-seam capacity/lifecycle tests and exact
+  Release and ReleaseLean coverage.
 
 ### TRB-Issue-090 - Writer-preflight publication fallbacks model unsupported races
 
@@ -1307,11 +1366,11 @@ coverage hardening and code-quality follow-up passes.
   seam start, composition rollback, and no-change closure reopening retain
   fallback branches that can fail only if an external reader races the same
   single-threaded deterministic maintenance boundary.
-- **Impact:** The branches cannot be reproduced through supported ordered context
-  simulation, encourage probabilistic race tests, and preserve direct classifier
-  tests that do not prove public behavior.
-- **Expected:** Express the writer-ownership guarantee diagnostically and keep the
-  supported deterministic publication path singular.
+- **Impact:** The branches cannot be reproduced through supported ordered
+  context simulation, encourage probabilistic race tests, and preserve direct
+  classifier tests that do not prove public behavior.
+- **Expected:** Express the writer-ownership guarantee diagnostically and keep
+  the supported deterministic publication path singular.
 - **Verification:** Remove the one-use rollback classifier rows, run writer-
   pressure behavior tests, and include exact Release and ReleaseLean coverage.
 
@@ -1324,12 +1383,12 @@ coverage hardening and code-quality follow-up passes.
   publication was observed and validates both its unaffected and affected cells,
   but its terminal assertion still expects the observation flag to be false from
   the deliberate red phase.
-- **Impact:** The focused behavior can pass against stale binaries yet fail in the
-  authoritative rebuilt aggregate after the runtime fix is present.
+- **Impact:** The focused behavior can pass against stale binaries yet fail in
+  the authoritative rebuilt aggregate after the runtime fix is present.
 - **Expected:** Require the supported affected-catch-up boundary to be observed
   and remove temporary trace scaffolding.
-- **Verification:** Rebuild the focused test, confirm its affected-root assertions
-  pass, and include it in exact Release and ReleaseLean coverage.
+- **Verification:** Rebuild the focused test, confirm its affected-root
+  assertions pass, and include it in exact Release and ReleaseLean coverage.
 
 ### TRB-Issue-088 - Volume-anchor coverage injects an unowned node reference
 
@@ -1337,28 +1396,28 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Volume-anchor evaluation tests and graph ownership
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** A direct evaluator test passes `default(NavigationNodeRef)` even
-  though production callers resolve the node from the same immutable graph before
-  evaluation.
+  though production callers resolve the node from the same immutable graph
+  before evaluation.
 - **Impact:** The test preserves a Release fallback for a state that supported
   endpoint and segment paths cannot supply, mixing invalid-state coverage with a
   useful dependency-capacity assertion.
 - **Expected:** Remove the invalid-node row, express graph ownership as a
   diagnostic invariant, and retain the atomic dependency-capacity behavior.
-- **Verification:** Run the focused volume-anchor fixture and include it in exact
-  Release and ReleaseLean coverage.
+- **Verification:** Run the focused volume-anchor fixture and include it in
+  exact Release and ReleaseLean coverage.
 
 ### TRB-Issue-087 - Transition refresh test bypasses duplicate-rule validation
 
 - **Discovered:** 2026-09-01
 - **Area:** Transition-rule publication tests
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** A test composes a raw graph with duplicate global transition-rule
-  IDs specifically to bypass the map-fold validation that rejects that state in
-  the supported candidate pipeline.
+- **Evidence:** A test composes a raw graph with duplicate global
+  transition-rule IDs specifically to bypass the map-fold validation that
+  rejects that state in the supported candidate pipeline.
 - **Impact:** The invalid-state fixture preserves a Release throw branch that no
   accepted operation can reach and duplicates the real validation test.
-- **Expected:** Keep duplicate ownership rejection at the supported fold boundary
-  and express refresh-time uniqueness as a diagnostic invariant.
+- **Expected:** Keep duplicate ownership rejection at the supported fold
+  boundary and express refresh-time uniqueness as a diagnostic invariant.
 - **Verification:** Run transition publication/fold tests and include them in
   exact Release and ReleaseLean coverage.
 
@@ -1371,20 +1430,20 @@ coverage hardening and code-quality follow-up passes.
   `ReleaseLean` compiles a distinct dependency/transport shape.
 - **Impact:** Lean-only branches or methods can regress without invalidating the
   claimed exact release gate.
-- **Expected:** Collect and enforce an independent exact summary for both Release
-  configurations without merging unlike assemblies.
-- **Verification:** Exercise the Ubuntu Release/ReleaseLean CI matrix and confirm
-  each summary independently reports exact line, branch, covered-method, and
-  fully-covered-method totals.
+- **Expected:** Collect and enforce an independent exact summary for both
+  Release configurations without merging unlike assemblies.
+- **Verification:** Exercise the Ubuntu Release/ReleaseLean CI matrix and
+  confirm each summary independently reports exact line, branch, covered-method,
+  and fully-covered-method totals.
 
 ### TRB-Issue-085 - Coverage workflow can validate a different commit after failure
 
 - **Discovered:** 2026-09-01
 - **Area:** CI workflow ownership and merge gates
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** The post-`build-and-test` workflow checks out the branch tip rather
-  than `workflow_run.head_sha`, does not require the triggering run to succeed,
-  and runs only after pushes to `main`.
+- **Evidence:** The post-`build-and-test` workflow checks out the branch tip
+  rather than `workflow_run.head_sha`, does not require the triggering run to
+  succeed, and runs only after pushes to `main`.
 - **Impact:** A newer commit can receive an older run's coverage report, failed
   validation can still launch coverage, and the exact threshold cannot block a
   pull request before merge.
@@ -1398,11 +1457,12 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Internal graph value-semantics tests
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** Three large tests in `NavigationGraphValueSemanticsTests` combine
-  transition-page behavior, internal key/reference validity, dependency identity,
-  and budget accounting in single methods.
-- **Impact:** A failure in one contract obscures the exact behavior that regressed
-  and can prevent later independent contracts in the same method from running.
+- **Evidence:** Three large tests in `NavigationGraphValueSemanticsTests`
+  combine transition-page behavior, internal key/reference validity, dependency
+  identity, and budget accounting in single methods.
+- **Impact:** A failure in one contract obscures the exact behavior that
+  regressed and can prevent later independent contracts in the same method from
+  running.
 - **Expected:** Split the aggregate rows into cohesive behavioral groups without
   creating one hollow test per branch.
 - **Verification:** Run the focused value-semantics fixture and include the
@@ -1433,10 +1493,10 @@ coverage hardening and code-quality follow-up passes.
   reject invalid media before those helpers are called.
 - **Impact:** The tests manufacture unreachable state and preserve misleading
   defensive branches instead of documenting supported behavior.
-- **Expected:** Remove invalid-enum rows and collapse internal default handling to
-  the proven supported-medium invariant where necessary.
-- **Verification:** Confirm the invalid casts and unreachable branches are absent,
-  then rerun exact Release coverage plus the Release/ReleaseLean matrix.
+- **Expected:** Remove invalid-enum rows and collapse internal default handling
+  to the proven supported-medium invariant where necessary.
+- **Verification:** Confirm the invalid casts and unreachable branches are
+  absent, then rerun exact Release coverage plus the Release/ReleaseLean matrix.
 
 ### TRB-Issue-081 - One-use runtime classifiers exist only for direct coverage tests
 
@@ -1452,8 +1512,8 @@ coverage hardening and code-quality follow-up passes.
 - **Expected:** Inline trivial one-use decisions, remove their direct coverage
   rows, and retain only multi-state classifiers whose precedence is itself a
   meaningful contract.
-- **Verification:** Run focused graph-capacity and lifecycle fixtures, then rerun
-  exact Release coverage plus the Release/ReleaseLean matrix.
+- **Verification:** Run focused graph-capacity and lifecycle fixtures, then
+  rerun exact Release coverage plus the Release/ReleaseLean matrix.
 
 ### TRB-Issue-080 - Materialized catch-up drops an owned affected closure
 
@@ -1461,9 +1521,10 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Structural-composition and materialized-snapshot closure transfer
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `MaintainMaterializedComponentWork` copies only
-  `ClosedStructuralComponents` and the all-close flag from a requested structural
-  publication. An exact affected closure stores its operation-owned component set
-  in the graph's additional closed root, so the copied graph can omit that root.
+  `ClosedStructuralComponents` and the all-close flag from a requested
+  structural publication. An exact affected closure stores its operation-owned
+  component set in the graph's additional closed root, so the copied graph can
+  omit that root.
 - **Impact:** An affected component can reopen for one published frame while its
   structural composition is still pending, after which the operation records the
   incomplete closure transfer as published.
@@ -1477,19 +1538,21 @@ coverage hardening and code-quality follow-up passes.
 ### TRB-Issue-079 - Structural carryover tests construct invalid public inputs
 
 - **Discovered:** 2026-09-01
-- **Area:** Structural-composition capacity and physical-capture regression tests
+- **Area:** Structural-composition capacity and physical-capture regression
+  tests
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** `PhysicalChangeCarryover_ShouldRetainExactCaptureUntilComponentPublication`
-  authors cells through index 7 against a normalized grid ending at index 1,
-  so `NavigationMapBuilder.Build` rejects the fixture before publication.
+- **Evidence:**
+  `PhysicalChangeCarryover_ShouldRetainExactCaptureUntilComponentPublication`
+  authors cells through index 7 against a normalized grid ending at index 1, so
+  `NavigationMapBuilder.Build` rejects the fixture before publication.
   `ResumedComposition_ShouldRejectDynamicSlotOverflowWithoutLeakingSafetyClosure`
   configures eight overlay cells but only one dynamic slot, so context settings
   validation rejects both theory rows before the claimed capacity lifecycle.
 - **Impact:** Three coverage rows are red for malformed setup and provide no
   evidence for physical-capture retention or resumed-composition rollback.
 - **Expected:** Keep every authored cell inside normalized bounds and align the
-  one-cell overlay limit with the one-slot lifetime ceiling so the fixtures reach
-  their intended deterministic runtime boundaries.
+  one-cell overlay limit with the one-slot lifetime ceiling so the fixtures
+  reach their intended deterministic runtime boundaries.
 - **Verification:** Run the three focused rows, confirm they reach their
   behavioral assertions, and include them in exact Release coverage plus the
   Release/ReleaseLean matrix.
@@ -1511,13 +1574,14 @@ coverage hardening and code-quality follow-up passes.
   conflating it with baseline completion, then wait for rematerialization and
   verify final structural publication retains both values.
 - **Verification:** Exercise the bounded fail-closed intermediate state, assert
-  the obstacle update during carryover and the fully reconciled map afterward, and
-  rerun exact Release coverage plus the Release/ReleaseLean matrix.
+  the obstacle update during carryover and the fully reconciled map afterward,
+  and rerun exact Release coverage plus the Release/ReleaseLean matrix.
 
 ### TRB-Issue-077 - Composition capacity rollback loses its closure baseline
 
 - **Discovered:** 2026-09-01
-- **Area:** Retained materialization and structural-composition rollback ownership
+- **Area:** Retained materialization and structural-composition rollback
+  ownership
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** A retained composition can complete an independently retained
   physical materialization snapshot, then reconcile a newly materialized
@@ -1571,8 +1635,8 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Initial structural-composition retained capacity
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** `NavigationStructuralCompositionWork.Advance` receives the
-  exact allowance remaining after current-root, operation, baseline, and rebuild
+- **Evidence:** `NavigationStructuralCompositionWork.Advance` receives the exact
+  allowance remaining after current-root, operation, baseline, and rebuild
   ownership. When it reports capacity, its retained state already exceeds that
   allowance. The immediately following combined check adds the operation-owned
   closed root and tests the same configured aggregate ceiling, so it necessarily
@@ -1580,8 +1644,9 @@ coverage hardening and code-quality follow-up passes.
 - **Impact:** Two adjacent rejection paths model one ownership boundary and make
   it appear that initial worker growth and aggregate closed-root capacity can
   disagree.
-- **Expected:** Let the combined `work + closed root` check own both budget-yield
-  and capacity-yield cases, preserving one atomic initial-composition rejection.
+- **Expected:** Let the combined `work + closed root` check own both
+  budget-yield and capacity-yield cases, preserving one atomic
+  initial-composition rejection.
 - **Verification:** Preserve preflight rejection, measured worker-growth
   rejection, terminal closure reopening, and exact Release coverage.
 
@@ -1593,9 +1658,9 @@ coverage hardening and code-quality follow-up passes.
 - **Evidence:** `BeginOperationClosureRollback` is called only for
   `ReleaseAndBeginRollback`, which requires a published operation result with
   composition or materialized completion ownership. Every such result either
-  published during the current maintenance pass, retains full-rebuild
-  ownership, or still has ingress ownership. The fallback that immediately
-  called `TryPublishReopenedStructuralScopes` therefore cannot execute through
+  published during the current maintenance pass, retains full-rebuild ownership,
+  or still has ingress ownership. The fallback that immediately called
+  `TryPublishReopenedStructuralScopes` therefore cannot execute through
   supported ordering and contradicts that method's no-publication assertion.
 - **Impact:** The duplicate fallback adds an unreachable branch and supports a
   detached truth-table test that fabricates an ownership combination the runtime
@@ -1612,12 +1677,12 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Immutable graph identity value contracts
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** Twelve internal graph identity structs override
-  `Equals(object)` even though every runtime owner compares them through their
-  exact generic type and `IEquatable<T>`. The only wrong-runtime-type caller is
-  an unconstrained coverage helper. Four of those structs also expose equality
-  operators, forcing the boxed override solely to satisfy the compiler even
-  though all operator call sites are internal and can use the typed contract.
+- **Evidence:** Twelve internal graph identity structs override `Equals(object)`
+  even though every runtime owner compares them through their exact generic type
+  and `IEquatable<T>`. The only wrong-runtime-type caller is an unconstrained
+  coverage helper. Four of those structs also expose equality operators, forcing
+  the boxed override solely to satisfy the compiler even though all operator
+  call sites are internal and can use the typed contract.
 - **Impact:** Unsupported boxed dispatch adds methods and branches that no graph
   lifecycle can execute, while tests allocate and manufacture unrelated objects
   only to satisfy those branches.
@@ -1635,12 +1700,12 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** A relevant topology event always passes through
   `NavigationMaterializedComponentWork` before automatic-seam start. That gate
-  retains the full candidate plus a 3,856-byte owner and succeeds only while
-  the current root, candidate, and work fit together. Starting the seam then
-  retains the same closed candidate plus only 3,560 bytes. The page envelope is
-  likewise strictly smaller than the already-proven current-root and
-  materialized-work envelope. Retained materialized completion repeats the same
-  capacity proof immediately before its start call.
+  retains the full candidate plus a 3,856-byte owner and succeeds only while the
+  current root, candidate, and work fit together. Starting the seam then retains
+  the same closed candidate plus only 3,560 bytes. The page envelope is likewise
+  strictly smaller than the already-proven current-root and materialized-work
+  envelope. Retained materialized completion repeats the same capacity proof
+  immediately before its start call.
 - **Impact:** The post-publication capacity-requeue disposition and no-effect
   dispatch model a state immutable context limits cannot produce, complicating
   fail-closed ownership and encouraging a coverage-shaped fixture that cannot
@@ -1692,13 +1757,13 @@ coverage hardening and code-quality follow-up passes.
   regressions.
 - **Expected:** Keep the public stale-alias behavior, make public alias disposal
   exercise the atomic single-winner detach path, remove impossible ordinal and
-  second-bind guards with their reflected fixtures, remove duplicate returns
-  and boxed-key paths, and exercise guide/slot generation retirement through
+  second-bind guards with their reflected fixtures, remove duplicate returns and
+  boxed-key paths, and exercise guide/slot generation retirement through
   production-owned pooling and no-wrap policies.
-- **Verification:** Preserve ordinary guide reuse, public stale-alias fail-close,
-  sample-ordinal overflow policy, disposed/full pool behavior, and permanent
-  retirement of exhausted guide and lease-slot identities; then rerun the exact
-  Release coverage aggregate without the reflected rows.
+- **Verification:** Preserve ordinary guide reuse, public stale-alias
+  fail-close, sample-ordinal overflow policy, disposed/full pool behavior, and
+  permanent retirement of exhausted guide and lease-slot identities; then rerun
+  the exact Release coverage aggregate without the reflected rows.
 
 ### TRB-Issue-069 - NavMotor coverage tests bypass the traversal lifecycle through reflection
 
@@ -1733,8 +1798,8 @@ coverage hardening and code-quality follow-up passes.
   change identity. Structural `Advance` receives an allowance that already
   subtracts the live root, operation work, rebuilds, and any separately retained
   closure baseline. When it returns without `capacityExceeded`, its unchanged
-  retained work fits that allowance; successful completion and seam
-  revalidation add no retained ownership before the repeated check.
+  retained work fits that allowance; successful completion and seam revalidation
+  add no retained ownership before the repeated check.
 - **Impact:** Rechecking these impossible losses suggests retained work can
   outlive its map owner or grow after its exact allowance check, obscuring the
   actual capacity boundaries and publication races that must stay fail-closed.
@@ -1766,12 +1831,12 @@ coverage hardening and code-quality follow-up passes.
 ### TRB-Issue-066 - Coincident guide append rechecks impossible non-node ownership
 
 - **Discovered:** 2026-09-01
-- **Area:** A* coincident guide-point ownership
+- **Area:** A\* coincident guide-point ownership
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** A non-node candidate following a node is preserved by the first
-  disposition, and any candidate following a non-node is replaced by the
-  second disposition. Reaching the append disposition therefore requires both
-  the prior and candidate points to be distinct addressed nodes.
+  disposition, and any candidate following a non-node is replaced by the second
+  disposition. Reaching the append disposition therefore requires both the prior
+  and candidate points to be distinct addressed nodes.
 - **Impact:** Rechecking `isNode` inside the append disposition models no
   reachable ownership state and can silently omit the path-node ordinal if the
   surrounding policy regresses.
@@ -1790,8 +1855,8 @@ coverage hardening and code-quality follow-up passes.
   `RequiresAffectedClosurePublication` state has published. Initial closure
   ownership establishes either that affected closure directly or an all-close
   closure that itself blocks advancement until the affected closure publishes.
-  When completed seam revalidation fails, `ResetSeamState` therefore always
-  sees `_affectedClosurePublished` and sets `_allCloseRepublishRequired`.
+  When completed seam revalidation fails, `ResetSeamState` therefore always sees
+  `_affectedClosurePublished` and sets `_allCloseRepublishRequired`.
 - **Impact:** Rechecking for a missing all-close publication models no retained
   ownership state the structural lifecycle can create and obscures the
   fail-closed response to a stale completed seam cursor.
@@ -1859,9 +1924,9 @@ coverage hardening and code-quality follow-up passes.
 - **Expected:** Assert that a cell-only delta reaching snapshot capture owns at
   least one new canonical address and capture its GridForge baseline directly;
   full zero-address captures remain supported.
-- **Verification:** Keep zero-new-address overlay materialization, positive exact
-  delta, oversized-delta rebuild, and full empty-map capture behavior, then
-  confirm the impossible skip is absent from the next `Release` coverage
+- **Verification:** Keep zero-new-address overlay materialization, positive
+  exact delta, oversized-delta rebuild, and full empty-map capture behavior,
+  then confirm the impossible skip is absent from the next `Release` coverage
   aggregate.
 
 ### TRB-Issue-061 - Seam changed-map capture rechecks its assigned ownership phase
@@ -1869,10 +1934,10 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Structural composition automatic-seam changed-map capture
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** The resumable seam cursor has only phase 0 and phase 1. A phase-0
-  budget failure returns immediately; every non-returning phase-0 path reads one
-  changed map and assigns phase 1 before control reaches the ownership block.
-  A resumed dependency-budget failure also retains phase 1.
+- **Evidence:** The resumable seam cursor has only phase 0 and phase 1. A
+  phase-0 budget failure returns immediately; every non-returning phase-0 path
+  reads one changed map and assigns phase 1 before control reaches the ownership
+  block. A resumed dependency-budget failure also retains phase 1.
 - **Impact:** Rechecking phase 1 at the ownership block models no reachable
   cursor state and hides broken resumable ownership behind a skipped block.
 - **Expected:** Assert the assigned ownership phase diagnostically and execute
@@ -1891,14 +1956,14 @@ coverage hardening and code-quality follow-up passes.
   private `ContainsParameter(int ordinal, Fixed64 parameter)` overload had no
   callers. All live ray policies call the exact interval-bound overload
   directly.
-- **Impact:** The forwarding overload is zombie code with no runtime behavior
-  or useful test surface, and retaining it prevents exact method/line coverage
-  from describing the executable library accurately.
+- **Impact:** The forwarding overload is zombie code with no runtime behavior or
+  useful test surface, and retaining it prevents exact method/line coverage from
+  describing the executable library accurately.
 - **Expected:** Remove the unreferenced overload and retain the production-used
   closed-interval predicate shared by portal and target policies.
 - **Verification:** Confirm no call sites remain, keep the before/boundary,
-  interior, and after interval matrix, and restore exact line/method coverage
-  in the next full Release aggregate.
+  interior, and after interval matrix, and restore exact line/method coverage in
+  the next full Release aggregate.
 
 ### TRB-Issue-058 - Deferred operation safety closure rechecks prior publication
 
@@ -1917,9 +1982,8 @@ coverage hardening and code-quality follow-up passes.
 - **Expected:** Assert the no-prior-publication ownership invariant and publish
   the exact all-closed safety candidate for deferred work without composition.
 - **Verification:** Keep deferred folding, retained composition, publication
-  capacity, and operation rollback behavior coverage, then confirm the
-  redundant publication check is absent from the next full `Release` coverage
-  aggregate.
+  capacity, and operation rollback behavior coverage, then confirm the redundant
+  publication check is absent from the next full `Release` coverage aggregate.
 
 ### TRB-Issue-057 - Automatic-seam lifecycle allowance counts impossible composition ownership
 
@@ -1939,8 +2003,8 @@ coverage hardening and code-quality follow-up passes.
   calculate allowance from the current graph, baselines, and operation owner
   only.
 - **Verification:** Keep exact lifecycle byte/page accounting, retained
-  materialization, and operation-composition capacity coverage, then confirm
-  the nullable composition fallbacks are absent from the next full `Release`
+  materialization, and operation-composition capacity coverage, then confirm the
+  nullable composition fallbacks are absent from the next full `Release`
   coverage aggregate.
 
 ### TRB-Issue-059 - Final ray admission rechecks an impossible post-segment interval entry
@@ -1948,13 +2012,13 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Navigation-ray final target admission
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** GridForge `GridTraceInterval` values are exact intersections with
-  the traced segment and normalize `TEnter` and `TExit` to its closed `[0, 1]`
-  parameter range. `TryFinish` reads one of those retained intervals, so its
-  `TEnter > Fixed64.One` rejection cannot occur. `TExit < Fixed64.One` remains
-  meaningful because it proves that an ordinary final interval does not contain
-  the requested destination; `DestinationSuffix` intentionally bypasses that
-  requirement.
+- **Evidence:** GridForge `GridTraceInterval` values are exact intersections
+  with the traced segment and normalize `TEnter` and `TExit` to its closed
+  `[0, 1]` parameter range. `TryFinish` reads one of those retained intervals,
+  so its `TEnter > Fixed64.One` rejection cannot occur. `TExit < Fixed64.One`
+  remains meaningful because it proves that an ordinary final interval does not
+  contain the requested destination; `DestinationSuffix` intentionally bypasses
+  that requirement.
 - **Impact:** Treating a post-segment entry as an ordinary final-target miss
   models no supported GridForge trace result and obscures a broken trace
   normalization invariant behind a silent `false` return.
@@ -1994,9 +2058,9 @@ coverage hardening and code-quality follow-up passes.
 - **Evidence:** `PrepareDiscoveredPair` is entered with a GridForge boundary
   contact only after both contact configuration keys resolve to map IDs in the
   prepared graph. GridForge emits topology-valid voxel indices for those exact
-  normalized configurations, and each resolved map retains that same
-  normalized binding. Repeating `TryGetSeamPrism` for either contact endpoint
-  therefore cannot fail.
+  normalized configurations, and each resolved map retains that same normalized
+  binding. Repeating `TryGetSeamPrism` for either contact endpoint therefore
+  cannot fail.
 - **Impact:** Treating either repeated prism lookup as ordinary missing seam
   geometry models no supported contact and hides a broken GridForge/graph
   binding invariant behind a silent return.
@@ -2005,8 +2069,8 @@ coverage hardening and code-quality follow-up passes.
   geometry outcome.
 - **Verification:** Keep physical-contact coverage for mapped and unmapped
   navigation addresses plus incompatible portal geometry, then confirm both
-  redundant prism-miss branches are absent from the next full `Release`
-  coverage aggregate.
+  redundant prism-miss branches are absent from the next full `Release` coverage
+  aggregate.
 
 ### TRB-Issue-054 - Seam constructor allocation gates are sensitive to runtime tiering
 
@@ -2023,8 +2087,8 @@ coverage hardening and code-quality follow-up passes.
   on test order, producing nondeterministic CI failures while the constructor's
   retained-size and persistent-page contracts remain unchanged.
 - **Expected:** Execute and discard one complete allocation-sized construction
-  window after the broad warmup, then enforce the exact per-instance contract
-  on the following window for both seam-refresh and seam-lifecycle work.
+  window after the broad warmup, then enforce the exact per-instance contract on
+  the following window for both seam-refresh and seam-lifecycle work.
 - **Verification:** Repeat both focused allocation gates, then run them in the
   full coverage aggregate and the final Release/ReleaseLean matrices before
   moving this item to resolved.
@@ -2045,17 +2109,18 @@ coverage hardening and code-quality follow-up passes.
 - **Expected:** Assert the canonical address/medium cursor ownership
   diagnostically while preserving unchanged-medium filtering and one-below
   dependency-budget retry behavior.
-- **Verification:** Keep repeated exact-scope coalescing, multi-medium expansion,
-  and one-entry dependency-budget regressions, then confirm the duplicate pair
-  branch is absent from the next full `Release` coverage aggregate.
+- **Verification:** Keep repeated exact-scope coalescing, multi-medium
+  expansion, and one-entry dependency-budget regressions, then confirm the
+  duplicate pair branch is absent from the next full `Release` coverage
+  aggregate.
 
 ### TRB-Issue-052 - Source-row seam filtering tolerates an impossible absent source record
 
 - **Discovered:** 2026-09-01
 - **Area:** Automatic-seam row reconstruction
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** `ShouldFilterSourcePair` is called only for a pair emitted by the
-  source automatic-seam row. A matching pair delta is created from the same
+- **Evidence:** `ShouldFilterSourcePair` is called only for a pair emitted by
+  the source automatic-seam row. A matching pair delta is created from the same
   source index's exact `TryGetPairRecord` result before row reconstruction. The
   source row and pair-record index are immutable parts of one
   `NavigationAutomaticSeamIndex`, so a matching delta reached through that row
@@ -2064,20 +2129,20 @@ coverage hardening and code-quality follow-up passes.
   defaults that no valid seam index can own, and can hide a broken internal
   index invariant behind ordinary row filtering.
 - **Expected:** Assert source-record ownership diagnostically and filter
-  dependency rows by geometry changes while filtering active rows by geometry
-  or activity changes.
+  dependency rows by geometry changes while filtering active rows by geometry or
+  activity changes.
 - **Verification:** Keep the mixed mapped/unmapped seam behavior coverage and
-  cover the complete dependency-versus-active row filtering policy, then
-  confirm the nullable source-record fallbacks are absent from the next full
-  `Release` coverage aggregate.
+  cover the complete dependency-versus-active row filtering policy, then confirm
+  the nullable source-record fallbacks are absent from the next full `Release`
+  coverage aggregate.
 
 ### TRB-Issue-051 - Graph node readers revalidate immutable traversal ownership
 
 - **Discovered:** 2026-09-01
 - **Area:** Graph node-state and structural native-edge enumeration
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** Every exact-medium `TryGetNodeState` caller retains a medium that
-  was validated when its query, transition, or evaluator was created; the
+- **Evidence:** Every exact-medium `TryGetNodeState` caller retains a medium
+  that was validated when its query, transition, or evaluator was created; the
   convenience overload supplies `Solid` directly. Structural native-edge
   enumeration is likewise entered only by the graph-created surface enumerator
   retaining its exact source `NavigationNodeRef`. An immutable graph can later
@@ -2152,9 +2217,9 @@ coverage hardening and code-quality follow-up passes.
   the cursor snapshot is no longer current. Its public contract also requires a
   stale result to write no output. Therefore a positive `outputCount` already
   proves the `invalidated` flag derived from `status == Stale` is false.
-- **Impact:** Rechecking `!invalidated` after `outputCount > 0` models a producer
-  result GridForge cannot return and leaves an unreachable branch in default
-  baseline discovery.
+- **Impact:** Rechecking `!invalidated` after `outputCount > 0` models a
+  producer result GridForge cannot return and leaves an unreachable branch in
+  default baseline discovery.
 - **Expected:** Assert the stale-with-zero-output producer contract
   diagnostically and let positive output enter baseline capture directly, while
   preserving stale reset, recapture identity validation, and exact probe
@@ -2170,10 +2235,9 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `NavigationOverlayFoldWork` reserved an unbaked address in
   `DynamicAddresses` only for `Set`. A direct `Suppress` over inherited default
-  semantics therefore published a tombstone without assigning the stable
-  dynamic slot needed to materialize it. Existing compose-only tests manually
-  supplied the expected address registry and did not exercise the production
-  fold.
+  semantics therefore published a tombstone without assigning the stable dynamic
+  slot needed to materialize it. Existing compose-only tests manually supplied
+  the expected address registry and did not exercise the production fold.
 - **Impact:** A default-cell tombstone can be omitted from the published graph,
   so a cell intended to be blocked may continue inheriting passable default
   semantics.
@@ -2183,18 +2247,17 @@ coverage hardening and code-quality follow-up passes.
   absorb or reuse its slot.
 - **Verification:** Keep the production fold regression covering direct
   default-backed suppression plus permanent reservation across reversion and
-  explicit-only Set-to-Suppress changes, then run
-  focused map/graph tests and the full Release and ReleaseLean matrices before
-  moving this item to resolved.
+  explicit-only Set-to-Suppress changes, then run focused map/graph tests and
+  the full Release and ReleaseLean matrices before moving this item to resolved.
 
 ### TRB-Issue-046 - Internal area-policy lookups retained impossible null branches
 
 - **Discovered:** 2026-09-01
 - **Area:** Pathing graph dependency validation and guide/ray admission
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** `NavigationAreaCatalog.TryGet` returns `true` only after assigning
-  an element from its immutable non-null policy array, yet its nullable `out`
-  contract forced callers such as `TrailblazerGuideService` and
+- **Evidence:** `NavigationAreaCatalog.TryGet` returns `true` only after
+  assigning an element from its immutable non-null policy array, yet its
+  nullable `out` contract forced callers such as `TrailblazerGuideService` and
   `NavigationRayWork` to recheck the successful result for `null`.
   `NavigationWorldGraph.IsDependencyCurrent` likewise guarded a non-nullable
   internal `GraphDependencyStamp` parameter against `null`; every typed caller
@@ -2215,8 +2278,9 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Pathing graph maintenance and dynamic-address baseline capture
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** With 65 baked addresses, one newly added dynamic address, and a
-  64-address baseline scratch capacity, `NavigationMapInstance.CopyNewCanonicalAddresses`
-  returns zero because the map's total address count exceeds the scratch span.
+  64-address baseline scratch capacity,
+  `NavigationMapInstance.CopyNewCanonicalAddresses` returns zero because the
+  map's total address count exceeds the scratch span.
   `NavigationWorldGraph.CaptureMaintenanceSnapshot` then requests a delta
   capture with `AddressCount == 0` and removes the stale rebuild instead of
   capturing the one new address.
@@ -2237,16 +2301,16 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** With an eight-cell dense map and a 98-page graph cap, a retained
   eight-suppression overlay closes the affected structural scope. Adding
-  obstacles to all eight GridForge cells before the next frame makes the
-  overlay publication fail with `CapacityExceeded` and enter
+  obstacles to all eight GridForge cells before the next frame makes the overlay
+  publication fail with `CapacityExceeded` and enter
   `BeginOperationClosureRollback`. The immediately published rollback graph has
   an open structural scope while its first cell still reports
   `IsMaterialized == true`, `ObstacleCount == 0`, and `IsBlocked == false`, even
   though the committed world contains the obstacles and a physical resnapshot
   has been requeued.
 - **Impact:** Navigation can observe stale passable physical state for at least
-  one frame after a capacity-rejected operation instead of remaining
-  fail-closed until committed GridForge changes are reconciled.
+  one frame after a capacity-rejected operation instead of remaining fail-closed
+  until committed GridForge changes are reconciled.
 - **Expected:** Operation rollback must not reopen a structural scope from a
   stale snapshot while safety or resnapshot work is pending. The graph should
   remain fail-closed until the requeued physical state has been reconciled and
@@ -2299,8 +2363,8 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Calling `RegisterJump()` on a standalone `JumpLocomotion`
   increments `JumpCount` and sets the jumping/hold flags before reading
-  context-owned simulation time. Missing-context validation then throws, but
-  the earlier state mutations remain visible.
+  context-owned simulation time. Missing-context validation then throws, but the
+  earlier state mutations remain visible.
 - **Impact:** A failed public jump command is not transactional. Reusing or
   subsequently binding the object can inherit a jump that never successfully
   started, producing state divergence from the command result.
@@ -2311,20 +2375,20 @@ coverage hardening and code-quality follow-up passes.
   exact pre-call state, then run the complete jump and controller lifecycle
   suites in `Release` and `ReleaseLean`.
 
-### TRB-Issue-006 - A* snapshot pressure discards active steering intent
+### TRB-Issue-006 - A\* snapshot pressure discards active steering intent
 
 - **Discovered:** 2026-08-31
-- **Area:** Navigation steering and A* guide lease refresh
+- **Area:** Navigation steering and A\* guide lease refresh
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** With an active public A* steering query and every graph snapshot
-  lease held, the current guide reports `CapacityExceeded`. The next heading is
-  correctly zero while pressure remains, but `ValidateGraphMovementPath`
-  handles only `Stale` as retryable and returns false. `GetHeading` then calls
-  `Arrive()` and clears `CurrentQuery`; the focused regression expected the
-  exact original query and observed `null`. Flow sampling already treats the
-  equivalent `CapacityExceeded` status as retryable.
+- **Evidence:** With an active public A\* steering query and every graph
+  snapshot lease held, the current guide reports `CapacityExceeded`. The next
+  heading is correctly zero while pressure remains, but
+  `ValidateGraphMovementPath` handles only `Stale` as retryable and returns
+  false. `GetHeading` then calls `Arrive()` and clears `CurrentQuery`; the
+  focused regression expected the exact original query and observed `null`. Flow
+  sampling already treats the equivalent `CapacityExceeded` status as retryable.
 - **Impact:** Temporary graph-snapshot capacity pressure permanently cancels an
-  A* movement request instead of pausing and retrying it, so otherwise
+  A\* movement request instead of pausing and retrying it, so otherwise
   deterministic navigation intent depends on transient lease availability.
 - **Expected:** An active A* lease that becomes capacity-blocked must preserve
   the exact query and schedule a retry, matching initial A* admission and Flow
@@ -2347,17 +2411,17 @@ coverage hardening and code-quality follow-up passes.
   throws `IndexOutOfRangeException` from `TakeNextRawScope`, called by
   `AdvanceChangedMapCapture` and `Advance`.
 - **Impact:** Structural publication for an otherwise valid cell-only overlay
-  can crash graph maintenance instead of retaining and atomically publishing
-  the exact affected address. The failure occurs after bounded work resumes,
-  so low maintenance budgets make it directly reachable in normal operation.
+  can crash graph maintenance instead of retaining and atomically publishing the
+  exact affected address. The failure occurs after bounded work resumes, so low
+  maintenance budgets make it directly reachable in normal operation.
 - **Expected:** Exhausting the final overlay map must finish the raw-scope
   cursor and return to `HasNextRawMapId` without indexing past the frame-change
   batch. The exact component and address debits must remain resumable and the
   overlay must publish without stale membership.
 - **Verification:** Keep the one-cell suppress regression with one dependency
   entry per frame red before the fix, then prove exact component/address retry,
-  successful completion, and suppressed effective state in focused `Release`
-  and `ReleaseLean` graph tests.
+  successful completion, and suppressed effective state in focused `Release` and
+  `ReleaseLean` graph tests.
 
 ### TRB-Issue-008 - Partial Navigator load dereferences absent steering
 
@@ -2383,23 +2447,23 @@ coverage hardening and code-quality follow-up passes.
   Navigator committed-cell behavior in focused `Release` and `ReleaseLean`
   serialization suites.
 
-### TRB-Issue-009 - Stale copied A* reservation can release its replacement
+### TRB-Issue-009 - Stale copied A\* reservation can release its replacement
 
 - **Discovered:** 2026-08-31
-- **Area:** A* payload cache reservation ownership
+- **Area:** A\* payload cache reservation ownership
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `NavigationAStarPayloadReservation` contains only maximum bytes
   and a lease-slot flag. Reserving A, copying it, releasing A, reserving B for
   the same byte count, and then releasing the stale copy of A passes cache
-  validation and consumes B's accounting. Releasing the legitimate B
-  reservation then throws `InvalidOperationException` from
-  `NavigationAStarPayloadCache` because the counters are inconsistent. The
-  focused regression is deterministic and uses only normal reservation APIs;
-  Flow reservations already carry owner, slot, and generation identity.
-- **Impact:** A stale value copy can corrupt cache byte and lease-slot ownership,
-  causing valid A* publication/release operations to fail and potentially
-  making capacity availability depend on alias order.
-- **Expected:** Each A* reservation must have exact cache-owned identity so a
+  validation and consumes B's accounting. Releasing the legitimate B reservation
+  then throws `InvalidOperationException` from `NavigationAStarPayloadCache`
+  because the counters are inconsistent. The focused regression is deterministic
+  and uses only normal reservation APIs; Flow reservations already carry owner,
+  slot, and generation identity.
+- **Impact:** A stale value copy can corrupt cache byte and lease-slot
+  ownership, causing valid A\* publication/release operations to fail and
+  potentially making capacity availability depend on alias order.
+- **Expected:** Each A\* reservation must have exact cache-owned identity so a
   stale alias cannot release, publish, or otherwise mutate a replacement slot.
   Stale operations must fail closed without changing the live reservation's
   accounting.
@@ -2434,16 +2498,16 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** A legal four-cell gas union succeeds when the guide bridge has
   the exact combined lookup-and-covered-address allowance. Reducing that
-  combined allowance by one makes GridForge report
-  `CandidateWorkLimitExceeded`, but `NavigationVolumeAnchorEvaluator` maps the
-  result to `CapacityExceeded` instead of `BudgetExceeded`.
+  combined allowance by one makes GridForge report `CandidateWorkLimitExceeded`,
+  but `NavigationVolumeAnchorEvaluator` maps the result to `CapacityExceeded`
+  instead of `BudgetExceeded`.
 - **Impact:** A Flow guide can report workspace exhaustion when only its public
   per-sample work budget ran out, preventing callers from distinguishing a
   retryable budget boundary from a fixed capacity limit.
 - **Expected:** Candidate-work exhaustion derived from
-  `NavigationWorkMeter.RemainingGridCandidateWork` must report
-  `BudgetExceeded`; workspace grid, address, and output ceilings must continue
-  to report `CapacityExceeded` at their exact boundaries.
+  `NavigationWorkMeter.RemainingGridCandidateWork` must report `BudgetExceeded`;
+  workspace grid, address, and output ceilings must continue to report
+  `CapacityExceeded` at their exact boundaries.
 - **Verification:** Keep the exact/one-below combined guide-work regression and
   the independent workspace-capacity boundary regression, then run focused
   volume and guide tests in `Release` and `ReleaseLean`.
@@ -2457,11 +2521,11 @@ coverage hardening and code-quality follow-up passes.
   by an agent with radius `1/4`. The agent fits the cells and their actual
   radius-`1/2` portal, but exceeds the connection's intentional clearance.
   `TraversalEvaluator.BeginExplicitEdge` returns `Impassable` and
-  `NavigationRayWork.MapExplicitStatus` converts it to `Stale`; the selected
-  ray therefore reports `Stale` instead of `Blocked`.
+  `NavigationRayWork.MapExplicitStatus` converts it to `Stale`; the selected ray
+  therefore reports `Stale` instead of `Blocked`.
 - **Impact:** A structurally current guide can be invalidated as stale merely
-  because its agent is too large for one authored connection, obscuring a
-  normal geometric blockage and triggering unnecessary cache or query refresh.
+  because its agent is too large for one authored connection, obscuring a normal
+  geometric blockage and triggering unnecessary cache or query refresh.
 - **Expected:** Explicit-edge profile impassability must report `Blocked` while
   structural certificate failures remain `Stale` and checked arithmetic remains
   `CostOverflow`.
@@ -2469,10 +2533,10 @@ coverage hardening and code-quality follow-up passes.
   off-corridor blocked, and too-wide blocked outcomes, then run focused ray and
   guide tests in `Release` and `ReleaseLean`.
 
-### TRB-Issue-013 - Synchronous A* rejection publishes through an absent search
+### TRB-Issue-013 - Synchronous A\* rejection publishes through an absent search
 
 - **Discovered:** 2026-08-31
-- **Area:** A* query admission and publication lifecycle
+- **Area:** A\* query admission and publication lifecycle
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** A transition-disabled query whose start and target media differ
   is rejected synchronously as `NoPath` by `NavigationQueryAdmissionWork.Begin`.
@@ -2485,12 +2549,13 @@ coverage hardening and code-quality follow-up passes.
 - **Expected:** Publication must preserve synchronous admission statuses when no
   search was created and must never dereference absent search state.
 - **Verification:** Keep the transition-shape regression red before the fix,
-  then prove the complete class and focused A* orchestration slice in `Release`.
+  then prove the complete class and focused A\* orchestration slice in
+  `Release`.
 
-### TRB-Issue-014 - A* pending action leaks an undefined public status
+### TRB-Issue-014 - A\* pending action leaks an undefined public status
 
 - **Discovered:** 2026-08-31
-- **Area:** A* guide status projection
+- **Area:** A\* guide status projection
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `NavigationAStarGuideLease.TryAdvanceWaypoint` legitimately
   returns internal `Pending` when the current step is a semantic action. The
@@ -2498,7 +2563,7 @@ coverage hardening and code-quality follow-up passes.
   byte value 255 instead of the documented fail-closed `Stale`. Existing ladder
   and explicit-transition regressions observe the undefined enum value. The
   sibling Flow request mapper has the same arithmetic default hazard. Removing
-  A* guide generation retirement also permits an eventually wrapped generation
+  A\* guide generation retirement also permits an eventually wrapped generation
   to make a stale copied lease alias a later acquisition.
 - **Impact:** Public guide callers can receive a status outside the declared
   contract when they attempt to cross an action as an ordinary movement step.
@@ -2532,10 +2597,10 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-08-31
 - **Area:** Flow guide generation retirement and bounded shell pooling
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** Retiring the sole preallocated guide at `ulong.MaxValue` correctly
-  keeps that shell out of the reuse pool while recycling its payload lease slot.
-  The next valid guide acquisition then calls `RentGuideUnderLock` with
-  `_freeGuideCount == 0`; the method decrements to `-1` and throws
+- **Evidence:** Retiring the sole preallocated guide at `ulong.MaxValue`
+  correctly keeps that shell out of the reuse pool while recycling its payload
+  lease slot. The next valid guide acquisition then calls `RentGuideUnderLock`
+  with `_freeGuideCount == 0`; the method decrements to `-1` and throws
   `IndexOutOfRangeException` instead of restoring the configured guide capacity.
 - **Impact:** The fail-closed generation-retirement safeguard can permanently
   break later Flow guide acquisition at an otherwise available lease slot.
@@ -2574,16 +2639,16 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Flow search terminal-status projection
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** The full `Release` coverage aggregate reproduced
-  `PublicGuideRequest_ShouldReportCostOverflowWithoutLeakingALease` for the
-  Flow algorithm with public status `CapacityExceeded` instead of
-  `CostOverflow`. `NavigationFlowFieldWork.MapTraversalStatus` projected the
-  internal traversal enum by subtracting one even though the Flow enum orders
-  `CostOverflow` before `CapacityExceeded`.
+  `PublicGuideRequest_ShouldReportCostOverflowWithoutLeakingALease` for the Flow
+  algorithm with public status `CapacityExceeded` instead of `CostOverflow`.
+  `NavigationFlowFieldWork.MapTraversalStatus` projected the internal traversal
+  enum by subtracting one even though the Flow enum orders `CostOverflow` before
+  `CapacityExceeded`.
 - **Impact:** Callers cannot distinguish fixed-point path-cost overflow from
   workspace capacity exhaustion and may respond with the wrong recovery path.
 - **Expected:** Flow search maps every internal terminal traversal status to its
   exact public guide meaning without relying on enum ordinal alignment.
-- **Verification:** Keep the public A*/Flow guide regression, restore an
+- **Verification:** Keep the public A\*/Flow guide regression, restore an
   explicit exhaustive projection, and prove the focused guide slice plus the
   fresh `Release` coverage aggregate pass.
 
@@ -2593,9 +2658,9 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Automatic seam refresh and sparse physical-presence lifecycle
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** The full `Release` coverage aggregate reproduced four seam
-  lifecycle regressions after a publication-invariant simplification. A
-  durable seam pair intentionally remained in the structural graph after its
-  sparse endpoint disappeared, but `FillSeam` treated active-row membership as
+  lifecycle regressions after a publication-invariant simplification. A durable
+  seam pair intentionally remained in the structural graph after its sparse
+  endpoint disappeared, but `FillSeam` treated active-row membership as
   sufficient and emitted a live cross-map edge instead of rechecking the
   endpoint's runtime presence.
 - **Impact:** Navigation can expose a cross-map traversal through a physically
@@ -2611,7 +2676,7 @@ coverage hardening and code-quality follow-up passes.
 ### TRB-Issue-020 - Explicit corridor shortcuts can clip blocked geometry
 
 - **Discovered:** 2026-08-31
-- **Area:** Explicit surface-edge routing and A* guide construction
+- **Area:** Explicit surface-edge routing and A\* guide construction
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** The full `Release` aggregate reproduced two existing explicit
   route regressions after corridor checks were reduced to publication
@@ -2626,7 +2691,7 @@ coverage hardening and code-quality follow-up passes.
   routing still validates the exact profile-sized entry, witness, and exit
   segments selected for the current query.
 - **Verification:** Keep both existing clipping regressions, restore the
-  runtime-significant corridor checks, and prove the focused surface A* slice
+  runtime-significant corridor checks, and prove the focused surface A\* slice
   plus a fresh `Release` coverage aggregate pass.
 
 ### TRB-Issue-021 - Structural resume contains an impossible safety-closure branch
@@ -2655,34 +2720,34 @@ coverage hardening and code-quality follow-up passes.
 ### TRB-Issue-022 - Query preparation duplicates world-epoch rejection
 
 - **Discovered:** 2026-09-01
-- **Area:** A* and Flow admission-to-search handoff
+- **Area:** A\* and Flow admission-to-search handoff
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Exact branch tracing found identical post-admission epoch checks
   in both query workers. Admission already rejects an epoch change before it
   binds a resolved query. If the world changes in the following concurrency
   window, cache checkout validates the payload epoch and a cache miss passes the
-  original epoch into an A* or Flow worker that rejects it before doing search
+  original epoch into an A\* or Flow worker that rejects it before doing search
   work.
 - **Impact:** The duplicate early exits add two state-machine paths and a
-  misleading coverage obligation without changing the public fail-closed
-  `Stale` outcome.
+  misleading coverage obligation without changing the public fail-closed `Stale`
+  outcome.
 - **Expected:** Keep epoch ownership in admission, cache validation, and the
   search workers; remove the duplicate handoff checks.
-- **Verification:** Preserve the admission, cache, A*, and Flow world-mutation
+- **Verification:** Preserve the admission, cache, A\*, and Flow world-mutation
   regressions, then run the focused query slices and a fresh `Release` coverage
   aggregate.
 
-### TRB-Issue-023 - A* publication exposes an impossible capacity fallback
+### TRB-Issue-023 - A\* publication exposes an impossible capacity fallback
 
 - **Discovered:** 2026-09-01
-- **Area:** A* query publication and payload reservation ownership
+- **Area:** A\* query publication and payload reservation ownership
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Caller tracing showed that a gate-owned reservation has exact
   cache ownership, remains current for the query lifetime, and is sized to the
   worker's maximum payload before search starts. After a completed search,
   `TryPublish` therefore cannot reject a current payload for capacity. The old
-  fallback could be reached only by constructing query work around an
-  undersized reservation outside the admission gate's invariants.
+  fallback could be reached only by constructing query work around an undersized
+  reservation outside the admission gate's invariants.
 - **Impact:** The impossible `CapacityExceeded`/`NoPath` split suggests a
   recoverable runtime outcome that the real state machine cannot produce and
   obscures that publication failure at this boundary means stale proof.
@@ -2690,12 +2755,12 @@ coverage hardening and code-quality follow-up passes.
   the only live publication failure to `Stale`.
 - **Verification:** Keep exact cache reservation-capacity tests at the cache
   boundary, preserve the query dependency-mutation regression, and run the
-  focused A* query slice plus a fresh `Release` coverage aggregate.
+  focused A\* query slice plus a fresh `Release` coverage aggregate.
 
-### TRB-Issue-024 - A* publication performs a non-authoritative immediate recheck
+### TRB-Issue-024 - A\* publication performs a non-authoritative immediate recheck
 
 - **Discovered:** 2026-09-01
-- **Area:** A* payload publication and guide handoff
+- **Area:** A\* payload publication and guide handoff
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `NavigationAStarPayloadCache.TryPublish` validates the exact
   graph dependencies and optional world epoch before publishing. Query work
@@ -2705,11 +2770,11 @@ coverage hardening and code-quality follow-up passes.
   same proof.
 - **Impact:** The best-effort duplicate check adds a race-only state-machine
   path without establishing a stronger currency guarantee.
-- **Expected:** Treat cache publication as proof that the payload was current
-  at publication time and leave subsequent currency validation to the guide
+- **Expected:** Treat cache publication as proof that the payload was current at
+  publication time and leave subsequent currency validation to the guide
   consumer boundary that can act on it.
 - **Verification:** Preserve cache publication, stale guide acquisition, and
-  concurrent guide-use regressions; then run the focused A* concurrency slice
+  concurrent guide-use regressions; then run the focused A\* concurrency slice
   plus a fresh `Release` coverage aggregate.
 
 ### TRB-Issue-025 - Graph terminal cleanup ownership proof was incomplete
@@ -2761,16 +2826,16 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Covered-address enumeration emits each canonical configuration
   and voxel once. `ConsiderCandidate` deterministically selects one resolution
-  medium from that immutable node, profile, and requested-media tuple, while
-  the blocked-ray volume fallback retains the pending candidate's same address.
-  Therefore a second candidate cannot reach `CanBeatCurrentResult` with the
-  same `NavigationCellAddress` and a lower resolution medium; that tie arm has
-  no constructible caller state.
+  medium from that immutable node, profile, and requested-media tuple, while the
+  blocked-ray volume fallback retains the pending candidate's same address.
+  Therefore a second candidate cannot reach `CanBeatCurrentResult` with the same
+  `NavigationCellAddress` and a lower resolution medium; that tie arm has no
+  constructible caller state.
 - **Impact:** The zombie tie implies that one canonical address can resolve to
   competing media across endpoint candidates, obscuring the actual stable
   ordering contract and adding an untestable branch to deterministic ranking.
-- **Expected:** Rank equal-distance candidates solely by canonical address;
-  keep the deterministic per-node medium choice inside candidate qualification.
+- **Expected:** Rank equal-distance candidates solely by canonical address; keep
+  the deterministic per-node medium choice inside candidate qualification.
 - **Verification:** Preserve the overlapping-endpoint canonical-selection and
   mixed-medium qualification regressions, then confirm the removed tie arm is
   absent from the next `Release` coverage aggregate.
@@ -2782,17 +2847,17 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** `NavigationWorldGraph.TryGetMapId` reads the immutable
   configuration index built from the graph's map instances. Every graph
-  transformation either preserves that index with the same instance directory
-  or constructs both from the same replacement instance set. A map id returned
-  by that index therefore cannot be absent or null in the same graph's instance
+  transformation either preserves that index with the same instance directory or
+  constructs both from the same replacement instance set. A map id returned by
+  that index therefore cannot be absent or null in the same graph's instance
   directory, yet both centerline interval mapping and swept-volume mapping
   treated that state as a recoverable stale trace branch.
 - **Impact:** The duplicate lookup failure advertises an impossible partial
   graph state and obscures the real staleness boundary: GridForge world identity
   and change-sequence checks against an otherwise coherent immutable graph.
 - **Expected:** Keep the configuration-index miss for physically traced grids
-  with no navigation map, assert the index-to-directory ownership invariant,
-  and retain all real world/grid generation mismatch checks.
+  with no navigation map, assert the index-to-directory ownership invariant, and
+  retain all real world/grid generation mismatch checks.
 - **Verification:** Preserve unmapped-grid, swept-volume, and stale-world ray
   regressions, then confirm the impossible same-graph directory misses are
   absent from the next `Release` coverage aggregate.
@@ -2844,12 +2909,12 @@ coverage hardening and code-quality follow-up passes.
 - **Discovered:** 2026-09-01
 - **Area:** Endpoint dependency currentness and immutable area-policy ownership
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** `NavigationAreaCatalog` owns a private
-  `NavigationAreaPolicy[]`. Its only successful `TryGet` path assigns the exact
-  array element to the out parameter; every miss assigns `null` and returns
-  `false`. Catalog construction and publication accept non-null policies and
-  never store a null element. Therefore neither the expected nor current policy
-  can be null after its corresponding lookup succeeds.
+- **Evidence:** `NavigationAreaCatalog` owns a private `NavigationAreaPolicy[]`.
+  Its only successful `TryGet` path assigns the exact array element to the out
+  parameter; every miss assigns `null` and returns `false`. Catalog construction
+  and publication accept non-null policies and never store a null element.
+  Therefore neither the expected nor current policy can be null after its
+  corresponding lookup succeeds.
 - **Impact:** The redundant null arms advertise an impossible partially-null
   immutable catalog and add untestable branches to endpoint stale-proof
   validation.
@@ -2873,15 +2938,15 @@ coverage hardening and code-quality follow-up passes.
   seed increments one pending physical count. The unique covered-address cursor
   can rediscover each such seed only once, so either corresponding count must be
   positive when it is consumed.
-- **Impact:** Recoverable fallbacks for an impossible cursor-capacity failure and
-  impossible zero-valued ownership counters obscure the exact rebuild state
+- **Impact:** Recoverable fallbacks for an impossible cursor-capacity failure
+  and impossible zero-valued ownership counters obscure the exact rebuild state
   machine and create untestable branches in safety-critical baseline recovery.
-- **Expected:** Express all three states as diagnostic ownership invariants while
-  preserving the exact cursor begin, unique rediscovery, structural-state
+- **Expected:** Express all three states as diagnostic ownership invariants
+  while preserving the exact cursor begin, unique rediscovery, structural-state
   removal, and count consumption behavior.
-- **Verification:** Preserve default baseline seed, sparse rediscovery, capacity,
-  and interleaved-mutation regressions, then confirm the impossible fallback
-  branches are absent from the next `Release` coverage aggregate.
+- **Verification:** Preserve default baseline seed, sparse rediscovery,
+  capacity, and interleaved-mutation regressions, then confirm the impossible
+  fallback branches are absent from the next `Release` coverage aggregate.
 
 ### TRB-Issue-034 - Unmatched structural-link deltas expose impossible nonpositive guards
 
@@ -2895,8 +2960,8 @@ coverage hardening and code-quality follow-up passes.
   positive; a nonpositive value contradicts the source-index ownership that
   produced the removal delta.
 - **Impact:** The two recoverable guards imply that an unmatched negative delta
-  can be silently discarded, obscuring the canonical merge invariant and
-  adding branches that no valid seam lifecycle can exercise.
+  can be silently discarded, obscuring the canonical merge invariant and adding
+  branches that no valid seam lifecycle can exercise.
 - **Expected:** Assert positive unmatched deltas diagnostically and emit their
   structural-link rows directly, while preserving matched removal and
   replacement handling.
@@ -2911,9 +2976,9 @@ coverage hardening and code-quality follow-up passes.
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Materialized component work is retained only after
   `CaptureOwnedStructuralClosureBaseline` records the current closure root and
-  the owned closed graph publishes successfully. Every cleanup path releases
-  the materialized worker before clearing that baseline. Consequently retained
-  work cannot reach completed publication without its owned baseline, yet the
+  the owned closed graph publishes successfully. Every cleanup path releases the
+  materialized worker before clearing that baseline. Consequently retained work
+  cannot reach completed publication without its owned baseline, yet the
   publication path fell back to the empty component set when it was null.
 - **Impact:** The fallback advertises a partially initialized ownership state
   and could hide lifecycle corruption by reopening against the wrong closure
@@ -2922,19 +2987,19 @@ coverage hardening and code-quality follow-up passes.
   materialized work against the exact retained baseline.
 - **Verification:** Preserve retained materialization, closure rollback,
   automatic-seam lifecycle, and exact-capacity regressions, then confirm the
-  successful-null fallback is absent from the next `Release` coverage
-  aggregate.
+  successful-null fallback is absent from the next `Release` coverage aggregate.
 
 ### TRB-Issue-036 - Traversal paths repeat impossible same-graph reference resolution
 
 - **Discovered:** 2026-09-01
-- **Area:** Traversal enumeration, native state lookup, and volume-edge certification
+- **Area:** Traversal enumeration, native state lookup, and volume-edge
+  certification
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** Traversal and incoming enumerators receive medium states resolved
-  from the same immutable graph they retain. Native and complete neighbor
-  lookups, active seam rows, and explicit-route dependency evidence likewise
-  produce nodes owned by that graph. Volume-edge endpoints therefore retain
-  exact addresses and bound cell prisms for the evaluator lifetime.
+- **Evidence:** Traversal and incoming enumerators receive medium states
+  resolved from the same immutable graph they retain. Native and complete
+  neighbor lookups, active seam rows, and explicit-route dependency evidence
+  likewise produce nodes owned by that graph. Volume-edge endpoints therefore
+  retain exact addresses and bound cell prisms for the evaluator lifetime.
 - **Impact:** Re-resolving those owned references as recoverable misses creates
   silent empty, stale, or skipped-edge fallbacks for states that valid
   production ownership cannot produce, while encouraging hollow invalid-ref
@@ -3003,19 +3068,19 @@ coverage hardening and code-quality follow-up passes.
   index/directory and transition-before-seam ownership, and publish from the
   exact transition graph.
 - **Verification:** Preserve materialized event, transition, seam, snapshot
-  restart, and retained-work regressions, then confirm both impossible
-  fallbacks are absent from the next `Release` coverage aggregate.
+  restart, and retained-work regressions, then confirm both impossible fallbacks
+  are absent from the next `Release` coverage aggregate.
 
 ### TRB-Issue-040 - Baseline rebuild repeats an impossible configuration-key mismatch
 
 - **Discovered:** 2026-09-01
 - **Area:** Chunked physical-baseline identity validation
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
-- **Evidence:** GridForge's `GridWorld.TryCaptureNavigationBaselineCore` resolves
-  the active grid by the exact requested `GridConfigurationKey`, then constructs
-  the successful `GridNavigationBaseline` with that same `configurationKey`
-  value verbatim. A baseline returned for the map binding therefore cannot carry
-  a different configuration key.
+- **Evidence:** GridForge's `GridWorld.TryCaptureNavigationBaselineCore`
+  resolves the active grid by the exact requested `GridConfigurationKey`, then
+  constructs the successful `GridNavigationBaseline` with that same
+  `configurationKey` value verbatim. A baseline returned for the map binding
+  therefore cannot carry a different configuration key.
 - **Impact:** Rechecking the successful baseline against the request adds an
   unreachable mismatch branch without detecting world, slot, generation, or
   concurrent grid-change invalidation.
@@ -3051,9 +3116,9 @@ coverage hardening and code-quality follow-up passes.
 - **Area:** Incoming and outgoing transition-rule volume seam enumeration
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** Entering either enumerator's volume-seam phase initializes
-  completion to false. The only path that sets completion true immediately
-  flows into `CompleteRuleContactScan`, which advances the rule and resets the
-  phase before the enumerator can re-enter that scan state.
+  completion to false. The only path that sets completion true immediately flows
+  into `CompleteRuleContactScan`, which advances the rule and resets the phase
+  before the enumerator can re-enter that scan state.
 - **Impact:** Rechecking the completed flag on phase entry modeled an invalid
   retained enumerator state and added a branch with no production transition.
 - **Expected:** Advance seam lookahead whenever none is owned, assert that the
@@ -3066,7 +3131,7 @@ coverage hardening and code-quality follow-up passes.
 ### TRB-Issue-043 - Transition guide allocation gate is sensitive to runtime tiering
 
 - **Discovered:** 2026-09-01
-- **Area:** A* transition-guide zero-allocation regression
+- **Area:** A\* transition-guide zero-allocation regression
 - **Status:** Resolved; verified by the 2026-09-01 release gates.
 - **Evidence:** The full instrumented `Release` aggregate reported 3,248 bytes
   inside the single measured window of
@@ -3074,9 +3139,9 @@ coverage hardening and code-quality follow-up passes.
   five isolated instrumented reruns of the same test reported zero. The guide
   behavior remained successful in every run, and the test already performed a
   fixed warmup before measuring the identical call loop.
-- **Impact:** A one-time runtime or coverage-instrumentation transition can
-  fail the release gate even though the post-transition hot path is allocation
-  free, making the test order-sensitive instead of measuring steady state.
+- **Impact:** A one-time runtime or coverage-instrumentation transition can fail
+  the release gate even though the post-transition hot path is allocation free,
+  making the test order-sensitive instead of measuring steady state.
 - **Expected:** Require a zero-allocation steady-state window after bounded
   stabilization, while still failing persistent or recurring allocations from
   `TryGetCurrentStep`.
@@ -3099,9 +3164,9 @@ coverage hardening and code-quality follow-up passes.
   unreachable branch in the lifecycle state machine.
 - **Expected:** Assert the queued key's map-mode ownership diagnostically and
   requeue it directly whenever it is present.
-- **Verification:** Preserve removal, replacement, discovery, stale restart,
-  and blocked-budget regressions, then confirm the redundant classifier is
-  absent from the next full `Release` coverage aggregate.
+- **Verification:** Preserve removal, replacement, discovery, stale restart, and
+  blocked-budget regressions, then confirm the redundant classifier is absent
+  from the next full `Release` coverage aggregate.
 
 ### TRB-Issue-045 - Seam discovery rechecks an impossible completed output
 
@@ -3119,18 +3184,18 @@ coverage hardening and code-quality follow-up passes.
   `Complete` directly, while preserving one-contact resumability and all
   completion side effects.
 - **Verification:** Preserve blocked, one-contact, stale, and completed seam
-  discovery regressions, then confirm the redundant predicate is absent from
-  the next full `Release` coverage aggregate.
+  discovery regressions, then confirm the redundant predicate is absent from the
+  next full `Release` coverage aggregate.
 
 ## Verification Record
 
 ### 2026-09-01 coverage hardening
 
-- `Release`: 2,288 tests passed; 30,013 of 30,013 lines, 11,903 of
-  11,903 branches, and 2,952 of 2,952 methods were covered. All 2,952 methods
-  were fully covered.
-- `ReleaseLean`: 2,239 tests passed with the same 30,013-line,
-  11,903-branch, and 2,952-method production surface at exact coverage.
+- `Release`: 2,288 tests passed; 30,013 of 30,013 lines, 11,903 of 11,903
+  branches, and 2,952 of 2,952 methods were covered. All 2,952 methods were
+  fully covered.
+- `ReleaseLean`: 2,239 tests passed with the same 30,013-line, 11,903-branch,
+  and 2,952-method production surface at exact coverage.
 - The serial full-solution restore, build, and test matrix passed in both
   configurations. Each build completed with zero warnings and zero errors.
 - Pull-request validation now enforces exact coverage independently for the

@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-151`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-153`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -24,6 +24,44 @@
   here until they have been investigated and confirmed as runtime defects.
 
 ## Active Issues
+
+### TRB-Issue-152 - Legacy hex inverse disagrees with the quantized forward lattice
+
+- **Discovered:** 2026-09-21 during independent planar-clearance review.
+- **Status:** Confirmed upstream mismatch, tracked as `GF-Issue-010` in
+  GridForge. The new planar trace is corrected; shared legacy callers are not.
+- **Evidence:** With pointy-hex radius six raw units and layer height one,
+  address `(100,0,100)` has forward center `(1500,0,900)` raw, but the idealized
+  inverse returns q approximately `94.333`, not `100`. Both hex orientations
+  caused the initial planar implementation to omit its admitted endpoint.
+- **Contained correction:** The new trace uses bounded searches over actual
+  forward coordinates. Permanent tests cover both orientations, translated
+  tiny metrics and adjacent legs. This feature regression is fixed locally;
+  it is not deferred here or concealed by an exception guard.
+- **Next scope:** Correct and verify the legacy inverse/range/dimension
+  contracts in GridForge before relying on those shared conversions for native
+  navigation acceptance. Audit downstream consumers; do not assume a constant
+  one-cell expansion or a minimum-radius restriction repairs the mismatch.
+
+### TRB-Issue-151 - Generalized capsule contact classification loses exact corner touch
+
+- **Discovered:** 2026-09-21 during native planar-clearance implementation.
+- **Status:** Confirmed upstream defect; tracked as `FMS-Issue-020` in
+  FixedMathSharp's issue tracker. No generalized contact solver fix is claimed.
+- **Evidence:** `FixedSegment2d.TryGetCenteredCapsuleConvexMinimumTranslation`
+  returns false for a stationary zero-axis capsule at `(3,4)`, radius `5`,
+  against polygon `(-1,-1),(0,-1),(0,0),(-1,0)`, despite exact 3–4–5 corner
+  tangency. Scales 10, 100 and 1000 reproduce against unchanged baseline binaries.
+  Its classifier uses rounded normalized axes while assuming an exact unit
+  radial extent.
+- **Current boundary:** The new native planar trace uses an exact closed
+  `FixedConvex2dRelations.IntersectsUprightCapsule` predicate sharing the strict
+  sweep's wide kernel. It does not rely on rounded contact-depth output or hide
+  the existing defect with an epsilon.
+- **Next scope:** Fix and verify generalized capsule/polygon contact
+  classification in FixedMathSharp, including arbitrary axes/rotations and
+  Gravitas consumers, before relying on that path for native 2D support/posture
+  acceptance. This pre-existing defect remains separate from the new trace.
 
 ### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 

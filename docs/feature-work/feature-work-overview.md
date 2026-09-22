@@ -29,10 +29,13 @@ instead of burying it in notes.
     and analytic slope-anchor probe pass. Circle/top-down and upright-capsule/
     side-view envelopes are proposed, with nominal feet separate from physical
     contact points. The [upstream prerequisite proposal](twoDimensionalNavigationPlan.md#proposed-upstream-prerequisite-contract)
-    now specifies native strict capsule math, layer-bound GridForge coverage,
-    indexed bounded support queries and atomic 2D posture replacement. Existing
-    primitive probes identify the necessary boundaries; these new APIs are not
-    implemented yet. Shared search/scheduler ownership is retained; final native
+    now has implemented exact capsule math and layer-bound GridForge coverage.
+    Indexed bounded support queries and atomic 2D posture replacement remain
+    proposed. The older rounded contact-depth defect `TRB-Issue-151` must be
+    corrected before native physics acceptance; the new exact classification
+    predicates do not fix that separate path. `TRB-Issue-152` tracks the legacy
+    hex inverse mismatch separately from the corrected new planar range.
+    Shared search/scheduler ownership is retained; final native
     controller/map/record signatures and acceptance still need contract review.
     Fixed-height projection is not the deliverable.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
@@ -199,8 +202,9 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Finish the dedicated 2D plan's Phase 0: correct `TRB-Issue-150`, settle the
-   native geometry/support and posture boundaries, then approve exact APIs and
+1. Finish the dedicated 2D plan's Phase 0: correct the remaining upstream
+   defects `TRB-Issue-151` and `TRB-Issue-152` (`TRB-Issue-150` is resolved), implement
+   bounded native support and posture, then approve exact controller APIs and
    bounded acceptance inputs. Add the planar runtime and adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.
 2. After every active feature-work plan is complete, release any changed

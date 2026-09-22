@@ -3,12 +3,14 @@
 > **For agentic workers:** Use `superpowers:subagent-driven-development` or
 > `superpowers:executing-plans` when execution is requested. Complete the contract
 > review before implementing runtime types. Use independent reviewers and the
-> checkboxes below. This draft does not start implementation.
+> checkboxes below. The approved upstream clearance slice is implemented;
+> native controller implementation still requires completion of Phase 0.
 
 **Created:** 2026-09-03
 
-**Status:** Phase 0 contract review in progress after the completed 3D integration
-and accepted performance hardening. No native 2D runtime has been implemented.
+**Status:** Phase 0 is in progress after the completed 3D integration and accepted
+performance hardening. Exact planar capsule geometry and layer-bound GridForge
+coverage are implemented upstream. No native Trailblazer 2D controller exists yet.
 Upstream releases remain deferred; Phase 1 requires review of the contract below.
 
 **Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`;
@@ -149,14 +151,14 @@ Planned responsibility boundaries, not files to scaffold ahead of the contract:
 | Optional Gravitas adapter and joint tests | `SolidBody2D` target/accepted-pose bridge and native planar collision scenarios |
 | Wiki, API documentation, behavioral tests | Top-down/platformer guidance linked to tested host fixtures, with explicit coordinates and ownership; no separate sample project |
 
-The upstream proposal below supplies the next concrete file/API boundary.
+The upstream contract below supplies the concrete prerequisite file/API boundary.
 Phase 0 must still finish the native controller, map and record signatures and
-their acceptance proofs before Phase 1. Proposed signatures are not current
-APIs and have not been implemented merely by appearing in this plan.
+their acceptance proofs before Phase 1. Section 1 is implemented in the local
+source stack; sections 2 and 3 remain proposed, not current APIs.
 
 ## Proposed upstream prerequisite contract
 
-This is the next reviewable implementation slice, grounded in the
+These prerequisite boundaries are grounded in the
 [bounded-primitive investigation](#2026-09-21---bounded-planar-primitive-investigation).
 Keep the existing 3D APIs and behavior intact. Reuse graph/search ownership,
 GridForge's exact prism/address machinery, and Gravitas's collider identity;
@@ -164,21 +166,26 @@ do not rotate 2D inputs into the 3D navigation controller.
 
 ### 1. Exact planar clearance: FixedMathSharp, then GridForge
 
-**Selected approach:** one native strict swept-capsule relation in
-FixedMathSharp, consumed by one layer-bound GridForge body trace. Reuse existing
+**Implemented locally:** native exact strict-swept and closed-stationary capsule
+relations in FixedMathSharp, consumed by one layer-bound GridForge body trace. Reuse existing
 trace result/evidence types and scratch where their semantics match. Rejected
 alternatives are a copied Trailblazer geometry solver, radius-expanded boxes
 (false rejection at rounded corners), and two end-circle sweeps (misses against
 the capsule's middle). Closed first-contact distance is not a strict-overlap
 predicate: both exact tangency and initial penetration can return zero.
 
-Proposed additions, **not runnable current API examples**:
+Implemented signatures, **declarations rather than a runnable host example**:
 
 ```csharp
 // FixedMathSharp.Geometry.FixedConvex2dRelations
 public static bool IntersectsSweptUprightCapsuleStrict(
     Vector2d startCenter, Vector2d endCenter,
     Fixed64 axisLength, Fixed64 radius,
+    Vector2d convexOrigin, ReadOnlySpan<Vector2d> convexVertexOffsets);
+
+// Exact touch-inclusive endpoint admission, sharing the same wide kernel.
+public static bool IntersectsUprightCapsule(
+    Vector2d center, Fixed64 axisLength, Fixed64 radius,
     Vector2d convexOrigin, ReadOnlySpan<Vector2d> convexVertexOffsets);
 
 // GridForge.Utility.GridTracer
@@ -203,8 +210,12 @@ host world Y is independent of this navigation embedding in pure TwoD physics.
 
 The math relation uses a capsule axis parallel to `Vector2d.Forward`; axis
 length zero is a circle. Total height is `axisLength + 2*radius`. Reject negative
-dimensions and invalid polygon inputs. Boundary-only contact returns false;
-strict overlap at either endpoint or anywhere between returns true. Zero radius
+dimensions and fewer than three polygon vertices. As in existing convex APIs,
+boundary-ordered convexity is an authoring precondition; repeated/collinear
+edges are allowed and a wholly collinear polygon has no interior. For the strict
+sweep, boundary-only contact returns false; strict overlap at either endpoint
+or anywhere between returns true. The stationary predicate includes exact
+boundary contact. Zero radius
 uses strict footprint entry by the swept axis, not positive capsule area.
 Use wide existing math internally: do not narrow conceptual half-axis endpoints,
 normalize a rounded travel vector, or infer penetration by comparing rounded
@@ -247,6 +258,10 @@ The trace's responsibilities are:
    do not scan the entire supplied span before applying its ceiling. Closure,
    congruent-alternative lookup and sorting must have a documented derived
    bound over the admitted candidate count and fixed planar neighbor degree.
+   Native candidate ranges use the actual quantized forward lattice, with at
+   most four binary coordinate searches of 31 probes per selected grid; these
+   are range arithmetic, not physical-address inspections. Do not reuse an
+   idealized hex inverse that can omit cells at small valid metrics.
    Establish that bound in implementation/tests; no world-wide scan or storage
    growth may occur outside it.
 6. Treat existing scratch/output capacities as hard ceilings for this new
@@ -271,13 +286,14 @@ the existing scheduler at the caller.
 Internal helper extraction must retain existing 3D work counts and performance
 controls; no generic dimension framework or unrelated tracer cleanup is needed.
 
-Proposed files: FixedMathSharp
+Owning files: FixedMathSharp
 `Geometry/Primitives/Relations/FixedConvex2dRelations.PlanarSweep.cs` plus its
 owning internal wide-math partial; GridForge
 `Utility/GridTracer.PlanarNavigationBody.cs`,
-`Grids/Topology/GridPlanarLayer.cs`, and focused helpers beside
-`GridCellGeometry.NavigationBodySegment.cs`. Add matching math and GridForge
-behavior tests; do not scaffold types before implementing their tests.
+`Grids/Topology/GridPlanarLayer.cs`, and
+the `Utility/GridTracer.PlanarNavigationBody.Geometry.cs` and `.Range.cs`
+partials. Matching math and
+GridForge behavior tests cover the new paths; existing 3D source stays intact.
 
 ### 2. Bounded native support queries: Gravitas
 
@@ -928,3 +944,114 @@ changed. Full library suites/coverage and performance controls from the prior
 fix are historical evidence, not rerun or claimed as verification of these
 unimplemented APIs. Phase 0 remains open for final controller/map/record
 signatures and executable native navigation acceptance.
+
+### 2026-09-21 - Native planar clearance implementation
+
+Baselines: Trailblazer `4eead5f`, FixedMathSharp `5170166`, GridForge `2f37202`,
+Gravitas `e9aee10`. This implements prerequisite section 1 in the existing
+develop checkouts; it does not start the native Trailblazer controller or
+complete Phase 0. No package references or releases change.
+
+FixedMathSharp now owns exact strict swept-upright-capsule and closed stationary
+capsule predicates. They share one linear-time kernel using existing wide
+arithmetic. Doubled raw coordinates preserve odd half-axis lengths without
+normalizing or rounding contact axes. Tests include exact tangency versus one
+raw unit, middle-only intersections, winding/travel reversal, full-domain
+chords, degenerate cores and a 1,225-case independent integer-distance oracle.
+
+The separate closed predicate is intentional: navigation needs an exact boolean
+classification, not physics contact depth or a rounded normal. Investigation
+reproduced an older 3–4–5 corner-tangency rejection in the generalized contact
+solver against unchanged binaries. `FMS-Issue-020` / `TRB-Issue-151` retain that
+defect for owning repair before support/posture acceptance. No epsilon or
+contact-output wrapper is introduced, and that older solver is not fixed here.
+
+GridForge now owns explicit generation/layer selection and one bounded native
+planar body trace, reusing existing evidence and scratch types. It certifies
+whole-body union coverage, not merely the endpoints: sparse holes, outside-grid
+neighbors, rectangular diagonal side cells, both hex orientations, aligned
+cross-grid alternatives and stale revisions have behavior tests. Existing
+storage capacities are hard ceilings. The proof holds world-read then
+committed-change locks so physical presence and generation evidence agree.
+
+Independent review found and blocked an initially green implementation: the
+legacy idealized hex inverse can omit cells from a quantized forward lattice.
+A radius-six-raw grid reproduced an endpoint lookup exception in both
+orientations. The new trace now derives inclusive candidate bounds with four
+bounded searches over actual forward coordinates. Translated tiny-cell,
+coupled-neighbor, empty-range and overflow regressions cover the correction;
+there is no minimum-size restriction, missing-endpoint workaround or full-grid
+scan. `GF-Issue-010` / `TRB-Issue-152` keep the unchanged legacy inverse and its
+other consumers open. Shared 3D runtime source remains unchanged.
+
+The independent correctness/simplicity re-review approves the corrected source.
+It also caught the benchmark fixture's old broad-range count: the capsule now
+inspects three addresses, not nine, so its exact setup proof was updated. The
+implementation adds no new sample application, regression project, scheduler,
+dimension framework or copied downstream geometry solver.
+
+An unrelated existing anchor-allocation guard reported 7,240 bytes once.
+`FMS-Issue-019` retains the failure as unattributed. The test now warms and
+measures the identical operation through the existing helper and checks all
+calls succeed. A temporary allocation still fails it; no retry, tolerance,
+runtime workaround or claim of a cured allocator is retained.
+
+#### Coverage and remaining scope
+
+Fresh source-stack Windows suites pass in both configurations:
+
+| Suite | Release | ReleaseLean |
+| --- | ---: | ---: |
+| FixedMathSharp core | 2,780 | 2,759 |
+| FixedMathSharp Chronicler integration | 8 | 8 |
+| GridForge | 1,140 | 1,140 |
+| Gravitas | 4,053 | 3,998 |
+| Trailblazer core | 3,164 | 3,081 |
+| Trailblazer Gravitas adapter | 84 | 80 |
+
+All of those managed suites also pass on Ubuntu/WSL with the same counts.
+These are Linux execution checks, not a separate Linux source build. Both
+library targets (`netstandard2.1` and `net8.0`) build without warnings/errors
+in both configurations. FixedMathSharp, GridForge and Trailblazer DocFX builds
+pass with warnings-as-errors. The six LSF DLLs in the adapter test output match
+their freshly built source counterparts in both configurations. This validates
+the local source chain, not released packages or source-mode package artifacts.
+
+Both configured coverage surfaces are exactly covered, with no new exclusions:
+
+| Surface | Configuration | Lines | Branches | Fully covered method entries |
+| --- | --- | ---: | ---: | ---: |
+| FixedMathSharp coverage filter | Release | 47,975/47,975 | 8,918/8,918 | 3,465/3,465 |
+| FixedMathSharp coverage filter | ReleaseLean | 48,068/48,068 | 8,918/8,918 | 3,461/3,461 |
+| GridForge | Both | 9,332/9,332 | 4,159/4,159 | 1,145/1,145 |
+
+FixedMathSharp reports are under `artifacts/planar-clearance`; GridForge reports
+are under `tests/GridForge.Tests/TestResults`. Reusable source tests, not the
+ignored coordination workspace, own the acceptance regressions.
+
+The new FixedMathSharp out-of-process ShortRun cases measure approximately
+0.60-5.06 microseconds per operation on this host, with zero-byte diagnostics.
+GridForge's first benchmark build failed because the generated host could not
+reference the report-valued return; the fixture now returns the existing
+primitive semantic-counter pattern while setup still validates the full report.
+The next generated run selected published math and could not load the new API.
+This is the already documented `GF-Issue-009` generated-child boundary, not a
+geometry failure. Both incomplete captures remain excluded; no project graph,
+DLL injection or package workaround was added.
+
+A subsequent direct-host **in-process ShortRun** passes all five setup/workload
+cases after all four local dependency DLL hashes are verified. Observed means
+are 170.98 microseconds for nine-cell planar circle coverage and 98.29 for the
+three-cell capsule. The three unchanged 3D controls also complete. This is
+observational smoke evidence, not an isolated canonical comparison or a host-
+frame improvement. The formatted allocation column rounds to zero, but the
+two planar raw diagnostic windows each contain 960 total bytes; do not present
+that benchmark as an absolute zero-allocation proof. Separate warmed,
+result-bearing unit guards measure exactly zero bytes. The successful capture
+is under GridForge `artifacts/planar-body-smoke`; both failed captures remain
+under `artifacts/planar-navigation-body-final*`.
+
+Next: repair the independently confirmed upstream contact-depth and legacy
+hex-conversion defects, implement bounded Gravitas support/posture prerequisites,
+then finish the native controller/map/record contract and acceptance inputs.
+Phase 1 and public release gates remain pending.

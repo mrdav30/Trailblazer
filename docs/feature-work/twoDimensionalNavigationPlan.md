@@ -1051,7 +1051,47 @@ result-bearing unit guards measure exactly zero bytes. The successful capture
 is under GridForge `artifacts/planar-body-smoke`; both failed captures remain
 under `artifacts/planar-navigation-body-final*`.
 
-Next: repair the independently confirmed upstream contact-depth and legacy
-hex-conversion defects, implement bounded Gravitas support/posture prerequisites,
-then finish the native controller/map/record contract and acceptance inputs.
-Phase 1 and public release gates remain pending.
+At this checkpoint, upstream contact-depth and legacy hex-conversion repairs
+were the next prerequisites. Their subsequent resolution is recorded below.
+
+### 2026-09-22 - Upstream contact and hex defects resolved
+
+`TRB-Issue-151` and `TRB-Issue-152` are resolved after reviewing the owning fixes
+and rerunning their regressions and downstream suites against current source.
+The preceding dated implementation record describes the earlier state, not
+current blockers.
+
+- FixedMathSharp `d53bf28` retains exact capsule/convex axes and radial extents
+  through classification and minimum-depth ordering. The original 3-4-5 corner
+  case passes at scales 1, 10, 100 and 1000 with zero depth; rotated capsules,
+  one-raw-unit boundaries and independent integer-distance oracles also pass.
+  `da6b6f1` corrects side-contact witnesses. Gravitas `0ddcb50` and `21a22ab`
+  provide consumer collision, query and witness regressions.
+- GridForge `315e0cc` inverts its quantized forward basis and preserves authored
+  corners during dimension rounding. Both orientations pass tiny-metric and
+  distant-address lookup, snapping, normalization and legacy coverage/trace
+  checks. The new planar trace still uses bounded forward-coordinate searches.
+  Unsaturated arithmetic remains the conversion contract; rebuild dimensions
+  and configuration keys derived from previously affected authored inputs.
+
+Fresh Windows verification on 2026-09-22:
+
+| Suite | Release | ReleaseLean |
+| --- | ---: | ---: |
+| FixedMathSharp core | 2,824 | 2,803 |
+| GridForge | 1,162 | 1,162 |
+| Gravitas | 4,062 | 4,007 |
+| Trailblazer core | 3,164 | 3,081 |
+| Trailblazer Gravitas adapter | 84 | 80 |
+
+All listed tests passed with no skips. Downstream commands used
+`dotnet test <test-project> -c <configuration> -p:UseLocalLsfStack=true`.
+FixedMathSharp's focused capsule/planar checks passed 205 cases per
+configuration before its complete core suites were run. The downstream
+FixedMathSharp and GridForge DLL hashes matched their source build outputs in
+both configurations. This is source-stack test verification, not a new coverage,
+Linux, performance or released-package certification.
+
+Next: implement the bounded Gravitas support/posture prerequisites, then finish
+the native controller/map/record contract and acceptance inputs. Phase 0 remains
+in progress; Phase 1 and public release gates remain pending.

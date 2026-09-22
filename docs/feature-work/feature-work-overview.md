@@ -31,10 +31,9 @@ instead of burying it in notes.
     contact points. The [upstream prerequisite proposal](twoDimensionalNavigationPlan.md#proposed-upstream-prerequisite-contract)
     now has implemented exact capsule math and layer-bound GridForge coverage.
     Indexed bounded support queries and atomic 2D posture replacement remain
-    proposed. The older rounded contact-depth defect `TRB-Issue-151` must be
-    corrected before native physics acceptance; the new exact classification
-    predicates do not fix that separate path. `TRB-Issue-152` tracks the legacy
-    hex inverse mismatch separately from the corrected new planar range.
+    proposed. The separate generalized contact defect `TRB-Issue-151` and legacy
+    hex inverse mismatch `TRB-Issue-152` are now fixed upstream and verified
+    through both source-stack configurations; neither remains a blocker.
     Shared search/scheduler ownership is retained; final native
     controller/map/record signatures and acceptance still need contract review.
     Fixed-height projection is not the deliverable.
@@ -202,8 +201,8 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Finish the dedicated 2D plan's Phase 0: correct the remaining upstream
-   defects `TRB-Issue-151` and `TRB-Issue-152` (`TRB-Issue-150` is resolved), implement
+1. Finish the dedicated 2D plan's Phase 0: with upstream defects
+   `TRB-Issue-150`, `TRB-Issue-151` and `TRB-Issue-152` resolved, implement
    bounded native support and posture, then approve exact controller APIs and
    bounded acceptance inputs. Add the planar runtime and adapter extension there;
    neither the initial 3D slice nor hardening requires completed 2D support.

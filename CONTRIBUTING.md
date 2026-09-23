@@ -34,10 +34,14 @@ Benchmark commands and evidence rules live in
 
 ### Coordinated source development and IDE restore
 
-For coordinated unreleased LSF changes, use matching `FixedMathSharp`,
+For coordinated unreleased LSF changes, use matching `Chronicler`, `FixedMathSharp`,
 `SwiftCollections`, `GridForge`, and `Gravitas` sibling checkouts. Published
 dependencies do not include those fixes. Command-line invocations can pass
 `-p:UseLocalLsfStack=true` to restore/build/test.
+
+This includes explicit source Chronicler and Lean shim references at the
+library, adapter, test, and benchmark boundaries. Their local 0.4.0 identities
+match the existing dependency graph; they are not selected release versions.
 
 For VS Code design-time restore, fully exit **all VS Code windows** first, then
 run the following from an external PowerShell terminal at the Trailblazer root:

@@ -31,6 +31,8 @@
     <!-- The Test SDK is required only for the VSTest Adapter to work -->
   </ItemGroup>
   <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'">
+    <ProjectReference Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj"
+      AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" />
     <!-- Suppress competing transitive package binaries at the executable host. -->
     <PackageReference Include="FixedMathSharp" Version="7.1.0"
       Condition="'$(Configuration)' != 'ReleaseLean' And '$(DisableMemoryPack)' != 'true'" ExcludeAssets="compile;runtime" />
@@ -52,5 +54,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Remove=".gitignore" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And ('$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true') And '$(UsePrebuiltLocalLsfStack)' != 'true'">
+    <ProjectReference Include="..\..\..\Chronicler\src\Chronicler.MemoryPackShim\Chronicler.MemoryPackShim.csproj"
+      AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" />
   </ItemGroup>
 </Project>

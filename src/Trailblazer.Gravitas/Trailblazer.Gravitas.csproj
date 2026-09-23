@@ -60,6 +60,8 @@
 		<PackageReference Include="Gravitas.Lean" Version="$(GravitasPackageVersion)" Condition="'$(DisableMemoryPack)' == 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
+		<ProjectReference PrivateAssets="all" Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj"
+		  AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" />
 		<!-- Compile against the coordinated sources without publishing extra direct dependencies. -->
 		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
 			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
@@ -75,5 +77,9 @@
 	<ItemGroup>
 		<None Include="README.md" Pack="true" PackagePath="/" />
 		<None Include="../../LICENSE;../../NOTICE;../../COPYRIGHT;../../icon.png" Pack="true" PackagePath="/" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And ('$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true')">
+		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler.MemoryPackShim\Chronicler.MemoryPackShim.csproj"
+		  AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" PrivateAssets="all" />
 	</ItemGroup>
 </Project>

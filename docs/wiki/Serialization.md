@@ -25,13 +25,21 @@ and does not serialize context bindings.
 ## Standalone PathQuery
 
 `PathQueryRecord` is the public standalone record for one complete immutable
-query. This C# fragment assumes a validated query and a chosen Chronicler
-transport:
+query. This C# fragment assumes a validated query and uses JSON:
 
 ~~~csharp
+using Chronicler.Serialization;
+using Trailblazer.Pathing;
+
 var record = new PathQueryRecord(query);
-// Serialize record with JsonRecordSerializer or MemoryPackRecordSerializer.
+string json = JsonRecordSerializer.Serialize(record);
 ~~~
+
+Chronicler v1.0.0 places transports and payload editing in
+`Chronicler.Serialization`; recording contracts and helpers remain in
+`Chronicler`. Use `MemoryPackRecordSerializer` for binary payloads in the
+standard package. See the [Chronicler migration guide](https://github.com/mrdav30/Chronicler/blob/main/docs/MIGRATION.md)
+for namespace changes and typed payload-editor replacements.
 
 It round-trips:
 

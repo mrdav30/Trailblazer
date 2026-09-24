@@ -1,4 +1,5 @@
 using Chronicler;
+using Chronicler.Serialization;
 
 namespace Trailblazer.Gravitas.Tests.Support;
 

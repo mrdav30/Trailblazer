@@ -6,6 +6,7 @@ using System;
 using System.Reflection;
 using System.Threading;
 using Chronicler;
+using Chronicler.Serialization;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;

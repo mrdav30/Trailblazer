@@ -13,6 +13,8 @@ Use this guide when upgrading from any v1.x package.
 
 - Update package references to `Trailblazer` v2.x, or `Trailblazer.Lean` v2.x
   when the rest of the LSF dependency stack uses Lean packages.
+- Follow the [Chronicler v1.0.0 migration guide](https://github.com/mrdav30/Chronicler/blob/main/docs/MIGRATION.md)
+  for `Chronicler.Serialization` imports and typed payload-editor calls.
 - Replace ambient pathing ownership with one `TrailblazerWorldContext` per
   active GridForge `GridWorld`.
 - Replace mutable charts and world-position authoring with immutable

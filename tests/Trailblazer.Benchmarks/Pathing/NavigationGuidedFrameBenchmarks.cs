@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using Chronicler;
+using Chronicler.Serialization;
 using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Spatial;

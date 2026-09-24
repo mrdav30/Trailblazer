@@ -1,5 +1,6 @@
 using System;
 using Chronicler;
+using Chronicler.Serialization;
 
 namespace Trailblazer.Tests;
 

@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Chronicler;
+using Chronicler.Serialization;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;

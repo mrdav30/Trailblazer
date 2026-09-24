@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json;
 using Chronicler;
+using Chronicler.Serialization;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;

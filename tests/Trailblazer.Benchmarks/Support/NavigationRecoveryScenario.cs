@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Chronicler;
+using Chronicler.Serialization;
 using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Grids;

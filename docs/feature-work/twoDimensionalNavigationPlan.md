@@ -15,6 +15,19 @@ Upstream releases remain deferred; Phase 1 requires review of the contract below
 Hard-budgeted physics queries are tracked separately for both 2D and 3D in the
 [physics query budget plan](physicsQueryBudgetPlan.md); they do not block this plan.
 
+**Current prerequisite blocker (2026-09-24):** Native support and posture work is
+in progress, not ready to merge. Independent review reproduced strict-clearance
+failure in both dimensions: genuinely positive penetration can round to zero
+contact depth and be admitted. Gravitas `GRV-Issue-081` owns the evidence. Exact
+FixedMathSharp-owned classification is required before declaring posture complete;
+the contract will not be weakened to a rounded-depth test or an epsilon.
+The shared FixedMathSharp repair was authorized on 2026-09-24, with explicit
+determinism and performance requirements. Work includes classification-only
+predicates and measured unchanged-contact controls. Review also reproduced a
+pre-existing finite cylinder/capsule rim-classification defect, now owned by
+FixedMathSharp `FMS-Issue-023`; passing the simple strict predicates does not
+certify the remaining 3D curved-shape families.
+
 **Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`;
 Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`. The dated execution record
 below identifies the revisions actually used for the current preflight.
@@ -63,7 +76,9 @@ not the deliverable or a permanent parallel public compatibility API.
 - Preserve deterministic fixed-point math, stable ordering, finite navigation
   work budgets, exact guide dependencies, and per-acquisition action/cursor
   ownership.
-- Reuse synchronous indexed physics discovery for support and posture checks.
+- Reuse synchronous indexed physics discovery for recurring support checks.
+  Rare explicit posture transactions retain complete registry clearance, matching
+  3D so blockers outside physics grids cannot be silently omitted.
   Hard per-query physics work/storage ceilings belong to the separate 2D/3D
   plan; this does not weaken existing navigation or planar-coverage budgets.
 - Carry forward Immediate/Scheduled acquisition, bounded shared-work scheduling,
@@ -72,6 +87,10 @@ not the deliverable or a permanent parallel public compatibility API.
   proofs; sharing control flow does not authorize reuse of 3D geometric proof.
 - Preserve the existing 3D contract. Do not rename it or add forwarding aliases
   merely to make a new naming scheme symmetrical.
+- Review every shared behavior or improvement against both 2D and 3D. Retain
+  explicit geometry-specific differences, and record whether each counterpart
+  is already equivalent, is fixed together, or needs separately approved work.
+  Parity means equivalent guarantees, not forced API or implementation symmetry.
 - Keep core engine-agnostic and Gravitas-independent. Rendering, sprite facing,
   physical contacts, and semantic action execution remain explicit host concerns.
 - Reuse proven dimension-independent machinery. Do not copy the entire search
@@ -388,9 +407,14 @@ Reuse native exact collision detection and detached shape staging to prove
 the **whole** replacement collider. No public capsule overlap API is needed.
 Dynamic colliders remain eligible blockers even though they are not supported
 carriers. Exact zero-depth touch is allowed; positive penetration rejects.
-Certify complete clearance through existing indexed discovery and choose a
-deterministic blocker. Gravitas preflights host pose, shape, mass properties and
-partition capacity before mutation. The coordinating Trailblazer caller must finish its
+Certify complete clearance through the registered collider set, matching the
+existing 3D posture transaction, and choose a deterministic blocker. Unlike
+recurring support queries, this rare explicit operation must also detect blockers
+outside physics grids. Gravitas preflights host pose, shape and mass properties
+before mutation. Existing partition storage may grow on publication; neither
+dimension currently guarantees rollback after process-level allocation failure.
+No new storage reservation scheme is implied by this transaction. The
+coordinating Trailblazer caller must finish its
 own fallible navigation preparation **before** invoking the transaction;
 Gravitas cannot inspect navigation state. The publisher only publishes that
 prepared state. Rejection preserves every live physical/controller/session
@@ -1176,3 +1200,243 @@ no longer depend on unimplemented budget/scratch types. Existing navigation and
 GridForge planar-coverage limits are unchanged. Next: implement those focused
 Gravitas prerequisites and complete Phase 0 contract review. This revision is
 documentation only; no runtime or new test result is claimed.
+
+### 2026-09-24 - Native support/posture implementation and parity review
+
+The maintainer authorized continuing the focused prerequisites and explicitly
+required considering shared improvements in both dimensions. Work remains in
+the existing develop checkouts, based on Trailblazer `7ab3fc9` and Gravitas
+`198d272`; nothing is staged or committed. Phase 0 is **not complete**, and this
+working change is **not ready to merge**.
+
+Implemented in Gravitas, pending the remaining acceptance gates:
+
+- `Physics2DSupportQuery`, `Physics2DSupportHit` and `Query2D.QuerySupport` reuse
+  native indexed discovery and geometry. Physical pair eligibility, carrier
+  role and support-normal filtering happen before nearest-hit reduction,
+  including individual compound parts. Tiny positive probes work without
+  changing the existing generic sweep contract. Hits retain sampled frame and
+  registration-lifetime evidence; neither is a geometric freshness guarantee.
+- `SolidBody2D.TryReconfigureCollider` stages circle/capsule shape, position and
+  mass changes before publishing accepted state. Rare explicit replacements
+  inspect the complete registered blocker set, including out-of-grid geometry.
+  Notification failures do not undo accepted state, and lifetime-safe retirement
+  preserves fresh pairs created by callbacks. Pure 2D is the explicit scope;
+  mixed-mode replacement is rejected.
+- Shared query readiness reconciles committed memberships after physical grid
+  changes in both dimensions. It neither publishes pending authored geometry
+  nor scans the registry on every ordinary query. Final-step 2D refresh no
+  longer relies on an incidental grounding query.
+- Existing 3D posture retirement now protects recycled registrations and uses
+  an invocation-local snapshot when callbacks can reset the world or begin a
+  nested transaction. Native 2D reset and holder-owned pair controls also pass.
+
+Parity review records distinct outcomes rather than assuming matching names
+mean matching guarantees:
+
+| Boundary | Current disposition |
+| --- | --- |
+| Partition readiness after grid changes | Reproduced and repaired in both dimensions; Gravitas `GRV-Issue-079` tracks the existing defect. |
+| Posture callback lifetime and reset | Native 2D controls and repaired 3D regressions pass; `GRV-Issue-080` retains the existing 3D defect. |
+| Filter-before-reduction physical support | Native 2D implemented. Equivalent dedicated 3D selection, including compound/mesh features, is a separate scope choice still awaiting maintainer direction. The generic 3D sweep has not silently changed. |
+| Strict posture clearance | Four regressions fail across both dimensions; `GRV-Issue-081` blocks completion. |
+| Hard query work/storage ceilings | Remain in the separate shared physics-query budget plan. |
+
+#### Blocking exact-classification repair
+
+A candidate can penetrate by less than half a Q32.32 raw unit while its contact
+depth rounds to zero. Circle/capsule 2D and sphere/capsule 3D regressions all
+return `Applied` instead of `Blocked`. The owning issue records exact candidate
+and box coordinates and the independent squared-distance proof. This is an
+existing 3D defect as well as a gap in the new 2D implementation, not an accepted
+precision tolerance.
+
+The required repair is to retain exact separation/tangency/penetration
+classification in FixedMathSharp and consume it at Gravitas posture admission.
+Do not alter normal solver depth rounding, add an epsilon, skip the regressions
+or weaken the strict-clearance contract.
+
+The native 2D source families can reuse centered-axis and rotated convex kernels.
+Complete 3D coverage is larger: existing posture supports sphere, capsule and
+cylinder replacement against radial, box, cylinder, cone, mesh and compound
+targets. Fixing only the four reproduced radial-versus-box cases would not
+establish complete parity. This coordinated math expansion requires a scope
+decision before implementation; no FixedMathSharp source changes were made in
+this slice.
+
+#### Verification checkpoint
+
+The untouched Gravitas Release baseline passed 4,103 tests. Initial support,
+posture, membership and callback regressions were observed failing before their
+corresponding fixes. An intermediate full instrumented Release run passed
+4,181 cases and failed one old mixed-grid membership assertion: repaired 2D
+memberships enabled real collision response, invalidating the assumption that
+both colliders' first covered cell would be identical. The corrected test now
+checks every owned replacement-grid membership and a genuinely shared cell;
+the restored collision response was not suppressed.
+
+The latest focused Windows source-stack checks cover support, posture,
+registration/reset/nested callbacks, partition readiness, mixed broad phase and
+3D projected-circle queries. **Release and ReleaseLean each pass 204 and fail
+the same four strict-clearance cases, with zero skips.** The reset fix passes
+independent re-review; the whole change remains unapproved due to exact
+clearance and incomplete final verification. Logs are under Gravitas
+`artifacts/support-posture-review-followup*.log` (the final Release repeat is
+`support-posture-final-focused-Release.log`); original RED evidence remains
+in `support-posture-red.log`, `posture-3d-lifetime-red.log` and
+`posture-review-red.log` in the same directory.
+
+Both solution configurations build for `netstandard2.1` and `net8.0` with zero
+warnings/errors. The initial benchmark compile caught mixed integer/fixed-point
+constructor arguments; explicit `Fixed64.Zero` fixes the fixture without a
+runtime change. Its in-process Dry smoke executes all eight cases successfully,
+including setup's eight complete frames per scene. This only checks runnable
+fixtures; one measured iteration is not usable throughput, allocation or
+improvement evidence. Capture: `artifacts/support-query-smoke-executed.log`.
+
+Intermediate coverage is not exact (44,583/44,588 lines and 13,189/13,208
+branches), and does not cover the final working snapshot. Final full suites,
+coverage, Linux, API-site, downstream and performance gates are not certified.
+The new benchmark fixture is not evidence of a speedup. Keep the failing
+regressions visible and resolve the shared geometry scope before completing
+posture, approving Phase 0, or beginning native controller implementation.
+
+### 2026-09-24 - Exact-classification implementation and finite-rim blocker
+
+The maintainer authorized the shared FixedMathSharp/Gravitas repair, emphasizing
+deterministic correctness and speed. This supersedes the preceding request for
+that scope decision. Work is being checkpointed in logical commits on develop. Native controller
+implementation and complete 3D posture admission are still blocked.
+
+Implemented in FixedMathSharp:
+
+- Strict centered-capsule pair predicates for 2D scalar frames, explicit world
+  axes, and exact 3D quaternion/local-axis frames. They compare exact squared
+  distances without rounding endpoints or the sum of radii.
+- Strict 2D capsule/polygon classification through the existing complete SAT
+  traversal, skipping contact-depth ranking and witness construction.
+- Internal classification-only box/sphere, box/capsule, convex-hull/capsule,
+  and finite-cylinder/cone versus sphere predicates. Triangle-as-hull controls
+  establish reuse for sphere/capsule versus individual concave-mesh triangles.
+- Normal solver contact rounding is unchanged. No epsilon, radius inflation,
+  floating-point arithmetic, runtime BigInteger, new dependency, or generic
+  collision framework was introduced. BigInteger is used only by independent
+  test oracles.
+
+Native Gravitas 2D posture now consumes exact predicates for every target leaf
+family, including compound parts. Physical filtering, stable root blocker
+identity, complete registry scans, transactional publication and callback
+lifetime rules remain intact. Scalar rotation is authoritative: the cached
+normalized `WorldAxis` is not interchangeable with the contact kernel's authored
+sine/cosine coefficients. Near-boundary direct/compound cases and an independently
+constructed noncardinal rotated-capsule compound fixture protect that distinction.
+
+Independent reviews covered each author's math through another reviewer and
+reviewed the 2D consumer separately. One public degenerate-polygon wording gap
+was corrected with a behavioral test. Lower-dimensional noncollapsed boundaries
+use positive separating translation; ordinary polygon interior wording alone
+would have been inaccurate. A full-domain test oracle initially multiplied two
+`long` values before promoting to BigInteger; explicit early promotion corrected
+that test-side overflow, with no corresponding runtime relaxation.
+
+#### Why 3D is not declared complete
+
+FixedMathSharp `FMS-Issue-023` preserves a geometric counterexample against the
+pre-existing cylinder/capsule contact authority: cylinder center zero, +Y axis,
+length 2 and radius 10; capsule +X axis, length 20 and radius 1, centered at
+`(20.75, 1.75, 0)`. Its nearest endpoint-to-rim distance squared is `9/8 > 1`,
+yet contact reports overlap. At center `(20.75, 2, 0)` and radius `5/4`, exact
+tangency reports depth `0.25`; a one-raw outward offset is also admitted.
+Three permanent tests remain red. This is not contact-depth rounding noise and
+cannot be fixed by making a sampled-axis comparison strict.
+
+Complete 3D posture also requires a complete authority for cylinder/capsule,
+cylinder/cylinder, capsule/cylinder versus cone, and cylinder versus mesh.
+Existing sampled axes, rounded support GJK, or sampled triangle contacts are
+not accepted as proofs of exact strict clearance. Sphere/capsule mesh dispatch
+can reuse the reviewed hull/triangle predicate, but has not been integrated in
+isolation behind an approximate fallback. Existing 3D posture remains unchanged
+at this boundary; `GRV-Issue-081` stays open.
+
+#### Performance checkpoint
+
+Windows x64, .NET 8.0.29, SDK 10.0.302, BenchmarkDotNet 0.15.8 default
+out-of-process jobs on the same machine. Capture the existing contact baseline
+before implementation and use matching fixture inputs for strict comparisons:
+
+| Fixture | Ordinary contact/depth query | Strict classification |
+| --- | ---: | ---: |
+| 2D capsule/polygon side overlap | 8.98 us | 6.98 us |
+| 2D capsule/polygon corner tangency | 8.15 us | 6.50 us |
+| Box/sphere | 3.58 us | 0.43 us |
+| Box/capsule, final rerun | 151.41 us | 51.91 us |
+| Convex hull/capsule | 1372.66 us | 619.22 us |
+
+The first box/capsule strict implementation still ranked depths (130.30 us).
+After measurement and independent review, it now uses the same candidate
+traversal but skips ranking and unnecessary squared norms. All measured rows
+report zero bytes allocated per operation. Ordinary contact controls show no
+material regression against the pre-change captures (side 9.017 us, corner
+8.207 us, box/sphere 3.580 us, box/capsule 155.562 us, hull/capsule 1373.40 us;
+unchanged cylinder controls remain near 27.5/25.1 us). These are geometry-query
+measurements, not full posture-transaction or simulation-frame speedup claims.
+
+Reproduce in FixedMathSharp after building its Release benchmark project:
+
+```bash
+dotnet tests/FixedMathSharp.Benchmarks/bin/Release/net8.0/FixedMathSharp.Benchmarks.dll centered-capsule-convex rigid-finite-shape-relation oriented-box-anchor --filter '*SideOverlap' '*CornerTangency' '*OrdinaryCylinderCapsule' '*OrdinaryCylinderCylinder' '*OrdinaryHullCapsule*' '*CapsulePrimary' '*SpherePrimary' '*CapsuleStrict' '*SphereStrict' --exporters json
+```
+
+Supporting captures are `artifacts/strict-clearance-baseline`,
+`strict-box-baseline`, `strict-clearance-candidate` and `strict-box-final` in
+FixedMathSharp. The first candidate's box strict row predates ranking removal;
+use the final capture for that row. No new benchmark project or CI gate was added.
+
+#### Verification checkpoint
+
+The complete FixedMathSharp core test project runs unfiltered: Release passes
+2,939 and fails the three finite-rim regressions; ReleaseLean passes 2,918 and
+fails those same three, with zero skips. Both instrumented configurations have
+exact 100% reachable line, branch and method coverage for the core and included
+FluentAssertions assembly. This does not make the red correctness gate green.
+Captures are `artifacts/strict-final-coverage-release*` and
+`strict-final-coverage-lean*`. Existing solver controls, exact quaternion and
+full-domain oracles, sub-raw boundaries, degenerate contracts and warmed
+allocation tests execute alongside the new classifiers.
+
+Native Gravitas 2D posture passes all 53 focused Release cases, including the
+two original strict-clearance failures. Unfiltered Gravitas runs pass 4,217
+Release / 4,158 ReleaseLean cases, and each fails only the two unchanged 3D
+sub-raw posture regressions; zero skips. Those runs include all 53 native 2D
+posture cases. Captures: Gravitas `artifacts/strict-full-Release.log` and
+`strict-full-ReleaseLean.log`.
+
+Downstream `dotnet test Trailblazer.slnx -c <configuration>
+-p:UseLocalLsfStack=true -p:BuildInParallel=false -m:1` builds the source chain
+for both `netstandard2.1` and `net8.0` without warnings/errors. Release passes
+3,245 core and 90 adapter tests; ReleaseLean passes 3,146 core and 86 adapter
+tests, all with zero skips. Captures: Trailblazer
+`artifacts/strict-upstream-Release.log` and `strict-upstream-ReleaseLean.log`.
+The working-tree diff checks are clean. No package-release, Linux, API-site,
+full Gravitas coverage or complete 3D correctness certification is implied by
+these source-mode checks. The whole prerequisite remains **not ready to merge**.
+
+### 2026-09-24 - Commit cleanup and complete curved-feature repair
+
+The maintainer authorized completing `GRV-Issue-081` without intermediate
+approval stops and requested logical local commits of the accumulated work.
+No push or release is authorized. FixedMathSharp's strict-predicate foundation
+is `9d532a9`; the independent finite-rim regressions are retained separately in
+`123221b`. The existing Chronicler test rename is isolated in `625d749`.
+Gravitas checkpoints separate partition readiness (`622753b`), callback pair
+lifetime (`4bc5010`), native physical support (`154df77`), and native posture
+(`c8dbb5b`). Its two unresolved 3D clearance regressions are isolated from
+lifetime tests in `e899e2b`.
+
+Fresh unfiltered Release checks reproduce the documented boundary: FixedMathSharp
+core 2,939 passed / 3 known failures, Chronicler 49 passed; Gravitas 4,217 passed /
+2 known failures, with no skips. Captures: each owning repository's
+`artifacts/checkpoint-release.log`. These are explicit implementation checkpoints,
+not declarations of a green release gate. Continue with complete curved-feature
+classification, then wire the whole 3D dispatch and rerun the full verification
+matrix. Do not substitute rounded contact depth or sampled axes for exact truth.

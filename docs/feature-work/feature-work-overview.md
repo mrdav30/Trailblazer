@@ -30,9 +30,19 @@ instead of burying it in notes.
     side-view envelopes are proposed, with nominal feet separate from physical
     contact points. The [upstream prerequisite proposal](twoDimensionalNavigationPlan.md#proposed-upstream-prerequisite-contract)
     now has implemented exact capsule math and layer-bound GridForge coverage.
-    Native support queries and atomic 2D posture replacement remain proposed,
-    using existing synchronous indexed discovery. Hard physics-query budgets
-    are a separate shared 2D/3D follow-up, not a prerequisite for this delivery.
+    Native support queries and atomic 2D posture replacement are in progress,
+    with synchronous indexed support discovery and complete registry clearance
+    for rare posture changes. Shared partition-readiness and callback-lifetime
+    repairs are under verification. Independent review reproduced strict posture
+    clearance failure in both dimensions (`GRV-Issue-081`): positive penetration
+    can round to zero contact depth. The authorized shared repair now supplies
+    exact 2D posture admission and reviewed classification-only math for several
+    3D families. Complete 3D admission remains open: investigation also exposed
+    a pre-existing finite cylinder/capsule rim defect (`FMS-Issue-023`). Do not
+    treat the partial math repair or its performance gains as prerequisite closure.
+    Hard physics-query budgets remain a separate shared 2D/3D follow-up, not a
+    prerequisite for this delivery. Review shared improvements against both
+    dimensions without forcing geometry-specific implementations to be identical.
     The separate generalized contact defect `TRB-Issue-151` and legacy hex
     inverse mismatch `TRB-Issue-152` are now fixed upstream and verified through
     both source-stack configurations; neither remains a blocker.

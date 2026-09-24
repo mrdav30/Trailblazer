@@ -95,10 +95,20 @@ While jump input remains held and the extra-height window is active, the motor
 partially offsets gravity along the latched jump direction. Releasing input
 earlier lets gravity take over sooner.
 
+`CanJump` governs admission of a new jump, not continuation of the current one.
+Exhausting the jump count or starting cooldown does not cancel a held extension.
+Releasing input ends that hold; pressing again cannot revive it unless a new
+jump is admitted. Input remains level-triggered: with multiple jumps available,
+requesting and affording a jump on successive frames can consume successive jumps.
+
 The time window is `ExtraJumpHeight / jumpSpeed`, compared with
 `ElapsedTime - JumpStartTime`. It does not depend on how long the world has
 already been running. Zero jump speed or non-positive extra height gives no
 held-jump extension. Absolute timestamps never enter height or speed arithmetic.
+
+Height settings tune the impulse and hold duration; they are not an exact height
+clamp. The fixed-step arc, jump direction, inherited velocity, and host collisions
+determine the accepted peak height.
 
 The main tuning values are:
 

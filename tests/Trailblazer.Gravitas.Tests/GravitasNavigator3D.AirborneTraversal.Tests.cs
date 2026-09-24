@@ -21,6 +21,51 @@ public sealed class GravitasNavigator3DAirborneTraversalTests
     private const int FlightAscend = 1;
     private const int FlightDescend = 2;
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void FinalAllowedJump_ShouldPreserveHeldMotionThroughTheSharedWorldBarrier(int maxJumpCount)
+    {
+        using var fixture = new GravitasAirborneScenarioFixture();
+        using GravitasNavigatorActor actor = fixture.CreateWalkingActor();
+        NavMotor motor = actor.Navigator.Motor!;
+        JumpLocomotion jump = motor.Handler.Jump!;
+        jump.MaxJumpCount = maxJumpCount;
+        jump.BaseJumpHeight = Fixed64.One;
+        jump.ExtraJumpHeight = Fixed64.One;
+        motor.Handler.Forces.GravityForce = (Fixed64)8;
+        int started = 0;
+        motor.Events.OnStartJump += _ => started++;
+
+        for (int index = 0; index < maxJumpCount; index++)
+        {
+            actor.Navigator.ApplyInputTrekRequest(isRequestingJump: true);
+            fixture.Step(actor);
+        }
+
+        Fixed64 speed = (Fixed64)(4 * maxJumpCount);
+        var start = jump.JumpStartTime;
+        for (int frame = 0; frame < 8; frame++)
+        {
+            Vector3d previous = actor.Navigator.Position;
+            actor.Navigator.ApplyInputTrekRequest(isRequestingJump: true);
+            fixture.Step(actor);
+
+            Assert.Equal(Vector3d.Up * (speed / 32), actor.Body.Position3d - previous);
+            Assert.Equal(actor.Body.Position3d, actor.Navigator.Position);
+            Assert.Equal(Vector3d.Up * speed, actor.Navigator.Velocity);
+            Assert.Equal(speed, motor.Handler.Move.FrameVelocity.Y);
+            Assert.Equal(maxJumpCount, started);
+            Assert.Equal(start, jump.JumpStartTime);
+        }
+
+        actor.Navigator.ApplyInputTrekRequest();
+        fixture.Step(actor);
+        Assert.Equal(speed - Fixed64.One / 4, actor.Navigator.Velocity.Y);
+        Assert.False(jump.IsHoldingJump);
+        Assert.Equal(maxJumpCount, started);
+    }
+
     [Fact]
     public void WalkOffLedge_ShouldRejectFallJumpAndLandOnceOnTheLowerSupport()
     {

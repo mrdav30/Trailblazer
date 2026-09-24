@@ -121,8 +121,8 @@ public partial class NavMotor
         ComputeMovementForces(request);
         Vector3d approachCorrection = ResolveApproachCorrection(request, approachTarget);
 
-        // Reset this before applying gravity.
-        if (JumpModule != null && (!request.IsRequestingJump || !JumpModule.CanJump))
+        // Releasing ends the current hold. Admission limits only govern new jumps.
+        if (JumpModule != null && !request.IsRequestingJump)
             JumpModule.IsHoldingJump = false;
 
         ApplyEnvironmentalForces();

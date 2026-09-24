@@ -140,7 +140,8 @@ public class JumpLocomotion : ILocomotion
     public bool IsJumping { get; set; }
 
     /// <summary>
-    /// Indicates whether the scout is holding the jump button.
+    /// Indicates whether the current jump's input has remained held without cancellation.
+    /// Releasing ends this hold; only an admitted new jump starts another.
     /// </summary>
     [Transient]
     public bool IsHoldingJump { get; set; }
@@ -176,7 +177,8 @@ public class JumpLocomotion : ILocomotion
     public int JumpCount { get; private set; }
 
     /// <summary>
-    /// Returns true if more jumps are allowed.
+    /// Returns true when the count and cooldown permit a new jump.
+    /// This does not control the held-input extension of an already admitted jump.
     /// </summary>
     public bool CanJump => JumpCount < MaxJumpCount && !IsCoolingDown;
 

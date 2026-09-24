@@ -130,7 +130,7 @@ public partial class NavMotor
         {
             JumpLocomotion jumpModule = JumpModule!;
 
-            // Reset cooldown on landing.
+            // Landing replenishes the jump count without clearing an active cooldown.
             jumpModule.ResetJumpCounter();
 
             if (IsInLiquid)

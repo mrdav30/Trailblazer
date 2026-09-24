@@ -26,28 +26,6 @@
 
 ## Active Issues
 
-### TRB-Issue-155 - The final allowed jump cancels its held-input extension
-
-- **Discovered:** 2026-09-23 during shared timing adoption.
-- **Status:** Open; pre-existing jump-policy defect, separate from the corrected
-  elapsed-time units in `TRB-Issue-153`.
-- **Evidence:** `ResolveTraversalForces` clears `IsHoldingJump` when `CanJump`
-  is false. `RegisterJump` increments `JumpCount` and starts cooldown on the last
-  allowed jump, making `CanJump` false on its next frame even while input remains
-  held. The default `MaxJumpCount = 1` therefore loses its extension immediately.
-  This guard is present at `e2a9edf`, before the timing migration.
-- **Reproduction:** A jump-ready agent at time zero, held input on consecutive
-  frames, and `CanAffordJump = false` on the second frame loses one gravity step:
-  `4.427188724279404` becomes `4.12093872576952`. Setting `MaxJumpCount = 2`
-  isolates the separate timestamp defect and preserves the held velocity after
-  its fix. The initial/control logs are retained in Chronicler's ignored
-  `artifacts/timing/phase5/red-motor*.log` evidence.
-- **Next scope:** Separate eligibility for a new jump from continuation of the
-  current held jump. Verify default single-jump and final multi-jump extension,
-  release/cooldown/landing/ceiling behavior, and replace permissive jump-height
-  assertions with exact accepted-motion checks. Do not weaken cooldown admission.
-  Kept outside the timing migration's explicit no-unrelated-motor-work boundary.
-
 ### TRB-Issue-119 - Guided A\* setup reported an exception in wide geometry
 
 - **Discovered:** 2026-09-10 during guided-host performance measurement.
@@ -200,6 +178,44 @@
 
 ## Resolved Issues
 
+### TRB-Issue-155 - The final allowed jump cancels its held-input extension
+
+- **Discovered:** 2026-09-23 during shared timing adoption.
+- **Resolved:** 2026-09-24; new-jump admission no longer cancels an active hold.
+- **Original evidence:** `ResolveTraversalForces` cleared `IsHoldingJump` when
+  `CanJump` became false. Registering the last allowed jump exhausts its count
+  and starts cooldown, so the default single jump lost its extension on the
+  next held frame. The guard predates the timing migration at `e2a9edf`;
+  `TRB-Issue-153` corrected a separate elapsed-time units defect.
+- **Reproduction:** The default jump lost one gravity step from
+  `4.427188724279404` to `4.12093872576952`. The new rational-step regressions
+  fail before the fix with `4 -> 3.75` for a single jump and `8 -> 7.75` for the
+  final double jump. All seven initial regression cases fail on the old guard,
+  including zero, short and century-scale world uptimes. Original timing logs
+  remain in Chronicler's ignored `artifacts/timing/phase5/red-motor*.log`;
+  this fix's evidence is under Trailblazer's ignored `artifacts/trb-issue155`.
+- **Fix:** Only released input clears the hold in `ResolveTraversalForces`.
+  New-jump eligibility remains enforced by `CanApplyJumpForce`; count,
+  cooldown and affordability do not gate continuation of an admitted jump.
+  Release/repress cannot revive that hold without a new admission. Existing
+  hold-window, ceiling, landing and locomotion cancellation remain in place.
+  Input stays level-triggered; serialization and public API shapes are unchanged.
+- **Regression coverage:** Exact accepted velocity/displacement for single and
+  final multi-jumps, affordability changes, cooldown expiry without count
+  replenishment, release/repress, inclusive hold-window boundaries and changing
+  timestep; finite tap/hold arcs and landing events; ceiling cancellation;
+  landing with a still-active cooldown; real Gravitas prepare/resolve/commit
+  motion. Duplicate and misleading height tests were replaced, including a
+  purported release test that actually held input. Height settings tune the
+  discrete arc rather than impose an exact continuous-height clamp.
+- **Verification:** Independent Windows and Linux source builds and full suites
+  pass with `UseLocalLsfStack=true`: Release has 3,245 core + 90 adapter tests;
+  ReleaseLean has 3,146 + 86. Each of the four runs retains exact coverage across
+  both assemblies: 32,475/32,475 lines, 13,290/13,290 branches, and 3,190/3,190
+  covered and fully covered methods. Both target frameworks build without
+  warnings or errors; DocFX passes with warnings as errors. Independent source
+  review found no actionable issues. No upstream changes or release actions.
+
 ### TRB-Issue-124 - World publication cannot advance across signed frame-count wrap
 
 - **Discovered:** 2026-09-14 while testing LOS phase clock boundaries.
@@ -250,7 +266,8 @@
 - **Evidence:** The old `(JumpStartTime + ExtraJumpHeight) / jumpSpeed` threshold
   mixed seconds and world units. The same held jump passed at world time zero
   but lost gravity compensation at ten seconds and one million seconds. Tests
-  use a second available jump to isolate this from `TRB-Issue-155`.
+  initially used a second available jump to isolate this from `TRB-Issue-155`;
+  they now exercise the default single jump after that separate fix.
 - **Fix:** Compare the wide elapsed duration since jump start with
   `ExtraJumpHeight / jumpSpeed`. Zero speed or non-positive extra height gives
   no extension; expired durations need not fit Fixed64.

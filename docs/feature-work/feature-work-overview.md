@@ -58,7 +58,8 @@ instead of burying it in notes.
   - All seven phases are complete. Trailblazer and its Gravitas adapter use the
     shared long-frame/wide-time contract; `TRB-Issue-124`, the held-jump units
     defect `TRB-Issue-153`, and stale commit ordering `TRB-Issue-154` are resolved.
-    `TRB-Issue-155` remains separate pre-existing final-jump policy work.
+    The separate final-jump policy defect `TRB-Issue-155` is also resolved:
+    new-jump admission no longer cancels the current held-input extension.
   - Cross-stack Windows/Linux Release/ReleaseLean suites pass, introduced timing
     code and downstream gates retain exact coverage, and all four API sites
     build cleanly. Independent review and isolated normal-package consumers

@@ -42,11 +42,14 @@ instead of burying it in notes.
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
     the default; use `UseLocalLsfStack=true` only for coordinated validation of
     unreleased sibling changes, then revalidate against released packages.
-  - `TRB-Issue-119`, GridForge's `GF-Issue-006`, and FixedMathSharp's
-    `FMS-Issue-018` retain their separate unexplained benchmark/setup failures;
-    clean replays and performance acceptance do not resolve them or establish
-    a shared cause. Capture exact inputs if they recur. `TRB-Issue-114` remains
-    closed unless new evidence meets its documented reopening criteria.
+  - The issue tracker has no active entries. `TRB-Issue-119` is closed as
+    unreproduced, with historical evidence, bounded verification and recurrence
+    capture instructions retained. GridForge's `GF-Issue-006` and
+    FixedMathSharp's `FMS-Issue-018` are likewise closed as unreproduced, not
+    repaired; no shared cause is established. Reopen #119 on a matching
+    recurrence and preserve exact inputs and executed-binary identities before
+    rebuilding. `TRB-Issue-114` remains closed unless new evidence meets its
+    documented reopening criteria.
 - [`Benchmark Signal Hardening`](benchmark-signal-hardening-backlog.md)
   - Reproduce and close confirmed release-relevant signals alongside the owning
     library change. Do not broaden this into speculative optimization work.

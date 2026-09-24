@@ -26,12 +26,17 @@
 
 ## Active Issues
 
+None currently.
+
+## Closed Investigations
+
 ### TRB-Issue-119 - Guided A\* setup reported an exception in wide geometry
 
 - **Discovered:** 2026-09-10 during guided-host performance measurement.
-- **Status:** Open. One historical BenchmarkDotNet A\*100 setup failure has not
-  reproduced in the bounded follow-ups below. No fix or runtime attribution is
-  claimed.
+- **Status:** Closed as unreproduced on 2026-09-24 by maintainer decision. One
+  historical BenchmarkDotNet A\*100 setup failure has not reproduced in the
+  bounded follow-ups below. No fix or runtime attribution is claimed; the
+  historical evidence and capture instructions remain for reopening this ID.
 - **Failure:** `NullReferenceException` in
   `WideConvex2dRelations.GetRotatedOffset` at ProjectionMath.cs:477, reached
   from `ContainsPoint` through GridForge's planar segment interval calculation
@@ -111,7 +116,95 @@
   reported helper from this containment path, so clean candidate runs cannot
   establish a fix.
 
-## Closed Investigations
+#### Bounded current-stack investigation - 2026-09-24
+
+- **Source state:** Trailblazer `f1ee052`, GridForge `83132cf`, FixedMathSharp
+  `b7a6b02`, SwiftCollections `3668bb4`, Chronicler `5397348`; clean source trees.
+  Windows 11 build 26200.9550, SDK 10.0.302, .NET 8.0.29 x64 RyuJIT,
+  BenchmarkDotNet 0.15.8, concurrent workstation GC. Release benchmark build
+  with `UseLocalLsfStack=true` passes without warnings or errors.
+- **Historical evidence limit:** The recorded `artifacts/benchmark004`,
+  `artifacts/benchmark005` and `artifacts/gf-issue006` directories are absent
+  from this checkout. The earlier observations above remain historical records,
+  not freshly verified frozen-binary results. Rebuilding an old source revision
+  would not recover the exact original executed child or its fault context.
+- **Current checks:** The original `Simulate64GuidedFrames` method, A\*/100,
+  passes two out-of-process runs: one normally, one with CDB following child
+  processes and collecting first-chance native access violations. Each run
+  completes three launches, three warmup blocks, nine actual blocks and three
+  allocation-diagnostic blocks. All six children exit zero; neither run reports
+  an NRE, and the debugger run captures no access violation. All 30 emitted
+  64-frame replay vectors agree within and across runs. The two executed-child
+  snapshots match on all 68 file hashes. These are diagnostic results, not a
+  performance comparison or a replacement for the failed historical capture.
+- **Behavior tests:** The existing surface-A* and navigation-ray suites pass
+  **224/224** in both Release and ReleaseLean using the same local source stack.
+  No new hollow test or speculative regression fixture was added.
+- **Collector check:** The existing isolated caught-NRE control from
+  FixedMathSharp produces first-chance `c0000005` dumps identifying
+  `Program.Touch`, then prints its caught-exception marker and exits zero.
+  This verifies capture before managed exception handling; it does not reproduce
+  Trailblazer's exception. Dumps remain local and private.
+- **Source review:** Independent review finds no actionable nullable-object,
+  scratch-ownership or retained-span defect in the inspected path. Guide points
+  and prism vertices are copied values, local spans are consumed synchronously,
+  and scratch reuse is guarded. Crucially, current planar tracing has slab and
+  strict-line rejection paths, and zero-rotation containment now selects
+  `ContainsPointUnrotated`; it no longer reaches the historical rotation helper
+  through this boundary. Clean current runs cannot prove that old path was fixed.
+- **Upstream disposition:** `GF-Issue-006` was closed as unreproduced on
+  2026-09-22; `FMS-Issue-018` on 2026-09-21. Their lack of attribution remains.
+  The separate later `FMS-Issue-021` rotation-helper failure was likewise closed
+  without reproduction. Similar managed frames do not establish a common cause.
+- **Local evidence:** `artifacts/trb-issue119` contains the build/test logs,
+  normal/debugger benchmark logs and validated summaries, collector control,
+  and matching executed-child snapshots. No runtime code, benchmark behavior,
+  dependency, GC/JIT setting or permanent diagnostic infrastructure was changed.
+
+The bounded benchmark command, from the repository root after the local-stack
+Release benchmark build, is:
+
+```powershell
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter '*Simulate64GuidedFrames(AgentCount: 100,*AStar*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/trb-issue119/normal
+```
+
+#### Reopening and recurrence capture
+
+Reopen **TRB-Issue-119**, rather than allocating a replacement ID, if the guided
+A* setup exception recurs or new concrete evidence identifies a defect on its
+recorded path. A fresh failure is enough to reopen; do not require a repeatable
+reproducer or complete dump first. A similar upstream stack alone does not
+establish that it is the same defect.
+
+Before rebuilding, cleaning artifacts or changing runtime settings:
+
+1. Preserve the complete parent and child logs, managed exception/stack, exact
+   command and benchmark parameters, launch/PID/exit codes and preparation
+   frame/agent index. Record any missing context explicitly.
+2. Freeze the **executed child**, not just parent build output: generated runner
+   source/project, binaries/PDBs, `.deps.json`, `.runtimeconfig.json` and SHA-256
+   hashes. Record source revisions/diffs, SDK/runtime, OS/architecture and
+   GC/JIT environment settings. Keep the failed run separate from clean replays.
+3. Capture the native fault before managed handling when possible. BenchmarkDotNet
+   catches exceptions, so an unhandled-only or name-only NRE collector is
+   insufficient. The validated Windows route uses CDB child following (`-o`)
+   with a first-chance `av` handler that writes `.dump /ma /u`, records
+   `.exr -1`, registers (`r`) and stack (`k`), then continues with `gn` so normal
+   exception handling can proceed. Revalidate the collector with a caught-NRE
+   control after tooling changes. Match native events to the benchmark failure;
+   handled native events alone do not prove this defect.
+4. Retain exact simplification ray/prism inputs and relevant profile/map state
+   when available, using fixed-point raw values before reducing to the public
+   math boundary. If extra instrumentation is needed, preserve the original
+   failure first and label instrumented replays as changed captures.
+5. Record the evidence location and hashes here. Preserve failure bundles outside
+   disposable benchmark output before cleanup; dumps stay private because they
+   can contain process memory. A missing capture is a limitation, not a reason
+   to discard the failure.
+
+Do not add null guards, retries, disable simplification or change optimization
+settings as a purported fix without an identified cause. Further clean runs
+alone do not justify renewed open-ended investigation.
 
 ### TRB-Issue-114 - Intermittent allocation signal in the covered warm Flow attach guard
 
@@ -819,7 +912,8 @@ retains commands, traces, cross-library verification, and review findings.
   invalid/no-match commands. Continue requiring complete expected child exits,
   launch/sample counts and semantic records from full logs. Neither a zero exit
   nor partial statistics makes an incomplete capture eligible for comparison.
-  `GF-Issue-006` and `TRB-Issue-119` remain open; this is not an NRE fix.
+  `GF-Issue-006` and `TRB-Issue-119` were subsequently closed as unreproduced;
+  the launcher change is not an NRE fix.
 
 ### TRB-Issue-118 - Rebase/rejoin allocation guards use different warmup and measurement bodies
 

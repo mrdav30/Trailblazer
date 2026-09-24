@@ -548,7 +548,8 @@ comparison. No candidate microcomparison or isolated-math speedup is claimed.
 FMS tracks this as `FMS-Issue-018`; one frozen-child diagnostic replay with
 first-chance native-fault capture passes without a dump. It changes hosting and
 debugger timing and does not repair either baseline or establish a fix. The
-separate `TRB-Issue-119` and `GF-Issue-006` remain open without a proven common cause.
+separate `TRB-Issue-119` and `GF-Issue-006` were subsequently closed as unreproduced,
+without a proven common cause or fix; their trackers retain the evidence.
 
 **Remaining work:** A fresh five-block Flow/100 profile using the archived
 candidate binaries attributes 58.5% of measured-root sampled time to direct

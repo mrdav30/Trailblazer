@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using Chronicler.Timing;
 using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
@@ -119,21 +120,12 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// <summary>
     /// Gets this context's simulated frame count.
     /// </summary>
-    public int FrameCount
+    public long FrameCount
     {
         get
         {
             ThrowIfDisposed();
             return _clock.FrameCount;
-        }
-    }
-
-    internal ulong LogicalFrameIndex
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return _clock.FrameIndex;
         }
     }
 
@@ -149,12 +141,12 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// <summary>
     /// Gets this context's total simulated time.
     /// </summary>
-    public Fixed64 TotalTime
+    public ChronicleTimestamp ElapsedTime
     {
         get
         {
             ThrowIfDisposed();
-            return _clock.TotalTime;
+            return _clock.ElapsedTime;
         }
     }
 
@@ -235,6 +227,9 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// Advances the deterministic clock, maintains the navigation graph, advances
     /// scheduled guide acquisition within shared frame allowances, and invokes ordered simulate hooks in that order.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The frame counter is exhausted or the context is unusable.</exception>
+    /// <exception cref="OverflowException">The elapsed timestamp is exhausted.</exception>
+    /// <remarks>Timing exhaustion rejects before fixed-frame publication, acquisition or hooks mutate.</remarks>
     public void Simulate()
     {
         if (!World.IsActive)
@@ -291,14 +286,15 @@ public sealed class TrailblazerWorldContext : IDisposable
     }
 
     /// <summary>
-    /// Calculates the frame index containing the specified fixed-point timestamp.
+    /// Counts complete steps in a duration using the current fixed step, not historical frame indices.
     /// </summary>
-    /// <param name="timestamp">The timestamp to resolve.</param>
-    /// <returns>The zero-based frame index for the timestamp.</returns>
-    public int GetFrameFromTime(Fixed64 timestamp)
+    /// <param name="duration">The nonnegative duration in seconds.</param>
+    /// <returns>The number of complete represented steps, rounded down.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The duration is negative.</exception>
+    public long GetFrameCountForDuration(Fixed64 duration)
     {
         ThrowIfDisposed();
-        return _clock.GetFrameFromTime(timestamp);
+        return _clock.GetFrameCountForDuration(duration);
     }
 
     internal IDisposable RegisterOnSimulate(string owner, int order, Action callback)

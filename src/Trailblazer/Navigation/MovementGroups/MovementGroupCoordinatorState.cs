@@ -32,7 +32,7 @@ internal sealed class MovementGroupCoordinatorState
         _context = context;
     }
 
-    private int FrameCount => _context.FrameCount;
+    private long FrameCount => _context.FrameCount;
 
     internal void CacheOwner(MovementGroupSession session, Guid ownerId)
     {
@@ -79,7 +79,7 @@ internal sealed class MovementGroupCoordinatorState
         UpdateMemberState(self, requestedDestination, position, radius, resetFormationOffset);
         UpdateMembership(session, self, requestedDestination);
 
-        int minFrame = FrameCount - MovementGroupHistoryFrames;
+        long minFrame = FrameCount - MovementGroupHistoryFrames;
         if (!TryGetFormationMetrics(group, requestedDestination, minFrame, out Vector3d groupCenter, out Fixed64 averageRadius, out int groupCount))
             return new(MovementGroupTravelMode.Individual, requestedDestination);
 
@@ -119,7 +119,7 @@ internal sealed class MovementGroupCoordinatorState
         MovementGroupSession session,
         Guid otherId,
         Vector3d requestedDestination,
-        int currentFrame)
+        long currentFrame)
     {
         if (session.GroupId < 0 || !_movementGroupMemberships.TryGetValue(otherId, out MovementGroupMembership membership))
             return false;
@@ -201,7 +201,7 @@ internal sealed class MovementGroupCoordinatorState
     private bool TryGetFormationMetrics(
         MovementGroupState group,
         Vector3d requestedDestination,
-        int minFrame,
+        long minFrame,
         out Vector3d groupCenter,
         out Fixed64 averageRadius,
         out int groupCount)
@@ -231,7 +231,7 @@ internal sealed class MovementGroupCoordinatorState
     private static Fixed64 UpdateFormationOffsets(
         MovementGroupState group,
         Vector3d requestedDestination,
-        int minFrame,
+        long minFrame,
         Vector3d groupCenter)
     {
         Fixed64 maxSpreadSq = Fixed64.Zero;
@@ -257,7 +257,7 @@ internal sealed class MovementGroupCoordinatorState
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsEligibleGroupMember(MovementGroupMember member, Vector3d requestedDestination, int minFrame)
+    private static bool IsEligibleGroupMember(MovementGroupMember member, Vector3d requestedDestination, long minFrame)
     {
         return member.LastSeenFrame >= minFrame
             && member.RequestedDestination == requestedDestination;

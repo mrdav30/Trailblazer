@@ -27,6 +27,8 @@ teleporters.
   share maps, queries, policies, dependencies, guides, and caches.
 - **World changes are explicit.** Publish map revisions and addressed overlays
   at deterministic fixed-step boundaries.
+- **Time supports long-running worlds.** Long frame counts and wide elapsed
+  timestamps share one context-owned clock; movement keeps fixed-point steps.
 - **Actions stay semantic.** A guide can hold a transition instruction while
   your host owns animation, physics, and gameplay execution.
 - **Controllers are optional.** Use pathing by itself or compose Navigator,

@@ -53,8 +53,8 @@ internal sealed class NavigationOperationProcessor
     private long _pendingDescriptorBytes;
     private long _pendingPreparedMapBytes;
     private long _sequenceHighWater;
-    private int _effectiveFrameHighWater = -1;
-    private int _lastProcessedFrame = -1;
+    private long _effectiveFrameHighWater = -1;
+    private long _lastProcessedFrame = -1;
     private int _deferredPrefixCount;
     private int _foldOperationIndex;
     private NavigationMapFoldWork? _mapFoldWork;
@@ -184,13 +184,13 @@ internal sealed class NavigationOperationProcessor
         return Admit(PendingOperation.ForOverlay(operation));
     }
 
-    internal void ProcessFrame(int frame)
+    internal void ProcessFrame(long frame)
     {
         ProcessFrame(frame, static (_, _, _, _) => NavigationCandidatePublication.Published);
     }
 
     internal NavigationOperationFrameResult ProcessFrame(
-        int frame,
+        long frame,
         NavigationCandidatePublisher publishCandidate,
         MaintenanceWorkMeter? maintenanceMeter = null,
         NavigationRetainedWorkGuard? retainedWorkGuard = null)
@@ -788,7 +788,7 @@ internal sealed class NavigationOperationProcessor
             PreparedNavigationOverlay? preparedOverlay,
             OverlayReplacementPolicy replacementPolicy,
             long operationSequence,
-            int effectiveFrame,
+            long effectiveFrame,
             NavigationOperationReceipt receipt,
             long descriptorBytes,
             long preparedMapBytes,
@@ -813,7 +813,7 @@ internal sealed class NavigationOperationProcessor
         internal PreparedNavigationOverlay? PreparedOverlay { get; }
         internal OverlayReplacementPolicy ReplacementPolicy { get; }
         internal long OperationSequence { get; }
-        internal int EffectiveFrame { get; }
+        internal long EffectiveFrame { get; }
         internal NavigationOperationReceipt Receipt { get; }
         internal long DescriptorBytes { get; }
         internal long PreparedMapBytes { get; }
@@ -844,7 +844,8 @@ internal sealed class NavigationOperationProcessor
                 operation.OperationSequence,
                 operation.EffectiveFrame,
                 operation.Receipt,
-                descriptorBytes: 64L + (operation.PreparedMap.Map.MapId.Length * sizeof(char)),
+                // Includes the eight additional retained bytes in the wide-frame receipt.
+                descriptorBytes: 72L + (operation.PreparedMap.Map.MapId.Length * sizeof(char)),
                 preparedMapBytes: operation.PreparedMap.RetainedBytes,
                 coalescingScratchBytes: MapCoverageScratchBytes);
 
@@ -858,7 +859,7 @@ internal sealed class NavigationOperationProcessor
                 operation.OperationSequence,
                 operation.EffectiveFrame,
                 operation.Receipt,
-                descriptorBytes: 48L + (operation.MapId.Length * sizeof(char)),
+                descriptorBytes: 56L + (operation.MapId.Length * sizeof(char)),
                 preparedMapBytes: 0,
                 coalescingScratchBytes: MapCoverageScratchBytes);
 
@@ -872,7 +873,7 @@ internal sealed class NavigationOperationProcessor
                 operation.OperationSequence,
                 operation.EffectiveFrame,
                 operation.Receipt,
-                operation.PreparedOverlay.DescriptorBytes,
+                NavigationByteCount.SaturatingAdd(operation.PreparedOverlay.DescriptorBytes, 8),
                 preparedMapBytes: 0,
                 coalescingScratchBytes: GetOverlayCoverageScratchBytes(operation.PreparedOverlay));
 

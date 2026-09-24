@@ -52,6 +52,31 @@ Use this guide when upgrading from any v1.x package.
 7. Consume `NavigationGuideLease` or `NavigationFlowFieldLease` and explicitly
    complete every selected `NavigationTransitionInstruction`.
 
+## Simulation Timing
+
+Use `long` for absolute frame stamps: context `FrameCount`, operation
+`EffectiveFrame`, receipt `PublishedFrame`, and committed-cell
+`SimulationFrame`. Do not cast them back to int. Bounded counts, rates, and work
+budgets remain int where appropriate.
+
+Replace `TotalTime` with `Chronicler.Timing.ChronicleTimestamp ElapsedTime`.
+`JumpLocomotion.JumpStartTime` uses the same wide timestamp contract. Subtract
+timestamps first and convert only the resulting bounded duration through
+`FixedChronicleTime` when Fixed64 arithmetic is needed. Integration still uses
+Fixed64 `DeltaTime` and `InvDeltaTime`.
+
+Replace `GetFrameFromTime` with `GetFrameCountForDuration`. The result is a long
+count of complete steps at the current represented timestep, not a historical
+frame index. Negative durations reject. Rate changes preserve elapsed history.
+
+Navigator schema 9 and jump schema 1 require wide timing records. Re-record old
+fixtures; schema-8 Navigator records and unversioned/narrow jump records reject
+before live Navigator mutation. A context reset starts a new lifetime; discard
+old prepared controller motion instead of matching only the numeric frame.
+
+Gravitas and Trailblazer still own independent clocks. Hosts configure matching
+steps and advance each once; the adapter never advances a shared clock twice.
+
 ## Removed And Replaced
 
 | Removed model | Current model |

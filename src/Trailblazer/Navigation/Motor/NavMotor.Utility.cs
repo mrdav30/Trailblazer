@@ -85,6 +85,7 @@ public partial class NavMotor
     {
         TraversalInProgress = false;
         _pendingTraversalFrame = -1;
+        _pendingTraversalLifetime = null;
         FrameSlopeAngle = Fixed64.Zero;
         _forceOutput = Vector3d.Zero;
     }

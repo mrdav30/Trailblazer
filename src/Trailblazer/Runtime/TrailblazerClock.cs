@@ -5,9 +5,10 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using System.Runtime.CompilerServices;
+using Chronicler.Timing;
 using FixedMathSharp;
+using FixedMathSharp.Chronicler;
 
 namespace Trailblazer;
 
@@ -22,7 +23,10 @@ internal sealed class TrailblazerClock
 
     private Fixed64 _deltaTime = Fixed64.One / (Fixed64)DefaultFrameRate;
 
-    private ulong _frameIndex;
+    private readonly ChronicleClock _timeline = new(FixedChronicleTime.FromFixed64(
+        Fixed64.One / (Fixed64)DefaultFrameRate));
+
+    private Fixed64 _invDeltaTime = (Fixed64)DefaultFrameRate;
 
     private object _lifetime = new();
 
@@ -39,21 +43,19 @@ internal sealed class TrailblazerClock
     /// <summary>
     /// Gets the reciprocal of the current fixed time step.
     /// </summary>
-    public Fixed64 InvDeltaTime => Fixed64.One / _deltaTime;
+    public Fixed64 InvDeltaTime => _invDeltaTime;
 
     /// <summary>
     /// Gets the number of simulated frames.
     /// </summary>
-    public int FrameCount { get; private set; }
-
-    internal ulong FrameIndex => _frameIndex;
+    public long FrameCount => _timeline.FrameCount;
 
     internal object Lifetime => _lifetime;
 
     /// <summary>
     /// Gets the total simulated time in seconds.
     /// </summary>
-    public Fixed64 TotalTime { get; private set; }
+    public ChronicleTimestamp ElapsedTime => _timeline.ElapsedTime;
 
     /// <summary>
     /// Gets the accumulated visualization time since the last late-simulate reset.
@@ -75,13 +77,7 @@ internal sealed class TrailblazerClock
     /// </summary>
     public void Simulate()
     {
-        SwiftThrowHelper.ThrowIfTrue(
-            _frameIndex == ulong.MaxValue,
-            message: "Trailblazer frame index is exhausted.");
-
-        _frameIndex++;
-        FrameCount = unchecked((int)_frameIndex);
-        TotalTime += _deltaTime;
+        _timeline.Advance();
     }
 
     /// <summary>
@@ -112,10 +108,8 @@ internal sealed class TrailblazerClock
     /// </summary>
     public void Reset()
     {
-        _frameIndex = 0;
         _lifetime = new object();
-        FrameCount = 0;
-        TotalTime = Fixed64.Zero;
+        _timeline.Reset();
         AccumulatedTime = Fixed64.Zero;
         ExpectedAccumulation = Fixed64.Zero;
         ResetAccumulation = false;
@@ -135,16 +129,18 @@ internal sealed class TrailblazerClock
 
         _frameRate = frameRate;
         _deltaTime = Fixed64.One / (Fixed64)_frameRate;
+        _invDeltaTime = Fixed64.One / _deltaTime;
+        _timeline.SetStepDuration(FixedChronicleTime.FromFixed64(_deltaTime));
     }
 
     /// <summary>
-    /// Calculates the frame index containing the specified fixed-point timestamp.
+    /// Counts complete steps at the current step size, not historical frame indices.
     /// </summary>
-    /// <param name="timestamp">The timestamp to resolve.</param>
-    /// <returns>The zero-based frame index for the timestamp.</returns>
+    /// <param name="duration">The nonnegative duration in seconds.</param>
+    /// <returns>The number of complete steps in the duration.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int GetFrameFromTime(Fixed64 timestamp)
+    public long GetFrameCountForDuration(Fixed64 duration)
     {
-        return (timestamp * InvDeltaTime).FloorToInt();
+        return FixedChronicleTime.GetFrameCountForDuration(duration, _deltaTime);
     }
 }

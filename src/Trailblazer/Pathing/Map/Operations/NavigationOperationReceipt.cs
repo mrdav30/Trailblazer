@@ -66,11 +66,11 @@ public sealed class NavigationOperationReceipt
 {
     private int _status;
     private int _rejection;
-    private int _publishedFrame = -1;
+    private long _publishedFrame = -1;
     private int _admissionClaimed;
     private int _completionClaimed;
 
-    internal NavigationOperationReceipt(long operationSequence, int effectiveFrame)
+    internal NavigationOperationReceipt(long operationSequence, long effectiveFrame)
     {
         OperationSequence = operationSequence;
         EffectiveFrame = effectiveFrame;
@@ -80,7 +80,7 @@ public sealed class NavigationOperationReceipt
     public long OperationSequence { get; }
 
     /// <summary>Gets the earliest fixed-step frame at which this operation may become visible.</summary>
-    public int EffectiveFrame { get; }
+    public long EffectiveFrame { get; }
 
     /// <summary>Gets the current lifecycle state.</summary>
     public NavigationOperationStatus Status => (NavigationOperationStatus)Volatile.Read(ref _status);
@@ -90,12 +90,12 @@ public sealed class NavigationOperationReceipt
         (NavigationOperationRejection)Volatile.Read(ref _rejection);
 
     /// <summary>Gets the actual publication frame, or -1 before publication.</summary>
-    public int PublishedFrame => Volatile.Read(ref _publishedFrame);
+    public long PublishedFrame => Volatile.Read(ref _publishedFrame);
 
     internal bool TryClaimAdmission() =>
         Interlocked.CompareExchange(ref _admissionClaimed, 1, 0) == 0;
 
-    internal void CompleteApplied(int publishedFrame)
+    internal void CompleteApplied(long publishedFrame)
     {
         Complete(NavigationOperationStatus.Applied, NavigationOperationRejection.None, publishedFrame);
     }
@@ -115,7 +115,7 @@ public sealed class NavigationOperationReceipt
     private void Complete(
         NavigationOperationStatus status,
         NavigationOperationRejection rejection,
-        int publishedFrame)
+        long publishedFrame)
     {
         SwiftThrowHelper.ThrowIfTrue(
             Interlocked.CompareExchange(ref _completionClaimed, 1, 0) != 0,

@@ -552,8 +552,8 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
         capabilities: TraversalCapability.None);
 
     private static (
-        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
-        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
+        (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
+        (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
         RunMovementReplay(PathAlgorithm algorithm, bool reverseConstruction)
     {
         using var world = new GridWorld();
@@ -624,8 +624,8 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
     }
 
     private static (
-        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
-        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
+        (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
+        (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
         RunRestoredMovementReplay(
             PathAlgorithm algorithm,
             bool useMemoryPack,
@@ -667,8 +667,8 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
     }
 
     private static (
-        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
-        (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
+        (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] FirstFrames,
+        (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[] SecondFrames)
         CaptureMovementReplay(
             TrailblazerWorldContext context,
             TestNavigator first,
@@ -678,9 +678,9 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
         NavSteering firstSteering = TestRequire.NotNull(first.Steering);
         NavSteering secondSteering = TestRequire.NotNull(second.Steering);
         var firstFrames =
-            new (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[frames];
+            new (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[frames];
         var secondFrames =
-            new (ulong Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[frames];
+            new (long Frame, Vector3d Position, bool HasLineOfSight, bool HasGuidance)[frames];
 
         for (int frame = 0; frame < frames; frame++)
         {
@@ -692,12 +692,12 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
             first.CommitFrameMotion();
             second.CommitFrameMotion();
             firstFrames[frame] = (
-                context.LogicalFrameIndex,
+                context.FrameCount,
                 first.Position,
                 firstSteering.HasLineOfSightPath,
                 firstSteering.HasNavigationGuidance);
             secondFrames[frame] = (
-                context.LogicalFrameIndex,
+                context.FrameCount,
                 second.Position,
                 secondSteering.HasLineOfSightPath,
                 secondSteering.HasNavigationGuidance);

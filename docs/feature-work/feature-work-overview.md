@@ -22,6 +22,15 @@ instead of burying it in notes.
 
 ## Active Coordination
 
+- Shared deterministic simulation timing (canonical plan in Chronicler:
+  `docs/feature-work/deterministicSimulationTimingPlan.md`)
+  - Trailblazer and its Gravitas adapter now use the shared long-frame/wide-time
+    contract; `TRB-Issue-124`, the held-jump units defect `TRB-Issue-153`, and
+    stale commit ordering `TRB-Issue-154` are resolved. Phase 5 is complete with
+    Windows/Linux Standard/Lean validation and exact core/adapter coverage.
+    Chronicler's Phase 6 cross-stack/package gates remain pending;
+    this does not imply release readiness. `TRB-Issue-155` separately tracks the
+    pre-existing final-jump held-input policy, outside the timing migration.
 - [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
   - Phase 0 is in progress for native top-down and side-view controllers and the
     Gravitas `SolidBody2D` adapter. The upstream surface-witness defect

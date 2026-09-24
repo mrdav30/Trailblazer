@@ -242,7 +242,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
         return _store.TryAcquire();
     }
 
-    internal void Maintain(int frame)
+    internal void Maintain(long frame)
     {
         EnsureUsable();
         _maintenanceMeter.Reset();
@@ -425,7 +425,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     internal static void CompletePolicyFrame(
         NavigationAreaCatalogProcessor.PreparedFrame policyFrame,
-        int frame,
+        long frame,
         bool policyPrepared,
         NavigationCandidatePublication publication)
     {
@@ -1702,7 +1702,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     private NavigationCandidatePublication PublishPendingCandidate(
         NavigationOperationCandidate candidate,
-        int frame,
+        long frame,
         NavigationOperationFrameChange[] changes,
         int changeCount)
     {

@@ -1,6 +1,8 @@
 using System;
+using Chronicler.Timing;
 using FixedMathSharp;
 using FixedMathSharp.Assertions;
+using FixedMathSharp.Chronicler;
 using FluentAssertions;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
@@ -11,6 +13,124 @@ namespace Trailblazer.Tests.Navigation.Motor;
 [Collection("TrailblazerCollection")]
 public class JumpLocomotionTests : IDisposable
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(10)]
+    [InlineData(3155760000L)]
+    public void HeldJumpPreservesUpwardSpeedRegardlessOfWorldStartTime(long seconds)
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        scout.Motor.Handler.Jump!.MaxJumpCount = 2;
+        TimingTestUtility.SetTime(TestWorld.Context, 0, new ChronicleTimestamp(seconds, 0));
+        TestWorld.Context.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+        Fixed64 speed = scout.Motor.Handler.Move.FrameVelocity.Y;
+        Assert.True(speed > Fixed64.Zero);
+
+        TestWorld.Context.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.FrameRequest.CanAffordJump = false;
+        scout.Simulate();
+
+        Assert.Equal(speed, scout.Motor.Handler.Move.FrameVelocity.Y);
+    }
+
+    [Theory]
+    [InlineData(-1, false)]
+    [InlineData(0, true)]
+    [InlineData(8, true)]
+    [InlineData(9, false)]
+    [InlineData(int.MaxValue, false)]
+    public void HeldJumpUsesElapsedDurationIncludingTheExactEndOfItsWindow(int elapsedFrames, bool held)
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        var motor = scout.Motor;
+        JumpLocomotion jump = motor.Handler.Jump!;
+        jump.MaxJumpCount = 2;
+        jump.BaseJumpHeight = Fixed64.One;
+        jump.ExtraJumpHeight = Fixed64.One;
+        motor.Handler.Forces.GravityForce = (Fixed64)8;
+        TimingTestUtility.SetTime(TestWorld.Context, int.MaxValue, new ChronicleTimestamp(3155760000L, 0));
+        jump.RegisterJump();
+        jump.FrameJumpDirection = Vector3d.Up;
+        ChronicleDuration elapsed = elapsedFrames == int.MaxValue
+            ? new ChronicleDuration(3155760000L, 0)
+            : FixedChronicleTime.FromFixed64((Fixed64)elapsedFrames / 32);
+        TimingTestUtility.SetTime(TestWorld.Context, int.MaxValue + 1L, jump.JumpStartTime + elapsed);
+        motor.CurrentState.Update(new TrekCondition { Medium = TraversalMedium.Gas }, null);
+        motor.Handler.Move.FrameVelocity = Vector3d.Up * (Fixed64)4;
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.FrameRequest.CanAffordJump = false;
+
+        Assert.True(motor.TryTraversal(scout.FrameRequest, out var displacement, out _, out _));
+        Assert.Equal((held ? (Fixed64)4 : Fixed64.FromFraction(15, 4)) * TestWorld.Context.DeltaTime,
+            displacement.Y);
+        motor.AbortTraversalFrame();
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(3155760000L)]
+    public void ActiveJumpKeepsItsElapsedWindowWhenTheHostChangesStepSize(long seconds)
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        JumpLocomotion jump = scout.Motor.Handler.Jump!;
+        jump.MaxJumpCount = 2;
+        jump.BaseJumpHeight = Fixed64.One;
+        jump.ExtraJumpHeight = Fixed64.One;
+        scout.Motor.Handler.Forces.GravityForce = (Fixed64)8;
+        TimingTestUtility.SetTime(TestWorld.Context, 0, new ChronicleTimestamp(seconds, 0));
+        TestWorld.Context.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+        Assert.Equal((Fixed64)4, scout.Motor.Handler.Move.FrameVelocity.Y);
+        ChronicleTimestamp start = jump.JumpStartTime;
+
+        foreach (int rate in new[] { 32, 32, 16, 16, 16 })
+        {
+            TestWorld.Context.SetFrameRate(rate);
+            TestWorld.Context.Simulate();
+            scout.FrameRequest.IsRequestingJump = true;
+            scout.FrameRequest.CanAffordJump = false;
+            scout.Simulate();
+            Assert.Equal((Fixed64)4, scout.Motor.Handler.Move.FrameVelocity.Y);
+            Assert.Equal(start, jump.JumpStartTime);
+        }
+        Assert.Equal(new ChronicleDuration(0, 0x40000000), TestWorld.Context.ElapsedTime - start);
+        TestWorld.Context.SetFrameRate(8);
+        TestWorld.Context.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.FrameRequest.CanAffordJump = false;
+        scout.Simulate();
+        Assert.Equal((Fixed64)3, scout.Motor.Handler.Move.FrameVelocity.Y);
+        Assert.Equal(new ChronicleDuration(0, 0x60000000), TestWorld.Context.ElapsedTime - start);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HeldJumpWithZeroSpeedOrExtraHeightDoesNotCancelGravity(bool zeroSpeed)
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        var motor = scout.Motor;
+        JumpLocomotion jump = motor.Handler.Jump!;
+        jump.MaxJumpCount = 2;
+        jump.BaseJumpHeight = zeroSpeed ? Fixed64.Zero : Fixed64.One;
+        jump.ExtraJumpHeight = zeroSpeed ? Fixed64.One : Fixed64.Zero;
+        motor.Handler.Forces.GravityForce = (Fixed64)8;
+        jump.RegisterJump();
+        jump.FrameJumpDirection = Vector3d.Up;
+        motor.CurrentState.Update(new TrekCondition { Medium = TraversalMedium.Gas }, null);
+        motor.Handler.Move.FrameVelocity = Vector3d.Up * (Fixed64)4;
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.FrameRequest.CanAffordJump = false;
+
+        Assert.True(motor.TryTraversal(scout.FrameRequest, out var displacement, out _, out _));
+        Assert.Equal(Fixed64.FromFraction(15, 4) * TestWorld.Context.DeltaTime, displacement.Y);
+        motor.AbortTraversalFrame();
+    }
+
     public void Dispose()
     {
         TestWorld.Reset();
@@ -29,7 +149,7 @@ public class JumpLocomotionTests : IDisposable
         jump.JumpCount.Should().Be(0);
         jump.IsJumping.Should().BeFalse();
         jump.IsHoldingJump.Should().BeFalse();
-        jump.JumpStartTime.Should().Be(Fixed64.Zero);
+        jump.JumpStartTime.Should().Be(ChronicleTimestamp.Zero);
     }
 
     [Fact]
@@ -86,7 +206,7 @@ public class JumpLocomotionTests : IDisposable
         TestWorld.Context.Simulate();
         scout.Simulate();
 
-        Fixed64 expectedJumpFrame = jump.JumpStartTime;
+        ChronicleTimestamp expectedJumpTime = jump.JumpStartTime;
 
         // Attempt to jump again immediately
         scout.FrameRequest.IsRequestingJump = true;
@@ -97,7 +217,7 @@ public class JumpLocomotionTests : IDisposable
         // Assert
         scout.Motor.IsInGas.Should().BeTrue();
         jump.IsCoolingDown.Should().BeTrue();
-        jump.JumpStartTime.Should().Be(expectedJumpFrame);
+        jump.JumpStartTime.Should().Be(expectedJumpTime);
     }
 
     [Fact]

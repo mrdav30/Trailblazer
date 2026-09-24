@@ -208,7 +208,7 @@ public sealed class NavigationAreaCatalogProcessorTests
         overRuleLimit.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
         ruleProcessor.PendingCount.Should().Be(1);
         ruleProcessor.PendingRuleCount.Should().Be(2);
-        ruleProcessor.PendingRetainedBytes.Should().Be(first.Policy.RetainedBytes);
+        ruleProcessor.PendingRetainedBytes.Should().Be(first.Policy.RetainedBytes + 8);
 
         ruleProcessor.Reset();
         ruleProcessor.PendingCount.Should().Be(0);
@@ -233,6 +233,25 @@ public sealed class NavigationAreaCatalogProcessorTests
         byteProcessor.PendingRetainedBytes.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PolicyAdmissionAccountsForWideReceiptAtTheExactByteBoundary(bool exactCapacity)
+    {
+        var operation = new NavigationAreaPolicyCommitOperation(CreatePolicy("wide", 1, 1), 1, int.MaxValue + 1L);
+        long bytes = operation.Policy.RetainedBytes + 8;
+        var processor = new NavigationAreaCatalogProcessor(CreateSettings(
+            navigationAreaCount: 1, maxAreaPolicies: 1, maxAreaRules: 1, maxDependencyEntries: 3,
+            maxPendingDescriptorBytes: bytes - 24 - (exactCapacity ? 0 : 1)));
+        Assert.Equal(exactCapacity, processor.Admit(operation));
+        Assert.Equal(exactCapacity ? bytes : 0, processor.PendingRetainedBytes);
+        if (!exactCapacity)
+            Assert.Equal(NavigationOperationRejection.CapacityExceeded, operation.Receipt.Rejection);
+        processor.Reset();
+        Assert.Equal(0, processor.PendingRetainedBytes);
+        if (exactCapacity) Assert.Equal(NavigationOperationStatus.Superseded, operation.Receipt.Status);
+    }
+
     [Fact]
     public void AdmissionDescriptorCeiling_ShouldSaturateWithoutArithmeticOverflow()
     {
@@ -250,7 +269,7 @@ public sealed class NavigationAreaCatalogProcessorTests
 
         processor.Admit(operation).Should().BeTrue(
             "adding the maximum rule allowance to an unbounded descriptor ceiling must saturate");
-        processor.PendingRetainedBytes.Should().Be(operation.Policy.RetainedBytes);
+        processor.PendingRetainedBytes.Should().Be(operation.Policy.RetainedBytes + 8);
     }
 
     [Fact]
@@ -604,9 +623,9 @@ public sealed class NavigationAreaCatalogProcessorTests
 
         diagnostics.PendingAreaPolicyCount.Should().Be(1);
         diagnostics.PendingAreaRuleCount.Should().Be(context.Settings.NavigationAreaCount);
-        diagnostics.PendingAreaPolicyBytes.Should().Be(operation.Policy.RetainedBytes);
+        diagnostics.PendingAreaPolicyBytes.Should().Be(operation.Policy.RetainedBytes + 8);
         diagnostics.ActiveSnapshotBytes.Should().BeGreaterThanOrEqualTo(
-            NavigationWorldGraph.Empty.RetainedBytes + operation.Policy.RetainedBytes);
+            NavigationWorldGraph.Empty.RetainedBytes + operation.Policy.RetainedBytes + 8);
     }
 
     [Fact]
@@ -663,7 +682,7 @@ public sealed class NavigationAreaCatalogProcessorTests
 
         processor.PendingCount.Should().Be(1);
         processor.PendingRuleCount.Should().Be(1);
-        processor.PendingRetainedBytes.Should().Be(retained.Policy.RetainedBytes);
+        processor.PendingRetainedBytes.Should().Be(retained.Policy.RetainedBytes + 8);
     }
 
     private static void AssertRejected(

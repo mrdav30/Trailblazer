@@ -2615,7 +2615,7 @@ public sealed class NavigationGraphCapacityTests
         while (commit.Receipt.Status == NavigationOperationStatus.Pending)
             context.Simulate();
 
-        int frame = context.FrameCount + 1;
+        long frame = context.FrameCount + 1;
         NavigationOverlayCommitOperation first = CreateCellOperation(
             NavigationCellOverlayOperation.Set(new VoxelIndex(1, 0, 0), cell),
             2,
@@ -2686,7 +2686,7 @@ public sealed class NavigationGraphCapacityTests
     private static NavigationOverlayCommitOperation CreateCellOperation(
         NavigationCellOverlayOperation cell,
         long sequence,
-        int frame) => new(
+        long frame) => new(
         new PreparedNavigationOverlay(
             new NavigationOverlayTransaction(
                 new[] { new NavigationMapOverlayDelta("map", new[] { cell }) })),

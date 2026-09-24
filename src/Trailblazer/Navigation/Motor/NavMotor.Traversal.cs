@@ -7,7 +7,9 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using Chronicler.Timing;
 using FixedMathSharp;
+using FixedMathSharp.Chronicler;
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -73,7 +75,8 @@ public partial class NavMotor
         if (TraversalInProgress)
         {
             SwiftThrowHelper.ThrowIfTrue(
-                FrameCount != _pendingTraversalFrame,
+                FrameCount != _pendingTraversalFrame
+                    || !ReferenceEquals(_pendingTraversalLifetime, RequireContext().ClockLifetime),
                 message: $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
 
             return false;
@@ -81,6 +84,7 @@ public partial class NavMotor
 
         TraversalInProgress = true;
         _pendingTraversalFrame = FrameCount;
+        _pendingTraversalLifetime = RequireContext().ClockLifetime;
         return true;
     }
 
@@ -699,13 +703,16 @@ public partial class NavMotor
         JumpLocomotion? jumpModule = JumpModule;
         if (IsJumping && jumpModule!.IsHoldingJump)
         {
-            // Calculate the duration that the extra jump force should have effect.
-            // If we're still less than that duration after the jumping time, apply the force.
-            Fixed64 extraJumpLimit = (jumpModule.JumpStartTime + jumpModule.ExtraJumpHeight) / GetVerticalJumpSpeed();
-
-            // Negate the gravity we just applied, except we push in jumpDir rather than jump upwards.
-            if (TotalTime <= extraJumpLimit)
-                _forceOutput += jumpModule.FrameJumpDirection * gravityStep;
+            Fixed64 jumpSpeed = GetVerticalJumpSpeed();
+            if (jumpSpeed > Fixed64.Zero && jumpModule.ExtraJumpHeight > Fixed64.Zero)
+            {
+                // Height / speed is a duration. Subtract wide timestamps before comparing;
+                // an expired interval never needs to fit the narrower Fixed64 range.
+                ChronicleDuration elapsed = ElapsedTime - jumpModule.JumpStartTime;
+                ChronicleDuration holdLimit = FixedChronicleTime.FromFixed64(jumpModule.ExtraJumpHeight / jumpSpeed);
+                if (elapsed >= ChronicleDuration.Zero && elapsed <= holdLimit)
+                    _forceOutput += jumpModule.FrameJumpDirection * gravityStep;
+            }
         }
     }
 

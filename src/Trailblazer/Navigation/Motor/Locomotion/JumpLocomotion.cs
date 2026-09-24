@@ -7,6 +7,7 @@
 
 using System;
 using Chronicler;
+using Chronicler.Timing;
 using FixedMathSharp;
 using Trailblazer.Support;
 
@@ -145,10 +146,10 @@ public class JumpLocomotion : ILocomotion
     public bool IsHoldingJump { get; set; }
 
     /// <summary>
-    /// The simulation frame when the scout started jumping.
+    /// The elapsed simulation timestamp when the scout started jumping, in the owning clock lifetime.
     /// </summary>
     [Transient]
-    public Fixed64 JumpStartTime { get; set; }
+    public ChronicleTimestamp JumpStartTime { get; set; }
 
     /// <summary>
     /// The direction in which the scout jumped during the current frame.
@@ -184,7 +185,7 @@ public class JumpLocomotion : ILocomotion
 
     private Fixed64 DeltaTime => RequireContext().DeltaTime;
 
-    private Fixed64 TotalTime => RequireContext().TotalTime;
+    private ChronicleTimestamp ElapsedTime => RequireContext().ElapsedTime;
 
     #endregion
 
@@ -195,7 +196,7 @@ public class JumpLocomotion : ILocomotion
     /// </summary>
     public void RegisterJump()
     {
-        Fixed64 startTime = TotalTime;
+        ChronicleTimestamp startTime = ElapsedTime;
         JumpCount++;
         IsJumping = true;
         IsHoldingJump = true;
@@ -251,6 +252,15 @@ public class JumpLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
+        int schemaVersion = 1;
+        RecordValues.Look(chronicler, ref schemaVersion, "SchemaVersion", 0);
+        SwiftThrowHelper.ThrowIfTrue(
+            chronicler.Mode == SerializationMode.Loading && schemaVersion != 1,
+            message: "Serialized jump schema is missing, retired, or unsupported.");
+        // Validate the complete timing record before changing any live configuration.
+        ChronicleTimestamp jumpStartTime = JumpStartTime;
+        RecordChronicleTime.Look(chronicler, ref jumpStartTime, "JumpStartTime");
+
         RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
         RecordValues.Look(chronicler, ref MaxJumpCount, "MaxJumpCount", 1);
         RecordValues.Look(chronicler, ref CooldownTime, "CooldownTime", DefaultCooldownTime);
@@ -263,7 +273,6 @@ public class JumpLocomotion : ILocomotion
 
         bool isJumping = IsJumping;
         bool isHoldingJump = IsHoldingJump;
-        Fixed64 jumpStartTime = JumpStartTime;
         Vector3d frameJumpDirection = FrameJumpDirection;
         Fixed64 cooldownTimer = CooldownTimer;
         bool isCoolingDown = IsCoolingDown;
@@ -271,7 +280,6 @@ public class JumpLocomotion : ILocomotion
 
         RecordValues.Look(chronicler, ref isJumping, "IsJumping", false);
         RecordValues.Look(chronicler, ref isHoldingJump, "IsHoldingJump", false);
-        RecordValues.Look(chronicler, ref jumpStartTime, "JumpStartTime", Fixed64.Zero);
         RecordValues.Look(chronicler, ref frameJumpDirection, "FrameJumpDirection", Vector3d.Zero);
         RecordValues.Look(chronicler, ref cooldownTimer, "CooldownTimer", Fixed64.Zero);
         RecordValues.Look(chronicler, ref isCoolingDown, "IsCoolingDown", false);

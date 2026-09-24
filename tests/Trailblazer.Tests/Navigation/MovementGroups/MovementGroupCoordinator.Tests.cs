@@ -195,15 +195,19 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
         session.GroupIndex.Should().Be(-1);
     }
 
-    [Fact]
-    public void IsNeighbor_ShouldRequireMatchingGroupDestinationAndFreshFrame()
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(2147483646L)]
+    [InlineData(4294967294L)]
+    public void IsNeighbor_ShouldRequireMatchingGroupDestinationAndFreshFrame(long initialFrame)
     {
+        TimingTestUtility.SetTime(TestWorld.Context, initialFrame);
         TestWorld.Context.Simulate();
 
         var member = new MovementGroupSession { GroupId = 12 };
         Guid ownerId = FirstOwnerId;
         Vector3d destination = new(8, 0, 0);
-        int frame = TestWorld.Context.FrameCount;
+        long frame = TestWorld.Context.FrameCount;
         TestWorld.Context.Navigation.MovementGroups.Prewarm(
             member,
             ownerId,
@@ -229,6 +233,16 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
                 destination,
                 frame + 2)
             .Should().BeFalse();
+
+        TestWorld.Context.Simulate();
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+            member, ownerId, destination, TestWorld.Context.FrameCount).Should().BeTrue();
+        TestWorld.Context.Simulate();
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+            member, ownerId, destination, TestWorld.Context.FrameCount).Should().BeFalse();
+        TestWorld.Context.Reset();
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(
+            member, ownerId, destination, TestWorld.Context.FrameCount).Should().BeFalse();
     }
 
     [Fact]

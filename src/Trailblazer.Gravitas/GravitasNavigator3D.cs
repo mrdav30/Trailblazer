@@ -35,7 +35,7 @@ public sealed class GravitasNavigator3D : Navigator
     private GravitasContact _contact;
     private Vector3d _requestedPosition;
     private FixedQuaternion _requestedRotation = FixedQuaternion.Identity;
-    private int _preparedFrame = -1;
+    private long _preparedFrame = -1;
     private bool _hasPreparedFrame;
 
     /// <summary>
@@ -136,6 +136,7 @@ public sealed class GravitasNavigator3D : Navigator
             Context!.FrameCount != _preparedFrame,
             nameof(GravitasNavigator3D),
             "Prepared motion cannot be committed after the Trailblazer frame advances.");
+        ValidatePendingFrameMotion();
         ValidateBody();
 
         Vector3d acceptedPosition = _body.Position3d;

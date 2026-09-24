@@ -61,16 +61,19 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 8. The nested path-session and
-standalone `PathQueryRecord` schemas remain version 1. Version 8 retains the
-earlier explicit world-space ground `SurfaceNormal` and controlled-descent
-request, configuration, active fall state, and periodic direct-LOS interval and
-nullable phase, plus the durable `NavSteering.AcquisitionMode` policy. It adds
-turn continuation: the active target rotation and completion state, buffered
-target, interpolation factor, and pending collision auto-turn signal.
-Earlier outer Navigator schemas, including version 7, reject
-transactionally rather than supplying a derived or default contract through a
-compatibility path.
+The outer Navigator record is schema version 9. The nested path-session and
+standalone `PathQueryRecord` schemas are version 1. Navigator records include
+the explicit world-space ground `SurfaceNormal`, controlled-descent state,
+periodic direct-LOS interval and nullable phase, durable acquisition policy,
+and active/buffered turn continuation.
+
+`JumpLocomotion` has its own required version-1 schema. `JumpStartTime` is a
+wide timestamp recorded through Chronicler's versioned time-value schema;
+cooldown durations remain Fixed64. Missing or retired jump timing records and
+outer Navigator schemas, including version 8, reject transactionally. There is
+no narrow-time fallback or inferred epoch. Hosts must restore controller timing
+against its original simulation origin, not populate an active jump into an
+unrelated zero-time world. Context clocks are not part of Navigator records.
 
 Loading preserves active and buffered turns instead of resetting turning to
 idle. The host must resume from the recorded authoritative rotation with the

@@ -73,7 +73,7 @@ internal readonly struct NavigationOperationFrameChange
 
 internal delegate NavigationCandidatePublication NavigationCandidatePublisher(
     NavigationOperationCandidate candidate,
-    int frame,
+    long frame,
     NavigationOperationFrameChange[] changes,
     int changeCount);
 

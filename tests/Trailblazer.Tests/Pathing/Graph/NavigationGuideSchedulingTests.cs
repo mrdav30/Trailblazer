@@ -872,28 +872,32 @@ public sealed class NavigationGuideSchedulingTests
         Complete(context, accepted);
     }
 
-    [Fact]
-    public void TinySlices_ShouldCompleteAtIdenticalFramesAndExactCostsOnReplay()
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(2147483646L)]
+    [InlineData(4294967294L)]
+    public void TinySlices_ShouldCompleteAtIdenticalFramesAndExactCostsOnReplay(long frameOffset)
     {
-        (int firstCompletion, int secondCompletion) = ReplayTinySlices();
-        (int replayFirstCompletion, int replaySecondCompletion) = ReplayTinySlices();
-        replayFirstCompletion.Should().Be(firstCompletion);
-        replaySecondCompletion.Should().Be(secondCompletion);
+        (long firstCompletion, long secondCompletion) = ReplayTinySlices(0);
+        (long replayFirstCompletion, long replaySecondCompletion) = ReplayTinySlices(frameOffset);
+        replayFirstCompletion.Should().Be(firstCompletion + frameOffset);
+        replaySecondCompletion.Should().Be(secondCompletion + frameOffset);
         secondCompletion.Should().BeGreaterThan(firstCompletion);
         secondCompletion.Should().BeGreaterThan(10);
     }
 
-    private static (int FirstCompletion, int SecondCompletion) ReplayTinySlices()
+    private static (long FirstCompletion, long SecondCompletion) ReplayTinySlices(long frameOffset)
     {
         using TrailblazerWorldContext context = CreateContext(PathAlgorithm.AStar, out PathQuery query,
             new NavigationSchedulingSettings(lookupStepLimit: 1, endpointCandidateStepLimit: 1,
                 nodeStepLimit: 1, edgeStepLimit: 1, connectionStepLimit: 1));
+        TimingTestUtility.SetTime(context, context.FrameCount + frameOffset);
         using NavigationGuideRequest first = Schedule(context, query);
         using NavigationGuideRequest second = Schedule(context, WithAlgorithm(query, PathAlgorithm.FlowField));
         Complete(context, first);
-        int firstCompletion = context.FrameCount;
+        long firstCompletion = context.FrameCount;
         Complete(context, second);
-        int secondCompletion = context.FrameCount;
+        long secondCompletion = context.FrameCount;
         first.TryTakeGuide(out NavigationGuideLease? guide).Should().BeTrue();
         second.TryTakeFlowField(out NavigationFlowFieldLease? flow).Should().BeTrue();
         using NavigationGuideLease guideLease = guide!.Value;

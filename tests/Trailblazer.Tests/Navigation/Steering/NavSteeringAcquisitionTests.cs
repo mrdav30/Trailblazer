@@ -16,6 +16,23 @@ namespace Trailblazer.Tests.Navigation.Steering;
 public class NavSteeringAcquisitionTests
 {
     [Fact]
+    public void ExhaustedClockLeavesScheduledAcquisitionPendingUntilExplicitReset()
+    {
+        using var context = CreateContext(PathAlgorithm.AStar, out PathQuery query);
+        TimingTestUtility.SetTime(context, long.MaxValue);
+        context.Guides.Schedule(query, out var ticket).Should().Be(NavigationGuideStatus.Pending);
+        using var owned = ticket!;
+        Assert.Throws<InvalidOperationException>(context.Simulate);
+        owned.Status.Should().Be(NavigationGuideStatus.Pending);
+        context.Guides.Scheduler.RetainedRequestCount.Should().Be(1);
+        context.FrameCount.Should().Be(long.MaxValue);
+        owned.TryTakeGuide(out _).Should().BeFalse();
+        context.Reset();
+        owned.Status.Should().Be(NavigationGuideStatus.Cancelled);
+        context.Guides.Scheduler.RetainedRequestCount.Should().Be(0);
+    }
+
+    [Fact]
     public void ValidationShell_ModePolicyMayBePreparedBeforeBindingWithoutCreatingRuntimeWork()
     {
         var steering = NavSteering.CreateSerializationValidationShell();
@@ -624,10 +641,13 @@ public class NavSteeringAcquisitionTests
         scheduler.ReleaseValidation(later);
     }
 
-    [Fact]
-    public void FlowAdoption_LocalRecovery_ShouldReleaseAndRetryCurrentFootOnLaterFrame()
+    [Theory]
+    [InlineData(64L)]
+    [InlineData(2147483646L)]
+    public void FlowAdoption_LocalRecovery_ShouldReleaseAndRetryCurrentFootOnLaterFrame(long initialFrame)
     {
         using var context = CreateContext(PathAlgorithm.FlowField, out PathQuery query);
+        TimingTestUtility.SetTime(context, initialFrame);
         var agent = CreateAgent(context, query);
         agent.Steering!.GetHeading(agent, out _);
         var ticket = GetTicket(agent.Steering)!;
@@ -1190,10 +1210,13 @@ public class NavSteeringAcquisitionTests
         agent.Reset();
     }
 
-    [Fact]
-    public void AStarMovedFoot_ShouldAdoptBoundedConnectorToOriginalRoute()
+    [Theory]
+    [InlineData(64L)]
+    [InlineData(2147483646L)]
+    public void AStarMovedFoot_ShouldAdoptBoundedConnectorToOriginalRoute(long initialFrame)
     {
         using var context = CreateContext(PathAlgorithm.AStar, out PathQuery query);
+        TimingTestUtility.SetTime(context, initialFrame);
         var agent = CreateAgent(context, query);
         agent.Steering!.GetHeading(agent, out _);
         NavigationGuideRequest original = GetTicket(agent.Steering)!;
@@ -1212,6 +1235,45 @@ public class NavSteeringAcquisitionTests
         agent.Steering.CurrentQuery!.Value.Start.Position.Should().Be(query.Start.Position);
         context.Guides.Scheduler.RetainedRequestCount.Should().Be(0);
         agent.Reset();
+    }
+
+    [Fact]
+    public void WideValidationGrantsExpireAndResetCannotReuseTheSameNumericFrame()
+    {
+        using var context = CreateContext(PathAlgorithm.AStar, out PathQuery query,
+            scheduling: new NavigationSchedulingSettings(operationStepLimit: 1));
+        context.Guides.Schedule(query, out var ticket);
+        using var owned = ticket!;
+        for (int i = 0; i < 256 && owned.Status == NavigationGuideStatus.Pending; i++) context.Simulate();
+        owned.Status.Should().Be(NavigationGuideStatus.Success);
+        TimingTestUtility.SetTime(context, int.MaxValue - 1L);
+        var scheduler = context.Guides.Scheduler;
+        var first = new NavigationValidationInterest();
+        var second = new NavigationValidationInterest();
+        scheduler.RegisterValidation(first).Should().BeTrue();
+        scheduler.RegisterValidation(second).Should().BeTrue();
+        context.Simulate();
+        first.GrantedFrame.Should().Be(int.MaxValue);
+        context.Simulate();
+        scheduler.TryConsumeValidationTurn(first).Should().BeFalse();
+        // A just-completed cohort may still own a charged cleanup turn. The
+        // same one-operation allowance must rotate to the second owner fairly.
+        for (int i = 0; i < 8 && second.GrantedFrame != context.FrameCount; i++)
+        {
+            context.Simulate();
+            scheduler.LastFrameOperationCount.Should().BeLessThanOrEqualTo(1);
+        }
+        second.GrantedFrame.Should().Be(context.FrameCount);
+        second.GrantedFrame.Should().BeGreaterThan(int.MaxValue);
+        scheduler.TryConsumeValidationTurn(second).Should().BeTrue();
+        scheduler.TryConsumeValidationTurn(second).Should().BeFalse();
+        context.Simulate();
+        long previousFrame = first.GrantedFrame;
+        context.Reset();
+        TimingTestUtility.SetTime(context, previousFrame);
+        scheduler.TryConsumeValidationTurn(first).Should().BeFalse();
+        scheduler.RetainedValidationInterestCount.Should().Be(0);
+        owned.TryTakeGuide(out _).Should().BeFalse();
     }
 
     internal static NavigationGuideRequest? GetTicket(NavSteering steering)
@@ -1261,7 +1323,7 @@ public class NavSteeringAcquisitionTests
             context.Simulate();
             scheduler.LastFrameOperationCount.Should().BeLessThanOrEqualTo(1);
             // Deliberately leave every first-owner grant unused, as a paused host can do.
-            if (first.GrantedFrame == context.LogicalFrameIndex
+            if (first.GrantedFrame == context.FrameCount
                 && ReferenceEquals(first.GrantedLifetime, context.ClockLifetime)) firstTurns++;
             if (scheduler.TryConsumeValidationTurn(second)) secondTurns++;
             scheduler.TryConsumeValidationTurn(second).Should().BeFalse();

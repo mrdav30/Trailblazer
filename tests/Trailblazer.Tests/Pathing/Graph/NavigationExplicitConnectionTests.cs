@@ -1509,7 +1509,7 @@ public sealed class NavigationExplicitConnectionTests
                 .Build(),
             2);
         context.Simulate();
-        int effectiveFrame = context.FrameCount + 1;
+        long effectiveFrame = context.FrameCount + 1;
         var suppress = new NavigationOverlayCommitOperation(
             new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
             {

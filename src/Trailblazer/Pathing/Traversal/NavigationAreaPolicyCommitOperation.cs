@@ -14,7 +14,7 @@ public readonly struct NavigationAreaPolicyCommitOperation
     public NavigationAreaPolicyCommitOperation(
         NavigationAreaPolicy policy,
         long publicationSequence,
-        int effectiveFrame)
+        long effectiveFrame)
     {
         SwiftThrowHelper.ThrowIfNull(policy, nameof(policy));
         NavigationOperationValidation.ValidateSchedule(publicationSequence, effectiveFrame);
@@ -31,7 +31,7 @@ public readonly struct NavigationAreaPolicyCommitOperation
     public long PublicationSequence { get; }
 
     /// <summary>Gets the earliest eligible fixed-step publication frame.</summary>
-    public int EffectiveFrame { get; }
+    public long EffectiveFrame { get; }
 
     /// <summary>Gets the operation's deterministic receipt.</summary>
     public NavigationOperationReceipt Receipt { get; }

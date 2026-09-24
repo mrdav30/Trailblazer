@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-153`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-156`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -26,38 +26,27 @@
 
 ## Active Issues
 
-### TRB-Issue-124 - World publication cannot advance across signed frame-count wrap
+### TRB-Issue-155 - The final allowed jump cancels its held-input extension
 
-- **Discovered:** 2026-09-14 while testing LOS phase clock boundaries.
-- **Status:** Open; pre-existing world/publication lifetime limit, not a
-  phase-spreading regression. No fix is claimed.
-- **Evidence:** `TrailblazerWorldContext.Simulate()` advances its clock before
-  passing signed `FrameCount` to `MaintainNavigationGraph`. The operation
-  processor requires `frame > _lastProcessedFrame`; wrapping from `int.MaxValue`
-  to `int.MinValue` therefore rejects. Operation authoring also rejects negative
-  effective frames. Both guards exist at the feature branch base `5367f5a`.
-  Clock/index tests can cross the boundary internally, but that does not
-  establish successful whole-world simulation across it.
-- **Reproduced (2026-09-22):** At `fd6b484`, queue two one-rule area policies
-  effective at `int.MaxValue`, with dependency work limited to five. The first
-  publishes there; the second remains pending. The next public `Simulate()`
-  throws `ArgumentException` from `NavigationOperationProcessor.ProcessFrame`
-  after `FrameCount` has become `int.MinValue`, leaving the second receipt
-  pending. The identical two-operation scenario starting at zero succeeds.
-  Chronicler's timing plan retains Phase 0 probe source/output under
-  `artifacts/timing/phase0`; Phase 5 owns the permanent regression and fix.
-- **Impact:** A continuously running context eventually reaches the signed
-  publication limit (about 2.1 years of simulated time at 32 Hz; accelerated
-  simulation can reach it sooner in wall-clock time). The failing call has
-  already advanced clock state before graph maintenance rejects; it is not a
-  transactional whole-world exhaustion boundary. A wider internal LOS index
-  alone does not remove this limitation.
-- **Next scope:** Review one explicit frame-lifetime contract across context,
-  operation effective frames, publication ordering, scheduled work and host
-  records. Reproduce the containing-frame failure at the boundary before any
-  fix. Do not remove monotonicity/nonnegative guards or wrap publication
-  timestamps locally without accounting for pending operations and ordering.
-  This broader clock/publication change is outside periodic LOS phase spreading.
+- **Discovered:** 2026-09-23 during shared timing adoption.
+- **Status:** Open; pre-existing jump-policy defect, separate from the corrected
+  elapsed-time units in `TRB-Issue-153`.
+- **Evidence:** `ResolveTraversalForces` clears `IsHoldingJump` when `CanJump`
+  is false. `RegisterJump` increments `JumpCount` and starts cooldown on the last
+  allowed jump, making `CanJump` false on its next frame even while input remains
+  held. The default `MaxJumpCount = 1` therefore loses its extension immediately.
+  This guard is present at `e2a9edf`, before the timing migration.
+- **Reproduction:** A jump-ready agent at time zero, held input on consecutive
+  frames, and `CanAffordJump = false` on the second frame loses one gravity step:
+  `4.427188724279404` becomes `4.12093872576952`. Setting `MaxJumpCount = 2`
+  isolates the separate timestamp defect and preserves the held velocity after
+  its fix. The initial/control logs are retained in Chronicler's ignored
+  `artifacts/timing/phase5/red-motor*.log` evidence.
+- **Next scope:** Separate eligibility for a new jump from continuation of the
+  current held jump. Verify default single-jump and final multi-jump extension,
+  release/cooldown/landing/ceiling behavior, and replace permissive jump-height
+  assertions with exact accepted-motion checks. Do not weaken cooldown admission.
+  Kept outside the timing migration's explicit no-unrelated-motor-work boundary.
 
 ### TRB-Issue-119 - Guided A\* setup reported an exception in wide geometry
 
@@ -210,6 +199,65 @@
   failures.
 
 ## Resolved Issues
+
+### TRB-Issue-124 - World publication cannot advance across signed frame-count wrap
+
+- **Discovered:** 2026-09-14 while testing LOS phase clock boundaries.
+- **Resolved:** 2026-09-23 through shared Chronicler timing adoption.
+- **Original evidence:** `TrailblazerWorldContext.Simulate()` advanced the clock
+  before passing signed `FrameCount` to graph maintenance. Publication requires
+  increasing, nonnegative frames, so int wrap rejected after time had already
+  changed. Both guards existed at `5367f5a`; a separate unsigned LOS timeline
+  did not repair world publication. At 32 Hz the limit was about 2.1 simulated
+  years, potentially reached sooner by accelerated simulation.
+- **Reproduction:** At `fd6b484`, two one-rule policies effective at int.MaxValue
+  with dependency work limited to five leave the second pending. The next public
+  `Simulate()` throws after wrapping. The zero-origin control succeeds. Phase 0
+  probes and Phase 5 red/green output remain in Chronicler's ignored timing
+  artifacts; permanent `TrailblazerTimingBoundaryTests` reproduce the containing
+  world call, not just an internal clock increment.
+- **Fix:** One ChronicleClock supplies long frames and wide elapsed time.
+  Publication, receipts, group history, LOS, scheduler attempts/grants, motor
+  transactions and adapter/committed-cell stamps use that timeline. Nonnegative
+  and monotonic admission guards remain intact; receipt publication stays volatile.
+- **Verification:** Pending work publishes on exact long frames across the old
+  limit; future work waits and late/regressing work rejects. Frame/time exhaustion
+  leaves clock state, hooks, pending policies and scheduled ownership unchanged.
+  Real two-actor adapter motion, LOS phases, group expiry, scheduled adoption and
+  reset-to-the-same-frame rejection pass. Independent Windows/Linux builds and
+  full suites pass in Release and ReleaseLean. Both Windows package
+  configurations retain exact core/adapter line, branch and fully covered
+  method coverage.
+
+### TRB-Issue-154 - Stale controller commits could mutate motion before rejecting
+
+- **Discovered and resolved:** 2026-09-23 during shared timing adoption.
+- **Evidence:** At `e2a9edf`, motor traversal validates only the numeric frame;
+  prepare at zero, reset the context, and commit at zero accepts stale work.
+  Navigator updates position, occupancy and velocity before motor finalization,
+  so an ordinary next-frame rejection also leaves partial changes. The Gravitas
+  adapter's prepared-frame guard likewise does not distinguish a reset lifetime.
+- **Fix:** Pending motor transactions retain the context's process-local clock
+  identity. Core and adapter preflight it before committing accepted state.
+  Hosts explicitly abort/reset stale work; identity is never serialized.
+- **Verification:** Owning regressions first failed for motor reset and for
+  core/adapter mutation, then passed. They verify unchanged pose/velocity/events
+  on rejection and preserve the normal exactly-once adapter barrier.
+
+### TRB-Issue-153 - Held-jump duration mixed absolute time with height
+
+- **Discovered and resolved:** 2026-09-23 during shared timing adoption.
+- **Evidence:** The old `(JumpStartTime + ExtraJumpHeight) / jumpSpeed` threshold
+  mixed seconds and world units. The same held jump passed at world time zero
+  but lost gravity compensation at ten seconds and one million seconds. Tests
+  use a second available jump to isolate this from `TRB-Issue-155`.
+- **Fix:** Compare the wide elapsed duration since jump start with
+  `ExtraJumpHeight / jumpSpeed`. Zero speed or non-positive extra height gives
+  no extension; expired durations need not fit Fixed64.
+- **Verification:** Identical early/100-year jump traces, future/start/exact-end/
+  expired/100-year-old windows, and zero-speed/height controls pass. JSON and
+  MemoryPack preserve the exact wide timestamp and reject retired timing records
+  without changing live Navigator state.
 
 ### TRB-Issue-129 - Runtime steering ranges bypass restored-value validation
 

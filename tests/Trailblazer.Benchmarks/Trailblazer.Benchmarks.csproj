@@ -40,6 +40,8 @@
       Condition="'$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true'" ExcludeAssets="compile;runtime" />
     <ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
       AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
+    <ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj"
+      AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
   </ItemGroup>
   <!-- Generated BenchmarkDotNet projects consume the already-verified local build.
        This prevents nested project-reference builds from overwriting versioned LSF binaries. -->
@@ -47,6 +49,7 @@
     <Reference Include="Trailblazer" HintPath="..\..\src\Trailblazer\bin\$(Configuration)\net8.0\Trailblazer.dll" Private="true" />
     <Reference Include="GridForge" HintPath="..\..\..\GridForge\src\GridForge\bin\$(Configuration)\net8.0\GridForge.dll" Private="true" />
     <Reference Include="FixedMathSharp" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp\bin\$(Configuration)\net8.0\FixedMathSharp.dll" Private="true" />
+    <Reference Include="FixedMathSharp.Chronicler" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\bin\$(Configuration)\net8.0\FixedMathSharp.Chronicler.dll" Private="true" />
     <Reference Include="SwiftCollections" HintPath="..\..\..\SwiftCollections\src\SwiftCollections\bin\$(Configuration)\net8.0\SwiftCollections.dll" Private="true" />
     <Reference Include="SwiftCollections.FixedMathSharp" HintPath="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\bin\$(Configuration)\net8.0\SwiftCollections.FixedMathSharp.dll" Private="true" />
     <Reference Include="Chronicler" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net8.0\Chronicler.dll" Private="true" />

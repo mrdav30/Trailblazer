@@ -288,6 +288,9 @@ New interests wait until a subsequent context frame. The ring capacity is derive
 from retained-request plus active A*/Flow payload-lease capacities, allowing later
 adopters and recurring owned-guide validators to coexist without a second queue.
 Normal periodic LOS checks remain governed by their existing cadence/phase policy.
+Grants and acquisition attempts use the context's long frame count and clock
+lifetime. A grant from an earlier frame or before a context reset cannot be
+consumed, even when a reset reaches the same numeric frame again.
 See the recovery benchmark harness for explicit acquisition-mode and work-limit
 controls; counted limits alone are not timing claims.
 

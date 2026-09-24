@@ -25,6 +25,40 @@ There is no ambient pathing manager. Hosts create or attach a context, publish
 world navigation truth into that context, simulate it once per fixed frame, and
 dispose it when every lease and controller is released.
 
+## Fixed frames and long-lived time
+
+`FrameCount` is a nonnegative `long`. `ElapsedTime` is a
+`Chronicler.Timing.ChronicleTimestamp`: whole seconds plus an exact binary
+fraction, measured from this context's origin. Publication, steering and motor
+transactions use that same timeline. `DeltaTime` and `InvDeltaTime` remain
+`Fixed64` values for ordinary motion integration.
+
+Subtract timestamps to get a `ChronicleDuration`; do not first convert both
+absolute times to Fixed64. Only convert a duration through
+`FixedMathSharp.Chronicler.FixedChronicleTime` when a bounded calculation needs
+it. Its checked and `Try` conversions make out-of-range intervals explicit.
+
+This C# fragment assumes an active context:
+
+```csharp
+Chronicler.Timing.ChronicleTimestamp started = context.ElapsedTime;
+context.Simulate();
+Chronicler.Timing.ChronicleDuration elapsed = context.ElapsedTime - started;
+long completeSteps = context.GetFrameCountForDuration(Fixed64.One);
+```
+
+`GetFrameCountForDuration` counts complete steps using the **currently represented
+step size**. It rejects negative durations; it is not a conversion to a historical
+frame index. Changing the rate affects future steps without recomputing elapsed
+history. The actual accumulated step, not `FrameCount / FrameRate`, defines time.
+
+The clock never wraps or saturates. At frame or timestamp exhaustion,
+`Simulate()` throws before publication, scheduled work or hooks advance.
+`Reset()` restarts this context at zero, preserves its configured rate, and
+invalidates outstanding clock-lifetime state. Reset/reinitialize live controllers
+as part of the host's reset transaction; do not commit old prepared motion in
+the new lifetime, even if the numeric frame is the same. Reset is not rollback.
+
 ## What gets published
 
 One immutable `NavigationMap` binds a stable map ID to one normalized GridForge

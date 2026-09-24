@@ -15,6 +15,27 @@ namespace Trailblazer.Gravitas.Tests;
 public sealed class GravitasNavigator3DLifecycleTests
 {
     [Fact]
+    public void ResetClockAtThePreparedFrame_ShouldRejectBeforeChangingAcceptedPose()
+    {
+        using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
+        using GravitasNavigatorActor actor = fixture.CreateActor();
+        actor.Navigator.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast);
+        fixture.Prepare(actor);
+        fixture.Gravitas.LateSimulate();
+        Vector3d before = actor.Navigator.Position;
+        actor.Body.Position3d.Should().NotBe(before);
+        long prepared = fixture.Trailblazer.FrameCount;
+        fixture.Trailblazer.Reset();
+        for (int i = 0; i < prepared; i++) fixture.Trailblazer.Simulate();
+
+        Action commit = actor.Navigator.CommitFrameMotion;
+        commit.Should().Throw<InvalidOperationException>();
+        actor.Navigator.Position.Should().Be(before);
+        actor.Navigator.Velocity.Should().Be(Vector3d.Zero);
+        actor.Navigator.Motor!.TraversalInProgress.Should().BeTrue();
+    }
+
+    [Fact]
     public void FrameContract_ShouldRejectMissingOrDuplicatePhasesWithoutDoubleCommit()
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);

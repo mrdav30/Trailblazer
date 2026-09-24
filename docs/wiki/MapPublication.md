@@ -17,7 +17,11 @@ Every operation has a unique host-supplied sequence and earliest eligible
 `EffectiveFrame`. Map, removal, and overlay operations call the sequence
 `OperationSequence`; area-policy operations call it `PublicationSequence`.
 All four operation kinds expose a receipt that starts pending and becomes
-terminal. Its `PublishedFrame` records the actual publication frame.
+terminal. Its `PublishedFrame` records the actual publication frame, or `-1`
+before publication. Effective and published frames are `long`, on the owning
+context's `FrameCount` timeline. Author nonnegative, nonregressing effective
+frames; work submitted after its boundary begins still rejects as late. A frame
+beyond the old 32-bit range has the same ordering and budget rules.
 
 ## Map Commit
 

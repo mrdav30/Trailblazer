@@ -38,7 +38,7 @@ public partial class NavSteering
             return Vector3d.Zero;
 
         TrailblazerWorldContext context = ResolveContext();
-        int currentFrame = context.FrameCount;
+        long currentFrame = context.FrameCount;
 
         // we need to see everybody who might influence us—either for group or for avoidance
         Fixed64 groupRadius = radius * GroupFactor;
@@ -171,7 +171,7 @@ public partial class NavSteering
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsGroupNeighbor(Guid otherId, int currentFrame)
+    private bool IsGroupNeighbor(Guid otherId, long currentFrame)
         => MovementGroups.IsNeighbor(_movementGroupSession, otherId, _requestedDestination, currentFrame);
 
     #endregion

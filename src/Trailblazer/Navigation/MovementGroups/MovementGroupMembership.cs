@@ -15,5 +15,5 @@ internal sealed class MovementGroupMembership
 
     public Vector3d RequestedDestination;
 
-    public int LastSeenFrame;
+    public long LastSeenFrame;
 }

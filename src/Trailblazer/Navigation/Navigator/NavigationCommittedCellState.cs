@@ -20,7 +20,7 @@ public readonly struct NavigationCommittedCellState
         TraversalMedium medium,
         long graphVersion,
         NavigationAreaPolicyKey? areaPolicy,
-        int simulationFrame)
+        long simulationFrame)
     {
         Address = address;
         Area = area;
@@ -46,5 +46,5 @@ public readonly struct NavigationCommittedCellState
     public NavigationAreaPolicyKey? AreaPolicy { get; }
 
     /// <summary>Gets the deterministic simulation frame at which motion was committed.</summary>
-    public int SimulationFrame { get; }
+    public long SimulationFrame { get; }
 }

@@ -127,6 +127,13 @@ proof/interest on advancement and every session/reset/teardown boundary.
 
 ## Determinism Rules
 
+The context composes Chronicler's clock: absolute frames are `long`, elapsed
+time and jump-start times are `ChronicleTimestamp`, and integration steps stay
+Fixed64. Subtract timestamps before bounded conversion; do not recreate a
+narrow or unsigned parallel timeline. `GetFrameCountForDuration` counts complete
+current steps, not historical frames. Preserve clock-lifetime checks at reset
+and reject stale prepared motion before changing accepted pose or occupancy.
+
 Always prefer:
 
 - `Fixed64`, `Vector3d`, and `FixedQuaternion` over floating-point simulation

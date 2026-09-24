@@ -14,7 +14,7 @@ public readonly struct NavigationOverlayCommitOperation
     public NavigationOverlayCommitOperation(
         PreparedNavigationOverlay preparedOverlay,
         long operationSequence,
-        int effectiveFrame)
+        long effectiveFrame)
     {
         SwiftThrowHelper.ThrowIfNull(preparedOverlay, nameof(preparedOverlay));
         NavigationOperationValidation.ValidateSchedule(operationSequence, effectiveFrame);
@@ -32,7 +32,7 @@ public readonly struct NavigationOverlayCommitOperation
     public long OperationSequence { get; }
 
     /// <summary>Gets the earliest eligible fixed-step publication frame.</summary>
-    public int EffectiveFrame { get; }
+    public long EffectiveFrame { get; }
 
     /// <summary>Gets the operation's deterministic pending or terminal receipt.</summary>
     public NavigationOperationReceipt Receipt { get; }

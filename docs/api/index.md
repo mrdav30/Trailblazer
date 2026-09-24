@@ -20,7 +20,7 @@ description: API reference and behavioral guides for deterministic navigation an
 <div class="trb-card-grid">
   <div class="trb-card">
     <h3><a href="xref:Trailblazer.TrailblazerWorldContext">Own the world</a></h3>
-    <p>Keep the clock, GridForge binding, pathing state, guide services, and
+    <p>Keep long-lived fixed-step timing, GridForge binding, pathing state, guide services, and
     heightmaps isolated inside one explicit context.</p>
   </div>
   <div class="trb-card">

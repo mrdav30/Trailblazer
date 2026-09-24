@@ -398,18 +398,15 @@ public sealed partial class NavSteeringLineOfSightPhaseTests
     }
 
     [Theory]
-    [InlineData(2147483646UL, int.MinValue)]
-    [InlineData(4294967294UL, 0)]
-    public void PhasedHeading_ShouldBecomeDueAcrossPublicFrameCountWraps(
-        ulong startingFrame,
-        int expectedDueFrameCount)
+    [InlineData(2147483646L, 2147483648L)]
+    [InlineData(4294967294L, 4294967296L)]
+    public void PhasedHeading_ShouldBecomeDueAcrossOldFrameBoundaries(
+        long startingFrame,
+        long expectedDueFrameCount)
     {
         (Vector3d start, Vector3d middle, Vector3d end) = PublishLine(Fixed64.One);
-        TrailblazerClock clock = ReflectionUtility.GetPrivateField<TrailblazerClock>(
-            TestWorld.Context,
-            "_clock");
-        ReflectionUtility.SetPrivateField(clock, "_frameIndex", startingFrame);
-        clock.Simulate();
+        TimingTestUtility.SetTime(TestWorld.Context, startingFrame);
+        TestWorld.Context.Simulate();
         NavigationAgentProfile profile = CreateProfile();
         TestNavigator navigator = CreateNavigator(start, profile);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -419,7 +416,7 @@ public sealed partial class NavSteeringLineOfSightPhaseTests
         steering.HasNavigationGuidance.Should().BeTrue();
         navigator.SetTestPosition(middle);
 
-        clock.Simulate();
+        TestWorld.Context.Simulate();
         TestWorld.Context.FrameCount.Should().Be(expectedDueFrameCount);
         steering.GetHeading(navigator, out _).Should().Be(Vector3d.Right);
 
@@ -432,11 +429,8 @@ public sealed partial class NavSteeringLineOfSightPhaseTests
     public void PhasedHeading_ShouldBecomeDueAtTheLastLogicalFrameBeforeExhaustion()
     {
         (Vector3d start, Vector3d middle, Vector3d end) = PublishLine(Fixed64.One);
-        TrailblazerClock clock = ReflectionUtility.GetPrivateField<TrailblazerClock>(
-            TestWorld.Context,
-            "_clock");
-        ReflectionUtility.SetPrivateField(clock, "_frameIndex", ulong.MaxValue - 2);
-        clock.Simulate();
+        TimingTestUtility.SetTime(TestWorld.Context, long.MaxValue - 2);
+        TestWorld.Context.Simulate();
         NavigationAgentProfile profile = CreateProfile();
         TestNavigator navigator = CreateNavigator(start, profile);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -446,13 +440,13 @@ public sealed partial class NavSteeringLineOfSightPhaseTests
         steering.HasNavigationGuidance.Should().BeTrue();
         navigator.SetTestPosition(middle);
 
-        clock.Simulate();
-        TestWorld.Context.LogicalFrameIndex.Should().Be(ulong.MaxValue);
+        TestWorld.Context.Simulate();
+        TestWorld.Context.FrameCount.Should().Be(long.MaxValue);
         steering.GetHeading(navigator, out _).Should().Be(Vector3d.Right);
 
         steering.HasLineOfSightPath.Should().BeTrue();
         steering.HasNavigationGuidance.Should().BeFalse();
-        clock.Invoking(static value => value.Simulate())
+        TestWorld.Context.Invoking(static value => value.Simulate())
             .Should().Throw<InvalidOperationException>();
         navigator.Reset();
     }

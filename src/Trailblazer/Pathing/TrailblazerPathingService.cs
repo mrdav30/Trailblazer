@@ -113,7 +113,7 @@ public sealed class TrailblazerPathingService
         return _navigationGraph.Admit(operation);
     }
 
-    internal void MaintainNavigationGraph(int frame)
+    internal void MaintainNavigationGraph(long frame)
     {
         EnsureUsable();
         _navigationGraph.Maintain(frame);

@@ -14,7 +14,7 @@ internal sealed class NavigationValidationInterest
     internal NavigationValidationInterest? Next;
     internal NavigationValidationInterest? Previous;
     internal object? GrantedLifetime;
-    internal ulong GrantedFrame;
+    internal long GrantedFrame;
     // Generation-checked alias, not another payload lease/pin. Reset releases this actual owner.
     internal NavigationGuideLease ConnectorGuide;
 }

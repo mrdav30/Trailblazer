@@ -9,7 +9,7 @@ namespace Trailblazer.Pathing;
 
 internal static class NavigationOperationValidation
 {
-    internal static void ValidateSchedule(long operationSequence, int effectiveFrame)
+    internal static void ValidateSchedule(long operationSequence, long effectiveFrame)
     {
         SwiftThrowHelper.ThrowIfArgument(operationSequence <= 0, nameof(operationSequence));
         SwiftThrowHelper.ThrowIfArgument(effectiveFrame < 0, nameof(effectiveFrame));

@@ -56,9 +56,47 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(8);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(9);
         document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(false, 2)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true, 0)]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+#endif
+    public void RetiredTimingRecordsRejectWithoutDiscardingPreparedShellMotion(bool useMemoryPack, int defect)
+    {
+        var source = CreateNavigator(new Vector3d(4, 0, 4));
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = defect switch
+        {
+            0 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, 8, "SchemaVersion"),
+            1 => SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Motor", "Handler", "Jump", "SchemaVersion"),
+            _ => SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Motor", "Handler", "Jump", "JumpStartTime")
+        };
+        var target = CreateNavigator(new Vector3d(-3, 0, -3));
+        try
+        {
+            target.Simulate();
+            target.AddPositionDelta(Vector3d.Right);
+            Vector3d before = target.Position;
+            Vector3d requested = target.RequestedFramePosition;
+            NavMotor motor = target.Motor!;
+            Assert.Throws<InvalidOperationException>(() => SerializationUtility.PopulateRecord(target, payload, useMemoryPack));
+            Assert.Equal(before, target.Position);
+            Assert.Same(motor, target.Motor);
+            Assert.True(motor.TraversalInProgress);
+            target.CommitFrameMotion();
+            Assert.Equal(requested, target.Position);
+            Assert.False(motor.TraversalInProgress);
+        }
+        finally { source.Reset(); target.Reset(); }
     }
 
     [Theory]
@@ -1047,7 +1085,7 @@ public class NavigatorSerializationTests : IDisposable
         targetJump.IsEnabled.Should().BeFalse();
         targetJump.IsJumping.Should().BeFalse();
         targetJump.IsHoldingJump.Should().BeFalse();
-        targetJump.JumpStartTime.Should().Be(Fixed64.Zero);
+        targetJump.JumpStartTime.Should().Be(Chronicler.Timing.ChronicleTimestamp.Zero);
         targetJump.FrameJumpDirection.Should().Be(Vector3d.Zero);
 
         targetFall.IsEnabled.Should().BeFalse();

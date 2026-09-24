@@ -774,6 +774,8 @@ public abstract partial class Navigator : INavigate, IRecordable
             !IsActive,
             message: "Navigator must be Setup and Initialized before CommitFrameMotion().");
 
+        ValidatePendingFrameMotion();
+
         _lastPosition = _position;
         _position += _positionDelta + _locomotionDisplacement;
 
@@ -816,6 +818,16 @@ public abstract partial class Navigator : INavigate, IRecordable
             _frameRequest.Reset();
 
         RebuildCommittedCellState(emitChange: true);
+    }
+
+    /// <summary>
+    /// Rejects pending motor motion from another fixed frame or clock lifetime.
+    /// Host adapters must call this before mutating accepted motion during commit.
+    /// </summary>
+    protected void ValidatePendingFrameMotion()
+    {
+        if (Motor!.TraversalInProgress)
+            Motor.ValidatePendingTraversalFrame();
     }
 
     /// <summary>

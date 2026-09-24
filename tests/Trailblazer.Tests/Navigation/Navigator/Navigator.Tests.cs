@@ -24,6 +24,33 @@ namespace Trailblazer.Tests.Navigation;
 [Collection("PathingCollection")]
 public class NavigatorTests : IDisposable
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StalePreparedMotionShouldRejectBeforeChangingPoseOrPublishingCells(bool reset)
+    {
+        TestNavigator navigator = CreateNavigator(Vector3d.Zero);
+        try
+        {
+            TestWorld.Context.Simulate();
+            navigator.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast);
+            navigator.Simulate();
+            navigator.AddPositionDelta(Vector3d.Right);
+            Vector3d before = navigator.Position;
+            int notifications = 0;
+            navigator.CommittedCellChanged += _ => notifications++;
+            if (reset) TestWorld.Context.Reset();
+            TestWorld.Context.Simulate();
+
+            Assert.Throws<InvalidOperationException>(navigator.CommitFrameMotion);
+            Assert.Equal(before, navigator.Position);
+            Assert.Equal(Vector3d.Zero, navigator.Velocity);
+            Assert.Equal(0, notifications);
+            Assert.True(navigator.Motor!.TraversalInProgress);
+        }
+        finally { navigator.Reset(); }
+    }
+
     public NavigatorTests()
     {
         TestWorld.Setup();

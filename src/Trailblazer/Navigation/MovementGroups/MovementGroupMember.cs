@@ -26,5 +26,5 @@ internal sealed class MovementGroupMember
 
     public bool HasFormationOffset;
 
-    public int LastSeenFrame;
+    public long LastSeenFrame;
 }

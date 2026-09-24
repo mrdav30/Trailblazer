@@ -24,13 +24,15 @@ Every fixed frame runs Trailblazer simulate, Gravitas simulate, all Navigator
 prepares, one Gravitas late resolution, all Navigator commits, then one
 Trailblazer late simulation. Render only after this barrier; interpolated
 presentation poses never become simulation input.
+The contexts own independent long-lived clocks. Configure matching fixed steps;
+the adapter neither advances time nor resets one context when the other resets.
 
 ## Repository development
 
-The current feature-work stack contains unreleased upstream fixes. Use matching
-sibling `FixedMathSharp`, `SwiftCollections`, `GridForge`, and `Gravitas`
-checkouts beside Trailblazer. Published dependencies are not a substitute for
-those revisions. From the Trailblazer root:
+For coordinated source development, use matching sibling `Chronicler`,
+`FixedMathSharp`, `SwiftCollections`, `GridForge`, and `Gravitas` checkouts beside
+Trailblazer. Package mode remains the default. To validate the sibling source
+stack, run from the Trailblazer root:
 
 ```powershell
 dotnet restore Trailblazer.slnx -p:Configuration=Release -p:UseLocalLsfStack=true

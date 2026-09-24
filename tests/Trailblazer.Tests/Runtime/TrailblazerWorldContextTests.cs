@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Chronicler.Timing;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Grids;
@@ -140,42 +141,36 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         contextB.FrameCount.Should().Be(1);
         contextA.DeltaTime.Should().Be(Fixed64.One / (Fixed64)20);
         contextB.DeltaTime.Should().Be(Fixed64.One / (Fixed64)64);
-        contextA.TotalTime.Should().Be(contextA.DeltaTime * 2);
-        contextB.TotalTime.Should().Be(contextB.DeltaTime);
+        contextA.ElapsedTime.Should().Be(new ChronicleTimestamp(0, (uint)(contextA.DeltaTime * 2).m_rawValue));
+        contextB.ElapsedTime.Should().Be(new ChronicleTimestamp(0, (uint)contextB.DeltaTime.m_rawValue));
     }
 
     [Fact]
-    public void Simulate_ShouldPreserveSignedLowBitsAcrossACompleteIntWrap()
+    public void Simulate_ShouldAdvanceBeyondTheUnsignedIntRange()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
-        TrailblazerClock clock = ReflectionUtility.GetPrivateField<TrailblazerClock>(context, "_clock");
-        ReflectionUtility.SetPrivateField(clock, "_frameIndex", (ulong)uint.MaxValue - 1);
+        TimingTestUtility.SetTime(context, (long)uint.MaxValue - 1);
 
-        clock.Simulate();
-        context.FrameCount.Should().Be(-1);
-        context.LogicalFrameIndex.Should().Be(uint.MaxValue);
+        context.Simulate();
+        context.FrameCount.Should().Be(uint.MaxValue);
 
-        clock.Simulate();
-        context.FrameCount.Should().Be(0);
-        context.LogicalFrameIndex.Should().Be((ulong)uint.MaxValue + 1);
+        context.Simulate();
+        context.FrameCount.Should().Be((long)uint.MaxValue + 1);
     }
 
     [Fact]
     public void Simulate_ShouldRejectExhaustedLogicalFrameBeforeMutation()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
-        TrailblazerClock clock = ReflectionUtility.GetPrivateField<TrailblazerClock>(context, "_clock");
-        ReflectionUtility.SetPrivateField(clock, "_frameIndex", ulong.MaxValue);
-        Fixed64 totalTime = context.TotalTime;
-        int frameCount = context.FrameCount;
+        TimingTestUtility.SetTime(context, long.MaxValue);
+        ChronicleTimestamp elapsedTime = context.ElapsedTime;
 
-        Action simulate = clock.Simulate;
+        Action simulate = context.Simulate;
 
         simulate.Should().Throw<InvalidOperationException>()
-            .WithMessage("*frame index is exhausted*");
-        context.LogicalFrameIndex.Should().Be(ulong.MaxValue);
-        context.FrameCount.Should().Be(frameCount);
-        context.TotalTime.Should().Be(totalTime);
+            .WithMessage("*frame counter is exhausted*");
+        context.FrameCount.Should().Be(long.MaxValue);
+        context.ElapsedTime.Should().Be(elapsedTime);
     }
 
     [Fact]
@@ -188,8 +183,8 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         context.Reset();
 
         context.ClockLifetime.Should().NotBeSameAs(initialLifetime);
-        context.LogicalFrameIndex.Should().Be(0);
         context.FrameCount.Should().Be(0);
+        context.ElapsedTime.Should().Be(ChronicleTimestamp.Zero);
     }
 
     [Fact]
@@ -205,9 +200,9 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         contextA.Reset();
 
         contextA.FrameCount.Should().Be(0);
-        contextA.TotalTime.Should().Be(Fixed64.Zero);
+        contextA.ElapsedTime.Should().Be(ChronicleTimestamp.Zero);
         contextB.FrameCount.Should().Be(2);
-        contextB.TotalTime.Should().Be(contextB.DeltaTime * 2);
+        contextB.ElapsedTime.Should().Be(new ChronicleTimestamp(0, (uint)(contextB.DeltaTime * 2).m_rawValue));
     }
 
     [Fact]

@@ -23,8 +23,8 @@ internal sealed class NavigationAreaCatalogProcessor
     private int _pendingRuleCount;
     private long _pendingRetainedBytes;
     private long _sequenceHighWater;
-    private int _effectiveFrameHighWater = -1;
-    private int _lastFrame = -1;
+    private long _effectiveFrameHighWater = -1;
+    private long _lastFrame = -1;
 
     internal NavigationAreaCatalogProcessor(TrailblazerWorldContextSettings settings)
     {
@@ -79,7 +79,7 @@ internal sealed class NavigationAreaCatalogProcessor
         else if (_pending.Count >= _maxPending)
             rejection = NavigationOperationRejection.CapacityExceeded;
         else if (operation.Policy.RuleCount > _maxRules - _pendingRuleCount
-            || operation.Policy.RetainedBytes > _maxPendingBytes - _pendingRetainedBytes)
+            || GetPendingBytes(operation) > _maxPendingBytes - _pendingRetainedBytes)
             rejection = NavigationOperationRejection.CapacityExceeded;
 
         if (operation.PublicationSequence > _sequenceHighWater)
@@ -96,12 +96,12 @@ internal sealed class NavigationAreaCatalogProcessor
         }
         _pending.Enqueue(operation);
         _pendingRuleCount += operation.Policy.RuleCount;
-        _pendingRetainedBytes += operation.Policy.RetainedBytes;
+        _pendingRetainedBytes += GetPendingBytes(operation);
         return true;
     }
 
     internal PreparedFrame Prepare(
-        int frame,
+        long frame,
         NavigationAreaCatalog current,
         MaintenanceWorkMeter meter,
         long maxCatalogBytes,
@@ -161,7 +161,7 @@ internal sealed class NavigationAreaCatalogProcessor
 
         internal int Count { get; }
 
-        internal void Complete(int frame)
+        internal void Complete(long frame)
         {
             for (int i = 0; i < Count; i++)
             {
@@ -194,7 +194,11 @@ internal sealed class NavigationAreaCatalogProcessor
         {
             NavigationAreaPolicyCommitOperation operation = _pending.Dequeue();
             _pendingRuleCount -= operation.Policy.RuleCount;
-            _pendingRetainedBytes -= operation.Policy.RetainedBytes;
+            _pendingRetainedBytes -= GetPendingBytes(operation);
         }
     }
+
+    // Apply the same wide-receipt allowance as the map/overlay operation queue.
+    private static long GetPendingBytes(NavigationAreaPolicyCommitOperation operation) =>
+        NavigationByteCount.SaturatingAdd(operation.Policy.RetainedBytes, 8);
 }

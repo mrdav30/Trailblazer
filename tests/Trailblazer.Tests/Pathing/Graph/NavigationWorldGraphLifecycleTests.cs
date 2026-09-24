@@ -1163,7 +1163,7 @@ public sealed class NavigationWorldGraphLifecycleTests
         NavigationMap replacement = new NavigationMapBuilder("map", binding)
             .AddCell(new VoxelIndex(1, 0, 0), SolidCell)
             .Build();
-        int frame = context.FrameCount + 1;
+        long frame = context.FrameCount + 1;
         var remove = new NavigationMapRemoveOperation("map", 2, frame);
         var commit = new NavigationMapCommitOperation(
             new PreparedNavigationMap(replacement, 2),
@@ -1197,7 +1197,7 @@ public sealed class NavigationWorldGraphLifecycleTests
         NavigationMap replacement = new NavigationMapBuilder("map", binding)
             .AddCell(new VoxelIndex(1, 0, 0), SolidCell)
             .Build();
-        int frame = context.FrameCount + 1;
+        long frame = context.FrameCount + 1;
         var commit = new NavigationMapCommitOperation(
             new PreparedNavigationMap(replacement, 2),
             OverlayReplacementPolicy.Clear,
@@ -1226,7 +1226,7 @@ public sealed class NavigationWorldGraphLifecycleTests
             GridStorageKind.Dense);
         AdmitMap(context, CreateMap("map", configuration, default), 1, 1);
         context.Simulate();
-        int frame = context.FrameCount + 1;
+        long frame = context.FrameCount + 1;
         var first = new NavigationOverlayCommitOperation(
             new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
             {

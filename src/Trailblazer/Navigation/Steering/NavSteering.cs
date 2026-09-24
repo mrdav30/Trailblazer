@@ -127,7 +127,7 @@ public partial class NavSteering : IRecordable
 
     private int? _pathRecheckPhase;
 
-    private ulong _pathRecheckArmedFrameIndex;
+    private long _pathRecheckArmedFrameIndex;
 
     private int _pathRecheckDelayFrames;
 

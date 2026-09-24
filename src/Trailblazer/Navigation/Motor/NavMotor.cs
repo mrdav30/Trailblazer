@@ -7,6 +7,7 @@
 
 using System;
 using Chronicler;
+using Chronicler.Timing;
 using FixedMathSharp;
 
 namespace Trailblazer.Navigation.Motor;
@@ -89,7 +90,9 @@ public partial class NavMotor : IRecordable
     /// <summary>
     /// Records the simulation frame that opened the current traversal so stale traversal usage can be detected.
     /// </summary>
-    private int _pendingTraversalFrame = -1;
+    private long _pendingTraversalFrame = -1;
+
+    private object? _pendingTraversalLifetime;
 
     #endregion
 
@@ -200,13 +203,13 @@ public partial class NavMotor : IRecordable
 
     private TrailblazerWorldContext RequireContext() => _context!;
 
-    private int FrameCount => RequireContext().FrameCount;
+    private long FrameCount => RequireContext().FrameCount;
 
     private Fixed64 DeltaTime => RequireContext().DeltaTime;
 
     private Fixed64 InvDeltaTime => RequireContext().InvDeltaTime;
 
-    private Fixed64 TotalTime => RequireContext().TotalTime;
+    private ChronicleTimestamp ElapsedTime => RequireContext().ElapsedTime;
 
     /// <summary>
     /// Prepares the controller by linking it to the given object and setting initial state values.

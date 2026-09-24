@@ -28,6 +28,15 @@ Use the same fixed frame rate and advance them together. Register the grids
 before colliders; publish maps and policies before submitting guided requests.
 Map clearance describes navigability—it does not create a physical collider.
 
+Each context owns its own Chronicler clock. Both expose long frame counts and
+wide elapsed timestamps while retaining Fixed64 integration steps. The adapter
+does not advance either clock, synchronize their rates, or repair a missed step.
+If the host changes the rate, change both at the same fixed-step boundary.
+Resetting one context does not reset the other; coordinate both resets and
+controller/body reconstruction explicitly. Numeric frame counts need not match
+if world preparation advanced one context earlier, but every gameplay step
+must use the same duration and the barrier below.
+
 ## Configure the body and Navigator
 
 The host implements Gravitas `IMatterAgent`, supplying its context and
@@ -70,7 +79,8 @@ then overwrite it with a collision correction. The accepted position, rotation,
 velocity, and committed navigation cell must describe the same movement.
 
 Duplicate prepare, commit without prepare, duplicate commit, and commit after
-the Trailblazer frame advances throw. The adapter cannot detect a commit that
+the Trailblazer frame advances or its clock resets throw before accepted motion
+changes. The adapter cannot detect a commit that
 occurs after prepare but before physics late resolution: correct host ordering
 is required. A failed/discarded physics frame invalidates that authoritative
 frame. Reset is not rollback; restore a complete host checkpoint or rebuild the

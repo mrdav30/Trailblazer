@@ -288,7 +288,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         if (episode == "ColdInitial")
             AssertEmptyCaches();
         _cacheCountAtTrigger = RelevantCacheCount();
-        _clockOrigin = (long)_fixture.Context.LogicalFrameIndex + 1;
+        _clockOrigin = checked(_fixture.Context.FrameCount + 1);
         Array.Clear(_movement);
         for (int i = 0; i < count; i++)
         {

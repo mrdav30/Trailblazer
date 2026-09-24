@@ -15,7 +15,7 @@ public readonly struct NavigationMapCommitOperation
         PreparedNavigationMap preparedMap,
         OverlayReplacementPolicy overlayReplacementPolicy,
         long operationSequence,
-        int effectiveFrame)
+        long effectiveFrame)
     {
         SwiftThrowHelper.ThrowIfNull(preparedMap, nameof(preparedMap));
         SwiftThrowHelper.ThrowIfArgument(
@@ -44,7 +44,7 @@ public readonly struct NavigationMapCommitOperation
     public long OperationSequence { get; }
 
     /// <summary>Gets the earliest eligible fixed-step publication frame.</summary>
-    public int EffectiveFrame { get; }
+    public long EffectiveFrame { get; }
 
     /// <summary>Gets the operation's deterministic pending or terminal receipt.</summary>
     public NavigationOperationReceipt Receipt { get; }

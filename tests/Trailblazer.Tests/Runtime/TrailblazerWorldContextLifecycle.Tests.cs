@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Chronicler.Timing;
 using FixedMathSharp;
 using FluentAssertions;
 using Trailblazer.Navigation.Steering;
@@ -191,18 +192,18 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
 
         resetCalls.Should().Be(1);
         TestWorld.Context.FrameCount.Should().Be(0);
-        TestWorld.Context.TotalTime.Should().Be(Fixed64.Zero);
+        TestWorld.Context.ElapsedTime.Should().Be(ChronicleTimestamp.Zero);
     }
 
     [Fact]
-    public void GetFrameFromTime_ShouldUseCurrentInverseDeltaTime()
+    public void GetFrameCountForDuration_ShouldCountCompleteCurrentSteps()
     {
         TestWorld.Setup();
         TestWorld.Context.SetFrameRate(10);
 
         Fixed64 timestamp = (TestWorld.Context.DeltaTime * 3) + (TestWorld.Context.DeltaTime / 2);
 
-        TestWorld.Context.GetFrameFromTime(timestamp).Should().Be(3);
+        TestWorld.Context.GetFrameCountForDuration(timestamp).Should().Be(3);
     }
 
     [Fact]

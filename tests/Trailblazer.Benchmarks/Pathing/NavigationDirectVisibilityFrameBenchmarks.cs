@@ -312,7 +312,7 @@ public class NavigationDirectVisibilityFrameBenchmarks
             ValidateAgentFrame(frame);
         }
         _mandatoryRayCount = _preparationRayCounts[0];
-        _clockOrigin = checked((long)_fixture.Context.LogicalFrameIndex + 1);
+        _clockOrigin = checked(_fixture.Context.FrameCount + 1);
         ValidateRaySchedule(_preparationRayCounts, _preparationRayObservations, preparation: true);
     }
 
@@ -480,7 +480,7 @@ public class NavigationDirectVisibilityFrameBenchmarks
                 NavigationRayStatus status = query.HasValue
                     ? _fixture.Context.Guides.TryGetDirectHeading(query.Value, agent.FootPosition, out _)
                     : NavigationRayStatus.Blocked;
-                Check(false, $"frame={frame}, logical={_fixture.Context.LogicalFrameIndex}, agent={i}, "
+                Check(false, $"frame={frame}, logical={_fixture.Context.FrameCount}, agent={i}, "
                     + $"position={agent.Position}, direct={agent.Steering.HasLineOfSightPath}, "
                     + $"guide={agent.Steering.HasNavigationGuidance}, moving={agent.Steering.ShouldMove}, "
                     + $"cell={committed?.Address}, cellFrame={committed?.SimulationFrame}, directStatus={status}");

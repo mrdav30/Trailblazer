@@ -1641,8 +1641,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
     [Fact]
     public void StructuralCarryover_ShouldPublishOnSameDeterministicFrame()
     {
-        int first = RunBridgeRemoval();
-        int second = RunBridgeRemoval();
+        long first = RunBridgeRemoval();
+        long second = RunBridgeRemoval();
 
         first.Should().Be(second);
         first.Should().BeGreaterThan(1);
@@ -2193,7 +2193,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         }
     }
 
-    private static int RunBridgeRemoval()
+    private static long RunBridgeRemoval()
     {
         using TrailblazerWorldContext context = CreateConnectedContext(out long sequence);
         NavigationOverlayCommitOperation removal = SuppressConnection(
@@ -2201,7 +2201,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             ++sequence,
             "B",
             "bc");
-        int start = context.FrameCount;
+        long start = context.FrameCount;
         SimulateUntilTerminal(context, removal.Receipt);
         removal.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         return removal.Receipt.PublishedFrame - start;

@@ -67,7 +67,7 @@ internal sealed partial class NavigationGuideScheduler
     {
         lock (_sync)
         {
-            if (interest.Owner != this || interest.GrantedFrame != _context.LogicalFrameIndex
+            if (interest.Owner != this || interest.GrantedFrame != _context.FrameCount
                 || !ReferenceEquals(interest.GrantedLifetime, _context.ClockLifetime))
                 return false;
             interest.GrantedLifetime = null;
@@ -94,7 +94,7 @@ internal sealed partial class NavigationGuideScheduler
             // Selection and its permitted atomic validation are one charged turn.
             // An unused grant expires; it cannot be reclaimed or refilled this frame.
             interest.GrantedLifetime = _context.ClockLifetime;
-            interest.GrantedFrame = _context.LogicalFrameIndex;
+            interest.GrantedFrame = _context.FrameCount;
             LastFrameOperationCount++;
         }
     }

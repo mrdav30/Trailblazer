@@ -21,6 +21,55 @@ public sealed class NavigationOperationProcessorTests
         Fixed64.One,
         Fixed64.One);
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(2, true)]
+    public void DescriptorAdmissionAccountsForWideReceiptStorage(int kind, bool exactCapacity)
+    {
+        NavigationMap map = CreateMap("map", CreateBinding(Vector3d.Zero), default);
+        var overlay = new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+        {
+            new NavigationMapOverlayDelta("map", new[]
+            { NavigationCellOverlayOperation.Set(new VoxelIndex(1, 0, 0), SolidCell) })
+        }));
+        long bytes = kind switch { 0 => 78L, 1 => 62L, _ => overlay.DescriptorBytes + 8 };
+        var processor = new NavigationOperationProcessor(CreateLimits(
+            maxPendingDescriptorBytes: bytes - (exactCapacity ? 0 : 1)));
+        const long frame = int.MaxValue + 1L;
+        NavigationOperationReceipt receipt;
+        bool admitted;
+        if (kind == 0)
+        {
+            var operation = new NavigationMapCommitOperation(new PreparedNavigationMap(map, 1),
+                OverlayReplacementPolicy.Clear, 1, frame);
+            receipt = operation.Receipt;
+            admitted = processor.Admit(operation);
+        }
+        else if (kind == 1)
+        {
+            var operation = new NavigationMapRemoveOperation("map", 1, frame);
+            receipt = operation.Receipt;
+            admitted = processor.Admit(operation);
+        }
+        else
+        {
+            var operation = new NavigationOverlayCommitOperation(overlay, 1, frame);
+            receipt = operation.Receipt;
+            admitted = processor.Admit(operation);
+        }
+        Assert.Equal(exactCapacity, admitted);
+        Assert.Equal(exactCapacity ? NavigationOperationStatus.Pending : NavigationOperationStatus.Rejected,
+            receipt.Status);
+        if (!exactCapacity)
+            Assert.Equal(NavigationOperationRejection.CapacityExceeded, receipt.Rejection);
+        processor.Reset();
+        if (exactCapacity) Assert.Equal(NavigationOperationStatus.Superseded, receipt.Status);
+    }
+
     [Fact]
     public void CheckpointStamp_UsesExactValueOperatorsAndStableHashing()
     {
@@ -1521,7 +1570,7 @@ public sealed class NavigationOperationProcessorTests
         int publicationCount = 0;
         NavigationCandidatePublication Publish(
             NavigationOperationCandidate _,
-            int __,
+            long __,
             NavigationOperationFrameChange[] ___,
             int ____)
         {

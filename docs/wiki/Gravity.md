@@ -53,8 +53,8 @@ profiles without changing every Navigator.
 ## Fixed-step timing
 
 The owning `TrailblazerWorldContext` supplies `DeltaTime`, `InvDeltaTime`, and
-`TotalTime`. Gravity, jump extension, cooldowns, and terminal-velocity checks
-all use that deterministic clock.
+wide `ElapsedTime`. Gravity and cooldowns integrate the Fixed64 step; jump
+extension compares the elapsed duration since its wide `JumpStartTime`.
 
 Call `context.Simulate()` exactly once for each authoritative fixed frame.
 Do not derive motor time from wall-clock time or a rendering frame.
@@ -94,6 +94,11 @@ the same frame.
 While jump input remains held and the extra-height window is active, the motor
 partially offsets gravity along the latched jump direction. Releasing input
 earlier lets gravity take over sooner.
+
+The time window is `ExtraJumpHeight / jumpSpeed`, compared with
+`ElapsedTime - JumpStartTime`. It does not depend on how long the world has
+already been running. Zero jump speed or non-positive extra height gives no
+held-jump extension. Absolute timestamps never enter height or speed arithmetic.
 
 The main tuning values are:
 

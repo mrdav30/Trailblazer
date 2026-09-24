@@ -23,9 +23,9 @@ public partial class NavSteering
         internal NavigationValidationInterest? ValidationInterest;
         internal object? Lifetime;
         internal object? AttemptLifetime;
-        internal ulong AttemptFrame;
+        internal long AttemptFrame;
         internal object? AdoptionLifetime;
-        internal ulong AdoptionFrame;
+        internal long AdoptionFrame;
         internal bool GraphOnlyRetry;
         internal bool DeferAcquisition;
         internal FlowAdoptionSample? AdoptionSample;
@@ -103,12 +103,12 @@ public partial class NavSteering
     }
 
     private bool AttemptedThisFrame() => ReferenceEquals(_acquisitionState!.AttemptLifetime, ResolveContext().ClockLifetime)
-        && _acquisitionState.AttemptFrame == ResolveContext().LogicalFrameIndex;
+        && _acquisitionState.AttemptFrame == ResolveContext().FrameCount;
 
     private void MarkAcquisitionAttempt()
     {
         _acquisitionState!.AttemptLifetime = ResolveContext().ClockLifetime;
-        _acquisitionState.AttemptFrame = ResolveContext().LogicalFrameIndex;
+        _acquisitionState.AttemptFrame = ResolveContext().FrameCount;
     }
 
     private bool ValidateScheduledMovementPath(Vector3d origin)
@@ -154,7 +154,7 @@ public partial class NavSteering
             || !scheduler.TryConsumeValidationTurn(interest))
             return true;
         state.AdoptionLifetime = ResolveContext().ClockLifetime;
-        state.AdoptionFrame = ResolveContext().LogicalFrameIndex;
+        state.AdoptionFrame = ResolveContext().FrameCount;
         MarkAcquisitionAttempt();
 
         if (request.IsDirect)
@@ -321,13 +321,13 @@ public partial class NavSteering
         state.ConnectorWaiting = true;
         _targetDirection = Vector3d.Zero;
         TrailblazerWorldContext context = ResolveContext();
-        if (ReferenceEquals(state.AdoptionLifetime, context.ClockLifetime) && state.AdoptionFrame == context.LogicalFrameIndex)
+        if (ReferenceEquals(state.AdoptionLifetime, context.ClockLifetime) && state.AdoptionFrame == context.FrameCount)
             return false;
         NavigationGuideScheduler scheduler = context.Guides.Scheduler;
         if (!scheduler.RegisterConnectorValidation(interest, guide) || !scheduler.TryConsumeValidationTurn(interest))
             return false;
         state.AdoptionLifetime = context.ClockLifetime;
-        state.AdoptionFrame = context.LogicalFrameIndex;
+        state.AdoptionFrame = context.FrameCount;
         NavigationGuideStatus status = context.Guides.TryProveAStarConnector(_currentQuery!.Value, origin, guide);
         LastAcquisitionStatus = status;
         if (status == NavigationGuideStatus.Success)

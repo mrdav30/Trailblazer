@@ -561,8 +561,8 @@ public partial class NavSteering
             return false;
 
         TrailblazerWorldContext context = ResolveContext();
-        return context.LogicalFrameIndex - _pathRecheckArmedFrameIndex
-            >= (ulong)_pathRecheckDelayFrames;
+        return context.FrameCount - _pathRecheckArmedFrameIndex
+            >= _pathRecheckDelayFrames;
     }
 
     private void EnsurePhasedClockLifetime()
@@ -597,8 +597,8 @@ public partial class NavSteering
             return;
 
         TrailblazerWorldContext context = ResolveContext();
-        ulong frameIndex = context.LogicalFrameIndex;
-        int remainder = (int)(frameIndex % (ulong)_pathRecheckCooldownFrames);
+        long frameIndex = context.FrameCount;
+        int remainder = (int)(frameIndex % _pathRecheckCooldownFrames);
         int delay = phase - remainder;
         if (delay <= 0)
             delay += _pathRecheckCooldownFrames;

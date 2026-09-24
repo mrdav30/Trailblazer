@@ -576,7 +576,7 @@ public sealed partial class NavigationDirectRayTests
         steering.GetHeading(navigator, out _).Should().NotBe(Vector3d.Zero);
         steering.HasLineOfSightPath.Should().BeTrue();
         scene.PublishWall();
-        int frame = scene.Context.FrameCount;
+        long frame = scene.Context.FrameCount;
 
         steering.GetHeading(navigator, out var action).Should().Be(Vector3d.Zero);
         action.Should().BeNull();

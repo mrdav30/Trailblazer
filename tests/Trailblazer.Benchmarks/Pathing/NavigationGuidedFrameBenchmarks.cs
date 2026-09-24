@@ -247,7 +247,7 @@ public class NavigationGuidedFrameBenchmarks
         if (_mode != null)
         {
             _mandatoryRayCount = _preparationRayCounts[0];
-            _clockOrigin = checked((long)_fixture.Context.LogicalFrameIndex + 1);
+            _clockOrigin = checked(_fixture.Context.FrameCount + 1);
             ValidateRaySchedule(
                 _preparationRayCounts,
                 _preparationRayObservations,
@@ -459,7 +459,7 @@ public class NavigationGuidedFrameBenchmarks
         for (int frame = 0; frame < 16; frame++)
         {
             int rays = CaptureBurstFrame($"resume-realigned-{frame + 1:D2}");
-            int expected = GetAssignedPhaseCount((int)(_fixture.Context.LogicalFrameIndex % 16));
+            int expected = GetAssignedPhaseCount((int)(_fixture.Context.FrameCount % 16));
             SwiftThrowHelper.ThrowIfTrue(
                 rays != expected,
                 $"Resumed LOS schedule did not realign at frame {frame}: expected={expected}, actual={rays}.");
@@ -485,7 +485,7 @@ public class NavigationGuidedFrameBenchmarks
             || publicationRays != AgentCount || CountActiveGuides() != AgentCount - 1
             || CountZeroTargetDirections() != 1
             || _agents[0].Steering.TargetDirection != Vector3d.Zero
-            || _phaseAssignments[0] == (int)(_fixture.Context.LogicalFrameIndex % 16),
+            || _phaseAssignments[0] == (int)(_fixture.Context.FrameCount % 16),
             "Same-map rebake did not invalidate the old guide proof in its containing frame.");
         for (int i = 0; i < AgentCount; i++)
         {
@@ -504,7 +504,7 @@ public class NavigationGuidedFrameBenchmarks
             "same-map-rebake-pending-retry-reacquisition",
             rebake.Receipt);
         int expectedRecoveryRays = 1
-            + GetAssignedPhaseCount((int)(_fixture.Context.LogicalFrameIndex % 16));
+            + GetAssignedPhaseCount((int)(_fixture.Context.FrameCount % 16));
         SwiftThrowHelper.ThrowIfTrue(
             recoveryRays != expectedRecoveryRays || CountActiveGuides() != AgentCount
             || CountZeroTargetDirections() != 0,
@@ -563,7 +563,7 @@ public class NavigationGuidedFrameBenchmarks
         Console.WriteLine("NAVIGATION_GUIDED_BURST_SAMPLES " + JsonSerializer.Serialize(new
         {
             scenario = "json-end-to-end-restore-preparation",
-            logicalFrame = _fixture.Context.LogicalFrameIndex,
+            logicalFrame = _fixture.Context.FrameCount,
             ticks = populationTicks,
             allocatedBytes = populationAllocated,
             collectionMask = populationCollectionMask,
@@ -592,7 +592,7 @@ public class NavigationGuidedFrameBenchmarks
         Console.WriteLine("NAVIGATION_GUIDED_BURST_SAMPLES " + JsonSerializer.Serialize(new
         {
             scenario,
-            logicalFrame = _fixture.Context.LogicalFrameIndex,
+            logicalFrame = _fixture.Context.FrameCount,
             ticks,
             allocatedBytes,
             collectionMask,

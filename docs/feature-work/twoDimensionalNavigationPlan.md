@@ -12,6 +12,8 @@
 performance hardening. Exact planar capsule geometry and layer-bound GridForge
 coverage are implemented upstream. No native Trailblazer 2D controller exists yet.
 Upstream releases remain deferred; Phase 1 requires review of the contract below.
+Hard-budgeted physics queries are tracked separately for both 2D and 3D in the
+[physics query budget plan](physicsQueryBudgetPlan.md); they do not block this plan.
 
 **Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`;
 Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`. The dated execution record
@@ -58,8 +60,12 @@ not the deliverable or a permanent parallel public compatibility API.
 
 ## Global constraints
 
-- Preserve deterministic fixed-point math, stable ordering, finite work budgets,
-  exact guide dependencies, and per-acquisition action/cursor ownership.
+- Preserve deterministic fixed-point math, stable ordering, finite navigation
+  work budgets, exact guide dependencies, and per-acquisition action/cursor
+  ownership.
+- Reuse synchronous indexed physics discovery for support and posture checks.
+  Hard per-query physics work/storage ceilings belong to the separate 2D/3D
+  plan; this does not weaken existing navigation or planar-coverage budgets.
 - Carry forward Immediate/Scheduled acquisition, bounded shared-work scheduling,
   safe waiting, cancellation, moved-origin adoption, and optional deterministic
   LOS phases. Planar geometry must certify its own endpoints, rays, and connector
@@ -295,46 +301,52 @@ the `Utility/GridTracer.PlanarNavigationBody.Geometry.cs` and `.Range.cs`
 partials. Matching math and
 GridForge behavior tests cover the new paths; existing 3D source stays intact.
 
-### 2. Bounded native support queries: Gravitas
+### 2. Native support queries: Gravitas
+
+Reuse Gravitas's existing synchronous indexed discovery, as the current 3D
+adapter does. Neither dimension inherently requires a caller-supplied work
+ceiling to be deterministic. Hard discovery/geometry budgets and no-growth
+scratch are a separate [2D/3D workstream](physicsQueryBudgetPlan.md), not an
+upstream prerequisite for this operation. Do not add hidden default limits or
+discard candidates to imitate a budget.
 
 Add one support-specific operation to `GravitasQuery2DService`, not a new
 general-purpose all-shape query API:
 
 ```csharp
 public Physics2DSupportQueryStatus QuerySupport(
-    in Physics2DSupportQuery request, in Physics2DQueryBudget budget,
-    Physics2DQueryScratch scratch,
-    out Physics2DSupportHit support, out Physics2DQueryWork consumed);
+    in Physics2DSupportQuery request, out Physics2DSupportHit support);
 ```
 
-Proposed value/storage contracts:
+Proposed request/result contracts:
 
 | Type | Required fields / behavior |
 | --- | --- |
 | `Physics2DSupportQuery` | Registered source collider, probe center, positive radius/distance, upward direction, minimum upward-normal dot in `(0,1]`, include-layer mask. The constructor explicitly normalizes the nonzero upward direction using FixedMathSharp and rejects unrepresentable normalization. Initial Trailblazer side-view supplies Forward. |
-| `Physics2DQueryBudget` | Independent nonnegative `LookupProbes`, `AddressProbes`, `ColliderVisits`, `GeometryWork` ceilings; zero means no work in that category, never unlimited. |
-| `Physics2DQueryWork` | Consumed counters in the same units, including failed attempts; never exceed the supplied ceilings. |
-| `Physics2DQueryScratch` | Caller-owned preallocated generation/cursor storage, constructed with `generationCapacity`; reset on entry/exit, no growth or retained live collider ownership during a query. Charge duplicate membership visits rather than adding an unbounded deduplication cache. |
-| `Physics2DSupportHit` | Existing `Physics2DHit` plus captured owner registration lifetime and sampled frame; `IsCurrentLifetime` is false for default or recycled registrations. It does not promise geometric freshness. |
-| `Physics2DSupportQueryStatus` | `Found`, `NoSupport`, `BudgetExceeded`, `CapacityExceeded`, `WorldNotReady`, `Unrepresentable`. Only the first two certify complete examination; all others clear the usable hit. |
+| `Physics2DSupportHit` | Existing `Physics2DHit` plus captured owner registration lifetime and sampled `long` frame from the shared clock; `IsCurrentLifetime` is false for default or recycled registrations. It does not promise geometric freshness. |
+| `Physics2DSupportQueryStatus` | `Found`, `NoSupport`, `WorldNotReady`, `Unrepresentable`. Only the first two certify complete examination; all others clear the usable hit. |
 
 Validate arguments before work. Operate at a stable between-frame boundary;
-reject reentrancy/active resolution. Traverse the existing spatial index with
-explicit lookup/address quotas, then visit existing `PhysicsPartition2D`
-memberships directly. Include generation discovery, filtered candidates,
-duplicate memberships and compound/convex work in the ceilings. Reuse the
-covered-address cursor only after proving equivalence to existing padded
-partition discovery. Physics partitions use **world Y = 0**, not the navigation
-embedding or actor host Y. Do not allocate a complete candidate list, copy/sort
-all IDs, or trigger query-stamp rollover scans before applying the budget.
+reject reentrancy/active resolution. Reuse existing candidate collection and
+query-owned buffers; do not introduce another index or an every-agent/all-collider
+scan. Physics partitions use **world Y = 0**, not the navigation embedding or
+actor host Y. Preserve padded discovery and physical-presence checks. Use
+checked probe bounds and reject unrepresentable inputs. Buffer reuse is not a
+hard no-growth or worst-case work guarantee; measure the actual allocation and
+full-frame cost in representative acceptance cases.
 
-Deferred index refresh must return `WorldNotReady`, not run an unbounded global
-refresh inside this operation. The normal owning world lifecycle must make the
-index ready at the documented sampling barrier; a permanently-not-ready query
-is not an acceptable implementation. Feature-size loops in existing kernels
-need metering or a verified conservative `GeometryWork` precharge before entry.
-Record those units and overflow handling in implementation tests. A direct scan
-of all registered colliders is a prototype oracle only, not the shipped default.
+Preserve positive probe distances down to one raw unit; the generic sweep's
+early rejection at `Fixed64.Epsilon` is not the proposed support contract. Test
+initial support and separated inputs at one raw unit, epsilon and epsilon plus
+one raw unit. Keep this support-specific behavior distinct from existing generic
+sweep semantics.
+
+An empty deferred-refresh set alone is not proof of a ready index. Finish
+callback-deferred partition refresh at the normal owning sampling barrier and
+settle GridWorld grid/sparse-change reconciliation there. Test recurrent callback
+changes and changed grid generations without relying on an intervening unrelated
+query to repair membership. Reuse the owning refresh lifecycle, not an adapter
+world scan. A permanently-not-ready query is not an acceptable implementation.
 
 Use the real source collider and full `RequireCollisionPair` admission, including
 both ignore masks, layer matrix, siblings and linked-joint exclusions. Reject
@@ -342,7 +354,7 @@ triggers/dynamic supports; permit bodyless, static and kinematic supports.
 Filter each candidate **and compound part** for support eligibility before
 nearest-hit reduction. Rank by distance, owner ID, authored part index, then
 stable feature order. A rejected wall part must not hide an eligible floor part.
-No partial best-so-far result may become grounded state after budget exhaustion.
+An incomplete or unrepresentable query must not publish a usable grounded result.
 
 Keep the existing rigid-frame hit anchor; no new witness representation.
 The adapter still resolves a host-owned stable carrier key with explicit
@@ -350,8 +362,8 @@ lifetime, derives a carrier-local anchor, and samples accepted planar carrier
 pose. Collider IDs and a captured anchor origin are not durable carrier bindings.
 
 Proposed files are `Queries/2D/GravitasQuery2DService.SupportQuery.cs`, one file
-per new public value/status/scratch type beside it, and a focused internal
-indexed-work partial beside `Core/2D/GravitasCollision2DService.cs`.
+per new public value/status type beside it, and focused changes to existing
+candidate/narrowphase helpers only where support filtering requires them.
 
 ### 3. Atomic native posture replacement: Gravitas
 
@@ -359,16 +371,15 @@ indexed-work partial beside `Core/2D/GravitasCollision2DService.cs`.
 // Proposed SolidBody2D operation; no change to the existing SolidBody overload.
 public ColliderReconfigurationStatus TryReconfigureCollider(
     ColliderShapeDefinition2D definition, Vector2d localOffset, Vector2d position,
-    in Physics2DQueryBudget clearanceBudget, Physics2DQueryScratch scratch,
-    out Physics2DQueryWork consumed, out LSCollider2D? blocker,
+    out LSCollider2D? blocker,
     out Exception? notificationException,
     Action? publishSynchronizedState = null);
 ```
 
-Reuse `Applied`, `Unchanged`, `Blocked`; append `BudgetExceeded`,
-`CapacityExceeded`, `WorldNotReady` without changing existing enum values or 3D
-behavior. Invalid family/definition, unsafe lifecycle and unrepresentable
-candidate/host pose retain the existing 3D exception conventions. Support only
+Reuse `Applied`, `Unchanged`, `Blocked` without adding budget statuses or changing
+existing enum values or 3D behavior. Invalid family/definition, unsafe lifecycle
+and unrepresentable candidate/host pose retain the existing 3D exception
+conventions. Support only
 circle-to-circle and capsule-to-capsule initially, in pure TwoD mode; reject
 mixed mode rather than silently skip 3D blockers. A compact side-view body is
 still the same capsule with height `2r`, not a new collider identity.
@@ -377,9 +388,9 @@ Reuse native exact collision detection and detached shape staging to prove
 the **whole** replacement collider. No public capsule overlap API is needed.
 Dynamic colliders remain eligible blockers even though they are not supported
 carriers. Exact zero-depth touch is allowed; positive penetration rejects.
-Certify clearance under the indexed budgets above and choose a deterministic
-blocker. Gravitas preflights host pose, shape, mass properties and partition
-capacity before mutation. The coordinating Trailblazer caller must finish its
+Certify complete clearance through existing indexed discovery and choose a
+deterministic blocker. Gravitas preflights host pose, shape, mass properties and
+partition capacity before mutation. The coordinating Trailblazer caller must finish its
 own fallible navigation preparation **before** invoking the transaction;
 Gravitas cannot inspect navigation state. The publisher only publishes that
 prepared state. Rejection preserves every live physical/controller/session
@@ -390,8 +401,8 @@ rotation and runtime identities; invalidate CCD/constraint caches, synchronize
 partition membership, publish navigation once, then finish pair retirement.
 `Unchanged` retains the existing once-only publisher semantics. Post-commit
 publisher/separation failures are returned separately and do not roll back an
-accepted transaction. The clearance budget does not bound atomic publication
-or arbitrary host-callback time.
+accepted transaction. This synchronous transaction makes no hard work or
+wall-clock guarantee; budgeted clearance belongs to the separate 2D/3D plan.
 
 Do not reuse 2D teardown pair removal: it clears runtime relationships and is
 not exception-safe reconfiguration. Add the focused counterpart of 3D
@@ -415,9 +426,10 @@ height; do not move the body silently to make it fit.
    non-neighbor and zero-radius boundary-axis rejection, explicit wrong
    layer/domain rejection, missing alternatives, stale generations, every
    exact/one-below work/scratch/output capacity and checked arithmetic failure.
-3. Implement/test Gravitas indexed support and the native posture transaction,
+3. Implement/test Gravitas support selection and the native posture transaction
+   over existing indexed discovery, without waiting for hard query budgets,
    preserving 3D behavior. Include compound wall/floor ordering, symmetric
-   filters, dirty index, huge compound/polygon work, duplicate memberships,
+   filters, dirty index, compound/polygon geometry, duplicate memberships,
    rejected growth, unchanged publication, callback failure and recycled pairs.
 4. Bind native top-down and side-view map/action examples to those primitives;
    finish support corners/slopes/steps and the controller/map/record signatures.
@@ -496,8 +508,9 @@ proposed operations already work.
   after each shared change; do not clone the whole search service or couple a
   planar consumer to the 3D motor merely to reuse its state fields.
 - [ ] **Review native top-down delivery.** Verify fixed-point repeatability,
-  bounded work, ownership, and changed-path coverage. Mark only this phase
-  complete; side-view movement and real Gravitas2D collision remain open.
+  existing navigation work limits, ownership, and changed-path coverage. Mark
+  only this phase complete; side-view movement and real Gravitas2D collision
+  remain open.
 
 ## Phase 2 - Side-View Traversal And Runtime Changes
 
@@ -563,6 +576,10 @@ proposed operations already work.
 Record approved contract decisions, exact revisions, files/signatures, test and
 coverage commands/results, scenario inputs, observation artifacts, and linked
 issues after each reviewed milestone.
+Entries below are historical. The
+[2026-09-24 scope split](#2026-09-24---physics-query-budgets-separated-from-2d-delivery)
+supersedes earlier statements making hard physics-query budgets a 2D prerequisite;
+the current contract above reflects that decision.
 
 ### 2026-09-03 - Draft captured
 
@@ -1095,3 +1112,67 @@ Linux, performance or released-package certification.
 Next: implement the bounded Gravitas support/posture prerequisites, then finish
 the native controller/map/record contract and acceptance inputs. Phase 0 remains
 in progress; Phase 1 and public release gates remain pending.
+
+### 2026-09-24 - Support prerequisite recheck
+
+Resumed after issue-tracker cleanup at Trailblazer `437348e`, Gravitas `198d272`,
+GridForge `83132cf`, FixedMathSharp `b7a6b02`, SwiftCollections `3668bb4` and
+Chronicler `5397348`. The wide clock and held-jump fixes remain the current
+baseline. No runtime source or dependency references changed in this recheck.
+
+The focused Gravitas witness/host-contract suites pass **48/48** in both
+source-stack Release and ReleaseLean. An ignored public-API probe compares
+covered-address cursor results against existing covered-voxel enumeration,
+resolving physical presence and applying the same planar padded-center filter.
+It passes **20,172 comparisons** with zero differences or omissions: rectangular,
+flat-hex and pointy-hex grids, dense/sparse storage, two vertical layer offsets,
+and half-unit query boxes translated in quarter-unit increments. Cursor calls
+allow only one lookup, one address and one output each. This is a bounded corpus,
+not proof of all seams, extreme coordinates, concurrent mutation or body support.
+The navigation-baseline allocation is setup only, not a proposed hot-path design.
+The Windows-built managed probe also passes under Ubuntu/WSL with exactly
+matching output; this is Linux execution, not an independent Linux source build.
+
+A touching-floor control also confirms that the existing generic circle sweep
+returns no hit for positive distances of 1 and 256 raw units, but returns the
+correct zero-distance floor hit at 257 raw units (`Fixed64.Epsilon` is 256 raw).
+The overlap control sees the floor. This establishes a reuse boundary for the
+new support operation, not a newly implemented support API or a generic sweep
+repair.
+
+Independent source review confirms the missing bounded generation-discovery
+boundary, world-stamp handoff requirement, quadratic convex-work accounting and
+sampling-barrier obligations. The budget-specific findings are now retained in
+the [separate physics query plan](physicsQueryBudgetPlan.md); current support
+correctness obligations remain in section 2. Grid-change membership
+reconciliation is a source-identified design risk, not a reproduced new runtime
+defect. No issue ID is allocated for these unimplemented feature prerequisites.
+
+Local probe/build/test evidence is under `artifacts/2d-support-preflight`; all
+six probe LSF DLL hashes match the freshly built Gravitas Release test host.
+No full-suite, coverage, performance or released-package certification is claimed.
+At this checkpoint the additional upstream discovery scope awaited approval.
+The following scope decision separates it from 2D delivery. Phase 0 stays open;
+no native controller types are scaffolded.
+
+### 2026-09-24 - Physics query budgets separated from 2D delivery
+
+The maintainer requested a separate workstream covering **both 2D and 3D**.
+The current 3D adapter uses synchronous `Query3D.SweepSphere`; it does not have
+the proposed per-query work ceiling. Existing 2D indexed discovery is also
+usable without that stronger guarantee. Deterministic results and caller-set
+work/storage ceilings are distinct contracts.
+
+[Bounded Physics Queries](physicsQueryBudgetPlan.md) now owns the discovery,
+geometry accounting, no-growth scratch and budget-exhaustion design, including
+the upstream GridForge/SwiftCollections investigation. This is not a dependency
+for completing native 2D support/posture. No measured performance defect or new
+issue is implied by the split.
+
+Sections 2 and 3 retain support filtering before nearest-hit reduction, exact
+witnesses/lifetimes, tiny-positive probe behavior, current partition membership,
+whole-body posture clearance and atomic publication. Their proposed signatures
+no longer depend on unimplemented budget/scratch types. Existing navigation and
+GridForge planar-coverage limits are unchanged. Next: implement those focused
+Gravitas prerequisites and complete Phase 0 contract review. This revision is
+documentation only; no runtime or new test result is claimed.

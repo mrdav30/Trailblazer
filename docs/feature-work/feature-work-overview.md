@@ -30,10 +30,12 @@ instead of burying it in notes.
     side-view envelopes are proposed, with nominal feet separate from physical
     contact points. The [upstream prerequisite proposal](twoDimensionalNavigationPlan.md#proposed-upstream-prerequisite-contract)
     now has implemented exact capsule math and layer-bound GridForge coverage.
-    Indexed bounded support queries and atomic 2D posture replacement remain
-    proposed. The separate generalized contact defect `TRB-Issue-151` and legacy
-    hex inverse mismatch `TRB-Issue-152` are now fixed upstream and verified
-    through both source-stack configurations; neither remains a blocker.
+    Native support queries and atomic 2D posture replacement remain proposed,
+    using existing synchronous indexed discovery. Hard physics-query budgets
+    are a separate shared 2D/3D follow-up, not a prerequisite for this delivery.
+    The separate generalized contact defect `TRB-Issue-151` and legacy hex
+    inverse mismatch `TRB-Issue-152` are now fixed upstream and verified through
+    both source-stack configurations; neither remains a blocker.
     Shared search/scheduler ownership is retained; final native
     controller/map/record signatures and acceptance still need contract review.
     Fixed-height projection is not the deliverable.
@@ -199,6 +201,20 @@ instead of burying it in notes.
 - [`Managed-transition lifecycle research`](done/managedTransitionLifecyclePlan.md)
   - Superseded by explicit transition definitions, rules, and overlay publication.
 
+## Queued Feature Work
+
+- [Bounded Physics Queries — 2D And 3D](physicsQueryBudgetPlan.md)
+  - Scope captured; implementation has not started. Give both dimensions explicit
+    query work/storage limits and complete-result semantics through the existing
+    spatial indexes and native geometry. Includes support and posture-clearance
+    consumers, potential GridForge/SwiftCollections prerequisites, and matched
+    existing-query controls. Keep existing synchronous behavior intact; no
+    scheduler, mixed-query expansion or new benchmark framework is implied.
+  - Separate from native 2D delivery and not a prerequisite for its support/posture
+    implementation. Review its contract and agree execution/release sequencing
+    when taking it up. Scope capture assigns no release milestone and does not
+    waive the existing coordinated-release policy.
+
 ## Deferred / Evidence-Gated
 
 The unmet **2 ms** Flow/500 navigation allowance is a deferred stretch target,
@@ -221,9 +237,10 @@ The remaining feature sequence is:
 
 1. Finish the dedicated 2D plan's Phase 0: with upstream defects
    `TRB-Issue-150`, `TRB-Issue-151` and `TRB-Issue-152` resolved, implement
-   bounded native support and posture, then approve exact controller APIs and
-   bounded acceptance inputs. Add the planar runtime and adapter extension there;
-   neither the initial 3D slice nor hardening requires completed 2D support.
+   native support and posture using existing discovery, then approve exact
+   controller APIs and bounded acceptance inputs. Add the planar runtime and
+   adapter extension there; neither the initial 3D slice nor hardening requires
+   completed 2D support.
 2. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.
@@ -232,6 +249,9 @@ The 3D Gravitas integration, navigation hardening, and separately approved
 scheduling/performance work are complete locally. First-class 2D implementation
 remains incomplete; drafting or reviewing its plan does not complete its
 implementation checkboxes. Public release validation remains separate.
+The shared physics query budget plan is queued separately; settle its execution
+and release sequencing explicitly when taking it up. It does not gate native 2D
+implementation or reopen TRB-Benchmark-005.
 The cross-stack rules apply throughout:
 
 1. Keep the benchmark backlog and issue tracker as intake buckets; promote new

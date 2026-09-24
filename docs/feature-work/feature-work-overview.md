@@ -22,15 +22,6 @@ instead of burying it in notes.
 
 ## Active Coordination
 
-- Shared deterministic simulation timing (canonical plan in Chronicler:
-  `docs/feature-work/deterministicSimulationTimingPlan.md`)
-  - Trailblazer and its Gravitas adapter now use the shared long-frame/wide-time
-    contract; `TRB-Issue-124`, the held-jump units defect `TRB-Issue-153`, and
-    stale commit ordering `TRB-Issue-154` are resolved. Phase 5 is complete with
-    Windows/Linux Standard/Lean validation and exact core/adapter coverage.
-    Chronicler's Phase 6 cross-stack/package gates remain pending;
-    this does not imply release readiness. `TRB-Issue-155` separately tracks the
-    pre-existing final-jump held-input policy, outside the timing migration.
 - [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
   - Phase 0 is in progress for native top-down and side-view controllers and the
     Gravitas `SolidBody2D` adapter. The upstream surface-witness defect
@@ -61,6 +52,20 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
+
+- Shared Deterministic Simulation Timing (canonical plan in Chronicler:
+  `docs/feature-work/done/deterministicSimulationTimingPlan.md`)
+  - All seven phases are complete. Trailblazer and its Gravitas adapter use the
+    shared long-frame/wide-time contract; `TRB-Issue-124`, the held-jump units
+    defect `TRB-Issue-153`, and stale commit ordering `TRB-Issue-154` are resolved.
+    `TRB-Issue-155` remains separate pre-existing final-jump policy work.
+  - Cross-stack Windows/Linux Release/ReleaseLean suites pass, introduced timing
+    code and downstream gates retain exact coverage, and all four API sites
+    build cleanly. Independent review and isolated normal-package consumers
+    pass with verified Standard/Lean dependencies and assembly provenance.
+    The archived plan retains exact evidence and legacy Chronicler coverage
+    gaps. Private fixture packages are not released-package proof; final
+    versions, dependency floors and public release validation remain below.
 
 - [Gravitas Kinematic Integration](done/gravitasIntegrationPlan.md)
   - All four phases are complete locally. The optional 3D adapter commits

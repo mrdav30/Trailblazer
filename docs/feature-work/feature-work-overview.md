@@ -30,16 +30,20 @@ instead of burying it in notes.
     side-view envelopes are proposed, with nominal feet separate from physical
     contact points. The [upstream prerequisite proposal](twoDimensionalNavigationPlan.md#proposed-upstream-prerequisite-contract)
     now has implemented exact capsule math and layer-bound GridForge coverage.
-    Native support queries and atomic 2D posture replacement are in progress,
+    Native support queries and atomic 2D posture replacement are implemented,
     with synchronous indexed support discovery and complete registry clearance
     for rare posture changes. Shared partition-readiness and callback-lifetime
-    repairs are under verification. Independent review reproduced strict posture
-    clearance failure in both dimensions (`GRV-Issue-081`): positive penetration
-    can round to zero contact depth. The authorized shared repair now supplies
-    exact 2D posture admission and reviewed classification-only math for several
-    3D families. Complete 3D admission remains open: investigation also exposed
-    a pre-existing finite cylinder/capsule rim defect (`FMS-Issue-023`). Do not
-    treat the partial math repair or its performance gains as prerequisite closure.
+    repairs pass the full source-stack checks. The shared `GRV-Issue-081` repair
+    supplies exact classification across every supported 2D/3D posture family,
+    including compound and mesh geometry; positive sub-raw intrusion no longer
+    disappears through contact-depth rounding. Complete coverage and independent
+    review cover the math, dispatcher, conservative bounds and transaction boundary.
+    Separate ordinary contact defects (`FMS-Issue-023`, `024`, `025`, and
+    `GRV-Issue-082`) remain open. Enabled regressions for `FMS-Issue-023/024` and
+    `GRV-Issue-082` remain red; `FMS-Issue-025` retains its numerical reproducer.
+    The upstream suites are not green release gates; the exact-admission repair
+    does not claim to repair solver contact generation. See the dated execution record
+    for the complete matrix, measured costs, and remaining Phase 0 scope.
     Hard physics-query budgets remain a separate shared 2D/3D follow-up, not a
     prerequisite for this delivery. Review shared improvements against both
     dimensions without forcing geometry-specific implementations to be identical.
@@ -245,12 +249,13 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Finish the dedicated 2D plan's Phase 0: with upstream defects
-   `TRB-Issue-150`, `TRB-Issue-151` and `TRB-Issue-152` resolved, implement
-   native support and posture using existing discovery, then approve exact
-   controller APIs and bounded acceptance inputs. Add the planar runtime and
-   adapter extension there; neither the initial 3D slice nor hardening requires
-   completed 2D support.
+1. Finish the dedicated 2D plan's Phase 0: with native support/posture
+   prerequisites implemented and the earlier `TRB-Issue-150`, `TRB-Issue-151`
+   and `TRB-Issue-152` defects resolved, review and settle exact controller,
+   map and record APIs plus bounded acceptance inputs. Keep the newly exposed
+   ordinary-contact defects visible in their owning upstream trackers. Add the
+   planar runtime and adapter extension there; neither the initial 3D slice nor
+   hardening requires completed 2D support.
 2. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.

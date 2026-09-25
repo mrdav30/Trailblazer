@@ -15,18 +15,24 @@ Upstream releases remain deferred; Phase 1 requires review of the contract below
 Hard-budgeted physics queries are tracked separately for both 2D and 3D in the
 [physics query budget plan](physicsQueryBudgetPlan.md); they do not block this plan.
 
-**Current prerequisite blocker (2026-09-24):** Native support and posture work is
-in progress, not ready to merge. Independent review reproduced strict-clearance
-failure in both dimensions: genuinely positive penetration can round to zero
-contact depth and be admitted. Gravitas `GRV-Issue-081` owns the evidence. Exact
-FixedMathSharp-owned classification is required before declaring posture complete;
-the contract will not be weakened to a rounded-depth test or an epsilon.
-The shared FixedMathSharp repair was authorized on 2026-09-24, with explicit
-determinism and performance requirements. Work includes classification-only
-predicates and measured unchanged-contact controls. Review also reproduced a
-pre-existing finite cylinder/capsule rim-classification defect, now owned by
-FixedMathSharp `FMS-Issue-023`; passing the simple strict predicates does not
-certify the remaining 3D curved-shape families.
+**Current prerequisite status (2026-09-24):** Native support and posture work,
+shared partition readiness, and callback-lifetime repairs are implemented.
+Exact FixedMathSharp-owned classification now covers every supported 2D/3D
+posture family, including finite rims, compound parts and mesh features.
+`GRV-Issue-081` is resolved without using a rounded-depth test, epsilon, or
+sampled-axis fallback; complete verification, final measured controls and
+closeout are recorded below.
+
+The investigation separately exposed ordinary contact-generation defects:
+FixedMathSharp `FMS-Issue-023`, `024`, `025`, and Gravitas `GRV-Issue-082` remain
+open in their owning trackers. Enabled FMS-Issue-023/024 and GRV-Issue-082
+regressions remain red; FMS-Issue-025 retains a numerical reproducer and
+historical RED evidence. The upstream suites are not green release gates.
+Exact posture classification does not certify contact normals, depths or
+witnesses. The unrelated pathological
+depth-rounding runtime (`FMS-Issue-026`) is repaired without changing results.
+Native Trailblazer controller/map/record contracts still need Phase 0 review;
+this prerequisite work does not complete the phase or authorize a release.
 
 **Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`;
 Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`. The dated execution record
@@ -387,7 +393,7 @@ candidate/narrowphase helpers only where support filtering requires them.
 ### 3. Atomic native posture replacement: Gravitas
 
 ```csharp
-// Proposed SolidBody2D operation; no change to the existing SolidBody overload.
+// Implemented SolidBody2D operation; the existing SolidBody signature is retained.
 public ColliderReconfigurationStatus TryReconfigureCollider(
     ColliderShapeDefinition2D definition, Vector2d localOffset, Vector2d position,
     out LSCollider2D? blocker,
@@ -395,18 +401,19 @@ public ColliderReconfigurationStatus TryReconfigureCollider(
     Action? publishSynchronizedState = null);
 ```
 
-Reuse `Applied`, `Unchanged`, `Blocked` without adding budget statuses or changing
-existing enum values or 3D behavior. Invalid family/definition, unsafe lifecycle
-and unrepresentable candidate/host pose retain the existing 3D exception
-conventions. Support only
+Reuse `Applied`, `Unchanged`, `Blocked` without adding budget statuses; preserve
+existing enum values and the 3D transaction contract. Invalid family/definition,
+unsafe lifecycle and unrepresentable candidate/host pose retain the existing 3D
+exception conventions. Support only
 circle-to-circle and capsule-to-capsule initially, in pure TwoD mode; reject
 mixed mode rather than silently skip 3D blockers. A compact side-view body is
 still the same capsule with height `2r`, not a new collider identity.
 
-Reuse native exact collision detection and detached shape staging to prove
+Use native exact penetration classification and detached shape staging to prove
 the **whole** replacement collider. No public capsule overlap API is needed.
 Dynamic colliders remain eligible blockers even though they are not supported
-carriers. Exact zero-depth touch is allowed; positive penetration rejects.
+carriers. Exact geometric touching is allowed; positive penetration rejects,
+including intrusion whose solver depth would round to zero.
 Certify complete clearance through the registered collider set, matching the
 existing 3D posture transaction, and choose a deterministic blocker. Unlike
 recurring support queries, this rare explicit operation must also detect blockers
@@ -452,7 +459,7 @@ height; do not move the body silently to make it fit.
    exact/one-below work/scratch/output capacity and checked arithmetic failure.
 3. Implement/test Gravitas support selection and the native posture transaction
    over existing indexed discovery, without waiting for hard query budgets,
-   preserving 3D behavior. Include compound wall/floor ordering, symmetric
+   preserving the 3D contract. Include compound wall/floor ordering, symmetric
    filters, dirty index, compound/polygon geometry, duplicate memberships,
    rejected growth, unchanged publication, callback failure and recycled pairs.
 4. Bind native top-down and side-view map/action examples to those primitives;
@@ -1440,3 +1447,109 @@ core 2,939 passed / 3 known failures, Chronicler 49 passed; Gravitas 4,217 passe
 not declarations of a green release gate. Continue with complete curved-feature
 classification, then wire the whole 3D dispatch and rerun the full verification
 matrix. Do not substitute rounded contact depth or sampled axes for exact truth.
+
+### 2026-09-24 - Complete exact posture admission and final verification
+
+The shared repair now classifies strict penetration before any solver-depth
+rounding. Native circle/capsule and 3D sphere/capsule/cylinder replacements cover
+all supported targets, compound leaves and transformed/scaled mesh geometry.
+Closed convex meshes include enclosure; open/concave meshes remain surface
+geometry. The dispatcher preserves physical filtering, stable root blocker
+identity, complete registered-body discovery and transactional rejection.
+
+FixedMathSharp owns the complete curved-feature math: cap-clipped polytope
+features, capsule/rim quartics, finite cap disks, common-sign circle arcs and
+cone generators. It uses fixed stack workspaces, exact rigid frames and bounded
+integer sign decisions. Independent review checked feature completeness,
+intermediate-width bounds and conservative broad-phase bounds. Factorized and
+integer-geometry oracles cover repeated roots, exact tangency, sub-raw intrusion,
+distinct oblique frames and full-domain sizes. No epsilon, rounded endpoint,
+sampled separating-axis fallback or production arbitrary-precision dependency
+was introduced. The six new curved-shape helpers have complete line/branch
+coverage in both configurations.
+
+Three review-found circle-sign defects were reproduced and repaired before
+the final geometry commit `7f0b9a9`. Complete 3D dispatch is in Gravitas
+`516327b`; capsule and cylinder/polytope kernels have their own earlier commits.
+The independent ordinary-contact regressions remain separate commits rather
+than being removed to make the stack appear green.
+
+The investigation also explained a previously stalled contact test. Reducing
+a cylinder-pair axis to small integer components made its floored-root depth
+estimate tens of millions of raw units inaccurate. The old loop corrected one
+unit at a time. FixedMathSharp `e7a001b` retains four exact correction attempts,
+then uses its existing bounded exact search. This changes work, not accepted
+geometry, normal/witness selection, nearest-even rounding or clamping. The
+eight independent rounding controls pass; the owning durable RCA is
+`FixedMathSharp/docs/feature-work/done/2026-09-24-cylinder-pair-depth-rounding.md`.
+
+#### Complete functional matrix
+
+All runs used Windows, the .NET 8 runtime, and `UseLocalLsfStack=true` with
+serialized builds. No failing regressions were skipped or excluded.
+
+| Suite | Release | ReleaseLean |
+| --- | --- | --- |
+| FixedMathSharp core | 3,123 passed; 6 known ordinary-contact failures | 3,102 passed; the same 6 failures |
+| FixedMathSharp.Chronicler | 49 passed | 49 passed |
+| Gravitas | 4,274 passed; 1 known ordinary-contact failure | 4,215 passed; the same failure |
+| Trailblazer core | 3,245 passed | 3,146 passed |
+| Trailblazer.Gravitas | 90 passed | 86 passed |
+
+FixedMathSharp plus its FluentAssertions assembly and Gravitas each report
+**100% line, branch and method coverage** in both configurations. Full
+Trailblazer solution builds, including the sibling `netstandard2.1` and `net8.0`
+library targets, complete with zero warnings and errors. Chronicler transport
+tests were executed, not newly coverage-instrumented by this slice.
+DocFX builds for FixedMathSharp, Gravitas and Trailblazer also complete with
+warnings treated as errors and zero warnings/errors.
+
+The six math failures are the retained FMS-Issue-023 and FMS-Issue-024 public
+contact counterexamples. Gravitas's failure is GRV-Issue-082: a triangle really
+enters a cylinder below its cap, but the ordinary contact path misses it. The
+new posture transaction blocks that same intrusion. FMS-Issue-025 separately
+records the existing cylinder/box contact false positive. Correct Boolean
+admission does not manufacture a truthful solver normal, depth or witness;
+those owning repairs remain open.
+
+Evidence is under FixedMathSharp `artifacts/rounding-final-release`,
+`rounding-full-lean`, and `strict-cylinder-final-coverage-*`; Gravitas
+`artifacts/grv081-final-release` and `grv081-final-lean`; and Trailblazer
+`artifacts/grv081-stack-build-*` / `grv081-stack-test-*`. Owning tests and
+documented numerical reproducers are durable; ignored captures are supporting
+evidence. These are source-stack Windows results, not Linux or released-package
+certification. Phase 0 contract review and native controller implementation
+remain unfinished; no upstream release is authorized by this closeout.
+
+#### Final measured geometry controls
+
+BenchmarkDotNet 0.15.8 default out-of-process jobs used the same Windows 11,
+i7-9700K and .NET 8.0.29 environment as the earlier controls. Builds/tests were
+serialized and finished before timing. Setup validates the intended results;
+all 12 completed rows report **0 B managed allocation** in raw JSON.
+
+| Matched positive geometry | Contact construction mean | Strict classification mean |
+| --- | ---: | ---: |
+| Cylinder/capsule | 27.477 us | 0.397 us |
+| Cylinder/cylinder | 24.881 us | 0.859 us |
+| Oriented box/cylinder | 518.14 us, including manifold | 0.315 us |
+
+These are favorable overlap fixtures where a center or core witness can prove
+intrusion immediately. They demonstrate work avoided when only a Boolean is
+needed, not a universal speedup ratio or an end-to-end frame/transaction claim.
+The matching ordinary cylinder controls are effectively unchanged from the
+preceding 27.48 us / 25.08 us capture; no ordinary-path regression was observed.
+
+Harder correctness-sensitive rows remain explicit: separated cylinder/capsule
+rims cost **95.60 us**, separated cylinder rims **291.90 us**, and the
+cap-clipped triangle intrusion **5.45 us**. Cone/capsule and cylinder/cone
+positive controls cost **0.98 us** and **0.52 us**. Do not compare the separated
+rows to an old contact query that returns the wrong geometric result.
+The repaired reduced-axis contact-depth case costs **340.74 us**; its old
+runtime exceeded diagnostic timeouts, so no fabricated before/after ratio is
+claimed. Whole posture transactions still may scan the registry and allocate.
+
+Capture: FixedMathSharp `artifacts/grv081-final-benchmarks`, with full JSON,
+logs, setup checks and the existing runner's failure-aware exit status. The
+retained benchmark rows live in `RigidFiniteShapeRelationBenchmarks` and
+`OrientedBoxAnchorBenchmarks`; no new benchmark project or CI layer was added.

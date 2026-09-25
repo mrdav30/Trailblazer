@@ -15,7 +15,7 @@ Upstream releases remain deferred; Phase 1 requires review of the contract below
 Hard-budgeted physics queries are tracked separately for both 2D and 3D in the
 [physics query budget plan](physicsQueryBudgetPlan.md); they do not block this plan.
 
-**Current prerequisite status (2026-09-24):** Native support and posture work,
+**Current prerequisite status (2026-09-25):** Native support and posture work,
 shared partition readiness, and callback-lifetime repairs are implemented.
 Exact FixedMathSharp-owned classification now covers every supported 2D/3D
 posture family, including finite rims, compound parts and mesh features.
@@ -23,9 +23,11 @@ posture family, including finite rims, compound parts and mesh features.
 sampled-axis fallback; complete verification, final measured controls and
 closeout are recorded below.
 
-The investigation separately exposed ordinary contact-generation defects:
-FixedMathSharp `FMS-Issue-023`, `024`, `025`, and Gravitas `GRV-Issue-082` remain
-open in their owning trackers. Enabled FMS-Issue-023/024 and GRV-Issue-082
+The investigation separately exposed ordinary contact-generation defects.
+FixedMathSharp `FMS-Issue-023` now has a complete cylinder/capsule contact repair,
+exact behavior coverage and measured follow-up optimizations. FixedMathSharp
+`FMS-Issue-024`, `025`, and Gravitas `GRV-Issue-082` remain open in their owning
+trackers. Enabled FMS-Issue-024 and GRV-Issue-082
 regressions remain red; FMS-Issue-025 retains a numerical reproducer and
 historical RED evidence. The upstream suites are not green release gates.
 Exact posture classification does not certify contact normals, depths or

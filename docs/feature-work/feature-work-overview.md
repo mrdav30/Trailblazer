@@ -38,8 +38,10 @@ instead of burying it in notes.
     including compound and mesh geometry; positive sub-raw intrusion no longer
     disappears through contact-depth rounding. Complete coverage and independent
     review cover the math, dispatcher, conservative bounds and transaction boundary.
-    Separate ordinary contact defects (`FMS-Issue-023`, `024`, `025`, and
-    `GRV-Issue-082`) remain open. Enabled regressions for `FMS-Issue-023/024` and
+    `FMS-Issue-023` now has a complete cylinder/capsule contact repair, exact
+    behavior coverage and measured follow-up optimizations. Separate ordinary
+    contact defects (`FMS-Issue-024`, `025`, and `GRV-Issue-082`) remain open.
+    Enabled regressions for `FMS-Issue-024` and
     `GRV-Issue-082` remain red; `FMS-Issue-025` retains its numerical reproducer.
     The upstream suites are not green release gates; the exact-admission repair
     does not claim to repair solver contact generation. See the dated execution record

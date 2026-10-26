@@ -116,11 +116,11 @@ internal readonly struct TraversalEvaluator
         NavigationAreaPolicy areaPolicy,
         TraversalMedium medium)
     {
-        SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
-        SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        ChronicleGuard.ThrowIfNull(graph, nameof(graph));
+        ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
         profile.Validate(nameof(profile));
         TraversalMedia resolvedMedium = NavigationCell.ToMedia(medium);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             resolvedMedium == TraversalMedia.None,
             nameof(medium),
             "Traversal medium must resolve to one exact authored medium.");

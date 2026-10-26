@@ -67,7 +67,7 @@ public readonly struct NavigationQueryLimits
         long maxFlowActivePayloadBytes,
         int maxFlowActivePayloadLeases)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxBatchItems <= 0 || maxBatchItems > MaximumBatchItems,
             maxBatchItems,
             nameof(maxBatchItems));
@@ -110,14 +110,14 @@ public readonly struct NavigationQueryLimits
         ThrowIfNonPositive(
             rayWorkspaceTraceIntervalCapacity,
             nameof(rayWorkspaceTraceIntervalCapacity));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             rayWorkspaceTraceIntervalCapacity > rayWorkspaceCoveredAddressCapacity,
             nameof(rayWorkspaceTraceIntervalCapacity),
             "Trace-interval capacity cannot exceed covered-address capacity.");
         ThrowIfNonPositive(
             aStarWorkspaceGuidePointCapacity,
             nameof(aStarWorkspaceGuidePointCapacity));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             aStarWorkspaceGuidePointCapacity < aStarWorkspaceNodeCapacity,
             nameof(aStarWorkspaceGuidePointCapacity),
             "A* guide-point capacity must cover every admitted search node.");
@@ -241,10 +241,10 @@ public readonly struct NavigationQueryLimits
         string componentName,
         string nodeName)
     {
-        SwiftThrowHelper.ThrowIfNegative(mapCapacity, mapName);
-        SwiftThrowHelper.ThrowIfNegative(pageCapacity, pageName);
-        SwiftThrowHelper.ThrowIfNegative(componentCapacity, componentName);
-        SwiftThrowHelper.ThrowIfNegative(nodeCapacity, nodeName);
+        ChronicleGuard.ThrowIfNegative(mapCapacity, mapName);
+        ChronicleGuard.ThrowIfNegative(pageCapacity, pageName);
+        ChronicleGuard.ThrowIfNegative(componentCapacity, componentName);
+        ChronicleGuard.ThrowIfNegative(nodeCapacity, nodeName);
     }
 
     private static void ValidateCache(
@@ -259,14 +259,14 @@ public readonly struct NavigationQueryLimits
         string activeName,
         string leaseName)
     {
-        SwiftThrowHelper.ThrowIfNegative(entries, entriesName);
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfNegative(entries, entriesName);
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             reusableBytes < 0,
             null,
             reusableName);
         ThrowIfNonPositive(singleBytes, singleName);
         ThrowIfNonPositive(activeBytes, activeName);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             singleBytes > activeBytes,
             singleName,
             "A single payload cannot exceed the complete active-payload byte ceiling.");
@@ -274,8 +274,8 @@ public readonly struct NavigationQueryLimits
     }
 
     private static void ThrowIfNonPositive(int value, string parameterName) =>
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, value, parameterName);
+        ChronicleGuard.ThrowIfArgumentOutOfRange(value <= 0, value, parameterName);
 
     private static void ThrowIfNonPositive(long value, string parameterName) =>
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, null, parameterName);
+        ChronicleGuard.ThrowIfArgumentOutOfRange(value <= 0, null, parameterName);
 }

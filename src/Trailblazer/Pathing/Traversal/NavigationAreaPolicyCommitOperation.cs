@@ -16,7 +16,7 @@ public readonly struct NavigationAreaPolicyCommitOperation
         long publicationSequence,
         long effectiveFrame)
     {
-        SwiftThrowHelper.ThrowIfNull(policy, nameof(policy));
+        ChronicleGuard.ThrowIfNull(policy, nameof(policy));
         NavigationOperationValidation.ValidateSchedule(publicationSequence, effectiveFrame);
         Policy = policy;
         PublicationSequence = publicationSequence;

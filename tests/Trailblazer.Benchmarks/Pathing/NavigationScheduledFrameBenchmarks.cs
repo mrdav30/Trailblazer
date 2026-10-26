@@ -10,7 +10,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using FixedMathSharp;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
@@ -137,7 +137,7 @@ public class NavigationScheduledFrameBenchmarks
                 for (int i = 0; i < _queries.Length; i++)
                 {
                     NavigationGuideStatus status = _scenario.Fixture.Context.Guides.Schedule(_queries[i], out _requests[i]);
-                    SwiftThrowHelper.ThrowIfTrue(status != NavigationGuideStatus.Pending,
+                    ChronicleGuard.ThrowIfTrue(status != NavigationGuideStatus.Pending,
                         "Scheduled cold request was not admitted.");
                 }
             }
@@ -146,26 +146,26 @@ public class NavigationScheduledFrameBenchmarks
             {
                 if ((completed & (1 << i)) != 0 || _requests[i].Status == NavigationGuideStatus.Pending)
                     continue;
-                SwiftThrowHelper.ThrowIfTrue(_requests[i].Status != NavigationGuideStatus.Success,
+                ChronicleGuard.ThrowIfTrue(_requests[i].Status != NavigationGuideStatus.Success,
                     "Scheduled cold request failed.");
                 long cost;
                 if (Algorithm == "AStar")
                 {
-                    SwiftThrowHelper.ThrowIfTrue(!_requests[i].TryTakeGuide(out NavigationGuideLease? result),
+                    ChronicleGuard.ThrowIfTrue(!_requests[i].TryTakeGuide(out NavigationGuideLease? result),
                         "Completed A* guide could not be transferred.");
                     using NavigationGuideLease guide = result.Value;
                     cost = guide.TotalCost.m_rawValue;
-                    SwiftThrowHelper.ThrowIfTrue(guide.StepCount != _scenario.AStarStepCount,
+                    ChronicleGuard.ThrowIfTrue(guide.StepCount != _scenario.AStarStepCount,
                         "Scheduled A* step count changed.");
                 }
                 else
                 {
-                    SwiftThrowHelper.ThrowIfTrue(!_requests[i].TryTakeFlowField(out NavigationFlowFieldLease? result),
+                    ChronicleGuard.ThrowIfTrue(!_requests[i].TryTakeFlowField(out NavigationFlowFieldLease? result),
                         "Completed Flow guide could not be transferred.");
                     using NavigationFlowFieldLease guide = result.Value;
                     cost = guide.OriginIntegrationCost.m_rawValue;
                 }
-                SwiftThrowHelper.ThrowIfTrue(cost != _scenario.ExpectedCost, "Scheduled route cost changed.");
+                ChronicleGuard.ThrowIfTrue(cost != _scenario.ExpectedCost, "Scheduled route cost changed.");
                 checksum = unchecked(checksum + cost);
                 _requests[i].Dispose();
                 completed |= 1 << i;
@@ -184,7 +184,7 @@ public class NavigationScheduledFrameBenchmarks
             if (completed == target && (RequestCount != 0 || _frames == 256))
                 return checksum;
         }
-        SwiftThrowHelper.ThrowIfTrue(completed != target, "Scheduled benchmark exceeded its finite frame ceiling.");
+        ChronicleGuard.ThrowIfTrue(completed != target, "Scheduled benchmark exceeded its finite frame ceiling.");
         return checksum;
     }
 
@@ -220,14 +220,14 @@ public class NavigationScheduledFrameBenchmarks
             if (!cell.HasValue
                 || cell.Value.SimulationFrame != _scenario.Fixture.Context.FrameCount
                 || cell.Value.Medium != TraversalMedium.Solid)
-                SwiftThrowHelper.ThrowIfTrue(true,
+                ChronicleGuard.ThrowIfTrue(true,
                     $"Scheduled agent commit invalid: frame={frame}, agent={i}, position={agent.Position}, "
                     + $"cellFrame={cell?.SimulationFrame}, expectedFrame={_scenario.Fixture.Context.FrameCount}, medium={cell?.Medium}.");
             _movement[i] += Math.Abs(agent.Position.X.m_rawValue - agent.LastPosition.X.m_rawValue)
                 + Math.Abs(agent.Position.Z.m_rawValue - agent.LastPosition.Z.m_rawValue);
             if ((frame + 1) % 32 == 0)
             {
-                SwiftThrowHelper.ThrowIfTrue(_movement[i] == 0,
+                ChronicleGuard.ThrowIfTrue(_movement[i] == 0,
                     "Every Navigator must move during each direction block.");
                 _movement[i] = 0;
             }
@@ -239,7 +239,7 @@ public class NavigationScheduledFrameBenchmarks
     {
         for (int i = 0; i < _requests.Length; i++)
         {
-            SwiftThrowHelper.ThrowIfTrue(_requests[i].Status != NavigationGuideStatus.Success,
+            ChronicleGuard.ThrowIfTrue(_requests[i].Status != NavigationGuideStatus.Success,
                 "Scheduled completion status changed after ownership transfer.");
             if (Algorithm == "FlowField")
                 _scenario.ValidateFlowPayload(_queries[i]);
@@ -248,11 +248,11 @@ public class NavigationScheduledFrameBenchmarks
         }
         for (int i = 0; i < _agents.Length; i++)
         {
-            SwiftThrowHelper.ThrowIfTrue(!_agents[i].LastCommittedCell.HasValue,
+            ChronicleGuard.ThrowIfTrue(!_agents[i].LastCommittedCell.HasValue,
                 "Scheduled frame lost a Navigator's committed map cell.");
         }
         _scenario.ValidateDrained();
-        SwiftThrowHelper.ThrowIfTrue(_scenario.Fixture.Context.Guides.Scheduler.RetainedRequestCount != 0
+        ChronicleGuard.ThrowIfTrue(_scenario.Fixture.Context.Guides.Scheduler.RetainedRequestCount != 0
             || _scenario.Fixture.Context.Guides.Scheduler.RetainedDescriptorBytes != 0,
             "Scheduled acquisition retained request capacity after all results were consumed.");
         // Output is untimed. Keep all raw frame samples, including outliers, GC and completion frames.

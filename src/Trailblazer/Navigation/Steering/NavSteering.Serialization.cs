@@ -57,7 +57,7 @@ public partial class NavSteering
         RecordValues.Look(chronicler, ref avoidFactor, "AvoidFactor", DefaultAvoidFactor);
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 groupFactor < Fixed64.Zero || avoidFactor < Fixed64.Zero,
                 message: "Serialized steering range factors must be non-negative.");
         }

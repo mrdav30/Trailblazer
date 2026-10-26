@@ -27,11 +27,11 @@ internal static class TransientStateUtility
 
     internal static void Sync(ITransient instance, ITransient other)
     {
-        SwiftThrowHelper.ThrowIfNull(other, nameof(other));
+        ChronicleGuard.ThrowIfNull(other, nameof(other));
 
         Type sourceType = instance.GetType();
         Type targetType = other.GetType();
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             sourceType != targetType,
             paramName: nameof(other),
             message: $"Type mismatch during SyncTransientState. Expected {sourceType.FullName}, but received {targetType.FullName}.");
@@ -103,7 +103,7 @@ internal static class TransientStateUtility
             return Expression.Field(null, field);
 
         PropertyInfo? prop = type.GetProperty(memberName, BindingFlags.Public | BindingFlags.Static);
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             prop == null,
             message: $"Transient default member '{type.FullName}.{memberName}' was not found.");
 

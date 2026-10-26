@@ -65,7 +65,7 @@ internal static class NavigationSelectedEdgeProgressWork
         int targetOrdinal,
         out NavigationFlowRejoinTarget target)
     {
-        SwiftThrowHelper.ThrowIfNegative(targetOrdinal, nameof(targetOrdinal));
+        ChronicleGuard.ThrowIfNegative(targetOrdinal, nameof(targetOrdinal));
         target = default;
         if (targetOrdinal == 0)
         {

@@ -11,7 +11,7 @@ internal static class NavigationOperationValidation
 {
     internal static void ValidateSchedule(long operationSequence, long effectiveFrame)
     {
-        SwiftThrowHelper.ThrowIfArgument(operationSequence <= 0, nameof(operationSequence));
-        SwiftThrowHelper.ThrowIfArgument(effectiveFrame < 0, nameof(effectiveFrame));
+        ChronicleGuard.ThrowIfArgument(operationSequence <= 0, nameof(operationSequence));
+        ChronicleGuard.ThrowIfArgument(effectiveFrame < 0, nameof(effectiveFrame));
     }
 }

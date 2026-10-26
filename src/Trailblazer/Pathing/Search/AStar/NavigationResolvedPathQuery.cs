@@ -30,9 +30,9 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         ulong worldChangeSequence,
         bool requiresWorldStamp)
     {
-        SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
-        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
+        ChronicleGuard.ThrowIfNull(lease, nameof(lease));
+        ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        ChronicleGuard.ThrowIfNull(meter, nameof(meter));
         _lease = lease;
         Query = query;
         Start = start;

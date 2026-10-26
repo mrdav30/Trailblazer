@@ -64,10 +64,10 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         NavigationRayWorkspace rayWorkspace,
         PathAlgorithm expectedAlgorithm)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
-        SwiftThrowHelper.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
         _workspace = workspace;
         _world = world;
         _expectedAlgorithm = expectedAlgorithm;
@@ -89,8 +89,8 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
         TraversalMedium startMedium,
         TraversalMedia targetMedia)
     {
-        SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfNull(lease, nameof(lease));
+        ChronicleGuard.ThrowIfTrue(
             _active,
             message: "The query admission work is already active.");
         _active = true;

@@ -47,59 +47,59 @@ public sealed class TrailblazerWorldContextSettings
         NavigationQueryLimits queryLimits,
         NavigationSchedulingSettings? scheduling = null)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             operationLimits.MaxPendingOperations <= 0,
             nameof(operationLimits),
             "Operation limits must be explicitly initialized.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             maintenanceBudget.MaxConsumedEnvelopes <= 0,
             nameof(maintenanceBudget),
             "Maintenance work budget must be explicitly initialized.");
         ThrowIfNonPositive(maxIngressEntries, nameof(maxIngressEntries));
         ThrowIfNonPositive(maxIngressBytes, nameof(maxIngressBytes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxIngressBytes < MinimumIngressBytes,
             null,
             nameof(maxIngressBytes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxActiveSnapshots < 3,
             maxActiveSnapshots,
             nameof(maxActiveSnapshots),
             "Snapshot capacity must reserve the current, fail-closed, and candidate roots.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxActiveSnapshotBytes < MinimumActiveSnapshotBytes,
             null,
             nameof(maxActiveSnapshotBytes),
             "Snapshot bytes must reserve the current, fail-closed, and candidate empty roots.");
         ThrowIfNegative(maxRetiredSnapshots, nameof(maxRetiredSnapshots));
         ThrowIfNegative(maxRetiredSnapshotBytes, nameof(maxRetiredSnapshotBytes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxPersistentGraphPages < MinimumPersistentGraphPages,
             maxPersistentGraphPages,
             nameof(maxPersistentGraphPages),
             "Persistent pages must reserve the current, fail-closed, and candidate empty roots.");
         ThrowIfNegative(maxDynamicCellSlotsPerMap, nameof(maxDynamicCellSlotsPerMap));
         ThrowIfNegative(maxDynamicCellSlots, nameof(maxDynamicCellSlots));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             maxDynamicCellSlots < maxDynamicCellSlotsPerMap,
             nameof(maxDynamicCellSlots),
             "Context dynamic-cell capacity cannot be smaller than the per-map capacity.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             maxDynamicCellSlotsPerMap < operationLimits.MaxOverlayCellsPerMap,
             nameof(maxDynamicCellSlotsPerMap),
             "Per-map dynamic-cell capacity must cover every cell overlay admitted by the operation limits.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             maxDynamicCellSlots < operationLimits.MaxOverlayCells,
             nameof(maxDynamicCellSlots),
             "Context dynamic-cell capacity must cover every cell overlay admitted by the operation limits.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             navigationAreaCount <= 0 || navigationAreaCount > ushort.MaxValue + 1,
             navigationAreaCount,
             nameof(navigationAreaCount));
         ThrowIfNonPositive(maxAreaPolicies, nameof(maxAreaPolicies));
         ThrowIfNonPositive(maxAreaRulesPerPolicy, nameof(maxAreaRulesPerPolicy));
         ThrowIfNonPositive(maxAreaRules, nameof(maxAreaRules));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             maxAreaRules < maxAreaRulesPerPolicy
             || maxAreaRulesPerPolicy < navigationAreaCount,
             nameof(maxAreaRules),
@@ -110,20 +110,20 @@ public sealed class TrailblazerWorldContextSettings
         long minimumAreaPolicyWork = System.Math.Max(
             navigationAreaCount,
             2L * maximumRetainedAreaPolicies) + 1L;
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             maintenanceBudget.MaxDependencyEntries < minimumAreaPolicyWork,
             nameof(maintenanceBudget),
             "Dependency work must fit one exact area-policy publication.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             movementGroupPadding < Fixed64.Zero,
             null,
             nameof(movementGroupPadding));
         ThrowIfNonPositive(maxConcurrentSnapshotLeases, nameof(maxConcurrentSnapshotLeases));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             queryLimits.MaxConcurrentNavigationQueries <= 0,
             nameof(queryLimits),
             "Query limits must be explicitly initialized.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             queryLimits.MaxConcurrentNavigationQueries > maxConcurrentSnapshotLeases,
             nameof(queryLimits),
             "Concurrent queries cannot exceed the context snapshot-lease ceiling.");
@@ -264,14 +264,14 @@ public sealed class TrailblazerWorldContextSettings
         queryLimits: NavigationQueryLimits.Default);
 
     private static void ThrowIfNonPositive(int value, string parameterName) =>
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, value, parameterName);
+        ChronicleGuard.ThrowIfArgumentOutOfRange(value <= 0, value, parameterName);
 
     private static void ThrowIfNonPositive(long value, string parameterName) =>
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, null, parameterName);
+        ChronicleGuard.ThrowIfArgumentOutOfRange(value <= 0, null, parameterName);
 
     private static void ThrowIfNegative(int value, string parameterName) =>
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value < 0, value, parameterName);
+        ChronicleGuard.ThrowIfArgumentOutOfRange(value < 0, value, parameterName);
 
     private static void ThrowIfNegative(long value, string parameterName) =>
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(value < 0, null, parameterName);
+        ChronicleGuard.ThrowIfArgumentOutOfRange(value < 0, null, parameterName);
 }

@@ -14,7 +14,7 @@ using Chronicler.Serialization;
 using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
@@ -107,7 +107,7 @@ public class NavigationGuidedFrameBenchmarks
         _fixture.Setup(configuration, NavigationGraphBenchmarkScenario.CreateSettings(
             Width * Length, concurrentQueries: 1, cacheEntries: AgentCount, activeLeaseCapacity: AgentCount));
         _fixture.Context.SetFrameRate(32);
-        SwiftThrowHelper.ThrowIfTrue(!configuration.TryNormalize(out NormalizedGridConfiguration binding),
+        ChronicleGuard.ThrowIfTrue(!configuration.TryNormalize(out NormalizedGridConfiguration binding),
             "Guided frame grid configuration is invalid.");
         NavigationAreaPolicyKey policy = PublishMap(binding);
         Vector3d destination = NavigationGraphBenchmarkScenario.GetFoot(binding, new VoxelIndex(98, 0, 50));
@@ -136,7 +136,7 @@ public class NavigationGuidedFrameBenchmarks
             NavigationWorkMeter meter = _fixture.Context.Pathing.ImmediateRayWorkspace.WorkMeter;
             meter.Reset(default);
             NavigationRayStatus direct = _fixture.Context.Guides.TryGetDirectHeading(_queries[i], foot, out _);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 direct != NavigationRayStatus.Blocked || meter.TraceIntervals <= 0 || meter.IsGuideSampleBridge,
                 $"Guided frame direct-ray preflight failed for agent {i}: status={direct}, "
                 + $"traceIntervals={meter.TraceIntervals}, guideSampleBridge={meter.IsGuideSampleBridge}.");
@@ -175,7 +175,7 @@ public class NavigationGuidedFrameBenchmarks
         var policy = new NavigationAreaPolicyCommitOperation(new NavigationAreaPolicy(key,
             new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
             publicationSequence: 2, effectiveFrame: _fixture.Context.FrameCount + 1);
-        SwiftThrowHelper.ThrowIfTrue(!_fixture.Context.Pathing.Admit(map) || !_fixture.Context.Pathing.Admit(policy),
+        ChronicleGuard.ThrowIfTrue(!_fixture.Context.Pathing.Admit(map) || !_fixture.Context.Pathing.Admit(policy),
             "Guided frame map or policy was not admitted.");
         for (int frame = 0; frame < 4_096
             && (map.Receipt.Status == NavigationOperationStatus.Pending
@@ -183,7 +183,7 @@ public class NavigationGuidedFrameBenchmarks
         {
             _fixture.Context.Simulate();
         }
-        SwiftThrowHelper.ThrowIfTrue(map.Receipt.Status != NavigationOperationStatus.Applied
+        ChronicleGuard.ThrowIfTrue(map.Receipt.Status != NavigationOperationStatus.Applied
             || policy.Receipt.Status != NavigationOperationStatus.Applied, "Guided frame publication failed.");
         return key;
     }
@@ -339,7 +339,7 @@ public class NavigationGuidedFrameBenchmarks
         }
         _checksums[frame] = checksum;
         if (_hasExpectedReplay && checksum != _expectedChecksums[frame])
-            SwiftThrowHelper.ThrowIfTrue(true, $"Guided frame replay diverged at relative frame {frame}.");
+            ChronicleGuard.ThrowIfTrue(true, $"Guided frame replay diverged at relative frame {frame}.");
         return checksum;
     }
 
@@ -364,7 +364,7 @@ public class NavigationGuidedFrameBenchmarks
         {
             meter.Reset(default);
             _agents[i].Simulate();
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 meter.IsGuideSampleBridge,
                 $"Guided frame Flow recovery ray contaminated direct LOS attribution for agent {i}.");
             bool observed = meter.TraceIntervals > 0;
@@ -399,12 +399,12 @@ public class NavigationGuidedFrameBenchmarks
                     expected++;
                 if (observedAgent)
                     observed++;
-                SwiftThrowHelper.ThrowIfTrue(
+                ChronicleGuard.ThrowIfTrue(
                     observedAgent != expectedAgent,
                     $"Guided frame {_mode} {(preparation ? "preparation" : "measured")} per-agent LOS schedule "
                     + $"mismatch at frame {frame}, agent {agent}: expected={expectedAgent}, actual={observedAgent}.");
             }
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 counts[frame] != observed || observed != expected,
                 $"Guided frame {_mode} {(preparation ? "preparation" : "measured")} LOS schedule "
                 + $"mismatch at frame {frame}: expected={expected}, observed={observed}, actual={counts[frame]}.");
@@ -413,7 +413,7 @@ public class NavigationGuidedFrameBenchmarks
         }
         if (!preparation)
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 total != AgentCount * 4,
                 $"Guided frame {_mode} measured {total} periodic rays instead of {AgentCount * 4}.");
             for (int agent = 0; agent < AgentCount; agent++)
@@ -421,7 +421,7 @@ public class NavigationGuidedFrameBenchmarks
                 int agentTotal = 0;
                 for (int frame = 0; frame < MeasuredFrames; frame++)
                     agentTotal += observations[frame * MaximumAgentCount + agent];
-                SwiftThrowHelper.ThrowIfTrue(
+                ChronicleGuard.ThrowIfTrue(
                     agentTotal != 4,
                     $"Guided frame {_mode} agent {agent} measured {agentTotal} periodic rays instead of 4.");
             }
@@ -448,12 +448,12 @@ public class NavigationGuidedFrameBenchmarks
         for (int frame = 0; frame < 17; frame++)
         {
             int pausedRays = CaptureBurstFrame($"pause-{frame + 1:D2}");
-            SwiftThrowHelper.ThrowIfTrue(pausedRays != 0, "Paused guided agents performed LOS work.");
+            ChronicleGuard.ThrowIfTrue(pausedRays != 0, "Paused guided agents performed LOS work.");
         }
         for (int i = 0; i < AgentCount; i++)
             _agents[i].Steering.CanMove = true;
         int resumedRays = CaptureBurstFrame("resume-overdue");
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             resumedRays != AgentCount,
             $"Resumed guided agents performed {resumedRays} overdue checks instead of {AgentCount}.");
         int realignedTotal = 0;
@@ -461,12 +461,12 @@ public class NavigationGuidedFrameBenchmarks
         {
             int rays = CaptureBurstFrame($"resume-realigned-{frame + 1:D2}");
             int expected = GetAssignedPhaseCount((int)(_fixture.Context.FrameCount % 16));
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 rays != expected,
                 $"Resumed LOS schedule did not realign at frame {frame}: expected={expected}, actual={rays}.");
             realignedTotal += rays;
         }
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             realignedTotal != AgentCount,
             $"Resumed LOS schedule performed {realignedTotal} checks across one interval.");
 
@@ -475,13 +475,13 @@ public class NavigationGuidedFrameBenchmarks
             OverlayReplacementPolicy.Clear,
             operationSequence: 3,
             effectiveFrame: _fixture.Context.FrameCount + 1);
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_fixture.Context.Pathing.Admit(rebake),
             "Guided burst same-map rebake was not admitted.");
         int publicationRays = CaptureBurstFrame(
             "same-map-rebake-invalidation-and-ordered-reacquisition",
             rebake.Receipt);
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             rebake.Receipt.Status != NavigationOperationStatus.Applied
             || publicationRays != AgentCount || CountActiveGuides() != AgentCount - 1
             || CountZeroTargetDirections() != 1
@@ -492,7 +492,7 @@ public class NavigationGuidedFrameBenchmarks
         {
             var steering = _agents[i].Steering;
             PathQuery? retry = steering.CurrentQuery;
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 steering.HasLineOfSightPath
                 || !steering.ShouldMove
                 || !retry.HasValue
@@ -506,7 +506,7 @@ public class NavigationGuidedFrameBenchmarks
             rebake.Receipt);
         int expectedRecoveryRays = 1
             + GetAssignedPhaseCount((int)(_fixture.Context.FrameCount % 16));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             recoveryRays != expectedRecoveryRays || CountActiveGuides() != AgentCount
             || CountZeroTargetDirections() != 0,
             "Same-query retry did not perform direct checks and reacquire guidance.");
@@ -519,16 +519,16 @@ public class NavigationGuidedFrameBenchmarks
         {
             NavigationProfileReplacementStatus status =
                 _agents[i].TryReplaceNavigationProfile(replacementProfile);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 status != NavigationProfileReplacementStatus.Applied
                 || _agents[i].Steering.PathRecheckPhase != i % 16,
                 $"Guided burst profile replacement failed for agent {i}: {status}.");
         }
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             CountActiveGuides() != 0,
             "Profile replacement retained old guide leases.");
         int replacementRays = CaptureBurstFrame("profile-replacement-admission");
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             replacementRays != AgentCount || CountActiveGuides() != AgentCount,
             "Profile replacement delayed forced re-admission or failed to reacquire guidance.");
 
@@ -546,7 +546,7 @@ public class NavigationGuidedFrameBenchmarks
             var target = new BenchmarkNavigator(_fixture.Context, foot, replacementProfile, i);
             target.PrepareFrame();
             JsonRecordSerializer.Populate(target, payload);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 target.Steering.PathRecheckPhase != i % 16
                 || target.Steering.PathRecheckCooldownFrames != 16
                 || target.Steering.HasNavigationGuidance,
@@ -558,7 +558,7 @@ public class NavigationGuidedFrameBenchmarks
         int populationCollectionMask = (GC.CollectionCount(0) != populationGen0 ? 1 : 0)
             | (GC.CollectionCount(1) != populationGen1 ? 2 : 0)
             | (GC.CollectionCount(2) != populationGen2 ? 4 : 0);
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             CountActiveGuides() != 0,
             "Guided burst population acquired guide leases.");
         Console.WriteLine("NAVIGATION_GUIDED_BURST_SAMPLES " + JsonSerializer.Serialize(new
@@ -572,7 +572,7 @@ public class NavigationGuidedFrameBenchmarks
             activeGuides = 0
         }));
         int restoreRays = CaptureBurstFrame("restore-next-admission");
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             restoreRays != AgentCount || CountActiveGuides() != AgentCount,
             "Restored guided agents delayed admission or failed to reacquire guidance.");
     }
@@ -655,7 +655,7 @@ public class NavigationGuidedFrameBenchmarks
                 || agent.FootPosition.Z - agent.Radius <= -Fixed64.Half
                 || agent.FootPosition.Z + agent.Radius >= (Fixed64)99 + Fixed64.Half)
             {
-                SwiftThrowHelper.ThrowIfTrue(true,
+                ChronicleGuard.ThrowIfTrue(true,
                     $"Guided agent invalid: frame={frame}, agent={i}, position={agent.Position}, "
                     + $"guided={agent.Steering.HasNavigationGuidance}, cellFrame={committed?.SimulationFrame}, "
                     + $"expectedFrame={_fixture.Context.FrameCount}, cell={committed?.Address}.");
@@ -665,7 +665,7 @@ public class NavigationGuidedFrameBenchmarks
             if ((frame + 1) % 32 == 0)
             {
                 if (_movement[i] == 0)
-                    SwiftThrowHelper.ThrowIfTrue(true, $"Guided agent {i} did not move during a 32-frame block.");
+                    ChronicleGuard.ThrowIfTrue(true, $"Guided agent {i} did not move during a 32-frame block.");
                 _movement[i] = 0;
             }
         }
@@ -675,7 +675,7 @@ public class NavigationGuidedFrameBenchmarks
     {
         NavigationAStarPayloadCache astar = _fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         NavigationFlowFieldPayloadCache flow = _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
-        SwiftThrowHelper.ThrowIfTrue(astar.ActiveLeaseCount != (_algorithm == PathAlgorithm.AStar ? AgentCount : 0)
+        ChronicleGuard.ThrowIfTrue(astar.ActiveLeaseCount != (_algorithm == PathAlgorithm.AStar ? AgentCount : 0)
             || flow.ActiveLeaseCount != (_algorithm == PathAlgorithm.FlowField ? AgentCount : 0),
             "Guided frame did not retain one real guide per Navigator.");
     }
@@ -683,7 +683,7 @@ public class NavigationGuidedFrameBenchmarks
     [IterationCleanup]
     public void ValidateAndExport()
     {
-        SwiftThrowHelper.ThrowIfTrue(_frames != MeasuredFrames, "Guided frame block ended early.");
+        ChronicleGuard.ThrowIfTrue(_frames != MeasuredFrames, "Guided frame block ended early.");
         ValidateActiveGuides();
         ReleaseAgentsAndValidateDrained();
         if (_mode == null)
@@ -740,7 +740,7 @@ public class NavigationGuidedFrameBenchmarks
                 agent?.Reset();
         NavigationAStarPayloadCache astar = _fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         NavigationFlowFieldPayloadCache flow = _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
-        SwiftThrowHelper.ThrowIfTrue(astar.ActiveLeaseCount != 0 || astar.ReservedLeaseCount != 0
+        ChronicleGuard.ThrowIfTrue(astar.ActiveLeaseCount != 0 || astar.ReservedLeaseCount != 0
             || astar.ReservedPayloadBytes != 0 || astar.LeasedBytes != 0 || astar.DetachedBytes != 0
             || flow.ActiveLeaseCount != 0 || flow.ReservedLeaseCount != 0
             || flow.ReservedPayloadBytes != 0 || flow.LeasedBytes != 0 || flow.DetachedBytes != 0

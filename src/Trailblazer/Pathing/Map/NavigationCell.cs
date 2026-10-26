@@ -94,27 +94,27 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
         Fixed64 heightClearance,
         NavigationCellFlags flags = NavigationCellFlags.None)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             media == TraversalMedia.None || (media & ~KnownMedia) != 0,
             nameof(media),
             "Media must contain at least one known traversal-medium bit.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (requiredCapabilities & ~KnownCapabilities) != 0,
             nameof(requiredCapabilities),
             "Required capabilities contain an unknown bit.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             enterCost < Fixed64.Zero,
             nameof(enterCost),
             "Enter cost must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             radiusClearance < Fixed64.Zero,
             nameof(radiusClearance),
             "Radius clearance must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             heightClearance < Fixed64.Zero,
             nameof(heightClearance),
             "Height clearance must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (flags & ~KnownFlags) != 0,
             nameof(flags),
             "Cell flags contain an unknown bit.");

@@ -256,7 +256,7 @@ public class JumpLocomotion : ILocomotion
     {
         int schemaVersion = 1;
         RecordValues.Look(chronicler, ref schemaVersion, "SchemaVersion", 0);
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             chronicler.Mode == SerializationMode.Loading && schemaVersion != 1,
             message: "Serialized jump schema is missing, retired, or unsupported.");
         // Validate the complete timing record before changing any live configuration.

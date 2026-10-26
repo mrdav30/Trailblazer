@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation.Steering;
 
 namespace Trailblazer.Benchmarks.Pathing;
@@ -57,10 +57,10 @@ public class NavigationRecoveryBenchmarks
             _scenario.CreateRecord(++_iteration, replayMatches, CaptureStage, Launch)));
         _expectedHashes ??= hashes;
         _expectedReadyFrames ??= (int[])ready.Clone();
-        SwiftThrowHelper.ThrowIfTrue(!replayMatches, "Recovery episode deterministic replay diverged.");
-        SwiftThrowHelper.ThrowIfTrue(!_scenario.Successful, "Recovery episode has failures or censored agents.");
-        SwiftThrowHelper.ThrowIfTrue(_scenario.DiagnosticValidationError != null, _scenario.DiagnosticValidationError);
-        SwiftThrowHelper.ThrowIfTrue(!_scenario.WarmReuseValid, "Warm compatible acquisition unexpectedly built or failed to reuse a payload.");
+        ChronicleGuard.ThrowIfTrue(!replayMatches, "Recovery episode deterministic replay diverged.");
+        ChronicleGuard.ThrowIfTrue(!_scenario.Successful, "Recovery episode has failures or censored agents.");
+        ChronicleGuard.ThrowIfTrue(_scenario.DiagnosticValidationError != null, _scenario.DiagnosticValidationError);
+        ChronicleGuard.ThrowIfTrue(!_scenario.WarmReuseValid, "Warm compatible acquisition unexpectedly built or failed to reuse a payload.");
         _scenario.Dispose();
         _scenario = null;
     }
@@ -93,7 +93,7 @@ public class NavigationRecoveryBenchmarks
     internal static int RunCapture(int launch, NavigationAcquisitionMode mode = NavigationAcquisitionMode.Immediate,
         string workLimits = "Default", string populationFilter = "All")
     {
-        SwiftThrowHelper.ThrowIfTrue(launch < 1 || launch > 3, "Capture launch must be 1, 2, or 3.");
+        ChronicleGuard.ThrowIfTrue(launch < 1 || launch > 3, "Capture launch must be 1, 2, or 3.");
         string[] populations = populationFilter == "All" ? new[] { "AStar100", "Flow100", "Flow500" }
             : populationFilter == "Flow" ? new[] { "Flow100", "Flow500" } : new[] { populationFilter };
         foreach (string population in populations)
@@ -119,7 +119,7 @@ public class NavigationRecoveryBenchmarks
 
     internal static int RunDiagnosticCapture(int launch)
     {
-        SwiftThrowHelper.ThrowIfTrue(launch < 1 || launch > 3, "Diagnostic launch must be 1, 2, or 3.");
+        ChronicleGuard.ThrowIfTrue(launch < 1 || launch > 3, "Diagnostic launch must be 1, 2, or 3.");
         const string limits = "65536,128,4096,8192,64,256";
         (string name, NavigationAcquisitionMode mode)[] cases =
         {

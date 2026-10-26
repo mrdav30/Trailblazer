@@ -7,7 +7,7 @@ using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
@@ -93,11 +93,11 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         scenario._agents[99].Steering.CanMove = false;
         Advance(0);
         Require(98, 0, "two original requests are still waiting");
-        SwiftThrowHelper.ThrowIfTrue(scenario.ReadyFrames[0] != 1, "Agent0 did not acquire its original guide.");
+        ChronicleGuard.ThrowIfTrue(scenario.ReadyFrames[0] != 1, "Agent0 did not acquire its original guide.");
 
         Request(0, scenario._agents[0].FootPosition + Vector3d.Right * 2);
         Advance(1);
-        SwiftThrowHelper.ThrowIfTrue(!scenario._agents[0].Steering.HasLineOfSightPath
+        ChronicleGuard.ThrowIfTrue(!scenario._agents[0].Steering.HasLineOfSightPath
             || scenario._agents[0].Steering.HasNavigationGuidance,
             "Regression must actually switch the early-ready agent from a lease to direct LOS.");
         Require(98, 0, "switching to LOS must not revoke an original success");
@@ -105,13 +105,13 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         scenario._agents[98].Steering.CanMove = true;
         Request(98, scenario._agents[98].FootPosition + Vector3d.Right * 2);
         Advance(2);
-        SwiftThrowHelper.ThrowIfTrue(!scenario._agents[98].Steering.HasLineOfSightPath
+        ChronicleGuard.ThrowIfTrue(!scenario._agents[98].Steering.HasLineOfSightPath
             || scenario.ReadyFrames[98] != 3, "A first usable direct heading must qualify for readiness.");
         Require(99, 0, "the direct-first request completed while the final request waits");
 
         Request(0, new Vector3d(200, 0, 200));
         Advance(3);
-        SwiftThrowHelper.ThrowIfTrue(!scenario._agents[0].Steering.IsAtDestination,
+        ChronicleGuard.ThrowIfTrue(!scenario._agents[0].Steering.IsAtDestination,
             "Regression must exercise the real invalid-path/arrival callback after first readiness.");
         Require(99, 0, "a later failed trek must not reclassify the original successful request");
 
@@ -122,7 +122,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         Request(99, scenario._queries[99].End.Position);
         Advance(5);
         Require(99, 1, "a failed original request stays failed after a later successful trek");
-        SwiftThrowHelper.ThrowIfTrue(scenario.ReadyFrames[0] != 1 || scenario.ReadyFrames[99] != -1
+        ChronicleGuard.ThrowIfTrue(scenario.ReadyFrames[0] != 1 || scenario.ReadyFrames[99] != -1
             || scenario._failed[0] || !scenario._failed[99], "Original outcomes are not disjoint and latched.");
         Console.WriteLine("RECOVERY_READINESS_REGRESSION passed: leased-to-direct, direct-first, sticky success/failure, zero final censoring");
         return 0;
@@ -142,7 +142,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
                 query.Traversal, query.Algorithm, query.Budget, query.AllowTransitions, query.FlowField), TrekRate.Slow);
         }
 
-        void Require(int ready, int failures, string reason) => SwiftThrowHelper.ThrowIfTrue(
+        void Require(int ready, int failures, string reason) => ChronicleGuard.ThrowIfTrue(
             scenario._ready != ready || scenario._failureCount != failures,
             $"Readiness regression: {reason}; ready={scenario._ready}/{ready}, failures={scenario._failureCount}/{failures}.");
     }
@@ -151,9 +151,9 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         NavigationAcquisitionMode acquisitionMode = NavigationAcquisitionMode.Immediate, string workLimits = "Default",
         string diagnostic = null)
     {
-        SwiftThrowHelper.ThrowIfTrue(population != "AStar100" && population != "Flow100" && population != "Flow500",
+        ChronicleGuard.ThrowIfTrue(population != "AStar100" && population != "Flow100" && population != "Flow500",
             "Recovery population must be AStar100, Flow100, or Flow500.");
-        SwiftThrowHelper.ThrowIfTrue(diagnostic != null && (population != "Flow100" || episode != "ColdInitial"
+        ChronicleGuard.ThrowIfTrue(diagnostic != null && (population != "Flow100" || episode != "ColdInitial"
             || workLimits != "65536,128,4096,8192,64,256"
             || diagnostic is not ("MixedFlowKeys" or "UncoveredFlowOrigin" or "RetentionPressure8" or "RetentionPressure100")
             || diagnostic.StartsWith("RetentionPressure", StringComparison.Ordinal) && acquisitionMode != NavigationAcquisitionMode.Scheduled),
@@ -186,7 +186,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             10_000, concurrentQueries: 1, cacheEntries: count, activeLeaseCapacity: count,
             scheduling: CreateScheduling(count, workLimits, diagnostic == "RetentionPressure8" ? 8 : count)));
         _fixture.Context.SetFrameRate(32);
-        SwiftThrowHelper.ThrowIfTrue(!configuration.TryNormalize(out NormalizedGridConfiguration binding),
+        ChronicleGuard.ThrowIfTrue(!configuration.TryNormalize(out NormalizedGridConfiguration binding),
             "Recovery grid configuration is invalid.");
         var cell = new NavigationCell(TraversalMedia.Solid, TraversalCapability.None,
             default, Fixed64.Zero, (Fixed64)4, (Fixed64)4);
@@ -201,12 +201,12 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         var policy = new NavigationAreaPolicyKey(MapId, 1);
         var policyPublication = new NavigationAreaPolicyCommitOperation(new NavigationAreaPolicy(policy,
             new[] { new NavigationAreaRule(true, Fixed64.Zero) }), 2, _fixture.Context.FrameCount + 1);
-        SwiftThrowHelper.ThrowIfTrue(!_fixture.Context.Pathing.Admit(publication)
+        ChronicleGuard.ThrowIfTrue(!_fixture.Context.Pathing.Admit(publication)
             || !_fixture.Context.Pathing.Admit(policyPublication), "Recovery map/policy admission failed.");
         for (int i = 0; i < 4_096 && (publication.Receipt.Status == NavigationOperationStatus.Pending
             || policyPublication.Receipt.Status == NavigationOperationStatus.Pending); i++)
             _fixture.Context.Simulate();
-        SwiftThrowHelper.ThrowIfTrue(publication.Receipt.Status != NavigationOperationStatus.Applied
+        ChronicleGuard.ThrowIfTrue(publication.Receipt.Status != NavigationOperationStatus.Applied
             || policyPublication.Receipt.Status != NavigationOperationStatus.Applied, "Recovery publication failed.");
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
@@ -237,7 +237,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             NavigationWorkMeter meter = _fixture.Context.Pathing.ImmediateRayWorkspace.WorkMeter;
             meter.Reset(default);
             NavigationRayStatus direct = _fixture.Context.Guides.TryGetDirectHeading(_queries[i], foot, out _);
-            SwiftThrowHelper.ThrowIfTrue(direct != NavigationRayStatus.Blocked || meter.TraceIntervals <= 0,
+            ChronicleGuard.ThrowIfTrue(direct != NavigationRayStatus.Blocked || meter.TraceIntervals <= 0,
                 "Recovery wall must block direct travel without budget exhaustion.");
         }
         AssertDrained();
@@ -260,7 +260,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
                 ValidateFrame(frame, recordReadiness: false);
             }
             for (int i = 0; i < count; i++)
-                SwiftThrowHelper.ThrowIfTrue(!_agents[i].Steering.HasNavigationGuidance || _movement[i] == 0,
+                ChronicleGuard.ThrowIfTrue(!_agents[i].Steering.HasNavigationGuidance || _movement[i] == 0,
                     "Recovery preparation must retain moving guided agents.");
             foreach (BenchmarkNavigator agent in _agents)
                 ConfigureAcquisitionMode(agent);
@@ -270,7 +270,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             var rebake = new NavigationMapCommitOperation(new PreparedNavigationMap(map, 2),
                 OverlayReplacementPolicy.Clear, 3, _fixture.Context.FrameCount + 1);
             _rebakeReceipt = rebake.Receipt;
-            SwiftThrowHelper.ThrowIfTrue(!_fixture.Context.Pathing.Admit(rebake), "Recovery rebake rejected.");
+            ChronicleGuard.ThrowIfTrue(!_fixture.Context.Pathing.Admit(rebake), "Recovery rebake rejected.");
         }
         else if (episode == "ProfileReplacement")
         {
@@ -278,13 +278,13 @@ internal sealed class NavigationRecoveryScenario : IDisposable
                 new KinematicBodyShape(Fixed64.FromFraction(1, 5), Fixed64.One, Fixed64.Zero),
                 Fixed64.Zero, Fixed64.Zero, Fixed64.Quarter, TraversalMedia.Solid, TraversalCapability.None);
             foreach (BenchmarkNavigator agent in _agents)
-                SwiftThrowHelper.ThrowIfTrue(agent.TryReplaceNavigationProfile(replacement)
+                ChronicleGuard.ThrowIfTrue(agent.TryReplaceNavigationProfile(replacement)
                     != NavigationProfileReplacementStatus.Applied, "Recovery profile replacement rejected.");
         }
         else if (episode == "Restore")
             PrepareRestore(profile);
         else
-            SwiftThrowHelper.ThrowIfTrue(episode != "ColdInitial" && episode != "WarmCompatible",
+            ChronicleGuard.ThrowIfTrue(episode != "ColdInitial" && episode != "WarmCompatible",
                 "Unknown recovery episode.");
         if (episode == "ColdInitial")
             AssertEmptyCaches();
@@ -307,7 +307,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         if (workLimits == "Default")
             return new NavigationSchedulingSettings(maxRetainedRequests: maxRetainedRequests, maxRetainedDescriptorBytes: bytes);
         string[] values = workLimits.Split(',');
-        SwiftThrowHelper.ThrowIfTrue(values.Length != 6,
+        ChronicleGuard.ThrowIfTrue(values.Length != 6,
             "Explicit work limits must be lookup,candidate,node,edge,connection,operation.");
         return new NavigationSchedulingSettings(maxRetainedRequests, bytes, int.Parse(values[0]), int.Parse(values[1]),
             int.Parse(values[2]), int.Parse(values[3]), int.Parse(values[4]), int.Parse(values[5]));
@@ -329,7 +329,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             ConfigureAcquisitionMode(restored);
             JsonRecordSerializer.Populate(restored, json);
             _agents[i] = restored;
-            SwiftThrowHelper.ThrowIfTrue(restored.Steering.HasNavigationGuidance
+            ChronicleGuard.ThrowIfTrue(restored.Steering.HasNavigationGuidance
                 || restored.Steering.PathRecheckPhase != i % 16,
                 "Recovery restore retained transient guidance or lost balanced phases.");
         }
@@ -423,7 +423,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
                 && current.End.Position != _queries[i].End.Position)
                 _originalDestinationsIntact = false;
             NavigationCommittedCellState? committed = agent.LastCommittedCell;
-            SwiftThrowHelper.ThrowIfTrue(!committed.HasValue
+            ChronicleGuard.ThrowIfTrue(!committed.HasValue
                 || committed.Value.SimulationFrame != _fixture.Context.FrameCount
                 || committed.Value.GraphVersion != _fixture.Context.Pathing.NavigationGraphStore.Current.GraphVersion
                 || committed.Value.Address.MapId != MapId || committed.Value.Medium != TraversalMedium.Solid
@@ -440,14 +440,14 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             foreach (WorldVoxelIndex index in GridOccupantManager.GetOccupiedIndices(_fixture.World, agent))
             {
                 occupancy++;
-                SwiftThrowHelper.ThrowIfTrue(index.VoxelIndex != committed.Value.Address.Index
+                ChronicleGuard.ThrowIfTrue(index.VoxelIndex != committed.Value.Address.Index
                     || !GridOccupantManager.TryGetOccupancyTicket(_fixture.World, agent, index, out _),
                     $"Recovery agent {i} occupancy does not match its committed physical cell at frame {frame}: occupied={index.VoxelIndex}, committed={committed.Value.Address.Index}, foot={agent.FootPosition}, waiting={agent.Steering.IsAwaitingGuidance}, guide={agent.Steering.HasNavigationGuidance}.");
             }
-            SwiftThrowHelper.ThrowIfTrue(occupancy != 1, $"Recovery agent {i} occupancy count is {occupancy}.");
+            ChronicleGuard.ThrowIfTrue(occupancy != 1, $"Recovery agent {i} occupancy count is {occupancy}.");
             _movement[i] += Math.Abs(agent.Position.X.m_rawValue - agent.LastPosition.X.m_rawValue)
                 + Math.Abs(agent.Position.Z.m_rawValue - agent.LastPosition.Z.m_rawValue);
-            SwiftThrowHelper.ThrowIfTrue(agent.PendingTransition.HasValue,
+            ChronicleGuard.ThrowIfTrue(agent.PendingTransition.HasValue,
                 "This wall-gap episode contains no authored action; an action cannot stand in for readiness.");
             bool arrival = agent.Steering.IsAtDestination
                 && (agent.FootPosition - _queries[i].End.Position).MagnitudeSquared
@@ -467,7 +467,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             if (recordReadiness && usable && ReadyFrames[i] < 0
                 && (_rebakeReceipt == null || _rebakeReceipt.Status == NavigationOperationStatus.Applied))
             {
-                SwiftThrowHelper.ThrowIfTrue(!arrival && _movement[i] == 0,
+                ChronicleGuard.ThrowIfTrue(!arrival && _movement[i] == 0,
                     $"Recovery agent {i} reported heading but did not move.");
                 ReadyFrames[i] = frame + 1;
             }
@@ -489,14 +489,14 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         if (_algorithm == PathAlgorithm.AStar)
         {
             NavigationGuideStatus status = _fixture.Context.Guides.RequestGuide(query, out var lease);
-            SwiftThrowHelper.ThrowIfTrue(status != NavigationGuideStatus.Success || !lease.HasValue,
+            ChronicleGuard.ThrowIfTrue(status != NavigationGuideStatus.Success || !lease.HasValue,
                 "Warm recovery A* preparation failed.");
             lease.Value.Dispose();
         }
         else
         {
             NavigationGuideStatus status = _fixture.Context.Guides.RequestFlowField(query, out var lease);
-            SwiftThrowHelper.ThrowIfTrue(status != NavigationGuideStatus.Success || !lease.HasValue,
+            ChronicleGuard.ThrowIfTrue(status != NavigationGuideStatus.Success || !lease.HasValue,
                 "Warm recovery Flow preparation failed.");
             lease.Value.Dispose();
         }
@@ -509,13 +509,13 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         if (_algorithm == PathAlgorithm.AStar)
         {
             NavigationAStarPayloadCache cache = _fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
-            SwiftThrowHelper.ThrowIfTrue(!cache.TryReservePayload(
+            ChronicleGuard.ThrowIfTrue(!cache.TryReservePayload(
                 _fixture.Context.Settings.QueryLimits.MaxAStarSinglePayloadBytes, out var reservation),
                 "Warm recovery A* diagnostic reservation failed.");
             try
             {
                 var key = new NavigationAStarPayloadKey(query, start, end, TraversalMedium.Solid, TraversalMedia.Solid);
-                SwiftThrowHelper.ThrowIfTrue(!cache.TryCheckoutReserved(key, store.Current, ref reservation, out var lease),
+                ChronicleGuard.ThrowIfTrue(!cache.TryCheckoutReserved(key, store.Current, ref reservation, out var lease),
                     "Warm recovery A* exact-key coverage is missing.");
                 lease.Dispose();
             }
@@ -526,7 +526,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             var key = new NavigationFlowFieldPayloadKey(query, end, TraversalMedium.Solid, TraversalMedia.Solid);
             NavigationFlowFieldStatus status = _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache
                 .TryCheckout(store, store.Current, key, start, out var lease, out _);
-            SwiftThrowHelper.ThrowIfTrue(status != NavigationFlowFieldStatus.Success,
+            ChronicleGuard.ThrowIfTrue(status != NavigationFlowFieldStatus.Success,
                 "Warm recovery Flow compatible-origin coverage is missing.");
             lease.Dispose();
         }
@@ -605,7 +605,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         ? _fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache.Count
         : _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.Count;
 
-    private void AssertEmptyCaches() => SwiftThrowHelper.ThrowIfTrue(
+    private void AssertEmptyCaches() => ChronicleGuard.ThrowIfTrue(
         _fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache.Count != 0
         || _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.Count != 0,
         "A cold episode must begin with genuinely empty payload caches.");
@@ -614,7 +614,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
     {
         var astar = _fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         var flow = _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
-        SwiftThrowHelper.ThrowIfTrue(astar.ActiveLeaseCount != 0 || astar.ReservedLeaseCount != 0
+        ChronicleGuard.ThrowIfTrue(astar.ActiveLeaseCount != 0 || astar.ReservedLeaseCount != 0
             || astar.ReservedPayloadBytes != 0 || astar.LeasedBytes != 0 || astar.DetachedBytes != 0
             || flow.ActiveLeaseCount != 0 || flow.ReservedLeaseCount != 0
             || flow.ReservedPayloadBytes != 0 || flow.LeasedBytes != 0 || flow.DetachedBytes != 0

@@ -100,35 +100,35 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
         Vector3d destinationPointOverride = default,
         bool hasDestinationPointOverride = false)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(id),
             nameof(id),
             "Transition ID cannot be null, empty, or whitespace.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !IsKnownType(type),
             nameof(type),
             "Transition type is unknown.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !IsKnownMedium(sourceMedium),
             nameof(sourceMedium),
             "Source medium must identify one known traversal medium.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !IsKnownMedium(destinationMedium),
             nameof(destinationMedium),
             "Destination medium must identify one known traversal medium.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (requiredCapabilities & ~NavigationCell.KnownCapabilities) != 0,
             nameof(requiredCapabilities),
             "Required capabilities contain an unknown bit.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             actionCost < Fixed64.Zero,
             nameof(actionCost),
             "Action cost must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (locomotionHints & ~TraversalTransitionRule.KnownLocomotionHints) != 0,
             nameof(locomotionHints),
             "Locomotion hints contain an unknown bit.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(destination.MapId),
             nameof(destination),
             "Destination must contain a valid map ID.");

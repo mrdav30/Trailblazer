@@ -24,11 +24,11 @@ internal readonly struct NavigationRayRequest
         NavigationRayEndpointAllowance endpointAllowance,
         NavigationRayChainConstraint chainConstraint = default)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(expectedGraph, nameof(expectedGraph));
-        SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(!NavigationCell.IsKnownMedium(medium), null, nameof(medium));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(expectedGraph, nameof(expectedGraph));
+        ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(!NavigationCell.IsKnownMedium(medium), null, nameof(medium));
         World = world;
         Store = store;
         ExpectedGraph = expectedGraph;

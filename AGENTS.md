@@ -297,3 +297,11 @@ user explicitly requests it. Preserve unrelated worktree changes.
 
 Treat graph publication, cache invalidation, transition ownership, controller
 load staging, and serialized schemas as high-risk boundaries.
+
+## Shared Diagnostics Ownership
+
+Use the independent `Chronicler.Diagnostics` package for diagnostic channels,
+lazy logging handlers, and `ChronicleGuard` guards. It does not depend on
+`Chronicler.Core`. Keep library-specific channels, formatters, and logger facades
+in their owning library. `UseLocalLsfStack=true` selects the sibling diagnostics
+project; standard and Lean builds use the same diagnostics package.

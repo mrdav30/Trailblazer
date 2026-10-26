@@ -37,7 +37,7 @@ public readonly struct NavigationTokenLegendEntry
         NavigationCell cell,
         TraversalMedia transitionMedia = TraversalMedia.None)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             cell.Media == TraversalMedia.None,
             nameof(cell),
             "The emitted cell must contain at least one known traversal-medium bit.");
@@ -49,7 +49,7 @@ public readonly struct NavigationTokenLegendEntry
         System.Diagnostics.Debug.Assert(cell.RadiusClearance >= Fixed64.Zero);
         System.Diagnostics.Debug.Assert(cell.HeightClearance >= Fixed64.Zero);
 
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (transitionMedia & ~NavigationCell.KnownMedia) != 0
             || (transitionMedia & ~cell.Media) != 0,
             nameof(transitionMedia),

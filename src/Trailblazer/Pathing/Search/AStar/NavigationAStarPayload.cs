@@ -38,12 +38,12 @@ internal sealed class NavigationAStarPayload
         ulong? worldChangeSequence,
         NavigationSurfaceAStarStatus status)
     {
-        SwiftThrowHelper.ThrowIfNull(guidePoints, nameof(guidePoints));
-        SwiftThrowHelper.ThrowIfNull(
+        ChronicleGuard.ThrowIfNull(guidePoints, nameof(guidePoints));
+        ChronicleGuard.ThrowIfNull(
             transitionInstructions,
             nameof(transitionInstructions));
-        SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(dependencies, nameof(dependencies));
+        ChronicleGuard.ThrowIfArgument(
             !IsReusableResult(status, guidePoints.Length),
             paramName: nameof(status),
             message: "Only successful paths and exact no-path results are reusable.");
@@ -82,11 +82,11 @@ internal sealed class NavigationAStarPayload
         int transitionInstructionCount,
         GraphDependencyStamp dependencies)
     {
-        SwiftThrowHelper.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
+        ChronicleGuard.ThrowIfNegative(
             transitionInstructionCount,
             nameof(transitionInstructionCount));
-        SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
+        ChronicleGuard.ThrowIfNull(dependencies, nameof(dependencies));
         return checked(
         BaseRetainedBytes
         + GetGuidePointArrayRetainedBytes(guidePointCount)
@@ -100,8 +100,8 @@ internal sealed class NavigationAStarPayload
         int componentCount,
         int pageCount)
     {
-        SwiftThrowHelper.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(guidePointCount, nameof(guidePointCount));
+        ChronicleGuard.ThrowIfNegative(
             transitionInstructionCount,
             nameof(transitionInstructionCount));
         return checked(

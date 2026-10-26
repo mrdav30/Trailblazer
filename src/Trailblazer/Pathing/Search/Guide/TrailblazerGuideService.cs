@@ -221,7 +221,7 @@ public sealed partial class TrailblazerGuideService
     {
         if (_context.IsDisposed)
             throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_context.World.IsActive,
             message: "TrailblazerGuideService is bound to an inactive GridWorld.");
     }

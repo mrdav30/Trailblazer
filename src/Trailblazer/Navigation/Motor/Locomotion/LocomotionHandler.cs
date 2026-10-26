@@ -206,7 +206,7 @@ public class LocomotionHandler : IRecordable
     /// </summary>
     public void Replace<T>(T locomotion) where T : class, ILocomotion
     {
-        SwiftThrowHelper.ThrowIfNull(locomotion, nameof(locomotion));
+        ChronicleGuard.ThrowIfNull(locomotion, nameof(locomotion));
 
         SetLocomotion(typeof(T), locomotion);
         RefreshInstalledKinds();
@@ -241,7 +241,7 @@ public class LocomotionHandler : IRecordable
     /// </summary>
     public void ApplyProfile(LocomotionProfile profile)
     {
-        SwiftThrowHelper.ThrowIfNull(profile, nameof(profile));
+        ChronicleGuard.ThrowIfNull(profile, nameof(profile));
 
         ClearReplacedLocomotion(Move, profile.Move);
         ClearReplacedLocomotion(Fall, profile.Fall);

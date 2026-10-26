@@ -67,16 +67,16 @@ internal sealed class NavigationSurfaceComponentBuildWork
         NavigationCellAddressSet seedAddresses,
         int affectedAddressCapacity)
     {
-        SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
-        SwiftThrowHelper.ThrowIfNull(previousGraph, nameof(previousGraph));
-        SwiftThrowHelper.ThrowIfNull(affectedKeys, nameof(affectedKeys));
-        SwiftThrowHelper.ThrowIfNull(seedAddresses, nameof(seedAddresses));
+        ChronicleGuard.ThrowIfNull(graph, nameof(graph));
+        ChronicleGuard.ThrowIfNull(previousGraph, nameof(previousGraph));
+        ChronicleGuard.ThrowIfNull(affectedKeys, nameof(affectedKeys));
+        ChronicleGuard.ThrowIfNull(seedAddresses, nameof(seedAddresses));
         _graph = graph;
         _previousGraph = previousGraph;
         _affectedKeys = affectedKeys;
         _affectedKeyEnumerator = affectedKeys.GetEnumerator();
         _seedAddresses = seedAddresses;
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             affectedAddressCapacity < seedAddresses.Count,
             affectedAddressCapacity,
             nameof(affectedAddressCapacity));
@@ -117,7 +117,7 @@ internal sealed class NavigationSurfaceComponentBuildWork
 
     internal bool Advance(MaintenanceWorkMeter meter)
     {
-        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
+        ChronicleGuard.ThrowIfNull(meter, nameof(meter));
         if (IsComplete)
             return true;
 
@@ -288,7 +288,7 @@ internal sealed class NavigationSurfaceComponentBuildWork
         {
             return;
         }
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_domain.Contains(address),
             message: "Surface-component closure omitted a structurally adjacent prior component.");
         _queue[_queueWrite++] = address;
@@ -340,7 +340,7 @@ internal sealed class NavigationSurfaceComponentBuildWork
     {
         if (!_visited.Add(address))
             return;
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_domain.Contains(address),
             message: "Medium-component closure omitted a positive-face neighbor.");
         _queue[_queueWrite++] = address;

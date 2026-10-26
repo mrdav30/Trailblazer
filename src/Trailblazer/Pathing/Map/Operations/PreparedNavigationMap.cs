@@ -21,9 +21,9 @@ public sealed class PreparedNavigationMap
         long bakeVersion,
         NavigationMapCheckpointStamp? checkpointStamp = null)
     {
-        SwiftThrowHelper.ThrowIfNull(map, nameof(map));
-        SwiftThrowHelper.ThrowIfArgument(bakeVersion <= 0, nameof(bakeVersion));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(map, nameof(map));
+        ChronicleGuard.ThrowIfArgument(bakeVersion <= 0, nameof(bakeVersion));
+        ChronicleGuard.ThrowIfArgument(
             checkpointStamp.HasValue
             && !string.Equals(checkpointStamp.Value.MapId, map.MapId, System.StringComparison.Ordinal),
             nameof(checkpointStamp),

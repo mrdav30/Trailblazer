@@ -12,7 +12,7 @@ using GridForge.Configuration;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks;
@@ -32,7 +32,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
     internal ColdGuideBenchmarkScenario(string geometry, int nodeCount, int concurrentQueries = 1,
         NavigationSchedulingSettings schedulingSettings = null)
     {
-        SwiftThrowHelper.ThrowIfTrue(geometry != "Plane" && geometry != "Ladder", "Unknown cold geometry.");
+        ChronicleGuard.ThrowIfTrue(geometry != "Plane" && geometry != "Ladder", "Unknown cold geometry.");
         _ladder = geometry == "Ladder";
         NodeCount = nodeCount;
         Geometry = geometry;
@@ -74,7 +74,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
         WorkspaceAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         WriteSetupPhase("internal-workspace", phaseClock, ref phaseAllocated);
         _expectedCost = InternalFlow();
-        SwiftThrowHelper.ThrowIfTrue(_expectedCost <= 0, "Cold benchmark requires a nonempty route.");
+        ChronicleGuard.ThrowIfTrue(_expectedCost <= 0, "Cold benchmark requires a nonempty route.");
         WriteSetupPhase("first-internal-cold-flow", phaseClock, ref phaseAllocated);
         ClearCaches();
         RequestFlow();
@@ -89,7 +89,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
         before = GC.GetAllocatedBytesForCurrentThread();
         RequestFlow();
         WarmAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
-        SwiftThrowHelper.ThrowIfTrue(WarmAllocatedBytes != 0, $"Warm acquisition allocated {WarmAllocatedBytes} bytes.");
+        ChronicleGuard.ThrowIfTrue(WarmAllocatedBytes != 0, $"Warm acquisition allocated {WarmAllocatedBytes} bytes.");
         ClearCaches();
         WriteSetupPhase("warm-257-and-drain", phaseClock, ref phaseAllocated);
     }
@@ -117,11 +117,11 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
     {
         NavigationAStarPayloadCache cache = Fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         var key = new NavigationAStarPayloadKey(query, _start, _end, TraversalMedium.Solid, TraversalMedia.Solid);
-        SwiftThrowHelper.ThrowIfTrue(!cache.TryReservePayload(_maximumAStarBytes, out var reservation),
+        ChronicleGuard.ThrowIfTrue(!cache.TryReservePayload(_maximumAStarBytes, out var reservation),
             "Scheduled A* eviction reservation failed.");
         try
         {
-            SwiftThrowHelper.ThrowIfTrue(!cache.TryCheckoutReserved(key,
+            ChronicleGuard.ThrowIfTrue(!cache.TryCheckoutReserved(key,
                 Fixture.Context.Pathing.NavigationGraphStore.Current, ref reservation, out var lease),
                 "Scheduled A* eviction expected the exact completed payload.");
             using (lease)
@@ -148,22 +148,22 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
     internal long RequestFlow(PathQuery query)
     {
         NavigationGuideStatus status = Fixture.Context.Guides.RequestFlowField(query, out NavigationFlowFieldLease? result);
-        SwiftThrowHelper.ThrowIfTrue(status != NavigationGuideStatus.Success || !result.HasValue,
+        ChronicleGuard.ThrowIfTrue(status != NavigationGuideStatus.Success || !result.HasValue,
             $"Cold public Flow failed: {status}.");
         using NavigationFlowFieldLease lease = result.Value;
         long cost = lease.OriginIntegrationCost.m_rawValue;
-        SwiftThrowHelper.ThrowIfTrue(cost != _expectedCost, $"Flow cost changed: {cost}/{_expectedCost}.");
+        ChronicleGuard.ThrowIfTrue(cost != _expectedCost, $"Flow cost changed: {cost}/{_expectedCost}.");
         return cost;
     }
 
     internal long RequestAStar()
     {
         NavigationGuideStatus status = Fixture.Context.Guides.RequestGuide(AStarQuery, out NavigationGuideLease? result);
-        SwiftThrowHelper.ThrowIfTrue(status != NavigationGuideStatus.Success || !result.HasValue,
+        ChronicleGuard.ThrowIfTrue(status != NavigationGuideStatus.Success || !result.HasValue,
             $"Cold public A* failed: {status}.");
         using NavigationGuideLease lease = result.Value;
         long cost = lease.TotalCost.m_rawValue;
-        SwiftThrowHelper.ThrowIfTrue(cost != _expectedCost || lease.StepCount < 2,
+        ChronicleGuard.ThrowIfTrue(cost != _expectedCost || lease.StepCount < 2,
             $"A* route changed: cost={cost}/{_expectedCost}, steps={lease.StepCount}.");
         AStarStepCount = lease.StepCount;
         return cost;
@@ -172,20 +172,20 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
     internal long InternalFlow()
     {
         NavigationWorldGraphLease graph = Fixture.Context.Pathing.TryAcquireNavigationGraph();
-        SwiftThrowHelper.ThrowIfTrue(graph == null, "Cold graph lease unavailable.");
+        ChronicleGuard.ThrowIfTrue(graph == null, "Cold graph lease unavailable.");
         _admission.Begin(graph, FlowQuery, TraversalMedium.Solid, TraversalMedia.Solid);
         try
         {
             while (_admission.Status == NavigationQueryAdmissionStatus.Pending)
                 _admission.Advance(FlowQuery.Budget.MaxLookupProbes, FlowQuery.Budget.MaxEndpointCandidates);
-            SwiftThrowHelper.ThrowIfTrue(_admission.Status != NavigationQueryAdmissionStatus.Success,
+            ChronicleGuard.ThrowIfTrue(_admission.Status != NavigationQueryAdmissionStatus.Success,
                 $"Cold internal admission failed: {_admission.Status}; endpoint_candidates={_admission.Meter.EndpointCandidates}/{FlowQuery.Budget.MaxEndpointCandidates}, lookup_probes={_admission.Meter.LookupProbes}/{FlowQuery.Budget.MaxLookupProbes}.");
             using var work = new NavigationFlowFieldWork(Fixture.World, _admission.Result, _workspace,
                 Fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.MaximumSinglePayloadBytes);
             while (work.Status == NavigationFlowFieldStatus.Pending)
                 work.Advance(FlowQuery.Budget.MaxLookupProbes, NodeCount, FlowQuery.Budget.MaxEvaluatedEdges,
                     FlowQuery.Budget.MaxConnectionLegs);
-            SwiftThrowHelper.ThrowIfTrue(work.Status != NavigationFlowFieldStatus.Success || work.Result == null,
+            ChronicleGuard.ThrowIfTrue(work.Status != NavigationFlowFieldStatus.Success || work.Result == null,
                 $"Cold internal Flow failed: {work.Status}.");
             NavigationWorkMeter meter = _admission.Meter;
             SettledNodes = meter.ExpandedNodes;
@@ -195,7 +195,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
             TransitionCandidates = meter.TransitionCandidates;
             TransitionPairs = meter.TransitionPairs;
             ValidatePayload(work.Result);
-            SwiftThrowHelper.ThrowIfTrue(SettledNodes != NodeCount, $"Settled nodes={SettledNodes}/{NodeCount}.");
+            ChronicleGuard.ThrowIfTrue(SettledNodes != NodeCount, $"Settled nodes={SettledNodes}/{NodeCount}.");
             work.Result.TryGetNode(_start, TraversalMedium.Solid, out NavigationFlowFieldNode origin);
             return origin.IntegrationCost.m_rawValue;
         }
@@ -212,10 +212,10 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
         NavigationWorldGraphStore store = Fixture.Context.Pathing.NavigationGraphStore;
         var key = new NavigationFlowFieldPayloadKey(query, _end, TraversalMedium.Solid, TraversalMedia.Solid);
         NavigationFlowFieldStatus status = cache.TryCheckout(store, store.Current, key, _start, out var lease, out _);
-        SwiftThrowHelper.ThrowIfTrue(status != NavigationFlowFieldStatus.Success, $"Expected cached Flow payload: {status}.");
+        ChronicleGuard.ThrowIfTrue(status != NavigationFlowFieldStatus.Success, $"Expected cached Flow payload: {status}.");
         using (lease)
         {
-            SwiftThrowHelper.ThrowIfTrue(lease.TryGetPayload(out NavigationFlowFieldPayload payload)
+            ChronicleGuard.ThrowIfTrue(lease.TryGetPayload(out NavigationFlowFieldPayload payload)
                 != NavigationFlowFieldStatus.Success, "Cached Flow payload unavailable.");
             ValidatePayload(payload);
         }
@@ -223,7 +223,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
 
     private void ValidatePayload(NavigationFlowFieldPayload payload)
     {
-        SwiftThrowHelper.ThrowIfTrue(payload.Nodes.Length != NodeCount
+        ChronicleGuard.ThrowIfTrue(payload.Nodes.Length != NodeCount
             || payload.TransitionInstructions.Length != (_ladder ? 1 : 0),
             $"Payload nodes={payload.Nodes.Length}/{NodeCount}, actions={payload.TransitionInstructions.Length}.");
         PayloadBytes = payload.RetainedBytes;
@@ -237,11 +237,11 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
         NavigationAStarPayloadCache cache = Fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         if (cache.Count != 0)
         {
-            SwiftThrowHelper.ThrowIfTrue(!cache.TryReservePayload(_maximumAStarBytes, out var reservation),
+            ChronicleGuard.ThrowIfTrue(!cache.TryReservePayload(_maximumAStarBytes, out var reservation),
                 "A* eviction reservation failed.");
             try
             {
-                SwiftThrowHelper.ThrowIfTrue(!cache.TryCheckoutReserved(_aStarKey,
+                ChronicleGuard.ThrowIfTrue(!cache.TryCheckoutReserved(_aStarKey,
                     Fixture.Context.Pathing.NavigationGraphStore.Current, ref reservation, out var lease),
                     "A* eviction expected the exact cached request.");
                 using (lease)
@@ -255,7 +255,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
                 cache.ReleasePayloadReservation(ref reservation);
             }
         }
-        SwiftThrowHelper.ThrowIfTrue(cache.Count != 0 || cache.CachedBytes != 0
+        ChronicleGuard.ThrowIfTrue(cache.Count != 0 || cache.CachedBytes != 0
             || Fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.Count != 0
             || Fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache.CachedBytes != 0,
             "Cold setup retained a reusable payload.");
@@ -266,7 +266,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
     {
         NavigationFlowFieldPayloadCache flow = Fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
         NavigationAStarPayloadCache astar = Fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
-        SwiftThrowHelper.ThrowIfTrue(flow.ActiveLeaseCount != 0 || flow.ReservedLeaseCount != 0
+        ChronicleGuard.ThrowIfTrue(flow.ActiveLeaseCount != 0 || flow.ReservedLeaseCount != 0
             || flow.ReservedPayloadBytes != 0 || flow.LeasedBytes != 0 || flow.DetachedBytes != 0
             || astar.ActiveLeaseCount != 0 || astar.ReservedLeaseCount != 0
             || astar.ReservedPayloadBytes != 0 || astar.LeasedBytes != 0 || astar.DetachedBytes != 0,
@@ -295,7 +295,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
 
     private PathQuery PublishLadder(GridConfiguration configuration, string mapId, int width, NavigationWorkBudget budget)
     {
-        SwiftThrowHelper.ThrowIfTrue(!configuration.TryNormalize(out var binding), "Invalid ladder geometry.");
+        ChronicleGuard.ThrowIfTrue(!configuration.TryNormalize(out var binding), "Invalid ladder geometry.");
         var builder = new NavigationMapBuilder(mapId, binding);
         var cell = new NavigationCell(TraversalMedia.Solid, TraversalCapability.None, default,
             Fixed64.Zero, (Fixed64)4, (Fixed64)4);
@@ -313,12 +313,12 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
         var policyKey = new NavigationAreaPolicyKey(mapId, 1);
         var policy = new NavigationAreaPolicyCommitOperation(new NavigationAreaPolicy(policyKey,
             new[] { new NavigationAreaRule(true, Fixed64.Zero) }), 2, Fixture.Context.FrameCount + 1);
-        SwiftThrowHelper.ThrowIfTrue(!Fixture.Context.Pathing.Admit(map) || !Fixture.Context.Pathing.Admit(policy),
+        ChronicleGuard.ThrowIfTrue(!Fixture.Context.Pathing.Admit(map) || !Fixture.Context.Pathing.Admit(policy),
             "Ladder publication was not admitted.");
         for (int i = 0; i < 4096 && (map.Receipt.Status == NavigationOperationStatus.Pending
             || policy.Receipt.Status == NavigationOperationStatus.Pending); i++)
             Fixture.Context.Simulate();
-        SwiftThrowHelper.ThrowIfTrue(map.Receipt.Status != NavigationOperationStatus.Applied
+        ChronicleGuard.ThrowIfTrue(map.Receipt.Status != NavigationOperationStatus.Applied
             || policy.Receipt.Status != NavigationOperationStatus.Applied, "Ladder publication failed.");
         var agent = new NavigationAgentProfile(new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.Climb);

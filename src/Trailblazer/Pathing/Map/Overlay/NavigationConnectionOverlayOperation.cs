@@ -28,8 +28,8 @@ public readonly struct NavigationConnectionOverlayOperation
         NavigationConnectionOverlayOperationKind kind,
         NavigationConnection? connection)
     {
-        SwiftThrowHelper.ThrowIfNull(id, nameof(id));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(id, nameof(id));
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(id),
             nameof(id),
             "Connection id cannot be empty or whitespace.");
@@ -54,7 +54,7 @@ public readonly struct NavigationConnectionOverlayOperation
     /// <summary>Creates an Upsert operation from a complete connection definition.</summary>
     public static NavigationConnectionOverlayOperation Upsert(NavigationConnection connection)
     {
-        SwiftThrowHelper.ThrowIfNull(connection, nameof(connection));
+        ChronicleGuard.ThrowIfNull(connection, nameof(connection));
         return new(connection.Id, NavigationConnectionOverlayOperationKind.Upsert, connection);
     }
 

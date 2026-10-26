@@ -84,7 +84,7 @@ public partial class NavSteering
     }
 
     private static void ValidateAcquisitionMode(NavigationAcquisitionMode mode) =>
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(mode != NavigationAcquisitionMode.Immediate
+        ChronicleGuard.ThrowIfArgumentOutOfRange(mode != NavigationAcquisitionMode.Immediate
             && mode != NavigationAcquisitionMode.Scheduled, (int)mode, nameof(mode));
 
     private void EnsureAcquisitionLifetime()

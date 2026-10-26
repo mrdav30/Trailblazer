@@ -67,27 +67,27 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
         TraversalCapability capabilities)
     {
         shape.Validate(nameof(shape));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxStepUp < Fixed64.Zero,
             actualValue: null,
             nameof(maxStepUp),
             "Maximum step-up distance cannot be negative.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxDropDown < Fixed64.Zero,
             actualValue: null,
             nameof(maxDropDown),
             "Maximum drop-down distance cannot be negative.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             arrivalRadius < Fixed64.Zero,
             actualValue: null,
             nameof(arrivalRadius),
             "Arrival radius cannot be negative.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (allowedMedia & ~NavigationCell.KnownMedia) != 0,
             (int)allowedMedia,
             nameof(allowedMedia),
             "Allowed media contains unknown flag bits.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (capabilities & ~KnownCapabilities) != 0,
             (int)capabilities,
             nameof(capabilities),

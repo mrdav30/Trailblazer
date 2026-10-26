@@ -18,9 +18,9 @@ internal sealed class NavigationEndpointWorkspace
         int pageCapacity,
         int componentCapacity)
     {
-        SwiftThrowHelper.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
-        SwiftThrowHelper.ThrowIfNegative(pageCapacity, nameof(pageCapacity));
-        SwiftThrowHelper.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
+        ChronicleGuard.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
+        ChronicleGuard.ThrowIfNegative(pageCapacity, nameof(pageCapacity));
+        ChronicleGuard.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
         CoveredAddressCursor = new GridCoveredAddressCursor(mapCapacity);
         CoveredAddressGenerations = mapCapacity == 0
             ? Array.Empty<GridCoveredAddressGeneration>()

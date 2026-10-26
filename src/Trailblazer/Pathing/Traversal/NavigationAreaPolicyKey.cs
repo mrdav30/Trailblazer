@@ -18,11 +18,11 @@ public readonly struct NavigationAreaPolicyKey : IEquatable<NavigationAreaPolicy
     /// <summary>Creates a stable policy identity and positive revision.</summary>
     public NavigationAreaPolicyKey(string policyId, long revision)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(policyId),
             nameof(policyId),
             "Policy ID cannot be null, empty, or whitespace.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             revision <= 0,
             actualValue: null,
             nameof(revision),
@@ -63,11 +63,11 @@ public readonly struct NavigationAreaPolicyKey : IEquatable<NavigationAreaPolicy
 
     internal void Validate(string parameterName)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(PolicyId),
             parameterName,
             "Area policy key must contain a stable ID and positive revision.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             Revision <= 0,
             parameterName,
             "Area policy key must contain a stable ID and positive revision.");

@@ -36,7 +36,7 @@ internal sealed partial class NavigationGuideScheduler
         {
             if (interest.Owner == this)
                 return true;
-            SwiftThrowHelper.ThrowIfTrue(interest.Owner != null, message: "Validation interest belongs to another context.");
+            ChronicleGuard.ThrowIfTrue(interest.Owner != null, message: "Validation interest belongs to another context.");
             long capacity = (long)_settings.MaxRetainedRequests
                 + _context.Settings.QueryLimits.MaxAStarActivePayloadLeases
                 + _context.Settings.QueryLimits.MaxFlowActivePayloadLeases;

@@ -27,7 +27,7 @@ internal sealed partial class NavigationRayWork
 
     internal NavigationRayWork(NavigationRayWorkspace workspace)
     {
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
         _workspace = workspace;
         Status = NavigationRayStatus.Pending;
     }
@@ -78,7 +78,7 @@ internal sealed partial class NavigationRayWork
 
     internal NavigationRayStatus Advance(NavigationWorkMeter meter)
     {
-        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
+        ChronicleGuard.ThrowIfNull(meter, nameof(meter));
         GuideSampleWorkMeter unused = default;
         return AdvanceCore(meter, ref unused, useGuideMeter: false);
     }

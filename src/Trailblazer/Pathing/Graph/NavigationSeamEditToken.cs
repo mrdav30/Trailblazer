@@ -27,7 +27,7 @@ internal readonly struct NavigationSeamEditToken
 
     internal static NavigationSeamEditToken FromIncrementedValue(long value)
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             value <= 0,
             message: "The seam edit ownership token space was exhausted.");
         return new NavigationSeamEditToken(value);

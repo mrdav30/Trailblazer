@@ -47,16 +47,16 @@ public readonly struct NavigationEndpoint : IEquatable<NavigationEndpoint>
         EndpointResolutionPolicy resolution = EndpointResolutionPolicy.Strict,
         Fixed64 maxResolutionDistance = default)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             mapId != null && string.IsNullOrWhiteSpace(mapId),
             nameof(mapId),
             "Map identifier cannot be empty or whitespace.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             resolution is not EndpointResolutionPolicy.Strict and not EndpointResolutionPolicy.NearestNavigable,
             (int)resolution,
             nameof(resolution),
             "Endpoint resolution policy is unknown.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxResolutionDistance < Fixed64.Zero,
             actualValue: null,
             nameof(maxResolutionDistance),

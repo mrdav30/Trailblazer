@@ -21,11 +21,11 @@ internal sealed class NavigationAStarWorkspace
         int rayTraceIntervalCapacity,
         int guidePointCapacity)
     {
-        SwiftThrowHelper.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
-        SwiftThrowHelper.ThrowIfNegative(endpointPageCapacity, nameof(endpointPageCapacity));
-        SwiftThrowHelper.ThrowIfNegative(nodeCapacity, nameof(nodeCapacity));
-        SwiftThrowHelper.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
-        SwiftThrowHelper.ThrowIfNegative(guidePointCapacity, nameof(guidePointCapacity));
+        ChronicleGuard.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
+        ChronicleGuard.ThrowIfNegative(endpointPageCapacity, nameof(endpointPageCapacity));
+        ChronicleGuard.ThrowIfNegative(nodeCapacity, nameof(nodeCapacity));
+        ChronicleGuard.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
+        ChronicleGuard.ThrowIfNegative(guidePointCapacity, nameof(guidePointCapacity));
         EndpointWorkspace = new NavigationEndpointWorkspace(
             mapCapacity,
             endpointPageCapacity,

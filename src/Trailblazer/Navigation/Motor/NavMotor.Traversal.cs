@@ -74,7 +74,7 @@ public partial class NavMotor
 
         if (TraversalInProgress)
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 FrameCount != _pendingTraversalFrame
                     || !ReferenceEquals(_pendingTraversalLifetime, RequireContext().ClockLifetime),
                 message: $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
@@ -605,7 +605,7 @@ public partial class NavMotor
     /// <returns>The acceleration limit depending on whether the object is grounded, airborne, or swimming.</returns>
     public Fixed64 GetMaxAcceleration()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             CurrentState == null,
             message: "NavMotor must be initialized before querying max acceleration.");
 

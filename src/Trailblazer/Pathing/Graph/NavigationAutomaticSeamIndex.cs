@@ -359,7 +359,7 @@ internal sealed class NavigationAutomaticSeamIndex
 
         internal NavigationAutomaticSeamIndex Seal()
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 _sealed,
                 message: "The seam index edit is already sealed.");
             _sealed = true;

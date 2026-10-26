@@ -76,7 +76,7 @@ internal sealed partial class NavigationGuideScheduler
         long bytes = PathQueryBatchItem.GetLogicalRetainedBytes(query);
         lock (_sync)
         {
-            SwiftThrowHelper.ThrowIfDisposed(_closed, nameof(TrailblazerWorldContext));
+            ChronicleGuard.ThrowIfDisposed(_closed, nameof(TrailblazerWorldContext));
             if (_count >= _settings.MaxRetainedRequests
                 || bytes > _settings.MaxRetainedDescriptorBytes - _descriptorBytes)
                 return NavigationGuideStatus.CapacityExceeded;

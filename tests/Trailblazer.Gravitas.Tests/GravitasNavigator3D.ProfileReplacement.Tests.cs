@@ -3,7 +3,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
@@ -205,7 +205,7 @@ public sealed class GravitasNavigator3DProfileReplacementTests
             actor.Navigator.NavigationProfile.Should().Be(crouching);
             actor.Navigator.FootPosition.Should().Be(foot);
             actor.Body.Position3d.Should().Be(actor.Navigator.Position);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 true,
                 message: "adapter reconfiguration exit failure");
         };

@@ -180,7 +180,7 @@ public sealed class PathQueryRecord : IRecordable
         if (!isLoading)
         {
             PathQuery? query = Query;
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !query.HasValue,
                 message: "PathQueryRecord must contain a query before it can be serialized.");
 
@@ -218,7 +218,7 @@ public sealed class PathQueryRecord : IRecordable
 
         if (isLoading)
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !TryCreateQuery(out PathQuery? query) || !query.HasValue,
                 message: "Serialized PathQuery is missing, invalid, or unsupported.");
 

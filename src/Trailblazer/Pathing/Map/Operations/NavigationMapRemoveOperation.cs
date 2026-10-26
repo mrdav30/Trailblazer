@@ -13,8 +13,8 @@ public readonly struct NavigationMapRemoveOperation
     /// <summary>Initializes an immutable map-removal operation and its pending receipt.</summary>
     public NavigationMapRemoveOperation(string mapId, long operationSequence, long effectiveFrame)
     {
-        SwiftThrowHelper.ThrowIfNull(mapId, nameof(mapId));
-        SwiftThrowHelper.ThrowIfArgument(string.IsNullOrWhiteSpace(mapId), nameof(mapId));
+        ChronicleGuard.ThrowIfNull(mapId, nameof(mapId));
+        ChronicleGuard.ThrowIfArgument(string.IsNullOrWhiteSpace(mapId), nameof(mapId));
         NavigationOperationValidation.ValidateSchedule(operationSequence, effectiveFrame);
 
         MapId = mapId;

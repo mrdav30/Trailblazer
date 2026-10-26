@@ -92,12 +92,12 @@ internal sealed class NavigationEndpointResolutionWork
         NavigationRayWorkspace rayWorkspace,
         NavigationRayWork rayWork)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
-        SwiftThrowHelper.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
-        SwiftThrowHelper.ThrowIfNull(rayWork, nameof(rayWork));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(meter, nameof(meter));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(rayWorkspace, nameof(rayWorkspace));
+        ChronicleGuard.ThrowIfNull(rayWork, nameof(rayWork));
         _world = world;
         _store = store;
         _meter = meter;
@@ -114,9 +114,9 @@ internal sealed class NavigationEndpointResolutionWork
         NavigationAreaPolicy areaPolicy,
         TraversalMedia media)
     {
-        SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
-        SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(graph, nameof(graph));
+        ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        ChronicleGuard.ThrowIfArgument(
             role is not NavigationEndpointRole.Start
                 and not NavigationEndpointRole.Destination,
             nameof(role),
@@ -188,8 +188,8 @@ internal sealed class NavigationEndpointResolutionWork
         int lookupStepLimit,
         int endpointCandidateStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
+        ChronicleGuard.ThrowIfNegative(
             endpointCandidateStepLimit,
             nameof(endpointCandidateStepLimit));
         if (Status != NavigationEndpointResolutionStatus.Pending)

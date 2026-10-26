@@ -57,7 +57,7 @@ internal sealed class NavigationConnectionOwnerKeySet
 
     internal NavigationConnectionOwnerKey GetAt(int ordinal)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)ordinal >= (uint)Count,
             ordinal,
             nameof(ordinal));

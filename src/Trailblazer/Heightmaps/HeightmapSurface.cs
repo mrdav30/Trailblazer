@@ -116,13 +116,13 @@ public sealed class HeightmapSurface
         HeightmapCompression compression)
     {
         ValidateName(name);
-        SwiftThrowHelper.ThrowIfNull(heights, nameof(heights));
+        ChronicleGuard.ThrowIfNull(heights, nameof(heights));
         ValidateInterval(interval);
         ValidateCompression(compression);
 
         int width = heights.GetLength(0);
         int depth = heights.GetLength(1);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             width <= 0 || depth <= 0,
             paramName: nameof(heights),
             message: "Height samples must have positive width and depth.");
@@ -193,7 +193,7 @@ public sealed class HeightmapSurface
 
     private static void ValidateName(string name)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(name),
             paramName: nameof(name),
             message: "Heightmap surface name cannot be null or whitespace.");
@@ -201,8 +201,8 @@ public sealed class HeightmapSurface
 
     private static void ValidateSamples(SwiftShortArray2D samples)
     {
-        SwiftThrowHelper.ThrowIfNull(samples, nameof(samples));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(samples, nameof(samples));
+        ChronicleGuard.ThrowIfArgument(
             samples.Width <= 0 || samples.Height <= 0,
             paramName: nameof(samples),
             message: "Height samples must have positive width and depth.");
@@ -210,7 +210,7 @@ public sealed class HeightmapSurface
 
     private static void ValidateInterval(Fixed64 interval)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             interval <= Fixed64.Zero,
             actualValue: null,
             paramName: nameof(interval),
@@ -219,7 +219,7 @@ public sealed class HeightmapSurface
 
     private static void ValidateCompression(HeightmapCompression compression)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !compression.IsValid,
             paramName: nameof(compression),
             message: "Heightmap compression requires a positive height step.");

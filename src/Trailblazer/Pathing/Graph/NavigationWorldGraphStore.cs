@@ -146,7 +146,7 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
             CollectReleased();
             if (_disposed)
                 return NavigationCandidatePublication.Deferred;
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 next.GraphVersion <= _current.GraphVersion,
                 message: "Published navigation graph versions must increase monotonically.");
             if (next.RetainedBytes > _maxActiveBytes

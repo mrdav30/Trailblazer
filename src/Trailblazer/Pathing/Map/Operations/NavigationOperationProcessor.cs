@@ -75,7 +75,7 @@ internal sealed class NavigationOperationProcessor
         int maxBakedCellsPerMap = int.MaxValue,
         int navigationAreaCount = ushort.MaxValue + 1)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             GetFixedScratchBytes(limits.MaxBatchItems) > limits.MaxBatchSortScratchBytes,
             nameof(limits),
             "Batch scratch capacity is smaller than the processor's fixed batch storage.");
@@ -168,19 +168,19 @@ internal sealed class NavigationOperationProcessor
 
     internal bool Admit(NavigationMapCommitOperation operation)
     {
-        SwiftThrowHelper.ThrowIfNull(operation.PreparedMap, nameof(operation));
+        ChronicleGuard.ThrowIfNull(operation.PreparedMap, nameof(operation));
         return Admit(PendingOperation.ForMapCommit(operation));
     }
 
     internal bool Admit(NavigationMapRemoveOperation operation)
     {
-        SwiftThrowHelper.ThrowIfNull(operation.MapId, nameof(operation));
+        ChronicleGuard.ThrowIfNull(operation.MapId, nameof(operation));
         return Admit(PendingOperation.ForMapRemove(operation));
     }
 
     internal bool Admit(NavigationOverlayCommitOperation operation)
     {
-        SwiftThrowHelper.ThrowIfNull(operation.PreparedOverlay, nameof(operation));
+        ChronicleGuard.ThrowIfNull(operation.PreparedOverlay, nameof(operation));
         return Admit(PendingOperation.ForOverlay(operation));
     }
 
@@ -195,8 +195,8 @@ internal sealed class NavigationOperationProcessor
         MaintenanceWorkMeter? maintenanceMeter = null,
         NavigationRetainedWorkGuard? retainedWorkGuard = null)
     {
-        SwiftThrowHelper.ThrowIfNull(publishCandidate, nameof(publishCandidate));
-        SwiftThrowHelper.ThrowIfArgument(frame <= _lastProcessedFrame, nameof(frame));
+        ChronicleGuard.ThrowIfNull(publishCandidate, nameof(publishCandidate));
+        ChronicleGuard.ThrowIfArgument(frame <= _lastProcessedFrame, nameof(frame));
         _lastProcessedFrame = frame;
         if (maintenanceMeter == null)
         {

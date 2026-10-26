@@ -59,10 +59,10 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         NavigationAStarWorkspace workspace,
         NavigationAStarPayloadCache cache)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
-        SwiftThrowHelper.ThrowIfNull(cache, nameof(cache));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(cache, nameof(cache));
         _store = store;
         _workspace = workspace;
         _cache = cache;
@@ -90,12 +90,12 @@ internal sealed class NavigationAStarQueryWork : IDisposable
         ref NavigationAStarPayloadReservation reservation,
         NavigationCohortSource? sharedSource = null)
     {
-        SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(lease, nameof(lease));
+        ChronicleGuard.ThrowIfArgument(
             !reservation.HasLeaseSlot && sharedSource == null,
             paramName: nameof(reservation),
             message: "A batch query requires one payload reservation.");
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             _started,
             message: "The A* query work is already active.");
         _started = true;
@@ -292,7 +292,7 @@ internal sealed class NavigationAStarQueryWork : IDisposable
 
     internal NavigationAStarPayloadLease TakeResult()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             Status != NavigationAStarQueryStatus.Success || _result == null,
             message: "The A* query has no successful payload lease.");
         NavigationAStarPayloadLease result = _result;

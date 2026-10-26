@@ -11,7 +11,7 @@ using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation;
@@ -690,7 +690,7 @@ public sealed class NavigatorProfileReplacementTests : IDisposable
         ClimbLocomotion climb = TestRequire.NotNull(motor.Handler.Climb);
         climb.IsClimbing = true;
         motor.Events.OnStopClimb = () =>
-            SwiftThrowHelper.ThrowIfTrue(true, message: "Host callback failure.");
+            ChronicleGuard.ThrowIfTrue(true, message: "Host callback failure.");
 
         Action replace = () => navigator.TryReplaceNavigationProfile(grounded);
 
@@ -727,7 +727,7 @@ public sealed class NavigatorProfileReplacementTests : IDisposable
         int stopNotifications = 0;
         motor.Events.OnStopClimb = () => stopNotifications++;
         navigator.CommittedCellChanged += _ =>
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 true,
                 message: "Host committed-cell callback failure.");
 

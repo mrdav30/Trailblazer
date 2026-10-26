@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-156`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-157`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -26,7 +26,30 @@
 
 ## Active Issues
 
-None currently.
+### TRB-Issue-156 - Moving-platform replay diverges on the first restored frame
+
+- **Discovered:** 2026-10-26 during the Chronicler.Diagnostics extraction.
+- **Status:** Open; reproduced before and after the extraction. Root cause is
+  not yet established.
+- **Area:** `GravitasNavigator3D` moving-platform snapshot continuation.
+- **Evidence:** Both JSON and MemoryPack cases of
+  `ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace` fail
+  at frame 8: expected position `(0.03163156774826348, -0.25,
+  0.02840337809175253)`, actual `(0.06393725564703345, -0.25,
+  0.05752925458364189)`. Immediate post-load pose and turning assertions pass.
+  The same failures reproduce in an isolated local-stack Release build at
+  Trailblazer `75422a0`, Gravitas `93ae61f`, GridForge `09f810e`, SwiftCollections
+  `5e0c4e0`, FixedMathSharp `f86bebe`, and Chronicler `18e9ef8`, both with and
+  without the starting workspace's uncommitted Gravitas query-lifetime edits.
+  The migrated `ReleaseLean` suite reproduces the same values in its JSON case;
+  MemoryPack is compiled out in that configuration.
+- **Reproduction:** With `UseLocalLsfStack=true`, run
+  `dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -m:1 --filter FullyQualifiedName~ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace`.
+- **Expected:** Restoring the snapshot must reproduce every subsequent accepted
+  position and the remaining trace exactly for both transports.
+- **Boundary:** This is not established as a recurrence of TRB-Issue-147; the
+  turning-state assertions involved there pass here. Diagnose the first resumed
+  platform/navigation step without weakening the replay assertions.
 
 ## Closed Investigations
 

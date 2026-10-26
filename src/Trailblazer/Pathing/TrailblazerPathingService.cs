@@ -226,10 +226,10 @@ public sealed class TrailblazerPathingService
 
     private void EnsureUsable()
     {
-        SwiftThrowHelper.ThrowIfDisposed(
+        ChronicleGuard.ThrowIfDisposed(
             _disposed,
             nameof(TrailblazerWorldContext));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_context.World.IsActive,
             nameof(TrailblazerPathingService),
             "TrailblazerPathingService is bound to an inactive GridWorld.");

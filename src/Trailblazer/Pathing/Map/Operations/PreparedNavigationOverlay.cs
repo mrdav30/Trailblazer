@@ -13,7 +13,7 @@ public sealed class PreparedNavigationOverlay
     /// <summary>Creates an inert prepared-overlay descriptor from an immutable transaction.</summary>
     public PreparedNavigationOverlay(NavigationOverlayTransaction transaction)
     {
-        SwiftThrowHelper.ThrowIfNull(transaction, nameof(transaction));
+        ChronicleGuard.ThrowIfNull(transaction, nameof(transaction));
         Transaction = transaction;
     }
 

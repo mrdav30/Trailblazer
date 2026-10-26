@@ -41,8 +41,8 @@ internal readonly struct PathQueryBatch
 {
     internal PathQueryBatch(PathQueryBatchItem[] items, int count)
     {
-        SwiftThrowHelper.ThrowIfNull(items, nameof(items));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfNull(items, nameof(items));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             count < 0 || count > items.Length,
             count,
             nameof(count));

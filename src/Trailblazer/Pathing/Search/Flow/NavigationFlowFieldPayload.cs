@@ -36,13 +36,13 @@ internal sealed class NavigationFlowFieldPayload
         bool isComplete,
         ulong? worldChangeSequence)
     {
-        SwiftThrowHelper.ThrowIfNull(nodes, nameof(nodes));
-        SwiftThrowHelper.ThrowIfNull(addressLookupOrdinals, nameof(addressLookupOrdinals));
-        SwiftThrowHelper.ThrowIfNull(
+        ChronicleGuard.ThrowIfNull(nodes, nameof(nodes));
+        ChronicleGuard.ThrowIfNull(addressLookupOrdinals, nameof(addressLookupOrdinals));
+        ChronicleGuard.ThrowIfNull(
             transitionInstructions,
             nameof(transitionInstructions));
-        SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(dependencies, nameof(dependencies));
+        ChronicleGuard.ThrowIfArgument(
             nodes.Length == 0 || addressLookupOrdinals.Length != nodes.Length,
             paramName: null,
             message: "Flow payload arrays must be non-empty and aligned.");
@@ -103,11 +103,11 @@ internal sealed class NavigationFlowFieldPayload
         int transitionInstructionCount,
         GraphDependencyStamp dependencies)
     {
-        SwiftThrowHelper.ThrowIfNegative(nodeCount, nameof(nodeCount));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(nodeCount, nameof(nodeCount));
+        ChronicleGuard.ThrowIfNegative(
             transitionInstructionCount,
             nameof(transitionInstructionCount));
-        SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
+        ChronicleGuard.ThrowIfNull(dependencies, nameof(dependencies));
         return checked(
             BaseRetainedBytes
             + GetArrayRetainedBytes(
@@ -126,12 +126,12 @@ internal sealed class NavigationFlowFieldPayload
         int componentCount,
         int pageCount)
     {
-        SwiftThrowHelper.ThrowIfNegative(nodeCount, nameof(nodeCount));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(nodeCount, nameof(nodeCount));
+        ChronicleGuard.ThrowIfNegative(
             transitionInstructionCount,
             nameof(transitionInstructionCount));
-        SwiftThrowHelper.ThrowIfNegative(componentCount, nameof(componentCount));
-        SwiftThrowHelper.ThrowIfNegative(pageCount, nameof(pageCount));
+        ChronicleGuard.ThrowIfNegative(componentCount, nameof(componentCount));
+        ChronicleGuard.ThrowIfNegative(pageCount, nameof(pageCount));
         return checked(
             BaseRetainedBytes
             + GetArrayRetainedBytes(

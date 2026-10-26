@@ -102,7 +102,7 @@ public sealed class NavigationOperationReceipt
 
     internal void CompleteRejected(NavigationOperationRejection rejection)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             rejection == NavigationOperationRejection.None,
             nameof(rejection),
             "A rejected receipt requires a reason.");
@@ -117,7 +117,7 @@ public sealed class NavigationOperationReceipt
         NavigationOperationRejection rejection,
         long publishedFrame)
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             Interlocked.CompareExchange(ref _completionClaimed, 1, 0) != 0,
             nameof(NavigationOperationReceipt),
             "A navigation operation receipt may complete only once.");

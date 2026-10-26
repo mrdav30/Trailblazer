@@ -223,11 +223,11 @@ public partial class NavSteering : IRecordable
         if (!phase.HasValue)
             return;
 
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             intervalFrames <= 0,
             intervalFrames,
             nameof(intervalFrames));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             phase.Value < 0 || phase.Value >= intervalFrames,
             phase.Value,
             nameof(phase));
@@ -306,7 +306,7 @@ public partial class NavSteering : IRecordable
 
     internal void BindPendingTransitionOwner(Navigator owner)
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             _pendingTransitionOwner != null
             && !ReferenceEquals(_pendingTransitionOwner, owner),
             message: "NavSteering is already bound to a different pending-transition owner.");
@@ -359,7 +359,7 @@ public partial class NavSteering : IRecordable
         get => _waypointTolerance;
         set
         {
-            SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            ChronicleGuard.ThrowIfArgumentOutOfRange(
                 value < Fixed64.Zero,
                 null,
                 nameof(value));
@@ -377,7 +377,7 @@ public partial class NavSteering : IRecordable
         get => _groupFactor;
         set
         {
-            SwiftThrowHelper.ThrowIfArgumentOutOfRange(value < Fixed64.Zero, null, nameof(value));
+            ChronicleGuard.ThrowIfArgumentOutOfRange(value < Fixed64.Zero, null, nameof(value));
             _groupFactor = value;
         }
     }
@@ -394,7 +394,7 @@ public partial class NavSteering : IRecordable
         get => _avoidFactor;
         set
         {
-            SwiftThrowHelper.ThrowIfArgumentOutOfRange(value < Fixed64.Zero, null, nameof(value));
+            ChronicleGuard.ThrowIfArgumentOutOfRange(value < Fixed64.Zero, null, nameof(value));
             _avoidFactor = value;
         }
     }

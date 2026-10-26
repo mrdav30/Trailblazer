@@ -26,11 +26,11 @@ public sealed class NavigationTokenLegend
         Fixed64 radiusClearance = default,
         Fixed64 heightClearance = default)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             radiusClearance < Fixed64.Zero,
             nameof(radiusClearance),
             "Radius clearance must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             heightClearance < Fixed64.Zero,
             nameof(heightClearance),
             "Height clearance must be non-negative.");
@@ -88,9 +88,9 @@ public sealed class NavigationTokenLegend
     /// </summary>
     public bool Register(string token, NavigationTokenLegendEntry entry)
     {
-        SwiftThrowHelper.ThrowIfNull(token, nameof(token));
+        ChronicleGuard.ThrowIfNull(token, nameof(token));
         string normalizedToken = token.Trim();
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             normalizedToken.IndexOf('!') >= 0 || normalizedToken.IndexOf('_') >= 0,
             nameof(token),
             "Legend tokens cannot contain reserved marker or inline-cost characters.");
@@ -107,7 +107,7 @@ public sealed class NavigationTokenLegend
     /// </summary>
     public bool TryGetEntry(string token, out NavigationTokenLegendEntry entry)
     {
-        SwiftThrowHelper.ThrowIfNull(token, nameof(token));
+        ChronicleGuard.ThrowIfNull(token, nameof(token));
         return _entries.TryGetValue(token.Trim(), out entry);
     }
 

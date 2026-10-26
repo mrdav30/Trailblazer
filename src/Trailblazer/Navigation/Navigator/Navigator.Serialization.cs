@@ -47,20 +47,20 @@ public abstract partial class Navigator
         PathQuery? restoredQuery = null;
         if (isLoading)
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 schemaVersion != CurrentSerializationSchemaVersion,
                 message: "Serialized Navigator schema is missing, retired, or unsupported.");
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !navigationProfileRecord.TryCreate(out NavigationAgentProfile recordedProfile)
                 || recordedProfile != _navigationProfile,
                 message: "Serialized navigation profile must exactly match the configured Navigator shell.");
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !TraversalTransitionDefinition.IsKnownMedium(frameCondition.Medium),
                 message: "Serialized Navigator traversal medium is missing or unsupported.");
 
             Vector3d loadedFootPosition =
                 position + Vector3d.Down * _navigationProfile.Shape.RootToFootOffsetY;
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !pathSession.TryCreateQuery(
                     loadedFootPosition,
                     frameCondition.Medium,
@@ -163,7 +163,7 @@ public abstract partial class Navigator
         {
             var steering = NavSteering.CreateSerializationValidationShell();
             RecordDeep.Look(chronicler, ref steering, "Steering");
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 steering.BrakingPower < Fixed64.Zero
                 || steering.WaypointTolerance < Fixed64.Zero,
                 message: "Serialized steering limits must be non-negative.");
@@ -173,7 +173,7 @@ public abstract partial class Navigator
         {
             var turning = new NavTurning(context, Radius);
             RecordDeep.Look(chronicler, ref turning, "Turning");
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 turning.TurnRate < Fixed64.Zero,
                 message: "Serialized turn rate must be non-negative.");
         }
@@ -185,7 +185,7 @@ public abstract partial class Navigator
                 frameCondition,
                 CreateLocomotionProfile());
             RecordDeep.Look(chronicler, ref motor, "Motor");
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 motor.Handler.Move.MaxSlowSpeed < Fixed64.Zero
                 || motor.Handler.Move.MaxModerateSpeed < Fixed64.Zero
                 || motor.Handler.Move.MaxFastSpeed < Fixed64.Zero

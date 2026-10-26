@@ -18,10 +18,10 @@ public readonly struct NavigationMapCheckpointStamp : IEquatable<NavigationMapCh
     /// <summary>Initializes an immutable checkpoint base stamp.</summary>
     public NavigationMapCheckpointStamp(string mapId, long bakeVersion, long overlayHighWaterSequence)
     {
-        SwiftThrowHelper.ThrowIfNull(mapId, nameof(mapId));
-        SwiftThrowHelper.ThrowIfArgument(string.IsNullOrWhiteSpace(mapId), nameof(mapId));
-        SwiftThrowHelper.ThrowIfArgument(bakeVersion <= 0, nameof(bakeVersion));
-        SwiftThrowHelper.ThrowIfArgument(overlayHighWaterSequence < 0, nameof(overlayHighWaterSequence));
+        ChronicleGuard.ThrowIfNull(mapId, nameof(mapId));
+        ChronicleGuard.ThrowIfArgument(string.IsNullOrWhiteSpace(mapId), nameof(mapId));
+        ChronicleGuard.ThrowIfArgument(bakeVersion <= 0, nameof(bakeVersion));
+        ChronicleGuard.ThrowIfArgument(overlayHighWaterSequence < 0, nameof(overlayHighWaterSequence));
 
         MapId = mapId;
         BakeVersion = bakeVersion;

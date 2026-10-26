@@ -88,18 +88,18 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         int guideMapCapacity,
         NavigationImmediateRayWorkspace immediateRayWorkspace)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNegative(maxEntries, nameof(maxEntries));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNegative(maxEntries, nameof(maxEntries));
         if (maxReusableBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxReusableBytes));
         if (maxSinglePayloadBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxSinglePayloadBytes));
         if (maxActivePayloadBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxActivePayloadBytes));
-        SwiftThrowHelper.ThrowIfNegative(maxActiveLeases, nameof(maxActiveLeases));
-        SwiftThrowHelper.ThrowIfNegative(guideMapCapacity, nameof(guideMapCapacity));
-        SwiftThrowHelper.ThrowIfNull(immediateRayWorkspace, nameof(immediateRayWorkspace));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNegative(maxActiveLeases, nameof(maxActiveLeases));
+        ChronicleGuard.ThrowIfNegative(guideMapCapacity, nameof(guideMapCapacity));
+        ChronicleGuard.ThrowIfNull(immediateRayWorkspace, nameof(immediateRayWorkspace));
+        ChronicleGuard.ThrowIfArgument(
             maxSinglePayloadBytes > maxActivePayloadBytes,
             nameof(maxSinglePayloadBytes),
             "A single payload cannot exceed the complete active-payload byte ceiling.");
@@ -187,7 +187,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowQueryResult result,
         out NavigationFlowFieldLease guide)
     {
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
         guide = default;
         NavigationFlowFieldPayloadLease payloadLease = result.PayloadLease;
         NavigationFlowFieldGuideLease? inner = null;
@@ -343,8 +343,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         bool scheduled = false,
         ulong requestWorldChangeSequence = 0)
     {
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(expectedGraph, nameof(expectedGraph));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(expectedGraph, nameof(expectedGraph));
         lease = default;
         proof = null;
         NavigationFlowFieldPayload? checkedPayload = null;
@@ -435,7 +435,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
             ref LeaseSlot owned = ref _leaseSlots[slot];
             if (owned.Generation != generation || owned.State != LeaseSlotState.ActivePayload
                 || owned.Entry == null || owned.Entry.IsInvalidated) return false;
-            SwiftThrowHelper.ThrowIfTrue((proof?.RetainedBytes ?? 0) > reservedBytes,
+            ChronicleGuard.ThrowIfTrue((proof?.RetainedBytes ?? 0) > reservedBytes,
                 message: "Endpoint proof must be reserved before attachment.");
             _leasedBytes += (proof?.RetainedBytes ?? 0) - (owned.EndpointProof?.RetainedBytes ?? 0);
             owned.EndpointProof = proof;
@@ -524,8 +524,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationCellAddress requiredOrigin,
         NavigationFlowFieldStatus expectedStatus)
     {
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(proof, nameof(proof));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(proof, nameof(proof));
         bool current;
         lock (_sync)
         {
@@ -551,8 +551,8 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         ref NavigationFlowFieldReservation reservation,
         out NavigationFlowFieldPayloadLease lease)
     {
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(payload, nameof(payload));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(payload, nameof(payload));
         lease = default;
         NavigationFlowFieldPayload? canonical = null;
         NavigationFlowFieldStatus status;
@@ -763,7 +763,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
 
     internal void RemoveExact(NavigationFlowFieldPayload payload)
     {
-        SwiftThrowHelper.ThrowIfNull(payload, nameof(payload));
+        ChronicleGuard.ThrowIfNull(payload, nameof(payload));
         InvalidateExact(payload);
     }
 
@@ -987,7 +987,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                     left,
                     candidate,
                     right);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !nodesEqual,
                 message: "Same-key flow payloads do not share one canonical node prefix.");
         }
@@ -999,7 +999,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
                 && existing.TransitionInstructions.Length
                     == candidate.TransitionInstructions.Length
                 && DependenciesAreEqual(existing.Dependencies, candidate.Dependencies);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !completionEqual,
                 message: "Equal flow prefixes do not share exact completion dependencies.");
             return PrefixRelation.Equal;
@@ -1011,7 +1011,7 @@ internal sealed class NavigationFlowFieldPayloadCache : IDisposable
         NavigationFlowFieldPayload longer = ReferenceEquals(shorter, existing)
             ? candidate
             : existing;
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             shorter.IsComplete
             || !WorldDependencyIsSubset(shorter, longer)
             || longer.Nodes[shorter.Nodes.Length].IntegrationCost

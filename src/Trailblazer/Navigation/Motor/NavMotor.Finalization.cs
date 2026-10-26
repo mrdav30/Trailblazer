@@ -57,7 +57,7 @@ public partial class NavMotor
 
     internal void ValidatePendingTraversalFrame()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             FrameCount != _pendingTraversalFrame
                 || !ReferenceEquals(_pendingTraversalLifetime, RequireContext().ClockLifetime),
             message: $"NavMotor traversal opened on frame {_pendingTraversalFrame} cannot be finalized on frame {FrameCount} or in another clock lifetime. Call AbortTraversalFrame() to discard stale traversal state before starting a new frame.");

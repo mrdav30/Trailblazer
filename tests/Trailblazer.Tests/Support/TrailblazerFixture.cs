@@ -1,5 +1,5 @@
 using System;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Xunit;
 
 namespace Trailblazer.Tests;

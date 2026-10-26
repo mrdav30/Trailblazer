@@ -37,17 +37,17 @@ public readonly struct KinematicBodyShape : IEquatable<KinematicBodyShape>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when a dimension is outside its valid range.</exception>
     public KinematicBodyShape(Fixed64 radius, Fixed64 height, Fixed64 rootToFootOffsetY)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             radius < Fixed64.Zero,
             actualValue: null,
             nameof(radius),
             "Body radius cannot be negative.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             height <= Fixed64.Zero,
             actualValue: null,
             nameof(height),
             "Body height must be positive.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             rootToFootOffsetY < Fixed64.Zero,
             actualValue: null,
             nameof(rootToFootOffsetY),
@@ -88,7 +88,7 @@ public readonly struct KinematicBodyShape : IEquatable<KinematicBodyShape>
 
     internal void Validate(string parameterName)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !IsValid,
             parameterName,
             "Body shape must be initialized.");

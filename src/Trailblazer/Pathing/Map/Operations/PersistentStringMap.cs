@@ -79,7 +79,7 @@ internal sealed class PersistentStringMap<T>
 
     private Node GetNodeAt(int ordinal)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)ordinal >= (uint)Count,
             ordinal,
             nameof(ordinal));

@@ -119,8 +119,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     internal NavigationGraphRuntime(GridWorld world, TrailblazerWorldContextSettings settings)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(settings, nameof(settings));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(settings, nameof(settings));
         _world = world;
         _operations = new NavigationOperationProcessor(
             settings.OperationLimits,
@@ -130,7 +130,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
             settings.MaxIngressEntries,
             settings.MaxIngressBytes,
             settings.OperationLimits.MaxMaps);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             ingressCapacity <= 0,
             nameof(settings),
             "Ingress byte capacity must fit at least one final-state event.");
@@ -1906,6 +1906,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     private void EnsureUsable()
     {
-        SwiftThrowHelper.ThrowIfDisposed(_disposed, nameof(NavigationGraphRuntime));
+        ChronicleGuard.ThrowIfDisposed(_disposed, nameof(NavigationGraphRuntime));
     }
 }

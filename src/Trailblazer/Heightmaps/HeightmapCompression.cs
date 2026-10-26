@@ -38,7 +38,7 @@ public readonly struct HeightmapCompression
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="heightStep"/> is not positive.</exception>
     public HeightmapCompression(Fixed64 referenceHeight, Fixed64 heightStep)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             heightStep <= Fixed64.Zero,
             actualValue: null,
             paramName: nameof(heightStep),
@@ -75,7 +75,7 @@ public readonly struct HeightmapCompression
 
     private void ThrowIfInvalid()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !IsValid,
             message: "Heightmap compression requires a positive height step.");
     }

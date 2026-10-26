@@ -87,23 +87,23 @@ public sealed class NavigationConnection : IEquatable<NavigationConnection>
         Fixed64 additionalCost = default,
         bool isLowerBoundCertified = false)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(id),
             nameof(id),
             "Connection ID cannot be null, empty, or whitespace.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             portalRadiusClearance < Fixed64.Zero,
             nameof(portalRadiusClearance),
             "Portal radius clearance must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             portalHeightClearance <= Fixed64.Zero,
             nameof(portalHeightClearance),
             "Portal height clearance must be positive.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             additionalCost < Fixed64.Zero,
             nameof(additionalCost),
             "Additional cost must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(destination.MapId),
             nameof(destination),
             "Destination must contain a valid map ID.");
@@ -120,7 +120,7 @@ public sealed class NavigationConnection : IEquatable<NavigationConnection>
         _witnesses = CopyWitnesses(witnesses);
         for (int i = 0; i < _witnesses.Length; i++)
         {
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 string.IsNullOrWhiteSpace(_witnesses[i].MapId),
                 nameof(witnesses),
                 "Every witness must contain a valid map ID.");

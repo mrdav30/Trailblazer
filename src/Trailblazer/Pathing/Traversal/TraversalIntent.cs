@@ -34,12 +34,12 @@ public readonly struct TraversalIntent : IEquatable<TraversalIntent>
         TraversalMedium startMedium,
         TraversalMedia targetMedia)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             !TraversalTransitionDefinition.IsKnownMedium(startMedium),
             (int)startMedium,
             nameof(startMedium),
             "Start medium must identify one known traversal medium.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             targetMedia == TraversalMedia.None
                 || (targetMedia & ~NavigationCell.KnownMedia) != 0,
             nameof(targetMedia),
@@ -75,15 +75,15 @@ public readonly struct TraversalIntent : IEquatable<TraversalIntent>
 
     internal void Validate(string parameterName)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !TraversalTransitionDefinition.IsKnownMedium(StartMedium),
             parameterName,
             "Traversal intent must contain an exact known start medium and nonempty known target media.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             TargetMedia == TraversalMedia.None,
             parameterName,
             "Traversal intent must contain an exact known start medium and nonempty known target media.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (TargetMedia & ~NavigationCell.KnownMedia) != 0,
             parameterName,
             "Traversal intent must contain an exact known start medium and nonempty known target media.");

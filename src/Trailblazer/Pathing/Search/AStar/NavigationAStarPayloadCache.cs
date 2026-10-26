@@ -78,16 +78,16 @@ internal sealed class NavigationAStarPayloadCache
         long maxActivePayloadBytes = long.MaxValue,
         int maxActiveLeases = int.MaxValue)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNegative(maxEntries, nameof(maxEntries));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNegative(maxEntries, nameof(maxEntries));
         if (maxReusableBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxReusableBytes));
         if (maxSinglePayloadBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxSinglePayloadBytes));
         if (maxActivePayloadBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maxActivePayloadBytes));
-        SwiftThrowHelper.ThrowIfNegative(maxActiveLeases, nameof(maxActiveLeases));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNegative(maxActiveLeases, nameof(maxActiveLeases));
+        ChronicleGuard.ThrowIfArgument(
             maxSinglePayloadBytes > maxActivePayloadBytes,
             nameof(maxSinglePayloadBytes),
             "A single payload cannot exceed the complete active-payload byte ceiling.");
@@ -185,8 +185,8 @@ internal sealed class NavigationAStarPayloadCache
         NavigationAStarPayloadLease payloadLease,
         out NavigationAStarGuideLease? guide)
     {
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(payloadLease, nameof(payloadLease));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(payloadLease, nameof(payloadLease));
         NavigationAStarPayload payload = payloadLease.Payload;
         if (!payload.HasPath)
         {
@@ -313,7 +313,7 @@ internal sealed class NavigationAStarPayloadCache
         ref NavigationAStarPayloadReservation reservation,
         out NavigationAStarPayloadLease lease)
     {
-        SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
+        ChronicleGuard.ThrowIfNull(graph, nameof(graph));
         lease = null!;
         lock (_sync)
         {
@@ -365,7 +365,7 @@ internal sealed class NavigationAStarPayloadCache
         {
             if (lease.GetOwnedEntry(this) == null)
                 return false;
-            SwiftThrowHelper.ThrowIfTrue(proof.RetainedBytes > reservedBytes,
+            ChronicleGuard.ThrowIfTrue(proof.RetainedBytes > reservedBytes,
                 message: "Endpoint proof must be reserved before attachment.");
             _leasedBytes += proof.RetainedBytes - (lease.EndpointProof?.RetainedBytes ?? 0);
             lease.EndpointProof = proof;
@@ -465,8 +465,8 @@ internal sealed class NavigationAStarPayloadCache
         ref NavigationAStarPayloadReservation reservation,
         out NavigationAStarPayloadLease lease)
     {
-        SwiftThrowHelper.ThrowIfNull(payload, nameof(payload));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(payload, nameof(payload));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
         lease = null!;
         long retainedBytes = payload.RetainedBytes;
         if (!ReferenceEquals(reservation.Owner, this)
@@ -538,7 +538,7 @@ internal sealed class NavigationAStarPayloadCache
 
     internal void RemoveExact(NavigationAStarPayload payload)
     {
-        SwiftThrowHelper.ThrowIfNull(payload, nameof(payload));
+        ChronicleGuard.ThrowIfNull(payload, nameof(payload));
         lock (_sync)
         {
             FindSlot(payload.Key, out int slot, out bool found);

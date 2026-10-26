@@ -86,11 +86,11 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         NavigationRayWork rayWork,
         long maximumPayloadBytes)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(query, nameof(query));
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
-        SwiftThrowHelper.ThrowIfNull(rayWork, nameof(rayWork));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(query, nameof(query));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(rayWork, nameof(rayWork));
         if (maximumPayloadBytes < 0)
             throw new ArgumentOutOfRangeException(nameof(maximumPayloadBytes));
         _world = world;

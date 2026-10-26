@@ -21,7 +21,7 @@ public readonly struct NavigationAreaRule : IEquatable<NavigationAreaRule>
     /// <summary>Creates an immutable navigation-area rule.</summary>
     public NavigationAreaRule(bool isAllowed, Fixed64 additionalEnterCost)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             additionalEnterCost < Fixed64.Zero,
             actualValue: null,
             nameof(additionalEnterCost),

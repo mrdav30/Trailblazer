@@ -26,7 +26,7 @@ public readonly struct FlowFieldQueryOptions : IEquatable<FlowFieldQueryOptions>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the extra integration cost is negative.</exception>
     public FlowFieldQueryOptions(Fixed64 extraIntegrationCost)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             extraIntegrationCost < Fixed64.Zero,
             actualValue: null,
             nameof(extraIntegrationCost),

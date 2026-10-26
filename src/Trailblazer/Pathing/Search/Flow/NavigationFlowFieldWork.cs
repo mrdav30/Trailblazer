@@ -61,9 +61,9 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         NavigationFlowFieldWorkspace workspace,
         long maximumPayloadBytes = long.MaxValue)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(query, nameof(query));
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(query, nameof(query));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
 
         _query = query;
         _world = world;

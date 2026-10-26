@@ -8,7 +8,7 @@
 using System;
 using BenchmarkDotNet.Attributes;
 using FixedMathSharp;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
@@ -124,7 +124,7 @@ public class NavigationColdFrameBenchmarks
         for (int i = 0; i < _agents.Length; i++)
         {
             BenchmarkNavigator agent = _agents[i];
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 agent.Position.X <= agent.LastPosition.X || !agent.LastCommittedCell.HasValue,
                 message: "Every frame must move all 100 Navigators forward on the published map.");
         }

@@ -36,18 +36,18 @@ internal sealed class LifecycleHookHandler
         int order,
         Action callback)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(owner),
             paramName: nameof(owner),
             message: "Lifecycle hook owner cannot be null or whitespace.");
 
-        SwiftThrowHelper.ThrowIfNull(callback, nameof(callback));
+        ChronicleGuard.ThrowIfNull(callback, nameof(callback));
 
         lock (_lifecycleHookLock)
         {
             for (int i = 0; i < hooks.Count; i++)
             {
-                SwiftThrowHelper.ThrowIfTrue(
+                ChronicleGuard.ThrowIfTrue(
                     hooks[i].Owner == owner,
                     message: $"Lifecycle hook '{owner}' is already registered.");
             }

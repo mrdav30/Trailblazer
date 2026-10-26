@@ -6,7 +6,7 @@ using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;

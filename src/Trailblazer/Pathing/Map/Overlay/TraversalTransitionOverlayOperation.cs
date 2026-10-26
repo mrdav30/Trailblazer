@@ -28,8 +28,8 @@ public readonly struct TraversalTransitionOverlayOperation
         TraversalTransitionOverlayOperationKind kind,
         TraversalTransitionDefinition transition)
     {
-        SwiftThrowHelper.ThrowIfNull(id, nameof(id));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(id, nameof(id));
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(id),
             nameof(id),
             "Transition id cannot be empty or whitespace.");

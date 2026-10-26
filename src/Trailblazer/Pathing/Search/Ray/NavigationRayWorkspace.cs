@@ -22,16 +22,16 @@ internal sealed class NavigationRayWorkspace
         int coveredAddressCapacity,
         int traceIntervalCapacity)
     {
-        SwiftThrowHelper.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
-        SwiftThrowHelper.ThrowIfNegative(pageCapacity, nameof(pageCapacity));
-        SwiftThrowHelper.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
+        ChronicleGuard.ThrowIfNegative(pageCapacity, nameof(pageCapacity));
+        ChronicleGuard.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
+        ChronicleGuard.ThrowIfNegative(
             coveredAddressCapacity,
             nameof(coveredAddressCapacity));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(
             traceIntervalCapacity,
             nameof(traceIntervalCapacity));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             traceIntervalCapacity > coveredAddressCapacity,
             nameof(traceIntervalCapacity),
             "Trace-interval capacity cannot exceed covered-address capacity.");

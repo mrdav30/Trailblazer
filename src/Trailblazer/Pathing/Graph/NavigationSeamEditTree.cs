@@ -260,7 +260,7 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
 
         private void EnsureWritable()
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 _sealed,
                 message: "The seam edit session is already sealed.");
         }
@@ -276,7 +276,7 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
 
         internal Cursor(int maximumHeight, int shellBytes)
         {
-            SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            ChronicleGuard.ThrowIfArgumentOutOfRange(
                 maximumHeight <= 0,
                 maximumHeight,
                 nameof(maximumHeight));
@@ -376,7 +376,7 @@ internal sealed class NavigationSeamEditTree<TKey, TValue>
 
         private void Push(Node node)
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 _count == _stack.Length,
                 message: "The configured seam tree height was exceeded.");
             _stack[_count++] = node;

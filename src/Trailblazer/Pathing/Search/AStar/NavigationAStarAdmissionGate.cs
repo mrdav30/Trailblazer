@@ -39,10 +39,10 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         NavigationQueryLimits limits,
         NavigationQueryAdmissionCoordinator coordinator)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(coordinator, nameof(coordinator));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(coordinator, nameof(coordinator));
+        ChronicleGuard.ThrowIfArgument(
             limits.MaxConcurrentNavigationQueries <= 0,
             nameof(limits),
             "Query limits must be explicitly initialized.");
@@ -210,7 +210,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     private BatchDescriptor GetDescriptor(int inputIndex)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             inputIndex < 0 || inputIndex >= _activeCount,
             inputIndex,
             nameof(inputIndex));
@@ -316,7 +316,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
             if (descriptor.SlotIndex < 0)
                 return NavigationAStarQueryStatus.CapacityExceeded;
             query = _queries[descriptor.SlotIndex];
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 !query.IsPrepared,
                 message: "The query has not completed sequential admission.");
             Monitor.Enter(query);
@@ -335,7 +335,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         NavigationAStarBatchWork work,
         int maximumCount)
     {
-        SwiftThrowHelper.ThrowIfNegative(maximumCount, nameof(maximumCount));
+        ChronicleGuard.ThrowIfNegative(maximumCount, nameof(maximumCount));
         lock (_sync)
         {
             EnsureActive(work);
@@ -365,7 +365,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         {
             EnsureActive(work);
             BatchDescriptor descriptor = GetDescriptor(inputIndex);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 descriptor.SlotIndex < 0,
                 message: "The query was not admitted.");
             return _queries[descriptor.SlotIndex].TakeResult();

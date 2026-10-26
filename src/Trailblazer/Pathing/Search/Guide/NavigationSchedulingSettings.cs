@@ -25,14 +25,14 @@ public sealed class NavigationSchedulingSettings
         int connectionStepLimit = 64,
         int operationStepLimit = 64)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(maxRetainedRequests <= 0, maxRetainedRequests, nameof(maxRetainedRequests));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(maxRetainedDescriptorBytes <= 0, null, nameof(maxRetainedDescriptorBytes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(lookupStepLimit <= 0, lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(endpointCandidateStepLimit <= 0, endpointCandidateStepLimit, nameof(endpointCandidateStepLimit));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(nodeStepLimit <= 0, nodeStepLimit, nameof(nodeStepLimit));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(edgeStepLimit <= 0, edgeStepLimit, nameof(edgeStepLimit));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(connectionStepLimit <= 0, connectionStepLimit, nameof(connectionStepLimit));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(operationStepLimit <= 0, operationStepLimit, nameof(operationStepLimit));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(maxRetainedRequests <= 0, maxRetainedRequests, nameof(maxRetainedRequests));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(maxRetainedDescriptorBytes <= 0, null, nameof(maxRetainedDescriptorBytes));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(lookupStepLimit <= 0, lookupStepLimit, nameof(lookupStepLimit));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(endpointCandidateStepLimit <= 0, endpointCandidateStepLimit, nameof(endpointCandidateStepLimit));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(nodeStepLimit <= 0, nodeStepLimit, nameof(nodeStepLimit));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(edgeStepLimit <= 0, edgeStepLimit, nameof(edgeStepLimit));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(connectionStepLimit <= 0, connectionStepLimit, nameof(connectionStepLimit));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(operationStepLimit <= 0, operationStepLimit, nameof(operationStepLimit));
         MaxRetainedRequests = maxRetainedRequests;
         MaxRetainedDescriptorBytes = maxRetainedDescriptorBytes;
         LookupStepLimit = lookupStepLimit;

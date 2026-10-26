@@ -217,7 +217,7 @@ public sealed class LocomotionProfileBuilder
 
     internal static LocomotionProfileBuilder FromHandler(LocomotionHandler handler)
     {
-        SwiftThrowHelper.ThrowIfNull(handler, nameof(handler));
+        ChronicleGuard.ThrowIfNull(handler, nameof(handler));
 
         return new LocomotionProfileBuilder(includeOptionalLocomotions: false)
             .WithMove(handler.Move)

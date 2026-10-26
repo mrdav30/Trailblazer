@@ -64,10 +64,10 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         NavigationRayWorkspace workspace,
         bool allowTransitions)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
-        SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(graph, nameof(graph));
+        ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
         bool foundDestinationAddress = graph.TryGetNodeAddress(
             destination.Node,
             out NavigationCellAddress destinationAddress);
@@ -180,11 +180,11 @@ internal struct NavigationIncomingTraversalEdgeEnumerator
         NavigationWorkMeter meter, NavigationDependencyWorkspace dependencies,
         ref int edgeStepRemaining, ref int connectionStepRemaining, ref int lookupRemaining)
     {
-        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
-        SwiftThrowHelper.ThrowIfNull(dependencies, nameof(dependencies));
-        SwiftThrowHelper.ThrowIfNegative(edgeStepRemaining, nameof(edgeStepRemaining));
-        SwiftThrowHelper.ThrowIfNegative(lookupRemaining, nameof(lookupRemaining));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNull(meter, nameof(meter));
+        ChronicleGuard.ThrowIfNull(dependencies, nameof(dependencies));
+        ChronicleGuard.ThrowIfNegative(edgeStepRemaining, nameof(edgeStepRemaining));
+        ChronicleGuard.ThrowIfNegative(lookupRemaining, nameof(lookupRemaining));
+        ChronicleGuard.ThrowIfNegative(
             connectionStepRemaining,
             nameof(connectionStepRemaining));
         System.Diagnostics.Debug.Assert(_graph != null,

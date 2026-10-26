@@ -37,12 +37,12 @@ public sealed class NavigationMapOverlayDelta
         ReadOnlySpan<NavigationConnectionOverlayOperation> connections = default,
         ReadOnlySpan<TraversalTransitionOverlayOperation> transitions = default)
     {
-        SwiftThrowHelper.ThrowIfNull(mapId, nameof(mapId));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(mapId, nameof(mapId));
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(mapId),
             nameof(mapId),
             "Map id cannot be empty or whitespace.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             cells.IsEmpty && connections.IsEmpty && transitions.IsEmpty,
             nameof(cells),
             "A map overlay delta must contain at least one operation.");
@@ -94,7 +94,7 @@ public sealed class NavigationMapOverlayDelta
         for (int i = 0; i < operations.Length; i++)
         {
             NavigationCell cell = operations[i].Cell;
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 operations[i].Kind == NavigationCellOverlayOperationKind.Set
                 && (cell.Media == TraversalMedia.None
                     || (cell.Media & ~NavigationCell.KnownMedia) != 0
@@ -105,7 +105,7 @@ public sealed class NavigationMapOverlayDelta
                     || (cell.Flags & ~NavigationCell.KnownFlags) != 0),
                 nameof(operations),
                 "Cell Set requires one complete valid navigation-cell payload.");
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && operations[i - 1].Index.CompareTo(operations[i].Index) == 0,
                 nameof(operations),
                 "Cell overlay addresses must be unique.");
@@ -117,7 +117,7 @@ public sealed class NavigationMapOverlayDelta
         for (int i = 0; i < operations.Length; i++)
         {
             NavigationConnectionOverlayOperation operation = operations[i];
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 string.IsNullOrWhiteSpace(operation.Id),
                 nameof(operations),
                 "Connection overlay ids cannot be empty.");
@@ -125,7 +125,7 @@ public sealed class NavigationMapOverlayDelta
             {
                 ValidateConnectionWitnesses(operation.Connection!, operations);
             }
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && string.Equals(operations[i - 1].Id, operations[i].Id, StringComparison.Ordinal),
                 nameof(operations),
                 "Connection overlay ids must be unique.");
@@ -139,11 +139,11 @@ public sealed class NavigationMapOverlayDelta
         var witnesses = new SwiftHashSet<NavigationCellAddress>(connection.Witnesses.Count);
         for (int witness = 0; witness < connection.Witnesses.Count; witness++)
         {
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 string.IsNullOrWhiteSpace(connection.Witnesses[witness].MapId),
                 nameof(operations),
                 "Connection witness map ids cannot be empty.");
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !witnesses.Add(connection.Witnesses[witness]),
                 nameof(operations),
                 "Connection witnesses must be unique.");
@@ -154,11 +154,11 @@ public sealed class NavigationMapOverlayDelta
     {
         for (int i = 0; i < operations.Length; i++)
         {
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 string.IsNullOrWhiteSpace(operations[i].Id),
                 nameof(operations),
                 "Transition overlay ids cannot be empty.");
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && string.Equals(operations[i - 1].Id, operations[i].Id, StringComparison.Ordinal),
                 nameof(operations),
                 "Transition overlay ids must be unique.");

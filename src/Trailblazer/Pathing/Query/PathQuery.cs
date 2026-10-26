@@ -62,16 +62,16 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         agent.Validate(nameof(agent));
         areaPolicy.Validate(nameof(areaPolicy));
         traversal.Validate(nameof(traversal));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField,
             (int)algorithm,
             nameof(algorithm),
             "Path algorithm is unknown.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             algorithm == PathAlgorithm.AStar && flowField != default,
             nameof(flowField),
             "A* queries cannot carry flow-field-specific options.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (traversal.TargetMedia & ~agent.AllowedMedia) != 0,
             nameof(traversal),
             "Target media must be a subset of the agent's allowed media.");

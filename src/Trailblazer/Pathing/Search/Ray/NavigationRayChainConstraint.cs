@@ -38,7 +38,7 @@ internal readonly struct NavigationRayChainConstraint
         NavigationCellAddress targetAddress,
         int edgeOrdinal)
     {
-        SwiftThrowHelper.ThrowIfNegative(edgeOrdinal, nameof(edgeOrdinal));
+        ChronicleGuard.ThrowIfNegative(edgeOrdinal, nameof(edgeOrdinal));
         return new(
             NavigationRayChainConstraintKind.SelectedEdge,
             sourceAddress,

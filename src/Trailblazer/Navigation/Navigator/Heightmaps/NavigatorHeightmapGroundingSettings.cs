@@ -48,7 +48,7 @@ public sealed class NavigatorHeightmapGroundingSettings : IRecordable
         Fixed64? snapTolerance)
     {
         ValidateMode(mode);
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             snapTolerance.HasValue && snapTolerance.Value < Fixed64.Zero,
             actualValue: null,
             paramName: nameof(snapTolerance),
@@ -90,7 +90,7 @@ public sealed class NavigatorHeightmapGroundingSettings : IRecordable
         if (chronicler.Mode == SerializationMode.Loading)
         {
             ValidateMode(mode);
-            SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            ChronicleGuard.ThrowIfArgumentOutOfRange(
                 hasSnapTolerance && snapTolerance < Fixed64.Zero,
                 actualValue: null,
                 paramName: nameof(SnapTolerance),

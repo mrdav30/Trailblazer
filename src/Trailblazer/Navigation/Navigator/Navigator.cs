@@ -264,7 +264,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         if (ReferenceEquals(_context, context))
             return;
 
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             _isSet || _isInitialized,
             message: "Navigator context cannot be changed after setup. Call Reset() before rebinding.");
 
@@ -354,14 +354,14 @@ public abstract partial class Navigator : INavigate, IRecordable
         Vector3d? velocity = null,
         Guid? globalId = null)
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             _isSet || _isInitialized,
             message: "Navigator is already set up. Call Reset() before setting it up again.");
 
         EnsureContextForSetup();
         navigationProfile.Validate(nameof(navigationProfile));
 
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             globalId.HasValue && globalId.Value == Guid.Empty,
             paramName: nameof(globalId),
             message: "Navigator globalId cannot be Guid.Empty.");
@@ -456,7 +456,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </remarks>
     public virtual void PrewarmMovementGroup()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !IsActive,
             message: "Navigator must be Setup and Initialized before prewarming movement groups.");
 
@@ -695,7 +695,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     public virtual void Simulate()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !IsActive,
             message: "Navigator must be Setup and Initialized before Simulate().");
 
@@ -770,7 +770,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </remarks>
     public virtual void CommitFrameMotion()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !IsActive,
             message: "Navigator must be Setup and Initialized before CommitFrameMotion().");
 
@@ -956,7 +956,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     public virtual void SyncCurrentTrekConditionToMotor()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !IsActive,
             message: "Navigator must be Setup and Initialized before syncing traversal state to the motor.");
 
@@ -970,7 +970,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="updateMotorState">Flags whether or not to immediately sync the new traversal snapshot into the motor before the next traversal step.</param>
     public virtual void ReplaceTrekCondition(TrekCondition state, bool updateMotorState)
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             updateMotorState && !IsActive,
             message: "Navigator must be Setup and Initialized before syncing traversal state to the motor.");
 
@@ -1068,7 +1068,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TrailblazerWorldContext RequireContext()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             _context == null,
             message: "Navigator requires a TrailblazerWorldContext before simulation.");
 
@@ -1146,7 +1146,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
     private void ValidateGuidedSurfaceQuery(PathQuery query)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             query.Agent != NavigationProfile
             || query.Start.Position != FootPosition
             || query.Traversal.StartMedium != _frameCondition.Medium,

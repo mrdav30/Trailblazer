@@ -63,7 +63,7 @@ internal sealed class PersistentIntMap<T>
 
     internal T GetValueAt(int ordinal)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)ordinal >= (uint)Count,
             ordinal,
             nameof(ordinal));

@@ -16,7 +16,7 @@ public readonly struct NavigationOverlayCommitOperation
         long operationSequence,
         long effectiveFrame)
     {
-        SwiftThrowHelper.ThrowIfNull(preparedOverlay, nameof(preparedOverlay));
+        ChronicleGuard.ThrowIfNull(preparedOverlay, nameof(preparedOverlay));
         NavigationOperationValidation.ValidateSchedule(operationSequence, effectiveFrame);
 
         PreparedOverlay = preparedOverlay;

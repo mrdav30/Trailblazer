@@ -121,7 +121,7 @@ internal sealed class TrailblazerClock
     /// <param name="frameRate">The new frame rate. Must be greater than zero.</param>
     public void SetFrameRate(int frameRate)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             frameRate <= 0,
             actualValue: frameRate,
             paramName: nameof(frameRate),

@@ -39,10 +39,10 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         NavigationQueryAdmissionCoordinator coordinator,
         NavigationImmediateRayWorkspace immediateRayWorkspace)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(coordinator, nameof(coordinator));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(coordinator, nameof(coordinator));
+        ChronicleGuard.ThrowIfArgument(
             limits.MaxConcurrentNavigationQueries <= 0,
             nameof(limits),
             "Query limits must be explicitly initialized.");
@@ -185,7 +185,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
 
     private BatchDescriptor GetDescriptor(int inputIndex)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             inputIndex < 0 || inputIndex >= _activeCount,
             inputIndex,
             nameof(inputIndex));
@@ -292,7 +292,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         lock (_sync)
         {
             EnsureActive(work);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 _nextAdmission < _activeAdmittedCount,
                 message: "The flow batch has not completed its sequential preparation barrier.");
             descriptor = GetDescriptor(inputIndex);
@@ -315,11 +315,11 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         NavigationFlowBatchWork work,
         int maximumCount)
     {
-        SwiftThrowHelper.ThrowIfNegative(maximumCount, nameof(maximumCount));
+        ChronicleGuard.ThrowIfNegative(maximumCount, nameof(maximumCount));
         lock (_sync)
         {
             EnsureActive(work);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 _nextAdmission < _activeAdmittedCount,
                 message: "The flow batch has not completed its sequential preparation barrier.");
             int published = 0;
@@ -348,7 +348,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         {
             EnsureActive(work);
             BatchDescriptor descriptor = GetDescriptor(inputIndex);
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 descriptor.SlotIndex < 0,
                 message: "The flow query was not admitted.");
             return _queries[descriptor.SlotIndex].TakeResult();

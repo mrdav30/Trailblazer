@@ -32,7 +32,7 @@ public partial class NavSteering
         Fixed64 radius,
         Guid id)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(radius < Fixed64.Zero, null, nameof(radius));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(radius < Fixed64.Zero, null, nameof(radius));
 
         if (speed <= Fixed64.Zero)
             return Vector3d.Zero;

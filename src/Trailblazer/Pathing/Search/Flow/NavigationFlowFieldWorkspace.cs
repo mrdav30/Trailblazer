@@ -40,13 +40,13 @@ internal sealed class NavigationFlowFieldWorkspace
         int rayCoveredAddressCapacity,
         int rayTraceIntervalCapacity)
     {
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(
             dependencyPageCapacity,
             nameof(dependencyPageCapacity));
-        SwiftThrowHelper.ThrowIfNegative(
+        ChronicleGuard.ThrowIfNegative(
             dependencyComponentCapacity,
             nameof(dependencyComponentCapacity));
-        SwiftThrowHelper.ThrowIfNegative(nodeCapacity, nameof(nodeCapacity));
+        ChronicleGuard.ThrowIfNegative(nodeCapacity, nameof(nodeCapacity));
         int tableSize = 1;
         int required = checked(Math.Max(1, nodeCapacity * 2));
         while (tableSize < required)

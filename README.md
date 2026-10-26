@@ -115,6 +115,11 @@ stack; see the [adapter development guide](https://github.com/mrdav30/Trailblaze
 - [Chronicler](https://github.com/mrdav30/Chronicler) supplies explicit state
   transfer and serialization.
 
+Shared logging and exception guards come from the independent
+`Chronicler.Diagnostics` package. See the
+[migration guide](https://github.com/mrdav30/Trailblazer/blob/main/docs/MIGRATION.md)
+for the updated imports and guard names.
+
 ## Learn more
 
 - [Get started with a complete route](https://github.com/mrdav30/Trailblazer/wiki/GettingStarted)

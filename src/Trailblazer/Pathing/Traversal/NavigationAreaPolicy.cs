@@ -25,8 +25,8 @@ public sealed class NavigationAreaPolicy
         IReadOnlyList<NavigationAreaRule> rules)
     {
         key.Validate(nameof(key));
-        SwiftThrowHelper.ThrowIfNull(rules, nameof(rules));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(rules, nameof(rules));
+        ChronicleGuard.ThrowIfArgument(
             rules.Count == 0 || rules.Count > MaximumRuleCount,
             nameof(rules),
             "A policy requires between one and 65,536 direct-indexed rules.");

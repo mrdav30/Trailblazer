@@ -17,11 +17,11 @@ public readonly struct NavigationMapCommitOperation
         long operationSequence,
         long effectiveFrame)
     {
-        SwiftThrowHelper.ThrowIfNull(preparedMap, nameof(preparedMap));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(preparedMap, nameof(preparedMap));
+        ChronicleGuard.ThrowIfArgument(
             overlayReplacementPolicy is < OverlayReplacementPolicy.PreserveAndRevalidate or > OverlayReplacementPolicy.Clear,
             nameof(overlayReplacementPolicy));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             preparedMap.CheckpointStamp.HasValue && overlayReplacementPolicy != OverlayReplacementPolicy.Clear,
             nameof(overlayReplacementPolicy),
             "A checkpoint-stamped map can only commit with the Clear replacement policy.");

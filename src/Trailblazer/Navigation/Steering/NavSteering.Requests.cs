@@ -107,7 +107,7 @@ public partial class NavSteering
     /// <param name="vessel">The current steering owner whose position, radius, and stable id should seed the coordinator.</param>
     public void PrewarmMovementGroup(ISteer vessel)
     {
-        SwiftThrowHelper.ThrowIfNull(vessel, nameof(vessel));
+        ChronicleGuard.ThrowIfNull(vessel, nameof(vessel));
 
         if (!ShouldMove || !IsInGroup)
             return;

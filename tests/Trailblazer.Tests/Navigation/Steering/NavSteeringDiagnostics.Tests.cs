@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using FixedMathSharp;
 using FluentAssertions;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;

@@ -36,26 +36,26 @@ public readonly struct NavigationOperationLimits
         int maxTransitionRulesPerMap,
         int maxTransitionRules)
     {
-        SwiftThrowHelper.ThrowIfArgument(maxPendingOperations <= 0, nameof(maxPendingOperations));
-        SwiftThrowHelper.ThrowIfArgument(maxPendingDescriptorBytes <= 0, nameof(maxPendingDescriptorBytes));
-        SwiftThrowHelper.ThrowIfArgument(maxPreparedMapBytes <= 0, nameof(maxPreparedMapBytes));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(maxPendingOperations <= 0, nameof(maxPendingOperations));
+        ChronicleGuard.ThrowIfArgument(maxPendingDescriptorBytes <= 0, nameof(maxPendingDescriptorBytes));
+        ChronicleGuard.ThrowIfArgument(maxPreparedMapBytes <= 0, nameof(maxPreparedMapBytes));
+        ChronicleGuard.ThrowIfArgument(
             maxBatchItems <= 0 || maxBatchItems > MaximumBatchItems,
             nameof(maxBatchItems));
-        SwiftThrowHelper.ThrowIfArgument(maxBatchDescriptorBytes <= 0, nameof(maxBatchDescriptorBytes));
-        SwiftThrowHelper.ThrowIfArgument(maxBatchSortScratchBytes <= 0, nameof(maxBatchSortScratchBytes));
-        SwiftThrowHelper.ThrowIfArgument(maxCorridorCells < 2, nameof(maxCorridorCells));
-        SwiftThrowHelper.ThrowIfArgument(maxCorridorCells > int.MaxValue / 2, nameof(maxCorridorCells));
-        SwiftThrowHelper.ThrowIfArgument(maxMaps <= 0, nameof(maxMaps));
-        SwiftThrowHelper.ThrowIfArgument(maxRetainedMapIdentities < maxMaps, nameof(maxRetainedMapIdentities));
-        SwiftThrowHelper.ThrowIfArgument(maxOverlayCellsPerMap < 0, nameof(maxOverlayCellsPerMap));
-        SwiftThrowHelper.ThrowIfArgument(maxOverlayConnectionsPerMap < 0, nameof(maxOverlayConnectionsPerMap));
-        SwiftThrowHelper.ThrowIfArgument(maxOverlayTransitionsPerMap < 0, nameof(maxOverlayTransitionsPerMap));
-        SwiftThrowHelper.ThrowIfArgument(maxOverlayCells < maxOverlayCellsPerMap, nameof(maxOverlayCells));
-        SwiftThrowHelper.ThrowIfArgument(maxOverlayConnections < maxOverlayConnectionsPerMap, nameof(maxOverlayConnections));
-        SwiftThrowHelper.ThrowIfArgument(maxOverlayTransitions < maxOverlayTransitionsPerMap, nameof(maxOverlayTransitions));
-        SwiftThrowHelper.ThrowIfArgument(maxTransitionRulesPerMap <= 0, nameof(maxTransitionRulesPerMap));
-        SwiftThrowHelper.ThrowIfArgument(maxTransitionRules < maxTransitionRulesPerMap, nameof(maxTransitionRules));
+        ChronicleGuard.ThrowIfArgument(maxBatchDescriptorBytes <= 0, nameof(maxBatchDescriptorBytes));
+        ChronicleGuard.ThrowIfArgument(maxBatchSortScratchBytes <= 0, nameof(maxBatchSortScratchBytes));
+        ChronicleGuard.ThrowIfArgument(maxCorridorCells < 2, nameof(maxCorridorCells));
+        ChronicleGuard.ThrowIfArgument(maxCorridorCells > int.MaxValue / 2, nameof(maxCorridorCells));
+        ChronicleGuard.ThrowIfArgument(maxMaps <= 0, nameof(maxMaps));
+        ChronicleGuard.ThrowIfArgument(maxRetainedMapIdentities < maxMaps, nameof(maxRetainedMapIdentities));
+        ChronicleGuard.ThrowIfArgument(maxOverlayCellsPerMap < 0, nameof(maxOverlayCellsPerMap));
+        ChronicleGuard.ThrowIfArgument(maxOverlayConnectionsPerMap < 0, nameof(maxOverlayConnectionsPerMap));
+        ChronicleGuard.ThrowIfArgument(maxOverlayTransitionsPerMap < 0, nameof(maxOverlayTransitionsPerMap));
+        ChronicleGuard.ThrowIfArgument(maxOverlayCells < maxOverlayCellsPerMap, nameof(maxOverlayCells));
+        ChronicleGuard.ThrowIfArgument(maxOverlayConnections < maxOverlayConnectionsPerMap, nameof(maxOverlayConnections));
+        ChronicleGuard.ThrowIfArgument(maxOverlayTransitions < maxOverlayTransitionsPerMap, nameof(maxOverlayTransitions));
+        ChronicleGuard.ThrowIfArgument(maxTransitionRulesPerMap <= 0, nameof(maxTransitionRulesPerMap));
+        ChronicleGuard.ThrowIfArgument(maxTransitionRules < maxTransitionRulesPerMap, nameof(maxTransitionRules));
 
         MaxPendingOperations = maxPendingOperations;
         MaxPendingDescriptorBytes = maxPendingDescriptorBytes;

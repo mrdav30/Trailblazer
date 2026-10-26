@@ -43,11 +43,11 @@ public sealed class NavigationMapBuilder
         string mapId,
         NormalizedGridConfiguration gridBinding)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(mapId),
             nameof(mapId),
             "Map ID cannot be null, empty, or whitespace.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !gridBinding.IsValid,
             nameof(gridBinding),
             "Grid binding must contain a valid normalized address space.");
@@ -98,7 +98,7 @@ public sealed class NavigationMapBuilder
     /// </summary>
     public NavigationMapBuilder AddConnection(NavigationConnection connection)
     {
-        SwiftThrowHelper.ThrowIfNull(connection, nameof(connection));
+        ChronicleGuard.ThrowIfNull(connection, nameof(connection));
         _connections.Add(connection);
         return this;
     }
@@ -161,13 +161,13 @@ public sealed class NavigationMapBuilder
         GridConfiguration gridConfiguration,
         NavigationCell?[,,] cells)
     {
-        SwiftThrowHelper.ThrowIfNull(cells, nameof(cells));
+        ChronicleGuard.ThrowIfNull(cells, nameof(cells));
         var builder = new NavigationMapBuilder(mapId, gridConfiguration);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             builder.GridBinding.Configuration.TopologyKind != GridTopologyKind.RectangularPrism,
             nameof(gridConfiguration),
             "Dense rectangular import requires rectangular-prism topology.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             cells.GetLength(0) != builder.GridBinding.Width
             || cells.GetLength(1) != builder.GridBinding.Height
             || cells.GetLength(2) != builder.GridBinding.Length,
@@ -198,9 +198,9 @@ public sealed class NavigationMapBuilder
         GridConfiguration gridConfiguration,
         IEnumerable<NavigationCellEntry> cells)
     {
-        SwiftThrowHelper.ThrowIfNull(cells, nameof(cells));
+        ChronicleGuard.ThrowIfNull(cells, nameof(cells));
         var builder = new NavigationMapBuilder(mapId, gridConfiguration);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             builder.GridBinding.Configuration.TopologyKind != GridTopologyKind.HexPrism,
             nameof(gridConfiguration),
             "Axial hex import requires hex-prism topology.");
@@ -214,7 +214,7 @@ public sealed class NavigationMapBuilder
     private static NormalizedGridConfiguration Normalize(GridConfiguration configuration)
     {
         bool normalized = configuration.TryNormalize(out NormalizedGridConfiguration descriptor);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !normalized,
             nameof(configuration),
             "Grid configuration could not be normalized into a supported address space.");
@@ -226,13 +226,13 @@ public sealed class NavigationMapBuilder
         for (int i = 0; i < cells.Length; i++)
         {
             NavigationCellEntry entry = cells[i];
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !GridBinding.IsValidIndex(entry.Index),
                 nameof(cells),
                 $"Cell index {entry.Index} is outside the normalized grid address space.");
             ValidateCellPayload(entry.Cell, nameof(cells));
 
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && cells[i - 1].Index.Equals(entry.Index),
                 nameof(cells),
                 $"Duplicate authored cell index {entry.Index}.");
@@ -256,12 +256,12 @@ public sealed class NavigationMapBuilder
         for (int i = 0; i < connections.Length; i++)
         {
             NavigationConnection connection = connections[i];
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && string.Equals(connections[i - 1].Id, connection.Id, StringComparison.Ordinal),
                 nameof(connections),
                 $"Duplicate map-local connection ID '{connection.Id}'.");
 
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !TryGetAuthoredCell(cells, connection.SourceIndex, out NavigationCell sourceCell),
                 nameof(connections),
                 $"Connection '{connection.Id}' references missing local source {connection.SourceIndex}.");
@@ -280,7 +280,7 @@ public sealed class NavigationMapBuilder
 
             if (string.Equals(connection.Destination.MapId, MapId, StringComparison.Ordinal))
             {
-                SwiftThrowHelper.ThrowIfArgument(
+                ChronicleGuard.ThrowIfArgument(
                     !TryGetAuthoredCell(
                         cells,
                         connection.Destination.Index,
@@ -312,16 +312,16 @@ public sealed class NavigationMapBuilder
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransitionDefinition transition = transitions[i];
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && string.Equals(transitions[i - 1].Id, transition.Id, StringComparison.Ordinal),
                 nameof(transitions),
                 $"Duplicate map-local transition ID '{transition.Id}'.");
 
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !TryGetAuthoredCell(cells, transition.SourceIndex, out NavigationCell sourceCell),
                 nameof(transitions),
                 $"Transition '{transition.Id}' references missing local source {transition.SourceIndex}.");
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !SupportsMedium(sourceCell, transition.SourceMedium),
                 nameof(transitions),
                 "Transition source medium is not authored on its source cell.");
@@ -338,14 +338,14 @@ public sealed class NavigationMapBuilder
             if (!string.Equals(transition.Destination.MapId, MapId, StringComparison.Ordinal))
                 continue;
 
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !TryGetAuthoredCell(
                     cells,
                     transition.Destination.Index,
                     out NavigationCell destinationCell),
                 nameof(transitions),
                 $"Transition '{transition.Id}' references missing local destination {transition.Destination.Index}.");
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !SupportsMedium(destinationCell, transition.DestinationMedium),
                 nameof(transitions),
                 "Transition destination medium is not authored on its destination cell.");
@@ -367,7 +367,7 @@ public sealed class NavigationMapBuilder
         {
             TraversalTransitionRule rule = rules[i];
             rule.Validate();
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && string.Equals(rules[i - 1].Id, rule.Id, StringComparison.Ordinal),
                 nameof(rules),
                 $"Duplicate map-local transition rule ID '{rule.Id}'.");
@@ -383,7 +383,7 @@ public sealed class NavigationMapBuilder
         for (int i = 0; i < connection.Witnesses.Count; i++)
         {
             NavigationCellAddress witness = connection.Witnesses[i];
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !witnessSet.Add(witness),
                 nameof(connection),
                 $"Connection '{connection.Id}' repeats witness {witness}.");
@@ -391,7 +391,7 @@ public sealed class NavigationMapBuilder
             if (!string.Equals(witness.MapId, MapId, StringComparison.Ordinal))
                 continue;
 
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !TryGetAuthoredCell(cells, witness.Index, out NavigationCell witnessCell),
                 nameof(connection),
                 $"Connection '{connection.Id}' references missing local witness {witness.Index}.");
@@ -421,7 +421,7 @@ public sealed class NavigationMapBuilder
                     bool representable = GridBinding.TryGetCellPrism(
                         new VoxelIndex(x, y, z),
                         out _);
-                    SwiftThrowHelper.ThrowIfArgument(
+                    ChronicleGuard.ThrowIfArgument(
                         !representable,
                         nameof(GridBinding),
                         "Grid binding cannot produce exact cell prisms across its address-space extremes.");
@@ -459,7 +459,7 @@ public sealed class NavigationMapBuilder
             waypointScratch.AsSpan(0, (prismCount - 1) * 2),
             out _,
             out Fixed64 corridorCost);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !validCorridor,
             nameof(connection),
             $"Connection '{connection.Id}' does not define a valid clearance-bearing prism corridor.");
@@ -474,7 +474,7 @@ public sealed class NavigationMapBuilder
             connection,
             corridorCost,
             destinationCell.EnterCost);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !certified,
             nameof(connection),
             $"Connection '{connection.Id}' lower-bound declaration cannot be proven by its canonical fixed-point cost.");
@@ -555,7 +555,7 @@ public sealed class NavigationMapBuilder
     {
         bool representable = GridBinding.TryGetCellPrism(index, out GridCellPrism prism);
         System.Diagnostics.Debug.Assert(representable);
-        SwiftThrowHelper.ThrowIfArgument(!prism.Contains(anchor), parameterName, message);
+        ChronicleGuard.ThrowIfArgument(!prism.Contains(anchor), parameterName, message);
     }
 
     private static void ValidateClearance(
@@ -564,14 +564,14 @@ public sealed class NavigationMapBuilder
         Fixed64 height,
         string parameterName,
         string message) =>
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             radius > cell.RadiusClearance || height > cell.HeightClearance,
             parameterName,
             message);
 
     private static void ValidateCellPayload(NavigationCell cell, string parameterName)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             cell.Media == TraversalMedia.None,
             parameterName,
             "Cell media must contain at least one known traversal-medium bit.");

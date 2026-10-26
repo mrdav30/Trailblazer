@@ -198,8 +198,8 @@ public sealed class TrailblazerWorldContext : IDisposable
         bool takeOwnership = false,
         TrailblazerWorldContextSettings? settings = null)
     {
-        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfNull(world, nameof(world));
+        ChronicleGuard.ThrowIfTrue(
             !world.IsActive,
             nameof(TrailblazerWorldContext),
             "TrailblazerWorldContext requires an active GridWorld.");
@@ -362,7 +362,7 @@ public sealed class TrailblazerWorldContext : IDisposable
 
     private static void ThrowIfWorldOwned(GridWorld world)
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             _ownedWorlds.Contains(world),
             message: "GridWorld is already attached to an active TrailblazerWorldContext.");
     }
@@ -376,15 +376,15 @@ public sealed class TrailblazerWorldContext : IDisposable
             throw new ArgumentNullException(nameof(context), "An explicit TrailblazerWorldContext is required.");
         if (context.IsDisposed)
             throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !context.World.IsActive,
             message: "An active TrailblazerWorldContext is required.");
     }
 
     private void ThrowIfDisposed()
     {
-        SwiftThrowHelper.ThrowIfDisposed(_disposed, nameof(TrailblazerWorldContext));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfDisposed(_disposed, nameof(TrailblazerWorldContext));
+        ChronicleGuard.ThrowIfTrue(
             !World.IsActive,
             message: "TrailblazerWorldContext is bound to an inactive GridWorld.");
     }

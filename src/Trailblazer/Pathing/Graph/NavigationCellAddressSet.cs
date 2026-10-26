@@ -63,7 +63,7 @@ internal sealed class NavigationCellAddressSet
 
     internal NavigationCellAddress GetAt(int ordinal)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)ordinal >= (uint)Count,
             ordinal,
             nameof(ordinal));

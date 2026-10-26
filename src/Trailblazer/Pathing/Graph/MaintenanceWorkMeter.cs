@@ -80,7 +80,7 @@ internal sealed class MaintenanceWorkMeter
 
     private static bool TryConsume(ref int consumed, int count, int maximum)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(count < 0, count, nameof(count));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(count < 0, count, nameof(count));
         if (count > maximum - consumed)
             return false;
         consumed += count;

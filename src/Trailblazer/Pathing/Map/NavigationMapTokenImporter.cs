@@ -30,13 +30,13 @@ public static class NavigationMapTokenImporter
         NavigationTokenLegend? legend = null,
         string? transitionIdPrefix = null)
     {
-        SwiftThrowHelper.ThrowIfNull(source, nameof(source));
+        ChronicleGuard.ThrowIfNull(source, nameof(source));
         var builder = new NavigationMapBuilder(mapId, gridConfiguration);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             builder.GridBinding.Configuration.TopologyKind != GridTopologyKind.RectangularPrism,
             nameof(gridConfiguration),
             "Token import requires rectangular-prism topology.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             source.GetLength(0) != builder.GridBinding.Width
             || source.GetLength(1) != builder.GridBinding.Height
             || source.GetLength(2) != builder.GridBinding.Length,
@@ -82,13 +82,13 @@ public static class NavigationMapTokenImporter
         int markerIndex = token.IndexOf('!');
         if (markerIndex >= 0)
         {
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 markerIndex != token.Length - 1 || token.LastIndexOf('!') != markerIndex,
                 nameof(rawToken),
                 $"Invalid token '{token}' at [{x}, {y}, {z}]. Only one trailing '!' marker is supported.");
             hasMarker = true;
             token = token[..^1].TrimEnd();
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 token.Length == 0,
                 nameof(rawToken),
                 $"Invalid token '{rawToken}' at [{x}, {y}, {z}]. A marker requires a base token.");
@@ -101,7 +101,7 @@ public static class NavigationMapTokenImporter
         {
             string costText = token[(costSeparatorIndex + 1)..];
             bool parsed = Fixed64.TryParse(costText, CultureInfo.InvariantCulture, out inlineCost);
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 !parsed || inlineCost < Fixed64.Zero || costSeparatorIndex == 0,
                 nameof(rawToken),
                 $"Invalid non-negative fixed-point cost in token '{rawToken}' at [{x}, {y}, {z}].");
@@ -110,11 +110,11 @@ public static class NavigationMapTokenImporter
         }
 
         bool known = legend.TryGetEntry(token, out NavigationTokenLegendEntry entry);
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !known,
             nameof(rawToken),
             $"Unknown navigation token '{rawToken}' at [{x}, {y}, {z}].");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             hasMarker
             && (!entry.EmitsCell
                 || (entry.TransitionMedia == TraversalMedia.None

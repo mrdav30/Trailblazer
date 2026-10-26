@@ -69,7 +69,7 @@ internal sealed class PersistentVoxelIndexMap<T>
 
     internal T GetValueAt(int ordinal)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)ordinal >= (uint)Count,
             ordinal,
             nameof(ordinal));
@@ -91,7 +91,7 @@ internal sealed class PersistentVoxelIndexMap<T>
 
     internal VoxelIndex GetKeyAt(int ordinal)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)ordinal >= (uint)Count,
             ordinal,
             nameof(ordinal));

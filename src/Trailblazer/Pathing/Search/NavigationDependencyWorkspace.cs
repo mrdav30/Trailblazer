@@ -17,8 +17,8 @@ internal sealed class NavigationDependencyWorkspace
 
     internal NavigationDependencyWorkspace(int pageCapacity, int componentCapacity)
     {
-        SwiftThrowHelper.ThrowIfNegative(pageCapacity, nameof(pageCapacity));
-        SwiftThrowHelper.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
+        ChronicleGuard.ThrowIfNegative(pageCapacity, nameof(pageCapacity));
+        ChronicleGuard.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
         Pages = pageCapacity == 0
             ? Array.Empty<GraphPageDependencyAddress>()
             : new GraphPageDependencyAddress[pageCapacity];
@@ -80,8 +80,8 @@ internal sealed class NavigationDependencyWorkspace
         out int missingComponents,
         out int missingPages)
     {
-        SwiftThrowHelper.ThrowIfNull(source, nameof(source));
-        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
+        ChronicleGuard.ThrowIfNull(source, nameof(source));
+        ChronicleGuard.ThrowIfNull(meter, nameof(meter));
         missingComponents = 0;
         missingPages = 0;
         int probeCount = source.ComponentCount + source.PageCount;
@@ -109,7 +109,7 @@ internal sealed class NavigationDependencyWorkspace
 
     internal void CommitMerge(NavigationDependencyWorkspace source)
     {
-        SwiftThrowHelper.ThrowIfNull(source, nameof(source));
+        ChronicleGuard.ThrowIfNull(source, nameof(source));
         for (int i = 0; i < source.ComponentCount; i++)
             TryRecordComponent(source.Components[i]);
         for (int i = 0; i < source.PageCount; i++)

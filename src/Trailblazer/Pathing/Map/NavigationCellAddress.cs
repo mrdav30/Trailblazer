@@ -33,7 +33,7 @@ public readonly struct NavigationCellAddress :
     /// </summary>
     public NavigationCellAddress(string mapId, VoxelIndex index)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(mapId),
             nameof(mapId),
             "Map ID cannot be null, empty, or whitespace.");

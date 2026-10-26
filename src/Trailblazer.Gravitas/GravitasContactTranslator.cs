@@ -11,7 +11,7 @@ using Gravitas;
 using Gravitas.Colliders;
 using Gravitas.Queries;
 using Gravitas.Support;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Navigation;
@@ -47,11 +47,11 @@ internal static class GravitasContactTranslator
         // A successful Gravitas query is produced from a registered collider.
         LSCollider collider = hit.Collider!;
         int carrierId = carrierIdResolver?.Invoke(collider) ?? 0;
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             carrierId < 0,
             nameof(carrierIdResolver),
             "Carrier identifiers must be zero or positive.");
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !collider.Transform.TryGetLocalToWorldMatrix(out Fixed4x4 transform),
             nameof(FixedTransform),
             "Supporting transform cannot be represented as a deterministic matrix.");

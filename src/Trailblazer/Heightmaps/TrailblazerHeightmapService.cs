@@ -35,8 +35,8 @@ public sealed class TrailblazerHeightmapService
         int priority = 0)
     {
         EnsureUsable();
-        SwiftThrowHelper.ThrowIfNull(surface, nameof(surface));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfNull(surface, nameof(surface));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxSelectionY <= minSelectionY,
             actualValue: null,
             paramName: nameof(maxSelectionY),
@@ -205,8 +205,8 @@ public sealed class TrailblazerHeightmapService
 
     private void EnsureUsable()
     {
-        SwiftThrowHelper.ThrowIfDisposed(_context.IsDisposed, nameof(TrailblazerWorldContext));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfDisposed(_context.IsDisposed, nameof(TrailblazerWorldContext));
+        ChronicleGuard.ThrowIfTrue(
             !_context.World.IsActive,
             message: "TrailblazerHeightmapService is bound to an inactive GridWorld.");
     }

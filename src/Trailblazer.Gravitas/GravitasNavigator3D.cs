@@ -11,7 +11,7 @@ using FixedMathSharp;
 using Gravitas;
 using Gravitas.Colliders;
 using Gravitas.Support;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
@@ -60,18 +60,18 @@ public sealed class GravitasNavigator3D : Navigator
         Fixed64 supportProbeDistance,
         Func<LSCollider, int>? carrierIdResolver = null)
     {
-        SwiftThrowHelper.ThrowIfNull(body, nameof(body));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfNull(body, nameof(body));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             supportProbeRadius <= Fixed64.Zero,
             actualValue: null,
             nameof(supportProbeRadius),
             "Support probe radius must be positive.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             supportProbeOffset < Fixed64.Zero,
             actualValue: null,
             nameof(supportProbeOffset),
             "Support probe offset cannot be negative.");
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             supportProbeDistance <= Fixed64.Zero,
             actualValue: null,
             nameof(supportProbeDistance),
@@ -95,8 +95,8 @@ public sealed class GravitasNavigator3D : Navigator
     /// <inheritdoc/>
     public override void BindContext(TrailblazerWorldContext context)
     {
-        SwiftThrowHelper.ThrowIfNull(context, nameof(context));
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfNull(context, nameof(context));
+        ChronicleGuard.ThrowIfArgument(
             !ReferenceEquals(context.World, _body.World),
             nameof(context),
             "Trailblazer and Gravitas must share the same GridForge world.");
@@ -106,7 +106,7 @@ public sealed class GravitasNavigator3D : Navigator
     /// <inheritdoc/>
     public override void Simulate()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             _hasPreparedFrame,
             nameof(GravitasNavigator3D),
             "The current frame is already prepared and must be committed or reset.");
@@ -115,7 +115,7 @@ public sealed class GravitasNavigator3D : Navigator
         base.Simulate();
         Vector3d requestedPosition = Position + _positionDelta + _locomotionDisplacement;
         FixedQuaternion requestedRotation = Rotation * _rotationDelta;
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_body.PositionTransform.TrySetWorldPose(requestedPosition, requestedRotation),
             nameof(FixedTransform),
             "The Gravitas host transform cannot represent the requested world pose.");
@@ -128,11 +128,11 @@ public sealed class GravitasNavigator3D : Navigator
     /// <inheritdoc/>
     public override void CommitFrameMotion()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_hasPreparedFrame,
             nameof(GravitasNavigator3D),
             "The current frame must be prepared before it can be committed.");
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             Context!.FrameCount != _preparedFrame,
             nameof(GravitasNavigator3D),
             "Prepared motion cannot be committed after the Trailblazer frame advances.");
@@ -256,11 +256,11 @@ public sealed class GravitasNavigator3D : Navigator
 
     private void ValidateBody()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_body.Active,
             nameof(SolidBody),
             "Gravitas body must remain active while the adapter is in use.");
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             !_body.IsKinematic,
             nameof(SolidBody),
             "GravitasNavigator3D requires a kinematic body.");

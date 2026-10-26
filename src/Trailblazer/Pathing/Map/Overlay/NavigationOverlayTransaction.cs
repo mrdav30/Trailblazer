@@ -23,20 +23,20 @@ public sealed class NavigationOverlayTransaction
     /// <summary>Initializes and canonically orders an immutable multi-map overlay transaction.</summary>
     public NavigationOverlayTransaction(ReadOnlySpan<NavigationMapOverlayDelta> maps)
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             maps.IsEmpty,
             nameof(maps),
             "An overlay transaction must contain at least one map delta.");
 
         _maps = maps.ToArray();
         for (int i = 0; i < _maps.Length; i++)
-            SwiftThrowHelper.ThrowIfNull(_maps[i], nameof(maps));
+            ChronicleGuard.ThrowIfNull(_maps[i], nameof(maps));
 
         Array.Sort(_maps, MapComparer);
         long descriptorBytes = 32L;
         for (int i = 0; i < _maps.Length; i++)
         {
-            SwiftThrowHelper.ThrowIfArgument(
+            ChronicleGuard.ThrowIfArgument(
                 i > 0 && string.Equals(_maps[i - 1].MapId, _maps[i].MapId, StringComparison.Ordinal),
                 nameof(maps),
                 "Map overlay ids must be unique within one transaction.");

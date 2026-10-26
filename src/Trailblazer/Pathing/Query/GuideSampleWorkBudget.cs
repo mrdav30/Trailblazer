@@ -49,13 +49,13 @@ public readonly struct GuideSampleWorkBudget : IEquatable<GuideSampleWorkBudget>
         int maxTraceIntervals,
         int maxLocalRecoveryAttempts)
     {
-        SwiftThrowHelper.ThrowIfNegative(maxCurrentNodeLookupProbes, nameof(maxCurrentNodeLookupProbes));
-        SwiftThrowHelper.ThrowIfNegative(maxCursorLegScans, nameof(maxCursorLegScans));
-        SwiftThrowHelper.ThrowIfNegative(maxCursorRebases, nameof(maxCursorRebases));
-        SwiftThrowHelper.ThrowIfNegative(maxPortalChecks, nameof(maxPortalChecks));
-        SwiftThrowHelper.ThrowIfNegative(maxPrismChecks, nameof(maxPrismChecks));
-        SwiftThrowHelper.ThrowIfNegative(maxTraceIntervals, nameof(maxTraceIntervals));
-        SwiftThrowHelper.ThrowIfNegative(maxLocalRecoveryAttempts, nameof(maxLocalRecoveryAttempts));
+        ChronicleGuard.ThrowIfNegative(maxCurrentNodeLookupProbes, nameof(maxCurrentNodeLookupProbes));
+        ChronicleGuard.ThrowIfNegative(maxCursorLegScans, nameof(maxCursorLegScans));
+        ChronicleGuard.ThrowIfNegative(maxCursorRebases, nameof(maxCursorRebases));
+        ChronicleGuard.ThrowIfNegative(maxPortalChecks, nameof(maxPortalChecks));
+        ChronicleGuard.ThrowIfNegative(maxPrismChecks, nameof(maxPrismChecks));
+        ChronicleGuard.ThrowIfNegative(maxTraceIntervals, nameof(maxTraceIntervals));
+        ChronicleGuard.ThrowIfNegative(maxLocalRecoveryAttempts, nameof(maxLocalRecoveryAttempts));
 
         MaxCurrentNodeLookupProbes = maxCurrentNodeLookupProbes;
         MaxCursorLegScans = maxCursorLegScans;

@@ -31,15 +31,15 @@ internal sealed class NavigationDependencyStampWork
         int pageCount,
         bool includeTransitionRules = false)
     {
-        SwiftThrowHelper.ThrowIfNull(graph, nameof(graph));
-        SwiftThrowHelper.ThrowIfNull(areaPolicy, nameof(areaPolicy));
-        SwiftThrowHelper.ThrowIfNull(componentAddresses, nameof(componentAddresses));
-        SwiftThrowHelper.ThrowIfNull(pageAddresses, nameof(pageAddresses));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfNull(graph, nameof(graph));
+        ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
+        ChronicleGuard.ThrowIfNull(componentAddresses, nameof(componentAddresses));
+        ChronicleGuard.ThrowIfNull(pageAddresses, nameof(pageAddresses));
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)componentCount > (uint)componentAddresses.Length,
             componentCount,
             nameof(componentCount));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (uint)pageCount > (uint)pageAddresses.Length,
             pageCount,
             nameof(pageCount));
@@ -61,8 +61,8 @@ internal sealed class NavigationDependencyStampWork
 
     internal bool Advance(NavigationWorkMeter meter, int lookupStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNull(meter, nameof(meter));
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
+        ChronicleGuard.ThrowIfNull(meter, nameof(meter));
+        ChronicleGuard.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
         int remaining = Math.Min(lookupStepLimit, meter.RemainingLookupProbes);
         while (_componentOrdinal < _components.Length)
         {

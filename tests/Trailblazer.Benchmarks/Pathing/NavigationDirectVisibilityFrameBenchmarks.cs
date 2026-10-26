@@ -8,7 +8,7 @@ using GridForge.Grids.Topology;
 using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
+using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
@@ -382,7 +382,7 @@ public class NavigationDirectVisibilityFrameBenchmarks
         {
             meter.Reset(default);
             _agents[i].Simulate();
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 meter.IsGuideSampleBridge,
                 $"Direct visibility {Case}/{_mode}: Flow recovery ray contaminated direct LOS attribution for agent {i}.");
             bool observed = meter.TraceIntervals > 0;
@@ -416,12 +416,12 @@ public class NavigationDirectVisibilityFrameBenchmarks
                     expected++;
                 if (observedAgent)
                     observed++;
-                SwiftThrowHelper.ThrowIfTrue(
+                ChronicleGuard.ThrowIfTrue(
                     observedAgent != expectedAgent,
                     $"Guided frame {_mode} {(preparation ? "preparation" : "measured")} per-agent LOS schedule "
                     + $"mismatch at frame {frame}, agent {agent}: expected={expectedAgent}, actual={observedAgent}.");
             }
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 counts[frame] != observed || observed != expected,
                 $"Guided frame {_mode} {(preparation ? "preparation" : "measured")} LOS schedule "
                 + $"mismatch at frame {frame}: expected={expected}, observed={observed}, actual={counts[frame]}.");
@@ -430,7 +430,7 @@ public class NavigationDirectVisibilityFrameBenchmarks
         }
         if (!preparation)
         {
-            SwiftThrowHelper.ThrowIfTrue(
+            ChronicleGuard.ThrowIfTrue(
                 total != AgentCount * 4,
                 $"Guided frame {_mode} measured {total} periodic rays instead of {AgentCount * 4}.");
             for (int agent = 0; agent < AgentCount; agent++)
@@ -438,7 +438,7 @@ public class NavigationDirectVisibilityFrameBenchmarks
                 int agentTotal = 0;
                 for (int frame = 0; frame < MeasuredFrames; frame++)
                     agentTotal += observations[frame * MaximumAgentCount + agent];
-                SwiftThrowHelper.ThrowIfTrue(
+                ChronicleGuard.ThrowIfTrue(
                     agentTotal != 4,
                     $"Guided frame {_mode} agent {agent} measured {agentTotal} periodic rays instead of 4.");
             }
@@ -577,7 +577,7 @@ public class NavigationDirectVisibilityFrameBenchmarks
                 agent?.Reset();
         NavigationAStarPayloadCache astar = _fixture.Context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         NavigationFlowFieldPayloadCache flow = _fixture.Context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
-        SwiftThrowHelper.ThrowIfTrue(astar.ActiveLeaseCount != 0 || astar.ReservedLeaseCount != 0
+        ChronicleGuard.ThrowIfTrue(astar.ActiveLeaseCount != 0 || astar.ReservedLeaseCount != 0
             || astar.ReservedPayloadBytes != 0 || astar.LeasedBytes != 0 || astar.DetachedBytes != 0
             || flow.ActiveLeaseCount != 0 || flow.ReservedLeaseCount != 0
             || flow.ReservedPayloadBytes != 0 || flow.LeasedBytes != 0 || flow.DetachedBytes != 0

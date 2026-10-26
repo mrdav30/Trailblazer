@@ -232,9 +232,9 @@ public partial class NavMotor : IRecordable
     /// </summary>
     public void SetLocomotionProfile(LocomotionProfile profile)
     {
-        SwiftThrowHelper.ThrowIfNull(profile, nameof(profile));
+        ChronicleGuard.ThrowIfNull(profile, nameof(profile));
 
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             TraversalInProgress,
             message: "Cannot change locomotion composition while a traversal frame is in progress.");
 
@@ -249,7 +249,7 @@ public partial class NavMotor : IRecordable
     /// </summary>
     public void ConfigureLocomotions(Action<LocomotionProfileBuilder> configure)
     {
-        SwiftThrowHelper.ThrowIfNull(configure, nameof(configure));
+        ChronicleGuard.ThrowIfNull(configure, nameof(configure));
 
         var builder = LocomotionProfileBuilder.FromHandler(Handler);
         configure(builder);

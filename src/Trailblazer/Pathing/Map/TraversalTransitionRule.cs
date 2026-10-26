@@ -97,36 +97,36 @@ public readonly struct TraversalTransitionRule : IEquatable<TraversalTransitionR
 
     internal void Validate()
     {
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             string.IsNullOrWhiteSpace(Id),
             nameof(Id),
             "Rule ID cannot be null, empty, or whitespace.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !TraversalTransitionDefinition.IsKnownType(Type),
             nameof(Type),
             "Transition type is unknown.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !TraversalTransitionDefinition.IsKnownMedium(SourceMedium),
             nameof(SourceMedium),
             "Source medium must identify one known traversal medium.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             !TraversalTransitionDefinition.IsKnownMedium(DestinationMedium),
             nameof(DestinationMedium),
             "Destination medium must identify one known traversal medium.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             Scope is < TraversalTransitionRuleScope.SameCell
                 or > TraversalTransitionRuleScope.PositiveFaceContact,
             nameof(Scope),
             "Rule scope is unknown.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (RequiredCapabilities & ~NavigationCell.KnownCapabilities) != 0,
             nameof(RequiredCapabilities),
             "Required capabilities contain an unknown bit.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             ActionCost < Fixed64.Zero,
             nameof(ActionCost),
             "Action cost must be non-negative.");
-        SwiftThrowHelper.ThrowIfArgument(
+        ChronicleGuard.ThrowIfArgument(
             (LocomotionHints & ~KnownLocomotionHints) != 0,
             nameof(LocomotionHints),
             "Locomotion hints contain an unknown bit.");

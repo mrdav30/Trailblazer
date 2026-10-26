@@ -14,11 +14,11 @@ internal struct NavigationAcquisitionSlice
     internal NavigationAcquisitionSlice(int lookupStepLimit, int endpointCandidateStepLimit = 0,
         int nodeStepLimit = 0, int edgeStepLimit = 0, int connectionStepLimit = 0)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(endpointCandidateStepLimit, nameof(endpointCandidateStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(nodeStepLimit, nameof(nodeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(edgeStepLimit, nameof(edgeStepLimit));
-        SwiftThrowHelper.ThrowIfNegative(connectionStepLimit, nameof(connectionStepLimit));
+        ChronicleGuard.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
+        ChronicleGuard.ThrowIfNegative(endpointCandidateStepLimit, nameof(endpointCandidateStepLimit));
+        ChronicleGuard.ThrowIfNegative(nodeStepLimit, nameof(nodeStepLimit));
+        ChronicleGuard.ThrowIfNegative(edgeStepLimit, nameof(edgeStepLimit));
+        ChronicleGuard.ThrowIfNegative(connectionStepLimit, nameof(connectionStepLimit));
         LookupRemaining = lookupStepLimit;
         EndpointCandidateRemaining = endpointCandidateStepLimit;
         NodeRemaining = nodeStepLimit;

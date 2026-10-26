@@ -5,7 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-global using SwiftCollections.Diagnostics;
+global using Chronicler.Diagnostics;
 
 using System;
 

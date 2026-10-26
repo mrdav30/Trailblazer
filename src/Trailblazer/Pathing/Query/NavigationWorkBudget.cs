@@ -65,17 +65,17 @@ public readonly struct NavigationWorkBudget : IEquatable<NavigationWorkBudget>
         int maxCoveredVoxelIntervals,
         int maxSimplificationRays)
     {
-        SwiftThrowHelper.ThrowIfNegative(maxLookupProbes, nameof(maxLookupProbes));
-        SwiftThrowHelper.ThrowIfNegative(maxEndpointCandidates, nameof(maxEndpointCandidates));
-        SwiftThrowHelper.ThrowIfNegative(maxExpandedNodes, nameof(maxExpandedNodes));
-        SwiftThrowHelper.ThrowIfNegative(maxEvaluatedEdges, nameof(maxEvaluatedEdges));
-        SwiftThrowHelper.ThrowIfNegative(maxConnectionLegs, nameof(maxConnectionLegs));
-        SwiftThrowHelper.ThrowIfNegative(maxTransitionCandidates, nameof(maxTransitionCandidates));
-        SwiftThrowHelper.ThrowIfNegative(maxTransitionPairs, nameof(maxTransitionPairs));
-        SwiftThrowHelper.ThrowIfNegative(maxStagedLegAttempts, nameof(maxStagedLegAttempts));
-        SwiftThrowHelper.ThrowIfNegative(maxTraceIntervals, nameof(maxTraceIntervals));
-        SwiftThrowHelper.ThrowIfNegative(maxCoveredVoxelIntervals, nameof(maxCoveredVoxelIntervals));
-        SwiftThrowHelper.ThrowIfNegative(maxSimplificationRays, nameof(maxSimplificationRays));
+        ChronicleGuard.ThrowIfNegative(maxLookupProbes, nameof(maxLookupProbes));
+        ChronicleGuard.ThrowIfNegative(maxEndpointCandidates, nameof(maxEndpointCandidates));
+        ChronicleGuard.ThrowIfNegative(maxExpandedNodes, nameof(maxExpandedNodes));
+        ChronicleGuard.ThrowIfNegative(maxEvaluatedEdges, nameof(maxEvaluatedEdges));
+        ChronicleGuard.ThrowIfNegative(maxConnectionLegs, nameof(maxConnectionLegs));
+        ChronicleGuard.ThrowIfNegative(maxTransitionCandidates, nameof(maxTransitionCandidates));
+        ChronicleGuard.ThrowIfNegative(maxTransitionPairs, nameof(maxTransitionPairs));
+        ChronicleGuard.ThrowIfNegative(maxStagedLegAttempts, nameof(maxStagedLegAttempts));
+        ChronicleGuard.ThrowIfNegative(maxTraceIntervals, nameof(maxTraceIntervals));
+        ChronicleGuard.ThrowIfNegative(maxCoveredVoxelIntervals, nameof(maxCoveredVoxelIntervals));
+        ChronicleGuard.ThrowIfNegative(maxSimplificationRays, nameof(maxSimplificationRays));
 
         MaxLookupProbes = maxLookupProbes;
         MaxEndpointCandidates = maxEndpointCandidates;

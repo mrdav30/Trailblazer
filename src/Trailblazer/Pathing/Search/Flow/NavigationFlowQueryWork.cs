@@ -78,9 +78,9 @@ internal sealed class NavigationFlowQueryWork : IDisposable
         NavigationFlowFieldWorkspace workspace,
         NavigationFlowFieldPayloadCache cache)
     {
-        SwiftThrowHelper.ThrowIfNull(store, nameof(store));
-        SwiftThrowHelper.ThrowIfNull(workspace, nameof(workspace));
-        SwiftThrowHelper.ThrowIfNull(cache, nameof(cache));
+        ChronicleGuard.ThrowIfNull(store, nameof(store));
+        ChronicleGuard.ThrowIfNull(workspace, nameof(workspace));
+        ChronicleGuard.ThrowIfNull(cache, nameof(cache));
         _store = store;
         _cache = cache;
         _workspace = workspace;
@@ -107,8 +107,8 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     internal void Begin(PathQuery query, NavigationWorldGraphLease lease, bool scheduled = false,
         NavigationCohortSource? sharedSource = null)
     {
-        SwiftThrowHelper.ThrowIfNull(lease, nameof(lease));
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfNull(lease, nameof(lease));
+        ChronicleGuard.ThrowIfTrue(
             _started,
             message: "The flow query work is already active.");
         _started = true;
@@ -350,7 +350,7 @@ internal sealed class NavigationFlowQueryWork : IDisposable
 
     internal NavigationFlowQueryResult TakeResult()
     {
-        SwiftThrowHelper.ThrowIfTrue(
+        ChronicleGuard.ThrowIfTrue(
             Status != NavigationFlowQueryStatus.Success || !_hasResult,
             message: "The flow query has no successful payload lease.");
         NavigationFlowQueryResult result = _result;

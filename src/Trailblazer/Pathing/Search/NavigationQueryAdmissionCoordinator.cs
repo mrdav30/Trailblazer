@@ -40,7 +40,7 @@ internal sealed class NavigationQueryAdmissionCoordinator
 
     internal NavigationQueryAdmissionCoordinator(int maximumCount)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maximumCount <= 0,
             maximumCount,
             nameof(maximumCount));
@@ -61,7 +61,7 @@ internal sealed class NavigationQueryAdmissionCoordinator
         int requestedCount,
         out NavigationQueryCapacityReservation reservation)
     {
-        SwiftThrowHelper.ThrowIfNegative(requestedCount, nameof(requestedCount));
+        ChronicleGuard.ThrowIfNegative(requestedCount, nameof(requestedCount));
         int lane = GetLane(algorithm);
         lock (_sync)
         {

@@ -58,8 +58,8 @@ internal sealed class GraphDependencyStamp
 
     internal static long GetRetainedBytes(int componentCount, int pageCount)
     {
-        SwiftThrowHelper.ThrowIfNegative(componentCount, nameof(componentCount));
-        SwiftThrowHelper.ThrowIfNegative(pageCount, nameof(pageCount));
+        ChronicleGuard.ThrowIfNegative(componentCount, nameof(componentCount));
+        ChronicleGuard.ThrowIfNegative(pageCount, nameof(pageCount));
         return checked(
             BaseRetainedBytes
             + GetArrayRetainedBytes(componentCount, GraphComponentDependencyBytes)

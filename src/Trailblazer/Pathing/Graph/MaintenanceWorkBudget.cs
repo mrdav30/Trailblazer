@@ -26,35 +26,35 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         int maxDependencyEntries,
         int maxSurfaceComponentEdges = 65_536)
     {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxConsumedEnvelopes <= 0,
             maxConsumedEnvelopes,
             nameof(maxConsumedEnvelopes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxBaselineAddresses <= 0,
             maxBaselineAddresses,
             nameof(maxBaselineAddresses));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxOverlaySlots <= 0,
             maxOverlaySlots,
             nameof(maxOverlaySlots));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxComponentNodes <= 0,
             maxComponentNodes,
             nameof(maxComponentNodes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxSeamCandidateProbes <= 0,
             maxSeamCandidateProbes,
             nameof(maxSeamCandidateProbes));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxExplicitEdges <= 0,
             maxExplicitEdges,
             nameof(maxExplicitEdges));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxDependencyEntries <= 0,
             maxDependencyEntries,
             nameof(maxDependencyEntries));
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+        ChronicleGuard.ThrowIfArgumentOutOfRange(
             maxSurfaceComponentEdges <= 0,
             maxSurfaceComponentEdges,
             nameof(maxSurfaceComponentEdges));

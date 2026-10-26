@@ -75,8 +75,8 @@ internal struct NavigationDependencySortWork
         int componentCount,
         int pageCount)
     {
-        SwiftThrowHelper.ThrowIfNegative(componentCount, nameof(componentCount));
-        SwiftThrowHelper.ThrowIfNegative(pageCount, nameof(pageCount));
+        ChronicleGuard.ThrowIfNegative(componentCount, nameof(componentCount));
+        ChronicleGuard.ThrowIfNegative(pageCount, nameof(pageCount));
         return checked(
             GetCollectionMaximumComparisonCount(componentCount)
             + GetCollectionMaximumComparisonCount(pageCount));
@@ -84,7 +84,7 @@ internal struct NavigationDependencySortWork
 
     internal bool Advance(NavigationWorkMeter meter, int lookupStepLimit)
     {
-        SwiftThrowHelper.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
+        ChronicleGuard.ThrowIfNegative(lookupStepLimit, nameof(lookupStepLimit));
         int remaining = Math.Min(lookupStepLimit, meter.RemainingLookupProbes);
         while (!IsComplete)
         {

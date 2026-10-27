@@ -10,7 +10,7 @@ By participating, you agree to follow the code of conduct below.
 ## Development setup
 
 Trailblazer uses the .NET 10 SDK for solution tooling and runs its test and
-benchmark projects on .NET 8. From the repository root:
+benchmark projects on .NET 10. From the repository root:
 
 ```bash
 dotnet restore Trailblazer.slnx --property:Configuration=Release

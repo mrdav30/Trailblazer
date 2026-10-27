@@ -6,7 +6,7 @@ accepted by Gravitas. Neither core library depends on the other.
 
 Use `Trailblazer.Gravitas` with standard LSF packages, or
 `Trailblazer.Gravitas.Lean` with the Lean family. Both target `netstandard2.1`
-and `net8.0`; the adapter and core Trailblazer packages share a release version.
+and `net10.0`; the adapter and core Trailblazer packages share a release version.
 The only direct runtime package dependencies are Trailblazer and Gravitas in
 the matching family. Do not mix standard and Lean packages.
 

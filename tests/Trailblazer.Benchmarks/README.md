@@ -6,7 +6,7 @@ hybrid fallback, and legacy steering scenarios are intentionally absent.
 
 ## Requirements
 
-- The .NET SDK selected by the repository's `global.json`, plus the .NET 8 runtime
+- The .NET SDK selected by the repository's `global.json`, plus the .NET 10 runtime
 - `Release` configuration
 
 ## Running
@@ -14,13 +14,13 @@ hybrid fallback, and legacy steering scenarios are intentionally absent.
 List the available selections:
 
 ```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- list
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net10.0 -- list
 ```
 
 Run all benchmarks:
 
 ```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- all
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net10.0 -- all
 ```
 
 Aliases are derived from benchmark class names by removing `Benchmarks` and
@@ -48,7 +48,7 @@ joining the remaining words with hyphens. Useful selections include:
 For a fast development smoke check:
 
 ```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- navigation-guide-service --job short --inProcess
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net10.0 -- navigation-guide-service --job short --inProcess
 ```
 
 Do not treat short-run results as canonical measurements.
@@ -161,7 +161,7 @@ For a matched obstruction/sampling investigation, use the same longer warmup
 on both versions and retain every observation:
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-volume-routing --filter '*RectObstructed2DAStar*' '*WarmFlowCacheHit*' --launchCount 3 --warmupCount 100 --iterationCount 100 --keepFiles --artifacts artifacts/volume-investigation
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-volume-routing --filter '*RectObstructed2DAStar*' '*WarmFlowCacheHit*' --launchCount 3 --warmupCount 100 --iterationCount 100 --keepFiles --artifacts artifacts/volume-investigation
 ```
 
 This remains one operation per iteration. Inspect each launch's timing sequence
@@ -204,11 +204,11 @@ payload retention and allocation preflights alongside BenchmarkDotNet statistics
 While upstream changes remain unreleased, run the coordinated source stack:
 
 ```powershell
-dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -p:UseLocalLsfStack=true
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*Ladder*' --job dry --inProcess --artifacts artifacts/hardening-phase3/smoke-small
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*' '*ColdPublicAStar*' '*ColdInternalFlow*' --launchCount 3 --warmupCount 1 --iterationCount 3 --artifacts artifacts/hardening-phase3/slow-guides
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-frame --filter '*Cold1*' '*Cold4*' --launchCount 3 --warmupCount 1 --iterationCount 3 --artifacts artifacts/hardening-phase3/slow-frames
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide navigation-cold-frame navigation-guide-service --filter '*WarmPublicFlow*' '*Baseline*' '*Warm1*' '*Warm4*' '*WarmFlowAcquireSampleDispose*' --artifacts artifacts/hardening-phase3/canonical-controls
+dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net10.0 -p:UseLocalLsfStack=true
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*Ladder*' --job dry --inProcess --artifacts artifacts/hardening-phase3/smoke-small
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*' '*ColdPublicAStar*' '*ColdInternalFlow*' --launchCount 3 --warmupCount 1 --iterationCount 3 --artifacts artifacts/hardening-phase3/slow-guides
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-cold-frame --filter '*Cold1*' '*Cold4*' --launchCount 3 --warmupCount 1 --iterationCount 3 --artifacts artifacts/hardening-phase3/slow-frames
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-cold-guide navigation-cold-frame navigation-guide-service --filter '*WarmPublicFlow*' '*Baseline*' '*Warm1*' '*Warm4*' '*WarmFlowAcquireSampleDispose*' --artifacts artifacts/hardening-phase3/canonical-controls
 ```
 
 The final command retains the normal canonical job (three launches, 100 measured
@@ -233,9 +233,9 @@ For an ordered small-request investigation, preserve the short control, then
 change actual count and warmup count separately on the same binaries:
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/cold-protocol/control
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 1 --iterationCount 100 --keepFiles --artifacts artifacts/cold-protocol/long-actual
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 100 --iterationCount 100 --keepFiles --artifacts artifacts/cold-protocol/long-warmup
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/cold-protocol/control
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 1 --iterationCount 100 --keepFiles --artifacts artifacts/cold-protocol/long-actual
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-cold-guide --filter '*ColdPublicFlow*Plane100?)' --launchCount 3 --warmupCount 100 --iterationCount 100 --keepFiles --artifacts artifacts/cold-protocol/long-warmup
 ```
 
 The final `?)` anchors this filter to the quoted `Plane100` parameter; a trailing
@@ -306,7 +306,7 @@ pattern because BenchmarkDotNet unions separate patterns:
 
 ```powershell
 $method = 'Simulate64GuidedFramesInstrumentedBalancedPhases'
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter "*.$method(AgentCount: 100,*" "*.$method(AgentCount: 500,*FlowField*" --launchCount 1 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-sizing
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter "*.$method(AgentCount: 100,*" "*.$method(AgentCount: 500,*FlowField*" --launchCount 1 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-sizing
 ```
 
 For a bounded repeated capture, the same paired filters run A*/100, Flow/100 and
@@ -316,7 +316,7 @@ mode. The selection deliberately excludes the much more expensive A*/500 setup;
 do not describe it as the complete four-case matrix.
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter "*.$method(AgentCount: 100,*" "*.$method(AgentCount: 500,*FlowField*" --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-capture
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-guided-frame --filter "*.$method(AgentCount: 100,*" "*.$method(AgentCount: 500,*FlowField*" --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/guided-capture
 ```
 
 Capture console output to a log, then analyze it:
@@ -341,7 +341,7 @@ not cancel out a repeatedly expensive recheck frame.
 For a bounded end-to-end semantic lifecycle smoke, use:
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll guided-phase-smoke
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll guided-phase-smoke
 ```
 
 Its `json-end-to-end-restore-preparation` sample includes serialization, source
@@ -437,18 +437,18 @@ and promotions.
 Build and run semantic/replay smoke (two episodes per case; not timing evidence):
 
 ```powershell
-dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -p:UseLocalLsfStack=true
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-smoke Flow100
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-smoke Flow500
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-smoke AStar100
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-readiness-smoke
+dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net10.0 -p:UseLocalLsfStack=true
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll recovery-smoke Flow100
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll recovery-smoke Flow500
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll recovery-smoke AStar100
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll recovery-readiness-smoke
 ```
 
 The existing BDN protocol can run all 15 cases, each in three fresh child launches,
 one warmup and three actual complete episodes:
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-recovery --filter '*RecoverUntilUsable*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/navigator-recovery/bdn
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-recovery --filter '*RecoverUntilUsable*' --launchCount 3 --warmupCount 1 --iterationCount 3 --keepFiles --artifacts artifacts/navigator-recovery/bdn
 ```
 
 **Frozen reruns must not rebuild against live sources.** The normal BDN launcher
@@ -514,7 +514,7 @@ matrix. Two local launches are semantic/replay checks only; root owns the later
 uncontended three-launch, two-capture timing protocol on frozen binaries.
 
 ```powershell
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll recovery-diagnostic 1 2>&1 | Tee-Object -FilePath artifacts/navigator-recovery/diagnostic.log
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll recovery-diagnostic 1 2>&1 | Tee-Object -FilePath artifacts/navigator-recovery/diagnostic.log
 if ($LASTEXITCODE -ne 0) { throw 'Recovery diagnostic failed; inspect the retained log.' }
 & tests/Trailblazer.Benchmarks/AnalyzeRecoveryFrames.ps1 -LogPath artifacts/navigator-recovery/diagnostic.log -OutputPath artifacts/navigator-recovery/diagnostic-summary.json -DiagnosticControls -ExpectedDirectLaunches 1
 ```
@@ -547,11 +547,11 @@ timer; no second diagnostic ray is issued in a timed frame.
 Run semantic validation before accepting or freezing any timing protocol:
 
 ```powershell
-dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -p:UseLocalLsfStack=true
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll direct-visibility-smoke
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll direct-visibility-smoke --list
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-direct-visibility-frame --filter '*Simulate64FramesUnphased*' --list flat
-dotnet tests/Trailblazer.Benchmarks/bin/Release/net8.0/Trailblazer.Benchmarks.dll navigation-direct-visibility-frame --filter '*Simulate64FramesBalancedPhases*' --list flat
+dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net10.0 -p:UseLocalLsfStack=true
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll direct-visibility-smoke
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll direct-visibility-smoke --list
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-direct-visibility-frame --filter '*Simulate64FramesUnphased*' --list flat
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-direct-visibility-frame --filter '*Simulate64FramesBalancedPhases*' --list flat
 ```
 
 The smoke runs all five cases in both cadences, with full setup preflight and

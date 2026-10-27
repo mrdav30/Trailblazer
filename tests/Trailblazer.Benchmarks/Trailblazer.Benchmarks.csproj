@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <LangVersion>11.0</LangVersion>
+    <LangVersion>14.0</LangVersion>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net8.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <Optimize>true</Optimize>
@@ -46,14 +46,14 @@
   <!-- Generated BenchmarkDotNet projects consume the already-verified local build.
        This prevents nested project-reference builds from overwriting versioned LSF binaries. -->
   <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' == 'true'">
-    <Reference Include="Trailblazer" HintPath="..\..\src\Trailblazer\bin\$(Configuration)\net8.0\Trailblazer.dll" Private="true" />
-    <Reference Include="GridForge" HintPath="..\..\..\GridForge\src\GridForge\bin\$(Configuration)\net8.0\GridForge.dll" Private="true" />
-    <Reference Include="FixedMathSharp" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp\bin\$(Configuration)\net8.0\FixedMathSharp.dll" Private="true" />
-    <Reference Include="FixedMathSharp.Chronicler" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\bin\$(Configuration)\net8.0\FixedMathSharp.Chronicler.dll" Private="true" />
-    <Reference Include="SwiftCollections" HintPath="..\..\..\SwiftCollections\src\SwiftCollections\bin\$(Configuration)\net8.0\SwiftCollections.dll" Private="true" />
-    <Reference Include="SwiftCollections.FixedMathSharp" HintPath="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\bin\$(Configuration)\net8.0\SwiftCollections.FixedMathSharp.dll" Private="true" />
-    <Reference Include="Chronicler" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net8.0\Chronicler.dll" Private="true" />
-    <Reference Include="MemoryPack.Core" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net8.0\MemoryPack.Core.dll" Private="true" />
+    <Reference Include="Trailblazer" HintPath="..\..\src\Trailblazer\bin\$(Configuration)\net10.0\Trailblazer.dll" Private="true" />
+    <Reference Include="GridForge" HintPath="..\..\..\GridForge\src\GridForge\bin\$(Configuration)\net10.0\GridForge.dll" Private="true" />
+    <Reference Include="FixedMathSharp" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp\bin\$(Configuration)\net10.0\FixedMathSharp.dll" Private="true" />
+    <Reference Include="FixedMathSharp.Chronicler" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\bin\$(Configuration)\net10.0\FixedMathSharp.Chronicler.dll" Private="true" />
+    <Reference Include="SwiftCollections" HintPath="..\..\..\SwiftCollections\src\SwiftCollections\bin\$(Configuration)\net10.0\SwiftCollections.dll" Private="true" />
+    <Reference Include="SwiftCollections.FixedMathSharp" HintPath="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\bin\$(Configuration)\net10.0\SwiftCollections.FixedMathSharp.dll" Private="true" />
+    <Reference Include="Chronicler" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net10.0\Chronicler.dll" Private="true" />
+    <Reference Include="MemoryPack.Core" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net10.0\MemoryPack.Core.dll" Private="true" />
   </ItemGroup>
   <ItemGroup>
     <None Remove=".gitignore" />

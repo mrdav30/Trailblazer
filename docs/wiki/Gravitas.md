@@ -8,7 +8,7 @@ independent.
 Use the standard adapter with standard LSF dependencies, or
 `Trailblazer.Gravitas.Lean` with an entirely Lean stack. Both expose
 `Trailblazer.Navigation.GravitasNavigator3D` and target `netstandard2.1` and
-`net8.0`. The Lean family omits the MemoryPack transport, not physics behavior.
+`net10.0`. The Lean family omits the MemoryPack transport, not physics behavior.
 
 The [adapter README](../../src/Trailblazer.Gravitas/README.md) covers repository
 builds and package validation. This is a 3D adapter, not a 2D controller or an

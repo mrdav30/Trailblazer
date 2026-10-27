@@ -4,8 +4,8 @@
       "src": [
         {
           "files": [
-            "src/Trailblazer/bin/Release/net8.0/Trailblazer.dll",
-            "src/Trailblazer.Gravitas/bin/Release/net8.0/Trailblazer.Gravitas.dll"
+            "src/Trailblazer/bin/Release/net10.0/Trailblazer.dll",
+            "src/Trailblazer.Gravitas/bin/Release/net10.0/Trailblazer.Gravitas.dll"
           ],
           "src": "../.."
         }

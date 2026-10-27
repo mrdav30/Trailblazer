@@ -38,7 +38,6 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
-            8.0.x
             10.0.x
 
       - name: Cache NuGet packages
@@ -65,8 +64,8 @@ jobs:
 
       - name: Build API documentation
         run: |
-          test -f src/Trailblazer/bin/Release/net8.0/Trailblazer.dll
-          test -f src/Trailblazer/bin/Release/net8.0/Trailblazer.xml
+          test -f src/Trailblazer/bin/Release/net10.0/Trailblazer.dll
+          test -f src/Trailblazer/bin/Release/net10.0/Trailblazer.xml
           dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
           test -f docs/api/obj/_site/index.html
           test -f docs/api/obj/_site/api/Trailblazer.html

@@ -6,7 +6,7 @@ Trailblazer is a deterministic, engine-agnostic navigation and character
 controller library for lockstep simulations and games. Correctness and
 cross-runtime determinism come before convenience or raw speed.
 
-The library targets `netstandard2.1` and `net8.0`, uses C# 11, and relies on
+The library targets `netstandard2.1` and `net10.0`, uses C# 11, and relies on
 FixedMathSharp for simulation math.
 
 ## Start Here
@@ -207,7 +207,7 @@ a small allocation.
 ## Testing Workflow
 
 `global.json` selects the .NET 10 SDK for `.slnx` tooling consistency. Install
-the .NET 8 runtime as well to execute the `net8.0` tests and benchmarks. CI
+the .NET 10 runtime as well to execute the `net10.0` tests and benchmarks. CI
 validates Windows and Linux in both `Release` and `ReleaseLean`.
 
 ```bash
@@ -217,7 +217,7 @@ dotnet test Trailblazer.slnx --configuration Release --no-build
 ```
 
 Repeat with `ReleaseLean`. The library itself must build for both
-`netstandard2.1` and `net8.0`; tests and benchmarks target `net8.0`.
+`netstandard2.1` and `net10.0`; tests and benchmarks target `net10.0`.
 
 Build the generated API site after a Release build:
 

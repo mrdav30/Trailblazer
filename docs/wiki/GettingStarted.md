@@ -26,8 +26,8 @@ dotnet add package Trailblazer.Lean
 
 Do not mix standard and Lean LSF packages in one dependency graph.
 
-Trailblazer targets `netstandard2.1` and `net8.0`. The examples on this page use
-a .NET 8 console application.
+Trailblazer targets `netstandard2.1` and `net10.0`. The examples on this page use
+a .NET 10 console application.
 
 ## Know the five pieces
 

@@ -42,7 +42,7 @@ teleporters.
 dotnet add package Trailblazer
 ```
 
-Trailblazer targets `netstandard2.1` and `net8.0`. The standard package includes
+Trailblazer targets `netstandard2.1` and `net10.0`. The standard package includes
 JSON and MemoryPack serialization support.
 
 ## Request a route

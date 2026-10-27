@@ -6,8 +6,8 @@ Trailblazer is a deterministic, engine-agnostic navigation and character
 controller library for lockstep simulations and games. Correctness and
 cross-runtime determinism come before convenience or raw speed.
 
-The library targets `netstandard2.1` and `net10.0`, uses C# 11, and relies on
-FixedMathSharp for simulation math.
+The library targets `netstandard2.1` and `net10.0`, uses C# 11 and C# 14
+respectively, and relies on FixedMathSharp for simulation math.
 
 ## Start Here
 

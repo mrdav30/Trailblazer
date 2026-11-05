@@ -11,5 +11,5 @@ namespace Trailblazer.Navigation.MovementGroups;
 
 internal sealed class MovementGroupState
 {
-    public SwiftBucket<MovementGroupMember> Members { get; } = new();
+    public SwiftSlotMap<MovementGroupMember> Members { get; } = new();
 }

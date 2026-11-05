@@ -39,10 +39,10 @@
 		</PackageReference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' != 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="7.1.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' == 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="7.1.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
 		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj"

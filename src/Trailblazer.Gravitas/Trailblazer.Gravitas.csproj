@@ -18,20 +18,6 @@
 		<DisableTransitiveProjectReferences Condition="'$(UseLocalLsfStack)' == 'true'">true</DisableTransitiveProjectReferences>
 	</PropertyGroup>
 	<PropertyGroup>
-		<SemVer Condition="'$(GitVersion_FullSemVer)' != ''">$(GitVersion_FullSemVer)</SemVer>
-		<SemVer Condition="'$(UseLocalLsfStack)' == 'true' And '$(SemVer)' == ''">2.0.0</SemVer>
-		<SemVer Condition="'$(SemVer)' == ''">0.0.0</SemVer>
-		<InfoVer Condition="'$(GitVersion_InformationalVersion)' != ''">$(GitVersion_InformationalVersion)</InfoVer>
-		<InfoVer Condition="'$(InfoVer)' == ''">$(SemVer)</InfoVer>
-		<AssemblySemVer Condition="'$(GitVersion_AssemblySemVer)' != ''">$(GitVersion_AssemblySemVer)</AssemblySemVer>
-		<AssemblySemVer Condition="'$(UseLocalLsfStack)' == 'true' And '$(AssemblySemVer)' == ''">2.0.0.0</AssemblySemVer>
-		<AssemblySemVer Condition="'$(AssemblySemVer)' == ''">$(SemVer).0</AssemblySemVer>
-		<AssemblySemFileVer Condition="'$(GitVersion_AssemblySemFileVer)' != ''">$(GitVersion_AssemblySemFileVer)</AssemblySemFileVer>
-		<AssemblySemFileVer Condition="'$(AssemblySemFileVer)' == ''">$(AssemblySemVer)</AssemblySemFileVer>
-		<Version>$(SemVer)</Version>
-		<AssemblyVersion>$(AssemblySemVer)</AssemblyVersion>
-		<FileVersion>$(AssemblySemFileVer)</FileVersion>
-		<InformationalVersion>$(InfoVer)</InformationalVersion>
 		<Authors>mrdav30</Authors>
 		<Description>Engine-agnostic Gravitas-backed 3D kinematic navigation for Trailblazer. Commits collision-accepted motion through an explicit deterministic prepare/resolve/commit host loop.</Description>
 		<PackageTags>navigation;kinematic;gravitas;trailblazer;deterministic;lockstep;fixed-point</PackageTags>
@@ -52,9 +38,9 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Trailblazer\Trailblazer.csproj"
-			AdditionalProperties="Configuration=$(Configuration)" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfTrailblazerProperties)" />
 		<ProjectReference Condition="'$(UseLocalLsfStack)' == 'true'" Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=1.1.0;AssemblySemVer=1.1.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGravitasProperties)" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' != 'true'">
 		<PackageReference Include="Gravitas" Version="$(GravitasPackageVersion)" Condition="'$(DisableMemoryPack)' != 'true'" />
@@ -62,18 +48,18 @@
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
 		<ProjectReference PrivateAssets="all" Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj"
-		  AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" />
+		  AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
 		<!-- Compile against the coordinated sources without publishing extra direct dependencies. -->
 		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
 		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
 		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0;AssemblySemVer=7.0.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfSwiftCollectionsProperties)" />
 		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\SwiftCollections.FixedMathSharp.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfSwiftCollectionsProperties)" />
 		<ProjectReference PrivateAssets="all" Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=9.1.0;AssemblySemVer=9.1.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGridForgeProperties)" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="README.md" Pack="true" PackagePath="/" />
@@ -81,7 +67,7 @@
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And ('$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true')">
 		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler.MemoryPackShim\Chronicler.MemoryPackShim.csproj"
-		  AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" PrivateAssets="all" />
+		  AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(UseLocalLsfStack)' != 'true'">
@@ -89,6 +75,6 @@
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
 		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler.Diagnostics\Chronicler.Diagnostics.csproj"
-			AdditionalProperties="Configuration=$(Configuration);SemVer=1.0.0;AssemblySemVer=1.0.0.0" />
+			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
 	</ItemGroup>
 </Project>

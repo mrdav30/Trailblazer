@@ -43,8 +43,21 @@
   without the starting workspace's uncommitted Gravitas query-lifetime edits.
   The migrated `ReleaseLean` suite reproduces the same values in its JSON case;
   MemoryPack is compiled out in that configuration.
+- **Local-identity recheck (2026-11-04):** The six-repository evergreen identity
+  migration reproduces the same values: Release adapter 88 passed / 2 failed,
+  ReleaseLean adapter 85 passed / 1 failed. Core navigation passes 3,245 and
+  3,146 respectively. An isolated copy of the same authored sources also
+  reproduces both Release failures with coherent numeric local identities:
+  Chronicler `1.0.0`, FixedMathSharp `8.0.0`, SwiftCollections `7.0.0`, GridForge
+  `9.1.0`, Gravitas `1.1.0`, Trailblazer `2.0.0`, with matching four-part
+  assembly versions. The evergreen labels do not explain this divergence.
+  Source bases are Chronicler `70b97a1`, FixedMathSharp `ba14b8f`,
+  SwiftCollections `980586f`, GridForge `3229299`, Gravitas `b1861ea`, and
+  Trailblazer `b97ea6f`, with local build-identity edits and the pre-existing
+  GridForge workspace changes. No runtime code or replay assertions changed
+  during this recheck.
 - **Reproduction:** With `UseLocalLsfStack=true`, run
-  `dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -m:1 --filter FullyQualifiedName~ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace`.
+  `dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -p:UseLocalLsfStack=true -p:DisableTransitiveProjectReferences=true -m:1 --filter FullyQualifiedName~ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace`.
 - **Expected:** Restoring the snapshot must reproduce every subsequent accepted
   position and the remaining trace exactly for both transports.
 - **Boundary:** This is not established as a recurrence of TRB-Issue-147; the

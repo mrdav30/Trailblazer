@@ -39,9 +39,12 @@ For coordinated unreleased LSF changes, use matching `Chronicler`, `FixedMathSha
 dependencies do not include those fixes. Command-line invocations can pass
 `-p:UseLocalLsfStack=true` to restore/build/test.
 
-This includes explicit source Chronicler and Lean shim references at the
-library, adapter, test, and benchmark boundaries. Their local 0.4.0 identities
-match the existing dependency graph; they are not selected release versions.
+This includes explicit source references at library, adapter, test, and benchmark
+boundaries. `Directory.Build.props` owns the shared runtime version selection
+and each library's reference identity. Trailblazer and its adapter use
+`0.0.0-tb-local-lsf`; siblings use their corresponding evergreen labels. All
+source assemblies use assembly/file version `0.0.0.0`, even when GitVersion
+values are present. These identities do not change for releases.
 
 For VS Code design-time restore, fully exit **all VS Code windows** first, then
 run the following from an external PowerShell terminal at the Trailblazer root:

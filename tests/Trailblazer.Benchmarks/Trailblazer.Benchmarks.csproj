@@ -19,29 +19,31 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj"
-                      Condition="'$(UseLocalLsfStack)' != 'true' Or '$(UsePrebuiltLocalLsfStack)' != 'true'" />
+                      Condition="'$(UseLocalLsfStack)' != 'true' Or '$(UsePrebuiltLocalLsfStack)' != 'true'">
+      <AdditionalProperties Condition="'$(UseLocalLsfStack)' == 'true'">Configuration=$(Configuration);$(LocalLsfTrailblazerProperties)</AdditionalProperties>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
                       Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"
                       Targets="GetTargetPath"
-                      AdditionalProperties="Configuration=$(Configuration);SemVer=9.1.0;AssemblySemVer=9.1.0.0" />
+                      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGridForgeProperties)" />
     <ProjectReference Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
                       Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"
-                      AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0;AssemblySemVer=7.0.0.0" />
+                      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfSwiftCollectionsProperties)" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- The Test SDK is required only for the VSTest Adapter to work -->
   </ItemGroup>
   <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'">
     <ProjectReference Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj"
-      AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" />
+      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
     <!-- Suppress competing transitive package binaries at the executable host. -->
     <PackageReference Include="FixedMathSharp" Version="7.1.0"
       Condition="'$(Configuration)' != 'ReleaseLean' And '$(DisableMemoryPack)' != 'true'" ExcludeAssets="compile;runtime" />
     <PackageReference Include="FixedMathSharp.Lean" Version="7.1.0"
       Condition="'$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true'" ExcludeAssets="compile;runtime" />
     <ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
-      AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
+      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
     <ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj"
-      AdditionalProperties="Configuration=$(Configuration);SemVer=7.1.0;AssemblySemVer=7.1.0.0" />
+      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
   </ItemGroup>
   <!-- Generated BenchmarkDotNet projects consume the already-verified local build.
        This prevents nested project-reference builds from overwriting versioned LSF binaries. -->
@@ -60,7 +62,7 @@
   </ItemGroup>
   <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And ('$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true') And '$(UsePrebuiltLocalLsfStack)' != 'true'">
     <ProjectReference Include="..\..\..\Chronicler\src\Chronicler.MemoryPackShim\Chronicler.MemoryPackShim.csproj"
-      AdditionalProperties="Configuration=$(Configuration);SemVer=0.4.0;AssemblySemVer=0.4.0.0" />
+      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseLocalLsfStack)' != 'true'">
@@ -68,6 +70,6 @@
   </ItemGroup>
   <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
     <ProjectReference Include="..\..\..\Chronicler\src\Chronicler.Diagnostics\Chronicler.Diagnostics.csproj"
-                      AdditionalProperties="Configuration=$(Configuration);SemVer=1.0.0;AssemblySemVer=1.0.0.0" />
+                      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
   </ItemGroup>
 </Project>

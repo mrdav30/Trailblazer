@@ -1,6 +1,6 @@
 using System;
-using GridForge;
 using Chronicler.Diagnostics;
+using GridForge;
 using Xunit;
 
 namespace Trailblazer.Tests;

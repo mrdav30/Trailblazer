@@ -1,4 +1,5 @@
 using System;
+using Chronicler.Diagnostics;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -11,7 +12,6 @@ using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
-using Chronicler.Diagnostics;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation;

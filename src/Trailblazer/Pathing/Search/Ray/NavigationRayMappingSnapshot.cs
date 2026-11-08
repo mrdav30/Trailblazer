@@ -9,6 +9,7 @@ using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Caches the node, component, and obstacle count resolved for one ray voxel.</summary>
 internal struct NavigationRayMappingSnapshot
 {
     internal VoxelIndex Index;

@@ -10,6 +10,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
+/// <content>Prepares and applies steering state during profile replacement.</content>
 public partial class NavSteering
 {
     internal bool TryPrepareProfileReplacement(

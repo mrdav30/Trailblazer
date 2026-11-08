@@ -7,19 +7,6 @@
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Identifies the final-state action for a source-owned semantic transition.</summary>
-public enum TraversalTransitionOverlayOperationKind
-{
-    /// <summary>Write or replace a complete transition definition.</summary>
-    Upsert = 0,
-
-    /// <summary>Tombstone the effective source-owned transition.</summary>
-    Suppress = 1,
-
-    /// <summary>Remove the override or tombstone and restore the baked definition.</summary>
-    RevertToBake = 2
-}
-
 /// <summary>Describes one immutable source-owned transition overlay operation.</summary>
 public readonly struct TraversalTransitionOverlayOperation
 {

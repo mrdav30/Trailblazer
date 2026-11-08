@@ -10,7 +10,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Selects how a world-space path endpoint may resolve to a navigation node.
 /// </summary>
-public enum EndpointResolutionPolicy
+public enum EndpointResolutionPolicy : byte
 {
     /// <summary>
     /// Requires the exact endpoint position to be navigable.

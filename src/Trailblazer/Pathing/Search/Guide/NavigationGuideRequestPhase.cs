@@ -7,6 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Identifies the active processing phase of a scheduled guide request.</summary>
 internal enum NavigationGuideRequestPhase : byte
 {
     Queued,

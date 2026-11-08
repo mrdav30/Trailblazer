@@ -13,6 +13,7 @@ using FixedMathSharp.Chronicler;
 
 namespace Trailblazer.Navigation.Motor;
 
+/// <content>Prepares traversal state and resolves the frame's locomotion and platform motion.</content>
 public partial class NavMotor
 {
     #region Request Traversal

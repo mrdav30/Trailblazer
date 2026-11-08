@@ -235,10 +235,3 @@ public sealed class TrailblazerPathingService
             "TrailblazerPathingService is bound to an inactive GridWorld.");
     }
 }
-
-internal enum NavigationCommittedCellResolveStatus : byte
-{
-    NoCell,
-    Resolved,
-    Unavailable
-}

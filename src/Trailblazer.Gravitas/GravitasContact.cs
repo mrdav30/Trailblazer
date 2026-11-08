@@ -1,8 +1,16 @@
+//=======================================================================
+// GravitasContact.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using FixedMathSharp;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Navigation;
 
+/// <summary>Carries translated Gravitas support geometry, friction, and platform motion for the navigator.</summary>
 internal readonly struct GravitasContact
 {
     internal GravitasContact(

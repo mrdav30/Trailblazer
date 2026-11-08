@@ -297,8 +297,6 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
             "destination", destinationMedium: (TraversalMedium)99);
         Action unknownScope = () => _ = CreateRule(
             "scope", scope: (TraversalTransitionRuleScope)99);
-        Action scopeBelowRange = () => _ = CreateRule(
-            "scope-low", scope: (TraversalTransitionRuleScope)(-1));
         Action unknownCapability = () => _ = CreateRule(
             "capability", capabilities: (TraversalCapability)(1 << 20));
         Action negativeCost = () => _ = CreateRule("cost", actionCost: -Fixed64.One);
@@ -310,7 +308,6 @@ public sealed class NavigationMapDefaultAndTransitionRuleTests
         unknownSource.Should().Throw<ArgumentException>();
         unknownDestination.Should().Throw<ArgumentException>();
         unknownScope.Should().Throw<ArgumentException>();
-        scopeBelowRange.Should().Throw<ArgumentException>();
         unknownCapability.Should().Throw<ArgumentException>();
         negativeCost.Should().Throw<ArgumentException>();
         unknownHint.Should().Throw<ArgumentException>();

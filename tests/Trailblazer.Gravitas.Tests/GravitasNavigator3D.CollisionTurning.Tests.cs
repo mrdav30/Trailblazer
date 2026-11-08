@@ -2,8 +2,6 @@ using FixedMathSharp;
 using FluentAssertions;
 using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
-using Trailblazer.Navigation.Motor;
-using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Gravitas.Tests;

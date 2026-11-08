@@ -12,6 +12,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
+/// <content>Records and restores durable steering configuration.</content>
 public partial class NavSteering
 {
     #region Serialization

@@ -12,23 +12,6 @@ using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Reports the complete internal lifecycle of one bounded A* query.</summary>
-internal enum NavigationAStarQueryStatus : byte
-{
-    Pending = 0,
-    Success = 1,
-    Unsupported = 2,
-    NoMap = 3,
-    InvalidProfile = 4,
-    InvalidStart = 5,
-    InvalidEnd = 6,
-    NoPath = 7,
-    BudgetExceeded = 8,
-    CostOverflow = 9,
-    CapacityExceeded = 10,
-    Stale = 11
-}
-
 /// <summary>
 /// Owns admission and search leases until one immutable payload lease can be returned.
 /// </summary>

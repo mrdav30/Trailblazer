@@ -5,17 +5,18 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+using System.Runtime.ExceptionServices;
 using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using System;
-using System.Runtime.ExceptionServices;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
 
+/// <content>Coordinates validation and application of a navigator profile replacement.</content>
 public abstract partial class Navigator
 {
     /// <summary>

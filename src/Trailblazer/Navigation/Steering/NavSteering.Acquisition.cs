@@ -10,6 +10,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
+/// <content>Acquires immediate and scheduled guidance and validates moving origins.</content>
 public partial class NavSteering
 {
     private NavigationAcquisitionMode _acquisitionMode;

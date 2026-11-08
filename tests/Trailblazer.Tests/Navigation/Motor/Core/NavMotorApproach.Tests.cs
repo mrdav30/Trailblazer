@@ -1,7 +1,7 @@
 using System;
 using FixedMathSharp;
-using Trailblazer.Navigation;
 using FluentAssertions;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Xunit;
 

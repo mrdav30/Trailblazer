@@ -7,6 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Identifies the guide algorithm owned by a scheduled request.</summary>
 internal enum NavigationGuideRequestFlavor : byte
 {
     PublicGraph,

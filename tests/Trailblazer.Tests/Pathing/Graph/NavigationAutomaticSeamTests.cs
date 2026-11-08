@@ -1,10 +1,3 @@
-//=======================================================================
-// NavigationAutomaticSeamTests.cs
-//=======================================================================
-// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
-// See LICENSE file in the project root for full license information.
-//=======================================================================
-
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -185,13 +178,13 @@ public sealed class NavigationAutomaticSeamTests
                     TrailblazerWorldContextSettings.Default.MaintenanceBudget),
                 exactBytes,
                 maximumPersistentPages: 5)
-            .Should().NotBe(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded);
+            .Should().NotBe(AdvanceStatus.CapacityExceeded);
         below.AdvanceOne(
                 new MaintenanceWorkMeter(
                     TrailblazerWorldContextSettings.Default.MaintenanceBudget),
                 exactBytes - 1,
                 maximumPersistentPages: 5)
-            .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded);
+            .Should().Be(AdvanceStatus.CapacityExceeded);
     }
 
     [Fact]
@@ -207,13 +200,13 @@ public sealed class NavigationAutomaticSeamTests
             TrailblazerWorldContextSettings.Default.MaintenanceBudget);
 
         work.AdvanceOne(meter, long.MaxValue, int.MaxValue)
-            .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Progressed);
+            .Should().Be(AdvanceStatus.Progressed);
         long refreshBytes = work.RetainedBytes;
         int refreshPages = work.PersistentPageCount;
         meter.Reset();
 
         work.AdvanceOne(meter, refreshBytes, refreshPages)
-            .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded,
+            .Should().Be(AdvanceStatus.CapacityExceeded,
                 "the exact refresh-only ceiling cannot retain the subsequent component rebuild");
         work.RetainedBytes.Should().BeGreaterThan(refreshBytes);
         work.PersistentPageCount.Should().BeGreaterThan(refreshPages);
@@ -254,14 +247,14 @@ public sealed class NavigationAutomaticSeamTests
         for (int step = 0; step < refreshSteps; step++)
         {
             lifecycle.AdvanceOne(meter, long.MaxValue, int.MaxValue)
-                .Should().NotBe(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded);
+                .Should().NotBe(AdvanceStatus.CapacityExceeded);
             meter.Reset();
         }
         long refreshOnlyBytes = lifecycle.RetainedBytes;
         int refreshOnlyPages = lifecycle.PersistentPageCount;
 
         lifecycle.AdvanceOne(meter, refreshOnlyBytes, int.MaxValue)
-            .Should().Be(NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded,
+            .Should().Be(AdvanceStatus.CapacityExceeded,
                 "the refresh-only ceiling cannot retain the first affected endpoint root");
         lifecycle.RetainedBytes.Should().BeGreaterThan(refreshOnlyBytes);
         lifecycle.PersistentPageCount.Should().BeGreaterThan(refreshOnlyPages);
@@ -288,7 +281,7 @@ public sealed class NavigationAutomaticSeamTests
         removeMeter.TryConsumeComponentNodes(budget.MaxComponentNodes).Should().BeTrue();
 
         removeWork.AdvanceOne(removeMeter).Should().Be(
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked);
+            SeamAdvanceStatus.Blocked);
         removeWork.IsComplete.Should().BeFalse();
         removeMeter.ComponentNodes.Should().Be(budget.MaxComponentNodes);
 
@@ -320,7 +313,7 @@ public sealed class NavigationAutomaticSeamTests
         overlayMeter.TryConsumeDependencyEntries(budget.MaxDependencyEntries).Should().BeTrue();
 
         overlayWork.AdvanceOne(overlayMeter).Should().Be(
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked);
+            SeamAdvanceStatus.Blocked);
         overlayWork.IsComplete.Should().BeFalse();
         overlayMeter.ComponentNodes.Should().Be(1,
             "the map inspection is retained even when its first cell cannot debit dependency work");
@@ -359,13 +352,13 @@ public sealed class NavigationAutomaticSeamTests
 
         work.IsComplete.Should().BeTrue();
         work.AdvanceOne(meter).Should().Be(
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Complete,
+            SeamAdvanceStatus.Complete,
             "an unchanged completed cursor is idempotently reusable");
         lease.Graph.TryGetMap("source", out NavigationMapInstance? source).Should().BeTrue();
         context.World.TryRemoveGrid(source!.GridIdentity.GridIndex).Should().BeTrue();
 
         work.AdvanceOne(meter).Should().Be(
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked,
+            SeamAdvanceStatus.Blocked,
             "a completed seam result cannot survive removal of its validated grid generation");
         work.IsComplete.Should().BeFalse();
         work.Revision.Should().Be(1);
@@ -405,10 +398,10 @@ public sealed class NavigationAutomaticSeamTests
         bool completedEmptyProbe = false;
         for (int step = 0; step < 256 && !completedEmptyProbe; step++)
         {
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus status =
+            SeamAdvanceStatus status =
                 work.AdvanceOne(meter);
             completedEmptyProbe = status
-                    == NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Progressed
+                    == SeamAdvanceStatus.Progressed
                 && meter.SeamCandidateProbes > 0;
             if (!completedEmptyProbe)
                 meter.Reset();
@@ -419,7 +412,7 @@ public sealed class NavigationAutomaticSeamTests
         meter.Reset();
 
         work.AdvanceOne(meter).Should().Be(
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked,
+            SeamAdvanceStatus.Blocked,
             "the completed zero-contact cursor must be revalidated before an empty result seals");
         work.Revision.Should().Be(1);
         work.IsComplete.Should().BeFalse();
@@ -464,9 +457,9 @@ public sealed class NavigationAutomaticSeamTests
         for (int step = 0; step < 64 && !completedFirstDiscovery; step++)
         {
             meter.Reset();
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus status =
+            SeamAdvanceStatus status =
                 work.AdvanceOne(meter);
-            status.Should().NotBe(NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Complete);
+            status.Should().NotBe(SeamAdvanceStatus.Complete);
             completedFirstDiscovery = meter.SeamCandidateProbes > 0;
         }
         completedFirstDiscovery.Should().BeTrue(
@@ -478,10 +471,10 @@ public sealed class NavigationAutomaticSeamTests
         {
             meter.Reset();
             meter.TryConsumeComponentNodes(budget.MaxComponentNodes).Should().BeTrue();
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus status =
+            SeamAdvanceStatus status =
                 work.AdvanceOne(meter);
             heldBeforeSecondMap =
-                status == NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked
+                status == SeamAdvanceStatus.Blocked
                 && meter.SeamCandidateProbes == 0;
         }
         heldBeforeSecondMap.Should().BeTrue(
@@ -492,13 +485,13 @@ public sealed class NavigationAutomaticSeamTests
         context.World.TryRemoveGrid(secondMap!.GridIdentity.GridIndex).Should().BeTrue();
 
         bool restartedBeforeSecondDiscovery = false;
-        NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus lastStatus = default;
+        SeamAdvanceStatus lastStatus = default;
         for (int step = 0; step < 64 && !restartedBeforeSecondDiscovery; step++)
         {
             meter.Reset();
             lastStatus = work.AdvanceOne(meter);
             restartedBeforeSecondDiscovery =
-                lastStatus == NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Blocked
+                lastStatus == SeamAdvanceStatus.Blocked
                 && work.Revision == 1
                 && meter.SeamCandidateProbes == 0;
         }
@@ -559,7 +552,7 @@ public sealed class NavigationAutomaticSeamTests
         var meter = new MaintenanceWorkMeter(
             TrailblazerWorldContextSettings.Default.MaintenanceBudget);
         work.AdvanceOne(meter).Should().Be(
-            NavigationAutomaticSeamRefreshWork.SeamAdvanceStatus.Progressed,
+            SeamAdvanceStatus.Progressed,
             "the map commit first enters its discovery mode");
         meter.Reset();
 

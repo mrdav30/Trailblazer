@@ -7,12 +7,13 @@
   <PropertyGroup Condition="'$(UseLocalLsfStack)' == 'true'">
     <LocalLsfVersion>0.0.0-tb-local-lsf</LocalLsfVersion>
     <LocalLsfAssemblyVersion>0.0.0.0</LocalLsfAssemblyVersion>
-    <LocalLsfChroniclerProperties>SemVer=0.0.0-chronicler-local-lsf;AssemblySemVer=$(LocalLsfAssemblyVersion)</LocalLsfChroniclerProperties>
-    <LocalLsfFixedMathSharpProperties>SemVer=0.0.0-fms-local-lsf;AssemblySemVer=$(LocalLsfAssemblyVersion)</LocalLsfFixedMathSharpProperties>
-    <LocalLsfSwiftCollectionsProperties>SemVer=0.0.0-sc-local-lsf;AssemblySemVer=$(LocalLsfAssemblyVersion)</LocalLsfSwiftCollectionsProperties>
-    <LocalLsfGridForgeProperties>SemVer=0.0.0-gf-local-lsf;AssemblySemVer=$(LocalLsfAssemblyVersion)</LocalLsfGridForgeProperties>
-    <LocalLsfGravitasProperties>SemVer=0.0.0-grv-local-lsf;AssemblySemVer=$(LocalLsfAssemblyVersion)</LocalLsfGravitasProperties>
-    <LocalLsfTrailblazerProperties>SemVer=$(LocalLsfVersion);AssemblySemVer=$(LocalLsfAssemblyVersion)</LocalLsfTrailblazerProperties>
+    <!-- Inferred sibling references can drop the version metadata from explicit references. -->
+    <LocalLsfReferenceProperties>AssemblySemVer=$(LocalLsfAssemblyVersion);DisableTransitiveProjectReferences=true</LocalLsfReferenceProperties>
+    <LocalLsfChroniclerProperties>SemVer=0.0.0-chronicler-local-lsf;$(LocalLsfReferenceProperties)</LocalLsfChroniclerProperties>
+    <LocalLsfFixedMathSharpProperties>SemVer=0.0.0-fms-local-lsf;$(LocalLsfReferenceProperties)</LocalLsfFixedMathSharpProperties>
+    <LocalLsfSwiftCollectionsProperties>SemVer=0.0.0-sc-local-lsf;$(LocalLsfReferenceProperties)</LocalLsfSwiftCollectionsProperties>
+    <LocalLsfGridForgeProperties>SemVer=0.0.0-gf-local-lsf;$(LocalLsfReferenceProperties)</LocalLsfGridForgeProperties>
+    <LocalLsfGravitasProperties>SemVer=0.0.0-grv-local-lsf;$(LocalLsfReferenceProperties)</LocalLsfGravitasProperties>
   </PropertyGroup>
 
   <!-- Runtime versions come from GitVersion in package mode and fixed identities in source mode. -->

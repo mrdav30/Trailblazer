@@ -10,6 +10,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Applies shared endpoint and result rules when navigation searches finish.</summary>
 internal static class NavigationSearchFinalizationRules
 {
     internal static bool IsEpochCurrent(

@@ -6,9 +6,9 @@ summary: *content
 Trailblazer provides deterministic, engine-agnostic navigation for lockstep
 games and simulations. `TrailblazerWorldContext` owns navigation state for one
 GridForge world, including fixed-step publication, graph generations, guide
-services, controller coordination, and deterministic heightmaps.
-Its clock exposes a long frame count and Chronicler wide elapsed timestamp;
-Fixed64 timesteps remain the motion-integration boundary.
+services, controller coordination, and deterministic heightmaps. Its clock
+exposes a long frame count and Chronicler wide elapsed timestamp; Fixed64
+timesteps remain the motion-integration boundary.
 
 The root namespace contains context, clock, lifecycle, logging, and traversal
 medium contracts. Map authoring, queries, algorithms, and guide leases live in

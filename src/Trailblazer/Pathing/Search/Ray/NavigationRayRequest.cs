@@ -10,6 +10,7 @@ using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Carries the endpoints and traversal constraints for an internal navigation ray.</summary>
 internal readonly struct NavigationRayRequest
 {
     internal NavigationRayRequest(

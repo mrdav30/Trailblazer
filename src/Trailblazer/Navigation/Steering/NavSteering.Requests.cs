@@ -12,6 +12,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
+/// <content>Manages requested destinations, commands, and guide request state.</content>
 public partial class NavSteering
 {
     #region Public Interface

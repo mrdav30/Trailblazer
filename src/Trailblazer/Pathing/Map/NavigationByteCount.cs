@@ -9,6 +9,7 @@ using System;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Adds retained-byte counts with saturation at the signed 64-bit limit.</summary>
 internal static class NavigationByteCount
 {
     internal static long SaturatingAdd(long left, long right) =>

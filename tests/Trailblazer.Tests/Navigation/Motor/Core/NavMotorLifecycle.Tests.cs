@@ -1,5 +1,4 @@
 using System;
-using Chronicler;
 using Chronicler.Serialization;
 using FixedMathSharp;
 using FluentAssertions;
@@ -171,7 +170,7 @@ public sealed class NavMotorLifecycleTests : IDisposable
         flyingAgent.Motor.Handler.Fly.CanFly = true;
         flyingAgent.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)3;
         flyingAgent.Motor.Handler.Move.MaxFastSpeed = (Fixed64)3;
-        flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, (TrekRate)999)
+        flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, (TrekRate)byte.MaxValue)
             .Should().Be(Fixed64.Zero);
     }
 

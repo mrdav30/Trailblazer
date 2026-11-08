@@ -3,11 +3,10 @@
 ![Trailblazer Icon](https://raw.githubusercontent.com/mrdav30/trailblazer/main/icon.png)
 
 [![Build](https://github.com/mrdav30/Trailblazer/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/mrdav30/Trailblazer/actions/workflows/build-and-test.yml)
-[![Branch Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmrdav30.github.io%2FTrailblazer%2FSummary.json&query=%24.summary.branchcoverage&suffix=%25&label=branch%20coverage&color=brightgreen)](https://mrdav30.github.io/Trailblazer/coverage/)
+[![Coverage](https://mrdav30.github.io/Trailblazer/coverage/badge_branchcoverage.svg)](https://mrdav30.github.io/Trailblazer/coverage/)
 [![NuGet](https://img.shields.io/nuget/v/Trailblazer.svg)](https://www.nuget.org/packages/Trailblazer)
-[![NuGet Lean](https://img.shields.io/nuget/v/Trailblazer.Lean.svg?label=nuget%20lean)](https://www.nuget.org/packages/Trailblazer.Lean)
 [![License](https://img.shields.io/github/license/mrdav30/Trailblazer.svg)](https://github.com/mrdav30/Trailblazer/blob/main/LICENSE)
-[![API](https://img.shields.io/badge/docs-API-f4511e)](https://mrdav30.github.io/Trailblazer/)
+[![Documentation](https://img.shields.io/badge/docs-guides%20%26%20API-f4511e)](https://mrdav30.github.io/Trailblazer/)
 [![Discord](https://img.shields.io/badge/discord-join%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/mhwK2QFNBA)
 
 **Deterministic navigation and character control for lockstep simulations and
@@ -42,13 +41,14 @@ teleporters.
 dotnet add package Trailblazer
 ```
 
-Trailblazer targets `netstandard2.1` and `net10.0`. The standard package includes
-JSON and MemoryPack serialization support.
+Trailblazer targets `netstandard2.1` and `net10.0`. The standard package
+includes JSON and MemoryPack serialization support.
 
 ## Request a route
 
-After publishing the referenced GridForge-backed map and area policy, describe
-the entire request with one immutable `PathQuery`:
+This excerpt assumes your host has created the context, published the referenced
+map and area policy, and supplied the endpoints, profile, and budget. Describe
+the request with one immutable `PathQuery`.
 
 ```csharp
 PathQuery query = new(
@@ -81,12 +81,12 @@ dependencies, and action-completion contract.
 These request methods finish synchronously. For large cold requests during
 gameplay, `context.Guides.Schedule(query, out request)` spreads acquisition over
 fixed frames. See the
-[scheduling guide](https://github.com/mrdav30/Trailblazer/wiki/Pathing#spreading-acquisition-across-fixed-frames)
+[scheduling guide](https://mrdav30.github.io/Trailblazer/guides/Pathing.html#spreading-acquisition-across-fixed-frames)
 for finite capacity, result ownership and latency tradeoffs. Navigator hosts can
 opt into the same queue through
 `navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled)`;
 see
-[steering acquisition](https://github.com/mrdav30/Trailblazer/wiki/NavSteering#scheduled-acquisition-and-moving-origins).
+[steering acquisition](https://mrdav30.github.io/Trailblazer/guides/NavSteering.html#scheduled-acquisition-and-moving-origins).
 
 ## Choose a package
 
@@ -97,14 +97,19 @@ see
 
 Do not mix standard and Lean LSF packages in one dependency graph.
 
-## Built on the LSF stack
+## Gravitas integration
 
 For collision-backed 3D movement, the optional `Trailblazer.Gravitas` and
 `Trailblazer.Gravitas.Lean` adapters connect Navigator to host-owned Gravitas
 bodies without coupling the core libraries. See the
-[integration guide](https://github.com/mrdav30/Trailblazer/wiki/Gravitas).
-Repository development currently requires the coordinated unreleased dependency
-stack; see the [adapter development guide](https://github.com/mrdav30/Trailblazer/blob/develop/src/Trailblazer.Gravitas/README.md).
+[integration guide](https://mrdav30.github.io/Trailblazer/guides/Gravitas.html).
+For coordinated source development, see the
+[adapter README](https://github.com/mrdav30/Trailblazer/blob/main/src/Trailblazer.Gravitas/README.md).
+
+## Part of the LSF ecosystem
+
+Trailblazer supplies navigation and character control in the Lockstep Simulation
+Framework (LSF).
 
 - [FixedMathSharp](https://github.com/mrdav30/FixedMathSharp) supplies
   deterministic fixed-point math.
@@ -114,6 +119,8 @@ stack; see the [adapter development guide](https://github.com/mrdav30/Trailblaze
   geometry, and physical cell identity.
 - [Chronicler](https://github.com/mrdav30/Chronicler) supplies explicit state
   transfer and serialization.
+- [Gravitas](https://github.com/mrdav30/Gravitas) supplies deterministic physics
+  for the optional collision-backed controller adapter.
 
 Shared logging and exception guards come from the independent
 `Chronicler.Diagnostics` package. See the
@@ -122,12 +129,12 @@ for the updated imports and guard names.
 
 ## Learn more
 
-- [Get started with a complete route](https://github.com/mrdav30/Trailblazer/wiki/GettingStarted)
-- [Understand Trailblazer's ownership model](https://github.com/mrdav30/Trailblazer/wiki/Overview)
-- [Author and publish navigation maps](https://github.com/mrdav30/Trailblazer/wiki/MapAuthoring)
-- [Consume A\* and flow-field guides](https://github.com/mrdav30/Trailblazer/wiki/PathGuides)
+- [Get started with a complete route](https://mrdav30.github.io/Trailblazer/guides/GettingStarted.html)
+- [Understand Trailblazer's ownership model](https://mrdav30.github.io/Trailblazer/guides/Overview.html)
+- [Author and publish navigation maps](https://mrdav30.github.io/Trailblazer/guides/MapAuthoring.html)
+- [Consume A\* and flow-field guides](https://mrdav30.github.io/Trailblazer/guides/PathGuides.html)
 - [Browse the API reference](https://mrdav30.github.io/Trailblazer/api/Trailblazer.html)
-- [Migrate from v1 to v2](https://github.com/mrdav30/Trailblazer/blob/main/docs/MIGRATION.md)
+- [Migration guide](https://github.com/mrdav30/Trailblazer/blob/main/docs/MIGRATION.md)
 
 ## Development
 
@@ -146,7 +153,11 @@ for the full workflow.
 
 Open an [issue](https://github.com/mrdav30/Trailblazer/issues) for bugs and
 feature requests, or join the
-[LSF Discord community](https://discord.gg/mhwK2QFNBA).
+[LSF Discord community](https://discord.gg/mhwK2QFNBA). See
+[support](https://github.com/mrdav30/Trailblazer/blob/main/.github/SUPPORT.md)
+for help and
+[security](https://github.com/mrdav30/Trailblazer/blob/main/SECURITY.md) for
+private vulnerability reports.
 
 Trailblazer is available under the
 [MIT License](https://github.com/mrdav30/Trailblazer/blob/main/LICENSE). See the

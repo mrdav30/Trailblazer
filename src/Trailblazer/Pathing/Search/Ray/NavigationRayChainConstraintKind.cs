@@ -7,6 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Identifies which cell or selected edge constrains navigation ray traversal.</summary>
 internal enum NavigationRayChainConstraintKind : byte
 {
     Unrestricted,

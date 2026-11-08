@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/TestResults/
+**/__pycache__/
+artifacts/
+BenchmarkDotNet.Artifacts/
+.vs/
+.codex/
+node_modules/
+# Preserve formatting in engineering plans and validation records.
+docs/feature-work/

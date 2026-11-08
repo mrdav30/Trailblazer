@@ -10,6 +10,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Navigation.MovementGroups;
 
+/// <summary>Tracks an agent's position, requested destination, and formation offset within a movement group.</summary>
 internal sealed class MovementGroupMember
 {
     public Guid OccupantId;

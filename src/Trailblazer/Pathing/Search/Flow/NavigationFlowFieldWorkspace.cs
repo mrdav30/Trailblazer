@@ -6,19 +6,8 @@
 //=======================================================================
 
 using System;
-using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
-
-internal struct NavigationFlowFieldSearchNode
-{
-    internal NavigationCellAddress Address;
-    internal Fixed64 IntegrationCost;
-    internal NavigationSelectedEdgeRef SelectedEdge;
-    internal int HeapIndex;
-    internal bool SelectedIsTransition;
-    internal bool Closed;
-}
 
 /// <summary>Owns reusable fixed-capacity buffers for one exclusive flow query.</summary>
 internal sealed class NavigationFlowFieldWorkspace

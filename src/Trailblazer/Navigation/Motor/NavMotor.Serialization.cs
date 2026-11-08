@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // NavMotor.Serialization.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -9,6 +9,7 @@ using Chronicler;
 
 namespace Trailblazer.Navigation.Motor;
 
+/// <content>Records and restores motor and locomotion state.</content>
 public partial class NavMotor
 {
     #region Serialization

@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Chronicler.Diagnostics;
 using FixedMathSharp;
 using FluentAssertions;
-using Chronicler.Diagnostics;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;

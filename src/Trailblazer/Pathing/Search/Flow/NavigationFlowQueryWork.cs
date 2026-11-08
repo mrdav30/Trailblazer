@@ -10,41 +10,6 @@ using System.Threading;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Reports the complete internal lifecycle of one bounded flow query.</summary>
-internal enum NavigationFlowQueryStatus : byte
-{
-    Pending = 0,
-    Success = 1,
-    Unsupported = 2,
-    NoMap = 3,
-    InvalidProfile = 4,
-    InvalidStart = 5,
-    InvalidEnd = 6,
-    NoPath = 7,
-    BudgetExceeded = 8,
-    CostOverflow = 9,
-    CapacityExceeded = 10,
-    Stale = 11
-}
-
-/// <summary>Owns one successful flow payload lease and its exact resolved origin.</summary>
-internal readonly struct NavigationFlowQueryResult : IDisposable
-{
-    internal NavigationFlowQueryResult(
-        NavigationCellAddress resolvedOrigin,
-        NavigationFlowFieldPayloadLease payloadLease)
-    {
-        ResolvedOrigin = resolvedOrigin;
-        PayloadLease = payloadLease;
-    }
-
-    internal NavigationCellAddress ResolvedOrigin { get; }
-
-    internal NavigationFlowFieldPayloadLease PayloadLease { get; }
-
-    public void Dispose() => PayloadLease.Dispose();
-}
-
 /// <summary>Owns flow admission, cache reservation, search, and result publication.</summary>
 internal sealed class NavigationFlowQueryWork : IDisposable
 {

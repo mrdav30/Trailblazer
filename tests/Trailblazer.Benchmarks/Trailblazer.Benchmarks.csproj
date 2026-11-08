@@ -20,7 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj"
                       Condition="'$(UseLocalLsfStack)' != 'true' Or '$(UsePrebuiltLocalLsfStack)' != 'true'">
-      <AdditionalProperties Condition="'$(UseLocalLsfStack)' == 'true'">Configuration=$(Configuration);$(LocalLsfTrailblazerProperties)</AdditionalProperties>
+      <AdditionalProperties Condition="'$(UseLocalLsfStack)' == 'true'">Configuration=$(Configuration)</AdditionalProperties>
     </ProjectReference>
     <ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
                       Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"

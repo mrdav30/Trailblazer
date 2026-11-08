@@ -1,9 +1,9 @@
 using System;
 using System.Reflection;
+using Chronicler.Diagnostics;
 using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
-using Chronicler.Diagnostics;
 using SwiftCollections.Pool;
 
 namespace Trailblazer.Benchmarks;

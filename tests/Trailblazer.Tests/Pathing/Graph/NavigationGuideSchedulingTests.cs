@@ -5,7 +5,6 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
-using GridForge.Grids.Storage;
 using GridForge.Spatial;
 using Trailblazer.Pathing;
 using Xunit;
@@ -1035,7 +1034,8 @@ public sealed class NavigationGuideSchedulingTests
             started.Set();
             try { context.Simulate(); }
             catch (Exception exception) { failure = exception; }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         var cache = gate.PayloadCache;
         var store = context.Pathing.NavigationGraphStore;
         try

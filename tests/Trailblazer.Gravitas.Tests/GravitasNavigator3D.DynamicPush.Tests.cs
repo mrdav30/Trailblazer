@@ -47,7 +47,7 @@ public sealed class GravitasNavigator3DDynamicPushTests
             FreezeAxes = BodyFreezeAxes3D.Rotation
         };
         body.UseManualGrounding();
-        body.Initialize(start, FixedQuaternion.Identity, BodyMotionType.Dynamic);
+        body.Initialize(start, FixedQuaternion.Identity, PhysicsMobilityType.Dynamic);
         try
         {
             var frames = new Vector3d[8 * 4];

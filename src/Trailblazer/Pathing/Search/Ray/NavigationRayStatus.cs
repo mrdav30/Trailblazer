@@ -7,6 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Reports the progress or result of an internal navigation ray.</summary>
 internal enum NavigationRayStatus : byte
 {
     Pending,

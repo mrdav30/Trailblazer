@@ -1,10 +1,3 @@
-//=======================================================================
-// NavigationEndpointResolutionTests.cs
-//=======================================================================
-// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
-// See LICENSE file in the project root for full license information.
-//=======================================================================
-
 using System;
 using FixedMathSharp;
 using FluentAssertions;
@@ -3274,7 +3267,9 @@ public sealed class NavigationEndpointResolutionTests
                 gate.PayloadCache.LeasedBytes.Should().Be(payload.RetainedBytes + proofBytes);
                 using var cachedSource = new NavigationCohortSource
                 {
-                    Flow = result.PayloadLease, HasFlow = true, Transfer = scenario != "CloneProof"
+                    Flow = result.PayloadLease,
+                    HasFlow = true,
+                    Transfer = scenario != "CloneProof"
                 };
                 gate.PayloadCache.TryCheckoutShared(store, graph, payload.Key, original.ResolvedOrigin,
                     cachedSource, null, out NavigationFlowFieldPayloadLease member, out _,

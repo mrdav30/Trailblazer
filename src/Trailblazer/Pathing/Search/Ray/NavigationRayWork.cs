@@ -1348,16 +1348,16 @@ internal sealed partial class NavigationRayWork
 
     internal static NavigationRayStatus MapVolumeStatus(
         NavigationTraversalEvaluationStatus status) => status switch
-    {
-        NavigationTraversalEvaluationStatus.BudgetExceeded =>
-            NavigationRayStatus.BudgetExceeded,
-        NavigationTraversalEvaluationStatus.CapacityExceeded =>
-            NavigationRayStatus.CapacityExceeded,
-        NavigationTraversalEvaluationStatus.CostOverflow =>
-            NavigationRayStatus.CostOverflow,
-        NavigationTraversalEvaluationStatus.Stale => NavigationRayStatus.Stale,
-        _ => NavigationRayStatus.Pending
-    };
+        {
+            NavigationTraversalEvaluationStatus.BudgetExceeded =>
+                NavigationRayStatus.BudgetExceeded,
+            NavigationTraversalEvaluationStatus.CapacityExceeded =>
+                NavigationRayStatus.CapacityExceeded,
+            NavigationTraversalEvaluationStatus.CostOverflow =>
+                NavigationRayStatus.CostOverflow,
+            NavigationTraversalEvaluationStatus.Stale => NavigationRayStatus.Stale,
+            _ => NavigationRayStatus.Pending
+        };
 
     internal static bool IsTraceIntervalCurrent(
         bool identityMatches,
@@ -1429,17 +1429,17 @@ internal sealed partial class NavigationRayWork
 
     internal static NavigationRayStatus MapTraversalAdvanceStatus(
         NavigationTraversalEdgeAdvanceStatus status) => status switch
-    {
-        NavigationTraversalEdgeAdvanceStatus.Blocked => NavigationRayStatus.Blocked,
-        NavigationTraversalEdgeAdvanceStatus.BudgetExceeded =>
-            NavigationRayStatus.BudgetExceeded,
-        NavigationTraversalEdgeAdvanceStatus.CapacityExceeded =>
-            NavigationRayStatus.CapacityExceeded,
-        NavigationTraversalEdgeAdvanceStatus.CostOverflow =>
-            NavigationRayStatus.CostOverflow,
-        NavigationTraversalEdgeAdvanceStatus.Stale => NavigationRayStatus.Stale,
-        _ => NavigationRayStatus.Pending
-    };
+        {
+            NavigationTraversalEdgeAdvanceStatus.Blocked => NavigationRayStatus.Blocked,
+            NavigationTraversalEdgeAdvanceStatus.BudgetExceeded =>
+                NavigationRayStatus.BudgetExceeded,
+            NavigationTraversalEdgeAdvanceStatus.CapacityExceeded =>
+                NavigationRayStatus.CapacityExceeded,
+            NavigationTraversalEdgeAdvanceStatus.CostOverflow =>
+                NavigationRayStatus.CostOverflow,
+            NavigationTraversalEdgeAdvanceStatus.Stale => NavigationRayStatus.Stale,
+            _ => NavigationRayStatus.Pending
+        };
 
     private GridNavigationBodySegmentEndpointAllowance GetEndpointAllowance(
         int ordinal,

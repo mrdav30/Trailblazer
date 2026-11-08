@@ -1,5 +1,5 @@
 ---
-title: Trailblazer API
+title: Trailblazer
 description: API reference and behavioral guides for deterministic navigation and character control.
 ---
 
@@ -10,7 +10,7 @@ description: API reference and behavioral guides for deterministic navigation an
   flow fields, explicit traversal actions, controller services, and
   fixed-point heightmaps inside world-owned contexts.</p>
   <div class="trb-actions">
-    <a href="https://github.com/mrdav30/Trailblazer/wiki/GettingStarted">Get started</a>
+    <a href="guides/GettingStarted.md">Get started</a>
     <a href="xref:Trailblazer">Browse the API</a>
   </div>
 </div>
@@ -60,39 +60,38 @@ description: API reference and behavioral guides for deterministic navigation an
 
 ## Package family
 
-| Package            | Serialization profile                                           |
-| ------------------ | --------------------------------------------------------------- |
-| `Trailblazer`      | Standard LSF dependencies with JSON and MemoryPack support      |
-| `Trailblazer.Lean` | Lean LSF dependencies and JSON without the MemoryPack transport |
-| `Trailblazer.Gravitas` | Optional Gravitas-backed 3D Navigator with standard dependencies |
-| `Trailblazer.Gravitas.Lean` | The same optional adapter with Lean dependencies |
+| Package                     | Serialization profile                                            |
+| --------------------------- | ---------------------------------------------------------------- |
+| `Trailblazer`               | Standard LSF dependencies with JSON and MemoryPack support       |
+| `Trailblazer.Lean`          | Lean LSF dependencies and JSON without the MemoryPack transport  |
+| `Trailblazer.Gravitas`      | Optional Gravitas-backed 3D Navigator with standard dependencies |
+| `Trailblazer.Gravitas.Lean` | The same optional adapter with Lean dependencies                 |
 
 Use one package family throughout the complete LSF dependency graph.
 
 The optional adapter commits collision-accepted motion through an explicit host
-loop. Start with the [Gravitas guide](https://github.com/mrdav30/Trailblazer/wiki/Gravitas)
-and <xref:Trailblazer.Navigation.GravitasNavigator3D>.
+loop. [Gravitas integration guide](guides/Gravitas.md),
+<xref:Trailblazer.Navigation.GravitasNavigator3D>.
 
-## Part of the LSF stack
+## Part of the LSF ecosystem
 
-Trailblazer builds navigation and controller policy on focused lower layers:
+Trailblazer provides navigation and character control in the Lockstep Simulation
+Framework.
 
-- [FixedMathSharp](https://github.com/mrdav30/FixedMathSharp) for deterministic
-  fixed-point math, transforms, and geometry.
-- [SwiftCollections](https://github.com/mrdav30/SwiftCollections) for
-  low-allocation collections, pools, and retained storage.
-- [GridForge](https://github.com/mrdav30/GridForge) for world topology, physical
-  cell identity, prisms, contacts, and geometry proofs.
-- [Chronicler](https://github.com/mrdav30/Chronicler) for explicit state
-  transfer, JSON, MemoryPack, and record schemas.
+- Deterministic fixed-point math, transforms, and geometry.
+  [FixedMathSharp](https://github.com/mrdav30/FixedMathSharp)
+- Low-allocation collections, pools, and retained storage.
+  [SwiftCollections](https://github.com/mrdav30/SwiftCollections)
+- World topology, physical cell identity, and geometry proofs.
+  [GridForge](https://github.com/mrdav30/GridForge)
+- Explicit state transfer, record schemas, and wide simulation timing.
+  [Chronicler](https://github.com/mrdav30/Chronicler)
+- Deterministic physics for the optional 3D Navigator adapter.
+  [Gravitas](https://github.com/mrdav30/Gravitas)
 
 ## Resources
 
-- [Behavioral guides and getting started](https://github.com/mrdav30/Trailblazer/wiki)
-- [v1 to v2 migration guide](https://github.com/mrdav30/Trailblazer/blob/main/docs/MIGRATION.md)
+- [Behavioral guides](guides/index.md)
+- [Migration guide](https://github.com/mrdav30/Trailblazer/blob/main/docs/MIGRATION.md)
 - [Source, issues, and releases](https://github.com/mrdav30/Trailblazer)
 - [Core and adapter test coverage](https://mrdav30.github.io/Trailblazer/coverage/)
-
-The API reference is generated from Trailblazer's XML documentation. The wiki
-explains world ownership, authoring, publication, pathing, guides, transitions,
-controllers, serialization, and troubleshooting in task-oriented prose.

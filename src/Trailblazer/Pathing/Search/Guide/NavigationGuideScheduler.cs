@@ -83,7 +83,7 @@ internal sealed partial class NavigationGuideScheduler
             _submissionSequence = NavigationGenerationCounter.Advance(_submissionSequence,
                 "The scheduled request sequence is exhausted.");
             request = new NavigationGuideRequest(this, query, bytes)
-                { Previous = _last, SubmissionSequence = _submissionSequence, Flavor = flavor };
+            { Previous = _last, SubmissionSequence = _submissionSequence, Flavor = flavor };
             if (_last == null)
                 _first = request;
             else

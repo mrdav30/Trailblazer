@@ -155,7 +155,7 @@ Review these existing contracts before selecting the 2D files:
   Vector3d/quaternion state, Y foot offset, frame lifecycle, and committed cells.
 - [KinematicBodyShape.cs](../../src/Trailblazer/Pathing/Query/KinematicBodyShape.cs),
   [NavigationAgentProfile.cs](../../src/Trailblazer/Pathing/Query/NavigationAgentProfile.cs),
-  and [TraversalEvaluator.cs](../../src/Trailblazer/Pathing/Graph/TraversalEvaluator.cs):
+  and [TraversalEvaluator.cs](../../src/Trailblazer/Pathing/Graph/Traversal/TraversalEvaluator.cs):
   authoritative body dimensions, capability admission, and vertical leg proof.
 - [Motor](../../src/Trailblazer/Navigation/Motor),
   [steering](../../src/Trailblazer/Navigation/Steering), and
@@ -165,13 +165,13 @@ Review these existing contracts before selecting the 2D files:
   [graph tests](../../tests/Trailblazer.Tests/Pathing/Graph), and
   [navigation tests](../../tests/Trailblazer.Tests/Navigation): preserve existing
   costs, stale handling, transition ownership, and 3D regression coverage.
-- [Serialization guide](../wiki/Serialization.md) and
+- [Serialization guide](../api/guides/Serialization.md) and
   [NavigationAgentProfileRecord.cs](../../src/Trailblazer/Navigation/Serialization/NavigationAgentProfileRecord.cs):
   dimensional identity and staged population cannot be inferred from a shell.
 
-In Gravitas, read `AGENTS.md`, `docs/wiki/DIMENSIONS.md`,
-`docs/wiki/HOST_INTEGRATION.md`, `src/Gravitas/Core/2D/SolidBody2D.cs`,
-`src/Gravitas/Core/2D/SolidBody2D.Grounding.cs`, and
+In Gravitas, read `AGENTS.md`, `docs/api/guides/DIMENSIONS.md`,
+`docs/api/guides/HOST_INTEGRATION.md`, `src/Gravitas/Core/2D/Bodies/SolidBody2D.cs`,
+`src/Gravitas/Core/2D/Bodies/SolidBody2D.Grounding.cs`, and
 `tests/Gravitas.Tests/Physics2D/SolidBody2DHostContractTests.cs`.
 
 Planned responsibility boundaries, not files to scaffold ahead of the contract:
@@ -182,7 +182,7 @@ Planned responsibility boundaries, not files to scaffold ahead of the contract:
 | Trailblazer query/graph source | Planar body/profile and traversal proof integrated with shared search machinery |
 | Matching core test areas | Native 2D acceptance, graph semantics, replay, serialization, and preserved 3D behavior |
 | Optional Gravitas adapter and joint tests | `SolidBody2D` target/accepted-pose bridge and native planar collision scenarios |
-| Wiki, API documentation, behavioral tests | Top-down/platformer guidance linked to tested host fixtures, with explicit coordinates and ownership; no separate sample project |
+| DocFX guides, API reference, behavioral tests | Top-down/platformer guidance linked to tested host fixtures, with explicit coordinates and ownership; no separate sample project |
 
 The upstream contract below supplies the concrete prerequisite file/API boundary.
 Phase 0 must still finish the native controller, map and record signatures and
@@ -591,7 +591,7 @@ proposed operations already work.
   side-view examples, coordinate/units guidance, ownership rules, and migration
   notes only where behavior actually changes. Link selected real behavioral
   tests and fixtures instead of maintaining another example application. Verify
-  any runnable documentation snippets and update XML/wiki/API pages together.
+  any runnable documentation snippets and update XML and DocFX guides together.
 - [ ] **Run the full verification matrix.** Use the
   [hardening verification commands](done/navigationHardeningPlan.md#verification-and-closeout),
   the adapter's recorded commands, and relevant Gravitas2D tests in both package

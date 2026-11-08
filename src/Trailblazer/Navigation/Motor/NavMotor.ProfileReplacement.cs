@@ -9,6 +9,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Motor;
 
+/// <content>Stages and applies motor state for locomotion profile replacement.</content>
 public partial class NavMotor
 {
     internal bool ApplyNavigationCapabilityLoss(

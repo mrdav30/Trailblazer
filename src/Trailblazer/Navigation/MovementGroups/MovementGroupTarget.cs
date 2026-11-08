@@ -9,6 +9,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Navigation.MovementGroups;
 
+/// <summary>Pairs a resolved movement group destination with its travel mode.</summary>
 internal readonly struct MovementGroupTarget
 {
     public MovementGroupTarget(MovementGroupTravelMode travelMode, Vector3d destination)

@@ -6,7 +6,6 @@
 //=======================================================================
 
 using System;
-using System.Collections.Generic;
 using FixedMathSharp;
 using SwiftCollections.Utility;
 
@@ -131,13 +130,4 @@ public readonly struct TraversalTransitionRule : IEquatable<TraversalTransitionR
             nameof(LocomotionHints),
             "Locomotion hints contain an unknown bit.");
     }
-}
-
-/// <summary>Provides complete deterministic canonical ordering for transition rules.</summary>
-internal sealed class TraversalTransitionRuleComparer : IComparer<TraversalTransitionRule>
-{
-    internal static readonly TraversalTransitionRuleComparer Instance = new();
-
-    public int Compare(TraversalTransitionRule left, TraversalTransitionRule right) =>
-        string.CompareOrdinal(left.Id, right.Id);
 }

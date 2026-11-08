@@ -4,7 +4,6 @@ using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
-using Gravitas.CollisionHandling;
 using Gravitas.Materials;
 using Gravitas.Support;
 using GridForge.Configuration;
@@ -133,7 +132,7 @@ internal sealed class GravitasAirborneScenarioFixture : IDisposable
             Mass = Fixed64.One
         };
         body.UseManualGrounding();
-        body.Initialize(position, rotation, BodyMotionType.Kinematic);
+        body.Initialize(position, rotation, PhysicsMobilityType.Kinematic);
 
         var navigator = new GravitasNavigator3D(
             Trailblazer,

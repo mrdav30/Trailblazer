@@ -1,20 +1,12 @@
-//=======================================================================
-// NavigationGuidedFrameBenchmarks.cs
-//=======================================================================
-// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
-// See LICENSE file in the project root for full license information.
-//=======================================================================
-
 using System;
 using System.Diagnostics;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
-using Chronicler;
+using Chronicler.Diagnostics;
 using Chronicler.Serialization;
 using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Spatial;
-using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 

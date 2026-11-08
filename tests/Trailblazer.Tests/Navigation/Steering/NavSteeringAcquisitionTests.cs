@@ -1,5 +1,4 @@
 using System;
-using Chronicler;
 using Chronicler.Serialization;
 using FixedMathSharp;
 using FluentAssertions;
@@ -243,7 +242,7 @@ public class NavSteeringAcquisitionTests
         ticket.Status.Should().Be(NavigationGuideStatus.Success);
         ticket.IsDirect.Should().BeFalse();
         var moved = new MockSteerAgent(query.Start.Position + Vector3d.Forward * 3)
-            { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+        { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
         steering.GetHeading(moved, out _).Should().Be(Vector3d.Zero);
         context.Simulate();
         steering.GetHeading(moved, out _).Should().Be(Vector3d.Zero);
@@ -384,7 +383,7 @@ public class NavSteeringAcquisitionTests
         ticket.Status.Should().Be(NavigationGuideStatus.Success);
         ticket.IsDirect.Should().BeTrue();
         var moved = new MockSteerAgent(query.Start.Position + Vector3d.Forward * 3)
-            { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+        { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
         int invalid = 0;
         steering.Events.OnInvalidPath += () => invalid++;
         for (int frame = 0; frame < 4; frame++)
@@ -1027,7 +1026,7 @@ public class NavSteeringAcquisitionTests
                 "the consumed adoption turn must not start replacement work in the same frame");
 
             var movedHost = new MockSteerAgent(query.End.Position)
-                { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+            { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
             for (int frame = 0; frame < 128 && !steering.IsAtDestination; frame++)
             {
                 context.Simulate();
@@ -1293,8 +1292,12 @@ public class NavSteeringAcquisitionTests
     {
         var agent = new TestNavigator(context);
         agent.Setup(query.Start.Position, query.Agent);
-        agent.Initialize(new TrekCondition { Medium = TraversalMedium.Solid,
-            SurfaceLevel = query.Start.Position.Y, GroundState = new GroundCondition { SurfaceNormal = Vector3d.Up } });
+        agent.Initialize(new TrekCondition
+        {
+            Medium = TraversalMedium.Solid,
+            SurfaceLevel = query.Start.Position.Y,
+            GroundState = new GroundCondition { SurfaceNormal = Vector3d.Up }
+        });
         agent.Steering!.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
         agent.ApplyGuidedTrekRequest(query);
         return agent;

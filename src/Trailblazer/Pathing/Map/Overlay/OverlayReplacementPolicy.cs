@@ -10,7 +10,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Selects how an existing semantic overlay is handled when its map is replaced.
 /// </summary>
-public enum OverlayReplacementPolicy
+public enum OverlayReplacementPolicy : byte
 {
     /// <summary>
     /// Retain the overlay and reject the replacement if it is invalid against the new map.

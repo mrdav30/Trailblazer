@@ -14,8 +14,6 @@ Compatible contiguous scheduled requests form frozen cohorts. Builds remain
 oldest-first; covered followers can complete before uncovered members, with
 independent lease state and endpoint proofs under existing retention ceilings.
 
-Start with the
-[map-authoring](https://github.com/mrdav30/Trailblazer/wiki/MapAuthoring),
-[pathing](https://github.com/mrdav30/Trailblazer/wiki/Pathing), and
-[path-guide](https://github.com/mrdav30/Trailblazer/wiki/PathGuides) guides for
-the lifecycle and ownership rules behind these APIs.
+Start with the [map-authoring](../guides/MapAuthoring.md),
+[pathing](../guides/Pathing.md), and [path-guide](../guides/PathGuides.md)
+guides for the lifecycle and ownership rules behind these APIs.

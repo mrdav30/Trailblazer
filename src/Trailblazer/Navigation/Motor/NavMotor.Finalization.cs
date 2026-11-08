@@ -5,12 +5,12 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using System.Runtime.CompilerServices;
 using FixedMathSharp;
 
 namespace Trailblazer.Navigation.Motor;
 
+/// <content>Finalizes accepted movement and updates traversal state.</content>
 public partial class NavMotor
 {
     #region Finalize

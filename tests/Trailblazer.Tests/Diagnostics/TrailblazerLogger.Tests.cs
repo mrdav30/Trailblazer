@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using FluentAssertions;
 using Chronicler.Diagnostics;
+using FluentAssertions;
 using Xunit;
 
 namespace Trailblazer.Tests.Support;

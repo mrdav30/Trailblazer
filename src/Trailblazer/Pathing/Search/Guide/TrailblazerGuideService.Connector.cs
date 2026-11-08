@@ -1,4 +1,6 @@
 //=======================================================================
+// TrailblazerGuideService.Connector.cs
+//=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
 //=======================================================================
@@ -7,6 +9,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
+/// <content>Validates and accounts for guide connector proofs.</content>
 public sealed partial class TrailblazerGuideService
 {
     // The caller must own a scheduler validation turn. This bounded ray/copy is atomic.

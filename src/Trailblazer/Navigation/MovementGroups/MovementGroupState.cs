@@ -9,6 +9,7 @@ using SwiftCollections;
 
 namespace Trailblazer.Navigation.MovementGroups;
 
+/// <summary>Owns the active member slots for one movement group.</summary>
 internal sealed class MovementGroupState
 {
     public SwiftSlotMap<MovementGroupMember> Members { get; } = new();

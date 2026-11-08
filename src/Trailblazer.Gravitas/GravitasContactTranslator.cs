@@ -6,16 +6,17 @@
 //=======================================================================
 
 using System;
+using Chronicler.Diagnostics;
 using FixedMathSharp;
 using Gravitas;
 using Gravitas.Colliders;
 using Gravitas.Queries;
 using Gravitas.Support;
-using Chronicler.Diagnostics;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Navigation;
 
+/// <summary>Translates Gravitas collision contacts into navigator support samples.</summary>
 internal static class GravitasContactTranslator
 {
     internal static GravitasContact Sample(

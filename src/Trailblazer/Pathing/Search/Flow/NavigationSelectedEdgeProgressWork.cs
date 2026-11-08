@@ -12,49 +12,27 @@ using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 
-internal readonly struct NavigationFlowRejoinTarget
-{
-    internal NavigationFlowRejoinTarget(
-        Vector3d position,
-        NavigationRayChainConstraint constraint)
-    {
-        Position = position;
-        Constraint = constraint;
-    }
-
-    internal Vector3d Position { get; }
-
-    internal NavigationRayChainConstraint Constraint { get; }
-}
-
-/// <summary>Samples only the canonical selected edge stored by one flow node.</summary>
-internal enum NavigationFlowNodeLookupStatus : byte
-{
-    Success,
-    NotFound,
-    BudgetExceeded
-}
-
+/// <summary>Evaluates whether a position can advance along a flow field's selected edge.</summary>
 internal static class NavigationSelectedEdgeProgressWork
 {
     internal static NavigationGuideStatus MapNodeLookupStatus(
         NavigationFlowNodeLookupStatus status,
         bool required) => status switch
-    {
-        NavigationFlowNodeLookupStatus.Success => NavigationGuideStatus.Success,
-        NavigationFlowNodeLookupStatus.BudgetExceeded =>
-            NavigationGuideStatus.BudgetExceeded,
-        _ => required ? NavigationGuideStatus.Stale : NavigationGuideStatus.Success
-    };
+        {
+            NavigationFlowNodeLookupStatus.Success => NavigationGuideStatus.Success,
+            NavigationFlowNodeLookupStatus.BudgetExceeded =>
+                NavigationGuideStatus.BudgetExceeded,
+            _ => required ? NavigationGuideStatus.Stale : NavigationGuideStatus.Success
+        };
 
     internal static NavigationGuideStatus MapStructuralEdgeStatus(
         NavigationSurfaceEdgeAdvanceStatus status) => status switch
-    {
-        NavigationSurfaceEdgeAdvanceStatus.Pending => NavigationGuideStatus.Success,
-        NavigationSurfaceEdgeAdvanceStatus.Edge => NavigationGuideStatus.Success,
-        NavigationSurfaceEdgeAdvanceStatus.Blocked => NavigationGuideStatus.BudgetExceeded,
-        _ => NavigationGuideStatus.Stale
-    };
+        {
+            NavigationSurfaceEdgeAdvanceStatus.Pending => NavigationGuideStatus.Success,
+            NavigationSurfaceEdgeAdvanceStatus.Edge => NavigationGuideStatus.Success,
+            NavigationSurfaceEdgeAdvanceStatus.Blocked => NavigationGuideStatus.BudgetExceeded,
+            _ => NavigationGuideStatus.Stale
+        };
 
     internal static bool TryGetRejoinTarget(
         NavigationCellAddress sourceAddress,

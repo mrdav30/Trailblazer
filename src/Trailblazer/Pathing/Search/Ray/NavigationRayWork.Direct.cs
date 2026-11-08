@@ -12,6 +12,7 @@ using GridForge.Utility;
 
 namespace Trailblazer.Pathing;
 
+/// <content>Advances direct navigation ray traversal and cell mapping.</content>
 internal sealed partial class NavigationRayWork
 {
     /// <summary>May reject direct travel after a freshly validated complete separating slab.</summary>

@@ -5,8 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
-
 namespace Trailblazer.Pathing;
 
 /// <summary>Advances bounded identities without allowing an alias-producing wrap.</summary>

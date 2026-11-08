@@ -1,10 +1,3 @@
-//=======================================================================
-// NavigationFlowFieldCacheTests.cs
-//=======================================================================
-// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
-// See LICENSE file in the project root for full license information.
-//=======================================================================
-
 using System;
 using System.Reflection;
 using System.Threading;
@@ -54,7 +47,8 @@ public sealed class NavigationFlowFieldCacheTests
             started.Set();
             try { result = cache.TryCreateGuide(fixture.Store, new NavigationFlowQueryResult(fixture.FarOrigin, payload), out acquired); }
             catch (Exception exception) { failure = exception; }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         try
         {
             lock (sync)
@@ -140,7 +134,7 @@ public sealed class NavigationFlowFieldCacheTests
         using var cache = CreateCache(fixture);
         using var foreign = CreateCache(fixture);
         using var source = new NavigationCohortSource
-            { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
+        { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
         var staleProof = new GraphDependencyStamp(new NavigationAreaPolicyKey("missing", 1),
             Array.Empty<GraphComponentDependency>(), Array.Empty<GraphPageDependency>());
         if (scenario == "StaleSourceProof")
@@ -207,7 +201,7 @@ public sealed class NavigationFlowFieldCacheTests
             payloadBytes + slots * proof.RetainedBytes - missingBytes, slots, 1,
             NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         using var source = new NavigationCohortSource
-            { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
+        { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
         long reservation = proof.RetainedBytes;
         cache.TryReserveEndpointProof(reservation).Should().BeTrue();
         cache.TryAttachEndpointProof(source.Flow, proof, ref reservation).Should().BeTrue();
@@ -236,7 +230,7 @@ public sealed class NavigationFlowFieldCacheTests
             payloadBytes + proof.RetainedBytes - missingBytes, slots, 1,
             NavigationFlowFieldCacheTestHarness.CreateImmediateRayWorkspace());
         using var source = new NavigationCohortSource
-            { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
+        { Flow = Publish(cache, fixture, fixture.Far, fixture.FarOrigin), HasFlow = true };
         NavigationFlowFieldStatus status = cache.TryCheckoutShared(fixture.Store, fixture.Graph,
             fixture.Far.Key, fixture.NearOrigin, source, proof, out NavigationFlowFieldPayloadLease shared,
             out NavigationFlowFieldPayload? checkedProof);
@@ -275,7 +269,7 @@ public sealed class NavigationFlowFieldCacheTests
         using var fixture = NavigationFlowFieldCacheTestHarness.CreateLine(Fixed64.One);
         using var cache = CreateCache(fixture);
         using var source = new NavigationCohortSource
-            { Flow = Publish(cache, fixture, fixture.Near, fixture.NearOrigin), HasFlow = true };
+        { Flow = Publish(cache, fixture, fixture.Near, fixture.NearOrigin), HasFlow = true };
         fixture.Near.TryGetNode(fixture.MarginOrigin, fixture.Near.Key.StartMedium, out _).Should().BeTrue();
         cache.TryCheckoutShared(fixture.Store, fixture.Graph, fixture.Near.Key, fixture.MarginOrigin,
             source, null, out _, out _).Should().Be(NavigationFlowFieldStatus.Pending);

@@ -9,6 +9,7 @@ using System;
 
 namespace Trailblazer.Navigation.MovementGroups;
 
+/// <summary>Stores one navigator's active movement group slot and owner identity.</summary>
 internal sealed class MovementGroupSession
 {
     public int GroupId = -1;

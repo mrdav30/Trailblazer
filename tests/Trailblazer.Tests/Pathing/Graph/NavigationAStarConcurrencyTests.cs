@@ -1,10 +1,3 @@
-//=======================================================================
-// NavigationAStarConcurrencyTests.cs
-//=======================================================================
-// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
-// See LICENSE file in the project root for full license information.
-//=======================================================================
-
 using System;
 using System.Reflection;
 using System.Threading;
@@ -425,7 +418,8 @@ public sealed class NavigationAStarConcurrencyTests
             readerStarted.Set();
             try { status = guide.TryGetCurrentStep(out step); }
             catch (Exception error) { readerError = error; }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
 
         Monitor.Enter(worldSync);
         try

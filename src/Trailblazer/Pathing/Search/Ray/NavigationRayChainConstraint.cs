@@ -7,6 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Carries exact cell addresses and an optional edge ordinal that constrain navigation ray traversal.</summary>
 internal readonly struct NavigationRayChainConstraint
 {
     private NavigationRayChainConstraint(

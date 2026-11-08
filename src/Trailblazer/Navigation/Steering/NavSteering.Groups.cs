@@ -13,6 +13,7 @@ using Trailblazer.Navigation.MovementGroups;
 
 namespace Trailblazer.Navigation.Steering;
 
+/// <content>Maintains movement group membership and resolves group guidance targets.</content>
 public partial class NavSteering
 {
     #region Steering Behaviors (Group & Avoidance)

@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Chronicler;
+using Chronicler.Diagnostics;
 using Chronicler.Serialization;
 using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
-using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
@@ -535,32 +534,56 @@ internal sealed class NavigationRecoveryScenario : IDisposable
 
     internal object CreateRecord(int iteration, bool replayMatches, string captureStage, int launch) => new
     {
-        schema = 1, process = Environment.ProcessId, iteration, episode = _episode, diagnostic = _diagnostic, captureStage, launch,
-        algorithm = _algorithm.ToString(), agents = _agents.Length, acquisitionMode = _acquisitionMode.ToString(),
+        schema = 1,
+        process = Environment.ProcessId,
+        iteration,
+        episode = _episode,
+        diagnostic = _diagnostic,
+        captureStage,
+        launch,
+        algorithm = _algorithm.ToString(),
+        agents = _agents.Length,
+        acquisitionMode = _acquisitionMode.ToString(),
         workLimits = _workLimits == "Default" ? "default-work-limits-with-workload-sized-retention" : "explicit:" + _workLimits,
-        frameRate = 32, maximumFrames = MaximumFrames, frames = _frames, clockOrigin = _clockOrigin,
-        intervalFrames = 16, phaseAssignment = "original-agent-index-modulo-16",
-        stopwatchFrequency = Stopwatch.Frequency, ticks = _ticks.AsSpan(0, _frames).ToArray(),
+        frameRate = 32,
+        maximumFrames = MaximumFrames,
+        frames = _frames,
+        clockOrigin = _clockOrigin,
+        intervalFrames = 16,
+        phaseAssignment = "original-agent-index-modulo-16",
+        stopwatchFrequency = Stopwatch.Frequency,
+        ticks = _ticks.AsSpan(0, _frames).ToArray(),
         allocatedBytes = _allocations.AsSpan(0, _frames).ToArray(),
-        collectionMasks = _collections.AsSpan(0, _frames).ToArray(), checksums = FrameHashes,
-        readyCounts = _readyCounts.AsSpan(0, _frames).ToArray(), readyFrames = ReadyFrames,
+        collectionMasks = _collections.AsSpan(0, _frames).ToArray(),
+        checksums = FrameHashes,
+        readyCounts = _readyCounts.AsSpan(0, _frames).ToArray(),
+        readyFrames = ReadyFrames,
         waitingCounts = _waitingCounts.AsSpan(0, _frames).ToArray(),
         frameOperationCounts = _operationCounts.AsSpan(0, _frames).ToArray(),
         retainedRequestCounts = _retainedRequestCounts?.AsSpan(0, _frames).ToArray(),
         capacityStatusCounts = _capacityStatusCounts?.AsSpan(0, _frames).ToArray(),
         distinctCapacityStatusAgents = _retainedRequestCounts == null ? (int?)null : _distinctCapacityStatusAgents,
         originalDestinationsIntact = _diagnostic == null ? (bool?)null : _originalDestinationsIntact,
-        originalStartCells = _originalStartCells, originalDestinationCells = _originalDestinationCells,
+        originalStartCells = _originalStartCells,
+        originalDestinationCells = _originalDestinationCells,
         latestAcquisitionOutcomes = Array.ConvertAll(_agents, agent => agent.Steering.LastAcquisitionStatus?.ToString()),
         warmReuseValid = WarmReuseValid,
-        failedAgents = _failed, failures = _failureCount, cancellations = 0,
-        censored = _agents.Length - _ready - _failureCount, ready = _ready, replayMatches,
-        episodeTicks = _episodeTicks, processWideCpuTicks = _processCpuTicks,
+        failedAgents = _failed,
+        failures = _failureCount,
+        cancellations = 0,
+        censored = _agents.Length - _ready - _failureCount,
+        ready = _ready,
+        replayMatches,
+        episodeTicks = _episodeTicks,
+        processWideCpuTicks = _processCpuTicks,
         processCpuFrequency = TimeSpan.TicksPerSecond,
         processCpuScope = "entire-episode-including-untimed-validation-not-preparation-or-export",
-        cacheCountAtTrigger = _cacheCountAtTrigger, warmOriginsVerified = _warmCoverage,
-        freshContextPerEpisode = true, publicationStatus = _rebakeReceipt?.Status.ToString(),
-        jsonPreparationTicks = _jsonTicks, jsonPreparationAllocatedBytes = _jsonAllocatedBytes,
+        cacheCountAtTrigger = _cacheCountAtTrigger,
+        warmOriginsVerified = _warmCoverage,
+        freshContextPerEpisode = true,
+        publicationStatus = _rebakeReceipt?.Status.ToString(),
+        jsonPreparationTicks = _jsonTicks,
+        jsonPreparationAllocatedBytes = _jsonAllocatedBytes,
         jsonPreparationCollectionMask = _jsonCollections,
         jsonPreparationScope = "serialize-reset-construct-prepare-populate-assert",
         acquisitionCounters = _counters,

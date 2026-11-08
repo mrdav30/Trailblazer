@@ -1,10 +1,3 @@
-//=======================================================================
-// NavigationSurfaceAStarTests.cs
-//=======================================================================
-// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
-// See LICENSE file in the project root for full license information.
-//=======================================================================
-
 using System;
 using System.Runtime.CompilerServices;
 using FixedMathSharp;
@@ -85,12 +78,12 @@ public sealed class NavigationSurfaceAStarTests
         var cells = new VoxelIndex[9];
         var meanings = new NavigationCell[9];
         for (int x = 0; x < 3; x++)
-        for (int z = 0; z < 3; z++)
-        {
-            cells[x * 3 + z] = new VoxelIndex(x, 0, z);
-            meanings[x * 3 + z] = new NavigationCell(TraversalMedia.Gas, TraversalCapability.None,
-                default, Fixed64.Zero, (Fixed64)4, (Fixed64)4);
-        }
+            for (int z = 0; z < 3; z++)
+            {
+                cells[x * 3 + z] = new VoxelIndex(x, 0, z);
+                meanings[x * 3 + z] = new NavigationCell(TraversalMedia.Gas, TraversalCapability.None,
+                    default, Fixed64.Zero, (Fixed64)4, (Fixed64)4);
+            }
         NavigationAStarExitTestHarness.GraphFixture fixture = NavigationAStarExitTestHarness.CreateSingleMap(
             world, NavigationAStarExitTestHarness.RectangularLine(3), cells, "atomic-rescan", meanings);
         var profile = new NavigationAgentProfile(

@@ -1,4 +1,3 @@
-using System;
 using GridForge.Spatial;
 using Trailblazer.Pathing;
 

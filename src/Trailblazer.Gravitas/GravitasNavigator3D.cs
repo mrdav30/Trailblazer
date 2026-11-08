@@ -7,11 +7,11 @@
 
 using System;
 using Chronicler;
+using Chronicler.Diagnostics;
 using FixedMathSharp;
 using Gravitas;
 using Gravitas.Colliders;
 using Gravitas.Support;
-using Chronicler.Diagnostics;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;

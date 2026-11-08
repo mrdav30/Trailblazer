@@ -245,7 +245,7 @@ separate files. Recheck source before execution because 2D work precedes this pl
 - [ ] Run owning and downstream Windows/Linux Release/ReleaseLean suites, both
   library targets, exact introduced-path coverage and DocFX. Verify source-stack
   binary provenance; keep final released-package verification separate.
-- [ ] Document current public behavior in XML/wiki/API references with verified
+- [ ] Document current public behavior in XML and DocFX guides with verified
   examples, without feature-plan links in evergreen pages. Obtain independent
   review, resolve findings, record evidence here and archive only after both
   dimensions meet the contract and consumer gates.

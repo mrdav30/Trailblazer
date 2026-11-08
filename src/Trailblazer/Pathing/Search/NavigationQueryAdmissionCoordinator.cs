@@ -9,27 +9,6 @@ using System;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Identifies one generation-safe aggregate query-capacity reservation.</summary>
-internal readonly struct NavigationQueryCapacityReservation
-{
-    internal NavigationQueryCapacityReservation(
-        NavigationQueryAdmissionCoordinator owner,
-        int lane,
-        ulong generation,
-        int count)
-    {
-        Owner = owner;
-        Lane = lane;
-        Generation = generation;
-        Count = count;
-    }
-
-    internal NavigationQueryAdmissionCoordinator? Owner { get; }
-    internal int Lane { get; }
-    internal ulong Generation { get; }
-    internal int Count { get; }
-}
-
 /// <summary>Bounds aggregate A* and Flow admission without sharing their workers.</summary>
 internal sealed class NavigationQueryAdmissionCoordinator
 {

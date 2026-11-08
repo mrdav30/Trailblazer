@@ -10,23 +10,6 @@ using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Reports bounded internal query-admission progress.</summary>
-internal enum NavigationQueryAdmissionStatus : byte
-{
-    Pending = 0,
-    Success = 1,
-    Unsupported = 2,
-    NoMap = 3,
-    InvalidProfile = 4,
-    InvalidStart = 5,
-    InvalidEnd = 6,
-    NoPath = 7,
-    BudgetExceeded = 8,
-    CostOverflow = 9,
-    CapacityExceeded = 10,
-    Stale = 11
-}
-
 /// <summary>Resolves one surface A* query against an exact leased graph generation.</summary>
 internal sealed class NavigationQueryAdmissionWork : IDisposable
 {

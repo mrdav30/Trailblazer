@@ -16,9 +16,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Trailblazer.Gravitas\Trailblazer.Gravitas.csproj"
-      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfTrailblazerProperties)" />
+      AdditionalProperties="Configuration=$(Configuration)" />
     <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj"
-      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfTrailblazerProperties)" />
+      AdditionalProperties="Configuration=$(Configuration)" />
     <ProjectReference Condition="'$(UseLocalLsfStack)' == 'true'" Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
       AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGravitasProperties)" />
     <PackageReference Include="FluentAssertions" Version="8.10.0" />

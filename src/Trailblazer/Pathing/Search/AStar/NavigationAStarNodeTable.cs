@@ -6,23 +6,8 @@
 //=======================================================================
 
 using System;
-using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
-
-internal struct NavigationAStarNodeRecord
-{
-    internal Fixed64 Cost;
-    internal Fixed64 Heuristic;
-    // The search-only f-score adds eight bytes per workspace node, never to cached payloads.
-    internal Fixed64 EstimatedTotalCost;
-    internal NavigationMediumStateRef Parent;
-    internal NavigationTraversalEdgeKind ParentEdgeKind;
-    internal int HeapIndex;
-    internal int ParentEdgeOrdinal;
-    internal bool HasParent;
-    internal bool Closed;
-}
 
 /// <summary>Stores fixed-capacity generation-stamped A* metadata.</summary>
 internal sealed class NavigationAStarNodeTable

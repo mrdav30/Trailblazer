@@ -1,14 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
-using System.Collections.Generic;
-using GridForge.Grids.Storage;
-using GridForge.Grids.Topology;
+using Chronicler.Diagnostics;
 using FixedMathSharp;
 using GridForge.Configuration;
+using GridForge.Grids.Storage;
+using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using Chronicler.Diagnostics;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
@@ -70,27 +70,27 @@ public class NavigationDirectVisibilityFrameBenchmarks
     {
         int failures = 0;
         foreach (string control in new[] { "Clear100", "Short100", "Late100", "Ineligible100", "Sparse500" })
-        foreach (string mode in new[] { "Unphased", "BalancedPhases" })
-        {
-            var benchmark = new NavigationDirectVisibilityFrameBenchmarks { Case = control };
-            try
+            foreach (string mode in new[] { "Unphased", "BalancedPhases" })
             {
-                benchmark.Setup(mode);
-                for (int replay = 0; replay < 2; replay++)
+                var benchmark = new NavigationDirectVisibilityFrameBenchmarks { Case = control };
+                try
                 {
-                    benchmark.Prepare();
-                    benchmark.Simulate64Frames();
-                    benchmark.ValidateAndExport();
+                    benchmark.Setup(mode);
+                    for (int replay = 0; replay < 2; replay++)
+                    {
+                        benchmark.Prepare();
+                        benchmark.Simulate64Frames();
+                        benchmark.ValidateAndExport();
+                    }
+                    Console.WriteLine($"DIRECT_VISIBILITY_SMOKE PASS case={control}, mode={mode}");
                 }
-                Console.WriteLine($"DIRECT_VISIBILITY_SMOKE PASS case={control}, mode={mode}");
+                catch (Exception error)
+                {
+                    failures++;
+                    Console.WriteLine($"DIRECT_VISIBILITY_SMOKE FAIL case={control}, mode={mode}: {error}");
+                }
+                finally { benchmark.Cleanup(); }
             }
-            catch (Exception error)
-            {
-                failures++;
-                Console.WriteLine($"DIRECT_VISIBILITY_SMOKE FAIL case={control}, mode={mode}: {error}");
-            }
-            finally { benchmark.Cleanup(); }
-        }
         return failures == 0 ? 0 : 1;
     }
 
@@ -116,12 +116,12 @@ public class NavigationDirectVisibilityFrameBenchmarks
         var physical = new List<VoxelIndex>();
         if (sparse)
             for (int x = 0; x < Width; x++)
-            for (int z = 0; z < Length; z++)
-                if ((x >= 2 && x <= 30 && z >= 2 && z <= 44
-                    || Math.Abs((long)(z - 2) * 251 - (long)(x - 2) * 183) <= 4 * 251
-                    || x >= 2 && x <= 4 || x >= 251 && x <= 253 || z >= 189)
-                    && (x != 48 || z >= 189))
-                    physical.Add(new VoxelIndex(x, 0, z));
+                for (int z = 0; z < Length; z++)
+                    if ((x >= 2 && x <= 30 && z >= 2 && z <= 44
+                        || Math.Abs((long)(z - 2) * 251 - (long)(x - 2) * 183) <= 4 * 251
+                        || x >= 2 && x <= 4 || x >= 251 && x <= 253 || z >= 189)
+                        && (x != 48 || z >= 189))
+                        physical.Add(new VoxelIndex(x, 0, z));
         Check(sparse ? _fixture.World.TryAddGrid(configuration, physical, out _)
             : _fixture.World.TryAddGrid(configuration, out _), "physical grid registration");
         if (Case == "Ineligible100")
@@ -180,9 +180,9 @@ public class NavigationDirectVisibilityFrameBenchmarks
         if (Case == "Sparse500") builder.SetDefaultCell(cell);
         else
             for (int x = 0; x < Width; x++)
-            for (int z = 0; z < Length; z++)
-                if (Direct || x != 250 || z >= 189)
-                    builder.AddCell(new VoxelIndex(x, 0, z), cell);
+                for (int z = 0; z < Length; z++)
+                    if (Direct || x != 250 || z >= 189)
+                        builder.AddCell(new VoxelIndex(x, 0, z), cell);
         var map = new NavigationMapCommitOperation(new PreparedNavigationMap(builder.Build(), 1),
             OverlayReplacementPolicy.Clear, 1, _fixture.Context.FrameCount + 1);
         var key = new NavigationAreaPolicyKey(MapId, 1);
@@ -241,20 +241,20 @@ public class NavigationDirectVisibilityFrameBenchmarks
         var physicalPages = new HashSet<int>();
         NavigationSurfaceComponent component = null;
         for (int x = 0; x < Width; x++)
-        for (int z = 0; z < Length; z++)
-        {
-            var index = new VoxelIndex(x, 0, z);
-            bool physical = instance.IsPhysicallyPresent(index);
-            if (Case == "Sparse500" && x == 48 && z < 189) Check(!physical, "sparse wall must be physically absent");
-            if (!physical) continue;
-            present++;
-            Check(instance.TryGetSlot(index, out int slot), $"physical slot {index}");
-            physicalPages.Add(slot / NavigationPhysicalPage.SlotCount);
-            Check(graph.SurfaceComponents.TryGet(new NavigationCellAddress(MapId, index),
-                TraversalMedium.Solid, out var current), $"Solid membership {index}");
-            component ??= current;
-            Check(component.Key.Equals(current.Key), $"multiple Solid components at {index}");
-        }
+            for (int z = 0; z < Length; z++)
+            {
+                var index = new VoxelIndex(x, 0, z);
+                bool physical = instance.IsPhysicallyPresent(index);
+                if (Case == "Sparse500" && x == 48 && z < 189) Check(!physical, "sparse wall must be physically absent");
+                if (!physical) continue;
+                present++;
+                Check(instance.TryGetSlot(index, out int slot), $"physical slot {index}");
+                physicalPages.Add(slot / NavigationPhysicalPage.SlotCount);
+                Check(graph.SurfaceComponents.TryGet(new NavigationCellAddress(MapId, index),
+                    TraversalMedium.Solid, out var current), $"Solid membership {index}");
+                component ??= current;
+                Check(component.Key.Equals(current.Key), $"multiple Solid components at {index}");
+            }
         int expected = seededPhysicalCount - (Case is "Late100" or "Ineligible100" ? 189 : 0);
         Check(present == expected && (Case != "Sparse500" || present < Width * Length / 4),
             $"captured physical-semantic count={present}, expected={expected}");

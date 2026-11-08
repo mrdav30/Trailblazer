@@ -7,6 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Identifies which ray endpoints can use their endpoint-specific admission rules.</summary>
 internal enum NavigationRayEndpointAllowance : byte
 {
     None,

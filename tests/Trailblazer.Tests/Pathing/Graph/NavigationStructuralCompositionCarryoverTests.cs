@@ -1238,7 +1238,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         second.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
         var firstAddress = new NavigationCellAddress(firstMap.MapId, default);
-        NavigationAutomaticSeamIndex.EndpointEnumerator seams =
+        EndpointEnumerator seams =
             lease.Graph.AutomaticSeams.GetActiveEndpointEnumerator(firstAddress);
         seams.MoveNext().Should().BeTrue(
             "the adjacent published maps own a structural seam before suppression");

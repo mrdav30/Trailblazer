@@ -74,7 +74,7 @@ public class NavigationRecoveryBenchmarks
         foreach (string episode in new[] { "ColdInitial", "WarmCompatible", "SameMapRebake", "ProfileReplacement", "Restore" })
         {
             var benchmark = new NavigationRecoveryBenchmarks
-                { Population = population, Episode = episode, CaptureStage = "Smoke", AcquisitionMode = mode, WorkLimits = workLimits };
+            { Population = population, Episode = episode, CaptureStage = "Smoke", AcquisitionMode = mode, WorkLimits = workLimits };
             try
             {
                 // First is a disposable warmup; second must independently prove cold/warm state and replay.
@@ -97,22 +97,22 @@ public class NavigationRecoveryBenchmarks
         string[] populations = populationFilter == "All" ? new[] { "AStar100", "Flow100", "Flow500" }
             : populationFilter == "Flow" ? new[] { "Flow100", "Flow500" } : new[] { populationFilter };
         foreach (string population in populations)
-        foreach (string episode in new[] { "ColdInitial", "WarmCompatible", "SameMapRebake", "ProfileReplacement", "Restore" })
-        {
-            var benchmark = new NavigationRecoveryBenchmarks
-                { Population = population, Episode = episode, Launch = launch, AcquisitionMode = mode, WorkLimits = workLimits };
-            try
+            foreach (string episode in new[] { "ColdInitial", "WarmCompatible", "SameMapRebake", "ProfileReplacement", "Restore" })
             {
-                for (int invocation = 0; invocation < 4; invocation++)
+                var benchmark = new NavigationRecoveryBenchmarks
+                { Population = population, Episode = episode, Launch = launch, AcquisitionMode = mode, WorkLimits = workLimits };
+                try
                 {
-                    benchmark.CaptureStage = invocation == 0 ? "Warmup" : "Actual";
-                    benchmark.Prepare();
-                    benchmark.RecoverUntilUsable();
-                    benchmark.ValidateAndExport();
+                    for (int invocation = 0; invocation < 4; invocation++)
+                    {
+                        benchmark.CaptureStage = invocation == 0 ? "Warmup" : "Actual";
+                        benchmark.Prepare();
+                        benchmark.RecoverUntilUsable();
+                        benchmark.ValidateAndExport();
+                    }
                 }
+                finally { benchmark.Cleanup(); }
             }
-            finally { benchmark.Cleanup(); }
-        }
         Console.WriteLine($"NAVIGATION_RECOVERY_CAPTURE_COMPLETE launch={launch} cases={populations.Length * 5} warmup={populations.Length * 5} actual={populations.Length * 15}");
         return 0;
     }
@@ -134,8 +134,12 @@ public class NavigationRecoveryBenchmarks
         {
             var benchmark = new NavigationRecoveryBenchmarks
             {
-                Population = "Flow100", Episode = "ColdInitial", Launch = launch,
-                AcquisitionMode = mode, WorkLimits = limits, Diagnostic = name
+                Population = "Flow100",
+                Episode = "ColdInitial",
+                Launch = launch,
+                AcquisitionMode = mode,
+                WorkLimits = limits,
+                Diagnostic = name
             };
             try
             {

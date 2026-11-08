@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using FixedMathSharp;
 
 namespace Trailblazer.Heightmaps;

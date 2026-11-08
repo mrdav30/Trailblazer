@@ -66,8 +66,13 @@ jobs:
         run: |
           test -f src/Trailblazer/bin/Release/net10.0/Trailblazer.dll
           test -f src/Trailblazer/bin/Release/net10.0/Trailblazer.xml
+          test -f src/Trailblazer.Gravitas/bin/Release/net10.0/Trailblazer.Gravitas.dll
+          test -f src/Trailblazer.Gravitas/bin/Release/net10.0/Trailblazer.Gravitas.xml
           dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
           test -f docs/api/obj/_site/index.html
+          for guide in index GettingStarted Gravitas Gravity HeightMaps MapAuthoring MapPublication NavMotor NavSteering NavTurning NavigationMaps Navigator Overview PathGuides Pathing Serialization Transitions Troubleshooting VolumeTraversal; do
+            test -f "docs/api/obj/_site/guides/${guide}.html"
+          done
           test -f docs/api/obj/_site/api/Trailblazer.html
           test -f docs/api/obj/_site/api/Trailblazer.Pathing.html
           test -f docs/api/obj/_site/api/Trailblazer.Navigation.html
@@ -80,7 +85,7 @@ jobs:
           grep -Fq -- '--trb-teal-rgb' docs/api/obj/_site/public/main.css
           grep -Fq 'github.com/mrdav30/Trailblazer' docs/api/obj/_site/public/main.js
           grep -Fq 'github.com/mrdav30/FixedMathSharp' docs/api/obj/_site/api/Trailblazer.html
-          grep -Fq 'github.com/mrdav30/Trailblazer/wiki/PathGuides' docs/api/obj/_site/api/Trailblazer.Pathing.html
+          grep -Fq 'guides/PathGuides.html' docs/api/obj/_site/api/Trailblazer.Pathing.html
 
           python3 - <<'PY'
           from html.parser import HTMLParser
@@ -154,6 +159,7 @@ jobs:
           cp -a docs/api/obj/_site/. artifacts/pages/
           cp -a artifacts/coverage-report/. artifacts/pages/coverage/
           test -f artifacts/pages/index.html
+          test -f artifacts/pages/guides/index.html
           test -f artifacts/pages/api/Trailblazer.html
           test -f artifacts/pages/api/Trailblazer.Pathing.html
           test -f artifacts/pages/assets/icon_128x128.png

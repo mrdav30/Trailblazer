@@ -1,4 +1,4 @@
-﻿using FixedMathSharp;
+using FixedMathSharp;
 
 namespace Trailblazer.Tests.Navigation.Turning;
 

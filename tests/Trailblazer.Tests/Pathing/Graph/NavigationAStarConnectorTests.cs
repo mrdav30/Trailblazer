@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
@@ -5,9 +8,6 @@ using GridForge.Grids.Storage;
 using GridForge.Spatial;
 using Trailblazer.Pathing;
 using Xunit;
-using System;
-using System.Collections.Generic;
-using System.Threading;
 
 namespace Trailblazer.Tests.Pathing.Graph;
 
@@ -39,7 +39,8 @@ public class NavigationAStarConnectorTests
         {
             try { result = context.Guides.TryProveAStarConnector(query, query.Start.Position + Vector3d.Left, guide); }
             catch (Exception exception) { failure = exception; }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         try
         {
             lock (context.Pathing.ImmediateRayWorkspace.SyncRoot)

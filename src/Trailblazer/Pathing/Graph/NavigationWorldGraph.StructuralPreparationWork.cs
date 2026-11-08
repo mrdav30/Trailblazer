@@ -5,10 +5,9 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
-
 namespace Trailblazer.Pathing;
 
+/// <content>Contains the StructuralPreparationWork companion type.</content>
 internal sealed partial class NavigationWorldGraph
 {
     /// <summary>Prepares changed instance and lookup roots without replaying payloads at publication.</summary>

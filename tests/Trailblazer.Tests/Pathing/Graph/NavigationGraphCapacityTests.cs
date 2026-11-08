@@ -111,7 +111,7 @@ public sealed class NavigationGraphCapacityTests
         false,
         true,
         false,
-        (int)NavigationGraphRuntime.OperationTerminalDisposition.None)]
+        (int)OperationTerminalDisposition.None)]
     [InlineData(
         (int)NavigationOperationFrameResult.Published,
         0,
@@ -119,7 +119,7 @@ public sealed class NavigationGraphCapacityTests
         false,
         true,
         false,
-        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndBeginRollback)]
+        (int)OperationTerminalDisposition.ReleaseAndBeginRollback)]
     [InlineData(
         (int)NavigationOperationFrameResult.Published,
         0,
@@ -127,7 +127,7 @@ public sealed class NavigationGraphCapacityTests
         true,
         true,
         false,
-        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndBeginRollback)]
+        (int)OperationTerminalDisposition.ReleaseAndBeginRollback)]
     [InlineData(
         (int)NavigationOperationFrameResult.Rejected,
         0,
@@ -135,7 +135,7 @@ public sealed class NavigationGraphCapacityTests
         false,
         false,
         false,
-        (int)NavigationGraphRuntime.OperationTerminalDisposition.Release)]
+        (int)OperationTerminalDisposition.Release)]
     [InlineData(
         (int)NavigationOperationFrameResult.Rejected,
         1,
@@ -143,7 +143,7 @@ public sealed class NavigationGraphCapacityTests
         true,
         true,
         false,
-        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndTryReopen)]
+        (int)OperationTerminalDisposition.ReleaseAndTryReopen)]
     [InlineData(
         (int)NavigationOperationFrameResult.Rejected,
         0,
@@ -151,7 +151,7 @@ public sealed class NavigationGraphCapacityTests
         false,
         true,
         true,
-        (int)NavigationGraphRuntime.OperationTerminalDisposition.ReleaseAndBeginRollback)]
+        (int)OperationTerminalDisposition.ReleaseAndBeginRollback)]
     public void TerminalPublication_ShouldClassifyRetainedAndRejectedCleanupDisposition(
         int resultValue,
         int retainedOperationWorkCount,
@@ -168,7 +168,7 @@ public sealed class NavigationGraphCapacityTests
                 materializedCompletesOperation,
                 hasClosedStructuralScope,
                 automaticSeamFullRebuildPending)
-            .Should().Be((NavigationGraphRuntime.OperationTerminalDisposition)expectedValue);
+            .Should().Be((OperationTerminalDisposition)expectedValue);
     }
 
     [Theory]
@@ -193,44 +193,44 @@ public sealed class NavigationGraphCapacityTests
 
     [Theory]
     [InlineData(
-        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Progressed,
-        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Continue)]
+        (int)AdvanceStatus.Progressed,
+        (int)AutomaticSeamAdvanceDisposition.Continue)]
     [InlineData(
-        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Blocked,
-        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Retain)]
+        (int)AdvanceStatus.Blocked,
+        (int)AutomaticSeamAdvanceDisposition.Retain)]
     [InlineData(
-        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.RestartRequired,
-        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Restart)]
+        (int)AdvanceStatus.RestartRequired,
+        (int)AutomaticSeamAdvanceDisposition.Restart)]
     [InlineData(
-        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.CapacityExceeded,
-        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Restart)]
+        (int)AdvanceStatus.CapacityExceeded,
+        (int)AutomaticSeamAdvanceDisposition.Restart)]
     [InlineData(
-        (int)NavigationAutomaticSeamLifecycleWork.AdvanceStatus.Complete,
-        (int)NavigationGraphRuntime.AutomaticSeamAdvanceDisposition.Complete)]
+        (int)AdvanceStatus.Complete,
+        (int)AutomaticSeamAdvanceDisposition.Complete)]
     public void AutomaticSeamAdvance_ShouldMapWorkerStatusToLifecycleAction(
         int statusValue,
         int expectedValue)
     {
         NavigationGraphRuntime.ClassifyAutomaticSeamAdvance(
-                (NavigationAutomaticSeamLifecycleWork.AdvanceStatus)statusValue)
-            .Should().Be((NavigationGraphRuntime.AutomaticSeamAdvanceDisposition)expectedValue);
+                (AdvanceStatus)statusValue)
+            .Should().Be((AutomaticSeamAdvanceDisposition)expectedValue);
     }
 
     [Theory]
     [InlineData(true, false, false, false,
-        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Restart,
+        (int)MaterializedAdvanceDisposition.Restart,
         (int)NavigationCandidatePublication.Deferred)]
     [InlineData(false, false, true, true,
-        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.RejectCapacity,
+        (int)MaterializedAdvanceDisposition.RejectCapacity,
         (int)NavigationCandidatePublication.PermanentCapacity)]
     [InlineData(false, true, false, true,
-        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Defer,
+        (int)MaterializedAdvanceDisposition.Defer,
         null)]
     [InlineData(false, true, true, false,
-        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Ready,
+        (int)MaterializedAdvanceDisposition.Ready,
         null)]
     [InlineData(false, true, true, true,
-        (int)NavigationGraphRuntime.MaterializedAdvanceDisposition.Publish,
+        (int)MaterializedAdvanceDisposition.Publish,
         null)]
     public void MaterializedAdvance_ShouldPrioritizeRestartCapacityAndPublication(
         bool requiresRestart,
@@ -246,7 +246,7 @@ public sealed class NavigationGraphCapacityTests
                 complete,
                 publish,
                 out NavigationCandidatePublication? abandonmentPublication)
-            .Should().Be((NavigationGraphRuntime.MaterializedAdvanceDisposition)expectedValue);
+            .Should().Be((MaterializedAdvanceDisposition)expectedValue);
         abandonmentPublication.Should().Be(
             expectedAbandonmentPublication.HasValue
                 ? (NavigationCandidatePublication?)expectedAbandonmentPublication.Value

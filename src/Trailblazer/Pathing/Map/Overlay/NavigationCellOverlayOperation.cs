@@ -9,19 +9,6 @@ using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Identifies the final-state action for a semantic cell overlay entry.</summary>
-public enum NavigationCellOverlayOperationKind
-{
-    /// <summary>Write a complete effective cell payload.</summary>
-    Set = 0,
-
-    /// <summary>Tombstone effective traversal at the address.</summary>
-    Suppress = 1,
-
-    /// <summary>Remove the override or tombstone and restore explicit, then default, authoring.</summary>
-    RevertToBake = 2
-}
-
 /// <summary>Describes one immutable addressed semantic-cell overlay operation.</summary>
 public readonly struct NavigationCellOverlayOperation
 {

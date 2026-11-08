@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // TrekRate.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -10,7 +10,7 @@ namespace Trailblazer.Navigation;
 /// <summary>
 /// Defines movement speed categories for traversal.
 /// </summary>
-public enum TrekRate
+public enum TrekRate : byte
 {
     /// <summary>
     /// No movement (idle state).

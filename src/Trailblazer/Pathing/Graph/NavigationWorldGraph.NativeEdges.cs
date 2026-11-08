@@ -11,6 +11,7 @@ using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
+/// <content>Enumerates native incoming and outgoing traversal edges.</content>
 internal sealed partial class NavigationWorldGraph
 {
     internal bool TryGetNodeRef(

@@ -8,7 +8,7 @@
 namespace Trailblazer.Navigation;
 
 /// <summary>Describes the result of an atomic runtime navigation-profile replacement.</summary>
-public enum NavigationProfileReplacementStatus
+public enum NavigationProfileReplacementStatus : byte
 {
     /// <summary>The replacement profile and every dependent state value were committed.</summary>
     Applied,

@@ -7,7 +7,8 @@
 
 namespace Trailblazer.Navigation.MovementGroups;
 
-internal enum MovementGroupTravelMode
+/// <summary>Identifies whether navigation proceeds individually or in formation.</summary>
+internal enum MovementGroupTravelMode : byte
 {
     None,
     Individual,

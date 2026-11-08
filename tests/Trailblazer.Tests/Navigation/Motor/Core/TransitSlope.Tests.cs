@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using Trailblazer.Navigation.Motor;
-using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;

@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // NavMotor.Utility.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -9,6 +9,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Navigation.Motor;
 
+/// <content>Provides shared motion and environment helpers for the motor.</content>
 public partial class NavMotor
 {
     #region Utility

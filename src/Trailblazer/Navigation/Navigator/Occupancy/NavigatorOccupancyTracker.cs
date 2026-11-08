@@ -11,6 +11,7 @@ using GridForge.Grids.Topology;
 
 namespace Trailblazer.Navigation;
 
+/// <summary>Updates and releases a navigator's context-owned occupancy registration.</summary>
 internal static class NavigatorOccupancyTracker
 {
     public static void Update(

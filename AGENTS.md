@@ -14,9 +14,10 @@ respectively, and relies on FixedMathSharp for simulation math.
 Read these in order before making a non-trivial change:
 
 1. [`README.md`](README.md) for package orientation and documentation routes.
-2. [`docs/wiki/GettingStarted.md`](docs/wiki/GettingStarted.md) for the public
-   integration path and [`docs/wiki/Overview.md`](docs/wiki/Overview.md) for
-   architecture and ownership.
+2. [`docs/api/guides/GettingStarted.md`](docs/api/guides/GettingStarted.md) for
+   the public integration path and
+   [`docs/api/guides/Overview.md`](docs/api/guides/Overview.md) for architecture
+   and ownership.
 3. [`Trailblazer.slnx`](Trailblazer.slnx),
    [`src/Trailblazer/Trailblazer.csproj`](src/Trailblazer/Trailblazer.csproj),
    and the project file for the matching test or benchmark area.
@@ -28,10 +29,10 @@ Read these in order before making a non-trivial change:
    and the evergreen issue or benchmark tracker when a task belongs to an active
    coordination thread.
 
-Read [`docs/wiki/Serialization.md`](docs/wiki/Serialization.md) before changing
-records or load behavior. Read
-[`docs/wiki/MapPublication.md`](docs/wiki/MapPublication.md) before changing
-map, overlay, policy, or graph lifecycle behavior.
+Read [`docs/api/guides/Serialization.md`](docs/api/guides/Serialization.md)
+before changing records or load behavior. Read
+[`docs/api/guides/MapPublication.md`](docs/api/guides/MapPublication.md) before
+changing map, overlay, policy, or graph lifecycle behavior.
 
 ## Source Of Truth
 
@@ -40,41 +41,48 @@ aligned across:
 
 - [`README.md`](README.md);
 - [`AGENTS.md`](AGENTS.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md);
-- [`docs/wiki/Overview.md`](docs/wiki/Overview.md);
-- the relevant wiki reference;
+- [`docs/api/guides/Overview.md`](docs/api/guides/Overview.md);
+- the relevant behavioral or integration guide;
 - [`docs/api`](docs/api) for the generated API-site configuration, landing
   content, namespace overrides, logo, repository link, and custom theme;
 - [`docs/feature-work`](docs/feature-work) for tracker state and active plans;
 - public XML comments;
 - source, tests, benchmarks, and relevant workflows.
 
-Keep links inside `docs/wiki` repository-friendly with their `.md` extensions.
-The wiki workflow rewrites only the published copy. Treat `docs/api/index.md`,
-`docs/api/toc.yml`, DocFX configuration, templates, and overwrite files as
-authored source. Never edit or commit generated `docs/api/obj` output.
+Keep links inside `docs/api/guides` repository-friendly with their `.md`
+extensions. DocFX publishes these guides alongside the API reference. Treat
+`docs/api/index.md`, `docs/api/toc.yml`, DocFX configuration, templates, and
+overwrite files as authored source. Never edit or commit generated
+`docs/api/obj` output.
 
 ## Repository Map
 
-| Path                                                               | Purpose                                                                               |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| [`src/Trailblazer/Runtime`](src/Trailblazer/Runtime)               | World context, clock, settings, and lifecycle ownership                               |
-| [`src/Trailblazer/Pathing/Map`](src/Trailblazer/Pathing/Map)       | Immutable maps, cells, connections, transitions, overlays, and publication operations |
-| [`src/Trailblazer/Pathing/Graph`](src/Trailblazer/Pathing/Graph)   | Immutable graph composition, dependencies, topology traversal, and diagnostics        |
-| [`src/Trailblazer/Pathing/Query`](src/Trailblazer/Pathing/Query)   | Public query, endpoint, profile, budget, status, and medium contracts                 |
-| [`src/Trailblazer/Pathing/Search`](src/Trailblazer/Pathing/Search) | Endpoint admission, A\*, Flow, guide leases, and internal navigation rays             |
-| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation)         | Navigator, steering, turning, motor, locomotion, occupancy, and controller records    |
-| [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps)         | Context-owned deterministic ground-height storage and sampling                        |
-| [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)               | xUnit v3 behavior, determinism, allocation, serialization, and API coverage           |
-| [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks)     | BenchmarkDotNet performance and semantic preflight scenarios                          |
-| [`docs/api`](docs/api)                                             | DocFX configuration, branded landing content, namespace overrides, and theme          |
-| [`docs/wiki`](docs/wiki)                                           | Behavioral and integration guides synced to the GitHub Wiki                           |
-| [`docs/feature-work`](docs/feature-work)                           | Active plans plus evergreen issue and benchmark-signal trackers                       |
+| Path                                                                   | Purpose                                                                               |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [`src/Trailblazer/Runtime`](src/Trailblazer/Runtime)                   | World context, clock, settings, and lifecycle ownership                               |
+| [`src/Trailblazer/Pathing/Map`](src/Trailblazer/Pathing/Map)           | Immutable maps, cells, connections, transitions, overlays, and publication operations |
+| [`src/Trailblazer/Pathing/Graph`](src/Trailblazer/Pathing/Graph)       | Immutable graph composition, dependencies, topology traversal, and diagnostics        |
+| [`src/Trailblazer/Pathing/Query`](src/Trailblazer/Pathing/Query)       | Public query, endpoint, profile, budget, status, and medium contracts                 |
+| [`src/Trailblazer/Pathing/Search`](src/Trailblazer/Pathing/Search)     | Endpoint admission, A\*, Flow, guide leases, and internal navigation rays             |
+| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation)             | Navigator, steering, turning, motor, locomotion, occupancy, and controller records    |
+| [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps)             | Context-owned deterministic ground-height storage and sampling                        |
+| [`src/Trailblazer.Gravitas`](src/Trailblazer.Gravitas)                 | Optional collision-backed 3D Navigator adapter                                        |
+| [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)                   | xUnit v3 behavior, determinism, allocation, serialization, and API coverage           |
+| [`tests/Trailblazer.Gravitas.Tests`](tests/Trailblazer.Gravitas.Tests) | Adapter behavior and snapshot continuation                                            |
+| [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks)         | BenchmarkDotNet performance and semantic preflight scenarios                          |
+| [`docs/api`](docs/api)                                                 | DocFX configuration, branded landing content, namespace overrides, and theme          |
+| [`docs/api/guides`](docs/api/guides)                                   | Behavioral and integration guides published by DocFX                                  |
+| [`docs/feature-work`](docs/feature-work)                               | Active plans plus evergreen issue and benchmark-signal trackers                       |
+
+The graph directory groups publication, seams, transitions, and traversal by
+ownership. Map operation admission and candidates have separate folders, and
+each search algorithm keeps its retained payloads beside its own work types.
 
 ## Runtime Architecture
 
 The optional `src/Trailblazer.Gravitas` project packages `GravitasNavigator3D`.
 Core must not acquire a Gravitas dependency. Follow
-[Gravitas.md](docs/wiki/Gravitas.md) for the shared-world all-prepare /
+[Gravitas.md](docs/api/guides/Gravitas.md) for the shared-world all-prepare /
 one-resolve / all-commit barrier.
 
 One `TrailblazerWorldContext` owns one active GridForge `GridWorld` binding and
@@ -114,7 +122,7 @@ result transfer and cancellation before pathing reset/disposal. Completed
 unclaimed results consume retention capacity. Counted slices do not bound atomic
 ray, allocation or publication time; measure full containing frames before
 making timing claims. The canonical contract is in
-[`Pathing.md`](docs/wiki/Pathing.md#spreading-acquisition-across-fixed-frames).
+[`Pathing.md`](docs/api/guides/Pathing.md#spreading-acquisition-across-fixed-frames).
 
 Navigator defaults to Immediate acquisition; Scheduled is explicit durable
 policy. Waiting yields zero guided heading but must preserve
@@ -129,8 +137,8 @@ proof/interest on advancement and every session/reset/teardown boundary.
 
 The context composes Chronicler's clock: absolute frames are `long`, elapsed
 time and jump-start times are `ChronicleTimestamp`, and integration steps stay
-Fixed64. Subtract timestamps before bounded conversion; do not recreate a
-narrow or unsigned parallel timeline. `GetFrameCountForDuration` counts complete
+Fixed64. Subtract timestamps before bounded conversion; do not recreate a narrow
+or unsigned parallel timeline. `GetFrameCountForDuration` counts complete
 current steps, not historical frames. Preserve clock-lifetime checks at reset
 and reject stale prepared motion before changing accepted pose or occupancy.
 
@@ -166,7 +174,7 @@ improve the long-term contract.
 When changing public behavior:
 
 1. add or update behavior tests;
-2. update README/wiki guidance, public XML, and the API landing/namespace
+2. update README and guide content, public XML, and the API landing/namespace
    content in the same change when affected;
 3. update JSON and MemoryPack coverage when wire behavior changes.
 
@@ -229,8 +237,7 @@ dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
 CI enforces exact reachable coverage in both package configurations. After a
 successful push to `main`, the coverage workflow checks out the exact tested
 commit, builds and validates the DocFX site, and deploys one Pages artifact with
-the API site at the root and coverage under `/coverage/`. The separate wiki
-workflow publishes `docs/wiki` from that tested commit.
+guides and API reference at the root and coverage under `/coverage/`.
 
 For focused work, filter the test project first:
 
@@ -241,9 +248,9 @@ dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Rel
 The library generates packages during build. Keep standard and Lean dependency
 families consistent; do not mix package families in one validation run.
 
-For coordinated source development, use `UseLocalLsfStack=true` as a command-line
-global property or the environment of a freshly launched IDE. A repo-only local
-property may not reach sibling NuGet restores. See
+For coordinated source development, use `UseLocalLsfStack=true` as a
+command-line global property or the environment of a freshly launched IDE. A
+repo-only local property may not reach sibling NuGet restores. See
 [CONTRIBUTING.md](CONTRIBUTING.md#coordinated-source-development-and-ide-restore).
 Keep package mode the default; never infer release readiness from source builds.
 
@@ -290,7 +297,7 @@ Prioritize:
 
 Keep the root README concise, product-focused, and safe for NuGet rendering. Put
 architecture, lifecycle, subsystem behavior, and troubleshooting detail in the
-matching wiki page or generated API reference.
+matching guide or generated API reference.
 
 Do not stage, commit, tag, push, publish packages, or create releases unless the
 user explicitly requests it. Preserve unrelated worktree changes.
@@ -302,6 +309,6 @@ load staging, and serialized schemas as high-risk boundaries.
 
 Use the independent `Chronicler.Diagnostics` package for diagnostic channels,
 lazy logging handlers, and `ChronicleGuard` guards. It does not depend on
-`Chronicler.Core`. Keep library-specific channels, formatters, and logger facades
-in their owning library. `UseLocalLsfStack=true` selects the sibling diagnostics
-project; standard and Lean builds use the same diagnostics package.
+`Chronicler.Core`. Keep library-specific channels, formatters, and logger
+facades in their owning library. `UseLocalLsfStack=true` selects the sibling
+diagnostics project; standard and Lean builds use the same diagnostics package.

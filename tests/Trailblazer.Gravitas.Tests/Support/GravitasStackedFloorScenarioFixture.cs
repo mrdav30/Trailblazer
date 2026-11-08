@@ -1,12 +1,9 @@
 using FixedMathSharp;
 using FluentAssertions;
-using Gravitas;
-using Gravitas.Colliders;
 using Gravitas.Support;
 using GridForge.Configuration;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Gravitas.Tests.Support;

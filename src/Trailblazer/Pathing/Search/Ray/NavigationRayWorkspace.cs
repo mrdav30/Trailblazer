@@ -6,7 +6,6 @@
 //=======================================================================
 
 using System;
-using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 
@@ -77,24 +76,4 @@ internal sealed class NavigationRayWorkspace
         BodyTraceScratch.Clear();
         Dependencies.Reset();
     }
-}
-
-internal enum NavigationRayChainRecordState : byte
-{
-    Unavailable,
-    Unreached,
-    Ready,
-    Expanded
-}
-
-internal struct NavigationRayChainRecord
-{
-    internal NavigationNodeRef Node;
-    internal int PredecessorOrdinal;
-    internal int RootOrdinal;
-    internal Fixed64 ArrivalParameter;
-    internal Fixed64 TraversalCost;
-    internal NavigationExplicitConnectionRecord IncomingExplicitConnection;
-    internal NavigationRayChainRecordState State;
-    internal bool IsSemanticCostNeutral;
 }

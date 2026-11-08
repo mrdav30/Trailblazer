@@ -1,14 +1,11 @@
 using System.Collections.Generic;
 using FixedMathSharp;
 using FluentAssertions;
-using Gravitas;
 using Gravitas.Colliders;
 using Gravitas.Materials;
 using Gravitas.Support;
 using GridForge.Configuration;
 using GridForge.Grids.Topology;
-using GridForge.Spatial;
-using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Gravitas.Tests.Support;
@@ -26,13 +23,13 @@ internal sealed class GravitasStairScenarioFixture : GravitasNavigatorScenarioFi
 
     protected override LSCollider CreateActorCollider(
         NavigationAgentProfile profile) => new LSCylinderCollider
-    {
-        Radius = Profile.Shape.Radius,
-        Size = new Vector3d(
+        {
+            Radius = Profile.Shape.Radius,
+            Size = new Vector3d(
             Profile.Shape.Radius * 2,
             Profile.Shape.Height,
             Profile.Shape.Radius * 2)
-    };
+        };
 
     protected override void PrepareHostMotion(GravitasNavigatorActor actor) =>
         ApplyGroundStep(actor);

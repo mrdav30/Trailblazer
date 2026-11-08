@@ -10,7 +10,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Selects the deterministic search algorithm used by a path query.
 /// </summary>
-public enum PathAlgorithm
+public enum PathAlgorithm : byte
 {
     /// <summary>
     /// Computes an origin-to-destination path with the internal certified heuristic.

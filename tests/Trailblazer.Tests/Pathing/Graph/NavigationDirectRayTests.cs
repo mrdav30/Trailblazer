@@ -8,8 +8,6 @@ using GridForge.Grids;
 using GridForge.Grids.Storage;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using GridForge.Utility;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
@@ -568,7 +566,9 @@ public sealed partial class NavigationDirectRayTests
         navigator.Setup(scene.Start, Scene.Profile);
         navigator.Initialize(new TrekCondition
         {
-            Medium = TraversalMedium.Solid, SurfaceLevel = scene.Start.Y, GroundState = new GroundCondition()
+            Medium = TraversalMedium.Solid,
+            SurfaceLevel = scene.Start.Y,
+            GroundState = new GroundCondition()
         });
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         steering.ConfigurePathRechecks(-1);
@@ -604,7 +604,9 @@ public sealed partial class NavigationDirectRayTests
         navigator.Setup(scene.Start, Scene.Profile);
         navigator.Initialize(new TrekCondition
         {
-            Medium = TraversalMedium.Solid, SurfaceLevel = scene.Start.Y, GroundState = new GroundCondition()
+            Medium = TraversalMedium.Solid,
+            SurfaceLevel = scene.Start.Y,
+            GroundState = new GroundCondition()
         });
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         steering.ConfigurePathRechecks(-1);
@@ -739,28 +741,28 @@ public sealed partial class NavigationDirectRayTests
                 storageKind: sparse ? GridStorageKind.Sparse : GridStorageKind.Dense);
             var indexes = new List<VoxelIndex>();
             for (int x = 0; x <= maxX; x++)
-            for (int z = 0; z < 12; z++)
-                if (wallKind != 3 || x != wallX || z == 11)
-                    indexes.Add(new VoxelIndex(x, 0, z));
+                for (int z = 0; z < 12; z++)
+                    if (wallKind != 3 || x != wallX || z == 11)
+                        indexes.Add(new VoxelIndex(x, 0, z));
             world.TryAddGrid(configuration, indexes.ToArray(), out ushort gridIndex).Should().BeTrue();
             Grid = world.ActiveGrids[gridIndex];
             configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
             var builder = new NavigationMapBuilder("direct", binding);
             for (int x = 0; x <= maxX; x++)
-            for (int z = 0; z < 12; z++)
-            {
-                var index = new VoxelIndex(x, 0, z);
-                bool wall = x == wallX && (z < 11 || wallKind == 7);
-                builder.AddCell(index, new NavigationCell(
-                    wallKind == 6 || wall && wallKind is 4 or 7 ? TraversalMedia.Gas : TraversalMedia.Solid,
-                    wall && wallKind == 2 ? TraversalCapability.Jump : TraversalCapability.None, default,
-                    wall && wallKind == 5 ? Fixed64.One : Fixed64.Zero, Fixed64.One, Fixed64.One));
-                if (wall && wallKind == 1)
+                for (int z = 0; z < 12; z++)
                 {
-                    Grid.TryGetVoxel(index, out Voxel? voxel).Should().BeTrue();
-                    Grid.TryAddObstacle(voxel!, world.AllocateObstacleToken()).Should().BeTrue();
+                    var index = new VoxelIndex(x, 0, z);
+                    bool wall = x == wallX && (z < 11 || wallKind == 7);
+                    builder.AddCell(index, new NavigationCell(
+                        wallKind == 6 || wall && wallKind is 4 or 7 ? TraversalMedia.Gas : TraversalMedia.Solid,
+                        wall && wallKind == 2 ? TraversalCapability.Jump : TraversalCapability.None, default,
+                        wall && wallKind == 5 ? Fixed64.One : Fixed64.Zero, Fixed64.One, Fixed64.One));
+                    if (wall && wallKind == 1)
+                    {
+                        Grid.TryGetVoxel(index, out Voxel? voxel).Should().BeTrue();
+                        Grid.TryAddObstacle(voxel!, world.AllocateObstacleToken()).Should().BeTrue();
+                    }
                 }
-            }
             GuidedPathTestScene.PublishMapAndPolicy(Context, builder.Build(), 1,
                 OverlayReplacementPolicy.Clear, 1, Policy, 2);
             Start = GuidedPathTestScene.Anchor(binding, default);
@@ -786,10 +788,10 @@ public sealed partial class NavigationDirectRayTests
         {
             var builder = new NavigationMapBuilder("direct", Graph.GetInstance(0).Map.GridBinding);
             for (int x = 0; x < 12; x++)
-            for (int z = 0; z < 12; z++)
-                builder.AddCell(new VoxelIndex(x, 0, z), new NavigationCell(TraversalMedia.Solid,
-                    x == 3 && z < 11 ? TraversalCapability.Jump : TraversalCapability.None,
-                    default, Fixed64.Zero, Fixed64.One, Fixed64.One));
+                for (int z = 0; z < 12; z++)
+                    builder.AddCell(new VoxelIndex(x, 0, z), new NavigationCell(TraversalMedia.Solid,
+                        x == 3 && z < 11 ? TraversalCapability.Jump : TraversalCapability.None,
+                        default, Fixed64.Zero, Fixed64.One, Fixed64.One));
             var operation = new NavigationMapCommitOperation(new PreparedNavigationMap(builder.Build(), 2),
                 OverlayReplacementPolicy.Clear, 3, Context.FrameCount + 1);
             Context.Pathing.Admit(operation).Should().BeTrue();

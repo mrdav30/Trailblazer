@@ -18,7 +18,7 @@ namespace Trailblazer.Navigation.Motor;
 /// must retain the eligible launch-platform snapshot and transfer mode for that frame;
 /// clearing the platform or making it ineligible selects <see cref="None"/> and skips transfer.
 /// </remarks>
-public enum MotionTransfer
+public enum MotionTransfer : byte
 {
     /// <summary>
     /// Does not add departure velocity. Ordinary grounded platform displacement and rotation still apply.

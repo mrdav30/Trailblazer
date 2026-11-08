@@ -38,7 +38,7 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Trailblazer\Trailblazer.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfTrailblazerProperties)" />
+			AdditionalProperties="Configuration=$(Configuration)" />
 		<ProjectReference Condition="'$(UseLocalLsfStack)' == 'true'" Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
 			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGravitasProperties)" />
 	</ItemGroup>

@@ -11,17 +11,6 @@ using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
-internal enum NavigationSurfaceAStarStatus : byte
-{
-    Pending = 0,
-    Success = 1,
-    NoPath = 2,
-    BudgetExceeded = 3,
-    CostOverflow = 4,
-    CapacityExceeded = 5,
-    Stale = 6
-}
-
 /// <summary>Runs one bounded fixed-point surface A* query over a leased graph.</summary>
 internal sealed class NavigationSurfaceAStarWork : IDisposable
 {

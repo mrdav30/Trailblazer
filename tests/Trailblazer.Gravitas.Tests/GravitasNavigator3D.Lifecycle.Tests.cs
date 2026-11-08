@@ -174,7 +174,7 @@ public sealed class GravitasNavigator3DLifecycleTests
     {
         using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
         using GravitasNavigatorActor dynamicActor = fixture.CreateActor();
-        dynamicActor.Body.SetMotionType(BodyMotionType.Dynamic);
+        dynamicActor.Body.SetMotionType(PhysicsMobilityType.Dynamic);
 
         Action simulateDynamic = dynamicActor.Navigator.Simulate;
         simulateDynamic.Should().Throw<InvalidOperationException>();

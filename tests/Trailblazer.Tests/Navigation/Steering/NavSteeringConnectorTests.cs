@@ -1,12 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Threading;
+using Chronicler.Serialization;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Spatial;
-using System.Collections.Generic;
-using System;
-using System.Reflection;
-using System.Threading;
-using Chronicler;
-using Chronicler.Serialization;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
@@ -79,7 +78,8 @@ public class NavSteeringConnectorTests
         {
             try { heading = steering.GetHeading(host, out action); }
             catch (Exception exception) { failure = exception; }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         context.Simulate();
         try
         {
@@ -287,7 +287,7 @@ public class NavSteeringConnectorTests
         using var context = NavSteeringAcquisitionTests.CreateContext(PathAlgorithm.AStar, out var query);
         var steering = recurring ? AdoptConnector(context, query) : new NavSteering(context);
         var host = new MockSteerAgent(recurring ? query.Start.Position + Vector3d.Right : query.Start.Position)
-            { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+        { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
         if (!recurring)
         {
             steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
@@ -313,7 +313,8 @@ public class NavSteeringConnectorTests
             started.Set();
             try { heading = steering.GetHeading(host, out action); }
             catch (Exception exception) { failure = exception; }
-        }) { IsBackground = true };
+        })
+        { IsBackground = true };
         try
         {
             lock (sync)
@@ -362,7 +363,7 @@ public class NavSteeringConnectorTests
             }
             context.Pathing.NavigationGraphStore.TryAcquire().Should().BeNull();
             steering.GetHeading(new MockSteerAgent(query.Start.Position + Vector3d.Right)
-                { NavigationProfile = query.Agent, Speed = (Fixed64)20 }, out _).Should().Be(Vector3d.Zero);
+            { NavigationProfile = query.Agent, Speed = (Fixed64)20 }, out _).Should().Be(Vector3d.Zero);
             steering.LastAcquisitionStatus.Should().Be(NavigationGuideStatus.CapacityExceeded);
             steering.ShouldMove.Should().BeTrue();
             guide.HasConnector.Should().BeTrue();
@@ -372,7 +373,7 @@ public class NavSteeringConnectorTests
         finally { foreach (var snapshot in held) snapshot.Dispose(); }
         context.Simulate();
         steering.GetHeading(new MockSteerAgent(query.Start.Position + Vector3d.Right)
-            { NavigationProfile = query.Agent, Speed = (Fixed64)20 }, out _).X.Should().BeLessThan(Fixed64.Zero);
+        { NavigationProfile = query.Agent, Speed = (Fixed64)20 }, out _).X.Should().BeLessThan(Fixed64.Zero);
         context.Pathing.NavigationAStarAdmissionGate.PayloadCache.AcquisitionDiagnostics.BuildStarts.Should().Be(1);
         steering.StopMove();
     }
@@ -640,7 +641,7 @@ public class NavSteeringConnectorTests
         guide.Status.Should().Be(NavigationGuideStatus.Success);
         context.Simulate();
         var moved = new MockSteerAgent(new Vector3d(Fixed64.Zero, query.Start.Position.Y, query.Start.Position.Z))
-            { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+        { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
         steering.GetHeading(moved, out var action).Should().Be(Vector3d.Zero);
         action.Should().BeNull();
         steering.LastAcquisitionStatus.Should().Be(exhaustTraceBudget
@@ -703,7 +704,7 @@ public class NavSteeringConnectorTests
                 Fixed64 x = frame >= 55 ? (Fixed64)3 : frame >= 50 ? (Fixed64)2 : frame >= 40
                     ? Fixed64.One : (frame % 2 == 0 ? (Fixed64)1.25m : (Fixed64)0.75m);
                 var host = new MockSteerAgent(new Vector3d(x, query.Start.Position.Y, query.Start.Position.Z))
-                    { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+                { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
                 var heading = steering.GetHeading(host, out var action);
                 action.Should().BeNull();
                 var guide = GetTestGuide(steering);
@@ -752,7 +753,7 @@ public class NavSteeringConnectorTests
         var steering = AdoptConnector(context, query);
         var guide = GetTestGuide(steering)!.Value;
         var moved = new MockSteerAgent(query.Start.Position + Vector3d.Right)
-            { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+        { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
         // Exercise both policy directions on an already adopted connector.
         steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Immediate);
         steering.ConfigureAcquisitionMode(mode);

@@ -9,6 +9,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Carries the admission result and work observations for an internal navigation ray.</summary>
 internal readonly struct NavigationRayResult
 {
     internal NavigationRayResult(

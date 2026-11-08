@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // Navigator.HeightmapGrounding.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -11,6 +11,7 @@ using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Navigation;
 
+/// <content>Resolves optional heightmap support for navigator grounding.</content>
 public abstract partial class Navigator
 {
     #region Heightmap Grounding

@@ -12,53 +12,6 @@ using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Reports bounded endpoint-resolution progress.</summary>
-internal enum NavigationEndpointResolutionStatus : byte
-{
-    Pending = 0,
-    Success = 1,
-    NoMap = 2,
-    InvalidEndpoint = 3,
-    BudgetExceeded = 4,
-    CostOverflow = 5,
-    CapacityExceeded = 6,
-    Stale = 7
-}
-
-/// <summary>Identifies the directed query endpoint being resolved.</summary>
-internal enum NavigationEndpointRole : byte
-{
-    Start,
-    Destination
-}
-
-/// <summary>Identifies one exact resolved graph endpoint.</summary>
-internal readonly struct NavigationResolvedEndpoint
-{
-    internal NavigationResolvedEndpoint(
-        NavigationNodeRef node,
-        NavigationCellAddress address,
-        TraversalMedia media,
-        TraversalMedium resolutionMedium,
-        Vector3d footAnchor,
-        Fixed64 resolutionDistance)
-    {
-        Node = node;
-        Address = address;
-        Media = media;
-        ResolutionMedium = resolutionMedium;
-        FootAnchor = footAnchor;
-        ResolutionDistance = resolutionDistance;
-    }
-
-    internal NavigationNodeRef Node { get; }
-    internal NavigationCellAddress Address { get; }
-    internal TraversalMedia Media { get; }
-    internal TraversalMedium ResolutionMedium { get; }
-    internal Vector3d FootAnchor { get; }
-    internal Fixed64 ResolutionDistance { get; }
-}
-
 /// <summary>Resolves one endpoint through bounded GridForge coverage and immutable graph filtering.</summary>
 internal sealed class NavigationEndpointResolutionWork
 {

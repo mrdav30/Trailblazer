@@ -9,6 +9,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Navigation.MovementGroups;
 
+/// <summary>Tracks an occupant's current movement group and its most recent destination request.</summary>
 internal sealed class MovementGroupMembership
 {
     public int GroupId;

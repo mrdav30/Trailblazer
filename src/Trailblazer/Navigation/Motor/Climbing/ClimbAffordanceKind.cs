@@ -10,7 +10,7 @@ namespace Trailblazer.Navigation.Motor;
 /// <summary>
 /// Identifies the broad type of climb affordance provided by the host.
 /// </summary>
-public enum ClimbAffordanceKind
+public enum ClimbAffordanceKind : byte
 {
     /// <summary>
     /// No climb affordance is available.

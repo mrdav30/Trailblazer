@@ -1,7 +1,7 @@
-﻿using FixedMathSharp;
+using System;
+using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Grids;
-using System;
 using Trailblazer.Navigation.Turning;
 using Xunit;
 

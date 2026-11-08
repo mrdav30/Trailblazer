@@ -1,4 +1,6 @@
+#if TRAILBLAZER_DISABLE_MEMORYPACK
 using System;
+#endif
 using Chronicler;
 using Chronicler.Serialization;
 

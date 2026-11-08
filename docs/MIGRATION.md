@@ -32,7 +32,8 @@ Use this guide when upgrading from any v1.x package.
 
 - Update package references to `Trailblazer` v2.x, or `Trailblazer.Lean` v2.x
   when the rest of the LSF dependency stack uses Lean packages.
-- Follow the [Chronicler v1.0.0 migration guide](https://github.com/mrdav30/Chronicler/blob/main/docs/MIGRATION.md)
+- Follow the
+  [Chronicler v1.0.0 migration guide](https://github.com/mrdav30/Chronicler/blob/main/docs/MIGRATION.md)
   for `Chronicler.Serialization` imports and typed payload-editor calls.
 - Replace ambient pathing ownership with one `TrailblazerWorldContext` per
   active GridForge `GridWorld`.
@@ -43,8 +44,8 @@ Use this guide when upgrading from any v1.x package.
 - Replace every legacy request family with one complete `PathQuery`.
 - Replace old guide factories and pooled guide interfaces with disposable A* or
   Flow leases from `context.Guides`.
-- Treat every transition as an explicit host-owned action and complete the
-  exact `NavigationTransitionInstruction` supplied by its lease.
+- Treat every transition as an explicit host-owned action and complete the exact
+  `NavigationTransitionInstruction` supplied by its lease.
 - Restore grids, maps, policies, and overlays before populating guided
   Navigators.
 - Supply an explicit world-space surface normal whenever reporting ground
@@ -100,21 +101,21 @@ steps and advance each once; the adapter never advances a shared clock twice.
 
 ## Removed And Replaced
 
-| Removed model | Current model |
-| --- | --- |
-| `NavigationChart`, its cell/update/registration types, overlap priority, and diagnostic extensions | immutable `NavigationMap`, complete `NavigationCell`, addressed overlays, and `GetNavigationGraphDiagnostics()` |
-| World-position, scalar interval, and dense `[y,x,z]` authoring APIs | stable map ID plus topology-local GridForge `VoxelIndex` under a normalized configuration binding |
-| Ambient `PathManager`, `PathingWorldState`, and thread-local state swapping | explicit `TrailblazerWorldContext.Pathing` ownership |
-| `SolidChartPartition` and `VolumeChartPartition` | one medium-state graph keyed by address plus exact `TraversalMedium` |
-| `TrailblazerGridCompatibility` and external grid-bridge requests | direct committed-change integration from the context-bound `GridWorld` |
-| `TrailblazerWorldContext.VoxelSize` | per-grid GridForge metrics and explicit world-unit controller settings |
-| Scalar agent size, mutable foot adjustment, and request unit size | required `KinematicBodyShape` inside `NavigationAgentProfile` |
-| `MaxPathSearchRange`, heuristic choice, and straight/diagonal constants | finite multi-counter `NavigationWorkBudget` and certified fixed-point geometry |
-| Old endpoint finder families and public endpoint-policy helpers | `NavigationEndpoint`, `EndpointResolutionPolicy`, and bounded graph admission |
-| Mutable `AStarPathRequest`, `FlowFieldPathRequest`, `VolumePathRequest`, and `HybridPathRequest` families | one immutable `PathQuery` |
-| Separate volume routing, generated transition registry, and runtime medium rules | `NavigationCell.Media`, explicit definitions/rules, and unified A*/Flow traversal |
-| Old guide factories, pooled guide interfaces, and request cache keys | context-owned `TrailblazerGuideService` and immutable dependency-stamped payload leases |
-| Old serialized request/session fields | required current schemas; incompatible records reject transactionally |
+| Removed model                                                                                             | Current model                                                                                                   |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `NavigationChart`, its cell/update/registration types, overlap priority, and diagnostic extensions        | immutable `NavigationMap`, complete `NavigationCell`, addressed overlays, and `GetNavigationGraphDiagnostics()` |
+| World-position, scalar interval, and dense `[y,x,z]` authoring APIs                                       | stable map ID plus topology-local GridForge `VoxelIndex` under a normalized configuration binding               |
+| Ambient `PathManager`, `PathingWorldState`, and thread-local state swapping                               | explicit `TrailblazerWorldContext.Pathing` ownership                                                            |
+| `SolidChartPartition` and `VolumeChartPartition`                                                          | one medium-state graph keyed by address plus exact `TraversalMedium`                                            |
+| `TrailblazerGridCompatibility` and external grid-bridge requests                                          | direct committed-change integration from the context-bound `GridWorld`                                          |
+| `TrailblazerWorldContext.VoxelSize`                                                                       | per-grid GridForge metrics and explicit world-unit controller settings                                          |
+| Scalar agent size, mutable foot adjustment, and request unit size                                         | required `KinematicBodyShape` inside `NavigationAgentProfile`                                                   |
+| `MaxPathSearchRange`, heuristic choice, and straight/diagonal constants                                   | finite multi-counter `NavigationWorkBudget` and certified fixed-point geometry                                  |
+| Old endpoint finder families and public endpoint-policy helpers                                           | `NavigationEndpoint`, `EndpointResolutionPolicy`, and bounded graph admission                                   |
+| Mutable `AStarPathRequest`, `FlowFieldPathRequest`, `VolumePathRequest`, and `HybridPathRequest` families | one immutable `PathQuery`                                                                                       |
+| Separate volume routing, generated transition registry, and runtime medium rules                          | `NavigationCell.Media`, explicit definitions/rules, and unified A*/Flow traversal                               |
+| Old guide factories, pooled guide interfaces, and request cache keys                                      | context-owned `TrailblazerGuideService` and immutable dependency-stamped payload leases                         |
+| Old serialized request/session fields                                                                     | required current schemas; incompatible records reject transactionally                                           |
 
 ## Map Identity And Overlays
 
@@ -141,17 +142,17 @@ profile's allowed media. Disabling transitions excludes every semantic action,
 including same-medium Jump or Climb.
 
 Guide payloads are immutable, while cursor and pending-action state belong to
-one lease. A transition instruction cannot be reconstructed or completed
-through another acquisition. Move to its source action position, perform the
-host action once, retry transient completion without repeating the action, and
-reacquire if publication returns `Stale`.
+one lease. A transition instruction cannot be reconstructed or completed through
+another acquisition. Move to its source action position, perform the host action
+once, retry transient completion without repeating the action, and reacquire if
+publication returns `Stale`.
 
 ## Serialization Cutover
 
 `PathQueryRecord` round-trips an exact standalone query. Navigator persistence
 stores durable session intent and rebuilds start position/medium from the
-restored controller shell. Neither record embeds maps, policies, overlays,
-graph payloads, guide cursors, dependencies, pending actions, or committed-cell
+restored controller shell. Neither record embeds maps, policies, overlays, graph
+payloads, guide cursors, dependencies, pending actions, or committed-cell
 metadata.
 
 Restore GridForge grids first, then publish maps and policies, replay overlays
@@ -163,21 +164,21 @@ names and schema versions are rejected; there is no fallback reader.
 The same major version corrects misleading motion names and removes misspellings
 and redundant controller accessors:
 
-| Removed name | Current name or access |
-| --- | --- |
-| `Navigator.IsGuideded` | `Navigator.IsGuided` |
-| `Navigator.AddVelocityDelta(...)` | `Navigator.AddLocomotionDisplacement(...)` |
-| protected `Navigator._velocityDelta` | protected `Navigator._locomotionDisplacement` |
-| `NavMotor.TryTraversal(...)` output `velocityDelta` | `locomotionDisplacement` |
-| `NavMotor.TryTraversal(...)` output `positionDelta` | `platformDisplacement` |
-| `NavMotor.TryTraversal(...)` output `rotationDelta` | `platformRotationDelta` |
-| `PlatformLocomotion.InteriaApplied` | `PlatformLocomotion.InertiaApplied` |
-| `WaterLocomotion.DefaultBouyancyFactor` | `WaterLocomotion.DefaultBuoyancyFactor` |
-| public `TrailblazerWorldContext.Navigation` / `TrailblazerNavigationService` | no host-facing service; bind and drive `Navigator` directly |
-| component `Context` getters | context binding remains constructor/Navigator owned |
-| public NavMotor module aliases | `Handler.Move`, `Handler.Jump`, `Handler.Water`, `Handler.Fly`, and `Handler.Climb` |
-| `LocomotionProfile.CreateBuilder(...)` | `new LocomotionProfileBuilder(...)` |
-| `GroundCondition.GroundNormal` derived from `Platform.Transform.Up` | explicit serialized `GroundCondition.SurfaceNormal` |
+| Removed name                                                                 | Current name or access                                                              |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `Navigator.IsGuideded`                                                       | `Navigator.IsGuided`                                                                |
+| `Navigator.AddVelocityDelta(...)`                                            | `Navigator.AddLocomotionDisplacement(...)`                                          |
+| protected `Navigator._velocityDelta`                                         | protected `Navigator._locomotionDisplacement`                                       |
+| `NavMotor.TryTraversal(...)` output `velocityDelta`                          | `locomotionDisplacement`                                                            |
+| `NavMotor.TryTraversal(...)` output `positionDelta`                          | `platformDisplacement`                                                              |
+| `NavMotor.TryTraversal(...)` output `rotationDelta`                          | `platformRotationDelta`                                                             |
+| `PlatformLocomotion.InteriaApplied`                                          | `PlatformLocomotion.InertiaApplied`                                                 |
+| `WaterLocomotion.DefaultBouyancyFactor`                                      | `WaterLocomotion.DefaultBuoyancyFactor`                                             |
+| public `TrailblazerWorldContext.Navigation` / `TrailblazerNavigationService` | no host-facing service; bind and drive `Navigator` directly                         |
+| component `Context` getters                                                  | context binding remains constructor/Navigator owned                                 |
+| public NavMotor module aliases                                               | `Handler.Move`, `Handler.Jump`, `Handler.Water`, `Handler.Fly`, and `Handler.Climb` |
+| `LocomotionProfile.CreateBuilder(...)`                                       | `new LocomotionProfileBuilder(...)`                                                 |
+| `GroundCondition.GroundNormal` derived from `Platform.Transform.Up`          | explicit serialized `GroundCondition.SurfaceNormal`                                 |
 
 Update method calls, overrides, protected-field references, and named arguments
 to the corrected motion names. These are naming-only changes: locomotion and
@@ -194,8 +195,8 @@ to encode collision geometry.
 
 ### Steering range validation
 
-`NavSteering.GroupFactor` and `AvoidFactor` are now guarded properties instead of
-public fields. Ordinary reads, assignments, compound assignments, and object
+`NavSteering.GroupFactor` and `AvoidFactor` are now guarded properties instead
+of public fields. Ordinary reads, assignments, compound assignments, and object
 initializers keep their syntax. Field-specific `ref`/`out` access and reflection
 must be updated; existing compiled consumers must be rebuilt.
 
@@ -207,71 +208,73 @@ negative body radius, even when speed is nonpositive; zero radius remains valid.
 No clamping or signed-radius compatibility path is provided.
 
 Serialized field names and defaults are unchanged, so this correction does not
-require a schema change. Negative saved factors reject rather than entering
-live steering, and failed Navigator population remains transactional.
+require a schema change. Negative saved factors reject rather than entering live
+steering, and failed Navigator population remains transactional.
 
 ### Periodic line-of-sight rechecks
 
-The v2 source workstream intentionally replaces the writable cooldown field
-with one atomic configuration method. There is no setter or forwarding alias.
-These host fragments assume an initialized Navigator with a configured,
-non-null steering controller.
+The v2 source workstream intentionally replaces the writable cooldown field with
+one atomic configuration method. There is no setter or forwarding alias. These
+host fragments assume an initialized Navigator with a configured, non-null
+steering controller.
 
 Obsolete host fragment (does not compile against the current API):
 
-~~~csharp
+```csharp
 navigator.Steering!.PathRecheckCooldownFrames = 16;
-~~~
+```
 
 Current host fragment preserving the old unphased countdown:
 
-~~~csharp
+```csharp
 navigator.Steering!.ConfigurePathRechecks(16);
-~~~
+```
 
 Optional host fragment enabling stable fixed-frame alignment:
 
-~~~csharp
+```csharp
 navigator.Steering!.ConfigurePathRechecks(16, phase: stableHostOrdinal % 16);
-~~~
+```
 
 Use a stable, nonnegative host ordinal. See the evergreen
-[periodic line-of-sight timing guide](wiki/NavSteering.md#periodic-line-of-sight-rechecks)
+[periodic line-of-sight timing guide](api/guides/NavSteering.md#periodic-line-of-sight-rechecks)
 for disabled countdown behavior, phase boundaries, lifecycle resets, and burst
 caveats.
 
 The outer Navigator record is schema version 8. It retains the explicit
-surface-normal, controlled-descent and periodic direct-LOS interval/phase fields,
-plus the durable `NavSteering.AcquisitionMode`. It now preserves active and
-buffered turning: target rotation/completion, pending target, interpolation
-factor, and collision auto-turn signal. Earlier outer schemas, including
-version 7, reject transactionally rather than supplying defaults. Re-record
-existing Navigator snapshots and replay fixtures for this schema.
+surface-normal, controlled-descent and periodic direct-LOS interval/phase
+fields, plus the durable `NavSteering.AcquisitionMode`. It now preserves active
+and buffered turning: target rotation/completion, pending target, interpolation
+factor, and collision auto-turn signal. Earlier outer schemas, including version
+7, reject transactionally rather than supplying defaults. Re-record existing
+Navigator snapshots and replay fixtures for this schema.
 
 Population no longer resets turning to idle. Restore the authoritative rotation
 and resume with the same deterministic timestep. Context bindings, body-radius
-thresholds, and host `CanTurnOnCollision` callbacks still belong to the initialized
-shell, not the record; guide leases, pending navigation actions, and acquisition
-requests remain transient. See [serialization](wiki/Serialization.md).
+thresholds, and host `CanTurnOnCollision` callbacks still belong to the
+initialized shell, not the record; guide leases, pending navigation actions, and
+acquisition requests remain transient. See
+[serialization](api/guides/Serialization.md).
 
 Immediate acquisition remains the default. Opt in per Navigator using
 `navigator.Steering.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled)`.
 Keep calling motor/host motion and commit while `IsAwaitingGuidance`; waiting
-means zero new guided heading, not a frozen physical body. Moved-origin A* adoption
-rejoins the exact ordinary start anchor and reproves that connector every heading
-under the same scheduler allowance. Changing mode does not bypass an adopted
-connector. Active A* byte limits include connector proofs; `TotalCost` remains
-the original route cost. Requests, proofs, validation turns and queue position
-are not saved. See [steering acquisition](wiki/NavSteering.md#scheduled-acquisition-and-moving-origins).
+means zero new guided heading, not a frozen physical body. Moved-origin A*
+adoption rejoins the exact ordinary start anchor and reproves that connector
+every heading under the same scheduler allowance. Changing mode does not bypass
+an adopted connector. Active A* byte limits include connector proofs;
+`TotalCost` remains the original route cost. Requests, proofs, validation turns
+and queue position are not saved. See
+[steering acquisition](api/guides/NavSteering.md#scheduled-acquisition-and-moving-origins).
 
 ## Current v2 Guides
 
-- [Getting started](wiki/GettingStarted.md)
-- [Navigation maps](wiki/NavigationMaps.md)
-- [Map authoring](wiki/MapAuthoring.md)
-- [Map publication](wiki/MapPublication.md)
-- [Pathing](wiki/Pathing.md)
-- [Path guides](wiki/PathGuides.md)
-- [NavSteering](wiki/NavSteering.md)
-- [Serialization](wiki/Serialization.md)
-- [Troubleshooting](wiki/Troubleshooting.md)
+- [Getting started](api/guides/GettingStarted.md)
+- [Navigation maps](api/guides/NavigationMaps.md)
+- [Map authoring](api/guides/MapAuthoring.md)
+- [Map publication](api/guides/MapPublication.md)
+- [Pathing](api/guides/Pathing.md)
+- [Path guides](api/guides/PathGuides.md)
+- [NavSteering](api/guides/NavSteering.md)
+- [Serialization](api/guides/Serialization.md)
+- [Troubleshooting](api/guides/Troubleshooting.md)

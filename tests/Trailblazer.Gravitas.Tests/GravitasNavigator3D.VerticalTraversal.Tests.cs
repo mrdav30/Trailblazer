@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Spatial;
 using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 using Xunit;
 

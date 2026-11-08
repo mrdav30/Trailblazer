@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Chronicler;
 using Chronicler.Serialization;
 using FixedMathSharp;
 using GridForge.Configuration;

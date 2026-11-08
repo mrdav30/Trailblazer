@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
+using Chronicler.Diagnostics;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
-using Chronicler.Diagnostics;
 using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;

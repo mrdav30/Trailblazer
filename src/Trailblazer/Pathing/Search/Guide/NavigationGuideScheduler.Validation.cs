@@ -7,6 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
+/// <content>Advances connector validation within the scheduled guide work budget.</content>
 internal sealed partial class NavigationGuideScheduler
 {
     private NavigationValidationInterest? _validationFirst;

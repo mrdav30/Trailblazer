@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using System.Runtime.CompilerServices;
 using FixedMathSharp;
 using Trailblazer.Navigation.MovementGroups;
@@ -13,6 +12,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
+/// <content>Advances steering and guide progress through a simulation step.</content>
 public partial class NavSteering
 {
     // Valid only for the current heading; never persists a lease/action token.

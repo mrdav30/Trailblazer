@@ -1,12 +1,12 @@
 using System;
+using Chronicler.Diagnostics;
 using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
-using Chronicler.Diagnostics;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -195,7 +195,7 @@ public sealed class GravitasNavigator3DProfileReplacementTests
         using GravitasNavigatorActor contactActor = fixture.CreateActor(
             position: actor.Navigator.Position
                 + Vector3d.Right * Fixed64.FromFraction(3, 4));
-        contactActor.Body.SetMotionType(BodyMotionType.Dynamic);
+        contactActor.Body.SetMotionType(PhysicsMobilityType.Dynamic);
         fixture.Gravitas.Simulate();
         fixture.Gravitas.LateSimulate();
         int exits = 0;

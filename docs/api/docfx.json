@@ -16,6 +16,7 @@
   "build": {
     "content": [
       { "files": ["index.md", "toc.yml"] },
+      { "files": ["guides/**/*.md"] },
       { "files": ["**/*.yml"], "src": "obj/api", "dest": "api" }
     ],
     "resource": [
@@ -30,7 +31,7 @@
     "template": ["default", "modern", "templates/trailblazer"],
     "globalMetadata": {
       "_appName": "Trailblazer",
-      "_appTitle": "Trailblazer API",
+      "_appTitle": "Trailblazer documentation",
       "_enableSearch": true,
       "_enableNewTab": true,
       "_appLogoPath": "assets/icon_128x128.png",

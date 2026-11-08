@@ -4,9 +4,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
-using Gravitas.CollisionHandling;
 using Gravitas.Materials;
-using Gravitas.Queries;
 using Gravitas.Support;
 using GridForge.Configuration;
 using GridForge.Grids;
@@ -182,7 +180,7 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
             Mass = Fixed64.One
         };
         body.UseManualGrounding();
-        body.Initialize(resolvedPosition, resolvedRotation, BodyMotionType.Kinematic);
+        body.Initialize(resolvedPosition, resolvedRotation, PhysicsMobilityType.Kinematic);
         var navigator = new GravitasNavigator3D(
             Trailblazer,
             body,
@@ -345,9 +343,9 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
 
     protected virtual LSCollider CreateActorCollider(
         NavigationAgentProfile profile) => new LSSphereCollider
-    {
-        Radius = profile.Shape.Radius
-    };
+        {
+            Radius = profile.Shape.Radius
+        };
 
     protected virtual void PrepareHostMotion(GravitasNavigatorActor actor)
     {

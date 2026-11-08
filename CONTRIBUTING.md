@@ -53,6 +53,11 @@ so MSBuild uses the explicit dependency edges and their version metadata. Within
 this solution, the core and adapter get their identity from the shared props
 file, including when MSBuild reaches them through a project reference.
 
+The [build workflow](.github/workflows/build-and-test.yml) lists the exact
+sibling commits used on `develop` pushes and PRs targeting `develop`. Use these
+revisions to reproduce the CI source graph locally. PRs targeting `main`
+validate the released NuGet graph.
+
 For VS Code design-time restore, fully exit **all VS Code windows** first, then
 run the following from an external PowerShell terminal at the Trailblazer root:
 

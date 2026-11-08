@@ -234,6 +234,11 @@ dotnet tool restore
 dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
 ```
 
+Build CI uses immutable sibling commits on `develop` pushes and PRs targeting
+`develop`. PRs targeting `main` and other package lanes validate released NuGet
+dependencies. Keep the source pins aligned with the pinned Gravitas dependency
+graph, and verify the released packages before promoting to `main`.
+
 CI enforces exact reachable coverage in both package configurations. After a
 successful push to `main`, the coverage workflow checks out the exact tested
 commit, builds and validates the DocFX site, and deploys one Pages artifact with

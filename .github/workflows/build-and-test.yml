@@ -12,9 +12,18 @@ on:
       - "main"
       - "develop"
 
+permissions:
+  contents: read
+
 jobs:
   validate-dotnet:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: Trailblazer
+    env:
+      # PRs follow their target branch so develop -> main validates released packages.
+      UseLocalLsfStack: ${{ (github.base_ref == 'develop' || github.ref == 'refs/heads/develop') && 'true' || 'false' }}
 
     strategy:
       fail-fast: false
@@ -26,7 +35,54 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          path: Trailblazer
           fetch-depth: 0
+          persist-credentials: false
+
+      # Keep the dependency closure aligned with the pinned Gravitas workflow.
+      - name: Checkout Chronicler
+        if: env.UseLocalLsfStack == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: mrdav30/Chronicler
+          ref: 7b90d5923d4bb6e0e42c033ec697b9678d6b8ece
+          path: Chronicler
+          persist-credentials: false
+
+      - name: Checkout FixedMathSharp
+        if: env.UseLocalLsfStack == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: mrdav30/FixedMathSharp
+          ref: e2c325a827506419b1a04b2427d9bc77e629ab6f
+          path: FixedMathSharp
+          persist-credentials: false
+
+      - name: Checkout SwiftCollections
+        if: env.UseLocalLsfStack == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: mrdav30/SwiftCollections
+          ref: 08b1b386353c66c7fa5d96a9c3e453eb19b9e39f
+          path: SwiftCollections
+          persist-credentials: false
+
+      - name: Checkout GridForge
+        if: env.UseLocalLsfStack == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: mrdav30/GridForge
+          ref: c4f80a034ee93bacee9c8f1d307d73187a4f8903
+          path: GridForge
+          persist-credentials: false
+
+      - name: Checkout Gravitas
+        if: env.UseLocalLsfStack == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: mrdav30/Gravitas
+          ref: 13f73bdc94397a8fdb324b1f67a0c92b472acaac
+          path: Gravitas
           persist-credentials: false
 
       - name: Setup .NET
@@ -43,34 +99,36 @@ jobs:
       - name: Execute GitVersion
         id: gitversion
         uses: gittools/actions/gitversion/execute@v4
+        with:
+          targetPath: Trailblazer
 
       - name: Cache NuGet packages
         uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-${{ matrix.configuration }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+          key: ${{ runner.os }}-${{ matrix.configuration }}-lsf-${{ env.UseLocalLsfStack }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.configuration }}-nuget-
-            ${{ runner.os }}-nuget-
+            ${{ runner.os }}-${{ matrix.configuration }}-lsf-${{ env.UseLocalLsfStack }}-nuget-
+            ${{ runner.os }}-lsf-${{ env.UseLocalLsfStack }}-nuget-
 
       - name: Restore dependencies
-        run: dotnet restore Trailblazer.slnx --property:Configuration=${{ matrix.configuration }}
+        run: dotnet restore Trailblazer.slnx --property:Configuration=${{ matrix.configuration }} -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true -m:1' || '' }}
 
       - name: Build Solution
         run: |
           echo "Version: ${{ steps.gitversion.outputs.fullSemVer }}"
           echo "Assembly Version: ${{ steps.gitversion.outputs.assemblySemFileVer }}"
-          dotnet build Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-restore -p:GitVersion_FullSemVer=${{ steps.gitversion.outputs.fullSemVer }} -p:GitVersion_AssemblySemVer=${{ steps.gitversion.outputs.assemblySemVer }} -p:GitVersion_AssemblySemFileVer=${{ steps.gitversion.outputs.assemblySemFileVer }}
+          dotnet build Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-restore -p:GitVersion_FullSemVer=${{ steps.gitversion.outputs.fullSemVer }} -p:GitVersion_AssemblySemVer=${{ steps.gitversion.outputs.assemblySemVer }} -p:GitVersion_AssemblySemFileVer=${{ steps.gitversion.outputs.assemblySemFileVer }} -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true -m:1 -p:BuildInParallel=false' || '' }}
 
       - name: Run Tests
         if: matrix.os == 'windows-latest'
-        run: dotnet test Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-build --verbosity normal
+        run: dotnet test Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal
 
       - name: Run Tests with coverage
         if: matrix.os == 'ubuntu-latest'
         run: |
-          dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --verbosity normal --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage/core
-          dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --verbosity normal --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage/adapter
+          dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage/core
+          dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage/adapter
 
       - name: Install ReportGenerator
         if: matrix.os == 'ubuntu-latest'

@@ -221,8 +221,8 @@ internal sealed partial class NavigationMapInstance
         return true;
     }
 
-    internal TraversalMedia GetEffectiveMedia(VoxelIndex index) =>
-        TryGetSlot(index, out int slot)
+    internal TraversalMedia GetSpatialEffectiveMedia(VoxelIndex index) =>
+        Map.IsSpatial && TryGetSlot(index, out int slot)
         && TryGetEffectiveCell(slot, out NavigationCell cell)
             ? cell.Media
             : TraversalMedia.None;

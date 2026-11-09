@@ -149,6 +149,12 @@ public sealed class TrailblazerPathingService
         }
         graph.TryGetMap(mapId, out NavigationMapInstance? instance);
         System.Diagnostics.Debug.Assert(instance != null);
+        if (!instance.Map.IsSpatial)
+        {
+            address = default;
+            area = default;
+            return NavigationCommittedCellResolveStatus.NoCell;
+        }
         if (!instance.GridIdentity.Matches(
                 worldIndex.WorldSpawnToken,
                 worldIndex.GridIndex,

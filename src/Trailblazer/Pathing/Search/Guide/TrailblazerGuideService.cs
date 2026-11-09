@@ -61,6 +61,8 @@ public sealed partial class TrailblazerGuideService
             if (lease == null)
                 return NavigationRayStatus.CapacityExceeded;
             NavigationWorldGraph graph = lease.Graph;
+            if (graph.IsPlanarMap(query.Start.MapId) || graph.IsPlanarMap(query.End.MapId))
+                return NavigationRayStatus.Blocked;
             if (!graph.AreaCatalog.TryGet(
                     query.AreaPolicy,
                     out NavigationAreaPolicy areaPolicy))

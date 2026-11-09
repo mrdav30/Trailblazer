@@ -508,7 +508,7 @@ internal sealed partial class NavigationOperationCandidate
         out bool hasCell,
         out NavigationCell cell)
     {
-        if (!_maps.TryGetValue(address.MapId, out MapState? state) || state == null)
+        if (!_maps.TryGetValue(address.MapId, out MapState state) || !state.Map.IsSpatial)
         {
             source = default;
             hasCell = false;
@@ -717,7 +717,7 @@ internal sealed partial class NavigationOperationCandidate
         MapState? destination = FindChangedState(transition.Destination.MapId, changedMapIds, changedStates);
         if (destination == null && !_maps.TryGetValue(transition.Destination.MapId, out destination))
             return true;
-        if (!destination.Map.GridBinding.IsValidIndex(transition.Destination.Index))
+        if (!destination.Map.IsSpatial || !destination.Map.GridBinding.IsValidIndex(transition.Destination.Index))
             return false;
         if (!HasDefinitionMedium(
                 destination,
@@ -752,7 +752,7 @@ internal sealed partial class NavigationOperationCandidate
             cell = state.Map.CellSpan[baked].Cell;
             return true;
         }
-        NavigationCell? defaultCell = state.Map.GridBinding.IsValidIndex(index)
+        NavigationCell? defaultCell = state.Map.ContainsGridIndex(index)
             ? state.Map.DefaultCell
             : null;
         cell = defaultCell.GetValueOrDefault();

@@ -26,7 +26,7 @@ internal sealed partial class NavigationWorldGraph
         }
 
         NavigationMapInstance instance = _instances.Get(mapOrdinal);
-        if (!instance.Map.GridBinding.IsValidIndex(index)
+        if (!instance.Map.IsSpatial || !instance.Map.GridBinding.IsValidIndex(index)
             || !instance.TryGetSlot(index, out int slot))
         {
             node = default;

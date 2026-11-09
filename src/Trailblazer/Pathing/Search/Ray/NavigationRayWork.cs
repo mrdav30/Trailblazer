@@ -251,6 +251,8 @@ internal sealed partial class NavigationRayWork
         System.Diagnostics.Debug.Assert(
             hasInstance,
             "the immutable configuration index and map directory are built and replaced together");
+        if (!instance.Map.IsSpatial)
+            return NavigationRayStatus.Pending;
         if (!IsTraceIntervalCurrent(
                 instance.GridIdentity.Matches(
                     interval.Cell.WorldSpawnToken,

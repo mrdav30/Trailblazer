@@ -5,11 +5,11 @@
 
 **Created:** 2026-09-03
 
-**Status (2026-11-09):** Phase 1 is in progress. The first slice implements
-offline layer-bound top-down bakes after capturing the
-[matched 3D controls](#2026-11-09---phase-1-authoring-and-3d-baselines).
-Next is planar publication and endpoint admission for the reviewed obstacle
-and portal cases. Use
+**Status (2026-11-09):** Phase 1 is in progress. Top-down bakes publish cells
+through the shared graph with selected-layer defaults and overlays. See the
+[publication checkpoint](#2026-11-09---phase-1-planar-publication).
+Spatial query and edge admission excludes those cells. Native endpoint
+admission comes next for the reviewed obstacle and portal cases. Use
 `UseLocalLsfStack=true` for adapter development. The core package references
 GridForge 10.0.0. Released-package validation of the adapter still requires
 Gravitas 1.1.0. Hard-budgeted physics queries remain a separate
@@ -896,8 +896,10 @@ in the existing test projects.
 
 - [x] **Capture the pre-edit 3D controls and bake the first fixtures.** Reuse
   the map builder for immutable top-down layer identity and canonical authored
-  cells. Keep planar bakes out of spatial preparation until the graph has
-  domain-aware publication and query admission.
+  cells. Keep their metadata separate from the spatial bake layout.
+- [x] **Publish layer-bound top-down cells.** Use the existing immutable
+  map and overlay pipeline, capture only selected-layer defaults, and
+  isolate spatial queries, raw trace coverage, committed cells, and edges.
 - [ ] **Write the first failing planar acceptance cases.** Test obstacle
   avoidance and a narrow gap at fitting/non-fitting body sizes through the
   public 2D contract, including no out-of-plane drift. Record the intended
@@ -2099,3 +2101,65 @@ seam, and committed-cell readers isolated when admitting planar cells.
 Charge the planar cell-view payload in preparation when it becomes
 admissible. The fitted portal, detour, A*/Flow, and accepted controller
 motion remain runtime acceptance cases.
+
+### 2026-11-09 - Phase 1 planar publication
+
+Before changing shared code, the Release source stack captured fresh 3D
+controls at Trailblazer `f0a0e08`, FixedMathSharp `e2c325a`, SwiftCollections
+`08b1b38`, Chronicler `7b90d59`, and GridForge `c4f80a0`. The controls used
+the same Windows host, .NET runtime, benchmark cases, and launch settings
+as the authoring checkpoint. The frozen host and dependency hashes, logs,
+and analyzer summaries are under `artifacts/phase1-f0a0e08-publication-baseline`.
+
+The publication tests failed on `f0a0e08` because preparation still
+rejected planar bakes. The existing map commit, baseline capture, semantic
+page, and overlay owners now publish top-down cells. Closed coverage can
+touch two layers at an embedding face. The baseline keeps only addresses
+on the selected layer and charges every GridForge probe. An off-layer
+sparse mutation advances the mirrored generation without creating a slot.
+Off-layer overlays reject atomically. The prepared bake charges its binding
+and uses the existing sorted lookup rather than a direct table sized to
+the entire grid.
+
+A live map ID keeps its exact domain binding. Remove and republish to
+change mode, layer, or embedding. Spatial component building and seam
+discovery omit planar cells. Existing spatial A*/Flow endpoint and recovery
+workspaces bind only spatial generations. They check eligible capacity,
+including when a retained Flow guide sees later spatial graph growth.
+Direct spatial headings cannot use an explicit planar endpoint map.
+Raw spatial rays ignore planar intervals, and spatial body traces fail
+closed if planar geometry would supply required coverage. Directory scans
+and raw GridForge candidates still consume the existing work budgets.
+
+Planar connection and transition authoring remains closed. Spatial
+connections and transitions reject known planar endpoints and witnesses,
+including definitions whose target map appears after the definition.
+
+The rerun under `artifacts/phase1-publication-post` used the same dependency
+DLL hashes and reversed workload order. All expected launches completed.
+Replay checksums, work counts, and allocations matched across 576 guided
+frames per algorithm, both ray preflights, and 45 scheduled recovery episodes.
+Guided and warm ray controls again allocated 0 B. Recovery completion frames
+were 1,281 cold, 203 warm, 1,419 rebake, 1,419 replacement, and 303 restore.
+
+| 3D timing | Before | After |
+| --- | ---: | ---: |
+| Guided A* frame median / observed P95 | 1.957 / 2.399 ms | 1.855 / 2.206 ms |
+| Guided Flow frame median / observed P95 | 1.723 / 3.386 ms | 1.560 / 3.609 ms |
+| Medium ray mean | 5.829 ms | 6.083 ms |
+| SparseBlocked ray mean | 438.4 µs | 420.2 µs |
+
+The recovery median-of-episode frame medians moved by at most 0.014 ms.
+These timings describe this capture. The replay and work comparisons are
+exact.
+
+Windows package-mode core validation passed 3,277 Release and 3,177
+ReleaseLean tests. The adapter used `UseLocalLsfStack=true` with Gravitas
+`4b0d83af` and passed 90 Release and 86 ReleaseLean tests. Both library
+targets built in each configuration. Combined coverage in each configuration
+was 32,598/32,598 lines, 13,410/13,410 branches, and 3,207/3,207 fully covered
+methods across both assemblies. The DocFX build passed with warnings as errors.
+
+Runtime acceptance still starts with native endpoint admission and the
+stationary circle proof. The shared graph remains the publication owner.
+Keep each public or internal type in its own file as the 2D surface grows.

@@ -341,7 +341,7 @@ internal sealed class NavigationMaterializedComponentWork
     private void AddChangedMedia(NavigationMapInstance next, VoxelIndex index)
     {
         var address = new NavigationCellAddress(next.MapId, index);
-        TraversalMedia nextMedia = next.GetEffectiveMedia(index);
+        TraversalMedia nextMedia = next.GetSpatialEffectiveMedia(index);
         for (TraversalMedium medium = TraversalMedium.Solid;
              medium <= TraversalMedium.Liquid;
              medium++)

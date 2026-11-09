@@ -21,17 +21,22 @@ cell payloads, transition identities, and rule payloads before creating the
 immutable bake. Context-wide and per-map transition-rule limits are enforced at
 publication.
 
-## Top-Down Bake Authoring
+## Top-Down Layer Binding
 
 `NavigationMapBuilder.SetPlanarLayer(NavigationMode2D.TopDown, layerIndex, embeddingY)`
-selects one topology-local layer for an offline top-down bake. The embedding
+selects one topology-local layer for a top-down bake. The embedding
 must be within that layer's closed world-Y range. Explicit cells must belong to
 the selected layer. `NavigationMap.PlanarBinding` preserves the mode, layer, and
 embedding in the bake's identity. It is null for spatial maps.
 
-This authoring stage supports cell payloads. Preparing a planar bake for
-runtime publication requires the planar graph path. The current
-`PreparedNavigationMap` constructor rejects planar bakes.
+Prepare and publish a top-down bake through the ordinary map operation. Its
+default and cell overlays apply only on the selected layer, even when its
+embedding touches an adjacent layer. A live map ID keeps its planar binding
+through replacement. Remove the map before publishing the ID in a different
+domain or with a different layer or embedding.
+
+This stage publishes cell payloads. Planar connections, actions, and native
+query admission are later Phase 1 work. Spatial queries exclude planar cells.
 
 ## Complete Cell Payloads
 

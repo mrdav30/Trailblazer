@@ -100,6 +100,13 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
 
     internal int NativePortalTemplateCount => _nativePortalTemplates.Length;
 
+    // Spatial bakes always reserve templates for their topology, even for a one-cell grid.
+    internal bool IsSpatial => _nativePortalTemplates.Length != 0;
+
+    internal bool ContainsGridIndex(GridForge.Spatial.VoxelIndex index) =>
+        GridBinding.IsValidIndex(index)
+        && (PlanarBinding is not NavigationPlanarBinding planar || index.y == planar.LayerIndex);
+
     internal long NativePortalTemplateRetainedBytes => checked(
         24L + ((long)_nativePortalTemplates.Length * Unsafe.SizeOf<GridNavigationPortal>()));
 

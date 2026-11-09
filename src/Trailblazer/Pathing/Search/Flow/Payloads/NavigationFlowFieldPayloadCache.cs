@@ -186,7 +186,7 @@ internal sealed partial class NavigationFlowFieldPayloadCache : IDisposable
                     payload = leaseSlot.Entry.Payload;
                     endpointProof = leaseSlot.EndpointProof;
                     NavigationWorldGraph current = store.Current;
-                    if (current.MapCount > _guideMapCapacity)
+                    if (!current.FitsSpatialMapCapacity(_guideMapCapacity))
                     {
                         status = NavigationGuideStatus.CapacityExceeded;
                     }

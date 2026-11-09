@@ -102,7 +102,7 @@ internal sealed class NavigationEndpointResolutionWork
         _workspace.ResetResolution();
         _discoveryComplete = endpoint.MapId == null && graph.MapCount == 0;
         Status = (endpoint.MapId == null
-                && graph.MapCount > _workspace.CoveredAddressGenerations.Length)
+                && !graph.FitsSpatialMapCapacity(_workspace.CoveredAddressGenerations.Length))
             || (endpoint.MapId != null
                 && _workspace.CoveredAddressGenerations.Length == 0)
                 ? NavigationEndpointResolutionStatus.CapacityExceeded
@@ -259,7 +259,7 @@ internal sealed class NavigationEndpointResolutionWork
         {
             if (_graph.TryGetCoveredAddressGeneration(
                     _endpoint.MapId,
-                    out GridCoveredAddressGeneration generation))
+                    out GridCoveredAddressGeneration generation, spatialOnly: true))
             {
                 _workspace.CoveredAddressGenerations[0] = generation;
                 _workspace.CoveredAddressGenerationCount = 1;
@@ -270,12 +270,14 @@ internal sealed class NavigationEndpointResolutionWork
         }
 
         // This method is called only while discovery is incomplete, so the ordinal is in range.
-        _graph.TryGetCoveredAddressGeneration(
+        if (_graph.TryGetCoveredAddressGeneration(
             _mapOrdinal,
             out _,
-            out GridCoveredAddressGeneration generationAtOrdinal);
-        _workspace.CoveredAddressGenerations[
-            _workspace.CoveredAddressGenerationCount++] = generationAtOrdinal;
+            out GridCoveredAddressGeneration generationAtOrdinal, spatialOnly: true))
+        {
+            _workspace.CoveredAddressGenerations[
+                _workspace.CoveredAddressGenerationCount++] = generationAtOrdinal;
+        }
         _mapOrdinal++;
         _discoveryComplete = _mapOrdinal >= _graph.MapCount;
     }

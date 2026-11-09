@@ -618,7 +618,8 @@ internal sealed partial class NavigationAutomaticSeamRefreshWork
     private void PrepareDiscoveredPair(GridBoundaryContact contact)
     {
         if (!_preparedGraph.TryGetMapId(contact.SourceConfigurationKey, out string sourceMapId)
-            || !_preparedGraph.TryGetMapId(contact.TargetConfigurationKey, out string targetMapId))
+            || !_preparedGraph.TryGetMapId(contact.TargetConfigurationKey, out string targetMapId)
+            || _preparedGraph.IsPlanarMap(sourceMapId) || _preparedGraph.IsPlanarMap(targetMapId))
         {
             return;
         }
@@ -1399,6 +1400,8 @@ internal sealed partial class NavigationAutomaticSeamRefreshWork
 
     private void BeginDiscovery(GridConfigurationKey key)
     {
+        if (_preparedGraph.TryGetMapId(key, out string mapId) && _preparedGraph.IsPlanarMap(mapId))
+            return;
         _pendingDiscoveryKey = key;
         _cursorBegun = false;
         _mode = WorkMode.Discover;

@@ -7,6 +7,7 @@
 
 using System;
 using System.Runtime.InteropServices;
+using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
@@ -341,6 +342,7 @@ internal sealed class NavigationBaselineRebuild
         if (_capacityBlocked || seedProbes != 0 || _defaultCandidate == null)
             return seedProbes;
         GridCoveredAddressCursor cursor = _coveredCursor!;
+        NavigationPlanarBinding? planar = _map.PlanarBinding;
         if (cursor.Status == GridCoveredAddressCursorStatus.Stale)
         {
             if (!world.TryCaptureNavigationBaseline(
@@ -370,10 +372,17 @@ internal sealed class NavigationBaselineRebuild
                 identity.GridIndex,
                 identity.GridSpawnToken,
                 identity.GridLastChangeSequence);
+            Vector3d minimum = identity.ConfigurationKey.BoundsMin;
+            Vector3d maximum = identity.ConfigurationKey.BoundsMax;
+            if (planar is NavigationPlanarBinding binding)
+            {
+                minimum = new Vector3d(minimum.X, binding.EmbeddingY, minimum.Z);
+                maximum = new Vector3d(maximum.X, binding.EmbeddingY, maximum.Z);
+            }
             bool began = world.TryBeginCoveredAddresses(
                 cursor,
-                identity.ConfigurationKey.BoundsMin,
-                identity.ConfigurationKey.BoundsMax,
+                minimum,
+                maximum,
                 eligibleGenerationCount: 1,
                 identity.ConfigurationKey);
             System.Diagnostics.Debug.Assert(began,
@@ -402,21 +411,27 @@ internal sealed class NavigationBaselineRebuild
         System.Diagnostics.Debug.Assert(!invalidated || outputCount == 0,
             "A stale covered-address cursor discards the run without emitting output.");
 
+        // A closed embedding plane can touch both layers at their shared face.
+        int selectedCount = 0;
         for (int i = 0; i < outputCount; i++)
-            addressScratch[i] = coveredAddressScratch[i].VoxelIndex;
+        {
+            VoxelIndex index = coveredAddressScratch[i].VoxelIndex;
+            if (!planar.HasValue || index.y == planar.Value.LayerIndex)
+                addressScratch[selectedCount++] = index;
+        }
         bool captured = false;
         GridNavigationBaseline? baseline = null;
-        if (outputCount > 0)
+        if (selectedCount > 0)
         {
             captured = world.TryCaptureNavigationBaseline(
                     _map.GridBinding.Key,
-                    addressScratch.Slice(0, outputCount),
+                    addressScratch.Slice(0, selectedCount),
                     out baseline);
         }
         return FinalizeCoveredAddressAdvance(
             status,
             addressProbes,
-            outputCount,
+            selectedCount,
             invalidated,
             captured,
             baseline,
@@ -484,7 +499,7 @@ internal sealed class NavigationBaselineRebuild
                         _omittedDefaultSeedSlotCount--;
                         UpdateStructuralStates(
                             index,
-                            _source.GetEffectiveMedia(index),
+                            _source.GetSpatialEffectiveMedia(index),
                             add: false);
                     }
                     if (sourcePresent
@@ -498,7 +513,7 @@ internal sealed class NavigationBaselineRebuild
                     if (!sourceHasDynamic && nextHasDynamic)
                     {
                         _hasNewDefaultSlot = true;
-                        UpdateStructuralStates(index, next.GetEffectiveMedia(index), add: true);
+                        UpdateStructuralStates(index, next.GetSpatialEffectiveMedia(index), add: true);
                     }
                 }
                 if (EstimateDefaultRetainedBytes(next) > maximumRetainedBytes
@@ -576,7 +591,7 @@ internal sealed class NavigationBaselineRebuild
                 AddMediaStates(
                     _map.MapId,
                     slot.Index,
-                    _source.GetEffectiveMedia(slot.Index),
+                    _source.GetSpatialEffectiveMedia(slot.Index),
                     ref structuralChangedStates);
                 if (_source.IsPhysicallyPresent(slot.Index))
                     omittedPhysicalSlotCount++;

@@ -34,7 +34,7 @@ internal sealed class NavigationBakedCellLookup
     {
         int addressCount = map.GridBinding.AddressCount;
         long directBytes = (long)addressCount * sizeof(int);
-        if (addressCount > map.CellSpan.Length * MinimumDirectDensityDivisor
+        if (!map.IsSpatial || addressCount > map.CellSpan.Length * MinimumDirectDensityDivisor
             || directBytes > MaximumDirectTableBytes)
             return new NavigationBakedCellLookup(map, null);
 

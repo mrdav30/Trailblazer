@@ -114,6 +114,11 @@ internal sealed class NavigationOverlayFoldWork
                         rejection = NavigationOperationRejection.MissingMap;
                         return true;
                     }
+                    if (!_current.Map.IsSpatial && (!delta.ConnectionSpan.IsEmpty || !delta.TransitionSpan.IsEmpty))
+                    {
+                        rejection = NavigationOperationRejection.ValidationFailed;
+                        return true;
+                    }
                     _overlay = _current.Overlay;
                     _dynamicAddresses = _current.DynamicAddresses;
                 }
@@ -126,7 +131,7 @@ internal sealed class NavigationOverlayFoldWork
                         return false;
                     }
                     NavigationCellOverlayOperation change = cells[_cellIndex++];
-                    if (!_current.Map.GridBinding.IsValidIndex(change.Index)
+                    if (!_current.Map.ContainsGridIndex(change.Index)
                         || (change.Kind == NavigationCellOverlayOperationKind.Set
                             && change.Cell.Area.Value >= _working.NavigationAreaCount))
                     {

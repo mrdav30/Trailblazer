@@ -130,6 +130,10 @@ internal sealed partial class NavigationWorldGraph
     internal bool TryGetMapId(GridConfigurationKey key, out string mapId) =>
         _mapIndex.TryGetValue(key, out mapId!);
 
+    internal bool IsPlanarMap(string? mapId) =>
+        mapId != null && _instances.TryGet(mapId, out NavigationMapInstance instance)
+        && !instance.Map.IsSpatial;
+
     internal bool TryGetSeamPrism(
         NavigationCellAddress address,
         out GridCellPrism prism)
@@ -145,6 +149,7 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool HasEffectiveCell(NavigationCellAddress address) =>
         _instances.TryGet(address.MapId, out NavigationMapInstance instance)
+        && instance.Map.IsSpatial
         && instance.TryGetSlot(address.Index, out int slot)
         && instance.TryGetEffectiveCell(slot, out _);
 
@@ -154,7 +159,8 @@ internal sealed partial class NavigationWorldGraph
         out bool hasCell,
         out NavigationCell cell)
     {
-        if (_instances.TryGet(address.MapId, out NavigationMapInstance instance))
+        if (_instances.TryGet(address.MapId, out NavigationMapInstance instance)
+            && instance.Map.IsSpatial)
         {
             return instance.TryGetSemanticState(
                 address.Index,
@@ -279,10 +285,25 @@ internal sealed partial class NavigationWorldGraph
 
     internal int MapCount => _instances.Count;
 
+    internal bool FitsSpatialMapCapacity(int capacity)
+    {
+        if (MapCount <= capacity)
+            return true;
+
+        // This admission check visits at most the bounded published map directory.
+        for (int i = 0; i < MapCount; i++)
+        {
+            if (_instances.Get(i).Map.IsSpatial && --capacity < 0)
+                return false;
+        }
+        return true;
+    }
+
     internal bool TryGetCoveredAddressGeneration(
         int configurationOrdinal,
         out string mapId,
-        out GridCoveredAddressGeneration generation)
+        out GridCoveredAddressGeneration generation,
+        bool spatialOnly = false)
     {
         if ((uint)configurationOrdinal >= (uint)_mapIndex.Count)
         {
@@ -291,15 +312,17 @@ internal sealed partial class NavigationWorldGraph
             return false;
         }
         mapId = _mapIndex.GetValueAt(configurationOrdinal);
-        return TryGetCoveredAddressGeneration(mapId, out generation);
+        return TryGetCoveredAddressGeneration(mapId, out generation, spatialOnly);
     }
 
     internal bool TryGetCoveredAddressGeneration(
         string mapId,
-        out GridCoveredAddressGeneration generation)
+        out GridCoveredAddressGeneration generation,
+        bool spatialOnly = false)
     {
         if (_instances.TryGet(mapId, out NavigationMapInstance instance)
-            && instance.IsMaterialized)
+            && instance.IsMaterialized
+            && (!spatialOnly || instance.Map.IsSpatial))
         {
             NavigationGridGenerationIdentity identity = instance.GridIdentity;
             generation = new GridCoveredAddressGeneration(

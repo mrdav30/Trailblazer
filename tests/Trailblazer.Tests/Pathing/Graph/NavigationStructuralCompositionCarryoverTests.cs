@@ -1080,7 +1080,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
 
         work.IsComplete.Should().BeTrue();
         work.Result.TryGetMap(map.MapId, out NavigationMapInstance expanded).Should().BeTrue();
-        expanded.GetEffectiveMedia(default).Should().Be(expandedCell.Media,
+        expanded.GetSpatialEffectiveMedia(default).Should().Be(expandedCell.Media,
             "the resumed exact-address capture must publish every newly affected medium");
     }
 

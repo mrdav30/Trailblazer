@@ -30,8 +30,8 @@ instead of burying it in notes.
     Trailblazer now references GridForge 10.0.0 in both package families.
     Released-package validation of the adapter awaits Gravitas 1.1.0.
     [Phase 0 evidence](twoDimensionalNavigationPlan.md#2026-11-09---phase-0-contract-closeout)
-  - Phase 1 has captured matched 3D controls and started with offline
-    top-down layer authoring. Planar publication and endpoint admission come
+  - Phase 1 publishes layer-bound top-down cells through the shared graph
+    while keeping spatial queries separate. Native endpoint admission comes
     next for the obstacle and portal cases. Retain one graph, A*/Flow
     pipeline, and scheduler. The 2D controller uses
     native geometry and preserves the 3D frame, ownership, and replay
@@ -232,9 +232,10 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Start the 2D plan's Phase 1 with the reviewed top-down fixtures. Capture
-   matched 3D controls before changing shared runtime paths. Validate the
-   adapter against the pinned source stack as its phase begins.
+1. Continue the 2D plan's Phase 1 with native endpoint admission for the
+   reviewed top-down fixtures. Capture matched 3D controls before changing
+   shared runtime paths. Validate the adapter against the pinned source stack
+   as its phase begins.
 2. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.

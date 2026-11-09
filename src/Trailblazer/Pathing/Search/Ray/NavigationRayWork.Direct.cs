@@ -41,7 +41,7 @@ internal sealed partial class NavigationRayWork
             }
 
             NavigationMapInstance instance = graph.GetInstance(0);
-            if (!graph.TryGetCoveredAddressGeneration(instance.MapId, out GridCoveredAddressGeneration generation)
+            if (!graph.TryGetCoveredAddressGeneration(instance.MapId, out GridCoveredAddressGeneration generation, spatialOnly: true)
                 || instance.GridIdentity.WorldSpawnToken != _request.World.SpawnToken
                 || graph.ExplicitConnections.GetSourceOwnerCount(instance.MapId) != 0
                 || meter.RemainingLookupProbes < 1L + outputLimit

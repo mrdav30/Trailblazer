@@ -67,6 +67,7 @@ not require a full-grid default baseline.
 For a replacement of the same map ID:
 
 - the GridForge binding must remain compatible;
+- the planar mode, layer, and embedding must remain identical when applicable;
 - the bake version must advance;
 - `PreserveAndRevalidate` preserves the exact overlay/dynamic-address set and
   validates the complete recomposed candidate;
@@ -112,6 +113,10 @@ context.Pathing.Admit(operation);
 All deltas publish or reject together. This is the correct boundary for a ladder
 whose two directions must appear atomically, or a flood that changes several
 addresses as one simulation event.
+
+Top-down planar maps accept cell deltas on the selected layer. An off-layer
+entry rejects the entire transaction. Spatial connections and transitions
+cannot use a planar map as an endpoint or corridor witness.
 
 ## Effective Cell Semantics
 

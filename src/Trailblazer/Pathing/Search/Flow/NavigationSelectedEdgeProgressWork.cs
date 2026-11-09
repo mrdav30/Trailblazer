@@ -1248,23 +1248,22 @@ internal static class NavigationSelectedEdgeProgressWork
         {
             return NavigationGuideStatus.BudgetExceeded;
         }
+        int generationCount = 0;
         for (int i = 0; i < graph.MapCount; i++)
         {
             if (!meter.TryConsumeCurrentNodeLookupProbes(1))
                 return NavigationGuideStatus.BudgetExceeded;
-            bool foundGeneration = graph.TryGetCoveredAddressGeneration(
-                i,
-                out _,
-                out generations[i]);
-            System.Diagnostics.Debug.Assert(
-                foundGeneration,
-                "published graph instances are materialized and indexed one-to-one");
+            if (!graph.TryGetCoveredAddressGeneration(i, out _, out var generation, spatialOnly: true))
+                continue;
+            if (generationCount == generations.Length)
+                return NavigationGuideStatus.CapacityExceeded;
+            generations[generationCount++] = generation;
         }
         bool began = world.TryBeginCoveredAddresses(
             cursor,
             actualFootPosition,
             actualFootPosition,
-            graph.MapCount);
+            generationCount);
         System.Diagnostics.Debug.Assert(began);
 
         int inputOrdinal = 0;
@@ -1273,14 +1272,14 @@ internal static class NavigationSelectedEdgeProgressWork
         NavigationCellAddress best = default;
         while (true)
         {
-            if (inputOrdinal < graph.MapCount)
+            if (inputOrdinal < generationCount)
             {
                 int available = meter.GetCurrentNodeLookupAllowance();
                 if (available == 0)
                     return NavigationGuideStatus.BudgetExceeded;
                 GridCoveredAddressCursorStatus bindStatus = world.AdvanceCoveredAddresses(
                     cursor,
-                    generations.AsSpan(inputOrdinal, graph.MapCount - inputOrdinal),
+                    generations.AsSpan(inputOrdinal, generationCount - inputOrdinal),
                     output,
                     lookupProbeLimit: available,
                     addressProbeLimit: 0,

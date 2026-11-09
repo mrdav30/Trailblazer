@@ -179,6 +179,12 @@ internal readonly struct NavigationVolumeAnchorEvaluator
             System.Diagnostics.Debug.Assert(
                 hasTraceInstance,
                 "the immutable configuration index and map directory are built and replaced together");
+            if (!traceInstance.Map.IsSpatial)
+            {
+                if (traceCell.Role == GridNavigationBodyTraceCellRole.RequiredCoverage)
+                    return NavigationVolumeAnchorStatus.Stale;
+                continue;
+            }
             if (!IsTraceGenerationCurrent(
                     traceInstance.GridIdentity.Matches(
                         traceCell.Cell.WorldSpawnToken,

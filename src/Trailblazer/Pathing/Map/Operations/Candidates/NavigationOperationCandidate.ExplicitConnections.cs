@@ -121,6 +121,12 @@ internal sealed partial class NavigationOperationCandidate
             dormant = true;
             return true;
         }
+        if (!target.Map.IsSpatial)
+        {
+            prism = default;
+            cell = default;
+            return false;
+        }
         if (!TryGetEffectiveCell(target, address.Index, out cell))
         {
             prism = default;

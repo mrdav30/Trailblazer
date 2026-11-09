@@ -58,6 +58,8 @@ public sealed class NavigationPlanarMapTests
 
         original.Should().Be(same);
         original.GetHashCode().Should().Be(same.GetHashCode());
+        (original.PlanarBinding!.Value == same.PlanarBinding!.Value).Should().BeTrue();
+        (original.PlanarBinding.Value != moved.PlanarBinding!.Value).Should().BeTrue();
         moved.Should().NotBe(original);
         spatial.PlanarBinding.Should().BeNull();
         spatial.Should().NotBe(original);
@@ -144,16 +146,6 @@ public sealed class NavigationPlanarMapTests
 
         Action build = () => builder.Build();
         build.Should().Throw<ArgumentException>().WithParameterName(nameof(NavigationMap.PlanarBinding));
-    }
-
-    [Fact]
-    public void Prepare_RejectsPlanarBakeBeforeSpatialPublication()
-    {
-        NavigationMap map = TopDown("map", Fixed64.One)
-            .AddCell(new VoxelIndex(1, 1, 1), Open)
-            .Build();
-        Action prepare = () => new PreparedNavigationMap(map, bakeVersion: 1);
-        prepare.Should().Throw<ArgumentException>();
     }
 
     private static NavigationMapBuilder TopDown(string mapId, Fixed64 embeddingY) =>

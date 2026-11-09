@@ -68,7 +68,7 @@ public sealed class NavigationMapBuilder
     }
 
     /// <summary>Sets the selected grid layer and world Y embedding for a top-down bake.</summary>
-    /// <remarks>Planar bakes can be authored offline while runtime publication remains spatial.</remarks>
+    /// <remarks>Explicit cells and runtime defaults are scoped to the selected layer.</remarks>
     /// <exception cref="ArgumentException">The mode, layer, or embedding is unsupported.</exception>
     public NavigationMapBuilder SetPlanarLayer(NavigationMode2D mode, int layerIndex, Fixed64 embeddingY)
     {

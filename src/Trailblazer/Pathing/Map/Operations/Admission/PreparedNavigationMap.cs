@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
 
@@ -16,15 +17,13 @@ public sealed class PreparedNavigationMap
     private const long TransitionRuleRetainedBytes = 80L;
 
     /// <summary>Creates an inert prepared-map descriptor from a validated immutable map.</summary>
-    /// <exception cref="ArgumentException">The map is planar or a preparation argument is invalid.</exception>
+    /// <exception cref="ArgumentException">A preparation argument is invalid.</exception>
     public PreparedNavigationMap(
         NavigationMap map,
         long bakeVersion,
         NavigationMapCheckpointStamp? checkpointStamp = null)
     {
         ChronicleGuard.ThrowIfNull(map, nameof(map));
-        ChronicleGuard.ThrowIfArgument(map.PlanarBinding.HasValue, nameof(map),
-            "Planar maps require planar runtime publication.");
         ChronicleGuard.ThrowIfArgument(bakeVersion <= 0, nameof(bakeVersion));
         ChronicleGuard.ThrowIfArgument(
             checkpointStamp.HasValue
@@ -60,7 +59,9 @@ public sealed class PreparedNavigationMap
         long bytes = NavigationByteCount.SaturatingAdd(
             128L,
             (long)map.MapId.Length * sizeof(char));
-        bytes = NavigationByteCount.SaturatingAdd(bytes, map.NativePortalTemplateRetainedBytes);
+        bytes = NavigationByteCount.SaturatingAdd(bytes, map.IsSpatial
+            ? map.NativePortalTemplateRetainedBytes
+            : Unsafe.SizeOf<NavigationPlanarBinding>());
         bytes = NavigationByteCount.SaturatingAdd(bytes, (long)map.Cells.Count * 96L);
         if (map.DefaultCell.HasValue)
             bytes = NavigationByteCount.SaturatingAdd(bytes, DefaultCellRetainedBytes);

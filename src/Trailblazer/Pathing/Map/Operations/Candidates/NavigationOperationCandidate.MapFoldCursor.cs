@@ -243,6 +243,12 @@ internal sealed partial class NavigationOperationCandidate
                 _stage = Stage.Complete;
                 return;
             }
+            if (replacing && !Nullable.Equals(_current!.Map.PlanarBinding, map.PlanarBinding))
+            {
+                _rejection = NavigationOperationRejection.ValidationFailed;
+                _stage = Stage.Complete;
+                return;
+            }
             if (_prepared.CheckpointStamp.HasValue)
             {
                 NavigationMapCheckpointStamp stamp = _prepared.CheckpointStamp.Value;
@@ -306,7 +312,7 @@ internal sealed partial class NavigationOperationCandidate
             {
                 if (!meter.TryConsumeOverlaySlots(1))
                     return false;
-                if (!_next.Map.GridBinding.IsValidIndex(
+                if (!_next.Map.ContainsGridIndex(
                         _next.Overlay.GetCellAt(_overlayCellIndex++).Index))
                 {
                     _rejection = NavigationOperationRejection.ValidationFailed;

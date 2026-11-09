@@ -23,38 +23,17 @@ instead of burying it in notes.
 ## Active Coordination
 
 - [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
-  - Phase 0 is in progress for native top-down and side-view controllers and the
-    Gravitas `SolidBody2D` adapter. The upstream surface-witness defect
-    `TRB-Issue-150` is fixed with owning regressions; the repeated native preflight
-    and analytic slope-anchor probe pass. Circle/top-down and upright-capsule/
-    side-view envelopes are proposed, with nominal feet separate from physical
-    contact points. The [upstream prerequisite proposal](twoDimensionalNavigationPlan.md#proposed-upstream-prerequisite-contract)
-    now has implemented exact capsule math and layer-bound GridForge coverage.
-    Native support queries and atomic 2D posture replacement are implemented,
-    with synchronous indexed support discovery and complete registry clearance
-    for rare posture changes. Shared partition-readiness and callback-lifetime
-    repairs pass the full source-stack checks. The shared `GRV-Issue-081` repair
-    supplies exact classification across every supported 2D/3D posture family,
-    including compound and mesh geometry; positive sub-raw intrusion no longer
-    disappears through contact-depth rounding. Complete coverage and independent
-    review cover the math, dispatcher, conservative bounds and transaction boundary.
-    `FMS-Issue-023` now has a complete cylinder/capsule contact repair, exact
-    behavior coverage and measured follow-up optimizations. Separate ordinary
-    contact defects (`FMS-Issue-024`, `025`, and `GRV-Issue-082`) remain open.
-    Enabled regressions for `FMS-Issue-024` and
-    `GRV-Issue-082` remain red; `FMS-Issue-025` retains its numerical reproducer.
-    The upstream suites are not green release gates; the exact-admission repair
-    does not claim to repair solver contact generation. See the dated execution record
-    for the complete matrix, measured costs, and remaining Phase 0 scope.
-    Hard physics-query budgets remain a separate shared 2D/3D follow-up, not a
-    prerequisite for this delivery. Review shared improvements against both
-    dimensions without forcing geometry-specific implementations to be identical.
-    The separate generalized contact defect `TRB-Issue-151` and legacy hex
-    inverse mismatch `TRB-Issue-152` are now fixed upstream and verified through
-    both source-stack configurations; neither remains a blocker.
-    Shared search/scheduler ownership is retained; final native
-    controller/map/record signatures and acceptance still need contract review.
-    Fixed-height projection is not the deliverable.
+  - Phase 0 contract review is complete. FixedMathSharp 8.0.0 and
+    GridForge 10.0.0 ship exact planar capsule clearance and layer-bound body
+    tracing. Pinned Gravitas source supplies native support queries and atomic
+    2D posture replacement. The September contact and hex issues are resolved.
+    Trailblazer now references GridForge 10.0.0 in both package families.
+    Released-package validation of the adapter awaits Gravitas 1.1.0.
+    [Phase 0 evidence](twoDimensionalNavigationPlan.md#2026-11-09---phase-0-contract-closeout)
+  - Phase 1 starts with the bounded top-down obstacle and portal cases.
+    Retain one graph, A*/Flow pipeline, and scheduler. The 2D controller uses
+    native geometry and preserves the 3D frame, ownership, and replay
+    guarantees. Hard physics-query budgets remain a separate 2D/3D workstream.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
@@ -251,13 +230,9 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Finish the dedicated 2D plan's Phase 0: with native support/posture
-   prerequisites implemented and the earlier `TRB-Issue-150`, `TRB-Issue-151`
-   and `TRB-Issue-152` defects resolved, review and settle exact controller,
-   map and record APIs plus bounded acceptance inputs. Keep the newly exposed
-   ordinary-contact defects visible in their owning upstream trackers. Add the
-   planar runtime and adapter extension there; neither the initial 3D slice nor
-   hardening requires completed 2D support.
+1. Start the 2D plan's Phase 1 with the reviewed top-down fixtures. Capture
+   matched 3D controls before changing shared runtime paths. Validate the
+   adapter against the pinned source stack as its phase begins.
 2. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.

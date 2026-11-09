@@ -1,44 +1,21 @@
 # First-Class 2D Navigation Implementation Plan
 
-> **For agentic workers:** Use `superpowers:subagent-driven-development` or
-> `superpowers:executing-plans` when execution is requested. Complete the contract
-> review before implementing runtime types. Use independent reviewers and the
-> checkboxes below. The approved upstream clearance slice is implemented;
-> native controller implementation still requires completion of Phase 0.
+> Follow the `lsf-development` workflow and track progress in the checkboxes
+> below. Complete Phase 0 contract review before implementing runtime types.
 
 **Created:** 2026-09-03
 
-**Status:** Phase 0 is in progress after the completed 3D integration and accepted
-performance hardening. Exact planar capsule geometry and layer-bound GridForge
-coverage are implemented upstream. No native Trailblazer 2D controller exists yet.
-Upstream releases remain deferred; Phase 1 requires review of the contract below.
-Hard-budgeted physics queries are tracked separately for both 2D and 3D in the
-[physics query budget plan](physicsQueryBudgetPlan.md); they do not block this plan.
+**Status (2026-11-09):** Phase 0 contract review is complete. The
+[reviewed design and acceptance inputs](#phase-0---settle-the-2d-contract)
+are ready for Phase 1's first failing top-down cases. Use
+`UseLocalLsfStack=true` for adapter development. The core package references
+GridForge 10.0.0. Released-package validation of the adapter still requires
+Gravitas 1.1.0. Hard-budgeted physics queries remain a separate
+[2D/3D workstream](physicsQueryBudgetPlan.md).
 
-**Current prerequisite status (2026-09-25):** Native support and posture work,
-shared partition readiness, and callback-lifetime repairs are implemented.
-Exact FixedMathSharp-owned classification now covers every supported 2D/3D
-posture family, including finite rims, compound parts and mesh features.
-`GRV-Issue-081` is resolved without using a rounded-depth test, epsilon, or
-sampled-axis fallback; complete verification, final measured controls and
-closeout are recorded below.
-
-The investigation separately exposed ordinary contact-generation defects.
-FixedMathSharp `FMS-Issue-023` now has a complete cylinder/capsule contact repair,
-exact behavior coverage and measured follow-up optimizations. FixedMathSharp
-`FMS-Issue-024`, `025`, and Gravitas `GRV-Issue-082` remain open in their owning
-trackers. Enabled FMS-Issue-024 and GRV-Issue-082
-regressions remain red; FMS-Issue-025 retains a numerical reproducer and
-historical RED evidence. The upstream suites are not green release gates.
-Exact posture classification does not certify contact normals, depths or
-witnesses. The unrelated pathological
-depth-rounding runtime (`FMS-Issue-026`) is repaired without changing results.
-Native Trailblazer controller/map/record contracts still need Phase 0 review;
-this prerequisite work does not complete the phase or authorize a release.
-
-**Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`;
-Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`. The dated execution record
-below identifies the revisions actually used for the current preflight.
+**Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`
+and Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`. The dated execution
+record identifies the revisions used at each checkpoint.
 
 **Goal:** Provide first-class deterministic 2D navigation and character control
 for top-down and side-view movement, with a Gravitas `SolidBody2D` integration
@@ -50,9 +27,10 @@ planar geometry, support, movement, and facing explicit contracts rather than
 silently projecting the world-Y-up motor into another plane. Keep physics in the
 host and the Gravitas-specific bridge in the optional adapter package.
 
-**Tech Stack:** C# 11; `netstandard2.1` and `net8.0`; FixedMathSharp `Vector2d`
-and fixed-point scalar rotation; GridForge; existing A*/Flow services; Chronicler;
-xUnit v3; Gravitas `SolidBody2D` for joint acceptance.
+**Tech stack:** `netstandard2.1` with C# 11 and `net10.0` with C# 14.
+Tests and benchmarks target `net10.0`. Use FixedMathSharp `Vector2d` and fixed-point
+scalar rotation, GridForge, existing A*/Flow services, Chronicler, xUnit v3,
+and Gravitas `SolidBody2D` for joint acceptance.
 
 **Spec:** [Agreed scope](#agreed-scope) and [Dimensional contract](#dimensional-contract)
 capture the feature boundary. Phase 0 must record approved exact public
@@ -184,12 +162,11 @@ Planned responsibility boundaries, not files to scaffold ahead of the contract:
 | Optional Gravitas adapter and joint tests | `SolidBody2D` target/accepted-pose bridge and native planar collision scenarios |
 | DocFX guides, API reference, behavioral tests | Top-down/platformer guidance linked to tested host fixtures, with explicit coordinates and ownership; no separate sample project |
 
-The upstream contract below supplies the concrete prerequisite file/API boundary.
+The upstream APIs below supply the prerequisite file and ownership boundaries.
 Phase 0 must still finish the native controller, map and record signatures and
-their acceptance proofs before Phase 1. Section 1 is implemented in the local
-source stack; sections 2 and 3 remain proposed, not current APIs.
+their acceptance proofs before Phase 1.
 
-## Proposed upstream prerequisite contract
+## Upstream prerequisite contracts
 
 These prerequisite boundaries are grounded in the
 [bounded-primitive investigation](#2026-09-21---bounded-planar-primitive-investigation).
@@ -199,9 +176,9 @@ do not rotate 2D inputs into the 3D navigation controller.
 
 ### 1. Exact planar clearance: FixedMathSharp, then GridForge
 
-**Implemented locally:** native exact strict-swept and closed-stationary capsule
-relations in FixedMathSharp, consumed by one layer-bound GridForge body trace. Reuse existing
-trace result/evidence types and scratch where their semantics match. Rejected
+FixedMathSharp 8.0.0 ships exact strict-swept and closed-stationary capsule
+relations. GridForge 10.0.0 consumes them in the layer-bound body trace, which
+reuses the existing trace result, evidence, and scratch types. Rejected
 alternatives are a copied Trailblazer geometry solver, radius-expanded boxes
 (false rejection at rounded corners), and two end-circle sweeps (misses against
 the capsule's middle). Closed first-contact distance is not a strict-overlap
@@ -337,43 +314,37 @@ scratch are a separate [2D/3D workstream](physicsQueryBudgetPlan.md), not an
 upstream prerequisite for this operation. Do not add hidden default limits or
 discard candidates to imitate a budget.
 
-Add one support-specific operation to `GravitasQuery2DService`, not a new
-general-purpose all-shape query API:
+The pinned Gravitas source exposes a support-specific operation on
+`GravitasQuery2DService`.
 
 ```csharp
 public Physics2DSupportQueryStatus QuerySupport(
     in Physics2DSupportQuery request, out Physics2DSupportHit support);
 ```
 
-Proposed request/result contracts:
+The request, result, and status contracts are:
 
 | Type | Required fields / behavior |
 | --- | --- |
-| `Physics2DSupportQuery` | Registered source collider, probe center, positive radius/distance, upward direction, minimum upward-normal dot in `(0,1]`, include-layer mask. The constructor explicitly normalizes the nonzero upward direction using FixedMathSharp and rejects unrepresentable normalization. Initial Trailblazer side-view supplies Forward. |
+| `Physics2DSupportQuery` | Registered source collider, probe center, positive radius/distance, upward direction, minimum upward-normal dot in `(0,1]`, include-layer mask. The constructor normalizes the nonzero upward direction using FixedMathSharp. Initial Trailblazer side-view supplies `Vector2d.Forward`. |
 | `Physics2DSupportHit` | Existing `Physics2DHit` plus captured owner registration lifetime and sampled `long` frame from the shared clock; `IsCurrentLifetime` is false for default or recycled registrations. It does not promise geometric freshness. |
 | `Physics2DSupportQueryStatus` | `Found`, `NoSupport`, `WorldNotReady`, `Unrepresentable`. Only the first two certify complete examination; all others clear the usable hit. |
 
-Validate arguments before work. Operate at a stable between-frame boundary;
-reject reentrancy/active resolution. Reuse existing candidate collection and
-query-owned buffers; do not introduce another index or an every-agent/all-collider
-scan. Physics partitions use **world Y = 0**, not the navigation embedding or
-actor host Y. Preserve padded discovery and physical-presence checks. Use
-checked probe bounds and reject unrepresentable inputs. Buffer reuse is not a
-hard no-growth or worst-case work guarantee; measure the actual allocation and
-full-frame cost in representative acceptance cases.
+Sample at a stable between-frame boundary. The query validates the source
+registration and returns `WorldNotReady` when Gravitas cannot reconcile the
+partitions at that boundary. It reuses indexed candidate collection and
+query-owned buffers. Physics partitions use **world Y = 0**, independent of the
+navigation embedding and actor host Y. Padded discovery uses checked probe
+bounds. Measure allocation and full-frame cost in representative acceptance
+cases because the query can grow its buffers and has no caller work ceiling.
 
-Preserve positive probe distances down to one raw unit; the generic sweep's
-early rejection at `Fixed64.Epsilon` is not the proposed support contract. Test
-initial support and separated inputs at one raw unit, epsilon and epsilon plus
-one raw unit. Keep this support-specific behavior distinct from existing generic
-sweep semantics.
+Support probes accept positive distances down to one raw unit. Owning tests
+exercise initial support and separated inputs around the generic sweep's
+`Fixed64.Epsilon` cutoff.
 
-An empty deferred-refresh set alone is not proof of a ready index. Finish
-callback-deferred partition refresh at the normal owning sampling barrier and
-settle GridWorld grid/sparse-change reconciliation there. Test recurrent callback
-changes and changed grid generations without relying on an intervening unrelated
-query to repair membership. Reuse the owning refresh lifecycle, not an adapter
-world scan. A permanently-not-ready query is not an acceptable implementation.
+The Gravitas sampling boundary reconciles GridWorld grid and sparse changes and
+refreshes callback-deferred memberships. The adapter uses that readiness
+contract and samples support without its own partition repair.
 
 Use the real source collider and full `RequireCollisionPair` admission, including
 both ignore masks, layer matrix, siblings and linked-joint exclusions. Reject
@@ -388,9 +359,9 @@ The adapter still resolves a host-owned stable carrier key with explicit
 lifetime, derives a carrier-local anchor, and samples accepted planar carrier
 pose. Collider IDs and a captured anchor origin are not durable carrier bindings.
 
-Proposed files are `Queries/2D/GravitasQuery2DService.SupportQuery.cs`, one file
-per new public value/status type beside it, and focused changes to existing
-candidate/narrowphase helpers only where support filtering requires them.
+The query lives in `Queries/2D/GravitasQuery2DService.SupportQuery.cs`. The
+request, hit, and status live under `Queries/2D/Support/`, with focused owning
+tests in `Physics2D/Physics2DSupportQueryTests.cs`.
 
 ### 3. Atomic native posture replacement: Gravitas
 
@@ -437,12 +408,11 @@ publisher/separation failures are returned separately and do not roll back an
 accepted transaction. This synchronous transaction makes no hard work or
 wall-clock guarantee; budgeted clearance belongs to the separate 2D/3D plan.
 
-Do not reuse 2D teardown pair removal: it clears runtime relationships and is
-not exception-safe reconfiguration. Add the focused counterpart of 3D
-lifetime-tokened pair retirement, retaining hierarchy/filter relationships and
-continuing cleanup when callbacks throw or deactivate/reinitialize objects.
-Put the transaction in `Core/2D/SolidBody2D.ColliderReconfiguration.cs`; extend
-existing shape/pair lifecycle partials only where required.
+The transaction lives in `Core/2D/Bodies/SolidBody2D.ColliderReconfiguration.cs`.
+Its lifetime-tokened pair retirement preserves hierarchy and filter
+relationships and continues cleanup when callbacks throw or recycle objects.
+The focused transaction and notification tests are in
+`Physics2D/SolidBody2DColliderReconfigurationTests*.cs`.
 
 Trailblazer's eventual replacement preserves the nominal foot and durable
 destination, not the old physical surface contact. Fresh support follows an
@@ -451,35 +421,31 @@ height; do not move the body silently to make it fit.
 
 ### Implementation order and acceptance gate
 
-1. Implement/test the strict FixedMathSharp relation, including exact tangent,
+1. FixedMathSharp ships the strict relation with coverage for exact tangent,
    one-raw penetration/separation, stationary/vertical/diagonal sweeps, zero/odd
    axis lengths, containment, middle-only collision and scalar-domain limits.
-2. Implement/test GridForge layer-bound union proof: wide bodies, sparse holes,
-   world edges, both hex orientations, aligned multi-grid seams, diagonal closure,
+2. GridForge ships the layer-bound union proof with coverage for wide bodies,
+   sparse holes, world edges, both hex orientations, aligned seams, diagonal closure,
    non-neighbor and zero-radius boundary-axis rejection, explicit wrong
    layer/domain rejection, missing alternatives, stale generations, every
    exact/one-below work/scratch/output capacity and checked arithmetic failure.
-3. Implement/test Gravitas support selection and the native posture transaction
-   over existing indexed discovery, without waiting for hard query budgets,
-   preserving the 3D contract. Include compound wall/floor ordering, symmetric
-   filters, dirty index, compound/polygon geometry, duplicate memberships,
-   rejected growth, unchanged publication, callback failure and recycled pairs.
-4. Bind native top-down and side-view map/action examples to those primitives;
-   finish support corners/slopes/steps and the controller/map/record signatures.
-   Then obtain the full Phase 0 contract review before Navigator2D runtime work.
+3. Pinned Gravitas source supplies indexed support selection and the complete
+   registry posture transaction. Its tests cover compound wall/floor ordering,
+   symmetric filters, partition readiness, rejected growth, unchanged
+   publication, callback failure, and recycled pairs.
+4. Phase 0 binds native top-down and side-view map/action examples to those
+   primitives and records the controller, graph, and record contracts.
+   Start Phase 1 with the first failing native top-down acceptance cases.
 
-These are prerequisite features, not unresolved bug tickets. Use the existing
-test projects, standard/Lean and both library targets, exact changed-path
-coverage, and independent source review. Shared hot-path changes require the
-existing matched performance controls; do not introduce another benchmark
-project. Probes below establish why these boundaries are needed, not that the
-proposed operations already work.
+Use the existing test projects, standard/Lean and both library targets, exact
+changed-path coverage, and independent source review. Shared hot-path changes
+require the existing matched performance controls.
 
 ## Progress dashboard
 
 | Phase | Deliverable | Status | Gate |
 | --- | --- | --- | --- |
-| 0 | Reviewed dimensional and API contract | In progress | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
+| 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
 | 1 | Native planar guidance and top-down movement | Not started | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
 | 2 | Side-view traversal and profile changes | Not started | In-plane support, locomotion, posture/capability sequences, and replay verified |
 | 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
@@ -491,35 +457,438 @@ proposed operations already work.
   public support queries on bounded inputs. Identify missing upstream contracts
   before committing to the controller design. Reuse focused tests or an ignored
   throwaway probe; do not scaffold a sample application or production adapter.
-- [ ] **Record the minimum supported controller surface.** Define exact public
-  types/signatures for planar pose, motion requests/results, scalar rotation or
-  facing, profile, and support snapshots. State units, coordinate conversion,
-  invalid-input behavior, and prepare/accepted-commit lifecycle. Review the
-  proposed source/test file map before implementing any of those types.
-- [ ] **Choose and validate the graph representation.** Compare reuse of the
-  existing graph with explicit planar geometry semantics against a focused
-  planar adapter over shared search internals. Use one top-down obstacle and
-  one side-view ledge/ceiling example to prove body fit, support, cost, and action
-  boundaries. Record the selected representation and why the smaller alternative
-  is insufficient if additional core contracts are needed.
+- [x] **Review the [controller surface](#public-2d-controller-contract).**
+  Record the native API, ownership, and frame lifecycle before implementation.
+- [x] **Choose and validate the [graph representation](#planar-graph-query-and-action-contracts).**
+  Retain the graph and search owners, with native leg and support proofs.
+  Check the two bounded fixtures against the released geometry primitives.
 - [x] **Define media, capability, and support semantics.** Explain how top-down
   traversability and side-view airborne/grounded state relate to navigation
   media. A downward direction alone cannot identify falling, and a permitted
   cell cannot stand in for actual physical support. No automatic gap-crossing
   action may arise from ordinary neighbor traversal.
-- [ ] **Set compatibility and persistence boundaries.** Record how 2D profiles,
-  graph/guide identity, and records differ from 3D. Reject cross-dimensional
-  shell or guide misuse explicitly; preserve existing 3D record behavior and
-  standard/Lean support. Do not hide dimensional conversion in legacy aliases.
-- [ ] **Set scheduling, proof identity, and performance boundaries.** Include
-  dimensions/mode/body geometry in every applicable cache/cohort/proof identity;
-  never share a proof merely because addresses match. Record matched 3D controls
-  before shared runtime changes and bounded representative 2D cases in the
-  existing benchmark project. Compare equivalent configurations and work; no
-  new benchmark infrastructure or arbitrary 2 ms acceptance gate.
-- [ ] **Approve bounded acceptance inputs.** Specify maps, profiles, gravity,
-  timestep, action handlers, expected addresses, and maximum frame counts for
-  both modes. Obtain contract review before moving to Phase 1.
+- [x] **Set [compatibility and persistence boundaries](#records-proof-identity-and-parity-gates).**
+  Keep spatial public types and records stable and define planar staged load.
+- [x] **Set scheduling, proof identity, and performance boundaries.**
+  Preserve shared queue and proof accounting with exact dimensional identity.
+  Name matched 3D controls to capture before the first shared runtime change.
+- [x] **Review [bounded acceptance inputs](#bounded-acceptance-inputs).**
+  Record fixture geometry, motion, costs, budgets, expected addresses, and
+  frame caps for the two modes. Runtime acceptance belongs to Phases 1–3.
+
+### Public 2D controller contract
+
+Use a native `Navigator2D` for both modes. It owns the accepted state and
+coordinates the frame. Hosts implement the physics boundary through protected
+hooks, as the optional Gravitas adapter does for 3D. These declarations
+describe the Phase 0 design. The graph, acquisition, action, and record
+contracts below complete the controller boundary.
+
+In `Trailblazer.Pathing`, expose an immutable `NavigationAgentProfile2D`.
+Its constructor arguments below have matching get-only properties in
+PascalCase. Include these fields in value equality. Keep motor tuning
+separate from the profile used for route admission.
+
+```csharp
+public enum NavigationMode2D : byte { TopDown = 1, SideView = 2 }
+
+// Constructor on readonly struct NavigationAgentProfile2D.
+public NavigationAgentProfile2D(
+    NavigationMode2D mode, Fixed64 radius, Fixed64 axisLength,
+    Fixed64 maxStepUp, Fixed64 maxDropDown, Fixed64 minimumSupportNormalDot,
+    Fixed64 arrivalRadius, TraversalMedia allowedMedia, TraversalCapability capabilities);
+```
+
+In `Trailblazer.Navigation`, the value-type constructor signatures below
+describe readonly structs with get-only properties named from their arguments.
+
+```csharp
+public NavigationPose2D(Vector2d center, Fixed64 rotationRadians);
+public NavigationInput2D(
+    Vector2d? move, bool jumpRequested, Vector2d? facing = null, bool blockJump = false);
+public NavigationMotorSettings2D(
+    Fixed64 moveSpeed, Fixed64 turnRateRadians, Fixed64 gravity, Fixed64 jumpSpeed);
+// Issued by Navigator2D, with an internal constructor.
+internal NavigationMotionRequest2D(long frame, NavigationPose2D target);
+public enum NavigationSupportStatus2D : byte { NotApplicable, NoSupport, Found, Unavailable }
+
+public NavigationCarrier2D(
+    int stableId, long lifetime, NavigationPose2D pose, Vector2d localAnchor);
+public NavigationSupport2D(
+    Vector2d point, Vector2d normal, Fixed64 friction, NavigationCarrier2D? carrier);
+public NavigationMotionResult2D(
+    NavigationPose2D accepted, NavigationSupportStatus2D supportStatus, NavigationSupport2D? support);
+
+public abstract class Navigator2D : IDisposable, IRecordable
+{
+    protected Navigator2D(
+        TrailblazerWorldContext context, string initialMapId, Guid globalId, NavigationPose2D initialPose,
+        NavigationAgentProfile2D profile, NavigationMotorSettings2D motorSettings);
+
+    public Guid GlobalId { get; }
+    public NavigationPose2D Pose { get; }
+    public Vector2d Velocity { get; }
+    public Vector2d Facing { get; }
+    public NavigationAgentProfile2D NavigationProfile { get; }
+    public NavigationSupportStatus2D SupportStatus { get; }
+    public NavigationSupport2D? Support { get; }
+    public bool IsGrounded { get; }
+    public byte OccupantGroupId { get; set; }
+    public NavigationAcquisitionMode AcquisitionMode { get; set; }
+    public NavigationGuideStatus? GuidanceStatus { get; }
+    public NavigationCommittedCellState? LastCommittedCell { get; }
+    public NavigationTransitionInstruction2D? PendingTransition { get; }
+    public event Action<NavigationCommittedCellState?>? CommittedCellChanged;
+
+    public void PrepareFrameMotion(in NavigationInput2D input);
+    public NavigationGuideStatus PrepareActionFrameMotion(
+        in NavigationTransitionInstruction2D instruction, NavigationPose2D target);
+    public void CommitFrameMotion();
+    public void RefreshSupport();
+    public void ApplyGuidedTrekRequest(PathQuery2D query, int groupId = -1);
+    public void CancelGuidance();
+    public NavigationGuideStatus CompletePendingTransition(in NavigationTransitionInstruction2D instruction);
+    public NavigationProfileReplacementStatus TryReplaceNavigationProfile(
+        NavigationAgentProfile2D replacement);
+    public void Dispose();
+    public void RecordData(IChronicler chronicler);
+
+    protected abstract void SubmitMotionTarget(in NavigationMotionRequest2D request);
+    protected abstract NavigationMotionResult2D ReadAcceptedMotion(
+        NavigationMotionRequest2D? request);
+    protected virtual bool TryReadCarrierPose(
+        int stableId, long lifetime, out NavigationPose2D pose);
+    protected abstract bool TryCommitPhysicalProfileReplacement(
+        NavigationAgentProfile2D replacement, Vector2d replacementCenter,
+        Action publishNavigationState, out Exception? notificationException);
+}
+```
+
+**Coordinates and validation.** Center is the collider center in world X/Z.
+Positions and distances use world units. Speed is units per second, gravity is
+units per second squared, and turn rate is radians per second. Positive rotation
+runs from planar Right toward Forward and is canonical in `[-π, π)`. Top-down
+facing follows accepted rotation. Side-view uses physical rotation zero and a
+logical Left or Right facing. It starts at Right, follows nonzero horizontal
+intent, and holds its last facing when stopped. Carrier rotation can move the
+passenger through its anchor while the capsule stays upright.
+The constructor binds a published initial map of the matching mode. Its
+embedding Y fixes the navigation domain for manual and guided motion. The
+accepted position can resolve into another compatible map in that domain.
+The physical host preserves its own world Y.
+
+Require a positive radius and a non-negative cap-center separation `axisLength`
+with representable total height `axisLength + 2*radius`. Top-down has zero axis
+length, step, drop, support threshold, gravity, and jump speed. Side-view uses
+positive gravity along `-Vector2d.Forward` and a support normal threshold in
+`(0, 1]`. A compact side-view posture uses the same capsule with zero axis
+length. Its nominal foot is the center minus Forward times
+`radius + axisLength/2`. Materialize the non-negative half-axis by rounding
+down to a raw unit for that point. Exact clearance still takes the full axis
+length. Preserve the nominal foot across side-view posture changes and the
+center across top-down radius changes.
+
+`Move` is a dimensionless analog input of magnitude at most one. Zero requests a
+stop. Null selects guidance, with zero voluntary heading while waiting or
+without an active guide. A manual move replaces guidance, as on the 3D
+Navigator. An optional nonzero facing direction overrides move-facing for
+that frame. Ordinary side-view movement and facing are horizontal. The host
+supplies `JumpRequested` on the input edge and can deny the jump with
+`BlockJump`. Trailblazer admits the request through its motor and capability
+policy. Completing an authored guide action remains a separate operation.
+Motor speed and turn
+rate are non-negative. Side-view facing needs zero physical turn rate and its
+jump speed is non-negative. The host supplies a nonempty, world-unique actor
+ID. Validate constructor arguments and known mode/media/capability values.
+Construction invokes no host hooks. Check inputs and target representability
+before submission, and reject invalid results or unrepresentable accepted
+motion before changing pose or occupancy. A replacement with a different mode
+returns `InvalidProfile` on the bound controller.
+
+**Prepare, resolve, commit.** The host advances the contexts once, prepares
+every controller in deterministic order, resolves the shared physics world
+once, then commits every controller before the navigation late step. Core
+holds one prepared request per controller with its context clock lifetime and
+absolute frame. The request target is an absolute pose. Prepare stages motion
+without publishing accepted pose, velocity, facing, occupancy, or cell
+notifications.
+Reject duplicate prepare, unprepared or repeated commit, and stale context or
+frame before publication. The host supplies the matching resolved result.
+The adapter validates body registration and the physics barrier where the
+physics lifecycle exposes it. Consume the prepared state before notifying
+listeners. Defer authoritative writes from listeners to ordered commands
+after the barrier so one actor's notification cannot change another actor's
+support sample. Failed target submission, an aborted physics step, or an
+accepted result that cannot be committed invalidates the authoritative frame.
+The host cleans up pending targets and recovers from a coordinated checkpoint.
+
+Commit derives observable velocity from accepted displacement and the
+prepared fixed step, including any accepted carry. Motor intent keeps its own
+velocity state so the next frame cannot apply carry a second time. Commit
+publishes one accepted pose and cell and samples support at the accepted
+pose. `Found` supplies a physical witness and normal. Motor policy decides
+whether that sample grounds the controller, including when it is jumping away.
+`NoSupport` is a complete miss. `Unavailable` commits the accepted motion with
+no fresh ground or carrier state and cannot reuse the prior sample.
+`NotApplicable` is required for top-down and invalid for side-view. Only
+`Found` carries a snapshot.
+The carrier-local anchor is the physical witness transformed into the
+carrier's frame at sampling time. For a live host-stable positive ID and
+matching registration lifetime, carry is the difference between the new and
+previous transforms of that same anchor. Equal poses produce exact zero
+displacement. A failed carrier lookup drops the binding and suppresses carry.
+Dispose releases navigation ownership and invalidates prepared motion. Host
+body and world lifetimes remain with the host.
+
+Call `RefreshSupport()` at the stable between-frame boundary to seed side-view
+support after construction, successful restore, or accepted posture
+replacement. The host hook receives a null request and reads the current
+accepted pose, which must agree with the controller. This refresh updates
+support without submitting or committing motion. After restore, seed from the
+restored body and carrier poses before applying the first frame's commands.
+Normal frames keep the previous committed sample for the carrier delta.
+Rebind any recorded carry continuation to the newly sampled registration
+before the first prepared frame. See the record contract below.
+
+**Posture transaction.** Between frames, with no prepared motion or held
+action, the controller stages navigation fit, occupancy, and durable intent
+before asking the host to replace the physical envelope. An accepted host
+change invokes the publisher exactly once before post-commit notifications.
+A rejected change leaves both sides unchanged and skips the publisher.
+Discard old support after an accepted change and acquire fresh support before
+using ground or carry again. Surface post-commit notification failures
+separately from a rejected replacement.
+
+| Owner | Planned files and responsibility |
+| --- | --- |
+| Trailblazer core | `src/Trailblazer/Navigation/Navigator/Navigator2D.cs` and native motion/support values in the same area. Own input interpretation, motor state, frame guards, accepted pose and velocity, support policy, carry, replacement coordination, and occupancy publication. |
+| Trailblazer pathing | `src/Trailblazer/Pathing/Query/NavigationAgentProfile2D.cs` owns geometry and traversal admission inputs. Existing graph/search owners supply dimensional clearance, leases, and scheduling. Existing `NavigationCommittedCellState` carries the committed cell without a pose conversion. |
+| Optional adapter | `src/Trailblazer.Gravitas/GravitasNavigator2D.cs` binds a host-owned kinematic `SolidBody2D` in the same GridWorld. It validates the centered circle or upright capsule, submits X/Z targets, and reads the accepted pose. In side-view it translates `QuerySupport` at the lower cap. An expired hit or a witness that `Physics2DHit.TryGetPoint` cannot materialize becomes `Unavailable`. It calls `TryReconfigureCollider` for physical fit. |
+| Host and Gravitas | Host owns ordered input, time advancement, body and map setup, carrier identity, and semantic action execution. Gravitas owns colliders, filtering, physical witnesses, resolution, and accepted body pose. |
+| Existing test projects | `tests/Trailblazer.Tests/Navigation/Navigator/` covers accepted motion, stale and repeated frame calls, support/motor policy, and occupancy. `tests/Trailblazer.Gravitas.Tests/` covers the shared resolve barrier, native shape/support, carry, and posture with real bodies. |
+
+### Planar graph, query, and action contracts
+
+Use one published graph, one map per GridForge configuration, and one shared
+search and acquisition pipeline. A separate planar graph would duplicate
+publication, invalidation, and lifetime ownership. An additive binding on the existing
+map identifies the mode, layer index, and embedding Y. Connected planar
+maps share the mode and embedding Y. A spatial map has no planar binding.
+Keep the existing configuration index and its uniqueness rule. A second
+layer or a second mode on the same configuration would require a different
+publication identity and is outside this contract.
+
+Add these methods to `NavigationMapBuilder`, returning the same builder.
+`NavigationMap.PlanarBinding` is a nullable get-only
+`NavigationPlanarBinding` value with get-only `Mode`, `LayerIndex`, and
+`EmbeddingY`. Keep existing constructors and default behavior spatial.
+
+```csharp
+public NavigationMapBuilder SetPlanarLayer(NavigationMode2D mode, int layerIndex, Fixed64 embeddingY);
+public NavigationMapBuilder AddPlanarSupport(VoxelIndex index, Vector2d left, Vector2d right);
+
+// Constructor on readonly struct NavigationEndpoint2D with get-only properties.
+public NavigationEndpoint2D(
+    string mapId, Vector2d position, EndpointResolutionPolicy resolution, Fixed64 maxResolutionDistance);
+
+// Constructor on readonly struct PathQuery2D with corresponding get-only properties.
+public PathQuery2D(
+    NavigationEndpoint2D start, NavigationEndpoint2D end, NavigationAgentProfile2D agent,
+    NavigationAreaPolicyKey areaPolicy, TraversalIntent traversal, PathAlgorithm algorithm,
+    NavigationWorkBudget budget, bool allowTransitions, FlowFieldQueryOptions flowField = default);
+```
+
+- Bind and validate the exact layer and embedding during map admission. Limit
+  defaults, explicit cells, overlays, connections, seams, and fallback endpoint
+  search to that domain and layer. Reject spatial/planar, top-down/side-view,
+  and incompatible embedding links before publication. Include the binding
+  and canonical support segments in bake equality and dependency identity.
+  Change support geometry by replacing the bake. Existing semantic overlays
+  can disable a cell and its support. Planar transitions use the existing
+  authored edge with canonical anchors. Reject world-Y rule generation and
+  3D point overrides on planar maps.
+- Require explicit map IDs on planar endpoints. Resolve top-down coordinates
+  at the center and side-view Solid coordinates at the profile's nominal
+  foot. Side-view support stores one finite left-to-right surface segment
+  per supported cell in this increment. Author separate cells for separate
+  support loci. Its X span is positive and its
+  endpoints belong to the authored footprint, with boundary contact allowed.
+  Project onto the profile-adjusted nominal-foot segment, which is the
+  physical segment translated by `radius*(normal - Forward)`. Reconstruct
+  the capsule center as witness plus `radius*normal + halfAxis*Forward` and
+  re-prove the materialized body against exact clearance, including odd raw
+  axes. Use the segment midpoint for the canonical cell anchor. `Strict`
+  requires the requested point itself to be admissible. Only
+  `NearestNavigable` can move the endpoint, within its distance in native
+  query coordinates. At a footprint boundary enumerate closed-contact
+  candidates in durable address order, including the owning support cell.
+  Apply the same normal-dot threshold to graph and live support. Charge each
+  inspected candidate.
+- For an ordinary side-view Solid edge along a surface, prove continuous support across
+  its ordered segments and certify the full swept capsule for each leg.
+  A corner join must keep support and fit through the turn. A supported
+  step uses directed step/drop limits and separate lift, advance, and
+  supported landing proofs. A step may temporarily leave contact during its
+  bounded lift. An unsupported gap requires a held action. Decline an
+  ordinary edge when its join, landing, or candidate evidence is incomplete.
+- Separate clearance from route state. Required footprint cells must be
+  present and semantically open for body coverage, including headroom
+  without a Solid support segment. For side-view Solid, use present authored
+  cells with allowed area and capabilities and no active blocker for that
+  coverage, without requiring their medium to be Solid. A missing or denied
+  cell blocks the footprint. Endpoint and ordinary support admission still
+  require the route medium and applicable clearance constraints. Apply
+  entry costs only at route entry, never for headroom cells.
+- Reuse the existing exact cell/medium state, edge enumeration, dependency
+  recording, and cache admission. Dispatch only the planar geometry for
+  endpoints, directed legs, direct rays, connectors, simplification, and
+  sampling. Use `TracePlanarNavigationBodyInto` for one selected neighbor
+  leg, with the existing graph generation snapshot. For longer rays prove
+  each selected leg and retain nonincreasing shortcut cost. Use the existing
+  lookup and covered-voxel budget counters for the corresponding grid and
+  address work, with caller ceilings applied before trace entry. Leave the
+  3D slab path and its mapping memo in the spatial evaluator.
+- Reuse current native neighbor ordering, including four cardinal directions
+  for rectangular ordinary edges. Charge checked, outward-rounded in-plane length on ordinary legs plus
+  destination cell and area entry costs. Actions charge proved approach and
+  exit lengths, authored action cost, and destination entry. Use a zero
+  heuristic for initial planar A*. Skip spatial component early rejection
+  for both planar A* and Flow. Flow uses the existing incoming index and
+  re-evaluates the predecessor's forward edge, including asymmetric
+  step/drop limits, costs, and action identity.
+
+The controller is the native query entry for this increment. Normalize
+`PathQuery2D` and spatial `PathQuery` once into a discriminated internal
+request for existing search, lease accounting, and scheduling. Keep native
+coordinates at the 2D boundary. Use ordinal map ID equality and the existing
+deterministic hash conventions for keys. Retain the public 3D query and lease
+shapes.
+Validate a new query against the controller's exact profile before replacing
+intent. Use current accepted geometry for reacquisition, as the 3D Navigator
+does. `GuidanceStatus` reports the current admission or guide status and is
+null without a session. `NavigationTransitionInstruction2D` is an immutable lease-issued value
+with `Id`, `OwnerMapId`, `Type`, `SourceAddress`, `DestinationAddress`,
+`SourceMedium`, `DestinationMedium`, and native `Vector2d SourcePosition` and
+`DestinationPosition`. Reuse the existing hidden completion stamp and its
+owner, acquisition generation, and edge checks.
+
+While an action is held, ordinary guided advance pauses. The host supplies
+an explicit target through `PrepareActionFrameMotion`, which verifies the
+live token and uses the same prepare/resolve/commit transaction. The host
+owns the trajectory during that action. Airborne state during a Solid-to-Solid
+jump leaves the guide medium intact. Complete once after the accepted landing
+proves the destination anchor and medium. Wrong landing returns `InvalidEnd`
+and leaves the token held. Stale, cancelled, or consumed instructions return
+`Stale` and cannot prepare or complete an action.
+
+Register physical occupancy at the accepted center projected into the exact
+selected map layer. Resolve coincident eligible candidates in canonical
+durable address order. Resolve `LastCommittedCell` with that accepted-center
+registration and the effective committed medium, matching 3D event semantics.
+Use the side-view nominal foot for route and landing proof. An airborne actor
+can occupy a cell without admitting an ordinary walking anchor. Leaving the
+eligible map releases the old ticket. Share ticket and notification semantics
+around the existing GridForge owner without exposing a 3D pose on the controller.
+
+### Records, proof identity, and parity gates
+
+Use a distinct `Trailblazer.Navigator2D` record kind and schema version 1
+under `Navigation/Navigator`. Reuse the existing Chronicler staging and
+populate-existing-shell pattern. Validate kind, version, mode, exact shell
+profile and motor settings, stable ID, published map/policy binding, pose,
+known media, and every nested continuation before mutation. The host
+restores and publishes the matching world and collider poses before load
+at a completed-frame boundary with no unresolved target.
+Successful load rebuilds occupancy and committed-cell state without emitting
+`CommittedCellChanged`. GridForge retains its normal occupancy events.
+Rejected load preserves the old controller, lease, action, scheduled
+interest, prepared frame, and occupancy. Keep spatial schema 9 unchanged.
+
+Record pose, accepted velocity, logical facing and active/buffered turn,
+motor and jump continuation, group and current medium, acquisition mode, and
+durable destination/query options. Preserve exact carry continuation as
+stable carrier ID, previous accepted carrier pose, and the raw carrier-local
+anchor used by the motor. This follows 3D's exact attachment replay rule.
+Rebind it only to a freshly sampled registration for the same stable carrier
+at the recorded prior pose, before any frame commands. A mismatch starts a
+new attachment with zero initial carry. Keep physical witness snapshots,
+runtime lifetime tokens, graph objects, tickets, prepared frames,
+leases/cursors, and pending action stamps transient. Cover JSON in both
+builds and MemoryPack in Release. Exact replay
+compares branches with the same published world, input order, and acquisition
+state at the checkpoint. A fresh guide rebuild may change timing relative to a
+warm lease, so exercise that separately against an equivalent reacquisition.
+
+Keep Immediate as the default and Scheduled on the existing bounded FIFO.
+Preserve frozen contiguous cohorts, oldest-first builds, independent follower
+admission, source pin accounting, one result transfer, cancellation, and
+the existing fair moved-origin connector validation. Waiting continues motor,
+carry, and accepted commit. Keep route/direct flavor separate. A* keys include
+normalized exact intent and resolved start/end/media. Flow keys omit the
+source as today and keep exact destination/profile/policy/budget/options and
+resolved media. Cohorts retain their current compatibility rules with an
+explicit dimension and mode discriminator. Profile geometry, support policy,
+and exact endpoint domain participate in keys. Bind layer, embedding, and
+surface content through the immutable bake dependencies instead of copying
+them into every token. Record missing cells and physical alternatives as
+well as positive evidence. Use the existing conservative world stamp when a
+negative dependency cannot be expressed more narrowly. Check exact retained
+bytes and allocations before sharing any new descriptor or proof layout
+with 3D. Keep spatial requests on their existing storage when a planar-only
+field would inflate that path.
+
+| Preserve from 3D | Reuse boundary |
+| --- | --- |
+| Frame lifecycle, occupancy, and replacement | Reuse clock/lifetime checks, GridForge ticket operations, committed-cell value, and validation-before-publication sequence. Share dimension-neutral operations once both callers exist. Keep root/foot math and accepted pose handling native. |
+| Guidance, actions, and scheduling | Reuse graph publication, A*/Flow, costs/status policy, exact action-stamp rules, budgets, and per-lease ownership. Add planar geometry at proof boundaries. |
+| Turning, locomotion, and carry | Preserve requested versus accepted motion, blocked-motion behavior, action/capability transitions, and continuation. Reuse state rules with identical semantics. Use fixed planar angle, capsule support, and native carrier-anchor math rather than wrapping the world-Y motor. |
+| Performance | Capture matched existing `navigation-guided-frame`, `navigation-ray`, and `navigation-recovery` controls before the first affected shared runtime edit. Keep build, dependency pins, scenario and acquisition settings fixed, with full-frame time, allocation, counts, and replay. Add planar open/blocked and support/action rows to the existing benchmark project only after their production paths run. |
+
+### Bounded acceptance inputs
+
+Use a dense rectangular unit grid with center bounds `(-1,0,-1)` through
+`(5,1,2)`, selected layer 1 and embedding Y = 1. The tables below use
+planar coordinates `(x,z)`, corresponding to `VoxelIndex(x+1,1,z+1)` at
+integer centers. Use separate maps/worlds for the two modes. Use Strict
+endpoints, Solid intent, zero arrival radius, zero step/drop limits, and an
+allowed zero-cost area except where specified. On open cells set the authored
+radius and height limits to 1 and 2 respectively so the footprint decides fit.
+Run A* and Flow with the same intent, first Immediate, then
+Scheduled for lifecycle parity. Capture ordered frames, raw accepted
+pose/velocity, committed addresses, action outcomes, and retained ownership.
+
+| Case | Fixture and expected outcome |
+| --- | --- |
+| Top-down obstacle | Circle radius 1/4. Start `(0,0)`, end `(4,0)`. Open the lower row at x = 0, 1, 3, 4 and the entire upper row z = 1 at x = 0..4. Leave `(2,0)` denied. The direct line fails. Both searches reach `(4,0)` through `(2,1)` at exact cost 6 and never commit the denied address. In a separate corridor, permit only z = 1. Radius 1/2 fits with tangency. Radius 1/2 plus one raw unit requires denied rows. |
+| Side-view ledge and ceiling | Supports at z = -1/2 span the full widths of x = 0, 1 and x = 3, 4 in row z = 0. The gap cell x = 2 is physically open and has no Solid anchor. Open headroom on the left and deny row z = 1 at x = 3, 4 for the ceiling. Radius 1/4 and axis 3/4 make standing height 5/4 and block the landing. Axis 0 keeps the same capsule and fits at height 1/2. Height 1 touches the ceiling and fits. Two extra raw axis units at the same nominal foot fail clearance. |
+| Directed action | Use a Solid-to-Solid Jump from foot `(1,-1/2)` to `(3,-1/2)` with authored cost 3, Jump capability, and destination cell enter cost 1/2 at x = 3. Compact start/end feet are `(0,-1/2)` and `(4,-1/2)`. Expected cost is 11/2. Reverse, missing Jump, and disabled actions all yield NoPath. Standing with the ceiling fails end admission. Give the host ten 1/4-unit action increments, one up at x = 1, five right to x = 9/4, one down, and three right to x = 3. Check accepted landing and exactly one completion. A stale token and early completion fail. |
+
+Use 16 Hz and speed 4. Top-down uses zero gravity, fixed physical rotation,
+and a 40-frame cap. Side-view uses gravity 16, jump speed 4, minimum support
+dot 1/2, and a 40-frame cap. Scripted action motion follows the action
+targets above through the host barrier. Eight ordinary horizontal movement
+frames plus ten action frames provide the ideal side-view movement count.
+Use `NavigationWorkBudget(8192, 128, 128, 512, 512, 128, 128, 128, 1024, 4096, 0)`
+and zero extra Flow integration cost. The route-cost oracle disables
+simplification. Test shortcuts separately with a positive simplification
+budget. Give the body scratch 8 grid entries and 128 addresses/output entries,
+with 136 candidate-work units per primitive leg. Record actual work and retain
+exact one-below tests at the proof boundary. Scheduled cases use
+`NavigationSchedulingSettings.Default`, a fixed 128-frame cap, and separate
+preparation and movement counts. These are test limits.
+
+For the slope control, keep the earlier exact 45-degree witness and require
+its normal to pass a 1/2 threshold and fail 3/4. For the step control, use the
+height-1 capsule with radius 1/4. Place adjacent supports at z = -1/2 and -1/4
+on cells x = 0 and 1. Lift the center 1/4 at x = 0, advance to x = 1 and
+verify landing. Max step 1/4 allows the rise and max drop 1/8 rejects the
+reverse. A ceiling starting at z = 1/2 above x = 0 blocks the lift.
+For replay checkpoint the compact side-view body on a rotating carrier,
+publish its restored pose before the first command, and compare 32 frames
+of exact continuation plus an unchanged rotated pose with zero carry.
+Exercise stale/duplicate frame calls, clock reset, unavailable support,
+cancelled actions, wrong-mode restore, and exact cleanup as negative controls
+in the existing test projects.
 
 ## Phase 1 - Native Planar Guidance And Top-Down Movement
 
@@ -609,7 +978,7 @@ proposed operations already work.
 Record approved contract decisions, exact revisions, files/signatures, test and
 coverage commands/results, scenario inputs, observation artifacts, and linked
 issues after each reviewed milestone.
-Entries below are historical. The
+Each entry records the evidence available at that checkpoint. The
 [2026-09-24 scope split](#2026-09-24---physics-query-budgets-separated-from-2d-delivery)
 supersedes earlier statements making hard physics-query budgets a 2D prerequisite;
 the current contract above reflects that decision.
@@ -1555,3 +1924,109 @@ Capture: FixedMathSharp `artifacts/grv081-final-benchmarks`, with full JSON,
 logs, setup checks and the existing runner's failure-aware exit status. The
 retained benchmark rows live in `RigidFiniteShapeRelationBenchmarks` and
 `OrientedBoxAnchorBenchmarks`; no new benchmark project or CI layer was added.
+
+### 2026-11-09 - Upstream baseline and Phase 0 restart
+
+- **Published foundations.** Chronicler.Core 1.0.0, FixedMathSharp 8.0.0,
+  SwiftCollections 8.0.0, and GridForge 10.0.0 are available. FixedMathSharp
+  8.0.0 includes the planar capsule predicates and the resolved
+  `FMS-Issue-023` through `FMS-Issue-026` repairs. GridForge 10.0.0 includes
+  `TracePlanarNavigationBodyInto` and uses FixedMathSharp 8.0.0 in both package
+  families. GridForge's `GF-Issue-012` entry still describes the old math
+  dependency. Its released-package Windows/Linux matrix passed with 8.0.0.
+  [FixedMathSharp closeouts](https://github.com/mrdav30/FixedMathSharp/blob/v8.0.0/docs/feature-work/issue-tracker.md)
+  · [GridForge v10 package CI](https://github.com/mrdav30/GridForge/actions/runs/42106692591)
+- **Gravitas source baseline.** The pinned `13f73bdc94397a8fdb324b1f67a0c92b472acaac`
+  contains `QuerySupport`, `SolidBody2D.TryReconfigureCollider`, and the partition
+  readiness and callback lifetime fixes. `GRV-Issue-081` closed exact posture
+  admission, and `GRV-Issue-082` independently closed triangle/cylinder contact
+  generation. Windows and Linux passed in Release and ReleaseLean on x64 and
+  arm64, including replay comparison across the matrix.
+  [Gravitas closeouts](https://github.com/mrdav30/Gravitas/blob/13f73bdc94397a8fdb324b1f67a0c92b472acaac/docs/feature-work/issue-tracker.md)
+  · [Pinned Gravitas CI](https://github.com/mrdav30/Gravitas/actions/runs/42404575272)
+- **Trailblazer development baseline.** Develop at `f3562cd` passed the
+  Windows/Linux Release and ReleaseLean source matrix, and the active issue
+  and benchmark signal lists are clear. Earlier 2D preflight defects
+  `TRB-Issue-150` through `TRB-Issue-152` are resolved. Use
+  `UseLocalLsfStack=true` for Phase 0 proofs. The run pins Chronicler
+  `7b90d59`, FixedMathSharp `e2c325a`, SwiftCollections `08b1b38`,
+  GridForge `c4f80a0`, and Gravitas `13f73bd`.
+  [Trailblazer develop CI](https://github.com/mrdav30/Trailblazer/actions/runs/42642641077)
+- **Package gate at this checkpoint.** Trailblazer selected GridForge and
+  GridForge.Lean 9.1.0 and needed 10.x for the planar trace. The adapter
+  selected unpublished Gravitas and Gravitas.Lean 1.1.0. Validate the standard
+  and Lean dependency graphs against released packages in dependency order,
+  with Gravitas available before releasing Trailblazer.Gravitas.
+
+Resume with the first unchecked [Phase 0 item](#phase-0---settle-the-2d-contract).
+Specify the public controller surface and ownership, then use a top-down
+obstacle and a side-view ledge/ceiling to settle graph representation, proof
+identity, persistence, and bounded acceptance inputs. Phase 1 begins after
+that contract review.
+
+### 2026-11-09 - GridForge v10 and controller contract draft
+
+Trailblazer now references `GridForge` and `GridForge.Lean` 10.0.0 in package
+mode, matching the existing source pin. Current rectangular slab tracing
+already uses the v10 surface. Trailblazer already targets the compatible
+frameworks and uses the v8 collection types and shared Chronicler diagnostics,
+so the upgrade required only the two package reference changes.
+[GridForge v10 migration guide](https://github.com/mrdav30/GridForge/blob/v10.0.0/docs/MIGRATION.md#migrating-from-gridforge-v9-to-v10)
+
+Windows validation with .NET SDK 10.0.302 used the existing projects.
+
+| Validation | Release | ReleaseLean |
+| --- | --- | --- |
+| Released-package core | GridForge 10.0.0 on both library targets. 3,250 tests passed. | GridForge.Lean 10.0.0 on both library targets. 3,150 tests passed. |
+| Released-package benchmark project | Build passed | Build passed |
+| Local-source solution | Build passed. 3,250 core and 90 adapter tests passed. | Build passed. 3,150 core and 86 adapter tests passed. |
+
+In each configuration, the combined coverage report used the released-package
+core run and local-source adapter run. It covered 32,511/32,511 lines,
+13,304/13,304 branches, and 3,194/3,194 fully covered methods across both
+assemblies.
+
+Source validation used the sibling checkouts, with Gravitas at `3f1a83fb`.
+Adapter package validation remains gated by the Gravitas 1.1.0 release.
+
+The [controller contract](#public-2d-controller-contract) records
+the first signatures, owner files, and accepted-motion and support lifecycle.
+Independent review checked the version bump and the frame, support, and
+posture boundaries. The controller checkbox stays open for review against the
+two graph examples and the exact replay and record contract.
+
+### 2026-11-09 - Phase 0 contract closeout
+
+Against Trailblazer `f3562cd`, review selected one shared graph, acquisition
+pipeline, and scheduler, with separate planar proofs and a native controller
+boundary. The acceptance inputs above supersede the early box-based design
+examples. Independent review checked the connected owners and corrected the
+slope endpoint projection, fixed-foot ceiling boundary, cardinal cost oracle,
+and restored carrier binding. Exact costs 6 and 11/2 are the expected
+forward graph costs, with reverse Flow required to re-evaluate those same
+directed edges.
+
+On Windows with .NET SDK 10.0.302, a disposable `net10.0` console probe
+referenced GridForge 10.0.0 and then GridForge.Lean 10.0.0. Each passed 98
+assertions, including fixture guards. The probe captured the public
+`GridNavigationBaseline` generation, then used
+`TracePlanarNavigationBodyInto` and the FixedMathSharp v8 capsule predicates
+on the bounded fixtures. It established the six detour legs, denied-cell
+evidence, corridor tangency and one-raw wider failure, separate headroom and
+support requirements, all ten compact jump sweeps and exact landing, the
+slope offset, and clear and blocked step lifts. The one-raw ceiling control
+translated the exact-tangent capsule up one raw unit. The fixed-foot growth
+control used two extra raw axis units.
+
+| Existing test controls | Release | ReleaseLean |
+| --- | --- | --- |
+| Gravitas native support, host motion, and posture tests at `d7ffa17b` | 105 passed | 105 passed |
+| Trailblazer transition edges and guides, Flow equivalence, scheduling, A* connectors, profile replacement, and serialization filter | 386 passed | 335 passed |
+| Trailblazer 3D moving/rotated carrier replay on the existing local-source adapter build | 2 passed, JSON and MemoryPack | 1 passed, JSON |
+
+The executed probes establish the primitive geometry and existing 3D
+controls. New planar search, controller, transactional restore, and joint
+replay remain implementation acceptance tests. No production path changed in
+this checkpoint, so the matched 3D timings remain a pre-edit gate for the
+first affected runtime path. Phase 1 starts with the bounded top-down
+obstacle and portal cases.

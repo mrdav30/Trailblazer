@@ -5,9 +5,11 @@
 
 **Created:** 2026-09-03
 
-**Status (2026-11-09):** Phase 0 contract review is complete. The
-[reviewed design and acceptance inputs](#phase-0---settle-the-2d-contract)
-are ready for Phase 1's first failing top-down cases. Use
+**Status (2026-11-09):** Phase 1 is in progress. The first slice implements
+offline layer-bound top-down bakes after capturing the
+[matched 3D controls](#2026-11-09---phase-1-authoring-and-3d-baselines).
+Next is planar publication and endpoint admission for the reviewed obstacle
+and portal cases. Use
 `UseLocalLsfStack=true` for adapter development. The core package references
 GridForge 10.0.0. Released-package validation of the adapter still requires
 Gravitas 1.1.0. Hard-budgeted physics queries remain a separate
@@ -446,7 +448,7 @@ require the existing matched performance controls.
 | Phase | Deliverable | Status | Gate |
 | --- | --- | --- | --- |
 | 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
-| 1 | Native planar guidance and top-down movement | Not started | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
+| 1 | Native planar guidance and top-down movement | In progress | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
 | 2 | Side-view traversal and profile changes | Not started | In-plane support, locomotion, posture/capability sequences, and replay verified |
 | 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
 
@@ -892,6 +894,10 @@ in the existing test projects.
 
 ## Phase 1 - Native Planar Guidance And Top-Down Movement
 
+- [x] **Capture the pre-edit 3D controls and bake the first fixtures.** Reuse
+  the map builder for immutable top-down layer identity and canonical authored
+  cells. Keep planar bakes out of spatial preparation until the graph has
+  domain-aware publication and query admission.
 - [ ] **Write the first failing planar acceptance cases.** Test obstacle
   avoidance and a narrow gap at fitting/non-fitting body sizes through the
   public 2D contract, including no out-of-plane drift. Record the intended
@@ -2030,3 +2036,66 @@ replay remain implementation acceptance tests. No production path changed in
 this checkpoint, so the matched 3D timings remain a pre-edit gate for the
 first affected runtime path. Phase 1 starts with the bounded top-down
 obstacle and portal cases.
+
+### 2026-11-09 - Phase 1 authoring and 3D baselines
+
+Captured the 3D baseline before changing shared code at Trailblazer
+`0923a116847d37268cef3199631bebd1061a0479`. The Release source build used
+Chronicler `7b90d59`, FixedMathSharp `e2c325a`, SwiftCollections `08b1b38`,
+and GridForge `c4f80a0`. The Windows host used an i7-9700K, .NET SDK 10.0.302,
+.NET runtime 10.0.10 x64, and BenchmarkDotNet 0.15.8.
+
+Use the existing benchmark project with `UseLocalLsfStack=true`. Build the
+Release host and sibling binaries before starting the measurement so generated
+children consume the intended prebuilt dependencies. For the BDN cases use
+three launches, one warmup, and three actual iterations per launch.
+
+| Control | Workload and baseline |
+| --- | --- |
+| `navigation-guided-frame` | `Simulate64GuidedFramesInstrumentedBalancedPhases`, 100 agents each for A* and Flow. At 32 Hz with a 16-frame LOS interval, actual frame medians were 1.876 and 1.884 ms, observed P95s 2.317 and 3.584 ms. Both had 576 actual frames, 0 B/frame, and matching replay and ray counts across launches. |
+| `navigation-ray` | `Execute` for Medium and SparseBlocked. Each visited 64 trace and 64 covered intervals, with 125 and 0 evaluated edges respectively. Both allocated 0 B in the warm preflight. BDN means were 5.831 ms and 405.1 µs per operation. |
+| Scheduled recovery | Run the frozen Release host with `recovery-capture <launch> Scheduled Default Flow100` for launches 1–3. Each launch has five warmups and fifteen actual episodes. Exact completion frames were 1,281 cold, 203 warm, 1,419 rebake, 1,419 replacement, and 303 restore. |
+
+Accepted captures are under `artifacts/phase1-0923a11-source-baseline`, with
+frozen DLL hashes, generated children, console output, and analyzer summaries.
+The package-host attempt failed to load the expected prebuilt GridForge
+assembly in the generated children. The first ray filter selected no cases,
+and the Flow100/500 attempt was stopped before all launches completed.
+Only completed children and the completed Flow100 launches count above.
+
+The first authoring tests used the Phase 0 obstacle cell and one-row portal
+fixtures. On `0923a11`, they failed to compile because `SetPlanarLayer` and
+`PlanarBinding` were absent. The implementation extends the existing map
+builder and bake equality with the exact layer and embedding. The first
+inline layout added 24 bytes to every spatial bake and broke existing exact
+capacity tests when accounted. The binding now lives in the planar bake's
+read-only cell view, preserving spatial layout, reservations, and hashes.
+Planar bakes reject off-layer explicit cells and spatial edge authoring. Preparation
+rejects them before they reach the spatial graph.
+
+Windows package-mode core validation passed 3,264 Release and 3,164
+ReleaseLean tests, including the existing exact-capacity cases. Both
+library targets built in each configuration. Each configuration covered
+32,354/32,354 lines, 13,302/13,302 branches, and 3,188/3,188 fully covered
+methods. The local-source adapter at Gravitas `d7ffa17b` passed 90 Release
+and 86 ReleaseLean tests. Combined reports for both configurations covered
+32,547/32,547 lines, 13,332/13,332 branches, and 3,201/3,201 fully covered
+methods across both assemblies. The DocFX build passed with warnings as
+errors.
+
+The matched rerun under `artifacts/phase1-authoring-post` used the same
+dependency DLL hashes and reversed workload order. Guided and recovery
+frame hashes and work counts matched exactly, as did recovery completion
+frames and frame allocations. Both warm ray preflights and all guided
+frames again allocated 0 B. Post-edit guided medians were 1.869 ms for A*
+and 1.683 ms for Flow, with P95s of 2.078 and 3.645 ms. Ray means were
+5.818 ms for Medium and 421.3 µs for SparseBlocked. All five recovery
+median-of-episode frame medians moved by less than 0.007 ms. These are
+observed timings for this capture.
+
+The next slice uses the existing publication pipeline and adds a planar
+endpoint caller for the stationary body proof. Keep spatial endpoint,
+seam, and committed-cell readers isolated when admitting planar cells.
+Charge the planar cell-view payload in preparation when it becomes
+admissible. The fitted portal, detour, A*/Flow, and accepted controller
+motion remain runtime acceptance cases.

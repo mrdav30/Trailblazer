@@ -61,6 +61,10 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     /// </summary>
     public NormalizedGridConfiguration GridBinding { get; }
 
+    /// <summary>Gets the exact planar domain, or null for a spatial bake.</summary>
+    public NavigationPlanarBinding? PlanarBinding =>
+        _cellView is PlanarCellView planar ? planar.Binding : null;
+
     /// <summary>
     /// Authored cells in stable lexicographic topology-local index order.
     /// </summary>
@@ -106,7 +110,8 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         NavigationConnection[] connections,
         TraversalTransitionDefinition[] transitions,
         TraversalTransitionRule[] transitionRules,
-        NavigationCell? defaultCell)
+        NavigationCell? defaultCell,
+        NavigationPlanarBinding? planarBinding)
     {
         MapId = mapId;
         GridBinding = gridBinding;
@@ -115,8 +120,12 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         _transitions = transitions;
         _transitionRules = transitionRules;
         _defaultCell = defaultCell;
-        _nativePortalTemplates = CompileNativePortalTemplates(gridBinding);
-        _cellView = Array.AsReadOnly(_cells);
+        _nativePortalTemplates = planarBinding.HasValue
+            ? Array.Empty<GridNavigationPortal>()
+            : CompileNativePortalTemplates(gridBinding);
+        _cellView = planarBinding.HasValue
+            ? new PlanarCellView(_cells, planarBinding.Value)
+            : Array.AsReadOnly(_cells);
         _connectionView = Array.AsReadOnly(_connections);
         _transitionView = Array.AsReadOnly(_transitions);
         _transitionRuleView = Array.AsReadOnly(_transitionRules);
@@ -130,6 +139,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         if (other is null
             || !string.Equals(MapId, other.MapId, StringComparison.Ordinal)
             || GridBinding.Key != other.GridBinding.Key
+            || !Nullable.Equals(PlanarBinding, other.PlanarBinding)
             || !_defaultCell.Equals(other._defaultCell)
             || _cells.Length != other._cells.Length
             || _connections.Length != other._connections.Length
@@ -178,6 +188,8 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         hash = SwiftHashTools.CombineHashCodes(hash, GridBinding.Height);
         hash = SwiftHashTools.CombineHashCodes(hash, GridBinding.Length);
         hash = SwiftHashTools.CombineHashCodes(hash, _defaultCell.GetHashCode());
+        if (PlanarBinding is NavigationPlanarBinding planar)
+            hash = SwiftHashTools.CombineHashCodes(hash, planar.GetHashCode());
         for (int i = 0; i < _cells.Length; i++)
             hash = SwiftHashTools.CombineHashCodes(hash, _cells[i].GetHashCode());
         for (int i = 0; i < _connections.Length; i++)
@@ -187,6 +199,18 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         for (int i = 0; i < _transitionRules.Length; i++)
             hash = SwiftHashTools.CombineHashCodes(hash, _transitionRules[i].GetHashCode());
         return hash;
+    }
+
+    // Only planar bakes pay for layer metadata. Spatial map size and storage stay the same.
+    private sealed class PlanarCellView : ReadOnlyCollection<NavigationCellEntry>
+    {
+        internal PlanarCellView(NavigationCellEntry[] cells, NavigationPlanarBinding binding)
+            : base(cells)
+        {
+            Binding = binding;
+        }
+
+        internal NavigationPlanarBinding Binding { get; }
     }
 
     internal bool ContainsCell(GridForge.Spatial.VoxelIndex index) =>

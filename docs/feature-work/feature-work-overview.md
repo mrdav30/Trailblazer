@@ -30,8 +30,10 @@ instead of burying it in notes.
     Trailblazer now references GridForge 10.0.0 in both package families.
     Released-package validation of the adapter awaits Gravitas 1.1.0.
     [Phase 0 evidence](twoDimensionalNavigationPlan.md#2026-11-09---phase-0-contract-closeout)
-  - Phase 1 starts with the bounded top-down obstacle and portal cases.
-    Retain one graph, A*/Flow pipeline, and scheduler. The 2D controller uses
+  - Phase 1 has captured matched 3D controls and started with offline
+    top-down layer authoring. Planar publication and endpoint admission come
+    next for the obstacle and portal cases. Retain one graph, A*/Flow
+    pipeline, and scheduler. The 2D controller uses
     native geometry and preserves the 3D frame, ownership, and replay
     guarantees. Hard physics-query budgets remain a separate 2D/3D workstream.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)

@@ -16,12 +16,15 @@ public sealed class PreparedNavigationMap
     private const long TransitionRuleRetainedBytes = 80L;
 
     /// <summary>Creates an inert prepared-map descriptor from a validated immutable map.</summary>
+    /// <exception cref="ArgumentException">The map is planar or a preparation argument is invalid.</exception>
     public PreparedNavigationMap(
         NavigationMap map,
         long bakeVersion,
         NavigationMapCheckpointStamp? checkpointStamp = null)
     {
         ChronicleGuard.ThrowIfNull(map, nameof(map));
+        ChronicleGuard.ThrowIfArgument(map.PlanarBinding.HasValue, nameof(map),
+            "Planar maps require planar runtime publication.");
         ChronicleGuard.ThrowIfArgument(bakeVersion <= 0, nameof(bakeVersion));
         ChronicleGuard.ThrowIfArgument(
             checkpointStamp.HasValue

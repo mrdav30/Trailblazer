@@ -25,6 +25,7 @@ public sealed class NavigationMapBuilder
     private readonly SwiftList<TraversalTransitionDefinition> _transitions = new();
     private readonly SwiftList<TraversalTransitionRule> _transitionRules = new();
     private NavigationCell? _defaultCell;
+    private NavigationPlanarBinding? _planarBinding;
 
     /// <summary>
     /// The stable host-owned identifier assigned to the resulting map.
@@ -64,6 +65,22 @@ public sealed class NavigationMapBuilder
         GridConfiguration gridConfiguration)
         : this(mapId, Normalize(gridConfiguration))
     {
+    }
+
+    /// <summary>Sets the selected grid layer and world Y embedding for a top-down bake.</summary>
+    /// <remarks>Planar bakes can be authored offline while runtime publication remains spatial.</remarks>
+    /// <exception cref="ArgumentException">The mode, layer, or embedding is unsupported.</exception>
+    public NavigationMapBuilder SetPlanarLayer(NavigationMode2D mode, int layerIndex, Fixed64 embeddingY)
+    {
+        ChronicleGuard.ThrowIfArgument(mode != NavigationMode2D.TopDown, nameof(mode),
+            "This authoring path supports top-down planar maps.");
+        bool hasLayer = GridBinding.TryGetCellPrism(new VoxelIndex(0, layerIndex, 0), out GridCellPrism prism);
+        ChronicleGuard.ThrowIfArgument(!hasLayer, nameof(layerIndex),
+            "The selected layer must belong to the normalized grid.");
+        ChronicleGuard.ThrowIfArgument(embeddingY < prism.VerticalMin || embeddingY > prism.VerticalMax,
+            nameof(embeddingY), "The embedding must lie inside the selected layer.");
+        _planarBinding = new NavigationPlanarBinding(mode, layerIndex, embeddingY);
+        return this;
     }
 
     /// <summary>
@@ -138,6 +155,9 @@ public sealed class NavigationMapBuilder
         if (_defaultCell.HasValue)
             ValidateCellPayload(_defaultCell.Value, nameof(_defaultCell));
         ValidateCells(cells);
+        ChronicleGuard.ThrowIfArgument(
+            _planarBinding.HasValue && (connections.Length != 0 || transitions.Length != 0 || transitionRules.Length != 0),
+            nameof(NavigationMap.PlanarBinding), "Planar connection and transition authoring is not supported yet.");
         ValidateConnections(cells, connections);
         ValidateTransitions(cells, transitions);
         ValidateTransitionRules(transitionRules);
@@ -149,7 +169,8 @@ public sealed class NavigationMapBuilder
             connections,
             transitions,
             transitionRules,
-            _defaultCell);
+            _defaultCell,
+            _planarBinding);
     }
 
     /// <summary>
@@ -227,9 +248,10 @@ public sealed class NavigationMapBuilder
         {
             NavigationCellEntry entry = cells[i];
             ChronicleGuard.ThrowIfArgument(
-                !GridBinding.IsValidIndex(entry.Index),
+                !GridBinding.IsValidIndex(entry.Index)
+                    || (_planarBinding.HasValue && entry.Index.y != _planarBinding.Value.LayerIndex),
                 nameof(cells),
-                $"Cell index {entry.Index} is outside the normalized grid address space.");
+                $"Cell index {entry.Index} is outside the map's grid address space or selected layer.");
             ValidateCellPayload(entry.Cell, nameof(cells));
 
             ChronicleGuard.ThrowIfArgument(

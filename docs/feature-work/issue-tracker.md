@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-157`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-158`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -26,43 +26,25 @@
 
 ## Active Issues
 
-### TRB-Issue-156 - Moving-platform replay diverges on the first restored frame
+### TRB-Issue-157 - Stationary rotated platform produces residual carry
 
-- **Discovered:** 2026-10-26 during the Chronicler.Diagnostics extraction.
-- **Status:** Open; reproduced before and after the extraction. Root cause is
-  not yet established.
-- **Area:** `GravitasNavigator3D` moving-platform snapshot continuation.
-- **Evidence:** Both JSON and MemoryPack cases of
-  `ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace` fail
-  at frame 8: expected position `(0.03163156774826348, -0.25,
-  0.02840337809175253)`, actual `(0.06393725564703345, -0.25,
-  0.05752925458364189)`. Immediate post-load pose and turning assertions pass.
-  The same failures reproduce in an isolated local-stack Release build at
-  Trailblazer `75422a0`, Gravitas `93ae61f`, GridForge `09f810e`, SwiftCollections
-  `5e0c4e0`, FixedMathSharp `f86bebe`, and Chronicler `18e9ef8`, both with and
-  without the starting workspace's uncommitted Gravitas query-lifetime edits.
-  The migrated `ReleaseLean` suite reproduces the same values in its JSON case;
-  MemoryPack is compiled out in that configuration.
-- **Local-identity recheck (2026-11-04):** The six-repository evergreen identity
-  migration reproduces the same values: Release adapter 88 passed / 2 failed,
-  ReleaseLean adapter 85 passed / 1 failed. Core navigation passes 3,245 and
-  3,146 respectively. An isolated copy of the same authored sources also
-  reproduces both Release failures with coherent numeric local identities:
-  Chronicler `1.0.0`, FixedMathSharp `8.0.0`, SwiftCollections `7.0.0`, GridForge
-  `9.1.0`, Gravitas `1.1.0`, Trailblazer `2.0.0`, with matching four-part
-  assembly versions. The evergreen labels do not explain this divergence.
-  Source bases are Chronicler `70b97a1`, FixedMathSharp `ba14b8f`,
-  SwiftCollections `980586f`, GridForge `3229299`, Gravitas `b1861ea`, and
-  Trailblazer `b97ea6f`, with local build-identity edits and the pre-existing
-  GridForge workspace changes. No runtime code or replay assertions changed
-  during this recheck.
-- **Reproduction:** With `UseLocalLsfStack=true`, run
-  `dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -p:UseLocalLsfStack=true -p:DisableTransitiveProjectReferences=true -m:1 --filter FullyQualifiedName~ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace`.
-- **Expected:** Restoring the snapshot must reproduce every subsequent accepted
-  position and the remaining trace exactly for both transports.
-- **Boundary:** This is not established as a recurrence of TRB-Issue-147; the
-  turning-state assertions involved there pass here. Diagnose the first resumed
-  platform/navigation step without weakening the replay assertions.
+- **Discovered:** 2026-11-08 while diagnosing TRB-Issue-156.
+- **Area:** `PlatformLocomotion.HandlePlatformMovement` and
+  `GetPlatformInfluence`.
+- **Evidence:** In the moving-platform replay, freeze the platform after frame
+  39 and step twice to consume the last transform. At the next prepare, with
+  the same platform transform, the attachment requests an X displacement of
+  -2 Fixed64 raw units and zero Y/Z displacement. A 100-frame idle probe
+  observed horizontal residuals as large as 3 raw units and nonzero accepted
+  velocity after ordinary frictional coasting had decayed.
+- **Cause:** Carry transforms the stored local attachment back to world space
+  and subtracts the foot position. An unchanged rotated platform can produce
+  a nonzero result because the fixed-point inverse and forward transforms do
+  not round-trip exactly.
+- **Expected:** An unchanged carrier contributes zero displacement while
+  ordinary locomotion, friction, and carry from a changed carrier still apply.
+  Preserve exact restored continuation and verify this separately from the
+  frame-8 host publication failure.
 
 ## Closed Investigations
 
@@ -306,6 +288,68 @@ alone do not justify renewed open-ended investigation.
   failures.
 
 ## Resolved Issues
+
+### TRB-Issue-156 - Moving-platform replay diverges on the first restored frame
+
+- **Discovered:** 2026-10-26 during the Chronicler.Diagnostics extraction.
+- **Resolved:** 2026-11-08. The restored fixture publishes the host platform
+  collider before the first resumed command.
+- **Area:** `GravitasNavigator3D` moving-platform snapshot continuation.
+- **Evidence:** Both JSON and MemoryPack cases of
+  `ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace` fail
+  at frame 8: expected position `(0.03163156774826348, -0.25,
+  0.02840337809175253)`, actual `(0.06393725564703345, -0.25,
+  0.05752925458364189)`. Immediate post-load pose and turning assertions pass.
+  The same failures reproduce in an isolated local-stack Release build at
+  Trailblazer `75422a0`, Gravitas `93ae61f`, GridForge `09f810e`, SwiftCollections
+  `5e0c4e0`, FixedMathSharp `f86bebe`, and Chronicler `18e9ef8`, both with and
+  without the starting workspace's uncommitted Gravitas query-lifetime edits.
+  The migrated `ReleaseLean` suite reproduces the same values in its JSON case;
+  MemoryPack is compiled out in that configuration.
+- **Local-identity recheck (2026-11-04):** The six-repository evergreen identity
+  migration reproduces the same values: Release adapter 88 passed / 2 failed,
+  ReleaseLean adapter 85 passed / 1 failed. Core navigation passes 3,245 and
+  3,146 respectively. An isolated copy of the same authored sources also
+  reproduces both Release failures with coherent numeric local identities:
+  Chronicler `1.0.0`, FixedMathSharp `8.0.0`, SwiftCollections `7.0.0`, GridForge
+  `9.1.0`, Gravitas `1.1.0`, Trailblazer `2.0.0`, with matching four-part
+  assembly versions. The evergreen labels do not explain this divergence.
+  Source bases are Chronicler `70b97a1`, FixedMathSharp `ba14b8f`,
+  SwiftCollections `980586f`, GridForge `3229299`, Gravitas `b1861ea`, and
+  Trailblazer `b97ea6f`, with local build-identity edits and the pre-existing
+  GridForge workspace changes. No runtime code or replay assertions changed
+  during this recheck.
+- **Reproduction:** With `UseLocalLsfStack=true`, run
+  `dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -p:UseLocalLsfStack=true -p:DisableTransitiveProjectReferences=true -m:1 --filter FullyQualifiedName~ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace`.
+- **Expected:** Restoring the snapshot must reproduce every subsequent accepted
+  position and the remaining trace exactly for both transports.
+- **Root cause:** The fixture assigned the frame-7 platform pose after its
+  ninth empty step, then overwrote that host transform with the frame-8
+  command. Gravitas runs CCD before its late bodyless collider refresh. On
+  frame 8 the two Navigators requested the same position and rotation and
+  had matching collision filters. CCD saw the committed frame-7 floor in the
+  source world and the original floor in the restored world.
+- **Fix:** Apply the saved platform pose before the ninth world-only step, so
+  partition preparation commits the saved geometry before actor population
+  and the next platform command. Matching all 32 moving frames with this one
+  publication step isolates the cause from prior actor or platform history.
+  The integration guide documents immediate publication with
+  `collider.Simulate()` when restoring a bodyless platform.
+- **Idle check:** With frame 8 corrected, the old source-only tail still
+  expected an immediate stop. With the fixture's 1/4 dynamic friction,
+  stationary input retains 3/4 of the preceding accepted velocity each frame.
+  The regression compares the worlds exactly through ten idle frames and
+  checks the requested displacement after the final carry against that decay.
+  Its four-raw-unit per-axis allowance covers the separate stationary
+  attachment residual tracked in TRB-Issue-157.
+- **Verification:** Both transports reproduced the original frame-8 values on
+  Trailblazer `372171d` with the pinned develop runtime sources. The corrected
+  source-stack suites pass on Windows and Ubuntu with 3,245 core and 90 adapter
+  tests in Release, and 3,146 core and 86 adapter tests in ReleaseLean. Both
+  assemblies meet the exact coverage gate in both configurations, with 32,475
+  lines, 13,278 branches, and 3,190 fully covered methods. DocFX passes with
+  warnings as errors. Package-mode restore reports `NU1102` for the required
+  `Gravitas` and `Gravitas.Lean` `1.1.0` packages.
 
 ### TRB-Issue-155 - The final allowed jump cancels its held-input extension
 

@@ -42,11 +42,13 @@ public sealed class GravitasNavigator3DPlatformReplayTests
         object navigatorSnapshot = GravitasRecordSnapshot.Save(source.Navigator, memoryPack);
 
         using var restoredFixture = new GravitasProfileReplacementScenarioFixture(addSupport: true);
-        // Reconstruct the host world and logical time before body and navigator.
-        for (int frame = 0; frame < 9; frame++)
+        // Publish the checkpoint platform pose during the last world-only step so
+        // the first resumed CCD step sees the same committed collider as the source.
+        for (int frame = 0; frame < 8; frame++)
             restoredFixture.Step();
         restoredFixture.SupportTransform!.LocalPosition = sourceFixture.SupportTransform!.LocalPosition;
         restoredFixture.SupportTransform.LocalRotation = sourceFixture.SupportTransform.LocalRotation;
+        restoredFixture.Step();
         using GravitasNavigatorActor restored = restoredFixture.CreateActor(
             profile: compact, carrierIdResolver: _ => 71);
         GravitasRecordSnapshot.Load(restored.Body, bodySnapshot);
@@ -65,6 +67,7 @@ public sealed class GravitasNavigator3DPlatformReplayTests
             MovePlatform(restoredFixture, frame);
             sourceFixture.Step(source);
             restoredFixture.Step(restored);
+            restored.NavigatorRequestedPosition.Should().Be(source.NavigatorRequestedPosition, "replay frame {0}", frame);
             restored.Navigator.Position.Should().Be(source.Navigator.Position, "replay frame {0}", frame);
             restored.Navigator.Velocity.Should().Be(source.Navigator.Velocity, "replay frame {0}", frame);
             restored.Navigator.Rotation.Should().Be(source.Navigator.Rotation);
@@ -82,15 +85,26 @@ public sealed class GravitasNavigator3DPlatformReplayTests
                 restored.Navigator.Position, restored.Navigator.Velocity, restoredPlatform.ScoutLocalPoint);
         }
 
-        // Once the final transform has been consumed, neither idle carry nor
-        // the rebuilt attachment may accumulate further displacement.
-        sourceFixture.Step(source);
-        sourceFixture.Step(source);
-        Vector3d stopped = source.Navigator.Position;
-        for (int frame = 0; frame < 8; frame++)
+        // Consume the last sampled platform transform, then check ordinary
+        // frictional coasting with only raw-unit attachment roundoff allowed.
+        Fixed64 attachmentRoundoff = Fixed64.FromRaw(4);
+        for (int frame = 0; frame < 10; frame++)
         {
+            Vector3d coastingPosition = source.Navigator.Position
+                + source.Navigator.Velocity * Fixed64.FromFraction(3, 4) * sourceFixture.Trailblazer.DeltaTime;
             sourceFixture.Step(source);
-            source.Navigator.Position.Should().Be(stopped);
+            restoredFixture.Step(restored);
+            restored.NavigatorRequestedPosition.Should().Be(source.NavigatorRequestedPosition, "stationary platform frame {0}", frame);
+            restored.Navigator.Position.Should().Be(source.Navigator.Position, "stationary platform frame {0}", frame);
+            restored.Navigator.Velocity.Should().Be(source.Navigator.Velocity);
+            restored.Navigator.Rotation.Should().Be(source.Navigator.Rotation);
+            if (frame < 2)
+                continue;
+
+            Vector3d residual = source.NavigatorRequestedPosition - coastingPosition;
+            residual.X.Abs().Should().BeLessThanOrEqualTo(attachmentRoundoff);
+            residual.Y.Should().Be(Fixed64.Zero);
+            residual.Z.Abs().Should().BeLessThanOrEqualTo(attachmentRoundoff);
         }
         source.Dispose();
         restored.Dispose();

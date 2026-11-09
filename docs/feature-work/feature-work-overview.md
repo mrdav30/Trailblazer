@@ -60,7 +60,7 @@ instead of burying it in notes.
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
     the default; use `UseLocalLsfStack=true` only for coordinated validation of
     unreleased sibling changes, then revalidate against released packages.
-  - The issue tracker has no active entries. `TRB-Issue-119` is closed as
+  - `TRB-Issue-119` is closed as
     unreproduced, with historical evidence, bounded verification and recurrence
     capture instructions retained. GridForge's `GF-Issue-006` and
     FixedMathSharp's `FMS-Issue-018` are likewise closed as unreproduced, not

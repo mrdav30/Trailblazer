@@ -137,13 +137,18 @@ callbacks observe them. A rejected growth leaves both live shapes unchanged. Do
 not resize the collider independently and then try to repair navigation.
 
 Restore the host world/settings, maps/policies, platform transforms, and
-physical body/collider first. Set up a Navigator shell with the recorded
-profile, then populate it through Chronicler. Successful population clears
-adapter-local prepared motion and cached support; the next complete frame
-samples support and rebuilds transient guidance. Rejected population preserves a
-valid prepared frame. JSON and standard-family MemoryPack follow the same
-ownership boundary. See [Serialization](Serialization.md) for the full load
-contract.
+physical body/collider first. Publish each restored bodyless platform pose to
+its collider before applying the first resumed platform command. For a host
+transform edit, `collider.Simulate()` publishes the geometry and partition
+immediately. CCD runs before the usual bodyless partition refresh during
+`LateSimulate()` and uses the committed pose.
+
+Set up a Navigator shell with the recorded profile, then populate it through
+Chronicler. Successful population clears adapter-local prepared motion and
+cached support. The next complete frame samples support and rebuilds transient
+guidance. Rejected population preserves a valid prepared frame. JSON and
+standard-family MemoryPack follow the same ownership boundary. See
+[Serialization](Serialization.md) for the full load contract.
 
 For teardown, reset each Navigator, deactivate its host-owned body and any
 bodyless colliders, dispose both contexts, and dispose the shared world last.

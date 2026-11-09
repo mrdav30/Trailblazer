@@ -6,13 +6,14 @@
 //=======================================================================
 
 using FixedMathSharp;
+using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
-/// <content>Resolves strict top-down placement against the current publication.</content>
+/// <content>Proves top-down placement and ordinary legs against the current publication.</content>
 public sealed partial class TrailblazerPathingService
 {
-    private NavigationTopDownEndpointWork? _topDownEndpoint;
+    private NavigationTopDownWork? _topDown;
 
     /// <summary>Checks whether a top-down circle fits at the exact center and resolves its cell in the named map.</summary>
     /// <remarks>
@@ -32,6 +33,39 @@ public sealed partial class TrailblazerPathingService
     {
         EnsureUsable();
         ChronicleGuard.ThrowIfArgument(string.IsNullOrWhiteSpace(mapId), nameof(mapId));
+        return RunTopDownQuery(mapId, null, center, default, radius, areaPolicy, medium, capabilities, budget, out address);
+    }
+
+    /// <summary>Validates the swept top-down circle between the centers of two ordinary neighboring cells.</summary>
+    /// <remarks>
+    /// The addresses must be on materialized top-down layers with the same embedding. Rectangular legs use
+    /// cardinal neighbors. Compatible footprints can meet across map boundaries. Exact tangency is allowed.
+    /// Every required cell must be physically present and pass the current obstacle, medium, capability,
+    /// area, and radius checks. An evaluated leg consumes one edge allowance and bounded lookup and coverage work.
+    /// </remarks>
+    /// <returns>
+    /// Success means the complete leg is clear. NoPath means the leg is unsupported or blocked. InvalidStart and
+    /// InvalidEnd identify invalid addresses. NoMap means a named top-down map is unavailable. Stale means the
+    /// policy or publication evidence is unavailable or changed.
+    /// </returns>
+    /// <exception cref="System.ArgumentException">The area policy key is invalid.</exception>
+    public NavigationGuideStatus ValidateTopDownLeg(NavigationCellAddress source, NavigationCellAddress destination,
+        Fixed64 radius, NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities,
+        NavigationWorkBudget budget)
+    {
+        EnsureUsable();
+        if (source.MapId == null)
+            return NavigationGuideStatus.InvalidStart;
+        if (destination.MapId == null)
+            return NavigationGuideStatus.InvalidEnd;
+        return RunTopDownQuery(source.MapId, source.Index, default, destination, radius, areaPolicy, medium,
+            capabilities, budget, out _);
+    }
+
+    private NavigationGuideStatus RunTopDownQuery(string mapId, VoxelIndex? sourceIndex, Vector2d center,
+        NavigationCellAddress destination, Fixed64 radius, NavigationAreaPolicyKey areaPolicy, TraversalMedium medium,
+        TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address)
+    {
         areaPolicy.Validate(nameof(areaPolicy));
         address = default;
         TraversalMedia media = NavigationCell.ToMedia(medium);
@@ -50,26 +84,25 @@ public sealed partial class TrailblazerPathingService
             if (lease == null)
                 return NavigationGuideStatus.CapacityExceeded;
             NavigationWorldGraph graph = lease.Graph;
-            if (!graph.TryGetMap(mapId, out NavigationMapInstance source)
-                || !source.IsMaterialized
-                || source.Map.PlanarBinding is not NavigationPlanarBinding binding)
-            {
+            if (!NavigationTopDownWork.TryGetMap(graph, mapId, out var source, out var binding))
                 return NavigationGuideStatus.NoMap;
-            }
             if (graph.AreAllStructuralComponentsClosed
                 || !graph.AreaCatalog.TryGet(areaPolicy, out NavigationAreaPolicy policy))
                 return NavigationGuideStatus.Stale;
 
-            _topDownEndpoint ??= new NavigationTopDownEndpointWork(immediate.RayWork.Workspace);
+            _topDown ??= new NavigationTopDownWork(immediate.RayWork.Workspace);
             immediate.WorkMeter.Reset(budget);
-            NavigationGuideStatus status = _topDownEndpoint.Resolve(world, graph, source, binding, center,
-                radius, media, capabilities, policy, immediate.WorkMeter, out address);
-            return FinishTopDownEndpoint(status, graph, _navigationGraph.Current, epoch,
+            NavigationGuideStatus status = sourceIndex is VoxelIndex index
+                ? _topDown.ValidateLeg(world, graph, source, binding, index, destination, radius, media,
+                    capabilities, policy, immediate.WorkMeter)
+                : _topDown.Resolve(world, graph, source, binding, center, radius, media, capabilities, policy,
+                    immediate.WorkMeter, out address);
+            return FinishTopDownQuery(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence), ref address);
         }
     }
 
-    internal static NavigationGuideStatus FinishTopDownEndpoint(NavigationGuideStatus status,
+    internal static NavigationGuideStatus FinishTopDownQuery(NavigationGuideStatus status,
         NavigationWorldGraph captured, NavigationWorldGraph current,
         (long Spawn, uint Version, ulong Sequence) before, (long Spawn, uint Version, ulong Sequence) after,
         ref NavigationCellAddress address)

@@ -10,8 +10,9 @@ through the shared graph with selected-layer defaults and overlays. See the
 [publication checkpoint](#2026-11-09---phase-1-planar-publication).
 Spatial query and edge admission excludes those cells. The [strict top-down
 placement check](#2026-11-09---phase-1-strict-top-down-endpoints) resolves a
-current endpoint. Native routing comes next for the reviewed obstacle and
-portal cases. Use
+current endpoint. [Swept-circle validation](#2026-11-09---phase-1-top-down-leg-clearance)
+checks an ordinary leg between cell centers. Native routing comes next for
+the reviewed obstacle and portal cases. Use
 `UseLocalLsfStack=true` for adapter development. The core package references
 GridForge 10.0.0. Released-package validation of the adapter still requires
 Gravitas 1.1.0. Hard-budgeted physics queries remain a separate
@@ -905,6 +906,9 @@ in the existing test projects.
 - [x] **Admit a strict top-down circle endpoint.** Use exact stationary GridForge
   coverage on the selected layer and compatible neighbors. Expose a bounded
   placement check for hosts and keep native route acquisition controller-owned.
+- [x] **Prove one ordinary top-down leg.** Use the same circle evaluator for the
+  full center-to-center sweep. Preserve cardinal rectangular neighbors, native
+  hex neighbors, and exact compatible footprints across maps.
 - [ ] **Write the first failing planar acceptance cases.** Test obstacle
   avoidance and a narrow gap at fitting/non-fitting body sizes through the
   public 2D contract, including no out-of-plane drift. Record the intended
@@ -2231,3 +2235,67 @@ DocFX passed with warnings treated as errors.
 Native swept legs and route admission for the obstacle detour and fitted
 portal are the next Phase 1 work. The shared A*/Flow and scheduler contracts
 remain the implementation target.
+
+### 2026-11-09 - Phase 1 top-down leg clearance
+
+Before shared edits, the Release source stack captured the matched 3D controls
+at Trailblazer `66e94cf`, FixedMathSharp `e2c325a`, SwiftCollections `08b1b38`,
+Chronicler `7b90d59`, and GridForge `c4f80a0`. The accepted captures are under
+`artifacts/phase1-66e94cf-sweeps-baseline`. The workload and launch settings
+match the placement checkpoint.
+
+The initial leg cases failed to compile on `66e94cf` because the production
+entry was absent. `context.Pathing.ValidateTopDownLeg` checks one leg between
+canonical cell centers. It uses the existing placement layer binding, policy,
+trace storage, semantic checks, work meter, and final world/graph stamp check.
+Legs debit one evaluated edge plus actual lookup and covered-voxel work.
+Ordinary adjacency excludes rectangular diagonals and coincident footprints.
+GridForge supplies the exact immediate-neighbor footprint proof, including
+compatible selected layers of different local indices or heights.
+
+In the pointy-hex fixture, a circle of radius `1/2 + one raw unit` fit at both
+endpoints but penetrated the flanks midway along the leg. Radius `1/2` was
+tangent and succeeded. Authoring both flank cells through the overlay made
+the larger sweep succeed in both directions. A removed sparse destination
+returns `Stale` before publication and `NoPath` after the update. Tests also
+cover cardinal and cross-map adjacency, exact embedding, finite work, and
+zero allocations in a warmed repeated leg check.
+
+The disposable Release leg probe used a tangent radius-1/2 sweep between
+cardinal neighbors in an authored row of a dense 3 × 2 × 3 rectangular grid.
+After 2,000 warmup calls, five blocks of 5,000 calls each passed and allocated
+0 B on the caller thread. Block averages were 115.5–119.6 µs per leg on the
+Windows baseline host. The result is specific to that fixture.
+
+The matched rerun under `artifacts/phase1-sweeps-post` used the same dependency
+DLL hashes and reversed the workload order. Replay checksums, work counts,
+allocations, and completion frames matched across 576 guided frames per
+algorithm, both ray preflights, and 45 scheduled recovery episodes.
+
+| 3D timing | Before | After |
+| --- | ---: | ---: |
+| Guided A* frame median / observed P95 | 1.879 / 2.182 ms | 1.911 / 2.174 ms |
+| Guided Flow frame median / observed P95 | 1.396 / 3.608 ms | 1.668 / 3.441 ms |
+| Medium ray mean | 5.892 ms | 5.886 ms |
+| SparseBlocked ray mean | 420.5 µs | 417.5 µs |
+
+The recovery median-of-episode frame medians moved by at most 0.026 ms.
+The guided Flow median increase did not repeat in the follow-up control under
+`artifacts/phase1-sweeps-flow-abba-complete`. The same generated child and
+dependencies ran eight alternating launches in ABBA/BAAB order with only the
+hash-verified `Trailblazer.dll` swapped. Each launch contributed three actual
+64-frame blocks. Before launch medians ranged from 1.523 to 2.375 ms and
+after medians ranged from 1.422 to 2.460 ms. The pooled medians were 2.075 and
+1.705 ms. Replay, work, and allocation counts matched in every launch. The
+timing variation across these captures leaves the latency effect inconclusive.
+
+On Windows, package-mode core validation passed 3,305 Release and 3,205
+ReleaseLean tests. The adapter used `UseLocalLsfStack=true` with the immutable
+develop CI pins, including Gravitas `13f73bdc`, and passed 90 Release and 86
+ReleaseLean tests. Both library targets built in each configuration. Combined
+coverage was 32,772/32,772 lines, 13,528/13,528 branches, and 3,223/3,223 fully
+covered methods in each configuration. DocFX passed with warnings treated as
+errors.
+
+The next Phase 1 acceptance cases wire ordinary planar legs into shared
+A* and Flow for the fitted portal and obstacle detour.

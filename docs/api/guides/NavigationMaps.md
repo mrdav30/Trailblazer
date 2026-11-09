@@ -35,8 +35,9 @@ embedding touches an adjacent layer. A live map ID keeps its planar binding
 through replacement. Remove the map before publishing the ID in a different
 domain or with a different layer or embedding.
 
-Hosts can check a circle's placement on these maps through
-[`ResolveTopDownEndpoint`](Pathing.md#strict-top-down-placement).
+Hosts can check [circle placement](Pathing.md#strict-top-down-placement)
+and [clearance between neighboring cells](Pathing.md#top-down-leg-clearance)
+on these maps.
 
 ## Complete Cell Payloads
 

@@ -77,6 +77,22 @@ limits. Every materialized top-down layer at the same embedding counts
 toward the layer workspace and generation-validation work. The result is
 a snapshot address for the exact requested center.
 
+### Top-down leg clearance
+
+Use `context.Pathing.ValidateTopDownLeg` to check the whole swept circle
+between the centers of two ordinary neighboring cells. Pass the durable cell
+addresses and the same radius, area policy, medium, and capabilities used for
+placement. Both addresses must use their maps' selected layers at the same
+world Y embedding. Rectangular legs follow a cardinal neighbor. Hex legs
+follow an immediate hex neighbor. A leg can cross a map boundary where the
+neighbor footprints match the source lattice exactly.
+
+Every required cell under the sweep must pass the current physical and
+semantic checks. Exact tangency is allowed. `Success` certifies the leg
+against the current publication. `NoPath` reports unsupported adjacency or
+blocked coverage. `InvalidStart` and `InvalidEnd` identify invalid addresses.
+An evaluated leg uses one edge allowance plus lookup and covered-voxel work.
+
 ## Agent Profile
 
 `NavigationAgentProfile` is immutable and includes:

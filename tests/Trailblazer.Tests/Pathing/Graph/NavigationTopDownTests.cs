@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Trailblazer.Tests.Pathing.Graph;
 
-public sealed class NavigationTopDownEndpointTests
+public sealed partial class NavigationTopDownTests
 {
     private static readonly NavigationCell Open = new(
         TraversalMedia.Solid, TraversalCapability.None, default,
@@ -111,6 +111,7 @@ public sealed class NavigationTopDownEndpointTests
     [Theory]
     [InlineData(0, 16, 128)]
     [InlineData(1, 16, 128)]
+    [InlineData(2, 16, 128)]
     [InlineData(256, 0, 128)]
     [InlineData(256, 16, 0)]
     public void Endpoint_UsesExistingQueryLimits(int lookups, int candidates, int covered)
@@ -237,7 +238,7 @@ public sealed class NavigationTopDownEndpointTests
         var world = context.World;
         var captured = (world.SpawnToken, world.Version, world.ChangeSequence);
         world.IncrementGridVersion(index, significant: true);
-        TrailblazerPathingService.FinishTopDownEndpoint(NavigationGuideStatus.Success, original, original, captured,
+        TrailblazerPathingService.FinishTopDownQuery(NavigationGuideStatus.Success, original, original, captured,
             (world.SpawnToken, world.Version, world.ChangeSequence), ref address).Should().Be(NavigationGuideStatus.Stale);
         address.Should().Be(default(NavigationCellAddress));
 
@@ -246,7 +247,7 @@ public sealed class NavigationTopDownEndpointTests
         store.TryPublish(closed).Should().Be(NavigationCandidatePublication.Published);
         Resolve(context, Vector2d.Zero, Fixed64.Quarter, out _).Should().Be(NavigationGuideStatus.Stale);
         address = new NavigationCellAddress("plane", new VoxelIndex(0, 1, 0));
-        TrailblazerPathingService.FinishTopDownEndpoint(NavigationGuideStatus.Success, original, closed, captured,
+        TrailblazerPathingService.FinishTopDownQuery(NavigationGuideStatus.Success, original, closed, captured,
             captured, ref address).Should().Be(NavigationGuideStatus.Stale);
         address.Should().Be(default(NavigationCellAddress));
     }
@@ -283,7 +284,7 @@ public sealed class NavigationTopDownEndpointTests
         Publish(context, TopDown("neighbor", second).SetDefaultCell(Open).Build(), 3);
         using var lease = TestRequire.NotNull(context.Pathing.TryAcquireNavigationGraph());
         lease.Graph.TryGetMap("plane", out var instance).Should().BeTrue();
-        var work = new NavigationTopDownEndpointWork(new NavigationRayWorkspace(maps, 1, 1, addresses, 0));
+        var work = new NavigationTopDownWork(new NavigationRayWorkspace(maps, 1, 1, addresses, 0));
 
         work.Resolve(context.World, lease.Graph, instance, instance.Map.PlanarBinding!.Value,
             Vector2d.Zero, Fixed64.Quarter, TraversalMedia.Solid, TraversalCapability.None, Policy,

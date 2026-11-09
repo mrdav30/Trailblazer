@@ -176,18 +176,24 @@ public sealed class PlatformLocomotionLifecycleTests : IDisposable
         locomotion.ScoutLocalPoint.Should().Be(Vector3d.Zero);
     }
 
-    [Fact]
-    public void StationaryAttachment_ShouldSyncExactPointAndInvalidateItWhenReplaced()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StationaryAttachment_ShouldSyncExactPointAndInvalidateItWhenReplaced(bool derived)
     {
         Fixed4x4 transform = MockMotorAgentTestFactory.CreatePlatformTransform(
             new Vector3d(2, 0, 0), FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.PiOver4));
         Vector3d foot = new(Fixed64.FromFraction(1, 3), Fixed64.Zero, Fixed64.FromFraction(1, 7));
         PlatformSnapshot platform = new(1, transform);
-        var source = new PlatformLocomotion { ActivePlatform = platform };
+        PlatformLocomotion source = derived ? new DerivedPlatformLocomotion() : new PlatformLocomotion();
+        source.ActivePlatform = platform;
+        source.SetHoldPlatform(platform);
+        source.TickHoldOnPlatform();
         source.HandlePlatformMovement(foot, FixedQuaternion.Identity);
-        var target = new PlatformLocomotion();
+        PlatformLocomotion target = derived ? new DerivedPlatformLocomotion() : new PlatformLocomotion();
         ITransientExtensions.SyncTransientState(target, source);
         ITransientExtensions.SyncTransientState(target, target);
+        target.HoldPlatformFrames.Should().Be(1);
 
         target.ActivePlatform = platform;
         target.GetPlatformInfluence(foot, FixedQuaternion.Identity, out Vector3d carry, out _);
@@ -215,9 +221,26 @@ public sealed class PlatformLocomotionLifecycleTests : IDisposable
 
         ITransientExtensions.SyncTransientState(target, source);
         target.ClearTransientState();
+        target.HoldPlatformFrames.Should().Be(0);
         target.GetPlatformInfluence(foot, FixedQuaternion.Identity, out carry, out _);
         carry.Should().Be(-foot - Vector3d.Up * target.HeightAdjust);
     }
+
+    [Fact]
+    public void ClearTransientState_ShouldResetInheritedHoldCounter()
+    {
+        var locomotion = new DerivedPlatformLocomotion();
+        locomotion.SetHoldPlatform(new PlatformSnapshot(1, Fixed4x4.Identity));
+        locomotion.TickHoldOnPlatform();
+        locomotion.HoldPlatformFrames.Should().Be(1);
+
+        locomotion.ClearTransientState();
+
+        locomotion.HoldPlatformFrames.Should().Be(0);
+        locomotion.HoldPlatform.Should().BeNull();
+    }
+
+    private sealed class DerivedPlatformLocomotion : PlatformLocomotion;
 
     [Theory]
     [InlineData(false)]

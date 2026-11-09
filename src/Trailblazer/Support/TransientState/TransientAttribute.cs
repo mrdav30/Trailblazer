@@ -14,6 +14,7 @@ namespace Trailblazer.Support;
 /// that can be synchronized from another instance or cleared back to defaults.
 /// </summary>
 /// <remarks>
+/// Public properties can use a private setter, including when inherited.
 /// When a default value source and member are provided via the two-argument constructor,
 /// <see cref="ITransient.ClearTransientState"/> resets the property to that static member's value
 /// instead of <c>default(T)</c>. Useful for types whose zero-value is not a valid reset state

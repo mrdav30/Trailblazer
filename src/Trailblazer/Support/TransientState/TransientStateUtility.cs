@@ -117,6 +117,9 @@ internal static class TransientStateUtility
             .Concat(type.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
                 .Where(static p => p.DeclaringType!.Assembly == typeof(TransientStateUtility).Assembly))
             .Where(static p => p.IsDefined(typeof(TransientAttribute), false))
+            // Reflection on a derived type omits an inherited property's private setter.
+            .Select(static p => p.CanWrite ? p : p.DeclaringType!.GetTypeInfo().DeclaredProperties
+                .Single(declared => declared.MetadataToken == p.MetadataToken))
             .ToArray();
     }
 }

@@ -37,44 +37,29 @@
 		<Optimize>true</Optimize>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\Trailblazer\Trailblazer.csproj"
-			AdditionalProperties="Configuration=$(Configuration)" />
-		<ProjectReference Condition="'$(UseLocalLsfStack)' == 'true'" Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGravitasProperties)" />
+		<ProjectReference Include="..\Trailblazer\Trailblazer.csproj" AdditionalProperties="Configuration=$(Configuration)" />
+		<ProjectReference Condition="'$(UseLocalLsfStack)' == 'true'" Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGravitasProperties)" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' != 'true'">
 		<PackageReference Include="Gravitas" Version="$(GravitasPackageVersion)" Condition="'$(DisableMemoryPack)' != 'true'" />
 		<PackageReference Include="Gravitas.Lean" Version="$(GravitasPackageVersion)" Condition="'$(DisableMemoryPack)' == 'true'" />
+		<PackageReference Include="Chronicler.Diagnostics" Version="1.0.0" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
-		<ProjectReference PrivateAssets="all" Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj"
-		  AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
+		<ProjectReference PrivateAssets="all" Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
 		<!-- Compile against the coordinated sources without publishing extra direct dependencies. -->
-		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
-		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
-		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfSwiftCollectionsProperties)" />
-		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\SwiftCollections.FixedMathSharp.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfSwiftCollectionsProperties)" />
-		<ProjectReference PrivateAssets="all" Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGridForgeProperties)" />
+		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
+		<ProjectReference PrivateAssets="all" Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
+		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections\SwiftCollections.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfSwiftCollectionsProperties)" />
+		<ProjectReference PrivateAssets="all" Include="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\SwiftCollections.FixedMathSharp.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfSwiftCollectionsProperties)" />
+		<ProjectReference PrivateAssets="all" Include="..\..\..\GridForge\src\GridForge\GridForge.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGridForgeProperties)" />
+		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler.Diagnostics\Chronicler.Diagnostics.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And ('$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true')">
+		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler.MemoryPackShim\Chronicler.MemoryPackShim.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" PrivateAssets="all" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="README.md" Pack="true" PackagePath="/" />
 		<None Include="../../LICENSE;../../NOTICE;../../COPYRIGHT;../../icon.png" Pack="true" PackagePath="/" />
-	</ItemGroup>
-	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And ('$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true')">
-		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler.MemoryPackShim\Chronicler.MemoryPackShim.csproj"
-		  AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" PrivateAssets="all" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(UseLocalLsfStack)' != 'true'">
-		<PackageReference Include="Chronicler.Diagnostics" Version="1.0.0" />
-	</ItemGroup>
-	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
-		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler.Diagnostics\Chronicler.Diagnostics.csproj"
-			AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
 	</ItemGroup>
 </Project>

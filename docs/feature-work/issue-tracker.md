@@ -26,20 +26,7 @@
 
 ## Active Issues
 
-### TRB-Issue-158 - Transient sync fails on inherited private setters
-
-- **Discovered:** 2026-11-08 during independent review of TRB-Issue-157.
-- **Reproduction:** Define a subclass of `PlatformLocomotion` with no added
-  properties. Call `ITransientExtensions.SyncTransientState` between two
-  instances of that subclass. The compiled expression builder throws
-  `ArgumentException` with `Expression must be writeable (Parameter 'left')`.
-  The same call between base `PlatformLocomotion` instances succeeds.
-- **Cause:** Reflection on the derived type finds the inherited transient
-  `HoldPlatformFrames` property without its private setter. The expression
-  builder tries to assign through that reflected property. The same failure
-  reproduced on a pre-TRB-Issue-157 binary.
-- **Expected:** Sync the inherited transient property through its declaring
-  type's setter. Preserve public extension dispatch and exact platform state.
+None.
 
 ## Closed Investigations
 
@@ -283,6 +270,38 @@ alone do not justify renewed open-ended investigation.
   failures.
 
 ## Resolved Issues
+
+### TRB-Issue-158 - Transient sync fails on inherited private setters
+
+- **Discovered:** 2026-11-08 during independent review of TRB-Issue-157.
+- **Resolved:** 2026-11-08.
+- **Reproduction:** Define a subclass of `PlatformLocomotion` with no added
+  properties. Call `ITransientExtensions.SyncTransientState` between two
+  instances of that subclass. The compiled expression builder throws
+  `ArgumentException` with `Expression must be writeable (Parameter 'left')`.
+  The same call between base `PlatformLocomotion` instances succeeds.
+- **Cause:** Reflection on the derived type finds the inherited transient
+  `HoldPlatformFrames` property without its private setter. The expression
+  builder tries to assign through that reflected property. The same failure
+  reproduced on a pre-TRB-Issue-157 binary.
+- **Expected:** Sync the inherited transient property through its declaring
+  type's setter. Preserve public extension dispatch and exact platform state.
+- **Fix:** The shared transient-property discovery resolves an unwritable
+  reflection view to the same property by metadata token on its declaring
+  type. Both compiled delegates recover the setter while retaining property
+  selection and order, including the exact platform attachment from
+  TRB-Issue-157. The cached invocation path remains unchanged.
+- **Regression:** At `619a158`, derived platform sync and standalone clear
+  failed with the same expression error while base platform sync passed.
+  After the fix, sync copies a nonzero hold counter and preserves exact
+  stationary carry on the derived type. Clear resets the inherited counter
+  and attachment.
+- **Verification:** The source-stack suites passed on Windows and Ubuntu, with
+  3,250 core and 90 adapter tests in Release and 3,150 core and 86 adapter tests
+  in ReleaseLean. Both assemblies met the exact coverage gate in both
+  configurations with 32,511 lines, 13,304 branches, and 3,194 fully covered
+  methods. DocFX built with warnings as errors. Package-mode restore returned
+  `NU1102` for `Gravitas` and `Gravitas.Lean` `1.1.0`.
 
 ### TRB-Issue-157 - Stationary rotated platform produces residual carry
 

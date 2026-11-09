@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-158`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-159`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -26,25 +26,20 @@
 
 ## Active Issues
 
-### TRB-Issue-157 - Stationary rotated platform produces residual carry
+### TRB-Issue-158 - Transient sync fails on inherited private setters
 
-- **Discovered:** 2026-11-08 while diagnosing TRB-Issue-156.
-- **Area:** `PlatformLocomotion.HandlePlatformMovement` and
-  `GetPlatformInfluence`.
-- **Evidence:** In the moving-platform replay, freeze the platform after frame
-  39 and step twice to consume the last transform. At the next prepare, with
-  the same platform transform, the attachment requests an X displacement of
-  -2 Fixed64 raw units and zero Y/Z displacement. A 100-frame idle probe
-  observed horizontal residuals as large as 3 raw units and nonzero accepted
-  velocity after ordinary frictional coasting had decayed.
-- **Cause:** Carry transforms the stored local attachment back to world space
-  and subtracts the foot position. An unchanged rotated platform can produce
-  a nonzero result because the fixed-point inverse and forward transforms do
-  not round-trip exactly.
-- **Expected:** An unchanged carrier contributes zero displacement while
-  ordinary locomotion, friction, and carry from a changed carrier still apply.
-  Preserve exact restored continuation and verify this separately from the
-  frame-8 host publication failure.
+- **Discovered:** 2026-11-08 during independent review of TRB-Issue-157.
+- **Reproduction:** Define a subclass of `PlatformLocomotion` with no added
+  properties. Call `ITransientExtensions.SyncTransientState` between two
+  instances of that subclass. The compiled expression builder throws
+  `ArgumentException` with `Expression must be writeable (Parameter 'left')`.
+  The same call between base `PlatformLocomotion` instances succeeds.
+- **Cause:** Reflection on the derived type finds the inherited transient
+  `HoldPlatformFrames` property without its private setter. The expression
+  builder tries to assign through that reflected property. The same failure
+  reproduced on a pre-TRB-Issue-157 binary.
+- **Expected:** Sync the inherited transient property through its declaring
+  type's setter. Preserve public extension dispatch and exact platform state.
 
 ## Closed Investigations
 
@@ -289,6 +284,49 @@ alone do not justify renewed open-ended investigation.
 
 ## Resolved Issues
 
+### TRB-Issue-157 - Stationary rotated platform produces residual carry
+
+- **Discovered:** 2026-11-08 while diagnosing TRB-Issue-156.
+- **Resolved:** 2026-11-08.
+- **Area:** `PlatformLocomotion.HandlePlatformMovement` and
+  `GetPlatformInfluence`.
+- **Evidence:** In the moving-platform replay, freeze the platform after frame
+  39 and step twice to consume the last transform. At the next prepare, with
+  the same platform transform, the attachment requests an X displacement of
+  -2 Fixed64 raw units and zero Y/Z displacement. A 100-frame idle probe
+  observed horizontal residuals as large as 3 raw units and nonzero accepted
+  velocity after ordinary frictional coasting had decayed.
+- **Cause:** Carry transforms the stored local attachment back to world space
+  and subtracts the foot position. An unchanged rotated platform can produce
+  a nonzero result because the fixed-point inverse and forward transforms do
+  not round-trip exactly.
+- **Expected:** An unchanged carrier contributes zero displacement while
+  ordinary locomotion, friction, and carry from a changed carrier still apply.
+  Preserve exact restored continuation and verify this separately from the
+  frame-8 host publication failure.
+- **Regression:** On Trailblazer `446a314`, replacing the four-raw-unit bound
+  with exact coasting displacement failed on stationary frame 2 in JSON and
+  MemoryPack. The requested X position was two raw units below the friction
+  oracle after both worlds replayed all moving frames exactly.
+- **Fix:** Retain the exact height-adjusted accepted foot point while the
+  attachment uses the current carrier pose. A changed carrier or an explicitly
+  replaced local point invalidates it. Carry from a changed pose continues to
+  use the local point projection. Velocity sampling and friction keep their
+  existing inputs.
+- **Replay:** The optional exact point follows transient sync and serialization.
+  Population validates it against the active carrier and local point. Older
+  schema-9 payloads use the local projection until the next accepted attachment
+  sample. The adapter regression restores both a moving checkpoint and a
+  stationary checkpoint and verifies exact requested and accepted positions.
+  All 64 raw moving-frame trace rows across the two transports also match the
+  TRB-Issue-156 baseline on Ubuntu.
+- **Verification:** The source-stack suites passed on Windows and Ubuntu, with
+  3,248 core and 90 adapter tests in Release and 3,148 core and 86 adapter
+  tests in ReleaseLean. Both assemblies met the exact coverage gate in both
+  configurations with 32,508 lines, 13,304 branches, and 3,194 fully covered
+  methods. DocFX built with warnings as errors. Package-mode restore returned
+  `NU1102` for `Gravitas` and `Gravitas.Lean` `1.1.0`.
+
 ### TRB-Issue-156 - Moving-platform replay diverges on the first restored frame
 
 - **Discovered:** 2026-10-26 during the Chronicler.Diagnostics extraction.
@@ -340,8 +378,8 @@ alone do not justify renewed open-ended investigation.
   stationary input retains 3/4 of the preceding accepted velocity each frame.
   The regression compares the worlds exactly through ten idle frames and
   checks the requested displacement after the final carry against that decay.
-  Its four-raw-unit per-axis allowance covers the separate stationary
-  attachment residual tracked in TRB-Issue-157.
+  The initial four-raw-unit allowance covered the stationary attachment
+  residual. TRB-Issue-157 subsequently removed that allowance.
 - **Verification:** Both transports reproduced the original frame-8 values on
   Trailblazer `372171d` with the pinned develop runtime sources. The corrected
   source-stack suites pass on Windows and Ubuntu with 3,245 core and 90 adapter

@@ -112,7 +112,10 @@ internal static class TransientStateUtility
 
     private static PropertyInfo[] GetTransientProperties(Type type)
     {
+        // Copy library-owned nonpublic state after the public setters that may invalidate it.
         return type.GetProperties()
+            .Concat(type.GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
+                .Where(static p => p.DeclaringType!.Assembly == typeof(TransientStateUtility).Assembly))
             .Where(static p => p.IsDefined(typeof(TransientAttribute), false))
             .ToArray();
     }

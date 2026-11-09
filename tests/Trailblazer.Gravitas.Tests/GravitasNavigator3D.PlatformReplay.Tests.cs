@@ -86,10 +86,12 @@ public sealed class GravitasNavigator3DPlatformReplayTests
         }
 
         // Consume the last sampled platform transform, then check ordinary
-        // frictional coasting with only raw-unit attachment roundoff allowed.
-        Fixed64 attachmentRoundoff = Fixed64.FromRaw(4);
+        // frictional coasting without any displacement from the stationary carrier.
         for (int frame = 0; frame < 10; frame++)
         {
+            if (frame == 2)
+                GravitasRecordSnapshot.Load(restored.Navigator, GravitasRecordSnapshot.Save(source.Navigator, memoryPack));
+
             Vector3d coastingPosition = source.Navigator.Position
                 + source.Navigator.Velocity * Fixed64.FromFraction(3, 4) * sourceFixture.Trailblazer.DeltaTime;
             sourceFixture.Step(source);
@@ -101,10 +103,7 @@ public sealed class GravitasNavigator3DPlatformReplayTests
             if (frame < 2)
                 continue;
 
-            Vector3d residual = source.NavigatorRequestedPosition - coastingPosition;
-            residual.X.Abs().Should().BeLessThanOrEqualTo(attachmentRoundoff);
-            residual.Y.Should().Be(Fixed64.Zero);
-            residual.Z.Abs().Should().BeLessThanOrEqualTo(attachmentRoundoff);
+            source.NavigatorRequestedPosition.Should().Be(coastingPosition, "stationary platform frame {0}", frame);
         }
         source.Dispose();
         restored.Dispose();

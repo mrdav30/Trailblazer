@@ -2,6 +2,7 @@ using System;
 using FixedMathSharp;
 using FluentAssertions;
 using Trailblazer.Navigation.Motor;
+using Trailblazer.Support;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;
@@ -174,6 +175,82 @@ public sealed class PlatformLocomotionLifecycleTests : IDisposable
         locomotion.HandlePlatformMovement(Vector3d.Zero, FixedQuaternion.Identity);
         locomotion.ScoutLocalPoint.Should().Be(Vector3d.Zero);
     }
+
+    [Fact]
+    public void StationaryAttachment_ShouldSyncExactPointAndInvalidateItWhenReplaced()
+    {
+        Fixed4x4 transform = MockMotorAgentTestFactory.CreatePlatformTransform(
+            new Vector3d(2, 0, 0), FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.PiOver4));
+        Vector3d foot = new(Fixed64.FromFraction(1, 3), Fixed64.Zero, Fixed64.FromFraction(1, 7));
+        PlatformSnapshot platform = new(1, transform);
+        var source = new PlatformLocomotion { ActivePlatform = platform };
+        source.HandlePlatformMovement(foot, FixedQuaternion.Identity);
+        var target = new PlatformLocomotion();
+        ITransientExtensions.SyncTransientState(target, source);
+        ITransientExtensions.SyncTransientState(target, target);
+
+        target.ActivePlatform = platform;
+        target.GetPlatformInfluence(foot, FixedQuaternion.Identity, out Vector3d carry, out _);
+        carry.Should().Be(Vector3d.Zero);
+
+        Vector3d displacedFoot = foot + Vector3d.Right * Fixed64.FromRaw(1);
+        target.GetPlatformInfluence(displacedFoot, FixedQuaternion.Identity, out carry, out _);
+        carry.Should().Be(foot - displacedFoot);
+
+        Vector3d projectedFoot = transform.TransformPoint(target.ScoutLocalPoint) - Vector3d.Up * target.HeightAdjust;
+        projectedFoot.Should().NotBe(foot);
+        target.ActivePlatform = new PlatformSnapshot(2, transform);
+        target.GetPlatformInfluence(foot, FixedQuaternion.Identity, out carry, out _);
+        carry.Should().Be(projectedFoot - foot);
+
+        ITransientExtensions.SyncTransientState(target, source);
+        target.ScoutLocalPoint = Vector3d.Zero;
+        target.GetPlatformInfluence(foot, FixedQuaternion.Identity, out carry, out _);
+        carry.Should().Be(transform.Translation - Vector3d.Up * target.HeightAdjust - foot);
+
+        ITransientExtensions.SyncTransientState(target, source);
+        target.ActivePlatform = new PlatformSnapshot(1, transform, inert: true);
+        target.GetPlatformInfluence(foot, FixedQuaternion.Identity, out carry, out _);
+        carry.Should().Be(projectedFoot - foot);
+
+        ITransientExtensions.SyncTransientState(target, source);
+        target.ClearTransientState();
+        target.GetPlatformInfluence(foot, FixedQuaternion.Identity, out carry, out _);
+        carry.Should().Be(-foot - Vector3d.Up * target.HeightAdjust);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void StationaryAttachmentRecord_ShouldValidateExactPointAndAllowLegacyLocalPoint(bool useMemoryPack)
+    {
+        Fixed4x4 transform = MockMotorAgentTestFactory.CreatePlatformTransform(
+            new Vector3d(2, 0, 0), FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.PiOver4));
+        Vector3d foot = new(Fixed64.FromFraction(1, 3), Fixed64.Zero, Fixed64.FromFraction(1, 7));
+        var locomotion = new PlatformLocomotion { ActivePlatform = new PlatformSnapshot(1, transform) };
+        locomotion.HandlePlatformMovement(foot, FixedQuaternion.Identity);
+        object record = SerializationUtility.SerializeRecord(locomotion, useMemoryPack);
+
+        object inconsistent = SerializationUtility.SetPayloadValue(record, useMemoryPack, Vector3d.Zero, "ScoutLocalPoint");
+        inconsistent = SerializationUtility.SetPayloadValue(inconsistent, useMemoryPack, false, "IsEnabled");
+        inconsistent = SerializationUtility.SetPayloadValue(inconsistent, useMemoryPack, Fixed64.Zero, "HeightAdjust");
+        Assert.Throws<InvalidOperationException>(() => SerializationUtility.PopulateRecord(locomotion, inconsistent, useMemoryPack));
+        locomotion.IsEnabled.Should().BeTrue();
+        locomotion.HeightAdjust.Should().Be(PlatformLocomotion.DefaultHeightAdjust);
+        object missingCarrier = SerializationUtility.RemovePayloadEntry(record, useMemoryPack, "ActivePlatform");
+        Assert.Throws<InvalidOperationException>(() => SerializationUtility.PopulateRecord(locomotion, missingCarrier, useMemoryPack));
+
+        object legacy = SerializationUtility.RemovePayloadEntry(record, useMemoryPack, "StationaryAttachmentPoint");
+        SerializationUtility.PopulateRecord(locomotion, legacy, useMemoryPack);
+        locomotion.GetPlatformInfluence(foot, FixedQuaternion.Identity, out Vector3d carry, out _);
+        carry.Should().Be(transform.TransformPoint(locomotion.ScoutLocalPoint) - (foot + Vector3d.Up * locomotion.HeightAdjust));
+        locomotion.HandlePlatformMovement(foot, FixedQuaternion.Identity);
+        locomotion.GetPlatformInfluence(foot, FixedQuaternion.Identity, out carry, out _);
+        carry.Should().Be(Vector3d.Zero);
+    }
+
 
     [Fact]
     public void HandlePlatformChange_ShouldClearHoldAndTransfer_WhenSurfaceStopsSupportingKinematicMotion()

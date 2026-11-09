@@ -23,6 +23,8 @@ namespace Trailblazer.Navigation.Motor;
 public class PlatformLocomotion : ILocomotion
 {
     private TrailblazerWorldContext? _context;
+    private PlatformSnapshot? _activePlatform;
+    private Vector3d _scoutLocalPoint;
 
     #region Constants
 
@@ -79,7 +81,22 @@ public class PlatformLocomotion : ILocomotion
     /// The currently active platform the scout is standing on, if any.
     /// </summary>
     [Transient]
-    public PlatformSnapshot? ActivePlatform { get; set; }
+    public PlatformSnapshot? ActivePlatform
+    {
+        get => _activePlatform;
+        set
+        {
+            if (StationaryAttachmentPoint.HasValue
+                && (value?.SupportsKinematicMotion != true
+                    || value.Value.Id != _activePlatform!.Value.Id
+                    || !value.Value.Transform.Equals(_activePlatform.Value.Transform)))
+            {
+                StationaryAttachmentPoint = null;
+            }
+
+            _activePlatform = value;
+        }
+    }
 
     /// <summary>
     /// The previously active platform, used for calculating platform velocity and movement transfer.
@@ -112,7 +129,19 @@ public class PlatformLocomotion : ILocomotion
     /// The attachment point in platform-local coordinates, including <see cref="HeightAdjust"/>.
     /// </summary>
     [Transient]
-    public Vector3d ScoutLocalPoint { get; set; }
+    public Vector3d ScoutLocalPoint
+    {
+        get => _scoutLocalPoint;
+        set
+        {
+            if (_scoutLocalPoint != value)
+                StationaryAttachmentPoint = null;
+            _scoutLocalPoint = value;
+        }
+    }
+
+    [Transient]
+    internal Vector3d? StationaryAttachmentPoint { get; set; }
 
     /// <summary>
     /// The local rotation of the scout relative to the platform.
@@ -227,6 +256,7 @@ public class PlatformLocomotion : ILocomotion
     /// <remarks>
     /// Returns motion deltas without changing the host's transform. The displacement is already
     /// in world units; do not multiply it by the timestep or add another platform-velocity displacement.
+    /// When the carrier pose and accepted foot are unchanged, the positional delta is exactly zero.
     /// </remarks>
     /// <param name="position">The scout's world-space foot position, or origin when no foot snapshot is available.</param>
     /// <param name="rotation">The scout's current world rotation.</param>
@@ -248,7 +278,9 @@ public class PlatformLocomotion : ILocomotion
         else
             rotationDelta = FixedQuaternion.Identity;
 
-        Vector3d newGlobalPoint = ActivePlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
+        Vector3d newGlobalPoint = StationaryAttachmentPoint
+            ?? ActivePlatform?.Transform.TransformPoint(ScoutLocalPoint)
+            ?? Vector3d.Zero;
         position.Y += HeightAdjust;
         positionDelta = newGlobalPoint - position;
     }
@@ -352,10 +384,13 @@ public class PlatformLocomotion : ILocomotion
             && !ActivePlatform.Value.Transform.Equals(refreshedPlatform!.Value.Transform);
 
         if (hasTransformRefresh)
+        {
             PreviousPlatform = ActivePlatform;
+            StationaryAttachmentPoint = null;
+        }
 
         // Same platform id, newer transform: refresh the snapshot without marking a platform swap.
-        ActivePlatform = refreshedPlatform;
+        _activePlatform = refreshedPlatform;
         _preservePreviousTransformForAttachment = hasTransformRefresh;
         return true;
     }
@@ -387,6 +422,11 @@ public class PlatformLocomotion : ILocomotion
             attachmentTransform,
             position);
 
+        // The accepted point is exact only for the transform used to attach it.
+        StationaryAttachmentPoint = !_preservePreviousTransformForAttachment && ActivePlatform?.SupportsKinematicMotion == true
+            ? position
+            : null;
+
         ScoutLocalRotation = attachmentTransform.Rotation.Inverse() * rotation;
     }
 
@@ -403,8 +443,10 @@ public class PlatformLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
-        RecordValues.Look(chronicler, ref HeightAdjust, "HeightAdjust", DefaultHeightAdjust);
+        bool isEnabled = _isEnabled;
+        Fixed64 heightAdjust = HeightAdjust;
+        RecordValues.Look(chronicler, ref isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref heightAdjust, "HeightAdjust", DefaultHeightAdjust);
 
         bool isNewPlatform = IsNewPlatform;
         PlatformSnapshot? activePlatform = ActivePlatform;
@@ -412,6 +454,7 @@ public class PlatformLocomotion : ILocomotion
         PlatformSnapshot? holdPlatform = HoldPlatform;
         MotionTransfer movementTransfer = MovementTransfer;
         Vector3d scoutLocalPoint = ScoutLocalPoint;
+        Vector3d? stationaryAttachmentPoint = StationaryAttachmentPoint;
         FixedQuaternion scoutLocalRotation = ScoutLocalRotation;
         Vector3d platformVelocity = PlatformVelocity;
         Vector3d framePlatformVelocity = FramePlatformVelocity;
@@ -423,6 +466,7 @@ public class PlatformLocomotion : ILocomotion
         RecordValues.Look(chronicler, ref holdPlatform, "HoldPlatform", null);
         RecordValues.Look(chronicler, ref movementTransfer, "MovementTransfer", MotionTransfer.None);
         RecordValues.Look(chronicler, ref scoutLocalPoint, "ScoutLocalPoint", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref stationaryAttachmentPoint, "StationaryAttachmentPoint", null);
         RecordValues.Look(chronicler, ref scoutLocalRotation, "ScoutLocalRotation", FixedQuaternion.Identity);
         RecordValues.Look(chronicler, ref platformVelocity, "PlatformVelocity", Vector3d.Zero);
         RecordValues.Look(chronicler, ref framePlatformVelocity, "FramePlatformVelocity", Vector3d.Zero);
@@ -430,6 +474,16 @@ public class PlatformLocomotion : ILocomotion
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
+            if (stationaryAttachmentPoint.HasValue)
+            {
+                ChronicleGuard.ThrowIfTrue(
+                    activePlatform?.SupportsKinematicMotion != true
+                    || Fixed4x4.InverseTransformPoint(activePlatform.Value.Transform, stationaryAttachmentPoint.Value) != scoutLocalPoint,
+                    message: "The stationary platform attachment must match the active carrier and local point.");
+            }
+
+            _isEnabled = isEnabled;
+            HeightAdjust = heightAdjust;
             ActivePlatform = NormalizeKinematicPlatform(activePlatform);
             PreviousPlatform = NormalizeKinematicPlatform(previousPlatform);
             HoldPlatform = NormalizeKinematicPlatform(holdPlatform);
@@ -438,6 +492,7 @@ public class PlatformLocomotion : ILocomotion
                 ? movementTransfer
                 : MotionTransfer.None;
             ScoutLocalPoint = scoutLocalPoint;
+            StationaryAttachmentPoint = stationaryAttachmentPoint;
             ScoutLocalRotation = scoutLocalRotation;
             PlatformVelocity = ActivePlatform?.SupportsKinematicMotion == true
                 ? platformVelocity

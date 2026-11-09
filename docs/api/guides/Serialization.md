@@ -76,6 +76,12 @@ the explicit world-space ground `SurfaceNormal`, controlled-descent state,
 periodic direct-LOS interval and nullable phase, durable acquisition policy, and
 active/buffered turn continuation.
 
+Platform locomotion records the exact height-adjusted world attachment point
+when it was sampled against the current carrier pose. A recorded point must
+match the active carrier and the local attachment. Older version-9 records
+without this optional point use the local attachment until the next accepted
+sample establishes the exact point.
+
 `JumpLocomotion` has its own required version-1 schema. `JumpStartTime` is a
 wide timestamp recorded through Chronicler's versioned time-value schema;
 cooldown durations remain Fixed64. Missing or retired jump timing records and

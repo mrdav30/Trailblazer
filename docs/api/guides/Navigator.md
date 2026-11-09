@@ -293,6 +293,10 @@ addition to the surface level. Use `Vector3d.Up` for flat ground and
 moving-platform identity and transform independently; its `Transform.Up` is not
 used as collision geometry.
 
+When the accepted foot is attached to the current platform pose, an unchanged
+platform adds zero displacement to that foot. Trailblazer keeps the exact
+accepted point so a fixed-point transform round trip cannot introduce motion.
+
 ## Heightmaps And Occupancy
 
 Heightmap grounding is opt-in and affects kinematic Y projection, not graph

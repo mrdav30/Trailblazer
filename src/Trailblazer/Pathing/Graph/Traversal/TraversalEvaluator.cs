@@ -533,12 +533,19 @@ internal readonly struct TraversalEvaluator
     {
         areaRule = default;
         return (_profile.AllowedMedia & _medium) == _medium
-            && (cell.Media & _medium) == _medium
-            && (_profile.Capabilities & cell.RequiredCapabilities) == cell.RequiredCapabilities
-            && _areaPolicy.TryGetRule(cell.Area, out areaRule)
-            && areaRule.IsAllowed
-            && _profile.Shape.Radius <= cell.RadiusClearance
+            && IsCellPassable(cell, _medium, _profile.Capabilities, _profile.Shape.Radius, _areaPolicy, out areaRule)
             && _profile.Shape.Height <= cell.HeightClearance;
+    }
+
+    internal static bool IsCellPassable(in NavigationCell cell, TraversalMedia medium,
+        TraversalCapability capabilities, Fixed64 radius, NavigationAreaPolicy policy, out NavigationAreaRule areaRule)
+    {
+        areaRule = default;
+        return (cell.Media & medium) == medium
+            && (capabilities & cell.RequiredCapabilities) == cell.RequiredCapabilities
+            && policy.TryGetRule(cell.Area, out areaRule)
+            && areaRule.IsAllowed
+            && radius <= cell.RadiusClearance;
     }
 
     private bool TryGetPassableNode(

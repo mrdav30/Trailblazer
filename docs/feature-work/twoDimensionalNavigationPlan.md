@@ -8,8 +8,10 @@
 **Status (2026-11-09):** Phase 1 is in progress. Top-down bakes publish cells
 through the shared graph with selected-layer defaults and overlays. See the
 [publication checkpoint](#2026-11-09---phase-1-planar-publication).
-Spatial query and edge admission excludes those cells. Native endpoint
-admission comes next for the reviewed obstacle and portal cases. Use
+Spatial query and edge admission excludes those cells. The [strict top-down
+placement check](#2026-11-09---phase-1-strict-top-down-endpoints) resolves a
+current endpoint. Native routing comes next for the reviewed obstacle and
+portal cases. Use
 `UseLocalLsfStack=true` for adapter development. The core package references
 GridForge 10.0.0. Released-package validation of the adapter still requires
 Gravitas 1.1.0. Hard-budgeted physics queries remain a separate
@@ -900,6 +902,9 @@ in the existing test projects.
 - [x] **Publish layer-bound top-down cells.** Use the existing immutable
   map and overlay pipeline, capture only selected-layer defaults, and
   isolate spatial queries, raw trace coverage, committed cells, and edges.
+- [x] **Admit a strict top-down circle endpoint.** Use exact stationary GridForge
+  coverage on the selected layer and compatible neighbors. Expose a bounded
+  placement check for hosts and keep native route acquisition controller-owned.
 - [ ] **Write the first failing planar acceptance cases.** Test obstacle
   avoidance and a narrow gap at fitting/non-fitting body sizes through the
   public 2D contract, including no out-of-plane drift. Record the intended
@@ -2163,3 +2168,66 @@ methods across both assemblies. The DocFX build passed with warnings as errors.
 Runtime acceptance still starts with native endpoint admission and the
 stationary circle proof. The shared graph remains the publication owner.
 Keep each public or internal type in its own file as the 2D surface grows.
+
+### 2026-11-09 - Phase 1 strict top-down endpoints
+
+Before shared edits, the Release source stack captured the matched 3D controls
+at Trailblazer `c6aa4de`, FixedMathSharp `e2c325a`, SwiftCollections `08b1b38`,
+Chronicler `7b90d59`, and GridForge `c4f80a0`. The accepted captures are under
+`artifacts/phase1-c6aa4de-endpoints-baseline`. The same workloads, build, and
+launch settings as the publication checkpoint were used.
+
+The initial placement cases failed to compile on `c6aa4de` because the
+production entry was absent. `context.Pathing.ResolveTopDownEndpoint` gives
+hosts a strict check at the exact requested X/Z center for spawn and goal
+placement. The 2D controller remains the planned route-acquisition entry.
+The result is a snapshot cell address from the explicit map and selected
+layer. Closed-boundary candidates use durable address order. The whole
+stationary circle is proved by GridForge's native planar trace. Present and
+unblocked required cells must pass the shared medium, capability, area, and
+radius policy. World Y selects the layer and spatial height clearance is
+outside this placement check.
+
+All materialized planar maps at the same embedding count toward the bounded
+layer and generation work. The exact generations are bound before tracing,
+with center candidates filtered to the named map. The first integration run
+exposed a dormant map with no usable generation. A dormant source now returns
+`NoMap`, and dormant neighbors are excluded. A closed publication or a changed
+world or graph snapshot cannot return an address. Footprint tests cover exact
+tangency and one-raw penetration, a selected-layer sparse hole, hex corners,
+compatible neighbors, obstacles, overlays, and finite budgets. A warmed series
+of 64 placements returned the same address and allocated 0 B on the caller.
+
+The disposable Release placement probe used one dense 3 × 2 × 3 grid with a
+single authored row and a tangent radius-1/2 circle on layer 1. After 2,000
+warmup calls, five blocks of 5,000 calls each returned the same exact address
+and allocated 0 B on the caller thread. Block averages were 78.9–81.7 µs per
+placement on the Windows baseline host. The result is specific to that fixture.
+
+The matched rerun under `artifacts/phase1-endpoints-post` used the same dependency
+DLL hashes. Replay checksums, work counts, allocations, and completion frames
+matched across 576 guided frames per algorithm, both ray preflights, and 45
+scheduled recovery episodes. The first ray launch attempt found a duplicate
+benchmark project in the isolated validation copy. That attempt ran zero
+children. The completed retry used the same frozen binaries.
+
+| 3D timing | Before | After |
+| --- | ---: | ---: |
+| Guided A* frame median / observed P95 | 1.928 / 2.165 ms | 1.879 / 2.081 ms |
+| Guided Flow frame median / observed P95 | 2.040 / 3.021 ms | 1.860 / 3.044 ms |
+| Medium ray mean | 5.855 ms | 5.866 ms |
+| SparseBlocked ray mean | 418.2 µs | 420.9 µs |
+
+The recovery median-of-episode frame medians moved by at most 0.011 ms.
+
+On Windows, package-mode core validation passed 3,295 Release and 3,195
+ReleaseLean tests. The adapter used `UseLocalLsfStack=true` against the
+immutable develop CI pins, including Gravitas `13f73bdc`. It passed 90
+Release and 86 ReleaseLean tests. Both library targets built in each
+configuration. Combined coverage was 32,724/32,724 lines, 13,494/13,494
+branches, and 3,216/3,216 fully covered methods in each configuration.
+DocFX passed with warnings treated as errors.
+
+Native swept legs and route admission for the obstacle detour and fitted
+portal are the next Phase 1 work. The shared A*/Flow and scheduler contracts
+remain the implementation target.

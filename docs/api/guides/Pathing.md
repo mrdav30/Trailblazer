@@ -57,6 +57,26 @@ When transitions are enabled, the winning target address may admit every
 qualifying medium in `TargetMedia`. When disabled, only the start medium is
 eligible; if the target mask excludes it, the valid query returns `NoPath`.
 
+### Strict top-down placement
+
+Use `context.Pathing.ResolveTopDownEndpoint` to check a circle at an exact
+world X/Z center before placing a top-down actor or choosing a destination.
+Pass the published map ID, radius, area policy, traversal medium and
+capabilities, and a `NavigationWorkBudget`. The map fixes the selected layer
+and world Y embedding. Compatible published layers at the same embedding
+can supply neighboring footprint coverage.
+
+The center must belong to a cell in the named map. Every required cell under
+the circle must be physically present and unblocked, admit the medium and
+capabilities, and satisfy the area policy and radius clearance. Exact tangency
+is allowed. Success returns the first admissible durable address in canonical
+order for the current publication. `InvalidStart` means placement failed.
+`Stale` means the policy or captured generations need to be refreshed.
+Placement uses the existing lookup, endpoint candidate, and covered-voxel
+limits. Every materialized top-down layer at the same embedding counts
+toward the layer workspace and generation-validation work. The result is
+a snapshot address for the exact requested center.
+
 ## Agent Profile
 
 `NavigationAgentProfile` is immutable and includes:

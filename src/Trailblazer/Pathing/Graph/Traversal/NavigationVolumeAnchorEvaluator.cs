@@ -235,11 +235,13 @@ internal readonly struct NavigationVolumeAnchorEvaluator
         int gridLimit,
         int mapCapacity,
         int addressLimit,
-        int coveredAddressCapacity)
-    {
-        if (worldSequenceBefore != worldSequenceAfter)
-            return NavigationVolumeAnchorStatus.Stale;
-        return status switch
+        int coveredAddressCapacity) => worldSequenceBefore != worldSequenceAfter
+        ? NavigationVolumeAnchorStatus.Stale
+        : ClassifyTraceStatus(status, gridLimit, mapCapacity, addressLimit, coveredAddressCapacity);
+
+    internal static NavigationVolumeAnchorStatus ClassifyTraceStatus(GridNavigationBodyTraceStatus status,
+        int gridLimit, int mapCapacity, int addressLimit, int coveredAddressCapacity) =>
+        status switch
         {
             GridNavigationBodyTraceStatus.Complete =>
                 NavigationVolumeAnchorStatus.Success,
@@ -259,7 +261,6 @@ internal readonly struct NavigationVolumeAnchorEvaluator
                     : NavigationVolumeAnchorStatus.CapacityExceeded,
             _ => NavigationVolumeAnchorStatus.BudgetExceeded
         };
-    }
 
     internal static NavigationVolumeAnchorStatus ResolveFinalStatus(
         ulong worldSequenceBefore,

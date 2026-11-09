@@ -24,9 +24,9 @@ publication.
 ## Top-Down Layer Binding
 
 `NavigationMapBuilder.SetPlanarLayer(NavigationMode2D.TopDown, layerIndex, embeddingY)`
-selects one topology-local layer for a top-down bake. The embedding
-must be within that layer's closed world-Y range. Explicit cells must belong to
-the selected layer. `NavigationMap.PlanarBinding` preserves the mode, layer, and
+selects one topology-local layer for a top-down bake. The embedding must be
+within that layer's closed world-Y range. Explicit cells must belong to the
+selected layer. `NavigationMap.PlanarBinding` preserves the mode, layer, and
 embedding in the bake's identity. It is null for spatial maps.
 
 Prepare and publish a top-down bake through the ordinary map operation. Its
@@ -35,8 +35,8 @@ embedding touches an adjacent layer. A live map ID keeps its planar binding
 through replacement. Remove the map before publishing the ID in a different
 domain or with a different layer or embedding.
 
-This stage publishes cell payloads. Planar connections, actions, and native
-query admission are later Phase 1 work. Spatial queries exclude planar cells.
+Hosts can check a circle's placement on these maps through
+[`ResolveTopDownEndpoint`](Pathing.md#strict-top-down-placement).
 
 ## Complete Cell Payloads
 

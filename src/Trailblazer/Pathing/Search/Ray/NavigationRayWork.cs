@@ -32,6 +32,7 @@ internal sealed partial class NavigationRayWork
         Status = NavigationRayStatus.Pending;
     }
 
+    internal NavigationRayWorkspace Workspace => _workspace;
     internal NavigationRayStatus Status { get; private set; }
 
     internal NavigationRayResult Result { get; private set; }

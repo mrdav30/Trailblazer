@@ -14,7 +14,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Context-owned admission, query, maintenance, and diagnostic API for unified navigation maps.
 /// </summary>
-public sealed class TrailblazerPathingService
+public sealed partial class TrailblazerPathingService
 {
     private readonly TrailblazerWorldContext _context;
 

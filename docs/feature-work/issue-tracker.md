@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-159`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-160`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -270,6 +270,36 @@ alone do not justify renewed open-ended investigation.
   failures.
 
 ## Resolved Issues
+
+### TRB-Issue-159 - Stale-guide retry test races the initial direct ray
+
+- **Discovered:** 2026-11-09 in the Ubuntu ReleaseLean CI job at `c6aa770`.
+  The same failure appeared at `372171d`.
+  [Failing CI job](https://github.com/mrdav30/Trailblazer/actions/runs/42565846257/job/128992062255)
+- **Resolved:** 2026-11-09.
+- **Root cause:** `GetHeading_ShouldRetryAfterGraphGuideAcquisitionBecomesStale`
+  waited for any graph lease. The direct ray takes and releases its own lease
+  before A* starts. If the test observed the ray lease, it replaced the graph
+  with a fixture root that retained traversable cells and dropped their
+  component index. A* then acquired that root, recorded a default component
+  key after the failed lookup, and threw in `NavigationSurfaceComponentIndex.TryGet`.
+- **Reproduction:** On Ubuntu with the CI SDK `10.0.403`, runtime `10.0.14`, and
+  pinned source stack, a temporary 300 ms delay after the ray acquired its
+  lease widened the race. The probe verified that the ray still owned its
+  monitor when the old test published, then reproduced the CI stack through
+  `NavigationEndpointResolutionWork.AreDependenciesCurrent`.
+- **Fix:** Observe the lease count while holding the immediate-ray monitor,
+  whose scope includes releasing the ray lease. The cache reservation lock
+  then holds A* on the original graph until the test publishes a structural
+  closure with its component index intact. Assert `Stale` and zero heading,
+  republish the open root, and verify the same query resumes. The corrected
+  test passed under the same forced delay.
+- **Verification:** Ten fresh focused ReleaseLean runs passed after removing
+  the delay. The complete source-stack test suites passed on Windows and
+  Ubuntu with 3,250 core and 90 adapter tests in Release and 3,150 core and 86
+  adapter tests in ReleaseLean. The Ubuntu runs used the CI toolchain and met
+  the exact coverage gate in both configurations with 32,511 lines, 13,304
+  branches, and 3,194 fully covered methods across both assemblies.
 
 ### TRB-Issue-158 - Transient sync fails on inherited private setters
 

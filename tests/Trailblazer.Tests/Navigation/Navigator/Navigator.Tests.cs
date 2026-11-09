@@ -1883,45 +1883,54 @@ public class NavigatorTests : IDisposable
         steering.ConfigurePathRechecks(16, 15);
         NavigationAStarAdmissionGate gate = TestWorld.Context.Pathing.NavigationAStarAdmissionGate;
         NavigationWorldGraphStore store = TestWorld.Context.Pathing.NavigationGraphStore;
-        NavigationSurfaceComponentIndex currentComponents = store.Current.SurfaceComponents;
+        NavigationWorldGraph current = store.Current;
+        NavigationWorldGraph closed = current.WithClosedStructuralComponents(
+            NavigationSurfaceComponentKeySet.Empty, closeAllStructuralComponents: true, current.GraphVersion + 1);
+        object raySync = TestWorld.Context.Pathing.ImmediateRayWorkspace.SyncRoot;
         FieldInfo cacheSyncField = TestRequire.NotNull(
             typeof(NavigationAStarPayloadCache).GetField(
                 "_sync",
                 BindingFlags.Instance | BindingFlags.NonPublic));
         object cacheSync = TestRequire.NotNull(cacheSyncField.GetValue(gate.PayloadCache));
         Task<Vector3d> acquisition;
+        NavigationCandidatePublication? publication = null;
 
-        Monitor.Enter(cacheSync);
-        try
+        lock (cacheSync)
         {
             acquisition = Task.Run(() => steering.GetHeading(navigator, out _));
-            SpinWait.SpinUntil(
-                    () => store.ActiveLeaseCount > 0,
-                    TimeSpan.FromSeconds(5))
-                .Should().BeTrue();
-            NavigationWorldGraph current = store.Current;
-            NavigationWorldGraph changed = current.WithSurfaceComponents(
-                NavigationSurfaceComponentIndex.Empty).WithGraphVersion(
-                    current.GraphVersion + 1);
-            store.TryPublish(changed).Should().Be(NavigationCandidatePublication.Published);
-        }
-        finally
-        {
-            Monitor.Exit(cacheSync);
+            if (SpinWait.SpinUntil(HasAStarLease, TimeSpan.FromSeconds(5)))
+                publication = store.TryPublish(closed);
         }
 
-        (await acquisition).Should().Be(Vector3d.Zero);
+        Vector3d heading = await acquisition;
+        publication.Should().Be(NavigationCandidatePublication.Published,
+            "A* must hold its graph lease before the closure is published");
+        heading.Should().Be(Vector3d.Zero);
+        steering.LastAcquisitionStatus.Should().Be(NavigationGuideStatus.Stale);
         steering.CurrentQuery.Should().Be(query);
         steering.ShouldMove.Should().BeTrue();
         steering.IsAtDestination.Should().BeFalse();
 
-        NavigationWorldGraph invalidated = store.Current;
-        store.TryPublish(invalidated.WithSurfaceComponents(currentComponents).WithGraphVersion(
-                invalidated.GraphVersion + 1))
+        store.TryPublish(current.WithGraphVersion(closed.GraphVersion + 1))
             .Should().Be(NavigationCandidatePublication.Published);
         steering.GetHeading(navigator, out _).Should().NotBe(Vector3d.Zero);
         steering.CurrentQuery.Should().Be(query);
         steering.ShouldMove.Should().BeTrue();
+
+        bool HasAStarLease()
+        {
+            // The direct ray holds this monitor until it releases its own graph lease.
+            if (!Monitor.TryEnter(raySync))
+                return false;
+            try
+            {
+                return store.ActiveLeaseCount > 0;
+            }
+            finally
+            {
+                Monitor.Exit(raySync);
+            }
+        }
     }
 
     [Fact]

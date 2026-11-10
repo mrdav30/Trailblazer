@@ -190,7 +190,7 @@ public sealed partial class NavigationTopDownTests
         var aStar = algorithm == PathAlgorithm.AStar ? new NavigationAStarWorkspace(1, 1, 1, 2, 1, 0, 2) : null;
         var flow = algorithm == PathAlgorithm.FlowField ? new NavigationFlowFieldWorkspace(1, 1, 1, 2, 1, 0) : null;
         NavigationTopDownRouteWork.Find(context.World, context.Pathing.NavigationGraphStore, request,
-            aStar, aStar == null ? null : new NavigationRayWork(aStar.RayWorkspace), flow, output, out _, out _)
+            aStar, aStar == null ? null : new NavigationRayWork(aStar.RayWorkspace), flow, output, out _, out _, null, out _)
             .Should().Be(NavigationGuideStatus.CapacityExceeded);
     }
 
@@ -228,16 +228,16 @@ public sealed partial class NavigationTopDownTests
         using var flow = new NavigationFlowAdmissionGate(context.World, store, context.Settings.QueryLimits, coordinator,
             context.Pathing.ImmediateRayWorkspace);
         coordinator.TryReservePrefix(PathAlgorithm.FlowField, 1, out var reservation).Should().Be(1);
-        aStar.FindTopDown(context.World, request, output, out _, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
+        aStar.FindTopDown(context.World, request, output, out _, out _, null, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
         coordinator.Release(reservation);
         coordinator.TryReservePrefix(PathAlgorithm.AStar, 1, out reservation).Should().Be(1);
-        flow.FindTopDown(context.World, request, output, out _, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
+        flow.FindTopDown(context.World, request, output, out _, out _, null, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
         coordinator.Release(reservation);
 
         aStar.Dispose();
         flow.Dispose();
-        aStar.FindTopDown(context.World, request, output, out _, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
-        flow.FindTopDown(context.World, request, output, out _, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
+        aStar.FindTopDown(context.World, request, output, out _, out _, null, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
+        flow.FindTopDown(context.World, request, output, out _, out _, null, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
 
         var leases = new NavigationWorldGraphLease?[context.Settings.MaxConcurrentSnapshotLeases];
         try

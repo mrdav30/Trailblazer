@@ -104,7 +104,7 @@ The normal host lifecycle is:
    controller-owned movement;
 8. dispose leases, Navigators, and then the context.
 
-`PathQuery` is the only public A\*/Flow request. Search state is an exact
+`PathQuery` describes spatial A\*/Flow requests. Search state is an exact
 `NavigationCellAddress` plus `TraversalMedium`. Solid, Gas, and Liquid movement
 share one graph, cost model, dependency system, and guide contract.
 

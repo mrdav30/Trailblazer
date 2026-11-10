@@ -98,7 +98,7 @@ sets and geometry rather than local neighbor formulas.
 
 ## One query and cost model
 
-`PathQuery` is the only public A*/Flow request. It contains start/end endpoints,
+`PathQuery` describes spatial A*/Flow requests. It contains start/end endpoints,
 agent profile, area-policy key, exact start medium, target-media mask,
 algorithm, finite work budget, transition permission, and optional Flow
 settings.
@@ -114,6 +114,10 @@ A* returns `NavigationGuideLease` with `NavigationGuideStep` values. Flow
 returns `NavigationFlowFieldLease` with `NavigationFlowSample` values. Each
 value reports its exact medium. A transition value also carries a lease-specific
 `NavigationTransitionInstruction`.
+
+Top-down requests use durable cell addresses and a circle radius. Both
+algorithms can return a retained `NavigationTopDownGuideLease` with an
+acquisition-local cursor over the selected centers.
 
 The host approaches the source position, performs the action, and calls
 `CompletePendingTransition(...)` with that exact instruction. Transient capacity

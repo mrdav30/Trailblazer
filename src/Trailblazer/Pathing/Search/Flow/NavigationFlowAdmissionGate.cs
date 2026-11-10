@@ -78,10 +78,12 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
     internal NavigationFlowFieldPayloadCache PayloadCache => _cache;
 
     internal NavigationGuideStatus FindTopDown(GridWorld world, in NavigationTopDownRouteRequest request,
-        Span<NavigationCellAddress> route, out int count, out Fixed64 cost)
+        Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
+        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)
     {
         count = 0;
         cost = default;
+        guide = default;
         NavigationFlowQueryWork query = _queries[0];
         NavigationQueryCapacityReservation reservation;
         lock (_sync)
@@ -93,7 +95,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         try
         {
             return NavigationTopDownRouteWork.Find(world, _store, request, null, null,
-                query.Workspace, route, out count, out cost);
+                query.Workspace, route, out count, out cost, retention, out guide);
         }
         finally
         {

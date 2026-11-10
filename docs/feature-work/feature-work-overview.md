@@ -32,7 +32,8 @@ instead of burying it in notes.
     [Phase 0 evidence](twoDimensionalNavigationPlan.md#2026-11-09---phase-0-contract-closeout)
   - Phase 1 publishes layer-bound top-down cells through the shared graph
     while keeping spatial queries separate. Strict circle placement and
-    immediate A*/Flow routes cover the obstacle and fitted portal cases.
+    immediate A*/Flow routes and retained center guides cover the obstacle and
+    fitted portal cases.
     Retain one graph, A*/Flow pipeline, and scheduler. The 2D controller uses
     native geometry and preserves the 3D frame, ownership, and replay
     guarantees. Hard physics-query budgets remain a separate 2D/3D workstream.
@@ -232,8 +233,8 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Continue the 2D plan's Phase 1 with retained planar guides and accepted
-   controller motion for the reviewed top-down fixtures. Capture matched 3D
+1. Continue the 2D plan's Phase 1 with accepted controller motion, cross-map
+   edge discovery and scheduled planar acquisition. Capture matched 3D
    controls before changing shared runtime paths. Validate the adapter against
    the pinned source stack as its phase begins.
 2. After every active feature-work plan is complete, release any changed

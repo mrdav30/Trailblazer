@@ -32,6 +32,8 @@ teleporters.
   your host owns animation, physics, and gameplay execution.
 - **Controllers are optional.** Use pathing by itself or compose Navigator,
   steering, turning, locomotion, occupancy, and deterministic heightmaps.
+- **Top-down routes use circle clearance.** Acquire A* or Flow guides over
+  cell centers with swept clearance between neighbors.
 - **The engine stays outside.** Trailblazer has no Unity, Godot, Unreal, or
   renderer dependency.
 

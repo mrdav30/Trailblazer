@@ -184,6 +184,13 @@ internal sealed partial class NavigationAStarPayloadCache
                 return NavigationAStarQueryStatus.Stale;
             }
         }
+        guide = BindGuide(store, payloadLease);
+        return NavigationAStarQueryStatus.Success;
+    }
+
+    private NavigationAStarGuideLease BindGuide(NavigationWorldGraphStore store, NavigationAStarPayloadLease payloadLease)
+    {
+        NavigationAStarGuideLease? guide;
         lock (_sync)
         {
             guide = _freeGuides;
@@ -196,7 +203,7 @@ internal sealed partial class NavigationAStarPayloadCache
             }
         }
         guide.Bind(store, payloadLease);
-        return NavigationAStarQueryStatus.Success;
+        return guide;
     }
 
     internal NavigationGuideStatus TryCreatePublicGuide(
@@ -480,11 +487,7 @@ internal sealed partial class NavigationAStarPayloadCache
 
             if (_maximumEntries == 0 || retainedBytes > _maximumReusableBytes)
             {
-                var detached = new CacheEntry(payload, isCached: false);
-                _detachedBytes = checked(_detachedBytes + retainedBytes);
-                ReleasePayloadReservationUnderLock(reservation);
-                reservation = default;
-                lease = Checkout(detached);
+                lease = CheckoutDetached(payload, retainedBytes, ref reservation);
                 return true;
             }
 
@@ -505,6 +508,36 @@ internal sealed partial class NavigationAStarPayloadCache
             lease = Checkout(entry);
             return true;
         }
+    }
+
+    private NavigationAStarPayloadLease CheckoutDetached(NavigationAStarPayload payload, long retainedBytes,
+        ref NavigationAStarPayloadReservation reservation)
+    {
+        var detached = new CacheEntry(payload, isCached: false);
+        _detachedBytes = checked(_detachedBytes + retainedBytes);
+        ReleasePayloadReservationUnderLock(reservation);
+        reservation = default;
+        return Checkout(detached);
+    }
+
+    internal NavigationGuideStatus PublishTopDownGuide(NavigationWorldGraphStore store,
+        NavigationTopDownGuidePayload payload, ref NavigationAStarPayloadReservation reservation,
+        out NavigationTopDownGuideLease guide)
+    {
+        guide = default;
+        NavigationAStarPayloadLease lease;
+        lock (_sync)
+        {
+            if (store.IsSafetyPending)
+                return NavigationGuideStatus.CapacityExceeded;
+            if (!payload.IsCurrent(_world, store))
+                return NavigationGuideStatus.Stale;
+            System.Diagnostics.Debug.Assert(IsReservationCurrentUnderLock(reservation)
+                && payload.RetainedBytes == reservation.MaximumBytes);
+            lease = CheckoutDetached(payload, reservation.MaximumBytes, ref reservation);
+        }
+        guide = new NavigationTopDownGuideLease(BindGuide(store, lease));
+        return NavigationGuideStatus.Success;
     }
 
     internal void RemoveExact(NavigationAStarPayload payload)

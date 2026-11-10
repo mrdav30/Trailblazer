@@ -47,6 +47,11 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
 
     internal NavigationWorldGraph Current => Volatile.Read(ref _current);
 
+    internal bool IsDisposed
+    {
+        get { lock (_sync) return _disposed; }
+    }
+
     internal int ActiveLeaseCount
     {
         get { lock (_sync) return _activeLeaseCount; }

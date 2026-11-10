@@ -1,11 +1,13 @@
 # Path Guides
 
-Trailblazer exposes two lease types over immutable graph payloads:
+Trailblazer exposes three lease types over immutable graph payloads:
 
 - `NavigationGuideLease` for ordered A* movement/action steps;
-- `NavigationFlowFieldLease` for destination-centric Flow sampling.
+- `NavigationFlowFieldLease` for destination-centric Flow sampling;
+- `NavigationTopDownGuideLease` for immediate A* or Flow routes over
+  canonical top-down centers. See [retained top-down guides](Pathing.md#retained-top-down-guides).
 
-The cached payload is immutable. Cursor, current medium, and pending-action
+The leased payload is immutable. Cursor, current medium, and pending-action
 state belong to one lease acquisition and are never shared between consumers.
 Navigator-owned current-foot connector proofs are also lease-local, never
 payload dependencies shared with another consumer.

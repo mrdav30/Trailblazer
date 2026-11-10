@@ -11,7 +11,7 @@ using FixedMathSharp;
 namespace Trailblazer.Pathing;
 
 /// <summary>Stores one immutable fixed-point A* result independent of graph slots.</summary>
-internal sealed class NavigationAStarPayload
+internal class NavigationAStarPayload
 {
     private const long ObjectHeaderBytes = 16L;
     private const long ArrayHeaderBytes = 24L;
@@ -71,7 +71,7 @@ internal sealed class NavigationAStarPayload
 
     internal NavigationSurfaceAStarStatus Status { get; }
 
-    internal long RetainedBytes => GetRetainedBytes(
+    internal virtual long RetainedBytes => GetRetainedBytes(
         GuidePoints.Length,
         TransitionInstructions.Length,
         Dependencies);

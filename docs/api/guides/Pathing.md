@@ -1,6 +1,6 @@
 # Pathing
 
-Trailblazer uses one immutable `PathQuery` for both A* and flow-field search.
+Trailblazer uses one immutable `PathQuery` for both spatial A* and flow-field search.
 The query is complete caller intent: no algorithm branch infers a medium,
 geometry, policy, or unbounded work limit later.
 
@@ -109,6 +109,21 @@ clearance between neighbors. Each leg charges the outward-rounded in-plane
 length plus the destination cell and area entry costs. The result is an
 immediate snapshot of the current graph. Run a fresh query to account for
 subsequent publication changes.
+
+### Retained top-down guides
+
+Use `context.Guides.RequestTopDownGuide` with the same route inputs to lease
+the selected center sequence. `TryGetCurrentStep` gives the current address
+and its fixed-point world X/Z center. The cursor starts at the first center.
+`TryAdvanceStep` moves it by one and stays at the destination once reached.
+The host owns movement and decides when to advance. Each request owns an
+independent cursor, and copies of a lease share that cursor and disposal.
+
+Both algorithms' center sequences share the A* route-guide lease, single-payload,
+and active-payload byte limits. A Flow request retains the route selected for
+its start address. Dispose successful leases to release capacity. A graph
+publication or raw GridWorld change makes the route stale. Read and advance
+operations validate the snapshot before exposing a center or moving the cursor.
 
 ## Agent Profile
 

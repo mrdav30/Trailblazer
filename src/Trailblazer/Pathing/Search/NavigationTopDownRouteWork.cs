@@ -11,15 +11,17 @@ using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Runs an immediate planar query in a borrowed search workspace and copies its route.</summary>
+/// <summary>Runs an immediate planar query in a borrowed search workspace and materializes its route.</summary>
 internal static class NavigationTopDownRouteWork
 {
     internal static NavigationGuideStatus Find(GridWorld world, NavigationWorldGraphStore store,
         in NavigationTopDownRouteRequest request, NavigationAStarWorkspace? aStar, NavigationRayWork? ray,
-        NavigationFlowFieldWorkspace? flow, Span<NavigationCellAddress> route, out int count, out Fixed64 cost)
+        NavigationFlowFieldWorkspace? flow, Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
+        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)
     {
         count = 0;
         cost = default;
+        guide = default;
         var epoch = (world.SpawnToken, world.Version, world.ChangeSequence);
         using NavigationWorldGraphLease? lease = store.TryAcquire();
         if (lease == null)
@@ -52,19 +54,13 @@ internal static class NavigationTopDownRouteWork
                 (world.SpawnToken, world.Version, world.ChangeSequence));
             if (status != NavigationGuideStatus.Success)
                 return status;
+            if (retention != null)
+                return RetainRoute(retention, store, graph, map, binding, request, epoch, aStar, flow, length, total, out guide);
             if (route.Length < length)
                 return NavigationGuideStatus.CapacityExceeded;
 
-            if (aStar != null)
-            {
-                for (int i = 0; i < length; i++)
-                    graph.TryGetNodeAddress(aStar.PathNodes[i].Node, out route[i]);
-            }
-            else
-            {
-                for (int i = 0; i < length; i++)
-                    route[i] = flow!.GetRecord(flow.SettledSlots[i]).Address;
-            }
+            for (int i = 0; i < length; i++)
+                route[i] = GetAddress(graph, aStar, flow, i);
             count = length;
             cost = total;
             return NavigationGuideStatus.Success;
@@ -74,6 +70,43 @@ internal static class NavigationTopDownRouteWork
             // Do not pass planar cleanup work to the next scheduled spatial search.
             if (flowSearch)
                 flow!.ResetSearch();
+        }
+    }
+
+    private static NavigationCellAddress GetAddress(NavigationWorldGraph graph, NavigationAStarWorkspace? aStar,
+        NavigationFlowFieldWorkspace? flow, int index)
+    {
+        if (aStar == null)
+            return flow!.GetRecord(flow.SettledSlots[index]).Address;
+        graph.TryGetNodeAddress(aStar.PathNodes[index].Node, out var address);
+        return address;
+    }
+
+    private static NavigationGuideStatus RetainRoute(NavigationAStarPayloadCache retention, NavigationWorldGraphStore store,
+        NavigationWorldGraph graph, NavigationMapInstance map, NavigationPlanarBinding binding,
+        in NavigationTopDownRouteRequest request, (long Spawn, uint Version, ulong Sequence) epoch,
+        NavigationAStarWorkspace? aStar, NavigationFlowFieldWorkspace? flow, int length, Fixed64 cost,
+        out NavigationTopDownGuideLease guide)
+    {
+        guide = default;
+        if (!retention.TryReservePayload(NavigationTopDownGuidePayload.MeasureBytes(length), out var reservation))
+            return NavigationGuideStatus.CapacityExceeded;
+        try
+        {
+            var points = new NavigationAStarGuidePoint[length];
+            for (int i = 0; i < length; i++)
+            {
+                NavigationCellAddress address = GetAddress(graph, aStar, flow, i);
+                map.Map.GridBinding.TryGetCellPrism(address.Index, out var prism);
+                var position = new Vector3d(prism.Center.X, binding.EmbeddingY, prism.Center.Z);
+                points[i] = new NavigationAStarGuidePoint(address, position, request.Medium);
+            }
+            var payload = new NavigationTopDownGuidePayload(points, cost, request.AreaPolicy, graph.GraphVersion, epoch);
+            return retention.PublishTopDownGuide(store, payload, ref reservation, out guide);
+        }
+        finally
+        {
+            retention.ReleasePayloadReservation(ref reservation);
         }
     }
 

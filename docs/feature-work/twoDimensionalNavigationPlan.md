@@ -2372,3 +2372,75 @@ This checkpoint enumerates ordinary neighbors within the named map. The
 standalone leg check continues to prove compatible cross-map legs. Planar
 route acquisition through retained guides and scheduling, cross-map edge
 discovery, and accepted controller motion remain Phase 1 integration work.
+
+### 2026-11-09 - Phase 1 retained top-down center guides
+
+`context.Guides.RequestTopDownGuide` runs the same immediate planar search
+as `FindTopDownRoute` and retains the selected canonical centers in order.
+Both algorithms use the existing pooled A* route cursor and its lease,
+single-payload, and active-byte ceilings. Flow uses its own search workspace
+and retains its selected route from the requested origin. Planar payloads
+stay detached from the spatial reusable cache.
+
+The retained stamp uses the monotonically increasing graph version and the
+raw GridWorld spawn, version, and change sequence. The stamp does not retain
+a graph root. Each read or advance validates the stamp and fails closed
+through graph maintenance, reset, or disposal. An overlay that opens the
+missing detour cell invalidates the old route without a raw world change.
+Fresh acquisition returns exact cost 4 in place of the cost-6 detour.
+
+The fitted portal covers radius `1/2` and the first penetrating raw unit.
+The guide tests also cover independent cursors, stale aliases after pool
+reuse, default failure outputs, raw changes before graph publication, reset,
+attached-world disposal, detached byte accounting, and acquisition with one
+available graph lease.
+
+The pre-edit Release controls are under
+`artifacts/phase1-ec9e9df-guides-baseline` at Trailblazer `ec9e9df`. The
+matched reverse-order rerun is under `artifacts/phase1-guides-post`. Frozen
+dependency hashes matched. The two captures matched 3D replay checksums,
+work counts, allocations, and completion frames across 576 guided frames
+per algorithm, both ray preflights, and 45 scheduled Flow recovery episodes.
+
+| 3D timing | Before | After |
+| --- | ---: | ---: |
+| Guided A* frame median / observed P95 | 1.932 / 2.247 ms | 1.924 / 2.226 ms |
+| Guided Flow frame median / observed P95 | 1.375 / 3.156 ms | 1.851 / 3.136 ms |
+| Medium ray mean | 5.953 ms | 5.915 ms |
+| SparseBlocked ray mean | 431.5 µs | 428.0 µs |
+
+The recovery median-of-episode frame medians moved by at most 0.005 ms.
+For the guided Flow follow-up, the same generated child and dependencies ran
+eight launches in ABBA/BAAB order, swapping only the hash-verified
+`Trailblazer.dll`. Each launch contributed three actual 64-frame blocks.
+
+| Flow follow-up | Before median / observed P95 | After median / observed P95 |
+| --- | ---: | ---: |
+| One warmup, default tiering | 1.585 / 3.349 ms | 2.496 / 3.748 ms |
+| One warmup, tiering disabled | 0.850 / 1.157 ms | 0.834 / 1.102 ms |
+| Eight warmups, default tiering | 0.686 / 0.988 ms | 0.693 / 0.983 ms |
+
+Replay, work, and allocations matched in each launch. The short-warmup
+capture shows a timing increase that largely disappears with more warmup or
+disabled tiering. The runs do not attribute the difference to a specific
+method. Raw logs are under `artifacts/phase1-guides-flow-abba`,
+`artifacts/phase1-guides-flow-abba-tiering-off`, and
+`artifacts/phase1-guides-flow-long-warm`.
+
+The disposable Windows Release probe acquired the cost-6 detour, advanced
+through six steps, verified the exact destination, and disposed the lease.
+After 64 warmups, five blocks of 100 operations averaged 1.516–1.674 ms
+and 5,384 B for A*, and 1.514–1.585 ms and 12,008–12,019 B for Flow.
+The route contains seven centers. These figures include search and retained
+payload construction. The raw probe is under `artifacts/phase1-guides-probe`.
+
+Windows and Ubuntu under WSL each passed 3,324 Release and 3,224 ReleaseLean
+package-mode core tests. On both hosts, the adapter at the immutable develop
+source pins, including Gravitas `13f73bdc`, passed 90 Release and 86
+ReleaseLean tests. Both library targets built in both configurations.
+Combined coverage was 33,122/33,122 lines, 13,689/13,689 branches, and
+3,264/3,264 fully covered methods per configuration and host. Windows DocFX
+passed with warnings treated as errors.
+
+Scheduled planar acquisition, cross-map edge discovery, and accepted
+controller motion remain in Phase 1.

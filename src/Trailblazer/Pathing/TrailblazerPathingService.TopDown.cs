@@ -70,11 +70,19 @@ public sealed partial class TrailblazerPathingService
     public NavigationGuideStatus FindTopDownRoute(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
         NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
         NavigationWorkBudget budget, Span<NavigationCellAddress> route, out int count, out Fixed64 cost)
+        => RunTopDownRoute(start, end, radius, areaPolicy, medium, capabilities, algorithm, budget, route,
+            out count, out cost, null, out _);
+
+    internal NavigationGuideStatus RunTopDownRoute(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
+        NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
+        NavigationWorkBudget budget, Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
+        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)
     {
         EnsureUsable();
         areaPolicy.Validate(nameof(areaPolicy));
         count = 0;
         cost = default;
+        guide = default;
         if (start.MapId == null)
             return NavigationGuideStatus.InvalidStart;
         if (end.MapId == null)
@@ -87,8 +95,10 @@ public sealed partial class TrailblazerPathingService
         var request = new NavigationTopDownRouteRequest(start, end, radius, areaPolicy, medium, capabilities, budget);
         return algorithm switch
         {
-            PathAlgorithm.AStar => _navigationAStarAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost),
-            PathAlgorithm.FlowField => _navigationFlowAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost),
+            PathAlgorithm.AStar => _navigationAStarAdmissionGate.FindTopDown(_context.World, request, route, out count,
+                out cost, retention, out guide),
+            PathAlgorithm.FlowField => _navigationFlowAdmissionGate.FindTopDown(_context.World, request, route, out count,
+                out cost, retention, out guide),
             _ => NavigationGuideStatus.Unsupported
         };
     }

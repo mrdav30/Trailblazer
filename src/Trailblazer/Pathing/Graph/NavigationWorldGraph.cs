@@ -1257,7 +1257,7 @@ internal sealed partial class NavigationWorldGraph
         return index;
     }
 
-    private int FindMapOrdinal(string mapId)
+    internal int FindMapOrdinal(string mapId)
     {
         int low = 0;
         int high = _instances.Count - 1;

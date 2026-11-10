@@ -11,8 +11,8 @@ through the shared graph with selected-layer defaults and overlays. See the
 Spatial query and edge admission excludes those cells. The [strict top-down
 placement check](#2026-11-09---phase-1-strict-top-down-endpoints) resolves a
 current endpoint. [Swept-circle validation](#2026-11-09---phase-1-top-down-leg-clearance)
-checks an ordinary leg between cell centers. Native routing comes next for
-the reviewed obstacle and portal cases. Use
+checks an ordinary leg between cell centers. [Immediate top-down routing](#2026-11-09---phase-1-immediate-top-down-routes)
+uses those legs in the shared A* and Flow searches. Use
 `UseLocalLsfStack=true` for adapter development. The core package references
 GridForge 10.0.0. Released-package validation of the adapter still requires
 Gravitas 1.1.0. Hard-budgeted physics queries remain a separate
@@ -909,6 +909,9 @@ in the existing test projects.
 - [x] **Prove one ordinary top-down leg.** Use the same circle evaluator for the
   full center-to-center sweep. Preserve cardinal rectangular neighbors, native
   hex neighbors, and exact compatible footprints across maps.
+- [x] **Route the obstacle detour and fitted portal.** Both shared searches
+  admit center-address endpoints and prove each native leg on one planar map.
+  Return a detached sequence and exact cost from the captured publication.
 - [ ] **Write the first failing planar acceptance cases.** Test obstacle
   avoidance and a narrow gap at fitting/non-fitting body sizes through the
   public 2D contract, including no out-of-plane drift. Record the intended
@@ -2299,3 +2302,73 @@ errors.
 
 The next Phase 1 acceptance cases wire ordinary planar legs into shared
 A* and Flow for the fitted portal and obstacle detour.
+
+### 2026-11-09 - Phase 1 immediate top-down routes
+
+Before shared edits, the matched Release source-stack controls were captured
+at Trailblazer `26d446b`, FixedMathSharp `e2c325a`, SwiftCollections `08b1b38`,
+Chronicler `7b90d59`, and GridForge `c4f80a0`. The accepted baseline is under
+`artifacts/phase1-26d446b-routes-baseline`. Launch and workload settings match
+the leg-clearance checkpoint.
+
+`context.Pathing.FindTopDownRoute` accepts two durable center addresses on one
+materialized top-down map. It borrows a configured A* or Flow workspace
+through the existing admission coordinator, binds the compatible planar
+generations once, and reuses the stationary and swept circle proof. Search
+uses the existing native direction order, heap and relaxation for each
+algorithm. A* uses zero heuristic and returns the reconstructed addresses.
+Flow considers each predecessor's forward leg, retains the forward ordinal,
+and follows the settled successors. Exact leg cost is outward-rounded
+in-plane length plus forward destination cell and area costs.
+
+The immediate route returns caller-owned addresses and cost after a graph
+root and world stamp check. It uses no spatial component rejection, spatial
+shortcut, or retained guide payload. A previously unauthored flank may lack
+a dependency page, so the complete snapshot covers semantic openings as
+well as physical changes. Caller output stays unchanged on failure. Flow
+clears the borrowed search records after extraction so its cleanup cannot
+consume a later scheduled spatial query's node slice.
+
+Both algorithms found the cost-6 detour through `(2,1)` and the cost-4
+direct route after an overlay opened `(2,0)` without a raw-world change.
+The fitted portal admitted radius `1/2` and rejected radius `1/2` plus one
+raw unit. A target toll gave exact forward and reverse costs of `4 1/4`
+and `4`. The pointy-hex regression proved an independent swept-only failure.
+Both endpoint circles fit, but the leg failed until the two flank cells were
+authored. Tests also cover finite edge, lookup, endpoint, node and coverage
+budgets, exact output capacity, overflow, lane ownership, and stale geometry.
+
+The matched rerun under `artifacts/phase1-routes-post` kept the dependency
+hashes and reversed workload order. Replay checksums, work counts,
+allocations, and completion frames matched across 576 guided frames per
+algorithm, both ray preflights, and 45 scheduled recovery episodes.
+
+| 3D timing | Before | After |
+| --- | ---: | ---: |
+| Guided A* frame median / observed P95 | 1.942 / 2.131 ms | 1.839 / 1.999 ms |
+| Guided Flow frame median / observed P95 | 2.019 / 3.540 ms | 1.948 / 3.314 ms |
+| Medium ray mean | 5.888 ms | 5.893 ms |
+| SparseBlocked ray mean | 421.3 µs | 422.3 µs |
+
+The recovery median-of-episode frame medians moved by at most 0.004 ms.
+These timings describe the matched captures.
+
+The disposable Release probe used the cost-6 rectangular detour with a
+caller-owned 16-address buffer. After 64 warmups per algorithm, five blocks
+of 100 queries each returned the exact route length and cost. A* block
+averages were 1.508–1.676 ms and 4,480 B per query. Flow block averages were
+1.515–1.595 ms and 11,104–11,155 B per query on the Windows baseline host.
+The route borrows search buffers and scratch. Each immediate call still
+constructs query and kernel work objects.
+
+Windows package-mode core passed 3,317 Release and 3,217 ReleaseLean tests.
+The local-source adapter at the immutable develop CI pins, including Gravitas
+`13f73bdc`, passed 90 Release and 86 ReleaseLean tests. Both library targets
+built in both configurations. Combined coverage was 33,048/33,048 lines,
+13,669/13,669 branches, and 3,244/3,244 fully covered methods per configuration.
+DocFX passed with warnings treated as errors.
+
+This checkpoint enumerates ordinary neighbors within the named map. The
+standalone leg check continues to prove compatible cross-map legs. Planar
+route acquisition through retained guides and scheduling, cross-map edge
+discovery, and accepted controller motion remain Phase 1 integration work.

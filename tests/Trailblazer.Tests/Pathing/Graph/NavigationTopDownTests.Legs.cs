@@ -12,8 +12,10 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed partial class NavigationTopDownTests
 {
-    [Fact]
-    public void Leg_ProvesTheMiddleOfAHexSweepEvenWhenBothEndpointsFit()
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void Leg_ProvesTheMiddleOfAHexSweepEvenWhenBothEndpointsFit(PathAlgorithm algorithm)
     {
         using var context = CreateContext();
         var metrics = GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One, HexOrientation.PointyTop);
@@ -41,6 +43,14 @@ public sealed partial class NavigationTopDownTests
         ValidateLeg(context, source, target, Fixed64.Half).Should().Be(NavigationGuideStatus.Success);
         ValidateLeg(context, source, target, penetratingRadius).Should().Be(NavigationGuideStatus.NoPath);
         ValidateLeg(context, target, source, penetratingRadius).Should().Be(NavigationGuideStatus.NoPath);
+        var route = new NavigationCellAddress[2];
+        FindRoute(context, source, target, Fixed64.Half, algorithm, route, out int count, out _)
+            .Should().Be(NavigationGuideStatus.Success);
+        count.Should().Be(2);
+        route.Should().Equal(source, target);
+        FindRoute(context, source, target, penetratingRadius, algorithm, route, out count, out _)
+            .Should().Be(NavigationGuideStatus.NoPath);
+        count.Should().Be(0);
 
         var overlay = new NavigationOverlayCommitOperation(new PreparedNavigationOverlay(new NavigationOverlayTransaction(
             new[] { new NavigationMapOverlayDelta("plane", new[]
@@ -52,6 +62,10 @@ public sealed partial class NavigationTopDownTests
         overlay.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         ValidateLeg(context, source, target, penetratingRadius).Should().Be(NavigationGuideStatus.Success);
         ValidateLeg(context, target, source, penetratingRadius).Should().Be(NavigationGuideStatus.Success);
+        FindRoute(context, source, target, penetratingRadius, algorithm, route, out count, out _)
+            .Should().Be(NavigationGuideStatus.Success);
+        count.Should().Be(2);
+        route.Should().Equal(source, target);
     }
 
     [Fact]
@@ -137,6 +151,8 @@ public sealed partial class NavigationTopDownTests
 
         TestRequire.Grid(context, slot).TryRemoveVoxel(target.Index).Should().BeTrue();
         ValidateLeg(context, source, target, Fixed64.Quarter).Should().Be(NavigationGuideStatus.Stale);
+        FindRoute(context, source, target, Fixed64.Quarter, PathAlgorithm.FlowField, new NavigationCellAddress[2], out _, out _)
+            .Should().Be(NavigationGuideStatus.Stale);
         context.Simulate();
         WaitForMaterialization(context, "plane");
         ValidateLeg(context, source, target, Fixed64.Quarter).Should().Be(NavigationGuideStatus.NoPath);

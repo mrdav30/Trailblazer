@@ -93,6 +93,23 @@ against the current publication. `NoPath` reports unsupported adjacency or
 blocked coverage. `InvalidStart` and `InvalidEnd` identify invalid addresses.
 An evaluated leg uses one edge allowance plus lookup and covered-voxel work.
 
+### Immediate top-down routes
+
+Use `context.Pathing.FindTopDownRoute` with two durable addresses on the same
+published top-down map, a circle radius, an area policy, a traversal medium
+and capabilities, an algorithm, and a work budget. Supply a span of
+`NavigationCellAddress` values to receive the route. `Success` writes the
+ordered addresses, including both endpoints, and returns their count and the
+exact fixed-point cost. A failed query leaves the span untouched and returns
+zero count and cost. `CapacityExceeded` can indicate insufficient output space
+or unavailable query resources.
+
+Both A* and Flow test stationary clearance at the endpoint centers and swept
+clearance between neighbors. Each leg charges the outward-rounded in-plane
+length plus the destination cell and area entry costs. The result is an
+immediate snapshot of the current graph. Run a fresh query to account for
+subsequent publication changes.
+
 ## Agent Profile
 
 `NavigationAgentProfile` is immutable and includes:

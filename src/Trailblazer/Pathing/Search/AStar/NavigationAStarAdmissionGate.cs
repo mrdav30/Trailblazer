@@ -7,6 +7,7 @@
 
 using System;
 using System.Threading;
+using FixedMathSharp;
 using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
@@ -76,6 +77,31 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     internal NavigationAStarPayloadCache PayloadCache => _cache;
 
+    internal NavigationGuideStatus FindTopDown(GridWorld world, in NavigationTopDownRouteRequest request,
+        Span<NavigationCellAddress> route, out int count, out Fixed64 cost)
+    {
+        count = 0;
+        cost = default;
+        NavigationAStarQueryWork query = _queries[0];
+        NavigationQueryCapacityReservation reservation;
+        lock (_sync)
+        {
+            if (!CanBegin() || _coordinator.TryReservePrefix(PathAlgorithm.AStar, 1, out reservation) == 0)
+                return NavigationGuideStatus.CapacityExceeded;
+            Monitor.Enter(query);
+        }
+        try
+        {
+            return NavigationTopDownRouteWork.Find(world, _store, request, query.Workspace, query.RayWork,
+                null, route, out count, out cost);
+        }
+        finally
+        {
+            Monitor.Exit(query);
+            _coordinator.Release(reservation);
+        }
+    }
+
     internal NavigationAStarQueryStatus Begin(
         PathQuery query,
         out NavigationAStarBatchWork work,
@@ -126,6 +152,8 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 active = new NavigationAStarBatchWork(this, _activeGeneration);
         }
         active.Dispose();
+        // Detached routes use the reserved worker without holding the admission lock.
+        lock (_queries[0]) { }
     }
 
     internal void CancelActive()
@@ -137,6 +165,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 active = new NavigationAStarBatchWork(this, _activeGeneration);
         }
         active.Dispose();
+        lock (_queries[0]) { }
     }
 
     private bool CanBegin() =>

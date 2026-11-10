@@ -36,6 +36,8 @@ internal sealed class NavigationFlowQueryWork : IDisposable
     private NavigationEndpointProofWork _endpointProofWork;
     private bool _endpointProofActive;
     private NavigationFlowFieldStatus _checkoutStatus;
+
+    internal NavigationFlowFieldWorkspace Workspace => _workspace;
     private long _endpointProofReservation;
 
     internal NavigationFlowQueryWork(

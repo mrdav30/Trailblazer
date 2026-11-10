@@ -247,6 +247,8 @@ public sealed partial class NavigationTopDownTests
         store.TryPublish(closed).Should().Be(NavigationCandidatePublication.Published);
         Resolve(context, Vector2d.Zero, Fixed64.Quarter, out _).Should().Be(NavigationGuideStatus.Stale);
         address = new NavigationCellAddress("plane", new VoxelIndex(0, 1, 0));
+        FindRoute(context, address, address, Fixed64.Quarter, PathAlgorithm.AStar, new NavigationCellAddress[1], out _, out _)
+            .Should().Be(NavigationGuideStatus.Stale);
         TrailblazerPathingService.FinishTopDownQuery(NavigationGuideStatus.Success, original, closed, captured,
             captured, ref address).Should().Be(NavigationGuideStatus.Stale);
         address.Should().Be(default(NavigationCellAddress));

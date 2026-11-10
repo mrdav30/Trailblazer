@@ -79,21 +79,24 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         _heap = new NavigationFlowFieldOpenHeap(workspace);
         _resultStatus = NavigationFlowFieldStatus.Success;
 
-        if (!TryRecordPage(query.Start.Node)
-            || !TryRecordPage(query.End.Node))
+        if (query.TopDown == null)
         {
-            Finish(NavigationFlowFieldStatus.CapacityExceeded);
-            return;
-        }
-        if (!query.Query.AllowTransitions
-            && !_graph.AreInSameSurfaceComponent(
-                query.Start.Address,
-                query.StartMedium,
-                query.End.Address,
-                query.StartMedium))
-        {
-            Finish(NavigationFlowFieldStatus.NoPath);
-            return;
+            if (!TryRecordPage(query.Start.Node)
+                || !TryRecordPage(query.End.Node))
+            {
+                Finish(NavigationFlowFieldStatus.CapacityExceeded);
+                return;
+            }
+            if (!query.Query.AllowTransitions
+                && !_graph.AreInSameSurfaceComponent(
+                    query.Start.Address,
+                    query.StartMedium,
+                    query.End.Address,
+                    query.StartMedium))
+            {
+                Finish(NavigationFlowFieldStatus.NoPath);
+                return;
+            }
         }
 
         int nodeRemaining = 0;
@@ -145,14 +148,25 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                     if (_stage != Stage.Search)
                         continue;
                 }
-                NavigationTraversalEdgeAdvanceStatus edgeStatus =
-                    _incoming.AdvanceOne(
+                NavigationTopDownSearch? topDown = _query!.TopDown;
+                NavigationMediumStateRef predecessor = default;
+                Fixed64 cost = default;
+                int forwardOrdinal = default;
+                NavigationTraversalEdgeAdvanceStatus edgeStatus;
+                if (topDown == null)
+                {
+                    edgeStatus = _incoming.AdvanceOne(
                         _meter,
                         _workspace.EndpointWorkspace.Dependencies,
                         ref edgeRemaining,
                         ref connectionRemaining,
                         ref lookupRemaining);
-                CaptureWorldDependency(_incoming.RequiresWorldStamp);
+                    CaptureWorldDependency(_incoming.RequiresWorldStamp);
+                }
+                else
+                {
+                    edgeStatus = topDown.AdvanceEdge(out predecessor, out cost, out forwardOrdinal);
+                }
                 edgeStatus = ResolvePostEnumerationStatus(
                     IsWorldCurrent(),
                     edgeStatus);
@@ -167,7 +181,10 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                     return Status;
                 if (edgeStatus != NavigationTraversalEdgeAdvanceStatus.Edge)
                     return Finish(NavigationGuideStatusMapper.ToFlowField(edgeStatus));
-                NavigationFlowFieldStatus applied = ApplyIncoming();
+                NavigationFlowFieldStatus applied = topDown == null
+                    ? ApplyIncoming(_incoming.CurrentPredecessor, _incoming.CurrentCost,
+                        _incoming.CurrentOrdinal, _incoming.CurrentKind)
+                    : ApplyIncoming(predecessor, cost, forwardOrdinal, NavigationTraversalEdgeKind.Surface);
                 if (applied != NavigationFlowFieldStatus.Pending)
                     return applied;
                 continue;
@@ -353,8 +370,15 @@ internal sealed class NavigationFlowFieldWork : IDisposable
 
     private bool TryBeginCurrent(ref int nodeRemaining)
     {
+        NavigationResolvedPathQuery query = _query!;
+        NavigationTopDownSearch? topDown = query.TopDown;
         if (!_heap.TryPeek(out int nextSlot))
         {
+            if (topDown != null)
+            {
+                Finish(NavigationFlowFieldStatus.NoPath);
+                return false;
+            }
             _isComplete = true;
             _resultStatus = _originSettled
                 ? NavigationFlowFieldStatus.Success
@@ -387,12 +411,18 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         _workspace.SettledSlots[_workspace.SettledCount++] = _currentSlot;
         NavigationMediumStateRef currentState = _workspace.GetNode(_currentSlot);
         if (currentState.Equals(new NavigationMediumStateRef(
-                _query!.Start.Node,
-                _query.StartMedium)))
+                query.Start.Node,
+                query.StartMedium)))
         {
+            if (topDown != null)
+            {
+                // Positive leg costs ensure every selected successor has already settled.
+                Finish(NavigationFlowFieldStatus.Success);
+                return false;
+            }
             if (!Fixed64.TryAdd(
                     current.IntegrationCost,
-                    _query.Query.FlowField.ExtraIntegrationCost,
+                    query.Query.FlowField.ExtraIntegrationCost,
                     out _coverageThreshold))
             {
                 Finish(NavigationFlowFieldStatus.CostOverflow);
@@ -400,28 +430,35 @@ internal sealed class NavigationFlowFieldWork : IDisposable
             }
             _originSettled = true;
         }
-        _incoming = new NavigationIncomingTraversalEdgeEnumerator(
-            _world!,
-            _graph!,
-            currentState,
-            _query.Query.Agent,
-            _query.AreaPolicy,
-            _workspace.RayWorkspace,
-            _query.Query.AllowTransitions);
+        if (topDown == null)
+        {
+            _incoming = new NavigationIncomingTraversalEdgeEnumerator(
+                _world!,
+                _graph!,
+                currentState,
+                query.Query.Agent,
+                query.AreaPolicy,
+                _workspace.RayWorkspace,
+                query.Query.AllowTransitions);
+        }
+        else
+        {
+            topDown.BeginEdges(currentState, incoming: true);
+        }
         _hasCurrent = true;
         return true;
     }
 
-    private NavigationFlowFieldStatus ApplyIncoming()
+    private NavigationFlowFieldStatus ApplyIncoming(NavigationMediumStateRef predecessorState,
+        Fixed64 edgeCost, int forwardOrdinal, NavigationTraversalEdgeKind edgeKind)
     {
-        NavigationMediumStateRef predecessorState = _incoming.CurrentPredecessor;
-        if (!TryRecordStateDependencies(predecessorState))
+        if (_query!.TopDown == null && !TryRecordStateDependencies(predecessorState))
             return Finish(NavigationFlowFieldStatus.CapacityExceeded);
         ref NavigationFlowFieldSearchNode current =
             ref _workspace.GetRecord(_currentSlot);
         if (!Fixed64.TryAdd(
                 current.IntegrationCost,
-                _incoming.CurrentCost,
+                edgeCost,
                 out Fixed64 candidate))
         {
             return Finish(NavigationFlowFieldStatus.CostOverflow);
@@ -439,7 +476,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         {
             _graph!.TryGetNodeAddress(predecessorState.Node, out predecessor.Address);
             predecessor.IntegrationCost = candidate;
-            SetSelectedEdge(ref predecessor, current.Address, currentState: _workspace.GetNode(_currentSlot));
+            SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot),
+                forwardOrdinal, edgeKind);
             predecessor.HeapIndex = -1;
             _heap.Push(predecessorSlot);
             return Status;
@@ -452,15 +490,17 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         {
             if (predecessor.SelectedEdge.IsValid
                 && CompareSelectedEdge(
-                    CreateSelectedEdge(current.Address, _workspace.GetNode(_currentSlot)),
+                    CreateSelectedEdge(current.Address, _workspace.GetNode(_currentSlot), forwardOrdinal),
                     predecessor.SelectedEdge) < 0)
             {
-                SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot));
+                SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot),
+                    forwardOrdinal, edgeKind);
             }
             return Status;
         }
         predecessor.IntegrationCost = candidate;
-        SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot));
+        SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot),
+            forwardOrdinal, edgeKind);
         _heap.DecreaseKey(predecessorSlot);
         return Status;
     }
@@ -624,21 +664,23 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         NavigationSelectedEdgeRef right) =>
         left.CanonicalOutgoingOrdinal.CompareTo(right.CanonicalOutgoingOrdinal);
 
-    private NavigationSelectedEdgeRef CreateSelectedEdge(
+    private static NavigationSelectedEdgeRef CreateSelectedEdge(
         NavigationCellAddress target,
-        NavigationMediumStateRef targetState) => new(
+        NavigationMediumStateRef targetState,
+        int forwardOrdinal) => new(
         target,
         targetState.Medium,
-        _incoming.CurrentOrdinal);
+        forwardOrdinal);
 
-    private void SetSelectedEdge(
+    private static void SetSelectedEdge(
         ref NavigationFlowFieldSearchNode record,
         NavigationCellAddress target,
-        NavigationMediumStateRef currentState)
+        NavigationMediumStateRef currentState,
+        int forwardOrdinal,
+        NavigationTraversalEdgeKind edgeKind)
     {
-        record.SelectedEdge = CreateSelectedEdge(target, currentState);
-        record.SelectedIsTransition =
-            _incoming.CurrentKind == NavigationTraversalEdgeKind.Transition;
+        record.SelectedEdge = CreateSelectedEdge(target, currentState, forwardOrdinal);
+        record.SelectedIsTransition = edgeKind == NavigationTraversalEdgeKind.Transition;
     }
 
     private bool TryBeginSearch()
@@ -663,14 +705,18 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         }
         if ((_query!.End.Media & NavigationCell.ToMedia(medium)) == 0)
             return true;
-        _graph!.TryGetSurfaceComponent(
-            _query.End.Address,
-            medium,
-            out NavigationSurfaceComponentKey component,
-            out _);
+        if (_query.TopDown == null)
+        {
+            _graph!.TryGetSurfaceComponent(
+                _query.End.Address,
+                medium,
+                out NavigationSurfaceComponentKey component,
+                out _);
+            if (!_workspace.TryRecordComponent(component))
+                return false;
+        }
         var state = new NavigationMediumStateRef(_query.End.Node, medium);
-        if (!_workspace.TryRecordComponent(component)
-            || !_workspace.TryGetOrAdd(state, out int slot, out _))
+        if (!_workspace.TryGetOrAdd(state, out int slot, out _))
         {
             return false;
         }

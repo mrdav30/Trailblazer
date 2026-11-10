@@ -65,6 +65,9 @@ internal sealed class NavigationAStarQueryWork : IDisposable
 
     internal bool IsPrepared => _search != null || _readyToPublish;
 
+    internal NavigationAStarWorkspace Workspace => _workspace;
+    internal NavigationRayWork RayWork => _admission.RayWork;
+
     internal bool IsReadyToPublish => Volatile.Read(ref _readyToPublish);
 
     internal void BeginReserved(
@@ -377,7 +380,7 @@ internal sealed class NavigationAStarQueryWork : IDisposable
     private static NavigationAStarQueryStatus MapAdmissionStatus(
         NavigationQueryAdmissionStatus status) => (NavigationAStarQueryStatus)status;
 
-    private static NavigationAStarQueryStatus MapSearchStatus(
+    internal static NavigationAStarQueryStatus MapSearchStatus(
         NavigationSurfaceAStarStatus status) => status <= NavigationSurfaceAStarStatus.Success
             ? (NavigationAStarQueryStatus)status
             : (NavigationAStarQueryStatus)((byte)status + 5);

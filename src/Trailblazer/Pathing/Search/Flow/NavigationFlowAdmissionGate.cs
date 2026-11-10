@@ -7,6 +7,7 @@
 
 using System;
 using System.Threading;
+using FixedMathSharp;
 using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
@@ -76,6 +77,31 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
 
     internal NavigationFlowFieldPayloadCache PayloadCache => _cache;
 
+    internal NavigationGuideStatus FindTopDown(GridWorld world, in NavigationTopDownRouteRequest request,
+        Span<NavigationCellAddress> route, out int count, out Fixed64 cost)
+    {
+        count = 0;
+        cost = default;
+        NavigationFlowQueryWork query = _queries[0];
+        NavigationQueryCapacityReservation reservation;
+        lock (_sync)
+        {
+            if (!CanBegin() || _coordinator.TryReservePrefix(PathAlgorithm.FlowField, 1, out reservation) == 0)
+                return NavigationGuideStatus.CapacityExceeded;
+            Monitor.Enter(query);
+        }
+        try
+        {
+            return NavigationTopDownRouteWork.Find(world, _store, request, null, null,
+                query.Workspace, route, out count, out cost);
+        }
+        finally
+        {
+            Monitor.Exit(query);
+            _coordinator.Release(reservation);
+        }
+    }
+
     internal NavigationFlowQueryStatus Begin(
         PathQuery query,
         out NavigationFlowBatchWork work,
@@ -127,6 +153,8 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
                 active = new NavigationFlowBatchWork(this, _activeGeneration);
         }
         active.Dispose();
+        // Join a borrowed worker before the context can dispose the world.
+        lock (_queries[0]) { }
         _cache.Dispose();
     }
 
@@ -139,6 +167,7 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
                 active = new NavigationFlowBatchWork(this, _activeGeneration);
         }
         active.Dispose();
+        lock (_queries[0]) { }
     }
 
     private bool CanBegin() =>

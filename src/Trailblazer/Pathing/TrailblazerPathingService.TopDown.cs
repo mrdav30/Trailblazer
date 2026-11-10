@@ -5,6 +5,7 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 using GridForge.Spatial;
 
@@ -13,8 +14,6 @@ namespace Trailblazer.Pathing;
 /// <content>Proves top-down placement and ordinary legs against the current publication.</content>
 public sealed partial class TrailblazerPathingService
 {
-    private NavigationTopDownWork? _topDown;
-
     /// <summary>Checks whether a top-down circle fits at the exact center and resolves its cell in the named map.</summary>
     /// <remarks>
     /// Coordinates are world X/Z. The map fixes the selected layer and world Y embedding.
@@ -62,6 +61,38 @@ public sealed partial class TrailblazerPathingService
             capabilities, budget, out _);
     }
 
+    /// <summary>Finds an immediate route between cell centers on one published top-down map.</summary>
+    /// <remarks>
+    /// The caller supplies a buffer for the route, including both endpoints. Success writes the ordered addresses and
+    /// exact fixed-point cost. Other outcomes leave the buffer unchanged with zero count and cost. The result describes
+    /// one graph snapshot. Both algorithms use ordinary swept-circle legs and charge forward destination entry costs.
+    /// </remarks>
+    public NavigationGuideStatus FindTopDownRoute(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
+        NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
+        NavigationWorkBudget budget, Span<NavigationCellAddress> route, out int count, out Fixed64 cost)
+    {
+        EnsureUsable();
+        areaPolicy.Validate(nameof(areaPolicy));
+        count = 0;
+        cost = default;
+        if (start.MapId == null)
+            return NavigationGuideStatus.InvalidStart;
+        if (end.MapId == null)
+            return NavigationGuideStatus.InvalidEnd;
+        if (!string.Equals(start.MapId, end.MapId, StringComparison.Ordinal))
+            return NavigationGuideStatus.Unsupported;
+        if (!IsTopDownProfileValid(radius, NavigationCell.ToMedia(medium), capabilities))
+            return NavigationGuideStatus.InvalidProfile;
+
+        var request = new NavigationTopDownRouteRequest(start, end, radius, areaPolicy, medium, capabilities, budget);
+        return algorithm switch
+        {
+            PathAlgorithm.AStar => _navigationAStarAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost),
+            PathAlgorithm.FlowField => _navigationFlowAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost),
+            _ => NavigationGuideStatus.Unsupported
+        };
+    }
+
     private NavigationGuideStatus RunTopDownQuery(string mapId, VoxelIndex? sourceIndex, Vector2d center,
         NavigationCellAddress destination, Fixed64 radius, NavigationAreaPolicyKey areaPolicy, TraversalMedium medium,
         TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address)
@@ -69,11 +100,8 @@ public sealed partial class TrailblazerPathingService
         areaPolicy.Validate(nameof(areaPolicy));
         address = default;
         TraversalMedia media = NavigationCell.ToMedia(medium);
-        if (radius <= Fixed64.Zero || media == TraversalMedia.None
-            || (capabilities & ~NavigationCell.KnownCapabilities) != 0)
-        {
+        if (!IsTopDownProfileValid(radius, media, capabilities))
             return NavigationGuideStatus.InvalidProfile;
-        }
 
         NavigationImmediateRayWorkspace immediate = _immediateRayWorkspace;
         lock (immediate.SyncRoot)
@@ -90,26 +118,34 @@ public sealed partial class TrailblazerPathingService
                 || !graph.AreaCatalog.TryGet(areaPolicy, out NavigationAreaPolicy policy))
                 return NavigationGuideStatus.Stale;
 
-            _topDown ??= new NavigationTopDownWork(immediate.RayWork.Workspace);
+            NavigationTopDownWork topDown = immediate.RayWork.Workspace.TopDown;
             immediate.WorkMeter.Reset(budget);
             NavigationGuideStatus status = sourceIndex is VoxelIndex index
-                ? _topDown.ValidateLeg(world, graph, source, binding, index, destination, radius, media,
+                ? topDown.ValidateLeg(world, graph, source, binding, index, destination, radius, media,
                     capabilities, policy, immediate.WorkMeter)
-                : _topDown.Resolve(world, graph, source, binding, center, radius, media, capabilities, policy,
+                : topDown.Resolve(world, graph, source, binding, center, radius, media, capabilities, policy,
                     immediate.WorkMeter, out address);
             return FinishTopDownQuery(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence), ref address);
         }
     }
 
+    private static bool IsTopDownProfileValid(Fixed64 radius, TraversalMedia media, TraversalCapability capabilities) =>
+        radius > Fixed64.Zero && media != TraversalMedia.None && (capabilities & ~NavigationCell.KnownCapabilities) == 0;
+
     internal static NavigationGuideStatus FinishTopDownQuery(NavigationGuideStatus status,
         NavigationWorldGraph captured, NavigationWorldGraph current,
         (long Spawn, uint Version, ulong Sequence) before, (long Spawn, uint Version, ulong Sequence) after,
         ref NavigationCellAddress address)
     {
-        if (ReferenceEquals(captured, current) && before.Equals(after))
-            return status;
-        address = default;
-        return NavigationGuideStatus.Stale;
+        status = ResolveTopDownSnapshotStatus(status, captured, current, before, after);
+        if (status == NavigationGuideStatus.Stale)
+            address = default;
+        return status;
     }
+
+    internal static NavigationGuideStatus ResolveTopDownSnapshotStatus(NavigationGuideStatus status,
+        NavigationWorldGraph captured, NavigationWorldGraph current,
+        (long Spawn, uint Version, ulong Sequence) before, (long Spawn, uint Version, ulong Sequence) after) =>
+        ReferenceEquals(captured, current) && before.Equals(after) ? status : NavigationGuideStatus.Stale;
 }

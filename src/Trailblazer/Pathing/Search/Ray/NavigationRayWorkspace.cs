@@ -14,6 +14,10 @@ namespace Trailblazer.Pathing;
 /// <summary>Owns fixed caller-side storage for one exclusive navigation ray.</summary>
 internal sealed class NavigationRayWorkspace
 {
+    private NavigationTopDownWork? _topDown;
+
+    internal NavigationTopDownWork TopDown => _topDown ??= new NavigationTopDownWork(this);
+
     internal NavigationRayWorkspace(
         int mapCapacity,
         int pageCapacity,

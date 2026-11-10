@@ -96,14 +96,16 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             || query.StartMedium == TraversalMedium.Gas
             || query.StartMedium == TraversalMedium.Liquid;
         _resultStatus = NavigationSurfaceAStarStatus.Success;
-        _useEuclideanHeuristic = !query.Query.AllowTransitions
+        _useEuclideanHeuristic = query.TopDown == null
+            && !query.Query.AllowTransitions
             && _graph.SurfaceComponents.TryGet(
                 query.Start.Address,
                 query.StartMedium,
                 out NavigationSurfaceComponent startComponent)
             && startComponent.AllSurfaceEdgesEuclideanCertified;
         _targetFootAnchor = query.End.FootAnchor;
-        if (!query.Query.AllowTransitions
+        if (query.TopDown == null
+            && !query.Query.AllowTransitions
             && !_graph.AreInSameSurfaceComponent(
                 query.Start.Address,
                 query.StartMedium,
@@ -158,6 +160,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         ref int nodeRemaining = ref remaining.NodeRemaining;
         ref int edgeRemaining = ref remaining.EdgeRemaining;
         ref int connectionRemaining = ref remaining.ConnectionRemaining;
+        NavigationTopDownSearch? topDown = _query!.TopDown;
 
         while (Status == NavigationSurfaceAStarStatus.Pending)
         {
@@ -167,6 +170,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 {
                     if (_workspace.HeapCount == 0)
                     {
+                        if (topDown != null)
+                            return Finish(NavigationSurfaceAStarStatus.NoPath);
                         _resultStatus = NavigationSurfaceAStarStatus.NoPath;
                         _workspace.PathNodeCount = 0;
                         _dependencySort = new NavigationDependencySortWork(_workspace);
@@ -194,17 +199,31 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                         _stage = Stage.Reconstruct;
                         continue;
                     }
-                    _edges = EnumerateEdges(_current, emittedSurfaceOrdinal: -1);
+                    if (topDown == null)
+                        _edges = EnumerateEdges(_current, emittedSurfaceOrdinal: -1);
+                    else
+                        topDown.BeginEdges(_current, incoming: false);
                     _hasCurrent = true;
                 }
 
-                NavigationTraversalEdgeAdvanceStatus edgeStatus = _edges.AdvanceOne(
-                    _meter,
-                    _workspace.EndpointWorkspace.Dependencies,
-                    ref edgeRemaining,
-                    ref connectionRemaining,
-                    ref lookupRemaining);
-                CaptureWorldDependency(_edges);
+                NavigationTraversalEdgeAdvanceStatus edgeStatus;
+                NavigationMediumStateRef target = default;
+                Fixed64 cost = default;
+                int ordinal = default;
+                if (topDown == null)
+                {
+                    edgeStatus = _edges.AdvanceOne(
+                        _meter,
+                        _workspace.EndpointWorkspace.Dependencies,
+                        ref edgeRemaining,
+                        ref connectionRemaining,
+                        ref lookupRemaining);
+                    CaptureWorldDependency(_edges);
+                }
+                else
+                {
+                    edgeStatus = topDown.AdvanceEdge(out target, out cost, out ordinal);
+                }
                 edgeStatus = NavigationSearchFinalizationRules.ResolveTraversalEpochStatus(
                     edgeStatus,
                     IsWorldCurrent());
@@ -234,17 +253,16 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 }
                 if (edgeStatus != NavigationTraversalEdgeAdvanceStatus.Edge)
                     continue;
-                NavigationMediumStateRef target = _edges.CurrentTarget;
+                if (topDown == null)
+                    target = _edges.CurrentTarget;
                 if (_workspace.NodeTable.TryGetSlot(target, out int existingSlot)
                     && _workspace.NodeTable.GetRecord(existingSlot).Closed)
                 {
                     continue;
                 }
-                NavigationSurfaceAStarStatus completion = ApplyRoute(
-                    target,
-                    _edges.CurrentCost,
-                    _edges.CurrentOrdinal,
-                    _edges.CurrentKind);
+                NavigationSurfaceAStarStatus completion = topDown == null
+                    ? ApplyRoute(target, _edges.CurrentCost, _edges.CurrentOrdinal, _edges.CurrentKind)
+                    : ApplyRoute(target, cost, ordinal, NavigationTraversalEdgeKind.Surface);
                 if (completion != NavigationSurfaceAStarStatus.Pending)
                     return completion;
                 continue;
@@ -288,6 +306,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     _reverseRight--;
                     continue;
                 }
+                if (topDown != null)
+                    return Finish(NavigationSurfaceAStarStatus.Success);
                 if (nodeRemaining == 0)
                     return Status;
                 nodeRemaining--;

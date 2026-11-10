@@ -118,7 +118,7 @@ internal sealed class NavigationTopDownWork
         return false;
     }
 
-    private NavigationGuideStatus BindLayers(GridWorld world, NavigationWorldGraph graph,
+    internal NavigationGuideStatus BindLayers(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance source, NavigationPlanarBinding binding, Vector3d point, NavigationWorkMeter meter,
         out int layerCount)
     {
@@ -178,10 +178,10 @@ internal sealed class NavigationTopDownWork
         return NavigationGuideStatus.Success;
     }
 
-    private static WorldVoxelIndex Pin(NavigationMapInstance instance, VoxelIndex index) =>
+    internal static WorldVoxelIndex Pin(NavigationMapInstance instance, VoxelIndex index) =>
         new(instance.GridIdentity.WorldSpawnToken, instance.GridIdentity.GridIndex, instance.GridIdentity.GridSpawnToken, index);
 
-    private NavigationGuideStatus TraceCircle(GridWorld world, NavigationWorldGraph graph,
+    internal NavigationGuideStatus TraceCircle(GridWorld world, NavigationWorldGraph graph,
         int layerCount, Fixed64 embeddingY, WorldVoxelIndex source, WorldVoxelIndex target, Vector2d start, Vector2d end,
         Fixed64 radius, TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy,
         NavigationWorkMeter meter, NavigationGuideStatus blocked)

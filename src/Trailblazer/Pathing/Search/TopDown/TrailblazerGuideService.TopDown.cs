@@ -11,7 +11,7 @@ namespace Trailblazer.Pathing;
 
 public sealed partial class TrailblazerGuideService
 {
-    /// <summary>Acquires a retained route between canonical cell centers on one published top-down map.</summary>
+    /// <summary>Acquires a retained route between canonical centers on published top-down maps.</summary>
     /// <remarks>
     /// A* and Flow use swept-circle legs and retain the selected center sequence in the shared A* route-guide
     /// lease and byte limits. Dispose each successful lease. A graph publication or raw world change invalidates it.
@@ -19,9 +19,17 @@ public sealed partial class TrailblazerGuideService
     public NavigationGuideStatus RequestTopDownGuide(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
         NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
         NavigationWorkBudget budget, out NavigationTopDownGuideLease guide)
+        => RequestTopDownGuide(start, end, radius, areaPolicy, medium, capabilities, algorithm, budget, out guide,
+            allowTransitions: false);
+
+    /// <summary>Acquires a retained top-down route with optional authored semantic actions.</summary>
+    /// <remarks>Enabled actions hold the cursor at their canonical source until the host completes their exact lease token.</remarks>
+    public NavigationGuideStatus RequestTopDownGuide(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
+        NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
+        NavigationWorkBudget budget, out NavigationTopDownGuideLease guide, bool allowTransitions)
     {
         TrailblazerPathingService pathing = _context.Pathing;
         return pathing.RunTopDownRoute(start, end, radius, areaPolicy, medium, capabilities, algorithm, budget,
-            default, out _, out _, pathing.NavigationAStarAdmissionGate.PayloadCache, out guide);
+            default, out _, out _, pathing.NavigationAStarAdmissionGate.PayloadCache, out guide, allowTransitions);
     }
 }

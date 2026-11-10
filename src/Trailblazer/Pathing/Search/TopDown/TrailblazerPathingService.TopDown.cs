@@ -63,7 +63,7 @@ public sealed partial class TrailblazerPathingService
             capabilities, budget, out _);
     }
 
-    /// <summary>Finds an immediate route between cell centers on one published top-down map.</summary>
+    /// <summary>Finds an immediate route between cell centers on compatible published top-down maps.</summary>
     /// <remarks>
     /// The caller supplies a buffer for the route, including both endpoints. Success writes the ordered addresses and
     /// exact fixed-point cost. Other outcomes leave the buffer unchanged with zero count and cost. The result describes
@@ -78,37 +78,26 @@ public sealed partial class TrailblazerPathingService
     internal NavigationGuideStatus RunTopDownRoute(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
         NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
         NavigationWorkBudget budget, Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
-        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)
+        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide, bool allowTransitions = false)
     {
         EnsureUsable();
-        areaPolicy.Validate(nameof(areaPolicy));
         count = 0;
         cost = default;
         guide = default;
-        if (start.MapId == null)
-            return NavigationGuideStatus.InvalidStart;
-        if (end.MapId == null)
-            return NavigationGuideStatus.InvalidEnd;
-        if (!string.Equals(start.MapId, end.MapId, StringComparison.Ordinal))
-            return NavigationGuideStatus.Unsupported;
-        if (!IsTopDownProfileValid(radius, NavigationCell.ToMedia(medium), capabilities))
-            return NavigationGuideStatus.InvalidProfile;
-
-        var request = new NavigationTopDownRouteRequest(start, end, radius, areaPolicy, medium, capabilities, budget);
-        return algorithm switch
-        {
-            PathAlgorithm.AStar => _navigationAStarAdmissionGate.FindTopDown(_context.World, request, route, out count,
-                out cost, retention, out guide),
-            PathAlgorithm.FlowField => _navigationFlowAdmissionGate.FindTopDown(_context.World, request, route, out count,
-                out cost, retention, out guide),
-            _ => NavigationGuideStatus.Unsupported
-        };
+        var status = NavigationTopDownRouteRequest.TryCreate(start, end, radius, areaPolicy, medium, capabilities, algorithm,
+            budget, allowTransitions, out var request);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        return algorithm == PathAlgorithm.AStar
+            ? _navigationAStarAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost, retention, out guide)
+            : _navigationFlowAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost, retention, out guide);
     }
 
     private NavigationGuideStatus RunTopDownQuery(string mapId, VoxelIndex? sourceIndex, Vector2d center,
         NavigationCellAddress destination, Fixed64 radius, NavigationAreaPolicyKey areaPolicy, TraversalMedium medium,
         TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address,
-        Vector2d? motionTarget = null, NavigationPlanarBinding? controllerBinding = null)
+        Vector2d? motionTarget = null, NavigationPlanarBinding? controllerBinding = null,
+        (string? Start, string? End) preferredMaps = default)
     {
         areaPolicy.Validate(nameof(areaPolicy));
         address = default;
@@ -125,10 +114,17 @@ public sealed partial class TrailblazerPathingService
             if (lease == null)
                 return NavigationGuideStatus.CapacityExceeded;
             NavigationWorldGraph graph = lease.Graph;
-            if (!NavigationTopDownWork.TryGetMap(graph, mapId, out var source, out var binding))
+            NavigationMapInstance source;
+            NavigationPlanarBinding binding;
+            if (controllerBinding is NavigationPlanarBinding plane)
+            {
+                var reference = ResolveControllerReferenceMap(graph, mapId, plane, preferredMaps.Start, out source, out binding);
+                if (reference != NavigationGuideStatus.Success)
+                    return reference;
+            }
+            else if (!NavigationTopDownWork.TryGetMap(graph, mapId, out source, out binding))
                 return NavigationGuideStatus.NoMap;
             if (graph.AreAllStructuralComponentsClosed
-                || (controllerBinding.HasValue && controllerBinding.Value != binding)
                 || !graph.AreaCatalog.TryGet(areaPolicy, out NavigationAreaPolicy policy))
                 return NavigationGuideStatus.Stale;
 
@@ -136,10 +132,13 @@ public sealed partial class TrailblazerPathingService
             immediate.WorkMeter.Reset(budget);
             NavigationGuideStatus status = motionTarget is Vector2d target
                 ? topDown.ValidateMotion(world, graph, source, binding, center, target, radius, media,
-                    capabilities, policy, immediate.WorkMeter)
+                    capabilities, policy, immediate.WorkMeter, preferredMaps)
                 : sourceIndex is VoxelIndex index
                 ? topDown.ValidateLeg(world, graph, source, binding, index, destination, radius, media,
                     capabilities, policy, immediate.WorkMeter)
+                : controllerBinding.HasValue
+                ? topDown.ResolveControllerStart(world, graph, binding, center, radius, media,
+                    capabilities, policy, immediate.WorkMeter, out address, preferredMaps.Start!)
                 : topDown.Resolve(world, graph, source, binding, center, radius, media, capabilities, policy,
                     immediate.WorkMeter, out address);
             return FinishTopDownQuery(status, graph, _navigationGraph.Current, epoch,
@@ -149,14 +148,16 @@ public sealed partial class TrailblazerPathingService
 
     internal NavigationGuideStatus ValidateTopDownMotion(string mapId, NavigationPlanarBinding binding, Vector2d start,
         Vector2d end, Fixed64 radius, NavigationAreaPolicyKey policy, TraversalMedium medium,
-        TraversalCapability capabilities, NavigationWorkBudget budget) =>
-        RunTopDownQuery(mapId, null, start, default, radius, policy, medium, capabilities, budget, out _, end, binding);
+        TraversalCapability capabilities, NavigationWorkBudget budget, (string? Start, string? End) preferredMaps = default) =>
+        RunTopDownQuery(mapId, null, start, default, radius, policy, medium, capabilities, budget, out _, end, binding,
+            preferredMaps);
 
     internal NavigationGuideStatus ResolveTopDownControllerStart(string mapId, NavigationPlanarBinding binding,
         Vector2d center, Fixed64 radius, NavigationAreaPolicyKey policy, TraversalMedium medium,
-        TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address) =>
+        TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address,
+        string preferredMapId) =>
         RunTopDownQuery(mapId, null, center, default, radius, policy, medium, capabilities, budget, out address,
-            controllerBinding: binding);
+            controllerBinding: binding, preferredMaps: (preferredMapId, null));
 
     internal bool TryGetTopDownBinding(string mapId, out NavigationPlanarBinding binding)
     {
@@ -167,11 +168,13 @@ public sealed partial class TrailblazerPathingService
 
     internal NavigationCommittedCellResolveStatus ResolveTopDownCommittedCell(string mapId, NavigationPlanarBinding binding,
         Vector2d center, TraversalMedium medium, NavigationAreaPolicyKey? policy, long frame,
-        out VoxelGrid? grid, out Voxel? voxel, out NavigationCommittedCellState? state)
+        out VoxelGrid? grid, out Voxel? voxel, out NavigationCommittedCellState? state, out string? acceptedMapId,
+        string currentMapId, string preferredMapId)
     {
         grid = null;
         voxel = null;
         state = null;
+        acceptedMapId = null;
         var immediate = _immediateRayWorkspace;
         lock (immediate.SyncRoot)
         {
@@ -181,30 +184,31 @@ public sealed partial class TrailblazerPathingService
             if (lease == null)
                 return NavigationCommittedCellResolveStatus.Unavailable;
             var graph = lease.Graph;
-            if (!NavigationTopDownWork.TryGetMap(graph, mapId, out var map, out var currentBinding)
-                || currentBinding != binding)
+            if (ResolveControllerReferenceMap(graph, mapId, binding, currentMapId, out _, out _)
+                != NavigationGuideStatus.Success)
                 return NavigationCommittedCellResolveStatus.NoCell;
             GuideSampleWorkBudget sample = _context.Settings.GuideSampleBudget;
             immediate.WorkMeter.Reset(new NavigationWorkBudget(sample.MaxCurrentNodeLookupProbes, sample.MaxPrismChecks,
                 0, 0, 0, 0, 0, 0, 0, 0, 0));
-            var status = immediate.RayWork.Workspace.TopDown.FindContainingCell(world, graph, map, binding, center,
-                immediate.WorkMeter, out grid, out voxel);
+            var status = immediate.RayWork.Workspace.TopDown.FindControllerCell(world, graph, binding, center,
+                immediate.WorkMeter, out var map, out grid, out voxel, preferredMapId);
             status = ResolveTopDownSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence));
             if (status == NavigationGuideStatus.NoPath)
                 return NavigationCommittedCellResolveStatus.NoCell;
             if (status != NavigationGuideStatus.Success)
                 return NavigationCommittedCellResolveStatus.Unavailable;
+            acceptedMapId = map.MapId;
             VoxelIndex index = voxel!.Index;
             if (!map.TryGetSlot(index, out int slot) || !map.TryGetEffectiveCell(slot, out NavigationCell cell))
                 return NavigationCommittedCellResolveStatus.NoCell;
-            state = new NavigationCommittedCellState(new NavigationCellAddress(mapId, index),
+            state = new NavigationCommittedCellState(new NavigationCellAddress(map.MapId, index),
                 cell.Area, medium, graph.GraphVersion, policy, frame);
             return NavigationCommittedCellResolveStatus.Resolved;
         }
     }
 
-    private static bool IsTopDownProfileValid(Fixed64 radius, TraversalMedia media, TraversalCapability capabilities) =>
+    internal static bool IsTopDownProfileValid(Fixed64 radius, TraversalMedia media, TraversalCapability capabilities) =>
         radius > Fixed64.Zero && media != TraversalMedia.None && (capabilities & ~NavigationCell.KnownCapabilities) == 0;
 
     internal static NavigationGuideStatus FinishTopDownQuery(NavigationGuideStatus status,

@@ -30,11 +30,11 @@ public enum NavigationGuideStatus : byte
     CostOverflow = 8,
     /// <summary>Finite query, cache, or lease capacity was exhausted.</summary>
     CapacityExceeded = 9,
-    /// <summary>A required graph dependency changed during the operation.</summary>
+    /// <summary>A required graph dependency or lease-issued token is no longer current.</summary>
     Stale = 10,
     /// <summary>The actual foot position requires bounded local field recovery.</summary>
     LocalRecoveryRequired = 11,
-    /// <summary>The accepted scheduled request has not completed.</summary>
+    /// <summary>A scheduled request or planar guide operation is waiting for progress.</summary>
     Pending = 12,
     /// <summary>The scheduled request was cancelled before completion.</summary>
     Cancelled = 13

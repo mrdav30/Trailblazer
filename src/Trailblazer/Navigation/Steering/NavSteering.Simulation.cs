@@ -598,10 +598,7 @@ public partial class NavSteering
 
         TrailblazerWorldContext context = ResolveContext();
         long frameIndex = context.FrameCount;
-        int remainder = (int)(frameIndex % _pathRecheckCooldownFrames);
-        int delay = phase - remainder;
-        if (delay <= 0)
-            delay += _pathRecheckCooldownFrames;
+        int delay = NavigationFramePhase.NextDelay(frameIndex, _pathRecheckCooldownFrames, phase);
 
         _pathRecheckArmedFrameIndex = frameIndex;
         _pathRecheckDelayFrames = delay;

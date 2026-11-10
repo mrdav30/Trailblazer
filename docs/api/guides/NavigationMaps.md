@@ -38,7 +38,7 @@ domain or with a different layer or embedding.
 Hosts can check [circle placement](Pathing.md#strict-top-down-placement)
 and [clearance between neighboring cells](Pathing.md#top-down-leg-clearance)
 on these maps, or find an [immediate route](Pathing.md#immediate-top-down-routes)
-between two cells on one map.
+between cells on compatible published maps at the same embedding.
 
 ## Complete Cell Payloads
 

@@ -115,8 +115,12 @@ whose two directions must appear atomically, or a flood that changes several
 addresses as one simulation event.
 
 Top-down planar maps accept cell deltas on the selected layer. An off-layer
-entry rejects the entire transaction. Spatial connections and transitions
-cannot use a planar map as an endpoint or corridor witness.
+entry rejects the entire transaction. Planar actions use source-owned
+`TraversalTransitionDefinition` records and the same upsert, suppress, and
+revert operations as other authored transitions. Both action anchors use
+their maps' selected layers, shared embedding, and the same traversal
+medium. Spatial connections, spatial transitions, generated transition rules,
+and point overrides require spatial maps.
 
 ## Effective Cell Semantics
 
@@ -158,6 +162,11 @@ Published graph snapshots are immutable. A guide or cached result records the
 exact pages, components, policy revision, transition-rule generation, and world
 sequence it used. Relevant changes make that proof stale; unrelated pages can
 remain reusable.
+
+Spatial volume queries exclude materialized planar grid generations before
+selecting prism coverage. They retain dependencies for excluded grids that the
+trace encounters. Removing an intersecting planar map can therefore invalidate
+the proof even when the raw GridWorld remains unchanged.
 
 Held transition instructions are pull-validated. If their definition moves or is
 removed, completion returns `Stale` and does not advance the cursor. The

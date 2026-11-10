@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Trailblazer.Tests.Navigation;
 
-public sealed class Navigator2DTests
+public sealed partial class Navigator2DTests
 {
     private static readonly NavigationAreaPolicy Policy = new(new NavigationAreaPolicyKey("ground", 1),
         new[] { new NavigationAreaRule(true, Fixed64.Zero) });
@@ -178,14 +178,18 @@ public sealed class Navigator2DTests
         }
     }
 
-    [Fact]
-    public void ReplacingTheMapLayerRequiresANewControllerBinding()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReplacingTheMapLayerRequiresANewControllerBinding(bool replaceWithSpatialMap)
     {
         using var context = CreateScene(portal: false);
         using var navigator = new Host(context, Vector2d.Zero, Fixed64.Quarter);
         context.World.TryGetGrid(new Vector3d(0, 1, 0), out var grid).Should().BeTrue();
-        var differentLayer = new NavigationMapBuilder("plane", grid!.Configuration)
-            .SetPlanarLayer(NavigationMode2D.TopDown, 0, Fixed64.Zero).SetDefaultCell(Open).Build();
+        var builder = new NavigationMapBuilder("plane", grid!.Configuration);
+        if (!replaceWithSpatialMap)
+            builder.SetPlanarLayer(NavigationMode2D.TopDown, 0, Fixed64.Zero);
+        var differentLayer = builder.SetDefaultCell(Open).Build();
         var removal = new NavigationMapRemoveOperation("plane", 3, context.FrameCount + 1);
         context.Pathing.Admit(removal).Should().BeTrue();
         AdvancePublication();
@@ -538,9 +542,9 @@ public sealed class Navigator2DTests
     private sealed class Host : Navigator2D
     {
         internal Host(TrailblazerWorldContext context, Vector2d center, Fixed64 radius, bool alternateId = false,
-            Fixed64? speed = null)
+            Fixed64? speed = null, TraversalCapability capabilities = TraversalCapability.None)
             : base(context, "plane", Guid.Parse(alternateId ? "7f2bd0a1-fd02-4cb9-bc66-5979d1ba48f3" : "7f2bd0a1-fd02-4cb9-bc66-5979d1ba48f2"),
-                new NavigationPose2D(center, Fixed64.Zero), radius, speed ?? (Fixed64)4, TraversalMedium.Solid) { }
+                new NavigationPose2D(center, Fixed64.Zero), radius, speed ?? (Fixed64)4, TraversalMedium.Solid, capabilities) { }
 
         internal NavigationMotionRequest2D Request { get; private set; }
         internal Action? OnSubmit { get; set; }

@@ -13,5 +13,6 @@ internal enum NavigationGuideRequestFlavor : byte
     PublicGraph,
     NavigatorDirectFirst,
     NavigatorDirectOnly,
-    NavigatorGraphOnly
+    NavigatorGraphOnly,
+    TopDown
 }

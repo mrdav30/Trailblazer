@@ -95,18 +95,19 @@ An evaluated leg uses one edge allowance plus lookup and covered-voxel work.
 
 ### Immediate top-down routes
 
-Use `context.Pathing.FindTopDownRoute` with two durable addresses on the same
-published top-down map, a circle radius, an area policy, a traversal medium
-and capabilities, an algorithm, and a work budget. Supply a span of
-`NavigationCellAddress` values to receive the route. `Success` writes the
+Use `context.Pathing.FindTopDownRoute` with two durable addresses on compatible
+published top-down layers at a shared embedding, a circle radius, an area
+policy, a traversal medium and capabilities, an algorithm, and a work budget.
+Supply a span of `NavigationCellAddress` values to receive the route. `Success` writes the
 ordered addresses, including both endpoints, and returns their count and the
 exact fixed-point cost. A failed query leaves the span untouched and returns
 zero count and cost. `CapacityExceeded` can indicate insufficient output space
 or unavailable query resources.
 
 Both A* and Flow test stationary clearance at the endpoint centers and swept
-clearance between neighbors. Each leg charges the outward-rounded in-plane
-length plus the destination cell and area entry costs. The result is an
+clearance between neighbors. A map boundary requires matching neighbor
+footprints on the same planar lattice. Each leg charges the outward-rounded
+in-plane length plus the destination cell and area entry costs. The result is an
 immediate snapshot of the current graph. Run a fresh query to account for
 subsequent publication changes.
 
@@ -124,6 +125,16 @@ and active-payload byte limits. A Flow request retains the route selected for
 its start address. Dispose successful leases to release capacity. A graph
 publication or raw GridWorld change makes the route stale. Read and advance
 operations validate the snapshot before exposing a center or moving the cursor.
+
+Pass `allowTransitions: true` when requesting a retained guide to admit
+authored same-medium top-down actions. Both endpoints must fit the circle.
+The action charges its authored cost and the destination entry costs.
+`TryGetPendingTransition` reads the exact lease-issued action with its
+source and destination centers in world X/Z. At that step, ordinary
+`TryAdvanceStep` returns `Pending`. Execute the action through the host and
+call `CompletePendingTransition` with the same token after the host accepts
+the destination pose. Disposed, replaced, and previously completed tokens
+return `Stale`.
 
 ## Agent Profile
 
@@ -232,6 +243,26 @@ transferred lease normally. Disposing a pending request cancels it; disposing
 any other request releases its unclaimed result without changing its completed
 outcome. `Status` is a stored outcome, not a continuously running validation:
 the take operation can change a previously successful result to `Stale`.
+
+### Scheduled top-down routes
+
+Use `context.Guides.ScheduleTopDownGuide` with the same center addresses,
+profile inputs, policy, and total work budget as an immediate top-down request.
+`Pending` returns a `NavigationTopDownGuideRequest`. Poll its status after each
+context frame and use `TryTakeTopDownGuide` to transfer a successful lease once.
+Dispose requests that no longer have a consumer.
+
+Planar acquisition uses the same FIFO and frame allowances as spatial A* and
+Flow. It counts endpoint proofs, search, reconstruction, and payload copying
+against those allowances. An atomic swept-circle proof can overrun the frame's
+lookup allowance, within the query's total work budget.
+
+Contiguous planar A* requests with identical route intent share a build.
+Planar Flow cohorts share destination intent across origins. The retained
+result covers its selected origin, so other origins re-admit and build in
+order when the available result cannot serve them. Followers admit their own
+endpoints and each lease owns its cursor. A graph publication or raw world
+change invalidates an active result before transfer.
 
 ### Ordering, capacity and latency
 

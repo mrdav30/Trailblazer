@@ -19,7 +19,7 @@ namespace Trailblazer.Navigation;
 /// Advance the context, prepare all controllers, resolve host motion, commit all controllers, then run the late step.
 /// Queue writes from motion and occupancy notifications for the next ordered host command boundary.
 /// </remarks>
-public abstract class Navigator2D : IDisposable, IVoxelOccupant
+public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
 {
     private readonly TrailblazerWorldContext _context;
     private readonly string _mapId;
@@ -33,12 +33,14 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
     private NavigationAreaPolicyKey _policy;
     private NavigationWorkBudget _budget;
     private WorldVoxelIndex? _occupied;
+    private string? _acceptedMapId;
     private NavigationMotionRequest2D? _pending;
     private object? _clockLifetime;
     private long _worldSpawn;
     private long _preparedFrame;
     private Fixed64 _preparedInvDelta;
     private bool _mayAdvance;
+    private string? _preparedDestinationMap;
     private bool _busy;
     private bool _disposed;
 
@@ -76,6 +78,8 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
 
     Vector3d IVoxelOccupant.Position => new(Pose.Center.X, _binding.EmbeddingY, Pose.Center.Y);
 
+    private string CurrentMapId => _acceptedMapId ?? _mapId;
+
     /// <summary>Gets the most recently accepted pose.</summary>
     public NavigationPose2D Pose { get; private set; }
 
@@ -100,41 +104,6 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
     /// <summary>Reports entry into a different committed cell, area, or medium.</summary>
     public event Action<NavigationCommittedCellState?>? CommittedCellChanged;
 
-    /// <summary>Replaces guidance with an immediate route from the accepted center's cell to the destination.</summary>
-    /// <remarks>The supplied budget bounds acquisition and each separate guided movement proof.</remarks>
-    public NavigationGuideStatus ApplyGuidedTrekRequest(NavigationCellAddress destination, NavigationAreaPolicyKey policy,
-        PathAlgorithm algorithm, NavigationWorkBudget budget)
-    {
-        EnsureIdle();
-        policy.Validate(nameof(policy));
-        ResetGuidance();
-        var pathing = _context.Pathing;
-        var graph = pathing.NavigationGraphStore.Current;
-        var world = _context.World;
-        var epoch = (world.SpawnToken, world.Version, world.ChangeSequence);
-        var status = pathing.ResolveTopDownControllerStart(_mapId, _binding, Pose.Center, _radius, policy, _medium, _capabilities,
-            budget, out NavigationCellAddress start);
-        NavigationTopDownGuideLease guide = default;
-        if (status == NavigationGuideStatus.Success)
-        {
-            status = _context.Guides.RequestTopDownGuide(start, destination, _radius, policy, _medium, _capabilities,
-                algorithm, budget, out guide);
-        }
-        status = TrailblazerPathingService.ResolveTopDownSnapshotStatus(status, graph, pathing.NavigationGraphStore.Current,
-            epoch, (world.SpawnToken, world.Version, world.ChangeSequence));
-        GuidanceStatus = status;
-        if (status == NavigationGuideStatus.Success)
-        {
-            _guide = guide;
-            _policy = policy;
-            _budget = budget;
-            GuideCost = guide.TotalCost;
-        }
-        else
-            guide.Dispose();
-        return status;
-    }
-
     /// <summary>Releases the current route and clears arrival and guidance status.</summary>
     public void CancelGuidance()
     {
@@ -150,15 +119,10 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
     public void PrepareFrameMotion(Vector2d? move = null)
     {
         EnsureIdle();
-        object lifetime = _context.ClockLifetime;
-        long frame = _context.FrameCount;
-        ChronicleGuard.ThrowIfTrue(frame == 0 || (ReferenceEquals(_clockLifetime, lifetime) && frame == _preparedFrame),
-            message: "Prepare once after advancing the context frame.");
-        _busy = true;
+        var (lifetime, frame) = BeginPrepareFrame();
         try
         {
             Vector2d center = Pose.Center;
-            _mayAdvance = false;
             if (move is Vector2d input)
             {
                 ChronicleGuard.ThrowIfArgument(Vector2d.CompareDistanceSquared(Vector2d.Zero, input,
@@ -168,19 +132,14 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
                     throw new OverflowException("The manual target is outside the representable plane.");
                 ResetGuidance();
             }
-            else if (_guide is NavigationTopDownGuideLease guide)
+            else
             {
-                center = PrepareGuidedCenter(guide, out _mayAdvance);
+                AdvanceAcquisition();
+                if (_guide is NavigationTopDownGuideLease guide && !_heldTransition.HasValue)
+                    center = PrepareGuidedCenter(guide, out _mayAdvance);
             }
 
-            var request = new NavigationMotionRequest2D(frame, new NavigationPose2D(center, Pose.RotationRadians));
-            _clockLifetime = lifetime;
-            _preparedFrame = frame;
-            _worldSpawn = _context.World.SpawnToken;
-            _preparedInvDelta = _context.InvDeltaTime;
-            SubmitMotionTarget(request);
-            ValidatePreparedFrame();
-            _pending = request;
+            SubmitPreparedTarget(new NavigationPose2D(center, Pose.RotationRadians), lifetime, frame, isAction: false);
         }
         finally
         {
@@ -206,13 +165,22 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
                 || !Fixed64.TryMultiplyAdd(displacement.Y, _preparedInvDelta, Fixed64.Zero, out Fixed64 z))
                 throw new OverflowException("The accepted displacement or velocity is outside the representable plane.");
 
+            bool acceptedTarget = accepted.Center == request.Target.Center;
+            string? actionMap = GetAcceptedActionMap(accepted.Center);
+            string preferredMap = actionMap ?? (acceptedTarget ? _preparedDestinationMap : null) ?? CurrentMapId;
             var cellStatus = _context.Pathing.ResolveTopDownCommittedCell(_mapId, _binding, accepted.Center, _medium,
-                _guide.HasValue ? _policy : null, request.Frame, out var grid, out var voxel, out var cell);
+                _guide.HasValue ? _policy : null, request.Frame, out var grid, out var voxel, out var cell,
+                out var acceptedMapId, CurrentMapId, preferredMap);
+            Vector2d previousCenter = Pose.Center;
             Pose = accepted;
             Velocity = new Vector2d(x, z);
-            CommitGuidance(_mayAdvance && accepted.Center == request.Target.Center);
+            CommitGuidance(acceptedTarget, previousCenter, request.Target.Center);
+            CommitActionMotion(actionMap != null);
             if (cellStatus != NavigationCommittedCellResolveStatus.Unavailable)
+            {
+                _acceptedMapId = acceptedMapId ?? _acceptedMapId;
                 PublishCell(grid, voxel, cell);
+            }
             else
                 DropExitedOccupancy();
         }
@@ -227,6 +195,32 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
 
     /// <summary>Reads the matching accepted host pose after the shared resolution barrier.</summary>
     protected abstract NavigationPose2D ReadAcceptedMotion(in NavigationMotionRequest2D request);
+
+    private (object Lifetime, long Frame) BeginPrepareFrame()
+    {
+        object lifetime = _context.ClockLifetime;
+        long frame = _context.FrameCount;
+        ChronicleGuard.ThrowIfTrue(frame == 0 || (ReferenceEquals(_clockLifetime, lifetime) && frame == _preparedFrame),
+            message: "Prepare once after advancing the context frame.");
+        _busy = true;
+        _mayAdvance = false;
+        _preparedDestinationMap = null;
+        _preparedVisibleAnchor = null;
+        return (lifetime, frame);
+    }
+
+    private void SubmitPreparedTarget(NavigationPose2D target, object lifetime, long frame, bool isAction)
+    {
+        var request = new NavigationMotionRequest2D(frame, target);
+        _clockLifetime = lifetime;
+        _preparedFrame = frame;
+        _worldSpawn = _context.World.SpawnToken;
+        _preparedInvDelta = _context.InvDeltaTime;
+        _actionFrame = isAction;
+        SubmitMotionTarget(request);
+        ValidatePreparedFrame();
+        _pending = request;
+    }
 
     /// <inheritdoc/>
     public void Dispose()
@@ -243,41 +237,89 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
     private Vector2d PrepareGuidedCenter(NavigationTopDownGuideLease guide, out bool mayAdvance)
     {
         mayAdvance = false;
-        var status = guide.TryGetCurrentStep(out _, out Vector2d waypoint);
+        var status = guide.TryGetCurrentStep(out var address, out Vector2d waypoint);
         if (status != NavigationGuideStatus.Success)
         {
             ApplyGuideStatus(status);
             return Pose.Center;
         }
-        if (waypoint == Pose.Center)
+        if (!TryValidateMovedOrigin(waypoint, address.MapId))
+            return Pose.Center;
+        string currentWaypointMap = address.MapId;
+        bool atWaypoint = waypoint == Pose.Center;
+        bool visible = false;
+        if (atWaypoint)
         {
-            // The current lease already certifies placement at this exact center.
             GuidanceStatus = NavigationGuideStatus.Success;
-            mayAdvance = true;
-            return waypoint;
+            visible = TrySelectVisibleLeg(guide, out var nextAddress, out var nextCenter);
+            if (visible)
+            {
+                address = nextAddress;
+                waypoint = nextCenter;
+            }
+            else
+            {
+                // The current lease already certifies placement at this exact center.
+                mayAdvance = true;
+                _preparedDestinationMap = currentWaypointMap;
+                return waypoint;
+            }
         }
-        if (!Vector2d.TrySubtract(waypoint, Pose.Center, out Vector2d delta)
-            || !delta.TryGetMagnitudeCeiling(out Fixed64 length))
+        if (!TryGetStepTarget(waypoint, out Vector2d target))
         {
             GuidanceStatus = NavigationGuideStatus.CostOverflow;
             return Pose.Center;
         }
+        if (visible && target == Pose.Center)
+        {
+            mayAdvance = true;
+            _preparedDestinationMap = currentWaypointMap;
+            return target;
+        }
+        if (!_requiresConnector || target != waypoint)
+        {
+            status = _context.Pathing.ValidateTopDownMotion(_mapId, _binding, Pose.Center, target, _radius,
+                _policy, _medium, _capabilities, _budget, (CurrentMapId, address.MapId));
+        }
+        if (status == NavigationGuideStatus.Success)
+            status = guide.Status;
+        ApplyGuideStatus(status);
+        if (status != NavigationGuideStatus.Success)
+            return Pose.Center;
+        if (visible)
+            _preparedVisibleAnchor = waypoint;
+        bool reachedCenter = target == waypoint;
+        mayAdvance = reachedCenter && !visible;
+        if (reachedCenter)
+            _preparedDestinationMap = address.MapId;
+        return target;
+    }
+
+    private bool TryGetStepTarget(Vector2d waypoint, out Vector2d target)
+    {
+        target = Pose.Center;
+        if (!Vector2d.TrySubtract(waypoint, Pose.Center, out Vector2d delta)
+            || !delta.TryGetMagnitudeCeiling(out Fixed64 length))
+            return false;
+        target = waypoint;
         Fixed64 distance = _moveSpeed * _context.DeltaTime;
-        Vector2d target = waypoint;
         if (length > distance)
         {
             // The positive divisor exceeds the step distance and bounds both component magnitudes.
             Fixed64.TryMultiplyDivide(delta.X, distance, length, out Fixed64 x);
             Fixed64.TryMultiplyDivide(delta.Y, distance, length, out Fixed64 z);
-            target = Pose.Center + LimitRoundedStep(new Vector2d(x, z), distance);
+            Vector2d step = LimitRoundedStep(new Vector2d(x, z), distance);
+            if (step == Vector2d.Zero && distance > Fixed64.Zero)
+            {
+                // A positive cap always admits one raw unit along the dominant component.
+                Vector2d signs = Vector2d.Sign(delta);
+                step = delta.X.Abs() >= delta.Y.Abs()
+                    ? new Vector2d(signs.X * Fixed64.MinIncrement, Fixed64.Zero)
+                    : new Vector2d(Fixed64.Zero, signs.Y * Fixed64.MinIncrement);
+            }
+            target = Pose.Center + step;
         }
-        status = _context.Pathing.ValidateTopDownMotion(_mapId, _binding, Pose.Center, target, _radius,
-            _policy, _medium, _capabilities, _budget);
-        if (status == NavigationGuideStatus.Success)
-            status = guide.Status;
-        ApplyGuideStatus(status);
-        mayAdvance = status == NavigationGuideStatus.Success && target == waypoint;
-        return status == NavigationGuideStatus.Success ? target : Pose.Center;
+        return true;
     }
 
     private static Vector2d LimitRoundedStep(Vector2d step, Fixed64 distance)
@@ -290,18 +332,24 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
         return step;
     }
 
-    private void CommitGuidance(bool reachedTarget)
+    private void CommitGuidance(bool acceptedRequestedTarget, Vector2d previousCenter, Vector2d requestedCenter)
     {
         if (_guide is not NavigationTopDownGuideLease guide)
             return;
+        bool reachedTarget = _mayAdvance && acceptedRequestedTarget;
+        if (!CommitVisibleLeg(guide, acceptedRequestedTarget, previousCenter, requestedCenter, ref reachedTarget))
+            return;
         bool arrived = reachedTarget && guide.CurrentStepIndex == guide.StepCount - 1;
+        if (reachedTarget && HoldActionIfPresent(guide))
+            return;
         NavigationGuideStatus status = reachedTarget ? guide.TryAdvanceStep() : guide.Status;
         if (status != NavigationGuideStatus.Success)
             ApplyGuideStatus(status);
-        else if (arrived)
+        else if (reachedTarget)
         {
-            HasArrived = true;
-            ReleaseGuide();
+            ReleaseConnectorValidation();
+            if (arrived)
+                FinishArrival();
         }
     }
 
@@ -316,11 +364,15 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
     {
         _guide?.Dispose();
         _guide = null;
+        ReleaseConnectorValidation();
+        ClearHeldAction();
     }
 
     private void ResetGuidance()
     {
         ReleaseGuide();
+        CancelAcquisition();
+        LeaveGroup();
         HasArrived = false;
         GuidanceStatus = null;
         GuideCost = default;
@@ -336,7 +388,7 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
         {
             // As in the spatial navigator, keep the occupant record alive across a successful handoff.
             _occupied = nextOccupancy;
-            if (voxel != null && !grid!.TryAddVoxelOccupant(voxel, this))
+            if (voxel != null && !NavigatorOccupancyTracker.TryRegisterResolvedVoxel(_context.World, grid!, voxel, this))
                 _occupied = null;
             if (priorOccupancy is WorldVoxelIndex exited)
                 GridOccupantManager.TryRemoveVoxelOccupant(_context.World, exited, this);
@@ -375,6 +427,7 @@ public abstract class Navigator2D : IDisposable, IVoxelOccupant
     {
         _pending = null;
         ResetGuidance();
+        _acceptedMapId = null;
         LastCommittedCell = null;
         ReleaseOccupancy();
     }

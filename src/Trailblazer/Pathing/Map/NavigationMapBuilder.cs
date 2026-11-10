@@ -156,8 +156,8 @@ public sealed class NavigationMapBuilder
             ValidateCellPayload(_defaultCell.Value, nameof(_defaultCell));
         ValidateCells(cells);
         ChronicleGuard.ThrowIfArgument(
-            _planarBinding.HasValue && (connections.Length != 0 || transitions.Length != 0 || transitionRules.Length != 0),
-            nameof(NavigationMap.PlanarBinding), "Planar connection and transition authoring is not supported yet.");
+            _planarBinding.HasValue && (connections.Length != 0 || transitionRules.Length != 0),
+            nameof(NavigationMap.PlanarBinding), "Spatial connections and generated transition rules require a spatial map.");
         ValidateConnections(cells, connections);
         ValidateTransitions(cells, transitions);
         ValidateTransitionRules(transitionRules);
@@ -334,6 +334,14 @@ public sealed class NavigationMapBuilder
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransitionDefinition transition = transitions[i];
+            bool isLocal = string.Equals(transition.Destination.MapId, MapId, StringComparison.Ordinal);
+            if (_planarBinding is NavigationPlanarBinding planar)
+            {
+                ChronicleGuard.ThrowIfArgument(
+                    !transition.UsesCanonicalPlanarAnchors(planar.LayerIndex)
+                    || (isLocal && transition.Destination.Index.y != planar.LayerIndex),
+                    nameof(NavigationMap.PlanarBinding), "Planar actions require canonical same-medium anchors on the selected layers.");
+            }
             ChronicleGuard.ThrowIfArgument(
                 i > 0 && string.Equals(transitions[i - 1].Id, transition.Id, StringComparison.Ordinal),
                 nameof(transitions),
@@ -357,7 +365,7 @@ public sealed class NavigationMapBuilder
                     "Transition source point is outside its source prism.");
             }
 
-            if (!string.Equals(transition.Destination.MapId, MapId, StringComparison.Ordinal))
+            if (!isLocal)
                 continue;
 
             ChronicleGuard.ThrowIfArgument(

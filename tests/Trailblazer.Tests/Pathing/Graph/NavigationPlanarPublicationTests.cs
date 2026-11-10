@@ -276,9 +276,106 @@ public sealed class NavigationPlanarPublicationTests
         var query = new PathQuery(endpoint, endpoint, profile, Policy.Key,
             new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas), PathAlgorithm.AStar,
             new NavigationWorkBudget(256, 32, 32, 64, 64, 16, 16, 16, 64, 64, 0), allowTransitions: false);
-        context.Guides.RequestGuide(query, out var guide)
-            .Should().Be(required ? NavigationGuideStatus.Stale : NavigationGuideStatus.InvalidStart);
+        context.Guides.RequestGuide(query, out var guide).Should().Be(NavigationGuideStatus.InvalidStart);
         using var ownedGuide = guide;
+    }
+
+    [Theory]
+    [InlineData(false, false, NavigationGuideStatus.Success)]
+    [InlineData(false, true, NavigationGuideStatus.Success)]
+    [InlineData(true, true, NavigationGuideStatus.Success)]
+    [InlineData(true, false, NavigationGuideStatus.Stale)]
+    public void Publish_CoincidentPlanarPrismCannotShadowSpatialVolume(
+        bool addCoincidentGrid, bool publishPlanarMap, NavigationGuideStatus expected)
+    {
+        using var context = TrailblazerWorldContext.CreateOwned();
+        var spatial = new GridConfiguration(new Vector3d(-1, 1, -1), new Vector3d(1, 1, 1));
+        context.World.TryAddGrid(spatial, out _).Should().BeTrue();
+        context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(Policy, 1, context.FrameCount + 1))
+            .Should().BeTrue();
+        var air = new NavigationCell(TraversalMedia.Gas, TraversalCapability.Fly, default,
+            Fixed64.Zero, Fixed64.One, Fixed64.Two);
+        var planar = new GridConfiguration(new Vector3d(-2, 0, -1), new Vector3d(1, 1, 1));
+        ushort coincidentIndex = default;
+        if (addCoincidentGrid)
+            context.World.TryAddGrid(planar, out coincidentIndex).Should().BeTrue();
+        if (publishPlanarMap)
+            Commit(context, Planar(planar).SetDefaultCell(air).Build(), 2).Should().Be(NavigationOperationStatus.Applied);
+        if (publishPlanarMap && addCoincidentGrid)
+        {
+            var distant = new GridConfiguration(new Vector3d(32, 0, -1), new Vector3d(34, 1, 1));
+            context.World.TryAddGrid(distant, out _).Should().BeTrue();
+            Commit(context, new NavigationMapBuilder("distant", distant)
+                .SetPlanarLayer(NavigationMode2D.TopDown, 1, Fixed64.Half).SetDefaultCell(air).Build(), 3)
+                .Should().Be(NavigationOperationStatus.Applied);
+        }
+        Commit(context, new NavigationMapBuilder("spatial", spatial).SetDefaultCell(air).Build(), 4)
+            .Should().Be(NavigationOperationStatus.Applied);
+        SimulateUntil(context, () => context.Pathing.GetNavigationGraphDiagnostics().Maps
+            .All(map => map.IsMaterialized || (!addCoincidentGrid && map.MapId == "planar")));
+
+        var profile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.FromFraction(3, 4), Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.Fly);
+        var endpoint = new NavigationEndpoint(new Vector3d(Fixed64.Zero, Fixed64.Half, Fixed64.Zero), "spatial");
+        var query = new PathQuery(endpoint, endpoint, profile, Policy.Key,
+            new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas), PathAlgorithm.AStar,
+            new NavigationWorkBudget(256, 32, 32, 64, 64, 16, 16, 16, 64, 64, 0), allowTransitions: false);
+        var status = context.Guides.RequestGuide(query, out var retained);
+        using var owned = retained;
+        status.Should().Be(expected);
+        if (!publishPlanarMap || !addCoincidentGrid)
+            return;
+
+        ulong rawSequence = context.World.ChangeSequence;
+        RemoveMap("distant", 5);
+        context.World.ChangeSequence.Should().Be(rawSequence);
+        retained!.Value.Status.Should().Be(NavigationGuideStatus.Success);
+        RemoveMap("planar", 6);
+        context.World.ChangeSequence.Should().Be(rawSequence);
+        retained.Value.Status.Should().Be(NavigationGuideStatus.Stale);
+        QueryVolume().Should().Be(NavigationGuideStatus.Stale, "the graph no longer excludes the live raw grid");
+
+        Commit(context, Planar(planar).SetDefaultCell(air).Build(), 7).Should().Be(NavigationOperationStatus.Applied);
+        SimulateUntil(context, () => context.Pathing.GetNavigationGraphDiagnostics().Maps.All(map => map.IsMaterialized));
+        QueryVolume().Should().Be(NavigationGuideStatus.Success);
+        CheckExclusionProofLimits();
+        context.World.TryRemoveGrid(coincidentIndex).Should().BeTrue();
+        context.World.TryAddGrid(planar, out _).Should().BeTrue();
+        QueryVolume().Should().Be(NavigationGuideStatus.Stale, "a new raw grid has not inherited the old binding");
+
+        void RemoveMap(string mapId, long sequence)
+        {
+            var remove = new NavigationMapRemoveOperation(mapId, sequence, context.FrameCount + 1);
+            context.Pathing.Admit(remove).Should().BeTrue();
+            SimulateUntil(context, () => remove.Receipt.Status != NavigationOperationStatus.Pending);
+            remove.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        }
+
+        NavigationGuideStatus QueryVolume()
+        {
+            var status = context.Guides.RequestGuide(query, out var guide);
+            using var ownedGuide = guide;
+            return status;
+        }
+
+        void CheckExclusionProofLimits()
+        {
+            using var graphLease = context.Pathing.TryAcquireNavigationGraph();
+            var graph = TestRequire.NotNull(graphLease).Graph;
+            graph.TryGetNodeRef(new NavigationCellAddress("spatial", new VoxelIndex(1, 0, 1)), out var node)
+                .Should().BeTrue();
+            var workspace = new NavigationRayWorkspace(2, 2, 0, 64, 0);
+            var evaluator = new NavigationVolumeAnchorEvaluator(context.World, graph, profile, Policy, workspace);
+            Evaluate(2, 2).Should().Be(NavigationVolumeAnchorStatus.BudgetExceeded);
+            Evaluate(3, 0).Should().Be(NavigationVolumeAnchorStatus.CapacityExceeded);
+            Evaluate(3, 2).Should().Be(NavigationVolumeAnchorStatus.Success);
+
+            NavigationVolumeAnchorStatus Evaluate(int probes, int pages) => evaluator.Evaluate(
+                node, TraversalMedia.Gas,
+                new NavigationWorkMeter(new NavigationWorkBudget(probes, 0, 0, 0, 0, 0, 0, 0, 0, 64, 0)),
+                new NavigationDependencyWorkspace(pages, 0), out _, out _);
+        }
     }
 
     [Theory]
@@ -336,9 +433,41 @@ public sealed class NavigationPlanarPublicationTests
         var planarDelta = new NavigationMapOverlayDelta("planar",
             connections: new[] { NavigationConnectionOverlayOperation.Suppress("cross") });
         ApplyOverlay(context, 4, planarDelta).Should().Be(NavigationOperationStatus.Rejected);
-        var planarAction = new NavigationMapOverlayDelta("planar",
-            transitions: new[] { TraversalTransitionOverlayOperation.Suppress("cross") });
+        var planarAction = new NavigationMapOverlayDelta("planar", transitions: new[]
+        {
+            TraversalTransitionOverlayOperation.Upsert(new TraversalTransitionDefinition("cross",
+                TraversalTransitionType.Jump, new VoxelIndex(0, 1, 0), TraversalMedium.Solid,
+                new NavigationCellAddress("spatial", source), TraversalMedium.Solid))
+        });
         ApplyOverlay(context, 5, planarAction).Should().Be(NavigationOperationStatus.Rejected);
+        var invalidAnchor = new NavigationMapOverlayDelta("planar", transitions: new[]
+        {
+            TraversalTransitionOverlayOperation.Upsert(new TraversalTransitionDefinition("override",
+                TraversalTransitionType.Jump, destination.Index, TraversalMedium.Solid,
+                new NavigationCellAddress("planar", new VoxelIndex(1, 1, 0)), TraversalMedium.Solid,
+                sourcePointOverride: new Vector3d(0, 1, 0), hasSourcePointOverride: true))
+        });
+        ApplyOverlay(context, 6, invalidAnchor).Should().Be(NavigationOperationStatus.Rejected);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Publish_RejectsPlanarActionsAcrossDifferentEmbeddings(bool targetArrivesLast)
+    {
+        using var context = TrailblazerWorldContext.CreateOwned();
+        var source = new GridConfiguration(Vector3d.Zero, new Vector3d(2, 1, 0));
+        var target = new GridConfiguration(new Vector3d(4, 0, 0), new Vector3d(5, 1, 0));
+        context.World.TryAddGrid(source, out _).Should().BeTrue();
+        context.World.TryAddGrid(target, out _).Should().BeTrue();
+        NavigationMap owner = Planar(source).SetDefaultCell(Open)
+            .AddTransition(new TraversalTransitionDefinition("wrong-plane", TraversalTransitionType.Jump,
+                new VoxelIndex(0, 1, 0), TraversalMedium.Solid,
+                new NavigationCellAddress("target", new VoxelIndex(0, 0, 0)), TraversalMedium.Solid)).Build();
+        NavigationMap destination = new NavigationMapBuilder("target", target).SetDefaultCell(Open)
+            .SetPlanarLayer(NavigationMode2D.TopDown, 0, Fixed64.Zero).Build();
+        Commit(context, targetArrivesLast ? owner : destination, 1).Should().Be(NavigationOperationStatus.Applied);
+        Commit(context, targetArrivesLast ? destination : owner, 2).Should().Be(NavigationOperationStatus.Rejected);
     }
 
     private static PathQuery Query(Vector3d start, Vector3d end, string? startMap = null, string? endMap = null) =>

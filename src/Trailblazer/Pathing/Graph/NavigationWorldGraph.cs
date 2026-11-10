@@ -175,78 +175,47 @@ internal sealed partial class NavigationWorldGraph
     }
 
     internal NavigationTransitionPage.Enumerator EnumerateOutgoingTransitions(
-        NavigationMediumStateRef source)
-    {
-        System.Diagnostics.Debug.Assert(
-            TryGetNodeLocation(source.Node, out _, out _),
-            "transition enumeration receives a state owned by this immutable graph");
-        NavigationMapInstance instance = _instances.Get(source.Node.MapOrdinal);
-        _transitionPages.TryGet(
-            new NavigationTransitionPageAddress(
-                instance.MapId,
-                source.Node.CellSlot / NavigationSemanticPage.SlotCount),
-            out NavigationTransitionPage page);
-        return page?.GetOutgoingEnumerator(this, source) ?? default;
-    }
+        NavigationMediumStateRef source) =>
+        GetTransitionPage(source.Node)?.GetOutgoingEnumerator(this, source) ?? default;
 
     internal NavigationTransitionPage.Enumerator EnumerateOutgoingTransitionCandidates(
-        NavigationMediumStateRef source)
-    {
-        System.Diagnostics.Debug.Assert(
-            TryGetNodeLocation(source.Node, out _, out _),
-            "transition enumeration receives a state owned by this immutable graph");
-        NavigationMapInstance instance = _instances.Get(source.Node.MapOrdinal);
-        _transitionPages.TryGet(
-            new NavigationTransitionPageAddress(
-                instance.MapId,
-                source.Node.CellSlot / NavigationSemanticPage.SlotCount),
-            out NavigationTransitionPage page);
-        return page?.GetOutgoingCandidateEnumerator(this, source) ?? default;
-    }
+        NavigationMediumStateRef source) =>
+        GetTransitionPage(source.Node)?.GetOutgoingCandidateEnumerator(this, source) ?? default;
 
     internal NavigationTransitionPage.Enumerator EnumerateIncomingTransitions(
-        NavigationMediumStateRef destination)
-    {
-        System.Diagnostics.Debug.Assert(
-            TryGetNodeLocation(destination.Node, out _, out _),
-            "transition enumeration receives a state owned by this immutable graph");
-        NavigationMapInstance instance = _instances.Get(destination.Node.MapOrdinal);
-        _transitionPages.TryGet(
-            new NavigationTransitionPageAddress(
-                instance.MapId,
-                destination.Node.CellSlot / NavigationSemanticPage.SlotCount),
-            out NavigationTransitionPage page);
-        return page?.GetIncomingEnumerator(this, destination) ?? default;
-    }
+        NavigationMediumStateRef destination) =>
+        GetTransitionPage(destination.Node)?.GetIncomingEnumerator(this, destination) ?? default;
 
     internal NavigationTransitionPage.Enumerator EnumerateIncomingTransitionCandidates(
-        NavigationMediumStateRef destination)
-    {
-        System.Diagnostics.Debug.Assert(
-            TryGetNodeLocation(destination.Node, out _, out _),
-            "transition enumeration receives a state owned by this immutable graph");
-        NavigationMapInstance instance = _instances.Get(destination.Node.MapOrdinal);
-        _transitionPages.TryGet(
-            new NavigationTransitionPageAddress(
-                instance.MapId,
-                destination.Node.CellSlot / NavigationSemanticPage.SlotCount),
-            out NavigationTransitionPage page);
-        return page?.GetIncomingCandidateEnumerator(this, destination) ?? default;
-    }
+        NavigationMediumStateRef destination) =>
+        GetTransitionPage(destination.Node)?.GetIncomingCandidateEnumerator(this, destination) ?? default;
 
     internal NavigationPublishedTransition GetPublishedTransition(
         NavigationIncomingTransitionRef incoming)
     {
-        bool pageFound = _transitionPages.TryGet(
-            incoming.SourcePage,
-            out NavigationTransitionPage page);
-        System.Diagnostics.Debug.Assert(pageFound,
+        NavigationTransitionPage? page = GetTransitionPage(incoming.SourcePage);
+        System.Diagnostics.Debug.Assert(page != null,
             "incoming transition references retain their exact immutable source page");
         NavigationPublishedTransition transition = default;
-        bool transitionFound = page.TryGetOutgoing(incoming.Owner, out transition);
+        bool transitionFound = page!.TryGetOutgoing(incoming.Owner, out transition);
         System.Diagnostics.Debug.Assert(transitionFound,
             "incoming transition references retain their exact immutable owner");
         return transition;
+    }
+
+    internal NavigationTransitionPage? GetTransitionPage(NavigationNodeRef node)
+    {
+        System.Diagnostics.Debug.Assert(
+            TryGetNodeLocation(node, out _, out _),
+            "transition lookup receives a node owned by this immutable graph");
+        return GetTransitionPage(new NavigationTransitionPageAddress(
+            _instances.GetMapId(node.MapOrdinal), node.CellSlot / NavigationSemanticPage.SlotCount));
+    }
+
+    internal NavigationTransitionPage? GetTransitionPage(NavigationTransitionPageAddress address)
+    {
+        _transitionPages.TryGet(address, out NavigationTransitionPage page);
+        return page;
     }
 
     internal bool IsTransitionActive(

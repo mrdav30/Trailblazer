@@ -191,6 +191,23 @@ internal sealed class NavigationAStarGuideLease
         }
     }
 
+    internal bool TryGetNextOrdinaryPoint(long generation, out NavigationAStarGuidePoint point)
+    {
+        point = default;
+        lock (_sync)
+        {
+            if (!IsGenerationActiveUnderLock(generation)
+                || ValidateCurrentPayloadUnderLock(out var payload) != NavigationAStarQueryStatus.Success)
+                return false;
+            int next = _currentWaypointOrdinal + 1;
+            if (next >= payload.GuidePoints.Length || payload.GuidePoints[_currentWaypointOrdinal].HasTransition
+                || payload.GuidePoints[next].HasTransition)
+                return false;
+            point = payload.GuidePoints[next];
+            return true;
+        }
+    }
+
     internal NavigationGuideStatus TryGetCurrentStep(
         long generation,
         Vector3d connectorOrigin,

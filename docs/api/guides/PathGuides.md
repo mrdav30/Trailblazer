@@ -4,7 +4,7 @@ Trailblazer exposes three lease types over immutable graph payloads:
 
 - `NavigationGuideLease` for ordered A* movement/action steps;
 - `NavigationFlowFieldLease` for destination-centric Flow sampling;
-- `NavigationTopDownGuideLease` for immediate A* or Flow routes over
+- `NavigationTopDownGuideLease` for A* or Flow routes over
   canonical top-down centers. See [retained top-down guides](Pathing.md#retained-top-down-guides).
 
 The leased payload is immutable. Cursor, current medium, and pending-action

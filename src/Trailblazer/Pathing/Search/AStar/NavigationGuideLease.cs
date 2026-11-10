@@ -37,6 +37,12 @@ public readonly struct NavigationGuideLease : IDisposable
 
     internal bool HasConnector => _inner?.HasConnector(_generation) ?? false;
 
+    internal bool TryGetNextOrdinaryPoint(out NavigationAStarGuidePoint point)
+    {
+        point = default;
+        return _inner?.TryGetNextOrdinaryPoint(_generation, out point) ?? false;
+    }
+
     internal NavigationGuideStatus BeginConnector(out NavigationGuideStep step)
     {
         step = default;
@@ -75,6 +81,14 @@ public readonly struct NavigationGuideLease : IDisposable
             ? NavigationGuideStatus.Stale
             : NavigationGuideStatusMapper.ToPublic(
                 _inner.TryAdvanceWaypoint(_generation));
+    }
+
+    internal NavigationGuideStatus TryAdvancePlanarStep()
+    {
+        NavigationAStarQueryStatus status = _inner?.TryAdvanceWaypoint(_generation) ?? NavigationAStarQueryStatus.Stale;
+        return status == NavigationAStarQueryStatus.Pending
+            ? NavigationGuideStatus.Pending
+            : NavigationGuideStatusMapper.ToPublic(status);
     }
 
     /// <summary>Completes the exact current pending semantic action.</summary>

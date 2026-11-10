@@ -34,6 +34,8 @@ internal sealed class MovementGroupCoordinatorState
 
     private long FrameCount => _context.FrameCount;
 
+    internal bool IsEmpty => _movementGroups.Count == 0;
+
     internal void CacheOwner(MovementGroupSession session, Guid ownerId)
     {
         if (session.HasOwnerId && session.OwnerId == ownerId)

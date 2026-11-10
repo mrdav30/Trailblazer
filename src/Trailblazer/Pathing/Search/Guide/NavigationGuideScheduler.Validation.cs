@@ -29,6 +29,22 @@ internal sealed partial class NavigationGuideScheduler
         }
     }
 
+    internal NavigationTopDownGuideLease? RegisterTopDownConnectorValidation(NavigationValidationInterest interest,
+        NavigationTopDownGuideLease guide, ref NavigationGuideStatus status)
+    {
+        lock (_sync)
+        {
+            if (!RegisterValidation(interest))
+            {
+                guide.Dispose();
+                status = NavigationGuideStatus.CapacityExceeded;
+                return null;
+            }
+            interest.ConnectorGuide = guide.RouteLease;
+            return guide;
+        }
+    }
+
     // Only callers owning a completed ticket or a guide needing validation may register.
     // This capacity accommodates all such owners simultaneously, including recurring connectors.
     internal bool RegisterValidation(NavigationValidationInterest interest)

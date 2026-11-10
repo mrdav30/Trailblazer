@@ -166,7 +166,7 @@ public partial class NavSteering : IRecordable
     /// </exception>
     public void ConfigurePathRechecks(int intervalFrames, int? phase = null)
     {
-        ValidatePathRecheckConfiguration(intervalFrames, phase);
+        NavigationFramePhase.ValidateConfiguration(intervalFrames, phase);
 
         if (_pathRecheckCooldownFrames == intervalFrames
             && _pathRecheckPhase == phase)
@@ -216,21 +216,6 @@ public partial class NavSteering : IRecordable
         ArmNextPhasedPathRecheck();
         if (preserveDue)
             _pathCheckCooldown = 0;
-    }
-
-    private static void ValidatePathRecheckConfiguration(int intervalFrames, int? phase)
-    {
-        if (!phase.HasValue)
-            return;
-
-        ChronicleGuard.ThrowIfArgumentOutOfRange(
-            intervalFrames <= 0,
-            intervalFrames,
-            nameof(intervalFrames));
-        ChronicleGuard.ThrowIfArgumentOutOfRange(
-            phase.Value < 0 || phase.Value >= intervalFrames,
-            phase.Value,
-            nameof(phase));
     }
 
     /// <inheritdoc cref="_targetDirection"/>

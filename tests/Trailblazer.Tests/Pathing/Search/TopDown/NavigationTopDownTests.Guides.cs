@@ -223,13 +223,13 @@ public sealed partial class NavigationTopDownTests
         try
         {
             store.MarkSafetyPending();
-            cache.PublishTopDownGuide(store, payload, ref reservation, out var guide)
+            cache.PublishTopDownPayload(store, payload, ref reservation, out var guide)
                 .Should().Be(NavigationGuideStatus.CapacityExceeded);
-            guide.Status.Should().Be(NavigationGuideStatus.Stale);
+            guide.Should().BeNull();
             store.ClearSafetyPending();
             context.Pathing.Reset();
-            cache.PublishTopDownGuide(store, payload, ref reservation, out guide).Should().Be(NavigationGuideStatus.Stale);
-            guide.Status.Should().Be(NavigationGuideStatus.Stale);
+            cache.PublishTopDownPayload(store, payload, ref reservation, out guide).Should().Be(NavigationGuideStatus.Stale);
+            guide.Should().BeNull();
             cache.ActiveLeaseCount.Should().Be(0);
         }
         finally

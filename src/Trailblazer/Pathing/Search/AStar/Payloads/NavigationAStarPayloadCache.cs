@@ -520,12 +520,11 @@ internal sealed partial class NavigationAStarPayloadCache
         return Checkout(detached);
     }
 
-    internal NavigationGuideStatus PublishTopDownGuide(NavigationWorldGraphStore store,
+    internal NavigationGuideStatus PublishTopDownPayload(NavigationWorldGraphStore store,
         NavigationTopDownGuidePayload payload, ref NavigationAStarPayloadReservation reservation,
-        out NavigationTopDownGuideLease guide)
+        out NavigationAStarPayloadLease? pin)
     {
-        guide = default;
-        NavigationAStarPayloadLease lease;
+        pin = null;
         lock (_sync)
         {
             if (store.IsSafetyPending)
@@ -534,9 +533,41 @@ internal sealed partial class NavigationAStarPayloadCache
                 return NavigationGuideStatus.Stale;
             System.Diagnostics.Debug.Assert(IsReservationCurrentUnderLock(reservation)
                 && payload.RetainedBytes == reservation.MaximumBytes);
-            lease = CheckoutDetached(payload, reservation.MaximumBytes, ref reservation);
+            pin = CheckoutDetached(payload, reservation.MaximumBytes, ref reservation);
         }
-        guide = new NavigationTopDownGuideLease(BindGuide(store, lease));
+        return NavigationGuideStatus.Success;
+    }
+
+    internal NavigationTopDownGuideLease CreateTopDownGuide(NavigationWorldGraphStore store,
+        NavigationAStarPayloadLease lease) => new(BindGuide(store, lease));
+
+    internal NavigationGuideStatus TryCheckoutTopDownGuide(NavigationWorldGraphStore store,
+        NavigationCohortSource source, NavigationCellAddress start, out NavigationTopDownGuideLease guide)
+    {
+        guide = default;
+        NavigationAStarPayloadLease lease;
+        lock (_sync)
+        {
+            var pin = source.AStar;
+            var entry = pin?.Generation == source.AStarGeneration ? pin!.GetOwnedEntry(this) : null;
+            if (entry?.Payload is not NavigationTopDownGuidePayload payload)
+                return NavigationGuideStatus.Stale;
+            // Planar Flow retains an exact selected route. Promote origins it did not cover.
+            if (payload.GuidePoints[0].Address != start)
+                return NavigationGuideStatus.Pending;
+            if (!payload.IsCurrent(_world, store))
+                return NavigationGuideStatus.Stale;
+            if (store.IsSafetyPending)
+                return NavigationGuideStatus.CapacityExceeded;
+            if (source.Transfer || _activeLeaseCount + _reservedLeaseCount >= _maximumActiveLeases)
+            {
+                lease = pin!;
+                source.AStar = null;
+            }
+            else
+                lease = Checkout(entry);
+        }
+        guide = CreateTopDownGuide(store, lease);
         return NavigationGuideStatus.Success;
     }
 

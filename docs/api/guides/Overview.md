@@ -115,9 +115,10 @@ returns `NavigationFlowFieldLease` with `NavigationFlowSample` values. Each
 value reports its exact medium. A transition value also carries a lease-specific
 `NavigationTransitionInstruction`.
 
-Top-down requests use durable cell addresses and a circle radius. Both
-algorithms can return a retained `NavigationTopDownGuideLease` with an
-acquisition-local cursor over the selected centers.
+Top-down requests use durable cell addresses and a circle radius. Immediate
+and scheduled A* and Flow can return a retained `NavigationTopDownGuideLease`
+with an acquisition-local cursor over the selected centers. Opted-in actions
+carry a lease-specific `NavigationTransitionInstruction2D`.
 
 The host approaches the source position, performs the action, and calls
 `CompletePendingTransition(...)` with that exact instruction. Transient capacity

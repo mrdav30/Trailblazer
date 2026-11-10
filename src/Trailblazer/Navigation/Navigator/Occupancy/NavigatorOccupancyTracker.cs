@@ -8,6 +8,7 @@
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Grids.Topology;
+using GridForge.Spatial;
 
 namespace Trailblazer.Navigation;
 
@@ -34,8 +35,7 @@ internal static class NavigatorOccupancyTracker
 
         // Moving within a cell keeps its existing ticket. Still retire the previous
         // cell below when the host already registered the destination independently.
-        if (!GridOccupantManager.TryGetOccupancyTicket(world, navigator, curVoxel!.WorldIndex, out _)
-            && !curGrid!.TryAddVoxelOccupant(curVoxel, navigator))
+        if (!TryRegisterResolvedVoxel(world, curGrid!, curVoxel!, navigator))
         {
             TrailblazerLogger.Channel.Warn($"Navigator {navigator.GlobalId} failed to register occupancy in voxel {curVoxel!.Index} of grid {curGrid} at position {position}.");
             return;
@@ -52,6 +52,10 @@ internal static class NavigatorOccupancyTracker
 
         lastGrid!.TryRemoveVoxelOccupant(lastVoxel!, navigator);
     }
+
+    internal static bool TryRegisterResolvedVoxel(GridWorld world, VoxelGrid grid, Voxel voxel, IVoxelOccupant occupant) =>
+        GridOccupantManager.TryGetOccupancyTicket(world, occupant, voxel.WorldIndex, out _)
+        || grid.TryAddVoxelOccupant(voxel, occupant);
 
     public static void UpdateAfterRootProjection(
         GridWorld world,

@@ -8,7 +8,8 @@ groups, occupancy, motor and turning services, heightmap grounding, and explicit
 Chronicler records.
 
 `Navigator2D` runs native top-down circle routes through a host-owned
-prepare, resolve, and commit barrier.
+prepare, resolve, and commit barrier. It supports immediate and scheduled
+guidance, formation goals, and explicit host actions.
 
 The optional `Trailblazer.Gravitas` assembly adds `GravitasNavigator3D` without
 coupling the core libraries. Read the

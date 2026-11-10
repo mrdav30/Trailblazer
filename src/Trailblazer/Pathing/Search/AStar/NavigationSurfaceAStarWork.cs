@@ -210,6 +210,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 NavigationMediumStateRef target = default;
                 Fixed64 cost = default;
                 int ordinal = default;
+                NavigationTraversalEdgeKind kind = default;
                 if (topDown == null)
                 {
                     edgeStatus = _edges.AdvanceOne(
@@ -222,14 +223,14 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 }
                 else
                 {
-                    edgeStatus = topDown.AdvanceEdge(out target, out cost, out ordinal);
+                    edgeStatus = topDown.AdvanceEdge(ref remaining, out target, out cost, out ordinal, out kind);
                 }
                 edgeStatus = NavigationSearchFinalizationRules.ResolveTraversalEpochStatus(
                     edgeStatus,
                     IsWorldCurrent());
                 if (edgeStatus == NavigationTraversalEdgeAdvanceStatus.Blocked)
                 {
-                    if (lookupRemaining == 0)
+                    if (topDown != null || lookupRemaining == 0)
                         return Status;
                     return ApplyTerminalStatus(
                         NavigationSearchFinalizationRules.ResolveBlockedTraversalStatus(
@@ -262,7 +263,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 }
                 NavigationSurfaceAStarStatus completion = topDown == null
                     ? ApplyRoute(target, _edges.CurrentCost, _edges.CurrentOrdinal, _edges.CurrentKind)
-                    : ApplyRoute(target, cost, ordinal, NavigationTraversalEdgeKind.Surface);
+                    : ApplyRoute(target, cost, ordinal, kind);
                 if (completion != NavigationSurfaceAStarStatus.Pending)
                     return completion;
                 continue;

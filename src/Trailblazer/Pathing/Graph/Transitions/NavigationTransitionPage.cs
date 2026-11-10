@@ -116,26 +116,59 @@ internal sealed partial class NavigationTransitionPage
 
     internal static int CompareOutgoing(
         NavigationPublishedTransition left,
-        NavigationPublishedTransition right)
+        NavigationPublishedTransition right) =>
+        CompareOutgoing(left, right.SourceAddress, right.Definition.SourceMedium, right.Definition.Destination,
+            right.Definition.DestinationMedium, right.Definition.Type, right.Owner.TransitionId);
+
+    internal int FindIncomingSourceOrdinal(NavigationIncomingTransitionRef incoming, NavigationCellAddress destination,
+        NavigationWorkMeter meter, out bool budgetExhausted)
     {
-        int comparison = left.SourceAddress.CompareTo(right.SourceAddress);
+        budgetExhausted = false;
+        int low = 0;
+        int high = _outgoing.Length - 1;
+        NavigationCellAddress source = incoming.SourceAddress;
+        while (low <= high)
+        {
+            if (!meter.TryConsumeLookupProbes(1))
+            {
+                budgetExhausted = true;
+                return -1;
+            }
+            int middle = low + ((high - low) >> 1);
+            int comparison = CompareOutgoing(_outgoing[middle], source, incoming.SourceMedium,
+                destination, incoming.DestinationMedium, incoming.Type, incoming.Owner.TransitionId);
+            if (comparison == 0)
+                return middle;
+            if (comparison < 0)
+                low = middle + 1;
+            else
+                high = middle - 1;
+        }
+        return -1;
+    }
+
+    private static int CompareOutgoing(NavigationPublishedTransition left, NavigationCellAddress source,
+        TraversalMedium sourceMedium, NavigationCellAddress destination, TraversalMedium destinationMedium,
+        TraversalTransitionType type, string id)
+    {
+        int comparison = left.SourceAddress.CompareTo(source);
         if (comparison != 0)
             return comparison;
         comparison = ((int)left.Definition.SourceMedium).CompareTo(
-            (int)right.Definition.SourceMedium);
+            (int)sourceMedium);
         if (comparison != 0)
             return comparison;
-        comparison = left.Definition.Destination.CompareTo(right.Definition.Destination);
+        comparison = left.Definition.Destination.CompareTo(destination);
         if (comparison != 0)
             return comparison;
         comparison = ((int)left.Definition.DestinationMedium).CompareTo(
-            (int)right.Definition.DestinationMedium);
+            (int)destinationMedium);
         if (comparison != 0)
             return comparison;
-        comparison = ((int)left.Definition.Type).CompareTo((int)right.Definition.Type);
+        comparison = ((int)left.Definition.Type).CompareTo((int)type);
         return comparison != 0
             ? comparison
-            : string.CompareOrdinal(left.Owner.TransitionId, right.Owner.TransitionId);
+            : string.CompareOrdinal(left.Owner.TransitionId, id);
     }
 
     internal static int CompareIncoming(

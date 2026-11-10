@@ -15,7 +15,7 @@ using GridForge.Utility;
 namespace Trailblazer.Pathing;
 
 /// <summary>Proves stationary and swept circles against one published top-down domain.</summary>
-internal sealed class NavigationTopDownWork
+internal sealed partial class NavigationTopDownWork
 {
     private readonly GridCoveredAddressCursor _cursor;
     private readonly GridPlanarLayer[] _layers;
@@ -33,16 +33,26 @@ internal sealed class NavigationTopDownWork
         TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy,
         NavigationWorkMeter meter, out NavigationCellAddress address)
     {
-        address = default;
         var point = new Vector3d(center.X, binding.EmbeddingY, center.Y);
         NavigationGuideStatus status = BindLayers(world, graph, source, binding, point, meter, out int layerCount);
         if (status != NavigationGuideStatus.Success)
-            return status;
-
-        GridCoveredAddressCursorStatus cursorStatus = GridCoveredAddressCursorStatus.More;
-        do
         {
-            status = ReadContainingCell(world, source, binding, point, meter, ref cursorStatus, out var candidate);
+            address = default;
+            return status;
+        }
+        return ResolveContainingCells(world, graph, source, binding, point, center, radius, medium, capabilities,
+            policy, meter, layerCount, GridCoveredAddressCursorStatus.More, out address);
+    }
+
+    private NavigationGuideStatus ResolveContainingCells(GridWorld world, NavigationWorldGraph graph,
+        NavigationMapInstance source, NavigationPlanarBinding binding, Vector3d point, Vector2d center, Fixed64 radius,
+        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter,
+        int layerCount, GridCoveredAddressCursorStatus cursorStatus, out NavigationCellAddress address)
+    {
+        address = default;
+        while (cursorStatus != GridCoveredAddressCursorStatus.Complete)
+        {
+            NavigationGuideStatus status = ReadContainingCell(world, source, binding, point, meter, ref cursorStatus, out var candidate);
             if (status == NavigationGuideStatus.NoPath)
                 return NavigationGuideStatus.InvalidStart;
             if (status != NavigationGuideStatus.Success)
@@ -55,7 +65,6 @@ internal sealed class NavigationTopDownWork
             if (status != NavigationGuideStatus.InvalidStart)
                 return status;
         }
-        while (cursorStatus != GridCoveredAddressCursorStatus.Complete);
         return NavigationGuideStatus.InvalidStart;
     }
 
@@ -79,9 +88,7 @@ internal sealed class NavigationTopDownWork
 
         Vector2d start = from.Center.ToVector2d();
         Vector2d end = to.Center.ToVector2d();
-        // GridForge also accepts coincident and rectangular corner-only legs for coverage proofs.
-        if (start == end || (from.TopologyKind == GridTopologyKind.RectangularPrism
-            && start.X != end.X && start.Y != end.Y))
+        if (!IsOrdinaryNeighbor(from.TopologyKind, start, end))
             return NavigationGuideStatus.NoPath;
 
         var point = new Vector3d(start.X, binding.EmbeddingY, start.Y);
@@ -106,18 +113,14 @@ internal sealed class NavigationTopDownWork
         return false;
     }
 
-    internal NavigationGuideStatus FindContainingCell(GridWorld world, NavigationWorldGraph graph,
+    private NavigationGuideStatus FindContainingCell(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance map, NavigationPlanarBinding binding, Vector2d center, NavigationWorkMeter meter,
         out VoxelGrid? grid, out Voxel? voxel)
     {
         grid = null;
         voxel = null;
         var point = new Vector3d(center.X, binding.EmbeddingY, center.Y);
-        graph.TryGetCoveredAddressGeneration(map.MapId, out var generation);
-        world.TryBeginCoveredAddresses(_cursor, point, point, 1, map.Map.GridBinding.Key);
-        Span<GridCoveredAddressGeneration> input = stackalloc GridCoveredAddressGeneration[1] { generation };
-        NavigationGuideStatus status = AdvanceCoverage(world, input, Span<GridCoveredAddress>.Empty,
-            meter, out GridCoveredAddressCursorStatus cursorStatus, out _);
+        NavigationGuideStatus status = BeginContainingCells(world, graph, map, point, meter, out var cursorStatus);
         if (status != NavigationGuideStatus.Success)
             return status;
         while (cursorStatus != GridCoveredAddressCursorStatus.Complete)
@@ -132,6 +135,15 @@ internal sealed class NavigationTopDownWork
         }
         grid = null;
         return NavigationGuideStatus.NoPath;
+    }
+
+    private NavigationGuideStatus BeginContainingCells(GridWorld world, NavigationWorldGraph graph,
+        NavigationMapInstance map, Vector3d point, NavigationWorkMeter meter, out GridCoveredAddressCursorStatus cursorStatus)
+    {
+        graph.TryGetCoveredAddressGeneration(map.MapId, out var generation);
+        world.TryBeginCoveredAddresses(_cursor, point, point, 1, map.Map.GridBinding.Key);
+        Span<GridCoveredAddressGeneration> input = stackalloc GridCoveredAddressGeneration[1] { generation };
+        return AdvanceCoverage(world, input, Span<GridCoveredAddress>.Empty, meter, out cursorStatus, out _);
     }
 
     private NavigationGuideStatus ReadContainingCell(GridWorld world, NavigationMapInstance map,
@@ -164,14 +176,16 @@ internal sealed class NavigationTopDownWork
 
     internal NavigationGuideStatus ValidateMotion(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance map, NavigationPlanarBinding binding, Vector2d start, Vector2d end, Fixed64 radius,
-        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter)
+        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter,
+        (string? Start, string? End) preferredMaps)
     {
         if (!meter.TryConsumeEvaluatedEdges(1))
             return NavigationGuideStatus.BudgetExceeded;
-        NavigationGuideStatus status = FindContainingCell(world, graph, map, binding, start, meter, out _, out var source);
+        NavigationGuideStatus status = FindControllerCell(world, graph, binding, start, meter, out _, out _, out var source,
+            preferredMaps.Start);
         if (status != NavigationGuideStatus.Success)
             return status;
-        status = FindContainingCell(world, graph, map, binding, end, meter, out _, out var target);
+        status = FindControllerCell(world, graph, binding, end, meter, out _, out _, out var target, preferredMaps.End);
         if (status != NavigationGuideStatus.Success)
             return status;
         var point = new Vector3d(start.X, binding.EmbeddingY, start.Y);

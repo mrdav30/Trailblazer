@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using SwiftCollections;
 using Trailblazer.Navigation.MovementGroups;
 
 namespace Trailblazer.Navigation;
@@ -15,6 +16,8 @@ namespace Trailblazer.Navigation;
 /// </summary>
 internal sealed class TrailblazerNavigationService
 {
+    private SwiftDictionary<string, MovementGroupCoordinatorState>? _planarMovementGroups;
+
     internal TrailblazerNavigationService(TrailblazerWorldContext context)
     {
         MovementGroups = new MovementGroupCoordinatorState(context);
@@ -27,9 +30,28 @@ internal sealed class TrailblazerNavigationService
 
     internal Guid CreateNavigatorId() => NavigatorIds.Create();
 
+    internal MovementGroupCoordinatorState GetPlanarMovementGroups(TrailblazerWorldContext context, string mapId)
+    {
+        _planarMovementGroups ??= new();
+        if (!_planarMovementGroups.TryGetValue(mapId, out var groups))
+        {
+            groups = new MovementGroupCoordinatorState(context);
+            _planarMovementGroups[mapId] = groups;
+        }
+        return groups;
+    }
+
+    internal void ReleasePlanarMovementGroup(string mapId, MovementGroupCoordinatorState owner, MovementGroupSession session)
+    {
+        owner.Remove(session);
+        if (owner.IsEmpty && _planarMovementGroups!.TryGetValue(mapId, out var current) && ReferenceEquals(owner, current))
+            _planarMovementGroups.Remove(mapId);
+    }
+
     internal void Reset()
     {
         MovementGroups.Reset();
+        _planarMovementGroups?.Clear();
         NavigatorIds.Reset();
     }
 }

@@ -314,7 +314,10 @@ internal readonly struct NavigationTransitionEdgeEvaluator
             targetAnchor,
             out Fixed64 targetDistance)
         && Fixed64.TryAdd(total, targetDistance, out total)
-        && Fixed64.TryAdd(total, targetEnterCost, out total)
+        && TryAddEntryCosts(total, targetEnterCost, additionalEnterCost, out total);
+
+    internal static bool TryAddEntryCosts(Fixed64 cost, Fixed64 targetEnterCost, Fixed64 additionalEnterCost,
+        out Fixed64 total) => Fixed64.TryAdd(cost, targetEnterCost, out total)
         && Fixed64.TryAdd(total, additionalEnterCost, out total);
 
     private bool TryGetAnchors(

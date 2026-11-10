@@ -152,6 +152,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 NavigationMediumStateRef predecessor = default;
                 Fixed64 cost = default;
                 int forwardOrdinal = default;
+                NavigationTraversalEdgeKind kind = default;
                 NavigationTraversalEdgeAdvanceStatus edgeStatus;
                 if (topDown == null)
                 {
@@ -165,7 +166,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 }
                 else
                 {
-                    edgeStatus = topDown.AdvanceEdge(out predecessor, out cost, out forwardOrdinal);
+                    edgeStatus = topDown.AdvanceEdge(ref remaining, out predecessor, out cost, out forwardOrdinal, out kind);
                 }
                 edgeStatus = ResolvePostEnumerationStatus(
                     IsWorldCurrent(),
@@ -184,7 +185,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 NavigationFlowFieldStatus applied = topDown == null
                     ? ApplyIncoming(_incoming.CurrentPredecessor, _incoming.CurrentCost,
                         _incoming.CurrentOrdinal, _incoming.CurrentKind)
-                    : ApplyIncoming(predecessor, cost, forwardOrdinal, NavigationTraversalEdgeKind.Surface);
+                    : ApplyIncoming(predecessor, cost, forwardOrdinal, kind);
                 if (applied != NavigationFlowFieldStatus.Pending)
                     return applied;
                 continue;

@@ -109,4 +109,7 @@ public readonly struct NavigationTransitionInstruction
         ReferenceEquals(CompletionOwner, completionOwner)
         && AcquisitionGeneration == acquisitionGeneration
         && StepOrdinal == stepOrdinal;
+
+    internal bool HasSameCompletion(in NavigationTransitionInstruction other) =>
+        CompletionOwner != null && other.MatchesCompletion(CompletionOwner, AcquisitionGeneration, StepOrdinal);
 }

@@ -77,6 +77,19 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     internal NavigationAStarPayloadCache PayloadCache => _cache;
 
+    internal NavigationTopDownRouteWork? BeginScheduledTopDown(GridWorld world, in NavigationTopDownRouteRequest request)
+    {
+        lock (_sync)
+        {
+            if (!CanBegin() || request.GetLogicalRetainedBytes() > _limits.MaxBatchDescriptorBytes
+                || _coordinator.TryReservePrefix(PathAlgorithm.AStar, 1, out var reservation) == 0)
+                return null;
+            var query = _queries[0];
+            return new NavigationTopDownRouteWork(world, _store, request, query.Workspace, query.RayWork,
+                null, reservation);
+        }
+    }
+
     internal NavigationGuideStatus FindTopDown(GridWorld world, in NavigationTopDownRouteRequest request,
         Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
         NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)

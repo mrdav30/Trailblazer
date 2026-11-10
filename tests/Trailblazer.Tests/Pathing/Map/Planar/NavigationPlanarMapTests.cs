@@ -134,7 +134,8 @@ public sealed class NavigationPlanarMapTests
             case "transition":
                 builder.AddTransition(new TraversalTransitionDefinition(
                     "jump", TraversalTransitionType.Jump, source, TraversalMedium.Solid,
-                    destination, TraversalMedium.Solid, TraversalCapability.Jump));
+                    destination, TraversalMedium.Solid, TraversalCapability.Jump,
+                    sourcePointOverride: new Vector3d(0, 1, 0), hasSourcePointOverride: true));
                 break;
             default:
                 builder.AddTransitionRule(new TraversalTransitionRule(
@@ -145,6 +146,22 @@ public sealed class NavigationPlanarMapTests
         }
 
         Action build = () => builder.Build();
+        build.Should().Throw<ArgumentException>().WithParameterName(nameof(NavigationMap.PlanarBinding));
+    }
+
+    [Theory]
+    [InlineData(0, 1, TraversalMedium.Solid, false)]
+    [InlineData(1, 0, TraversalMedium.Solid, false)]
+    [InlineData(1, 1, TraversalMedium.Gas, false)]
+    [InlineData(1, 1, TraversalMedium.Solid, true)]
+    public void Build_RejectsPlanarActionsWithoutCanonicalSameMediumAnchors(int sourceLayer, int destinationLayer,
+        TraversalMedium destinationMedium, bool overrideDestination)
+    {
+        var transition = new TraversalTransitionDefinition("gap", TraversalTransitionType.Jump,
+            new VoxelIndex(1, sourceLayer, 1), TraversalMedium.Solid,
+            new NavigationCellAddress("map", new VoxelIndex(3, destinationLayer, 1)), destinationMedium,
+            destinationPointOverride: new Vector3d(2, 1, 0), hasDestinationPointOverride: overrideDestination);
+        Action build = () => TopDown("map", Fixed64.One).SetDefaultCell(Open).AddTransition(transition).Build();
         build.Should().Throw<ArgumentException>().WithParameterName(nameof(NavigationMap.PlanarBinding));
     }
 

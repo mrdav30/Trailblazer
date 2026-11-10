@@ -5,17 +5,17 @@
 
 **Created:** 2026-09-03
 
-**Status (2026-11-09):** Phase 1 is in progress. Top-down bakes publish cells
-through the shared graph with selected-layer defaults and overlays. See the
-[publication checkpoint](#2026-11-09---phase-1-planar-publication).
-Spatial query and edge admission excludes those cells. The [strict top-down
-placement check](#2026-11-09---phase-1-strict-top-down-endpoints) resolves a
-current endpoint. [Swept-circle validation](#2026-11-09---phase-1-top-down-leg-clearance)
-checks an ordinary leg between cell centers. [Immediate top-down routing](#2026-11-09---phase-1-immediate-top-down-routes)
-uses those legs in the shared A* and Flow searches. Use
-`UseLocalLsfStack=true` for adapter development. The core package references
-GridForge 10.0.0. Released-package validation of the adapter still requires
-Gravitas 1.1.0. Hard-budgeted physics queries remain a separate
+**Status (2026-11-10):** Phase 1 and its hardening pass are complete in
+coordinated source mode. Native top-down A* and Flow
+use the shared graph and scheduler. They prove swept-circle legs across
+compatible published maps and support formation goals and opted-in
+same-medium actions through accepted controller motion. See the
+[Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
+covers side-view traversal and profile changes. Use `UseLocalLsfStack=true`
+with the GridForge hardening changes. Hosted develop validation needs the
+updated GridForge pin. The released-package lane needs GridForge with the
+filtered trace overload and Gravitas 1.1.0 for the adapter. Hard-budgeted
+physics queries remain a separate
 [2D/3D workstream](physicsQueryBudgetPlan.md).
 
 **Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`
@@ -451,7 +451,7 @@ require the existing matched performance controls.
 | Phase | Deliverable | Status | Gate |
 | --- | --- | --- | --- |
 | 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
-| 1 | Native planar guidance and top-down movement | In progress | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
+| 1 | Native planar guidance and top-down movement | Complete | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
 | 2 | Side-view traversal and profile changes | Not started | In-plane support, locomotion, posture/capability sequences, and replay verified |
 | 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
 
@@ -666,11 +666,11 @@ separately from a rejected replacement.
 
 | Owner | Planned files and responsibility |
 | --- | --- |
-| Trailblazer core | `src/Trailblazer/Navigation/Navigator/Navigator2D.cs` and native motion/support values in the same area. Own input interpretation, motor state, frame guards, accepted pose and velocity, support policy, carry, replacement coordination, and occupancy publication. |
+| Trailblazer core | `src/Trailblazer/Navigation/Navigator/Planar/Navigator2D.cs` and native motion/support values in the same area. Own input interpretation, motor state, frame guards, accepted pose and velocity, support policy, carry, replacement coordination, and occupancy publication. |
 | Trailblazer pathing | `src/Trailblazer/Pathing/Query/NavigationAgentProfile2D.cs` owns geometry and traversal admission inputs. Existing graph/search owners supply dimensional clearance, leases, and scheduling. Existing `NavigationCommittedCellState` carries the committed cell without a pose conversion. |
 | Optional adapter | `src/Trailblazer.Gravitas/GravitasNavigator2D.cs` binds a host-owned kinematic `SolidBody2D` in the same GridWorld. It validates the centered circle or upright capsule, submits X/Z targets, and reads the accepted pose. In side-view it translates `QuerySupport` at the lower cap. An expired hit or a witness that `Physics2DHit.TryGetPoint` cannot materialize becomes `Unavailable`. It calls `TryReconfigureCollider` for physical fit. |
 | Host and Gravitas | Host owns ordered input, time advancement, body and map setup, carrier identity, and semantic action execution. Gravitas owns colliders, filtering, physical witnesses, resolution, and accepted body pose. |
-| Existing test projects | `tests/Trailblazer.Tests/Navigation/Navigator/` covers accepted motion, stale and repeated frame calls, support/motor policy, and occupancy. `tests/Trailblazer.Gravitas.Tests/` covers the shared resolve barrier, native shape/support, carry, and posture with real bodies. |
+| Existing test projects | `tests/Trailblazer.Tests/Navigation/Navigator/Planar/` covers accepted motion, stale and repeated frame calls, support/motor policy, and occupancy. `tests/Trailblazer.Gravitas.Tests/` covers the shared resolve barrier, native shape/support, carry, and posture with real bodies. |
 
 ### Planar graph, query, and action contracts
 
@@ -920,18 +920,18 @@ in the existing test projects.
   route legality, exact costs, final cell, and arrival. Cover off-axis starts,
   shortened or blocked host results, finite budgets, stale publication, and
   exact replay within each algorithm.
-- [ ] **Complete Phase 1 guide integrations.** Exercise cross-map edge
+- [x] **Complete Phase 1 guide integrations.** Exercise cross-map edge
   discovery, groups, explicit transitions, and held-action completion exactly once.
-- [ ] **Exercise shared acquisition and visibility policies in 2D.** Test
+- [x] **Exercise shared acquisition and visibility policies in 2D.** Test
   Immediate and opt-in Scheduled acquisition, frozen shared-work cohorts,
   cancellation/retry, moved-origin connectors, and mode changes. Waiting must
-  preserve ordinary motor/platform/commit work with zero guided heading. Test
+  preserve ordinary host motion and commit work with zero guided heading. Test
   phased LOS and invalidation without cross-dimensional proof or cache reuse.
-- [ ] **Preserve 3D behavior while extracting shared logic.** Keep dimension-
+- [x] **Preserve 3D behavior while extracting shared logic.** Keep dimension-
   specific geometry and units explicit. Run existing graph/controller tests
   after each shared change; do not clone the whole search service or couple a
   planar consumer to the 3D motor merely to reuse its state fields.
-- [ ] **Review native top-down delivery.** Verify fixed-point repeatability,
+- [x] **Review native top-down delivery.** Verify fixed-point repeatability,
   existing navigation work limits, ownership, and changed-path coverage. Mark
   only this phase complete; side-view movement and real Gravitas2D collision
   remain open.
@@ -2520,3 +2520,219 @@ The broader profile, motor, and recording signatures in the Phase 0 design
 remain planned. This checkpoint keeps the inputs needed for the immediate
 top-down controller and leaves support, physical posture, and record
 contracts with their owning integrations.
+
+### Phase 1 top-down integration
+
+Ordinary A* and Flow search discover native neighbors across materialized
+maps in the same planar domain. Discovery uses bounded GridForge address
+enumeration and the same swept-circle proof as an internal edge. It
+rejects coincident cells, mismatched lattices, and rectangular corner-only
+joins. Forward destination entry costs remain directional under reverse
+Flow expansion. The retained sequence keeps each address's own canonical
+center. Controller pose and occupancy cross the seam through the same
+accepted-frame barrier. At coincident layer faces the selected guide or
+current committed map supplies the identity before compatible fallback.
+
+Scheduled top-down requests use the existing bounded FIFO, admission
+lanes, frame counters, frozen cohorts, and result ownership. Each follower
+proves its endpoints independently. Flow cohorts match destination intent
+without an origin. A retained top-down Flow result covers its selected
+origin, so uncovered origins promote oldest-first after covered followers.
+Reset, cancellation, or publication invalidation retire request and guide
+ownership. A moved controller must prove the connector to the exact
+first guide center on the fair validation turn. This obligation survives
+changes to acquisition mode and ends when the accepted cursor advances.
+
+The controller uses the shared group coordinator for formation goals,
+with membership separated by planar destination map. It proves a selected
+formation cell and can retry the common goal. Optional phased visibility
+uses the same fixed-frame phase arithmetic as spatial steering. It
+looks ahead one ordinary edge from an already accepted center, keeps the
+selected route cost, and validates the actual target sweep. Neither an
+unaccepted move nor a stale guide advances the cursor.
+
+Opt-in authored same-medium transitions use the published transition
+pages and the existing completion stamp. A directed action holds its
+exact source center. The host supplies targets while the action is held,
+and completion requires an accepted result at the exact certified
+destination. Wrong landing, cancellation, publication change, and a
+second completion cannot advance the action. A terminal action can
+arrive on completion. Native side-view support, physical Gravitas2D
+integration, and planar controller records remain in their owning phases.
+
+#### Matched spatial controls
+
+The pre-edit control at Trailblazer `76eadbc` and the final implementation
+used the same pinned source dependencies and benchmark settings. All 18
+guided samples matched exact checksums, phase assignments, ray counts,
+and allocations. The six ray child processes completed with all 18
+expected samples and identical semantic traces. The 45 scheduled Flow
+recovery episodes matched checksums, work counts, request and acquisition
+outcomes, allocations, and completion frames for all five scenarios.
+
+The guided capture used 100 agents and balanced phases for each algorithm.
+It and the ray capture used three launches with one warmup and three
+measured iterations per launch. The scheduled capture ran
+`recovery-capture <launch> Scheduled Default Flow100` for launches 1–3.
+
+| Control | Before | After |
+| --- | ---: | ---: |
+| Guided A* frame median / observed P95 | 1.917 / 2.249 ms | 1.889 / 2.260 ms |
+| Guided Flow frame median / observed P95 | 1.752 / 3.317 ms | 1.712 / 3.301 ms |
+| Medium ray mean | 5.971 ms | 5.899 ms |
+| SparseBlocked ray mean | 431.1 µs | 424.8 µs |
+
+The median of episode frame medians in the recovery control changed by
+at most 0.017 ms. These are short matched timing captures. Replay, work,
+and allocation comparisons are exact. Raw captures are under
+`artifacts/phase1-76eadbc-completion-baseline` and
+`artifacts/phase1-completion-post`.
+
+#### Planar accepted-frame probe
+
+The Windows Release host fixture used the same 16 Hz, cost-6 detour and
+one held movement frame per episode. Both algorithms reached the same
+exact goal and committed address in 26 immediate or 27 scheduled frames.
+After 32 warmups per algorithm, five blocks of 20 episodes each measured
+the following ranges and per-frame allocations.
+
+| Acquisition | A* time | Flow time | A* bytes | Flow bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Immediate | 77.229–89.967 µs | 67.195–73.008 µs | 7.385 B | 7.385 B |
+| Scheduled | 139.873–161.841 µs | 129.329–151.581 µs | 230.815 B | 476.148 B |
+
+Immediate acquisition ran before the timed frames. Scheduled acquisition
+included queue advancement, search, and retained payload materialization
+in the timed frames. Both include context simulation and host prepare,
+accept, and commit. Raw blocks are under
+`artifacts/phase1-completion-motion-probe`.
+
+#### Review and verification
+
+Independent reviews checked cross-map discovery, scheduler lifetime,
+transition ownership, and accepted controller motion. The follow-up
+regressions verify exact failed-transfer status, group retirement, and
+destination-map ownership after the original map is removed or rebound.
+Coverage includes the moved-origin fair turn, cancelled and stale requests,
+exact-once actions, and phased lookahead. The focused run passed 225 tests.
+
+Windows and Ubuntu under WSL each passed the following test matrix.
+
+| Configuration | Package-mode core | Pinned-source Gravitas adapter |
+| --- | ---: | ---: |
+| Release | 3,455 | 90 |
+| ReleaseLean | 3,355 | 86 |
+
+Both library targets built in both configurations. Each host and
+configuration reached 34,263/34,263 lines, 14,455/14,455 branches, and
+3,405/3,405 fully covered methods across the core and adapter. The adapter
+used the immutable develop pins and `UseLocalLsfStack=true`, with Gravitas
+at `13f73bdc`. The full solution also built and passed the same test counts
+on both hosts with the pinned source stack and the develop CI build flags.
+Ubuntu's source-mode coverage matched the exact combined totals in both
+configurations. Coverlet and ReportGenerator evidence is under
+`artifacts/phase1-completion-validation`. Windows DocFX passed with
+warnings treated as errors.
+
+### 2026-11-10 - Phase 1 hardening
+
+The independent audit started from Phase 0 closeout `0923a11` and covered
+the Phase 1 commits through `76eadbc` plus the pending integration. Eight of
+12 isolated cases failed identically in Release and ReleaseLean. The
+maintained regressions now cover these behaviors.
+
+| Case | Failure before hardening | Owner of the correction |
+| --- | --- | --- |
+| Mixed-world spatial placement | A stationary radius-3/4 Gas body at world foot (0, 1/2, 0) returned `Stale` when a lower-ordered, coincident planar grid supplied a required prism. | GridForge excludes exact grid generations before selecting the prism union. Trailblazer records intersecting exclusions using existing page dependencies. Geometry failure returns no admissible medium. |
+| Held action on coincident layers | Requesting 1-1/4 and accepting the exact destination at 1 completed the action on the original map. | `Navigator2D` resolves the destination map from the accepted landing. |
+| Physical map handoff | After retiring the original map, moving into a physically present unauthored destination cell lost occupancy on the next stationary commit. | The controller keeps the accepted physical map separately from its optional semantic sample. |
+| Host-registered ticket | An existing destination ticket survived controller disposal. | Both dimensions use the same ticket adoption or registration operation. |
+| Phased lookahead | A quarter-unit target clipped to an eighth reversed on the next frame. A forward-only host stalled at the clipped point. | Retire the already accepted source after progress on the exact proved segment. Hold the source after a block or off-segment deflection. |
+| Guided fixed-point step | A one-raw-unit allowance from an offset of (8, 8) raw rounded to zero. | A deterministic guided axis step stays within the allowance. |
+| Bounded admission | Eight separated maps and 50 lookups exhausted the controller query while direct acquisition succeeded. | Reuse one plane binding and move the candidate cursor locally. |
+
+Phase validation, the planar frame-slice debit, ordinary-neighbor checks,
+transition-page lookup, and scheduler leader handoff use their shared
+owners. Failed submission at sequence exhaustion exposes no unlinked ticket.
+Native controller and motion types live in `Navigation/Navigator/Planar`.
+Planar proofs, routes, and guides live in `Pathing/Search/TopDown`, with
+planar map contracts in `Pathing/Map/Planar`. Namespaces stay stable.
+
+The volume workspace refreshes its exclusion set once per immutable
+publication, bounded by the admitted map count. It allocates exclusion storage
+when a volume proof first encounters a graph with materialized planar maps.
+The trace meters candidate inspection and stamps only exclusions it encounters.
+An intersecting planar map removal stales the held spatial guide even when
+the raw world sequence is constant. Removing a distant planar map preserves it.
+
+The full Windows ReleaseLean run also reproduced a pre-existing GridForge
+ticket fixture failure on the unchanged `c4f80a0` baseline. A reused
+bucket can retain a free-slot order when cleared while empty. The old
+assertion expected the replacement to reuse the original slot and observed
+slot 1 followed by slot 0. The lifecycle regressions now assert that the
+original generation is rejected at the replacement's actual slot, while
+retaining the original stale-ticket and live-replacement checks.
+
+The new GridForge overload is additive to the released 10.0 API. The
+coordinated source lane requires the GridForge change to land before the
+Trailblazer CI pin can move. The released-package lane requires the released
+GridForge dependency in both package families. Existing references and
+immutable pins identify the previous released and CI dependencies.
+
+#### Hardening validation
+
+Windows and Ubuntu under WSL built the Trailblazer and GridForge solutions
+from frozen source with the develop build flags, including both library
+targets. The snapshots used the pending GridForge source at `c4f80a0` plus
+hardening and the other immutable develop pins, including Gravitas
+`13f73bdc`. The final matrix passed on both hosts.
+
+| Configuration | Trailblazer core | Gravitas adapter | GridForge |
+| --- | ---: | ---: | ---: |
+| Release | 3,472 | 90 | 1,174 |
+| ReleaseLean | 3,372 | 86 | 1,174 |
+
+Trailblazer and its adapter together covered 34,286/34,286 lines,
+14,493/14,493 branches, and 3,416/3,416 fully covered methods. GridForge
+covered 9,343/9,343 lines, 4,143/4,143 branches, and 1,146/1,146 fully
+covered methods. Both DocFX builds passed with warnings treated as errors.
+An isolated feed and cache validated 87 selected Trailblazer cases in
+each package family using locally built GridForge prerelease fixtures.
+These are source and fixture-package results. The real release dependencies
+must be verified after publication.
+
+#### Matched workload captures
+
+All 18 measured 100-agent guided samples, 18 ray samples, and 45 scheduled
+Flow100 recovery episodes reproduced exact semantic traces or checksums.
+The guided and recovery captures matched work, allocations, and completion
+frames where measured. Each volume case had three launches, ten warmups,
+and twelve actual measurements per launch. The six volume children matched
+their semantic traces. The same-session controls measured the following.
+The unchanged dependency sources matched byte for byte. Their compiled IL
+also matched after accounting for SwiftCollections caller-path strings from
+the separate snapshot directories.
+
+| Control | Before | After |
+| --- | ---: | ---: |
+| Guided A* median / observed P95 | 2.088 / 2.331 ms | 2.097 / 2.399 ms |
+| Guided Flow median / observed P95 | 1.911 / 3.637 ms | 1.455 / 3.208 ms |
+| Medium ray mean | 6.310 ms | 6.192 ms |
+| SparseBlocked ray mean | 451.3 µs | 452.8 µs |
+| Obstructed volume A* median and allocation | 45.844 ms, 4,544 B | 45.234 ms, 4,544 B |
+| Warm volume Flow median and allocation | 823.1 µs, 0 B | 839.4 µs, 0 B |
+
+The sequential recovery capture showed higher wall times. The alternating
+baseline, hardened, hardened, baseline rerun matched all 60 actual traces
+and did not reproduce the direction of that increase. For example, cold
+frame medians ranged from 0.366–0.381 ms before and 0.340–0.342 ms after,
+while warm-compatible medians ranged from 0.562–0.618 ms before and
+0.540–0.617 ms after. These captures show host timing variation.
+
+The 16 Hz planar detour retained its exact cost, final address, and 26
+immediate or 27 scheduled frames per episode. Immediate allocations matched
+at 7.385 B/frame for both algorithms. Scheduled allocations matched at
+230.815 B/frame for A* and 476.148 B/frame for Flow. Block times varied.
+The capture covers the original host fixture and pure-spatial workloads.
+Mixed-world exclusion and retirement are covered by behavioral tests.
+Raw evidence is under `artifacts/phase1-hardening-validation`.

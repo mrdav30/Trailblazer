@@ -13,13 +13,18 @@ namespace Trailblazer.Pathing;
 /// <remarks>Runtime-only. Submit and cancel in deterministic host order; no background work is performed.
 /// Any raw GridWorld change between activation and transfer invalidates this acquisition, even if unrelated.
 /// After transfer, the existing lease's normal dependency-validation rules apply.</remarks>
-public sealed class NavigationGuideRequest : IDisposable
+public class NavigationGuideRequest : IDisposable
 {
     internal NavigationGuideRequest(NavigationGuideScheduler owner, PathQuery query, long descriptorBytes)
+        : this(owner, query.Algorithm, descriptorBytes)
+    {
+        Query = query;
+    }
+
+    internal NavigationGuideRequest(NavigationGuideScheduler owner, PathAlgorithm algorithm, long descriptorBytes)
     {
         Owner = owner;
-        Query = query;
-        Algorithm = query.Algorithm;
+        Algorithm = algorithm;
         DescriptorBytes = descriptorBytes;
     }
 

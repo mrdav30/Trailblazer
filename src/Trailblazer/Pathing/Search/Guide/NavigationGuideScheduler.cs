@@ -77,23 +77,32 @@ internal sealed partial class NavigationGuideScheduler
         lock (_sync)
         {
             ChronicleGuard.ThrowIfDisposed(_closed, nameof(TrailblazerWorldContext));
-            if (_count >= _settings.MaxRetainedRequests
-                || bytes > _settings.MaxRetainedDescriptorBytes - _descriptorBytes)
+            if (!HasRequestCapacity(bytes))
                 return NavigationGuideStatus.CapacityExceeded;
-            _submissionSequence = NavigationGenerationCounter.Advance(_submissionSequence,
-                "The scheduled request sequence is exhausted.");
-            request = new NavigationGuideRequest(this, query, bytes)
-            { Previous = _last, SubmissionSequence = _submissionSequence, Flavor = flavor };
-            if (_last == null)
-                _first = request;
-            else
-                _last.Next = request;
-            _last = request;
-            _scan ??= request;
-            _count++;
-            _descriptorBytes += bytes;
+            var candidate = new NavigationGuideRequest(this, query, bytes) { Flavor = flavor };
+            Enqueue(candidate);
+            request = candidate;
             return NavigationGuideStatus.Pending;
         }
+    }
+
+    private bool HasRequestCapacity(long bytes) => _count < _settings.MaxRetainedRequests
+        && bytes <= _settings.MaxRetainedDescriptorBytes - _descriptorBytes;
+
+    private void Enqueue(NavigationGuideRequest request)
+    {
+        _submissionSequence = NavigationGenerationCounter.Advance(_submissionSequence,
+            "The scheduled request sequence is exhausted.");
+        request.SubmissionSequence = _submissionSequence;
+        request.Previous = _last;
+        if (_last == null)
+            _first = request;
+        else
+            _last.Next = request;
+        _last = request;
+        _scan ??= request;
+        _count++;
+        _descriptorBytes += request.DescriptorBytes;
     }
 
     internal void Advance()
@@ -113,7 +122,7 @@ internal sealed partial class NavigationGuideScheduler
                     NavigationGuideRequest? candidate = _scan;
                     if (candidate == null || candidate.SubmissionSequence > _freezeSequence
                         || (candidate.Status == NavigationGuideStatus.Pending
-                            && (candidate.Flavor != _cohortFlavor || !Compatible(_cohortQuery, candidate.Query))))
+                            && (candidate.Flavor != _cohortFlavor || !MatchesCohort(candidate))))
                     {
                         _grouping = false;
                         continue;
@@ -165,6 +174,8 @@ internal sealed partial class NavigationGuideScheduler
                     if (queued.Status == NavigationGuideStatus.Pending)
                     {
                         _cohortQuery = queued.Query;
+                        if (queued is NavigationTopDownGuideRequest topDown)
+                            _cohortTopDownQuery = topDown.TopDownQuery;
                         _cohortFlavor = queued.Flavor;
                         _cohortWorldSequence = _context.World.ChangeSequence;
                         _freezeSequence = _submissionSequence;
@@ -184,6 +195,12 @@ internal sealed partial class NavigationGuideScheduler
                 bool flow = request.Algorithm == PathAlgorithm.FlowField;
                 NavigationAcquisitionSlice before = _frameRemaining;
                 NavigationGuideRequestPhase phase = _phase;
+                if (request is NavigationTopDownGuideRequest planar)
+                {
+                    if (AdvanceTopDown(planar) && _phase == phase && _frameRemaining.HasSameRemaining(before))
+                        break;
+                    continue;
+                }
                 if (phase == NavigationGuideRequestPhase.Direct)
                 {
                     NavigationRayStatus direct = (request.Query.Traversal.TargetMedia
@@ -265,6 +282,11 @@ internal sealed partial class NavigationGuideScheduler
 
     private void BeginGraph(NavigationGuideRequest request)
     {
+        if (request is NavigationTopDownGuideRequest topDown)
+        {
+            BeginTopDown(topDown);
+            return;
+        }
         if (request.Algorithm == PathAlgorithm.FlowField)
         {
             NavigationFlowQueryStatus status = _context.Pathing.NavigationFlowAdmissionGate.Begin(request.Query, out _flowWork,
@@ -327,12 +349,7 @@ internal sealed partial class NavigationGuideScheduler
         }
         if (!_sharedAdmission && status == NavigationGuideStatus.Success)
         {
-            // The leader's admitted result is the pin. Finish the gate before follower admission.
-            ReleaseActiveWork();
-            _sharing = true;
-            _fanout = _nextBuild;
-            if (request.Owner == this)
-                CompleteMember(request, PublishLeader(request, flow));
+            PublishLeader(request);
             return;
         }
         Complete(request, status);
@@ -354,11 +371,22 @@ internal sealed partial class NavigationGuideScheduler
         _cohortPending--;
     }
 
-    private NavigationGuideStatus PublishLeader(NavigationGuideRequest request, bool flow)
+    private void PublishLeader(NavigationGuideRequest request)
+    {
+        // The leader's admitted result is the pin. Finish the gate before follower admission.
+        ReleaseActiveWork();
+        _sharing = true;
+        _fanout = _nextBuild;
+        if (request.Owner == this)
+            CompleteMember(request, request is NavigationTopDownGuideRequest topDown
+                ? CheckoutTopDown(topDown) : CheckoutSpatialLeader(request));
+    }
+
+    private NavigationGuideStatus CheckoutSpatialLeader(NavigationGuideRequest request)
     {
         _source.Transfer = _cohortPending == 1;
         NavigationWorldGraphStore store = _context.Pathing.NavigationGraphStore;
-        if (flow)
+        if (request.Algorithm == PathAlgorithm.FlowField)
         {
             NavigationFlowFieldPayloadCache cache = _context.Pathing.NavigationFlowAdmissionGate.PayloadCache;
             if (_source.Flow.TryGetPayload(out NavigationFlowFieldPayload payload) != NavigationFlowFieldStatus.Success)
@@ -429,6 +457,7 @@ internal sealed partial class NavigationGuideScheduler
     {
         _cohortCount = _cohortPending = _nextBuild = _fanout = _clearIndex = 0;
         _cohortQuery = default;
+        _cohortTopDownQuery = default;
         _grouping = _sharing = false;
         _source.Dispose();
     }
@@ -441,12 +470,20 @@ internal sealed partial class NavigationGuideScheduler
             && first.Budget == candidate.Budget && first.AllowTransitions == candidate.AllowTransitions
             && first.FlowField == candidate.FlowField;
 
+    private bool MatchesCohort(NavigationGuideRequest request) =>
+        request is NavigationTopDownGuideRequest topDown
+            ? _cohort[0]!.Algorithm == topDown.Algorithm
+                && _cohortTopDownQuery.Matches(topDown.TopDownQuery, requireStart: topDown.Algorithm == PathAlgorithm.AStar)
+            : Compatible(_cohortQuery, request.Query);
+
     private void ReleaseActiveWork()
     {
         _aStarWork.Dispose();
         _flowWork.Dispose();
         _aStarWork = default;
         _flowWork = default;
+        _topDownWork?.Dispose();
+        _topDownWork = null;
         _active = null;
     }
 
@@ -508,6 +545,12 @@ internal sealed partial class NavigationGuideScheduler
             request.Phase = NavigationGuideRequestPhase.Completed;
             request.Guide?.Dispose();
             request.FlowField?.Dispose();
+            if (request is NavigationTopDownGuideRequest topDown)
+            {
+                topDown.TopDownGuide?.Dispose();
+                topDown.TopDownGuide = null;
+                topDown.TopDownQuery = default;
+            }
             request.Guide = null;
             request.FlowField = null;
             if (request.Previous == null)

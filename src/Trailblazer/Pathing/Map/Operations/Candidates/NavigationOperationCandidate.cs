@@ -699,6 +699,9 @@ internal sealed partial class NavigationOperationCandidate
     {
         if (!source.Map.GridBinding.IsValidIndex(transition.SourceIndex))
             return false;
+        NavigationPlanarBinding? sourceBinding = source.Map.PlanarBinding;
+        if (sourceBinding is NavigationPlanarBinding planar && !transition.UsesCanonicalPlanarAnchors(planar.LayerIndex))
+            return false;
 
         // NavigationMapBuilder validates authored source media. Once a map identity is
         // admitted, overlay and cross-map endpoints may deliberately remain dormant
@@ -717,7 +720,10 @@ internal sealed partial class NavigationOperationCandidate
         MapState? destination = FindChangedState(transition.Destination.MapId, changedMapIds, changedStates);
         if (destination == null && !_maps.TryGetValue(transition.Destination.MapId, out destination))
             return true;
-        if (!destination.Map.IsSpatial || !destination.Map.GridBinding.IsValidIndex(transition.Destination.Index))
+        if (!destination.Map.ContainsGridIndex(transition.Destination.Index))
+            return false;
+        // Map authoring only admits top-down planar bindings.
+        if (sourceBinding?.EmbeddingY != destination.Map.PlanarBinding?.EmbeddingY)
             return false;
         if (!HasDefinitionMedium(
                 destination,

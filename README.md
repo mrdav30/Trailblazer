@@ -33,8 +33,8 @@ teleporters.
 - **Controllers are optional.** Use pathing by itself or compose Navigator,
   steering, turning, locomotion, occupancy, and deterministic heightmaps.
 - **Top-down routes use circle clearance.** Acquire A* or Flow guides over
-  cell centers with swept clearance between neighbors. Use `Navigator2D`
-  to follow them through a host-owned motion resolver.
+  cell centers with swept clearance across compatible maps. Use `Navigator2D`
+  to follow immediate or scheduled guides through a host-owned motion resolver.
 - **The engine stays outside.** Trailblazer has no Unity, Godot, Unreal, or
   renderer dependency.
 

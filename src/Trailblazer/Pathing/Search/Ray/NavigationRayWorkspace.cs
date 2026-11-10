@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using GridForge.Configuration;
 using GridForge.Grids;
 using SwiftCollections;
 
@@ -15,6 +16,9 @@ namespace Trailblazer.Pathing;
 internal sealed class NavigationRayWorkspace
 {
     private NavigationTopDownWork? _topDown;
+    private long _volumeExclusionsGraphVersion = -1;
+    private SwiftPackedSet<long>? _excludedVolumeGridTokens;
+    private SwiftList<GridConfigurationKey>? _excludedVolumeCandidates;
 
     internal NavigationTopDownWork TopDown => _topDown ??= new NavigationTopDownWork(this);
 
@@ -71,6 +75,29 @@ internal sealed class NavigationRayWorkspace
     internal NavigationRayChainRecord[] ChainRecords { get; }
 
     internal NavigationDependencyWorkspace Dependencies { get; }
+
+    internal SwiftPackedSet<long>? GetVolumeExclusions(NavigationWorldGraph graph)
+    {
+        if (_volumeExclusionsGraphVersion != graph.GraphVersion)
+        {
+            // One scan per immutable publication, bounded by the admitted map directory.
+            _excludedVolumeGridTokens?.Clear();
+            for (int i = 0; i < graph.MapCount; i++)
+            {
+                NavigationMapInstance map = graph.GetInstance(i);
+                if (!map.Map.IsSpatial && map.IsMaterialized)
+                {
+                    _excludedVolumeGridTokens ??= new SwiftPackedSet<long>();
+                    _excludedVolumeGridTokens.Add(map.GridIdentity.GridSpawnToken);
+                }
+            }
+            _volumeExclusionsGraphVersion = graph.GraphVersion;
+        }
+        return _excludedVolumeGridTokens is { Count: > 0 } ? _excludedVolumeGridTokens : null;
+    }
+
+    internal SwiftList<GridConfigurationKey> ExcludedVolumeCandidates =>
+        _excludedVolumeCandidates ??= new SwiftList<GridConfigurationKey>(MapCapacity);
 
     internal void Reset()
     {

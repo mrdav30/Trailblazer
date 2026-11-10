@@ -6,8 +6,8 @@ abstract so hosts can supply their own traversal-state checks and integrations.
 
 ## Top-down Navigator2D
 
-`Navigator2D` follows an immediate A* or Flow route for a circle on a
-published top-down map. Derive a host shell and implement
+`Navigator2D` follows an A* or Flow route for a circle on published top-down
+layers at the same embedding. Derive a host shell and implement
 `SubmitMotionTarget` and `ReadAcceptedMotion`. Construct it with the matching
 host collider center, radius, speed, traversal medium, and a nonempty
 world-unique actor ID. The center is native world X/Z and the host owns its
@@ -21,6 +21,23 @@ last accepted center. The budget applies separately to acquisition and each
 movement proof. An explicit analog move replaces guidance and delegates motion
 clearance to the host. Targets carry the current accepted rotation.
 
+Immediate acquisition is the default. Set `ConfigureAcquisitionMode` to
+`Scheduled` to use the context queue. A pending controller submits a held
+target and still commits the accepted host pose each frame. If the accepted
+center moves while queued, the controller checks the connector to the exact
+first guide center on the queue's fair validation turn. It repeats that check
+while the connector is active, including after a mode change.
+
+Pass a movement group ID to select a formation cell when a compatible group
+approaches the same destination. Each adjusted goal must pass clearance and
+route acquisition. Groups use the same formation policy as spatial navigation
+and keep separate membership by planar destination map. An invalid formation
+route retries the common goal. `ConfigurePathRechecks` optionally looks one
+ordinary leg ahead on a fixed frame phase from an already accepted center.
+The lookahead keeps the selected edge and checks the actual sweep. A clipped
+result on that sweep can leave the source waypoint behind. The next waypoint
+still requires its own accepted arrival.
+
 For each fixed frame, call `context.Simulate()`, prepare all controllers,
 resolve host motion once, commit all controllers, then call
 `context.LateSimulate()`. Return the accepted pose for the matching
@@ -30,12 +47,22 @@ prepared timestep. It consumes the request before publishing cell changes.
 A short or blocked result holds the current waypoint. Arrival requires
 accepted motion at the exact final center on a current guide.
 
+Opt in to authored same-medium actions with `allowTransitions`. Once the
+controller accepts the action's source center, `PendingTransition` exposes
+the exact lease stamp. Use `PrepareActionFrameMotion` with that stamp for
+each host-controlled action frame. Complete with `CompletePendingTransition`
+after the accepted result reaches the exact destination center. The accepted
+landing selects the action's destination map, including at coincident layers.
+A wrong landing leaves the action held. A stale, cancelled, or completed stamp
+cannot submit another action frame or complete it again.
+
 If a publication invalidates the guide between prepare and commit, the valid
 host pose still commits and the guide is released. A temporarily unavailable
 cell publication preserves the last semantic cell sample and releases any
-occupancy ticket the accepted center has exited. Queue authoritative changes
-from host callbacks and cell notifications for the next ordered command
-boundary. Dispose the controller to release guidance and occupancy.
+occupancy ticket the accepted center has exited. A physical cell can keep its
+occupancy ticket even when it has no authored navigation semantics. Queue
+authoritative changes from host callbacks and cell notifications for the next
+ordered command boundary. Dispose the controller to release guidance and occupancy.
 
 ## Setup
 

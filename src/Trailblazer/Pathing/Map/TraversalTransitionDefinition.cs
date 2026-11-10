@@ -196,6 +196,12 @@ public readonly struct TraversalTransitionDefinition : IEquatable<TraversalTrans
     internal static bool IsKnownType(TraversalTransitionType type) =>
         type >= TraversalTransitionType.Custom && type <= TraversalTransitionType.Climb;
 
+    internal bool UsesCanonicalPlanarAnchors(int sourceLayer) =>
+        SourceIndex.y == sourceLayer
+        && SourceMedium == DestinationMedium
+        && !HasSourcePointOverride
+        && !HasDestinationPointOverride;
+
     /// <summary>
     /// Tests two definitions for value equality.
     /// </summary>

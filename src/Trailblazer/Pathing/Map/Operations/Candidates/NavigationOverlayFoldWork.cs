@@ -114,7 +114,7 @@ internal sealed class NavigationOverlayFoldWork
                         rejection = NavigationOperationRejection.MissingMap;
                         return true;
                     }
-                    if (!_current.Map.IsSpatial && (!delta.ConnectionSpan.IsEmpty || !delta.TransitionSpan.IsEmpty))
+                    if (!_current.Map.IsSpatial && !delta.ConnectionSpan.IsEmpty)
                     {
                         rejection = NavigationOperationRejection.ValidationFailed;
                         return true;

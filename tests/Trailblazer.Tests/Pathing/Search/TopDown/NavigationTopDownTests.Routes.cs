@@ -152,7 +152,7 @@ public sealed partial class NavigationTopDownTests
         Publish(context, TopDown("plane", grid).AddCell(start.Index, Open).Build(), 2);
         Check(default, start, Fixed64.Quarter, PathAlgorithm.AStar, NavigationGuideStatus.InvalidStart);
         Check(start, default, Fixed64.Quarter, PathAlgorithm.AStar, NavigationGuideStatus.InvalidEnd);
-        Check(start, other, Fixed64.Quarter, PathAlgorithm.AStar, NavigationGuideStatus.Unsupported);
+        Check(start, other, Fixed64.Quarter, PathAlgorithm.AStar, NavigationGuideStatus.NoMap);
         Check(start, start, Fixed64.Zero, PathAlgorithm.AStar, NavigationGuideStatus.InvalidProfile);
         Check(start, start, Fixed64.Quarter, (PathAlgorithm)255, NavigationGuideStatus.Unsupported);
         Check(offLayer, start, Fixed64.Quarter, PathAlgorithm.AStar, NavigationGuideStatus.InvalidStart);

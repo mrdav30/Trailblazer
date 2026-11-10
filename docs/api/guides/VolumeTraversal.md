@@ -122,6 +122,13 @@ larger body falls back to bounded swept-union coverage. Missing output capacity,
 arithmetic overflow, stale grid identity, blocked required coverage, and a real
 geometric rejection remain distinct failure paths.
 
+Swept volume proofs exclude the exact grid generations bound to published
+planar maps before choosing between coincident prisms. Those generations
+can neither supply missing spatial coverage nor displace a spatial prism.
+A retained guide tracks the published maps excluded from its candidate set.
+A raw grid without a matching spatial publication can still make the proof
+stale if the trace needs its evidence.
+
 Automatic seams can connect compatible map/grid faces. Heterogeneous or
 misaligned geometry fails closed when GridForge cannot issue an exact directed
 proof. Semantic actions do not substitute for missing physical movement unless

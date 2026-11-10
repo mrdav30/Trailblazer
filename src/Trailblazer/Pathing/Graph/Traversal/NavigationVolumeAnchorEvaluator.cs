@@ -132,6 +132,8 @@ internal readonly struct NavigationVolumeAnchorEvaluator
             meter.RemainingCoveredVoxelIntervals);
         long candidateWorkLimit = meter.RemainingGridCandidateWork;
         meter.RecordVolumeUnionCheck();
+        var exclusions = _workspace.GetVolumeExclusions(_graph);
+        var excludedCandidates = exclusions != null ? _workspace.ExcludedVolumeCandidates : null;
         GridNavigationBodyTraceReport report = GridTracer.TraceNavigationBodyInto(
             _world,
             sourceCell,
@@ -145,7 +147,9 @@ internal readonly struct NavigationVolumeAnchorEvaluator
             gridLimit,
             addressLimit,
             _workspace.CoveredAddressCapacity,
-            candidateWorkLimit);
+            candidateWorkLimit,
+            exclusions,
+            excludedCandidates);
         bool consumedLookups = meter.TryConsumeLookupProbes(report.GridCandidateCount);
         bool consumedAddresses =
             meter.TryConsumeCoveredVoxelIntervals(report.AddressCandidateCount);
@@ -167,7 +171,20 @@ internal readonly struct NavigationVolumeAnchorEvaluator
             return traceStatus;
         }
 
-        qualifyingMedia = requestedMedia & TraversalMedia.AnyVolume;
+        if (excludedCandidates is { Count: > 0 })
+        {
+            if (!meter.TryConsumeLookupProbes(excludedCandidates.Count))
+                return NavigationVolumeAnchorStatus.BudgetExceeded;
+            foreach (var configuration in excludedCandidates)
+            {
+                bool found = _graph.TryGetMapId(configuration, out string excludedMapId);
+                System.Diagnostics.Debug.Assert(found, "Excluded generations belong to the captured graph.");
+                if (!dependencies.TryRecordPage(excludedMapId, 0))
+                    return NavigationVolumeAnchorStatus.CapacityExceeded;
+            }
+        }
+
+        TraversalMedia passableMedia = requestedMedia & TraversalMedia.AnyVolume;
         for (int i = 0; i < _workspace.BodyTraceCells.Count; i++)
         {
             GridNavigationBodyTraceCell traceCell = _workspace.BodyTraceCells[i];
@@ -180,11 +197,7 @@ internal readonly struct NavigationVolumeAnchorEvaluator
                 hasTraceInstance,
                 "the immutable configuration index and map directory are built and replaced together");
             if (!traceInstance.Map.IsSpatial)
-            {
-                if (traceCell.Role == GridNavigationBodyTraceCellRole.RequiredCoverage)
-                    return NavigationVolumeAnchorStatus.Stale;
-                continue;
-            }
+                return NavigationVolumeAnchorStatus.Stale;
             if (!IsTraceGenerationCurrent(
                     traceInstance.GridIdentity.Matches(
                         traceCell.Cell.WorldSpawnToken,
@@ -209,17 +222,20 @@ internal readonly struct NavigationVolumeAnchorEvaluator
                 continue;
             if (!traceCell.IsPhysicallyPresent)
             {
-                qualifyingMedia = TraversalMedia.None;
+                passableMedia = TraversalMedia.None;
                 continue;
             }
 
-            qualifyingMedia = FilterPassableMedia(traceNode, qualifyingMedia);
+            passableMedia = FilterPassableMedia(traceNode, passableMedia);
         }
         NavigationVolumeAnchorStatus result = traceStatus == NavigationVolumeAnchorStatus.Unavailable
-            || qualifyingMedia == TraversalMedia.None
+            || passableMedia == TraversalMedia.None
             ? NavigationVolumeAnchorStatus.Unavailable
             : NavigationVolumeAnchorStatus.Success;
-        return ResolveFinalStatus(before, _world.ChangeSequence, result);
+        result = ResolveFinalStatus(before, _world.ChangeSequence, result);
+        if (result == NavigationVolumeAnchorStatus.Success)
+            qualifyingMedia = passableMedia;
+        return result;
     }
 
     internal static bool IsTraceGenerationCurrent(

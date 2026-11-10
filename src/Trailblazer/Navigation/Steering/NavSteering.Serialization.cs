@@ -32,7 +32,7 @@ public partial class NavSteering
         RecordValues.Look(chronicler, ref acquisitionMode, "AcquisitionMode", NavigationAcquisitionMode.Immediate);
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            ValidatePathRecheckConfiguration(pathRecheckCooldownFrames, pathRecheckPhase);
+            NavigationFramePhase.ValidateConfiguration(pathRecheckCooldownFrames, pathRecheckPhase);
             ValidateAcquisitionMode(acquisitionMode);
         }
 

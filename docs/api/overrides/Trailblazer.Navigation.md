@@ -7,6 +7,9 @@ Compose host-owned character controllers from `Navigator`, steering, movement
 groups, occupancy, motor and turning services, heightmap grounding, and explicit
 Chronicler records.
 
+`Navigator2D` runs native top-down circle routes through a host-owned
+prepare, resolve, and commit barrier.
+
 The optional `Trailblazer.Gravitas` assembly adds `GravitasNavigator3D` without
 coupling the core libraries. Read the
 [Gravitas integration guide](../guides/Gravitas.md) for shared-world ownership,

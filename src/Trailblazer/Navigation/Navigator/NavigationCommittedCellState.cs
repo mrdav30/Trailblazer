@@ -47,4 +47,13 @@ public readonly struct NavigationCommittedCellState
 
     /// <summary>Gets the deterministic simulation frame at which motion was committed.</summary>
     public long SimulationFrame { get; }
+
+    internal static bool RepresentsSameCellEntry(NavigationCommittedCellState? first, NavigationCommittedCellState? second)
+    {
+        if (!first.HasValue || !second.HasValue)
+            return first.HasValue == second.HasValue;
+        NavigationCommittedCellState left = first.Value;
+        NavigationCommittedCellState right = second.Value;
+        return left.Address == right.Address && left.Area == right.Area && left.Medium == right.Medium;
+    }
 }

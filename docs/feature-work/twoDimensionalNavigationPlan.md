@@ -912,14 +912,16 @@ in the existing test projects.
 - [x] **Route the obstacle detour and fitted portal.** Both shared searches
   admit center-address endpoints and prove each native leg on one planar map.
   Return a detached sequence and exact cost from the captured publication.
-- [ ] **Write the first failing planar acceptance cases.** Test obstacle
+- [x] **Write the first failing planar acceptance cases.** Test obstacle
   avoidance and a narrow gap at fitting/non-fitting body sizes through the
   public 2D contract, including no out-of-plane drift. Record the intended
   failure, then implement the minimum graph/profile support and controller.
-- [ ] **Exercise A* and Flow through accepted motion.** Compare route legality,
-  exact costs where applicable, final cell, and arrival, not identical sampled
-  trajectories. Cover off-axis approaches, groups, explicit transitions,
-  budget exhaustion, stale publication, and held-action completion exactly once.
+- [x] **Exercise immediate A* and Flow through accepted top-down motion.** Compare
+  route legality, exact costs, final cell, and arrival. Cover off-axis starts,
+  shortened or blocked host results, finite budgets, stale publication, and
+  exact replay within each algorithm.
+- [ ] **Complete Phase 1 guide integrations.** Exercise cross-map edge
+  discovery, groups, explicit transitions, and held-action completion exactly once.
 - [ ] **Exercise shared acquisition and visibility policies in 2D.** Test
   Immediate and opt-in Scheduled acquisition, frozen shared-work cohorts,
   cancellation/retry, moved-origin connectors, and mode changes. Waiting must
@@ -2444,3 +2446,77 @@ passed with warnings treated as errors.
 
 Scheduled planar acquisition, cross-map edge discovery, and accepted
 controller motion remain in Phase 1.
+
+### 2026-11-09 - Phase 1 accepted top-down motion
+
+The initial `Navigator2D` binds one materialized top-down layer, a native
+circle, and fixed speed and traversal inputs. Its protected host hooks use
+`NavigationPose2D` and an absolute `NavigationMotionRequest2D`. The
+immediate destination-cell request owns a retained guide. The controller
+reuses the covered-address cursor and circle sweep for each proposed
+guided step. It advances a waypoint only when the host commits the exact
+requested center while the lease is current. Velocity uses accepted
+displacement and the reciprocal captured at prepare. Occupancy uses the
+selected navigation layer and the shared committed-cell entry comparison.
+
+The first acceptance tests failed to compile before the native controller
+existed. During integration, the rectangular detour stopped at accepted
+`(0, 5/8)`. The floor-address lookup picked the cell centered at `(0, 0)`
+for a proposed endpoint at `(0, 7/8)`. The wrong pin made the exact sweep
+reject the leg. Bounded covered-address enumeration with exact prism
+containment now resolves the real containing cell. A second control checks
+one raw unit of travel on a four-unit leg. A fused component scale avoids
+losing the allowance in a rounded intermediate ratio.
+
+Both algorithms completed the cost-6 detour and cost-4 fitted portal at
+16 Hz within the 40-frame cap, with one held frame and one shortened result
+in each run. Repeated runs matched the exact accepted centers, velocities,
+and committed addresses. The first penetrating portal radius failed
+placement. Additional tests covered exact one-center arrival with zero
+edge allowance, bounded off-axis proof, raw and clock reset, stale guide
+ownership, occupancy teardown, velocity overflow, and frame-rate changes
+between prepare and commit.
+
+Before shared edits, the Release controls were captured at Trailblazer
+`ae77720` under `artifacts/phase1-ae77720-motion-baseline`. The final
+reverse-order rerun under `artifacts/phase1-motion-post-final` matched the
+frozen dependency hashes. Replay, work counts, allocation counts, and
+completion frames matched across 576 guided frames per algorithm, both
+ray preflights, and 45 scheduled Flow recovery episodes.
+
+| 3D timing | Before | After |
+| --- | ---: | ---: |
+| Guided A* frame median / observed P95 | 1.867 / 2.145 ms | 1.951 / 2.315 ms |
+| Guided Flow frame median / observed P95 | 1.821 / 3.232 ms | 1.892 / 3.114 ms |
+| Medium ray mean | 5.850 ms | 5.904 ms |
+| SparseBlocked ray mean | 416.9 µs | 419.6 µs |
+
+The recovery median-of-episode frame medians moved by at most 0.010 ms.
+The earlier capture under `artifacts/phase1-motion-post` measured a
+guided A* P95 of 2.091 ms and a Flow median of 1.659 ms. The timing
+movement varies by capture.
+
+The Windows Release planar probe measured complete 16 Hz context and host
+frames on the seven-center detour. Each episode included one held movement
+frame and took 26 frames to arrive. Repositioning and route acquisition were
+outside the timing interval. After 32 warmups per algorithm, five 520-frame blocks
+averaged 74.752–82.474 µs per frame for A* and 63.994–70.461 µs for Flow.
+The initial remove-before-add handoff rebuilt GridForge's actor record
+on each crossing and averaged 168 B per frame. Registering the new ticket
+before retiring the old one preserves the record and matches the direct
+GridForge handoff allocation. The final probe averaged 7.385 B per frame
+from six 32 B crossings in each episode. Raw results are under
+`artifacts/phase1-motion-probe-final`.
+
+Windows and Ubuntu under WSL each passed 3,344 Release and 3,244 ReleaseLean
+package-mode core tests. The adapter at the immutable develop source pins,
+including Gravitas `13f73bdc`, passed 90 Release and 86 ReleaseLean tests per
+host. Both library targets built in both configurations. Each host and
+configuration covered 33,425/33,425 lines, 13,835/13,835 branches, and
+3,295/3,295 fully covered methods across the core and adapter assemblies.
+Windows DocFX passed with warnings treated as errors.
+
+The broader profile, motor, and recording signatures in the Phase 0 design
+remain planned. This checkpoint keeps the inputs needed for the immediate
+top-down controller and leaves support, physical posture, and record
+contracts with their owning integrations.

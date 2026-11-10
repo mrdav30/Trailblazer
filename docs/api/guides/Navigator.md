@@ -4,6 +4,39 @@
 locomotion, traversal state, occupancy, and guided semantic actions. It remains
 abstract so hosts can supply their own traversal-state checks and integrations.
 
+## Top-down Navigator2D
+
+`Navigator2D` follows an immediate A* or Flow route for a circle on a
+published top-down map. Derive a host shell and implement
+`SubmitMotionTarget` and `ReadAcceptedMotion`. Construct it with the matching
+host collider center, radius, speed, traversal medium, and a nonempty
+world-unique actor ID. The center is native world X/Z and the host owns its
+physical world Y. The map's selected layer determines navigation occupancy.
+
+Call `ApplyGuidedTrekRequest` with the destination cell, area policy, algorithm,
+and finite work budget. The route starts in the accepted center's cell. The
+controller can approach the first canonical center from a clear off-axis
+position. Each nonzero guided target requires a swept-circle proof from the
+last accepted center. The budget applies separately to acquisition and each
+movement proof. An explicit analog move replaces guidance and delegates motion
+clearance to the host. Targets carry the current accepted rotation.
+
+For each fixed frame, call `context.Simulate()`, prepare all controllers,
+resolve host motion once, commit all controllers, then call
+`context.LateSimulate()`. Return the accepted pose for the matching
+`NavigationMotionRequest2D`. Prepare leaves pose, velocity, and occupancy
+intact. Commit derives velocity from the accepted displacement and the
+prepared timestep. It consumes the request before publishing cell changes.
+A short or blocked result holds the current waypoint. Arrival requires
+accepted motion at the exact final center on a current guide.
+
+If a publication invalidates the guide between prepare and commit, the valid
+host pose still commits and the guide is released. A temporarily unavailable
+cell publication preserves the last semantic cell sample and releases any
+occupancy ticket the accepted center has exited. Queue authoritative changes
+from host callbacks and cell notifications for the next ordered command
+boundary. Dispose the controller to release guidance and occupancy.
+
 ## Setup
 
 A Navigator binds to one `TrailblazerWorldContext` and requires one exact

@@ -39,33 +39,21 @@ internal sealed class NavigationTopDownWork
         if (status != NavigationGuideStatus.Success)
             return status;
 
-        Span<GridCoveredAddress> output = stackalloc GridCoveredAddress[1];
-        GridCoveredAddressCursorStatus cursorStatus;
+        GridCoveredAddressCursorStatus cursorStatus = GridCoveredAddressCursorStatus.More;
         do
         {
-            status = AdvanceCoverage(world, ReadOnlySpan<GridCoveredAddressGeneration>.Empty, output,
-                meter, out cursorStatus, out int outputCount);
+            status = ReadContainingCell(world, source, binding, point, meter, ref cursorStatus, out var candidate);
+            if (status == NavigationGuideStatus.NoPath)
+                return NavigationGuideStatus.InvalidStart;
             if (status != NavigationGuideStatus.Success)
                 return status;
-
-            if (outputCount != 0 && output[0].VoxelIndex.y == binding.LayerIndex)
-            {
-                if (!meter.TryConsumeEndpointCandidates(1))
-                    return NavigationGuideStatus.BudgetExceeded;
-                GridCoveredAddress candidate = output[0];
-                source.Map.GridBinding.TryGetCellPrism(candidate.VoxelIndex, out var prism);
-                if (prism.Contains(point))
-                {
-                    WorldVoxelIndex pinned = Pin(source, candidate.VoxelIndex);
-                    status = TraceCircle(world, graph, layerCount, binding.EmbeddingY,
-                        pinned, pinned, center, center, radius, medium, capabilities, policy, meter,
-                        NavigationGuideStatus.InvalidStart);
-                    if (status == NavigationGuideStatus.Success)
-                        address = new NavigationCellAddress(source.MapId, candidate.VoxelIndex);
-                    if (status != NavigationGuideStatus.InvalidStart)
-                        return status;
-                }
-            }
+            WorldVoxelIndex pinned = Pin(source, candidate);
+            status = TraceCircle(world, graph, layerCount, binding.EmbeddingY, pinned, pinned, center, center,
+                radius, medium, capabilities, policy, meter, NavigationGuideStatus.InvalidStart);
+            if (status == NavigationGuideStatus.Success)
+                address = new NavigationCellAddress(source.MapId, candidate);
+            if (status != NavigationGuideStatus.InvalidStart)
+                return status;
         }
         while (cursorStatus != GridCoveredAddressCursorStatus.Complete);
         return NavigationGuideStatus.InvalidStart;
@@ -116,6 +104,82 @@ internal sealed class NavigationTopDownWork
         }
         binding = default;
         return false;
+    }
+
+    internal NavigationGuideStatus FindContainingCell(GridWorld world, NavigationWorldGraph graph,
+        NavigationMapInstance map, NavigationPlanarBinding binding, Vector2d center, NavigationWorkMeter meter,
+        out VoxelGrid? grid, out Voxel? voxel)
+    {
+        grid = null;
+        voxel = null;
+        var point = new Vector3d(center.X, binding.EmbeddingY, center.Y);
+        graph.TryGetCoveredAddressGeneration(map.MapId, out var generation);
+        world.TryBeginCoveredAddresses(_cursor, point, point, 1, map.Map.GridBinding.Key);
+        Span<GridCoveredAddressGeneration> input = stackalloc GridCoveredAddressGeneration[1] { generation };
+        NavigationGuideStatus status = AdvanceCoverage(world, input, Span<GridCoveredAddress>.Empty,
+            meter, out GridCoveredAddressCursorStatus cursorStatus, out _);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        while (cursorStatus != GridCoveredAddressCursorStatus.Complete)
+        {
+            status = ReadContainingCell(world, map, binding, point, meter, ref cursorStatus, out var candidate);
+            if (status != NavigationGuideStatus.Success)
+                return status;
+            if (!meter.TryConsumeLookupProbes(1))
+                return NavigationGuideStatus.BudgetExceeded;
+            if (world.TryGetGridAndVoxel(Pin(map, candidate), out grid, out voxel))
+                return NavigationGuideStatus.Success;
+        }
+        grid = null;
+        return NavigationGuideStatus.NoPath;
+    }
+
+    private NavigationGuideStatus ReadContainingCell(GridWorld world, NavigationMapInstance map,
+        NavigationPlanarBinding binding, Vector3d point, NavigationWorkMeter meter,
+        ref GridCoveredAddressCursorStatus cursorStatus, out VoxelIndex index)
+    {
+        index = default;
+        Span<GridCoveredAddress> output = stackalloc GridCoveredAddress[1];
+        do
+        {
+            NavigationGuideStatus status = AdvanceCoverage(world, ReadOnlySpan<GridCoveredAddressGeneration>.Empty, output,
+                meter, out cursorStatus, out int count);
+            if (status != NavigationGuideStatus.Success)
+                return status;
+            if (count == 0 || output[0].VoxelIndex.y != binding.LayerIndex)
+                continue;
+            if (!meter.TryConsumeEndpointCandidates(1))
+                return NavigationGuideStatus.BudgetExceeded;
+            VoxelIndex candidate = output[0].VoxelIndex;
+            map.Map.GridBinding.TryGetCellPrism(candidate, out var prism);
+            if (prism.Contains(point))
+            {
+                index = candidate;
+                return NavigationGuideStatus.Success;
+            }
+        }
+        while (cursorStatus != GridCoveredAddressCursorStatus.Complete);
+        return NavigationGuideStatus.NoPath;
+    }
+
+    internal NavigationGuideStatus ValidateMotion(GridWorld world, NavigationWorldGraph graph,
+        NavigationMapInstance map, NavigationPlanarBinding binding, Vector2d start, Vector2d end, Fixed64 radius,
+        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter)
+    {
+        if (!meter.TryConsumeEvaluatedEdges(1))
+            return NavigationGuideStatus.BudgetExceeded;
+        NavigationGuideStatus status = FindContainingCell(world, graph, map, binding, start, meter, out _, out var source);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        status = FindContainingCell(world, graph, map, binding, end, meter, out _, out var target);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        var point = new Vector3d(start.X, binding.EmbeddingY, start.Y);
+        status = BindLayers(world, graph, map, binding, point, meter, out int layerCount);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        return TraceCircle(world, graph, layerCount, binding.EmbeddingY, source!.WorldIndex, target!.WorldIndex,
+            start, end, radius, medium, capabilities, policy, meter, NavigationGuideStatus.NoPath);
     }
 
     internal NavigationGuideStatus BindLayers(GridWorld world, NavigationWorldGraph graph,

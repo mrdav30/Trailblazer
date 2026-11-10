@@ -1090,7 +1090,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         _lastCommittedCell = current;
         _steering?.ConsumePendingCommittedAreaPolicy();
 
-        if (emitChange && !RepresentsSameCellEntry(previous, current))
+        if (emitChange && !NavigationCommittedCellState.RepresentsSameCellEntry(previous, current))
             CommittedCellChanged?.Invoke(current);
     }
 
@@ -1128,20 +1128,6 @@ public abstract partial class Navigator : INavigate, IRecordable
             _steering?.AreaPolicyForCommit,
             context.FrameCount);
         return NavigationCommittedCellResolveStatus.Resolved;
-    }
-
-    private static bool RepresentsSameCellEntry(
-        NavigationCommittedCellState? first,
-        NavigationCommittedCellState? second)
-    {
-        if (!first.HasValue || !second.HasValue)
-            return first.HasValue == second.HasValue;
-
-        NavigationCommittedCellState left = first.Value;
-        NavigationCommittedCellState right = second.Value;
-        return left.Address == right.Address
-            && left.Area == right.Area
-            && left.Medium == right.Medium;
     }
 
     private void ValidateGuidedSurfaceQuery(PathQuery query)

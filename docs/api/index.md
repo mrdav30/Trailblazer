@@ -54,7 +54,8 @@ description: API reference and behavioral guides for deterministic navigation an
     <p>Bring steering, turning, motor, locomotion, occupancy, heightmap
     grounding, opt-in scheduled acquisition with current-foot adoption,
     explicit periodic direct-LOS timing, and serialization together
-    when your host needs them.</p>
+    when your host needs them. Follow native top-down circle routes through
+    your host's motion resolver with <a href="xref:Trailblazer.Navigation.Navigator2D">Navigator2D</a>.</p>
   </div>
 </div>
 

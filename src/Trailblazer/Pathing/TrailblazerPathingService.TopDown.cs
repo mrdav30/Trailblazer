@@ -7,7 +7,9 @@
 
 using System;
 using FixedMathSharp;
+using GridForge.Grids;
 using GridForge.Spatial;
+using Trailblazer.Navigation;
 
 namespace Trailblazer.Pathing;
 
@@ -105,7 +107,8 @@ public sealed partial class TrailblazerPathingService
 
     private NavigationGuideStatus RunTopDownQuery(string mapId, VoxelIndex? sourceIndex, Vector2d center,
         NavigationCellAddress destination, Fixed64 radius, NavigationAreaPolicyKey areaPolicy, TraversalMedium medium,
-        TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address)
+        TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address,
+        Vector2d? motionTarget = null, NavigationPlanarBinding? controllerBinding = null)
     {
         areaPolicy.Validate(nameof(areaPolicy));
         address = default;
@@ -125,18 +128,79 @@ public sealed partial class TrailblazerPathingService
             if (!NavigationTopDownWork.TryGetMap(graph, mapId, out var source, out var binding))
                 return NavigationGuideStatus.NoMap;
             if (graph.AreAllStructuralComponentsClosed
+                || (controllerBinding.HasValue && controllerBinding.Value != binding)
                 || !graph.AreaCatalog.TryGet(areaPolicy, out NavigationAreaPolicy policy))
                 return NavigationGuideStatus.Stale;
 
             NavigationTopDownWork topDown = immediate.RayWork.Workspace.TopDown;
             immediate.WorkMeter.Reset(budget);
-            NavigationGuideStatus status = sourceIndex is VoxelIndex index
+            NavigationGuideStatus status = motionTarget is Vector2d target
+                ? topDown.ValidateMotion(world, graph, source, binding, center, target, radius, media,
+                    capabilities, policy, immediate.WorkMeter)
+                : sourceIndex is VoxelIndex index
                 ? topDown.ValidateLeg(world, graph, source, binding, index, destination, radius, media,
                     capabilities, policy, immediate.WorkMeter)
                 : topDown.Resolve(world, graph, source, binding, center, radius, media, capabilities, policy,
                     immediate.WorkMeter, out address);
             return FinishTopDownQuery(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence), ref address);
+        }
+    }
+
+    internal NavigationGuideStatus ValidateTopDownMotion(string mapId, NavigationPlanarBinding binding, Vector2d start,
+        Vector2d end, Fixed64 radius, NavigationAreaPolicyKey policy, TraversalMedium medium,
+        TraversalCapability capabilities, NavigationWorkBudget budget) =>
+        RunTopDownQuery(mapId, null, start, default, radius, policy, medium, capabilities, budget, out _, end, binding);
+
+    internal NavigationGuideStatus ResolveTopDownControllerStart(string mapId, NavigationPlanarBinding binding,
+        Vector2d center, Fixed64 radius, NavigationAreaPolicyKey policy, TraversalMedium medium,
+        TraversalCapability capabilities, NavigationWorkBudget budget, out NavigationCellAddress address) =>
+        RunTopDownQuery(mapId, null, center, default, radius, policy, medium, capabilities, budget, out address,
+            controllerBinding: binding);
+
+    internal bool TryGetTopDownBinding(string mapId, out NavigationPlanarBinding binding)
+    {
+        using var lease = TryAcquireNavigationGraph();
+        binding = default;
+        return lease != null && NavigationTopDownWork.TryGetMap(lease.Graph, mapId, out _, out binding);
+    }
+
+    internal NavigationCommittedCellResolveStatus ResolveTopDownCommittedCell(string mapId, NavigationPlanarBinding binding,
+        Vector2d center, TraversalMedium medium, NavigationAreaPolicyKey? policy, long frame,
+        out VoxelGrid? grid, out Voxel? voxel, out NavigationCommittedCellState? state)
+    {
+        grid = null;
+        voxel = null;
+        state = null;
+        var immediate = _immediateRayWorkspace;
+        lock (immediate.SyncRoot)
+        {
+            var world = _context.World;
+            var epoch = (world.SpawnToken, world.Version, world.ChangeSequence);
+            using var lease = TryAcquireNavigationGraph();
+            if (lease == null)
+                return NavigationCommittedCellResolveStatus.Unavailable;
+            var graph = lease.Graph;
+            if (!NavigationTopDownWork.TryGetMap(graph, mapId, out var map, out var currentBinding)
+                || currentBinding != binding)
+                return NavigationCommittedCellResolveStatus.NoCell;
+            GuideSampleWorkBudget sample = _context.Settings.GuideSampleBudget;
+            immediate.WorkMeter.Reset(new NavigationWorkBudget(sample.MaxCurrentNodeLookupProbes, sample.MaxPrismChecks,
+                0, 0, 0, 0, 0, 0, 0, 0, 0));
+            var status = immediate.RayWork.Workspace.TopDown.FindContainingCell(world, graph, map, binding, center,
+                immediate.WorkMeter, out grid, out voxel);
+            status = ResolveTopDownSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
+                (world.SpawnToken, world.Version, world.ChangeSequence));
+            if (status == NavigationGuideStatus.NoPath)
+                return NavigationCommittedCellResolveStatus.NoCell;
+            if (status != NavigationGuideStatus.Success)
+                return NavigationCommittedCellResolveStatus.Unavailable;
+            VoxelIndex index = voxel!.Index;
+            if (!map.TryGetSlot(index, out int slot) || !map.TryGetEffectiveCell(slot, out NavigationCell cell))
+                return NavigationCommittedCellResolveStatus.NoCell;
+            state = new NavigationCommittedCellState(new NavigationCellAddress(mapId, index),
+                cell.Area, medium, graph.GraphVersion, policy, frame);
+            return NavigationCommittedCellResolveStatus.Resolved;
         }
     }
 

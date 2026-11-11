@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownWork.Controller.cs
+// NavigationPlanarWork.Controller.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -12,7 +12,7 @@ using GridForge.Grids.Topology;
 namespace Trailblazer.Pathing;
 
 /// <content>Resolves accepted controller centers within the bound plane.</content>
-internal sealed partial class NavigationTopDownWork
+internal sealed partial class NavigationPlanarWork
 {
     internal NavigationGuideStatus FindControllerCell(GridWorld world, NavigationWorldGraph graph,
         NavigationPlanarBinding plane, Vector2d center, NavigationWorkMeter meter,

@@ -42,6 +42,42 @@ and [clearance between neighboring cells](Pathing.md#top-down-leg-clearance)
 on these maps, or find an [immediate route](Pathing.md#immediate-top-down-routes)
 between cells on compatible published maps at the same embedding.
 
+## Side-View Support
+
+Select `NavigationMode2D.SideView` and use `AddPlanarSupport(index, left, right)`
+to author a finite support surface for a cell. Supply the endpoints in world
+X/Z with increasing X. Each selected-layer cell owns at most one segment. Both
+endpoints must lie within its closed footprint. A support edit changes the
+bake's identity and uses the ordinary map replacement operation.
+
+The effective cell still controls whether a support can anchor Solid travel.
+It must be physically present and unblocked, permit Solid, and admit the
+capsule's radius and total height. The profile must hold its required
+capabilities. A semantic
+overlay can change or suppress that permission without changing the segment.
+Headroom cells provide open space through their effective area and capability
+rules. They can use a different medium and do not need a support segment.
+
+Use `ResolveSideViewAnchor` to obtain the capsule center above the canonical
+support midpoint. The center can belong to a different cell from its support
+owner. `ValidateSideViewLeg` checks two anchors and the entire upright capsule
+sweep using the current publication and a finite work budget. It checks authored
+support surfaces in the selected coverage cells as well as the cells themselves.
+Exact tangency is allowed. A rounded center or an intermediate pose that
+penetrates a surface fails the proof.
+
+Continuous legs join collinear supports at an exact shared endpoint with a
+common fixed-point normal. Different-height horizontal supports may join at a
+shared X boundary in one rectangular row. A step up lifts before crossing at
+the higher center height. A drop crosses before descending. Each phase must
+clear the capsule and stay within the pinned support owners' trace closure.
+The profile supplies separate limits for rising and dropping. A gap or an
+unsupported corner fails the ordinary leg check.
+
+For a horizontal step, the lower center must be at least one capsule radius
+from the seam in X. This reserves clearance beside the step during the lift
+or descent.
+
 ## Complete Cell Payloads
 
 `NavigationCell` stores:

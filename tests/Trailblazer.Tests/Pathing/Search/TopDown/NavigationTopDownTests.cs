@@ -290,7 +290,7 @@ public sealed partial class NavigationTopDownTests
         Publish(context, TopDown("neighbor", second).SetDefaultCell(Open).Build(), 3);
         using var lease = TestRequire.NotNull(context.Pathing.TryAcquireNavigationGraph());
         lease.Graph.TryGetMap("plane", out var instance).Should().BeTrue();
-        var work = new NavigationTopDownWork(new NavigationRayWorkspace(maps, 1, 1, addresses, 0));
+        var work = new NavigationPlanarWork(new NavigationRayWorkspace(maps, 1, 1, addresses, 0));
 
         work.Resolve(context.World, lease.Graph, instance, instance.Map.PlanarBinding!.Value,
             Vector2d.Zero, Fixed64.Quarter, TraversalMedia.Solid, TraversalCapability.None, Policy,

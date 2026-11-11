@@ -37,7 +37,7 @@ teleporters.
   to follow immediate or scheduled guides through a host-owned motion resolver.
 - **Side-view movement stays native.** Use an upright capsule profile with
   manual movement, gravity, jumping, and support sampled at host-accepted poses.
-  Carrier motion keeps its own registration and anchor contract.
+  Author support segments to check capsule anchors and ordinary legs.
 - **The engine stays outside.** Trailblazer has no Unity, Godot, Unreal, or
   renderer dependency.
 

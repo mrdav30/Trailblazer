@@ -122,13 +122,13 @@ public sealed partial class TrailblazerPathingService
                 if (reference != NavigationGuideStatus.Success)
                     return reference;
             }
-            else if (!NavigationTopDownWork.TryGetMap(graph, mapId, out source, out binding))
+            else if (!NavigationPlanarWork.TryGetMap(graph, mapId, out source, out binding))
                 return NavigationGuideStatus.NoMap;
             if (graph.AreAllStructuralComponentsClosed
                 || !graph.AreaCatalog.TryGet(areaPolicy, out NavigationAreaPolicy policy))
                 return NavigationGuideStatus.Stale;
 
-            NavigationTopDownWork topDown = immediate.RayWork.Workspace.TopDown;
+            NavigationPlanarWork topDown = immediate.RayWork.Workspace.Planar;
             immediate.WorkMeter.Reset(budget);
             NavigationGuideStatus status = motionTarget is Vector2d target
                 ? topDown.ValidateMotion(world, graph, source, binding, center, target, radius, media,

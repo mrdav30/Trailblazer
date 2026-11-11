@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownWork.Neighbors.cs
+// NavigationPlanarWork.Neighbors.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -14,7 +14,7 @@ using GridForge.Grids.Topology;
 namespace Trailblazer.Pathing;
 
 /// <content>Enumerates bounded cross-map neighbor candidates.</content>
-internal sealed partial class NavigationTopDownWork
+internal sealed partial class NavigationPlanarWork
 {
     internal GridPlanarLayer GetBoundLayer(int ordinal) => _layers[ordinal];
 

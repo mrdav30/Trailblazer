@@ -52,7 +52,7 @@ public sealed partial class TrailblazerPathingService
             GuideSampleWorkBudget sample = _context.Settings.GuideSampleBudget;
             immediate.WorkMeter.Reset(new NavigationWorkBudget(sample.MaxCurrentNodeLookupProbes, sample.MaxPrismChecks,
                 0, 0, 0, 0, 0, 0, 0, 0, 0));
-            var status = immediate.RayWork.Workspace.TopDown.FindControllerCell(world, graph, binding, center,
+            var status = immediate.RayWork.Workspace.Planar.FindControllerCell(world, graph, binding, center,
                 immediate.WorkMeter, out var map, out grid, out voxel, preferredMapId);
             status = ResolveTopDownSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence));
@@ -77,7 +77,7 @@ public sealed partial class TrailblazerPathingService
         // An accepted seam handoff can outlive the original map's publication.
         if (preferredMapId != null && !string.Equals(preferredMapId, boundMapId, System.StringComparison.Ordinal)
             && graph.TryGetMap(preferredMapId, out map)
-            && NavigationTopDownWork.TryGetControllerLayer(map, plane, out layer))
+            && NavigationPlanarWork.TryGetControllerLayer(map, plane, out layer))
             return NavigationGuideStatus.Success;
         if (graph.TryGetMap(boundMapId, out map))
         {

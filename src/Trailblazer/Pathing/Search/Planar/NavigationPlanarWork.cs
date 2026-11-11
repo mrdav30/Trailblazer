@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownWork.cs
+// NavigationPlanarWork.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -14,97 +14,25 @@ using GridForge.Utility;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Proves stationary and swept circles against one published top-down domain.</summary>
-internal sealed partial class NavigationTopDownWork
+/// <summary>Owns bounded native planar coverage against one published domain.</summary>
+internal sealed partial class NavigationPlanarWork
 {
     private readonly GridCoveredAddressCursor _cursor;
     private readonly GridPlanarLayer[] _layers;
     private readonly NavigationRayWorkspace _workspace;
 
-    internal NavigationTopDownWork(NavigationRayWorkspace workspace)
+    internal NavigationPlanarWork(NavigationRayWorkspace workspace)
     {
         _workspace = workspace;
         _cursor = new GridCoveredAddressCursor(workspace.MapCapacity);
         _layers = new GridPlanarLayer[workspace.MapCapacity];
     }
 
-    internal NavigationGuideStatus Resolve(GridWorld world, NavigationWorldGraph graph,
-        NavigationMapInstance source, NavigationPlanarBinding binding, Vector2d center, Fixed64 radius,
-        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy,
-        NavigationWorkMeter meter, out NavigationCellAddress address)
-    {
-        var point = new Vector3d(center.X, binding.EmbeddingY, center.Y);
-        NavigationGuideStatus status = BindLayers(world, graph, source, binding, point, meter, out int layerCount);
-        if (status != NavigationGuideStatus.Success)
-        {
-            address = default;
-            return status;
-        }
-        return ResolveContainingCells(world, graph, source, binding, point, center, radius, medium, capabilities,
-            policy, meter, layerCount, GridCoveredAddressCursorStatus.More, out address);
-    }
-
-    private NavigationGuideStatus ResolveContainingCells(GridWorld world, NavigationWorldGraph graph,
-        NavigationMapInstance source, NavigationPlanarBinding binding, Vector3d point, Vector2d center, Fixed64 radius,
-        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter,
-        int layerCount, GridCoveredAddressCursorStatus cursorStatus, out NavigationCellAddress address)
-    {
-        address = default;
-        while (cursorStatus != GridCoveredAddressCursorStatus.Complete)
-        {
-            NavigationGuideStatus status = ReadContainingCell(world, source, binding, point, meter, ref cursorStatus, out var candidate);
-            if (status == NavigationGuideStatus.NoPath)
-                return NavigationGuideStatus.InvalidStart;
-            if (status != NavigationGuideStatus.Success)
-                return status;
-            WorldVoxelIndex pinned = Pin(source, candidate);
-            status = TraceCircle(world, graph, layerCount, binding.EmbeddingY, pinned, pinned, center, center,
-                radius, medium, capabilities, policy, meter, NavigationGuideStatus.InvalidStart);
-            if (status == NavigationGuideStatus.Success)
-                address = new NavigationCellAddress(source.MapId, candidate);
-            if (status != NavigationGuideStatus.InvalidStart)
-                return status;
-        }
-        return NavigationGuideStatus.InvalidStart;
-    }
-
-    internal NavigationGuideStatus ValidateLeg(GridWorld world, NavigationWorldGraph graph,
-        NavigationMapInstance source, NavigationPlanarBinding binding, VoxelIndex sourceIndex,
-        NavigationCellAddress destination, Fixed64 radius, TraversalMedia medium, TraversalCapability capabilities,
-        NavigationAreaPolicy policy, NavigationWorkMeter meter)
-    {
-        if (!TryGetMap(graph, destination.MapId, out var target, out var targetBinding))
-            return NavigationGuideStatus.NoMap;
-        if (binding.EmbeddingY != targetBinding.EmbeddingY)
-            return NavigationGuideStatus.NoPath;
-        if (!meter.TryConsumeEvaluatedEdges(1))
-            return NavigationGuideStatus.BudgetExceeded;
-        if (sourceIndex.y != binding.LayerIndex
-            || !source.Map.GridBinding.TryGetCellPrism(sourceIndex, out GridCellPrism from))
-            return NavigationGuideStatus.InvalidStart;
-        if (destination.Index.y != targetBinding.LayerIndex
-            || !target.Map.GridBinding.TryGetCellPrism(destination.Index, out GridCellPrism to))
-            return NavigationGuideStatus.InvalidEnd;
-
-        Vector2d start = from.Center.ToVector2d();
-        Vector2d end = to.Center.ToVector2d();
-        if (!IsOrdinaryNeighbor(from.TopologyKind, start, end))
-            return NavigationGuideStatus.NoPath;
-
-        var point = new Vector3d(start.X, binding.EmbeddingY, start.Y);
-        NavigationGuideStatus status = BindLayers(world, graph, source, binding, point, meter, out int layerCount);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        return TraceCircle(world, graph, layerCount, binding.EmbeddingY, Pin(source, sourceIndex),
-            Pin(target, destination.Index), start, end, radius, medium, capabilities, policy, meter,
-            NavigationGuideStatus.NoPath);
-    }
-
     internal static bool TryGetMap(NavigationWorldGraph graph, string mapId, out NavigationMapInstance instance,
-        out NavigationPlanarBinding binding)
+        out NavigationPlanarBinding binding, NavigationMode2D mode = NavigationMode2D.TopDown)
     {
         if (graph.TryGetMap(mapId, out instance) && instance.IsMaterialized
-            && instance.Map.PlanarBinding is NavigationPlanarBinding planar && planar.Mode == NavigationMode2D.TopDown)
+            && instance.Map.PlanarBinding is NavigationPlanarBinding planar && planar.Mode == mode)
         {
             binding = planar;
             return true;
@@ -174,28 +102,6 @@ internal sealed partial class NavigationTopDownWork
         return NavigationGuideStatus.NoPath;
     }
 
-    internal NavigationGuideStatus ValidateMotion(GridWorld world, NavigationWorldGraph graph,
-        NavigationMapInstance map, NavigationPlanarBinding binding, Vector2d start, Vector2d end, Fixed64 radius,
-        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter,
-        (string? Start, string? End) preferredMaps)
-    {
-        if (!meter.TryConsumeEvaluatedEdges(1))
-            return NavigationGuideStatus.BudgetExceeded;
-        NavigationGuideStatus status = FindControllerCell(world, graph, binding, start, meter, out _, out _, out var source,
-            preferredMaps.Start);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        status = FindControllerCell(world, graph, binding, end, meter, out _, out _, out var target, preferredMaps.End);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        var point = new Vector3d(start.X, binding.EmbeddingY, start.Y);
-        status = BindLayers(world, graph, map, binding, point, meter, out int layerCount);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        return TraceCircle(world, graph, layerCount, binding.EmbeddingY, source!.WorldIndex, target!.WorldIndex,
-            start, end, radius, medium, capabilities, policy, meter, NavigationGuideStatus.NoPath);
-    }
-
     internal NavigationGuideStatus BindLayers(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance source, NavigationPlanarBinding binding, Vector3d point, NavigationWorkMeter meter,
         out int layerCount)
@@ -245,7 +151,7 @@ internal sealed partial class NavigationTopDownWork
                 continue;
             graph.TryGetMap(mapId, out NavigationMapInstance instance);
             if (instance.Map.PlanarBinding is not NavigationPlanarBinding candidate
-                || candidate.Mode != NavigationMode2D.TopDown || candidate.EmbeddingY != binding.EmbeddingY)
+                || candidate.Mode != binding.Mode || candidate.EmbeddingY != binding.EmbeddingY)
             {
                 continue;
             }
@@ -259,16 +165,16 @@ internal sealed partial class NavigationTopDownWork
     internal static WorldVoxelIndex Pin(NavigationMapInstance instance, VoxelIndex index) =>
         new(instance.GridIdentity.WorldSpawnToken, instance.GridIdentity.GridIndex, instance.GridIdentity.GridSpawnToken, index);
 
-    internal NavigationGuideStatus TraceCircle(GridWorld world, NavigationWorldGraph graph,
-        int layerCount, Fixed64 embeddingY, WorldVoxelIndex source, WorldVoxelIndex target, Vector2d start, Vector2d end,
-        Fixed64 radius, TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy,
+    internal NavigationGuideStatus TraceBody(GridWorld world, NavigationWorldGraph graph,
+        int layerCount, NavigationPlanarBinding binding, WorldVoxelIndex source, WorldVoxelIndex target, Vector2d start, Vector2d end,
+        Fixed64 radius, Fixed64 axisLength, TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy,
         NavigationWorkMeter meter, NavigationGuideStatus blocked)
     {
         int gridLimit = Math.Min(_workspace.MapCapacity, meter.RemainingLookupProbes);
         int addressLimit = Math.Min(_workspace.CoveredAddressCapacity, meter.RemainingCoveredVoxelIntervals);
         var cells = _workspace.BodyTraceCells;
         GridNavigationBodyTraceReport report = GridTracer.TracePlanarNavigationBodyInto(world,
-            _layers.AsSpan(0, layerCount), embeddingY, source, target, start, end, Fixed64.Zero, radius,
+            _layers.AsSpan(0, layerCount), binding.EmbeddingY, source, target, start, end, axisLength, radius,
             cells, _workspace.BodyTraceScratch,
             gridLimit, addressLimit, _workspace.CoveredAddressCapacity, meter.RemainingGridCandidateWork);
         meter.TryConsumeLookupProbes(report.GridCandidateCount);
@@ -278,20 +184,32 @@ internal sealed partial class NavigationTopDownWork
 
         if (status == NavigationVolumeAnchorStatus.Success)
         {
+            bool sideView = binding.Mode == NavigationMode2D.SideView;
+            // Support constraints belong to anchors. The rest of the body needs open space.
+            TraversalMedia coverageMedium = sideView ? TraversalMedia.None : medium;
+            Fixed64 coverageRadius = sideView ? Fixed64.Zero : radius;
             // Complete traces contain only required cells. The cursor validated their generations before tracing.
             for (int i = 0; i < cells.Count; i++)
             {
                 var cell = cells[i];
                 graph.TryGetMapId(cell.ConfigurationKey, out string mapId);
                 graph.TryGetMap(mapId, out NavigationMapInstance instance);
-                if (instance.TryGetSlot(cell.Cell.VoxelIndex, out int slot))
+                VoxelIndex index = cell.Cell.VoxelIndex;
+                if (instance.TryGetSlot(index, out int slot)
+                    && instance.TryGetEffectiveCell(slot, out NavigationCell semantics))
                 {
-                    // Absent semantics yield a default cell with no admissible medium.
-                    instance.TryGetEffectiveCell(slot, out NavigationCell semantics);
                     instance.TryGetPhysicalState(slot, out bool present, out byte obstacleCount);
                     if ((present & (obstacleCount == 0))
-                        && TraversalEvaluator.IsCellPassable(semantics, medium, capabilities, radius, policy, out _))
+                        && TraversalEvaluator.IsCellPassable(semantics, coverageMedium, capabilities, coverageRadius, policy, out _))
+                    {
+                        if (sideView && instance.Map.TryGetPlanarSupport(index, out var support))
+                        {
+                            status = support.CheckClearance(start, end, axisLength, radius);
+                            if (status != NavigationVolumeAnchorStatus.Success)
+                                break;
+                        }
                         continue;
+                    }
                 }
                 status = NavigationVolumeAnchorStatus.Unavailable;
                 break;

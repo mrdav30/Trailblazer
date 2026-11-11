@@ -64,7 +64,7 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
             return;
         }
         NavigationWorldGraph graph = _graphLease.Graph;
-        if (!NavigationTopDownWork.TryGetMap(graph, request.Start.MapId, out var map, out var binding))
+        if (!NavigationPlanarWork.TryGetMap(graph, request.Start.MapId, out var map, out var binding))
         {
             Status = NavigationGuideStatus.NoMap;
             return;
@@ -77,7 +77,7 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
         NavigationRayWorkspace rayWorkspace = aStar?.RayWorkspace ?? flow!.RayWorkspace;
         _meter = new NavigationWorkMeter(request.Budget);
         _policy = policy;
-        _planar = new NavigationTopDownSearch(world, graph, rayWorkspace.TopDown, map, binding, request, policy, _meter);
+        _planar = new NavigationTopDownSearch(world, graph, rayWorkspace.Planar, map, binding, request, policy, _meter);
     }
 
     internal NavigationGuideStatus Status { get; private set; } = NavigationGuideStatus.Pending;

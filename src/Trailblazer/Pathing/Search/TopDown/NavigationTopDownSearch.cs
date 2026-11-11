@@ -18,7 +18,7 @@ internal sealed partial class NavigationTopDownSearch
     private const int CrossMapEdgeOrdinal = 6;
 
     private readonly GridWorld _world;
-    private readonly NavigationTopDownWork _proof;
+    private readonly NavigationPlanarWork _proof;
     private readonly NavigationMapInstance _map;
     private readonly NavigationPlanarBinding _binding;
     private readonly NavigationTopDownRouteRequest _request;
@@ -38,7 +38,7 @@ internal sealed partial class NavigationTopDownSearch
     private GridPlanarLayer _crossLayer;
     private bool _crossLayerBound;
 
-    internal NavigationTopDownSearch(GridWorld world, NavigationWorldGraph graph, NavigationTopDownWork proof,
+    internal NavigationTopDownSearch(GridWorld world, NavigationWorldGraph graph, NavigationPlanarWork proof,
         NavigationMapInstance map, NavigationPlanarBinding binding, in NavigationTopDownRouteRequest request,
         NavigationAreaPolicy policy, NavigationWorkMeter meter)
     {
@@ -71,7 +71,7 @@ internal sealed partial class NavigationTopDownSearch
     internal NavigationGuideStatus ResolveEnd(out NavigationResolvedEndpoint endpoint)
     {
         endpoint = default;
-        if (!NavigationTopDownWork.TryGetMap(Graph, _request.End.MapId, out var map, out var binding))
+        if (!NavigationPlanarWork.TryGetMap(Graph, _request.End.MapId, out var map, out var binding))
             return NavigationGuideStatus.NoMap;
         if (binding.EmbeddingY != _binding.EmbeddingY)
             return NavigationGuideStatus.NoPath;
@@ -176,7 +176,7 @@ internal sealed partial class NavigationTopDownSearch
             Graph.TryGetMap(mapId, out var candidate);
             var currentGrid = _currentMap.Map.GridBinding.Configuration;
             var targetGrid = candidate.Map.GridBinding.Configuration;
-            if (!NavigationTopDownWork.AreHorizontalLatticesCompatible(currentGrid, targetGrid))
+            if (!NavigationPlanarWork.AreHorizontalLatticesCompatible(currentGrid, targetGrid))
                 return NavigationTraversalEdgeAdvanceStatus.Pending;
 
             _currentMap.Map.GridBinding.TryGetCellPrism(_current, out var prism);
@@ -229,7 +229,7 @@ internal sealed partial class NavigationTopDownSearch
         toMap.Map.GridBinding.TryGetCellPrism(to, out GridCellPrism destination);
         Vector2d start = source.Center.ToVector2d();
         Vector2d end = destination.Center.ToVector2d();
-        if (!NavigationTopDownWork.IsOrdinaryNeighbor(_topology, start, end))
+        if (!NavigationPlanarWork.IsOrdinaryNeighbor(_topology, start, end))
             return NavigationTraversalEdgeAdvanceStatus.Pending;
         NavigationGuideStatus status = Trace(fromMap, from, toMap, to, start, end, NavigationGuideStatus.NoPath);
         if (status != NavigationGuideStatus.Success)
@@ -260,7 +260,7 @@ internal sealed partial class NavigationTopDownSearch
     internal bool TryGetNode(NavigationCellAddress address, out NavigationMapInstance map, out NavigationNodeRef node)
     {
         node = default;
-        return NavigationTopDownWork.TryGetMap(Graph, address.MapId, out map, out var binding)
+        return NavigationPlanarWork.TryGetMap(Graph, address.MapId, out map, out var binding)
             && binding.EmbeddingY == _binding.EmbeddingY
             && TryGetNode(map, Graph.FindMapOrdinal(map.MapId), address.Index, out node);
     }
@@ -278,7 +278,7 @@ internal sealed partial class NavigationTopDownSearch
 
     private NavigationGuideStatus Trace(NavigationMapInstance fromMap, VoxelIndex from, NavigationMapInstance toMap,
         VoxelIndex to, Vector2d start, Vector2d end, NavigationGuideStatus blocked) =>
-        _proof.TraceCircle(_world, Graph, _layerCount, _binding.EmbeddingY,
-        NavigationTopDownWork.Pin(fromMap, from), NavigationTopDownWork.Pin(toMap, to), start, end,
-        _request.Radius, _media, _request.Capabilities, _policy, _meter, blocked);
+        _proof.TraceBody(_world, Graph, _layerCount, _binding,
+        NavigationPlanarWork.Pin(fromMap, from), NavigationPlanarWork.Pin(toMap, to), start, end,
+        _request.Radius, Fixed64.Zero, _media, _request.Capabilities, _policy, _meter, blocked);
 }

@@ -26,6 +26,7 @@ public sealed class NavigationMapBuilder
     private readonly SwiftList<TraversalTransitionRule> _transitionRules = new();
     private NavigationCell? _defaultCell;
     private NavigationPlanarBinding? _planarBinding;
+    private SwiftList<NavigationPlanarSupport>? _planarSupports;
 
     /// <summary>
     /// The stable host-owned identifier assigned to the resulting map.
@@ -79,6 +80,19 @@ public sealed class NavigationMapBuilder
         ChronicleGuard.ThrowIfArgument(embeddingY < prism.VerticalMin || embeddingY > prism.VerticalMax,
             nameof(embeddingY), "The embedding must lie inside the selected layer.");
         _planarBinding = new NavigationPlanarBinding(mode, layerIndex, embeddingY);
+        return this;
+    }
+
+    /// <summary>Adds a left-to-right side-view support segment in world X/Z for one selected-layer cell.</summary>
+    /// <remarks>Build validates the footprint and rejects multiple segments for the same index.</remarks>
+    public NavigationMapBuilder AddPlanarSupport(VoxelIndex index, Vector2d left, Vector2d right)
+    {
+        bool hasDirection = Vector2d.TrySubtract(right, left, out Vector2d direction);
+        ChronicleGuard.ThrowIfArgument(!hasDirection || direction.X <= Fixed64.Zero, nameof(right),
+            "Support must have a positive X span and a representable direction.");
+        Vector2d tangent = direction.Y == Fixed64.Zero ? Vector2d.Right : direction.Normalized;
+        (_planarSupports ??= new SwiftList<NavigationPlanarSupport>()).Add(
+            new NavigationPlanarSupport(index, left, right, new Vector2d(-tangent.Y, tangent.X)));
         return this;
     }
 
@@ -160,6 +174,7 @@ public sealed class NavigationMapBuilder
         ValidateConnections(cells, connections);
         ValidateTransitions(cells, transitions);
         ValidateTransitionRules(transitionRules);
+        NavigationPlanarSupport[] supports = BuildPlanarSupports();
 
         return new NavigationMap(
             MapId,
@@ -169,7 +184,31 @@ public sealed class NavigationMapBuilder
             transitions,
             transitionRules,
             _defaultCell,
-            _planarBinding);
+            _planarBinding,
+            supports);
+    }
+
+    private NavigationPlanarSupport[] BuildPlanarSupports()
+    {
+        if (_planarSupports == null)
+            return Array.Empty<NavigationPlanarSupport>();
+        ChronicleGuard.ThrowIfArgument(_planarBinding?.Mode != NavigationMode2D.SideView, nameof(NavigationMap.PlanarBinding),
+            "Support segments require a side-view layer.");
+        NavigationPlanarBinding binding = _planarBinding!.Value;
+        NavigationPlanarSupport[] supports = _planarSupports.ToArray();
+        Array.Sort(supports, static (left, right) => left.Index.CompareTo(right.Index));
+        for (int i = 0; i < supports.Length; i++)
+        {
+            NavigationPlanarSupport support = supports[i];
+            ChronicleGuard.ThrowIfArgument(i > 0 && support.Index.Equals(supports[i - 1].Index), nameof(AddPlanarSupport),
+                "A cell may own only one support segment.");
+            bool hasPrism = GridBinding.TryGetCellPrism(support.Index, out GridCellPrism prism);
+            ChronicleGuard.ThrowIfArgument(support.Index.y != binding.LayerIndex || !hasPrism
+                || !prism.Contains(new Vector3d(support.Left.X, binding.EmbeddingY, support.Left.Y))
+                || !prism.Contains(new Vector3d(support.Right.X, binding.EmbeddingY, support.Right.Y)),
+                nameof(AddPlanarSupport), "Both endpoints must belong to the selected cell footprint.");
+        }
+        return supports;
     }
 
     /// <summary>

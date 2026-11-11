@@ -16,7 +16,7 @@ public sealed partial class TrailblazerPathingService
         center = default;
         using var lease = TryAcquireNavigationGraph();
         if (lease == null || address.MapId == null || !lease.Graph.TryGetMap(address.MapId, out var map)
-            || !NavigationTopDownWork.TryGetControllerLayer(map, plane, out var layer) || address.Index.y != layer.LayerIndex
+            || !NavigationPlanarWork.TryGetControllerLayer(map, plane, out var layer) || address.Index.y != layer.LayerIndex
             || !map.Map.GridBinding.TryGetCellPrism(address.Index, out var prism))
             return false;
         center = prism.Center.ToVector2d();

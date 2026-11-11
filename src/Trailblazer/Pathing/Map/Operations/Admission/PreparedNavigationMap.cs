@@ -61,7 +61,10 @@ public sealed class PreparedNavigationMap
             (long)map.MapId.Length * sizeof(char));
         bytes = NavigationByteCount.SaturatingAdd(bytes, map.IsSpatial
             ? map.NativePortalTemplateRetainedBytes
-            : Unsafe.SizeOf<NavigationPlanarBinding>());
+            : Unsafe.SizeOf<NavigationPlanarBinding>() + 8L);
+        if (!map.PlanarSupports.IsEmpty)
+            bytes = NavigationByteCount.SaturatingAdd(bytes,
+                24L + ((long)map.PlanarSupports.Length * Unsafe.SizeOf<NavigationPlanarSupport>()));
         bytes = NavigationByteCount.SaturatingAdd(bytes, (long)map.Cells.Count * 96L);
         if (map.DefaultCell.HasValue)
             bytes = NavigationByteCount.SaturatingAdd(bytes, DefaultCellRetainedBytes);

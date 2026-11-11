@@ -220,7 +220,7 @@ public sealed partial class NavigationTopDownTests
         var graph = context.Pathing.NavigationGraphStore.Current;
         graph.TryGetCoveredAddressGeneration("east", out var generation).Should().BeTrue();
         var layer = new GridPlanarLayer(generation, 0);
-        NavigationTopDownWork discovery = context.Pathing.ImmediateRayWorkspace.RayWork.Workspace.TopDown;
+        NavigationPlanarWork discovery = context.Pathing.ImmediateRayWorkspace.RayWork.Workspace.Planar;
 
         Begin();
         var zero = new NavigationWorkMeter(RouteBudget(lookups: 0));
@@ -263,13 +263,13 @@ public sealed partial class NavigationTopDownTests
         Publish(context, new NavigationMapBuilder(end.MapId, east)
             .SetPlanarLayer(NavigationMode2D.TopDown, 0, Fixed64.Zero).SetDefaultCell(Open).Build(), 3);
         var graph = context.Pathing.NavigationGraphStore.Current;
-        NavigationTopDownWork.TryGetMap(graph, start.MapId, out var map, out var binding).Should().BeTrue();
+        NavigationPlanarWork.TryGetMap(graph, start.MapId, out var map, out var binding).Should().BeTrue();
         var budget = RouteBudget();
         var meter = new NavigationWorkMeter(budget);
         var request = new NavigationTopDownRouteRequest(start, end, Fixed64.Quarter, Policy.Key,
             TraversalMedium.Solid, TraversalCapability.None, budget);
         var search = new NavigationTopDownSearch(context.World, graph,
-            context.Pathing.ImmediateRayWorkspace.RayWork.Workspace.TopDown, map, binding, request, Policy, meter);
+            context.Pathing.ImmediateRayWorkspace.RayWork.Workspace.Planar, map, binding, request, Policy, meter);
         search.BindSource().Should().Be(NavigationGuideStatus.Success);
         search.ResolveStart(out var origin).Should().Be(NavigationGuideStatus.Success);
         search.BeginEdges(new NavigationMediumStateRef(origin.Node, TraversalMedium.Solid), incoming: false);

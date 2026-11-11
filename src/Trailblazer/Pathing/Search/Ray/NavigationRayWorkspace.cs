@@ -15,12 +15,12 @@ namespace Trailblazer.Pathing;
 /// <summary>Owns fixed caller-side storage for one exclusive navigation ray.</summary>
 internal sealed class NavigationRayWorkspace
 {
-    private NavigationTopDownWork? _topDown;
+    private NavigationPlanarWork? _planar;
     private long _volumeExclusionsGraphVersion = -1;
     private SwiftPackedSet<long>? _excludedVolumeGridTokens;
     private SwiftList<GridConfigurationKey>? _excludedVolumeCandidates;
 
-    internal NavigationTopDownWork TopDown => _topDown ??= new NavigationTopDownWork(this);
+    internal NavigationPlanarWork Planar => _planar ??= new NavigationPlanarWork(this);
 
     internal NavigationRayWorkspace(
         int mapCapacity,

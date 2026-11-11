@@ -92,6 +92,9 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
 
     internal ReadOnlySpan<NavigationCellEntry> CellSpan => _cells;
 
+    internal ReadOnlySpan<NavigationPlanarSupport> PlanarSupports =>
+        _cellView is PlanarCellView planar ? planar.Supports : default;
+
     internal ReadOnlySpan<NavigationConnection> ConnectionSpan => _connections;
 
     internal ReadOnlySpan<TraversalTransitionDefinition> TransitionSpan => _transitions;
@@ -118,7 +121,8 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         TraversalTransitionDefinition[] transitions,
         TraversalTransitionRule[] transitionRules,
         NavigationCell? defaultCell,
-        NavigationPlanarBinding? planarBinding)
+        NavigationPlanarBinding? planarBinding,
+        NavigationPlanarSupport[] supports)
     {
         MapId = mapId;
         GridBinding = gridBinding;
@@ -131,7 +135,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
             ? Array.Empty<GridNavigationPortal>()
             : CompileNativePortalTemplates(gridBinding);
         _cellView = planarBinding.HasValue
-            ? new PlanarCellView(_cells, planarBinding.Value)
+            ? new PlanarCellView(_cells, planarBinding.Value, supports)
             : Array.AsReadOnly(_cells);
         _connectionView = Array.AsReadOnly(_connections);
         _transitionView = Array.AsReadOnly(_transitions);
@@ -147,6 +151,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
             || !string.Equals(MapId, other.MapId, StringComparison.Ordinal)
             || GridBinding.Key != other.GridBinding.Key
             || !Nullable.Equals(PlanarBinding, other.PlanarBinding)
+            || !PlanarSupports.SequenceEqual(other.PlanarSupports)
             || !_defaultCell.Equals(other._defaultCell)
             || _cells.Length != other._cells.Length
             || _connections.Length != other._connections.Length
@@ -196,7 +201,11 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         hash = SwiftHashTools.CombineHashCodes(hash, GridBinding.Length);
         hash = SwiftHashTools.CombineHashCodes(hash, _defaultCell.GetHashCode());
         if (PlanarBinding is NavigationPlanarBinding planar)
+        {
             hash = SwiftHashTools.CombineHashCodes(hash, planar.GetHashCode());
+            foreach (NavigationPlanarSupport support in PlanarSupports)
+                hash = SwiftHashTools.CombineHashCodes(hash, support.GetHashCode());
+        }
         for (int i = 0; i < _cells.Length; i++)
             hash = SwiftHashTools.CombineHashCodes(hash, _cells[i].GetHashCode());
         for (int i = 0; i < _connections.Length; i++)
@@ -211,13 +220,38 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     // Only planar bakes pay for layer metadata. Spatial map size and storage stay the same.
     private sealed class PlanarCellView : ReadOnlyCollection<NavigationCellEntry>
     {
-        internal PlanarCellView(NavigationCellEntry[] cells, NavigationPlanarBinding binding)
+        internal PlanarCellView(NavigationCellEntry[] cells, NavigationPlanarBinding binding, NavigationPlanarSupport[] supports)
             : base(cells)
         {
             Binding = binding;
+            Supports = supports;
         }
 
         internal NavigationPlanarBinding Binding { get; }
+        internal NavigationPlanarSupport[] Supports { get; }
+    }
+
+    internal bool TryGetPlanarSupport(VoxelIndex index, out NavigationPlanarSupport support)
+    {
+        ReadOnlySpan<NavigationPlanarSupport> supports = PlanarSupports;
+        int low = 0;
+        int high = supports.Length - 1;
+        while (low <= high)
+        {
+            int middle = low + ((high - low) >> 1);
+            int comparison = supports[middle].Index.CompareTo(index);
+            if (comparison == 0)
+            {
+                support = supports[middle];
+                return true;
+            }
+            if (comparison < 0)
+                low = middle + 1;
+            else
+                high = middle - 1;
+        }
+        support = default;
+        return false;
     }
 
     internal bool ContainsCell(GridForge.Spatial.VoxelIndex index) =>

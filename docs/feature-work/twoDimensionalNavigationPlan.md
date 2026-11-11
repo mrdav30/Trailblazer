@@ -11,8 +11,9 @@ use the shared graph and scheduler. They prove swept-circle legs across
 compatible published maps and support formation goals and opted-in
 same-medium actions through accepted controller motion. See the
 [Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
-has started with native support and manual motor movement; side-view traversal
-and profile changes remain open. Use `UseLocalLsfStack=true`
+covers native manual motion, authored supports, canonical anchors, and
+ordinary side-view leg proofs. Search integration and profile changes remain
+open. Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
 overload and Gravitas 1.1.0 for the adapter. Hard-budgeted
@@ -947,8 +948,11 @@ in the existing test projects.
   - [x] Native profile/settings/input/result boundary, accepted support refresh,
     horizontal and slope-tangent movement, gravity, jump admission, ceiling
     clipping, fall/landing, logical facing, and exact carrier-anchor carry.
-  - [ ] Supported planar route legs and step/headroom proofs, with the bounded
-    first ladder/jump/drop fixtures. Manual physical stepping remains host-owned.
+  - [x] Authored support, canonical capsule anchors, continuous collinear legs,
+    and bounded horizontal step/drop and headroom proofs through the shared
+    planar coverage workspace.
+  - [ ] Supported route integration with A* and Flow, remaining surface joins,
+    and the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
 - [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
   ladder between supported regions over bounded frames. Test insufficient
   clearance/capability and invalidated actions without teleporting through guide
@@ -2898,3 +2902,107 @@ prototype's one-frame-ready assumption failed and its earlier `raw-*` capture is
 excluded; the valid control polls bounded context frames to completion. Probe
 outputs loaded the frozen assemblies directly and their copied DLL hashes were
 checked. No maintained benchmark/test-infrastructure harness was added.
+
+### 2026-11-10 - Phase 2 authored support and ordinary leg proofs
+
+`AddPlanarSupport` bakes one finite left-to-right segment inside its selected
+SideView cell. The bake sorts and copies the segments, includes the authored
+endpoints in equality and hashing, and accounts for their retained storage.
+Semantic overlays still control support admission. Replacing the bake changes
+its support geometry through ordinary publication.
+
+`ResolveSideViewAnchor` and `ValidateSideViewLeg` are immediate snapshot proofs
+for canonical support addresses. They use the existing planar ray workspace,
+exact generation pins, and caller work meter. The shared owner is now
+`NavigationPlanarWork`. Top-down callers supply a zero axis and their existing
+circle clearance policy. Side-view callers trace the full upright axis, require
+Solid and profile clearance at support owners, and admit open headroom through
+its authored area and capability rules. Required cells use the canonical
+GridForge coverage owner. The caller's output stays empty after a failed or
+stale anchor proof.
+
+A continuous leg requires an exact adjoining endpoint, raw collinearity, and
+matching materialized normals. A same-row rectangular step joins horizontal
+supports with a shared X seam. It checks the directed rise/drop allowance and
+reserves a radius beside the lower anchor. It proves the lift before crossing
+upward and the descent after crossing downward. Exact pin contact can reject
+lifts that leave the lower owner's footprint. Corner joins, nonhorizontal
+steps, A*/Flow route acquisition, and authored actions remain open in Phase 2.
+The immediate proof API lets hosts check their movement against the publication.
+
+Independent review found two false successes with only the cell-union check.
+A 45-degree support and two-raw-unit radius rounded its offset to `(-1, +1)`
+raw, which penetrated the authored line. A short lower support at a seam also
+let an anchor penetrate the neighboring higher support. Both cases failed red
+against the initial implementation. The proof now holds the full capsule at
+its start and sweeps each encountered finite segment in the reverse direction.
+FixedMathSharp's existing strict capsule-versus-convex predicate checks that
+exact hull, including a degenerate finite segment for stationary tests.
+A separate sweep case has clear endpoints and a headroom segment that blocks
+only the middle. Raw endpoint heights distinguish shallow slopes from steps.
+Odd half-axes round the candidate center outward before the exact full-axis
+trace. The proof rejects rounded witnesses or hulls it cannot certify.
+
+Other controls cover open Gas headroom, exact ceiling tangency, odd-axis
+penetration, directed one-raw step limits, blocked lift, unsupported gaps,
+coincident foreign-mode coverage, same-domain map seams, authored support
+replacement, missing/suppressed/blocked cells, stale generations, budget and
+lease limits, coordinate overflow, and zero warm allocations. Both independent
+reviews checked the shared boundary and final geometry.
+
+The local and hosted source graph uses the same immutable pins recorded above.
+The GridForge planar capsule trace already appears in the 10.0.0 package API.
+FixedMathSharp's strict finite-hull predicate and exact orientation helper are
+present in the cached 8.0.0 standard and Lean API XML. The prior released-stack
+promotion gates still govern package-mode validation.
+
+The final source diff adds 382 net runtime lines relative to `c47c958`, with
+the existing planar coverage traversal reused by both modes. The 36 focused
+side-view tests cover the geometry and admission rules above.
+
+Built `Trailblazer.slnx` with `UseLocalLsfStack=true` in `Release` and
+`ReleaseLean` on Windows (.NET SDK 10.0.302) and Ubuntu (10.0.203). All four
+builds had zero warnings and errors. Both hosts passed 3,561 core and 90 adapter
+tests in Release and 3,461 core and 86 adapter tests in ReleaseLean. Per-suite
+Coverlet reports combined with ReportGenerator included both assemblies in
+each lane, covering 34,685/34,685 lines, 14,849/14,849 branches and
+3,460/3,460 fully covered methods. The Release DocFX build with
+`--warningsAsErrors` passed with zero warnings.
+
+Captured the frozen `c47c958` 3D baseline before editing the shared workspace.
+Ran the 100-agent balanced-phase, 64-frame A* and Flow workloads in baseline,
+candidate, candidate, baseline order on Windows. Each capture used two
+launches, five warmups and five actual iterations per algorithm. All four
+children per capture exited successfully. Across the 20 actual blocks per
+capture, all 1,280 frame checksums, phase assignments and mandatory,
+preparation and periodic ray counts matched. The measured frames allocated
+zero bytes. First admission allocated 21,600 bytes in every actual block.
+
+The instrumented 64-frame elapsed sums had these medians:
+
+| Workload | Baseline 1 / 2 | Candidate 1 / 2 |
+| --- | ---: | ---: |
+| Spatial A* | 102.953 / 105.297 ms | 111.471 / 111.163 ms |
+| Spatial Flow | 50.287 / 47.853 ms | 51.391 / 55.483 ms |
+
+A* ran 5.6–8.3% higher on the candidate in the two default-tiering
+comparisons. An A*-only control with `DOTNET_TieredCompilation=0`, otherwise
+using the same settings, measured 201.268 ms before and 198.007 ms after.
+The two children per control exited successfully, and all 640 actual frame
+checksums and ray counts matched with zero warm-frame allocations. The
+default-tiering timing increase remains unattributed. Reopen on a repeatable
+increase with a profile that identifies the changed hot path.
+
+The direct planar probe used the frozen assemblies after checking their
+hashes. It warmed each call 2,048 times and measured five blocks of 512
+successful proofs per process. Top-down medians were 115.786 and 108.720
+us/proof before, and 107.904 and 104.224 us/proof after, in ABBA order.
+The new side-view proof with a quarter-unit rise, quarter-unit radius and
+half-unit capsule axis measured 256.210 us/proof. All blocks allocated zero
+bytes. These are immediate proof costs for one two-cell fixture.
+
+Raw evidence is under `artifacts/side-view-legs`. The final matrix is in
+`windows-final-*`, `linux-final-*` and `docfx.log`. The timing and replay
+captures are `frozen-baseline.log`, `candidate.log`, `*-repeat.log`,
+`*-no-tiering.log` and `planar-probes.log`. The earlier `baseline.log`
+launcher attempt produced no valid runs and is excluded.

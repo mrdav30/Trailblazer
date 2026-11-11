@@ -162,6 +162,8 @@ shared route capacity.
 
 Use [scheduled acquisition](#scheduled-side-view-routes) to spread search
 and publication across fixed frames.
+Use [Navigator2D](Navigator.md#following-a-side-view-guide) to coordinate
+accepted motion through the stages from a canonical support anchor.
 
 ## Agent Profile
 

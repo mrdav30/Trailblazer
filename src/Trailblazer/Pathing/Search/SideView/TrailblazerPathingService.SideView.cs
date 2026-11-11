@@ -28,8 +28,14 @@ public sealed partial class TrailblazerPathingService
         in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, NavigationWorkBudget budget) =>
         RunSideViewProof(source, destination, profile, areaPolicy, budget, out _);
 
+    internal NavigationGuideStatus ResolveSideViewControllerAnchor(NavigationCellAddress address,
+        string boundMapId, NavigationPlanarBinding plane, string currentMapId, in NavigationAgentProfile2D profile,
+        NavigationAreaPolicyKey areaPolicy, NavigationWorkBudget budget, out Vector2d center) =>
+        RunSideViewProof(address, null, profile, areaPolicy, budget, out center, (boundMapId, plane, currentMapId));
+
     private NavigationGuideStatus RunSideViewProof(NavigationCellAddress address, NavigationCellAddress? destination,
-        in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, NavigationWorkBudget budget, out Vector2d center)
+        in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, NavigationWorkBudget budget,
+        out Vector2d center, (string MapId, NavigationPlanarBinding Plane, string CurrentMapId)? controller = null)
     {
         EnsureUsable();
         center = default;
@@ -52,6 +58,15 @@ public sealed partial class TrailblazerPathingService
             var graph = lease.Graph;
             if (!NavigationPlanarWork.TryGetMap(graph, address.MapId, out var map, out var binding, NavigationMode2D.SideView))
                 return NavigationGuideStatus.NoMap;
+            if (controller is { } shell)
+            {
+                var reference = ResolveControllerReferenceMap(graph, shell.MapId, shell.Plane, shell.CurrentMapId,
+                    out _, out _);
+                if (reference != NavigationGuideStatus.Success)
+                    return reference;
+                if (shell.Plane.EmbeddingY != binding.EmbeddingY)
+                    return NavigationGuideStatus.InvalidStart;
+            }
             if (graph.AreAllStructuralComponentsClosed || !graph.AreaCatalog.TryGet(areaPolicy, out var policy))
                 return NavigationGuideStatus.Stale;
 

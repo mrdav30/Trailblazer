@@ -26,7 +26,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     private readonly NavigationPlanarBinding _binding;
     private readonly TraversalMedium _medium;
     private readonly IDisposable _resetHook;
-    private NavigationTopDownGuideLease? _guide;
+    private NavigationGuideLease? _guide;
     private NavigationAreaPolicyKey _policy;
     private NavigationWorkBudget _budget;
     private WorldVoxelIndex? _occupied;
@@ -139,6 +139,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         try
         {
             Vector2d center = Pose.Center;
+            bool carrierSampled = false;
             if (input.Move is Vector2d move)
             {
                 Fixed64 distance = Multiply(_motorSettings.MoveSpeed, _context.DeltaTime);
@@ -147,12 +148,25 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
             }
             else
             {
-                AdvanceAcquisition();
-                if (_guide is NavigationTopDownGuideLease guide && !_heldTransition.HasValue)
-                    center = PrepareGuidedCenter(guide, out _mayAdvance);
+                if (_binding.Mode == NavigationMode2D.SideView && CanStartJump(input))
+                    ResetGuidance();
+                else
+                {
+                    AdvanceAcquisition();
+                    if (_guide is NavigationGuideLease guide && !_heldTransition.HasValue)
+                    {
+                        if (_binding.Mode == NavigationMode2D.SideView)
+                        {
+                            carrierSampled = true;
+                            _sideViewStagePrepared = TryPrepareSideViewStage(guide, out center);
+                        }
+                        else
+                            center = PrepareGuidedCenter(new NavigationTopDownGuideLease(guide), out _mayAdvance);
+                    }
+                }
             }
 
-            NavigationPose2D target = PrepareMotorTarget(center, input);
+            NavigationPose2D target = PrepareMotorTarget(center, input, carrierSampled);
             SubmitPreparedTarget(target, isAction: false);
         }
         finally
@@ -226,6 +240,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
             message: "Prepare once after advancing the context frame.");
         _busy = true;
         _mayAdvance = false;
+        _sideViewStagePrepared = false;
         _preparedDestinationMap = null;
         _preparedVisibleAnchor = null;
         _preparedFacing = _facing;
@@ -359,8 +374,14 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
 
     private void CommitGuidance(bool acceptedRequestedTarget, Vector2d previousCenter, Vector2d requestedCenter)
     {
-        if (_guide is not NavigationTopDownGuideLease guide)
+        if (_guide is not NavigationGuideLease route)
             return;
+        if (_binding.Mode == NavigationMode2D.SideView)
+        {
+            CommitSideViewStage(route, acceptedRequestedTarget, previousCenter, requestedCenter);
+            return;
+        }
+        var guide = new NavigationTopDownGuideLease(route);
         bool reachedTarget = _mayAdvance && acceptedRequestedTarget;
         if (!CommitVisibleLeg(guide, acceptedRequestedTarget, previousCenter, requestedCenter, ref reachedTarget))
             return;

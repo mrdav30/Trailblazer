@@ -29,8 +29,8 @@ internal sealed partial class NavigationGuideScheduler
         }
     }
 
-    internal NavigationTopDownGuideLease? RegisterTopDownConnectorValidation(NavigationValidationInterest interest,
-        NavigationTopDownGuideLease guide, ref NavigationGuideStatus status)
+    internal NavigationGuideLease? RegisterTopDownConnectorValidation(NavigationValidationInterest interest,
+        NavigationGuideLease guide, ref NavigationGuideStatus status)
     {
         lock (_sync)
         {
@@ -40,7 +40,7 @@ internal sealed partial class NavigationGuideScheduler
                 status = NavigationGuideStatus.CapacityExceeded;
                 return null;
             }
-            interest.ConnectorGuide = guide.RouteLease;
+            interest.ConnectorGuide = guide;
             return guide;
         }
     }

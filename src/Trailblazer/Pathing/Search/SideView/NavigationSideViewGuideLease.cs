@@ -20,6 +20,8 @@ public readonly struct NavigationSideViewGuideLease : IDisposable
 
     internal NavigationSideViewGuideLease(NavigationGuideLease lease) => _lease = lease;
 
+    internal NavigationGuideLease RouteLease => _lease;
+
     /// <summary>Gets the current snapshot-validated status.</summary>
     public NavigationGuideStatus Status => _lease.Status;
 

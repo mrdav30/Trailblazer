@@ -56,7 +56,8 @@ internal sealed partial class NavigationPlanarRouteWork
             Vector2d bend = NavigationPlanarWork.GetSideViewStepWaypoint(previous, center);
             var owner = previous.Y < center.Y ? previousPoint.Address : address;
             points[_pointWrite++] = new NavigationAStarGuidePoint(owner,
-                new Vector3d(bend.X, embedding, bend.Y), TraversalMedium.Solid);
+                new Vector3d(bend.X, embedding, bend.Y), TraversalMedium.Solid,
+                NavigationAStarGuidePoint.SideViewBendOrdinal);
         }
         points[_pointWrite++] = new NavigationAStarGuidePoint(address, new Vector3d(center.X, embedding, center.Y),
             TraversalMedium.Solid);

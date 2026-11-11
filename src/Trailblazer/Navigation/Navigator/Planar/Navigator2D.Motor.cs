@@ -73,7 +73,7 @@ public abstract partial class Navigator2D
                 || input.Facing is Vector2d facing && facing.Y != Fixed64.Zero, nameof(input));
     }
 
-    private NavigationPose2D PrepareMotorTarget(Vector2d center, in NavigationInput2D input)
+    private NavigationPose2D PrepareMotorTarget(Vector2d center, in NavigationInput2D input, bool carrierSampled)
     {
         Vector2d intent = input.Facing ?? input.Move ?? (center - Pose.Center);
         if (NavigationProfile.Mode == NavigationMode2D.TopDown)
@@ -91,8 +91,12 @@ public abstract partial class Navigator2D
 
         if (intent.X != Fixed64.Zero)
             _preparedFacing = intent.X < Fixed64.Zero ? -Vector2d.Right : Vector2d.Right;
-        bool jump = input.JumpRequested && !input.BlockJump && IsGrounded
-            && (NavigationProfile.Capabilities & TraversalCapability.Jump) != 0 && _motorSettings.JumpSpeed > Fixed64.Zero;
+        if (_sideViewStagePrepared)
+        {
+            _preparedVertical = Fixed64.Zero;
+            return new NavigationPose2D(center, Fixed64.Zero);
+        }
+        bool jump = CanStartJump(input);
         _preparedVertical = jump ? _motorSettings.JumpSpeed : _verticalVelocity;
         if (!IsGrounded || jump)
         {
@@ -108,19 +112,27 @@ public abstract partial class Navigator2D
             center = Add(Pose.Center, new Vector2d(Multiply(travel, support.Normal.Y), Multiply(travel, -support.Normal.X)));
         }
 
-        if (IsGrounded && Support!.Value.Carrier is NavigationCarrier2D carrier
-            && TryReadCarrierPose(carrier.StableId, carrier.Lifetime, out NavigationPose2D current))
-        {
-            if (current.Center != carrier.Pose.Center || current.RotationRadians != carrier.Pose.RotationRadians)
-            {
-                if (!Vector2d.TryGetRelativeOffset(current.Center, carrier.LocalAnchor, current.RotationRadians,
-                    carrier.Pose.Center, carrier.LocalAnchor, carrier.Pose.RotationRadians, out _preparedCarry))
-                    throw new OverflowException("The carrier displacement is outside the representable plane.");
-                center = Add(center, _preparedCarry);
-            }
-        }
+        if (!carrierSampled)
+            _preparedCarry = ReadCarrierDisplacement();
+        if (_preparedCarry != Vector2d.Zero)
+            center = Add(center, _preparedCarry);
         return new NavigationPose2D(center, Fixed64.Zero);
     }
+
+    private Vector2d ReadCarrierDisplacement()
+    {
+        if (!IsGrounded || Support!.Value.Carrier is not NavigationCarrier2D carrier
+            || !TryReadCarrierPose(carrier.StableId, carrier.Lifetime, out NavigationPose2D current)
+            || (current.Center == carrier.Pose.Center && current.RotationRadians == carrier.Pose.RotationRadians))
+            return Vector2d.Zero;
+        if (!Vector2d.TryGetRelativeOffset(current.Center, carrier.LocalAnchor, current.RotationRadians,
+            carrier.Pose.Center, carrier.LocalAnchor, carrier.Pose.RotationRadians, out var carry))
+            throw new OverflowException("The carrier displacement is outside the representable plane.");
+        return carry;
+    }
+
+    private bool CanStartJump(in NavigationInput2D input) => input.JumpRequested && !input.BlockJump && IsGrounded
+        && (NavigationProfile.Capabilities & TraversalCapability.Jump) != 0 && _motorSettings.JumpSpeed > Fixed64.Zero;
 
     private Fixed64 ResolveMotorVertical(Fixed64 acceptedVerticalDisplacement)
     {

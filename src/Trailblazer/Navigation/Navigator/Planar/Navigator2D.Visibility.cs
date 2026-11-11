@@ -60,9 +60,7 @@ public abstract partial class Navigator2D
         if (_preparedVisibleAnchor is not Vector2d next || Pose.Center == previousCenter)
             return true;
         // Only a clipped point on the proved segment can retire the source waypoint.
-        if (!acceptedRequestedTarget
-            && !new FixedSegment2d(previousCenter, requestedCenter)
-                .TryGetUniqueIntersection(new FixedSegment2d(Pose.Center, Pose.Center), out _))
+        if (!acceptedRequestedTarget && !IsOnSegment(previousCenter, requestedCenter, Pose.Center))
             return true;
         NavigationGuideStatus status = guide.TryAdvanceStep();
         if (status != NavigationGuideStatus.Success)
@@ -73,4 +71,8 @@ public abstract partial class Navigator2D
         reachedTarget = acceptedRequestedTarget && Pose.Center == next;
         return true;
     }
+
+    private static bool IsOnSegment(Vector2d start, Vector2d end, Vector2d point) =>
+        point == start || point == end || new FixedSegment2d(start, end)
+            .TryGetUniqueIntersection(new FixedSegment2d(point, point), out _);
 }

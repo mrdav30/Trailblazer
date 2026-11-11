@@ -208,6 +208,23 @@ internal sealed class NavigationAStarGuideLease
         }
     }
 
+    internal NavigationAStarQueryStatus GetSideViewStage(long generation, out NavigationAStarGuidePoint source,
+        out NavigationAStarGuidePoint target)
+    {
+        source = target = default;
+        lock (_sync)
+        {
+            if (!IsGenerationActiveUnderLock(generation))
+                return NavigationAStarQueryStatus.Stale;
+            var status = ValidateCurrentPayloadUnderLock(out var payload);
+            if (status != NavigationAStarQueryStatus.Success)
+                return status;
+            target = payload.GuidePoints[_currentWaypointOrdinal];
+            source = _currentWaypointOrdinal == 0 ? target : payload.GuidePoints[_currentWaypointOrdinal - 1];
+            return NavigationAStarQueryStatus.Success;
+        }
+    }
+
     internal NavigationGuideStatus TryGetCurrentStep(
         long generation,
         Vector3d connectorOrigin,

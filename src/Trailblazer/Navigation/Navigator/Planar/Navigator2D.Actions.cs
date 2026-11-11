@@ -57,7 +57,7 @@ public abstract partial class Navigator2D
             return current == NavigationGuideStatus.Success ? NavigationGuideStatus.InvalidEnd : current;
         }
         // The current lease already certifies the exact landing center in this medium.
-        var status = _guide!.Value.CompletePendingTransition(instruction);
+        var status = _guide!.Value.CompletePendingTransition(instruction.Instruction);
         if (status == NavigationGuideStatus.Success)
         {
             ClearHeldAction();

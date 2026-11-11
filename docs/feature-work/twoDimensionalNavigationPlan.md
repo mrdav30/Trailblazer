@@ -13,7 +13,8 @@ same-medium actions through accepted controller motion. See the
 [Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
 covers native manual motion, authored supports, canonical anchors, and
 immediate and scheduled A* and Flow guides over proved ordinary side-view legs.
-Controller guidance, authored traversal, and profile changes remain open.
+Navigator2D follows exact stages from a canonical support anchor. Rounded
+slope substeps, authored traversal, and profile changes remain open.
 Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
@@ -956,7 +957,9 @@ in the existing test projects.
     ordered step waypoints and forward entry costs.
   - [x] Side-view guides use the shared scheduled acquisition FIFO and
     materialize exact step waypoints within counted frame allowances.
-  - [ ] Controller guidance, remaining surface joins, and
+  - [x] Controller following from a canonical anchor through accepted exact
+    subsegments, with live support required at landings.
+  - [ ] Rounded slope substeps, moved-origin connectors, remaining surface joins, and
     the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
 - [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
   ladder between supported regions over bounded frames. Test insufficient
@@ -3173,3 +3176,74 @@ differences inconclusive. Raw evidence is under
 `artifacts/side-view-scheduling` in `windows-final-*`, `linux-final-*`,
 `docfx.log`, `baseline.log`, `candidate.log`, `*-scheduled.log`, and
 `planar-scheduled-probes.log`.
+
+### 2026-11-11 - Phase 2 Navigator2D following from canonical support anchors
+
+`ApplySideViewGuidedTrekRequest` binds an explicit canonical support address
+to the accepted capsule center and fresh walkable support. Both immediate
+and scheduled acquisition use the existing controller intent, request and
+lease owners. The scheduled result is usable at the same grounded origin.
+The controller still runs the free motor while waiting.
+
+Each requested target stays on the exact retained stage and fits the
+per-frame speed bound. This lets the controller inherit its capsule
+sweep, including the lift, crossing and descent. An accepted clip on the
+prepared segment can continue. Bends can advance without ground, while a
+support waypoint requires a fresh walkable sample. Off-segment acceptance
+commits the host pose and releases the route. A rounded slope substep
+outside the exact segment fails closed with `Unsupported`. Rounded-target
+proofs, moved-origin connectors, authored actions and posture remain open.
+
+Support and occupancy remain separate. Start admission reuses the
+controller's exact reference-map binding check. Moving carrier displacement
+is sampled once, releases the static route and goes through the free motor.
+An exact accepted grounded landing remains a candidate for reacquisition
+even when the previous guide stales during host resolution. It receives a
+new proof before the controller can resume or report arrival.
+
+Review caught an intermediate 64-byte waypoint layout. Side-view bends now
+use a reserved ordinary ordinal, preserving the 56-byte retained point and
+the existing spatial byte gates. The diff adds 261 net runtime lines
+relative to `f119801`. No new upstream API is required.
+
+Tests exercise both algorithms and acquisition modes, clipped lifts and
+crossings, exact descending stages, support loss, off-stage accepted
+motion, carrier interruption, scheduled origin changes, binding replacement,
+rounded slope rejection, and stale commit followed by grounded reacquisition.
+The final solution built with `UseLocalLsfStack=true` on Windows and Ubuntu
+using the same pinned sibling source graph. Each host passed 3,605 core and
+90 adapter tests in Release and 3,505 core and 86 adapter tests in ReleaseLean.
+Both assemblies reached 35,004/35,004 lines, 15,031/15,031 branches and
+3,509/3,509 fully covered methods in each lane. All builds and Release
+DocFX with `--warningsAsErrors` had zero warnings and errors.
+
+The two-cell following probe used an accepting host and exact support
+samples, alternating outbound and return routes at 16 Hz. It warmed 256
+routes and measured five blocks of 128 routes per process. It timed the
+complete context/prepare/accept/commit/late frames and excluded acquisition.
+Every measured route arrived at its exact destination. Assembly copies
+were checked by hash. Each route allocated 32 bytes during its measured
+frames in all processes.
+
+| Following workload | Frames per route | Baseline frame medians | Candidate frame medians |
+| --- | ---: | ---: | ---: |
+| TopDown A* | 5 | 94.153 / 95.833 us | 93.985 / 97.324 us |
+| SideView A* step | 6 | — | 22.693 us |
+
+The frozen `f119801` 100-agent 3D guided-frame baseline was captured before
+shared source edits. The runs used baseline, candidate, candidate, baseline
+order with two launches, five warmups and five actual iterations per
+algorithm per capture. All four children per capture succeeded. All 1,280
+actual frame checksums, phase assignments and ray counts matched in each
+capture, with zero warm-frame bytes and 21,600 bytes per first admission.
+
+| 3D workload | Baseline median 64-frame sums | Candidate median 64-frame sums |
+| --- | ---: | ---: |
+| A* | 107.489 / 106.194 ms | 102.428 / 106.629 ms |
+| Flow | 54.226 / 56.900 ms | 62.796 / 50.769 ms |
+
+The first Flow timing increase reversed on repeat. The timing results
+remain inconclusive. Raw evidence is under `artifacts/side-view-following`
+in `*-landing-Release-*`, `*-final-ReleaseLean-*`, `docfx.log`,
+`baseline.log`, `candidate.log`, `*-repeat.log`, and
+`planar-following-probes.log`.

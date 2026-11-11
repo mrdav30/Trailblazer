@@ -11,8 +11,10 @@ Chronicler records.
 prepare, resolve, and commit barrier. It supports immediate and scheduled
 guidance, formation goals, and explicit host actions.
 The same controller coordinates manual side-view capsules with native gravity,
-jumping, logical facing, and fresh support at accepted poses. Both modes share
-frame validation and occupancy publication while the host owns physical motion.
+jumping, logical facing, and fresh support at accepted poses. It follows
+side-view routes from canonical support anchors, including directed step
+waypoints. Both modes share frame validation and occupancy publication while
+the host owns physical motion.
 
 The optional `Trailblazer.Gravitas` assembly adds `GravitasNavigator3D` without
 coupling the core libraries. Read the

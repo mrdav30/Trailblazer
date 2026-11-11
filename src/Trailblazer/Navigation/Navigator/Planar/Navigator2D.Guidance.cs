@@ -20,7 +20,7 @@ public abstract partial class Navigator2D
     private bool _allowTransitions;
     private bool _hasIntent;
     private long _lastAcquisitionFrame = -1;
-    private NavigationTopDownGuideRequest? _guideRequest;
+    private NavigationGuideRequest? _guideRequest;
     private Vector2d _queuedOrigin;
     private NavigationValidationInterest? _connectorValidation;
     private bool _requiresConnector;
@@ -59,16 +59,23 @@ public abstract partial class Navigator2D
             return NavigationGuideStatus.InvalidProfile;
         policy.Validate(nameof(policy));
         ChronicleGuard.ThrowIfArgumentOutOfRange(groupId < -1, groupId, nameof(groupId));
+        BeginTrek(destination, policy, algorithm, budget);
+        _allowTransitions = allowTransitions;
+        JoinGroup(groupId);
+        RefreshGroupTarget();
+        return StartAcquisition();
+    }
+
+    private void BeginTrek(NavigationCellAddress destination, NavigationAreaPolicyKey policy,
+        PathAlgorithm algorithm, NavigationWorkBudget budget)
+    {
         ResetGuidance();
         _hasIntent = true;
         _requestedGoal = _routeGoal = destination;
         _policy = policy;
         _budget = budget;
         _algorithm = algorithm;
-        _allowTransitions = allowTransitions;
-        JoinGroup(groupId);
-        RefreshGroupTarget();
-        return StartAcquisition();
+        _allowTransitions = false;
     }
 
     private NavigationGuideStatus StartAcquisition()
@@ -78,23 +85,8 @@ public abstract partial class Navigator2D
         var graph = pathing.NavigationGraphStore.Current;
         var world = _context.World;
         var epoch = (world.SpawnToken, world.Version, world.ChangeSequence);
-        var status = pathing.ResolveTopDownControllerStart(_mapId, _binding, Pose.Center, NavigationProfile.Radius, _policy,
-            _medium, NavigationProfile.Capabilities, _budget, out NavigationCellAddress start, CurrentMapId);
-        NavigationTopDownGuideLease guide = default;
-        if (status == NavigationGuideStatus.Success)
-        {
-            if (AcquisitionMode == NavigationAcquisitionMode.Scheduled)
-            {
-                _queuedOrigin = Pose.Center;
-                status = _context.Guides.ScheduleTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
-                    NavigationProfile.Capabilities, _algorithm, _budget, out _guideRequest, _allowTransitions);
-            }
-            else
-            {
-                status = _context.Guides.RequestTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
-                    NavigationProfile.Capabilities, _algorithm, _budget, out guide, _allowTransitions);
-            }
-        }
+        var status = _binding.Mode == NavigationMode2D.SideView
+            ? BeginSideViewAcquisition(out var guide) : BeginTopDownAcquisition(out guide);
         status = TrailblazerPathingService.ResolvePlanarSnapshotStatus(status, graph, pathing.NavigationGraphStore.Current,
             epoch, (world.SpawnToken, world.Version, world.ChangeSequence));
         if (status == NavigationGuideStatus.Success)
@@ -107,6 +99,27 @@ public abstract partial class Navigator2D
         return RecordAcquisitionStatus(status);
     }
 
+    private NavigationGuideStatus BeginTopDownAcquisition(out NavigationGuideLease guide)
+    {
+        guide = default;
+        var status = _context.Pathing.ResolveTopDownControllerStart(_mapId, _binding, Pose.Center, NavigationProfile.Radius, _policy,
+            _medium, NavigationProfile.Capabilities, _budget, out NavigationCellAddress start, CurrentMapId);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        if (AcquisitionMode == NavigationAcquisitionMode.Scheduled)
+        {
+            _queuedOrigin = Pose.Center;
+            status = _context.Guides.ScheduleTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
+                NavigationProfile.Capabilities, _algorithm, _budget, out var request, _allowTransitions);
+            _guideRequest = request;
+            return status;
+        }
+        status = _context.Guides.RequestTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
+            NavigationProfile.Capabilities, _algorithm, _budget, out var acquired, _allowTransitions);
+        guide = acquired.RouteLease;
+        return status;
+    }
+
     private void AdvanceAcquisition()
     {
         if (!_hasIntent || HasArrived || _heldTransition.HasValue)
@@ -117,23 +130,13 @@ public abstract partial class Navigator2D
             ReleaseRequest();
             StartAcquisition();
         }
-        if (_guideRequest is NavigationTopDownGuideRequest request)
+        if (_guideRequest is NavigationGuideRequest request)
         {
             NavigationGuideStatus status = request.Status;
             if (status == NavigationGuideStatus.Pending)
                 return;
-            if (request.TryTakeTopDownGuide(out var guide))
-            {
-                AdoptGuide(guide);
-                if (Pose.Center != _queuedOrigin)
-                {
-                    _connectorValidation ??= new NavigationValidationInterest();
-                    _guide = _context.Guides.Scheduler.RegisterTopDownConnectorValidation(_connectorValidation, guide, ref status);
-                    _requiresConnector = _guide.HasValue;
-                }
-            }
-            else
-                status = request.Status == NavigationGuideStatus.Success ? NavigationGuideStatus.Stale : request.Status;
+            status = request is NavigationSideViewGuideRequest sideView
+                ? AdoptScheduledSideView(sideView) : AdoptScheduledTopDown((NavigationTopDownGuideRequest)request);
             ReleaseRequest();
             RecordAcquisitionStatus(status);
             _lastAcquisitionFrame = _context.FrameCount;
@@ -143,6 +146,24 @@ public abstract partial class Navigator2D
                 or NavigationGuideStatus.Pending or NavigationGuideStatus.Cancelled)
             StartAcquisition();
     }
+
+    private NavigationGuideStatus AdoptScheduledTopDown(NavigationTopDownGuideRequest request)
+    {
+        if (!request.TryTakeTopDownGuide(out var guide))
+            return FailedScheduledTransfer(request);
+        AdoptGuide(guide.RouteLease);
+        var status = NavigationGuideStatus.Success;
+        if (Pose.Center != _queuedOrigin)
+        {
+            _connectorValidation ??= new NavigationValidationInterest();
+            _guide = _context.Guides.Scheduler.RegisterTopDownConnectorValidation(_connectorValidation, guide.RouteLease, ref status);
+            _requiresConnector = _guide.HasValue;
+        }
+        return status;
+    }
+
+    private static NavigationGuideStatus FailedScheduledTransfer(NavigationGuideRequest request) =>
+        request.Status == NavigationGuideStatus.Success ? NavigationGuideStatus.Stale : request.Status;
 
     private NavigationGuideStatus RecordAcquisitionStatus(NavigationGuideStatus status)
     {
@@ -155,7 +176,7 @@ public abstract partial class Navigator2D
         return status;
     }
 
-    private void AdoptGuide(NavigationTopDownGuideLease guide)
+    private void AdoptGuide(NavigationGuideLease guide)
     {
         _guide = guide;
         GuideCost = guide.TotalCost;

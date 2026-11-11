@@ -37,6 +37,14 @@ public readonly struct NavigationGuideLease : IDisposable
 
     internal bool HasConnector => _inner?.HasConnector(_generation) ?? false;
 
+    internal NavigationGuideStatus GetSideViewStage(out NavigationAStarGuidePoint source,
+        out NavigationAStarGuidePoint target)
+    {
+        source = target = default;
+        return NavigationGuideStatusMapper.ToPublic(
+            _inner?.GetSideViewStage(_generation, out source, out target) ?? NavigationAStarQueryStatus.Stale);
+    }
+
     internal bool TryGetNextOrdinaryPoint(out NavigationAStarGuidePoint point)
     {
         point = default;

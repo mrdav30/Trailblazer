@@ -173,7 +173,7 @@ public sealed partial class Navigator2DTests
         var scheduler = context.Guides.Scheduler;
         scheduler.Dispose();
         var status = NavigationGuideStatus.Success;
-        scheduler.RegisterTopDownConnectorValidation(new NavigationValidationInterest(), guide, ref status)
+        scheduler.RegisterTopDownConnectorValidation(new NavigationValidationInterest(), guide.RouteLease, ref status)
             .Should().BeNull();
         status.Should().Be(NavigationGuideStatus.CapacityExceeded);
         context.Pathing.NavigationAStarAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);

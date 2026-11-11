@@ -12,6 +12,9 @@ namespace Trailblazer.Pathing;
 /// <summary>Stores one immutable addressed waypoint in a certified A* guide.</summary>
 internal readonly struct NavigationAStarGuidePoint
 {
+    // Negative ordinals are ordinary points. Reserve a value for bends without widening retained spatial points.
+    internal const int SideViewBendOrdinal = -2;
+
     internal NavigationAStarGuidePoint(
         NavigationCellAddress address,
         Vector3d position,
@@ -29,6 +32,8 @@ internal readonly struct NavigationAStarGuidePoint
     internal Vector3d Position { get; }
 
     internal TraversalMedium Medium { get; }
+
+    internal bool IsSideViewBend => TransitionOrdinal == SideViewBendOrdinal;
 
     internal int TransitionOrdinal { get; }
 

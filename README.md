@@ -38,7 +38,8 @@ teleporters.
 - **Side-view movement stays native.** Use an upright capsule profile with
   manual movement, gravity, jumping, and support sampled at host-accepted poses.
   Author support segments to acquire immediate or scheduled A* and Flow
-  guides with capsule clearance and step waypoints for host-executed movement.
+  guides with capsule clearance. `Navigator2D` can follow their step waypoints
+  through host-accepted motion from a canonical support anchor.
 - **The engine stays outside.** Trailblazer has no Unity, Godot, Unreal, or
   renderer dependency.
 

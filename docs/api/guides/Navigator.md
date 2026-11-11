@@ -67,7 +67,7 @@ ordered command boundary. Dispose the controller to release guidance and occupan
 
 ## Side-view Navigator2D
 
-For host-resolved manual side-view movement, bind a `SideView` map with a
+For host-resolved side-view movement, bind a `SideView` map with a
 `NavigationAgentProfile2D` and `NavigationMotorSettings2D`. The body is an
 upright capsule in world X/Z. Radius is positive and axis length is the
 non-negative distance between cap centers. The host keeps the physical collider
@@ -109,10 +109,35 @@ no carry. Every accepted commit replaces the previous support sample, so fresh
 reattachment starts from its newly sampled carrier pose. Observable velocity
 includes accepted carry while the motor keeps carry out of its next integration.
 
-Top-down queries and guide acquisition require TopDown maps. SideView layers
-cannot supply circle-clearance coverage or publish actions to a different mode,
-even at the same embedding. `ApplyGuidedTrekRequest` on a side-view controller
-returns `InvalidProfile`.
+### Following a side-view guide
+
+Call `ApplySideViewGuidedTrekRequest` with the source and destination support
+addresses, area policy, search algorithm, and work budget. The accepted
+capsule center must equal the canonical source anchor and have walkable host
+support. The support address is independent of the physical cell occupied by
+the center. Use `RefreshSupport()` to seed the host sample between frames.
+
+Immediate acquisition is the default. In Scheduled mode, waiting frames
+still run the free motor. The result requires the same grounded origin when
+the controller takes it. An explicit analog input or an admitted manual jump
+cancels the guide. Top-down formation, lookahead, and held-action APIs apply
+to top-down guidance.
+
+Guided motion follows the retained capsule sweep one stage at a time, at the
+configured move speed. A step-up lifts before crossing. A drop crosses before
+descending. The host resolves each target and reports the accepted pose and
+support. A clipped result on the prepared segment can continue that stage.
+Progress through the bend requires its exact accepted center. Progress through
+a support anchor also requires fresh walkable support. An off-segment result
+or missing landing support releases guidance while committing the accepted
+pose. A moving carrier likewise releases the static route and applies its
+sampled carry through the free motor.
+
+Only exact subsegments inherit a retained sweep. A rounded slope substep
+outside that segment returns `Unsupported` and releases guidance. A graph
+publication or raw world change invalidates the guide before any cursor
+advance. Reacquisition requires a currently accepted canonical support
+anchor in the bound plane.
 
 ## Setup
 

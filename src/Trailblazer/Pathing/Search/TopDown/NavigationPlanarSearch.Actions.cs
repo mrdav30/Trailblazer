@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownSearch.Actions.cs
+// NavigationPlanarSearch.Actions.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -9,7 +9,7 @@ using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
-internal sealed partial class NavigationTopDownSearch
+internal partial class NavigationPlanarSearch
 {
     // Ordinary native and seam ordinals sort before every action.
     internal const int FirstActionOrdinal = 16;

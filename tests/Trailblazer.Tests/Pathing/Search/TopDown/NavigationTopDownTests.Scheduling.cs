@@ -62,7 +62,7 @@ public sealed partial class NavigationTopDownTests
 
         var cache = context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         cache.ActiveLeaseCount.Should().Be(2);
-        cache.LeasedBytes.Should().Be(NavigationTopDownGuidePayload.MeasureBytes(5));
+        cache.LeasedBytes.Should().Be(NavigationPlanarGuidePayload.MeasureBytes(5));
         first.TryTakeTopDownGuide(out var firstGuide).Should().BeTrue();
         using (firstGuide)
         {
@@ -164,7 +164,7 @@ public sealed partial class NavigationTopDownTests
     {
         using var context = CreateScheduledPlanarContext();
         var gate = context.Pathing.NavigationAStarAdmissionGate;
-        var query = new NavigationTopDownRouteRequest(ScheduledCell(0), ScheduledCell(4), Fixed64.Quarter, Policy.Key,
+        var query = new NavigationPlanarRouteRequest(ScheduledCell(0), ScheduledCell(4), Fixed64.Quarter, Policy.Key,
             TraversalMedium.Solid, TraversalCapability.None, RouteBudget());
         var first = TestRequire.NotNull(gate.BeginScheduledTopDown(context.World, query));
         first.Dispose();
@@ -183,7 +183,7 @@ public sealed partial class NavigationTopDownTests
         request.Phase.Should().Be(NavigationGuideRequestPhase.Publication);
         SimulateScheduled(context);
         var cache = context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
-        cache.ReservedPayloadBytes.Should().Be(NavigationTopDownGuidePayload.MeasureBytes(5));
+        cache.ReservedPayloadBytes.Should().Be(NavigationPlanarGuidePayload.MeasureBytes(5));
         var remove = new NavigationMapRemoveOperation("plane", 3, context.FrameCount + 1);
         context.Pathing.Admit(remove).Should().BeTrue();
         for (int frame = 0; frame < 64 && request.Status == NavigationGuideStatus.Pending; frame++)
@@ -249,7 +249,7 @@ public sealed partial class NavigationTopDownTests
         using var context = CreateScheduledPlanarContext();
         using var request = SchedulePlanar(context, algorithm);
         var pathing = context.Pathing;
-        var query = new NavigationTopDownRouteRequest(ScheduledCell(0), ScheduledCell(4), Fixed64.Quarter,
+        var query = new NavigationPlanarRouteRequest(ScheduledCell(0), ScheduledCell(4), Fixed64.Quarter,
             Policy.Key, TraversalMedium.Solid, TraversalCapability.None, RouteBudget());
         IDisposable owner;
         if (!spatial)
@@ -361,7 +361,7 @@ public sealed partial class NavigationTopDownTests
         var origin = ScheduledCell(0);
         using var source = new NavigationCohortSource();
         cache.TryCheckoutTopDownGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.Stale);
-        var payload = new NavigationTopDownGuidePayload(
+        var payload = new NavigationPlanarGuidePayload(
             new[] { new NavigationAStarGuidePoint(origin, Vector3d.Zero, TraversalMedium.Solid) },
             Fixed64.Zero, Policy.Key, store.Current.GraphVersion, (world.SpawnToken, world.Version, world.ChangeSequence));
         var first = PublishPin();
@@ -381,7 +381,7 @@ public sealed partial class NavigationTopDownTests
         NavigationAStarPayloadLease PublishPin()
         {
             cache.TryReservePayload(payload.RetainedBytes, out var reservation).Should().BeTrue();
-            cache.PublishTopDownPayload(store, payload, ref reservation, out var lease)
+            cache.PublishPlanarPayload(store, payload, ref reservation, out var lease)
                 .Should().Be(NavigationGuideStatus.Success);
             return TestRequire.NotNull(lease);
         }

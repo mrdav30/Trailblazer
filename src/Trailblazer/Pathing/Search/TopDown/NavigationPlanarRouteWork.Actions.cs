@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownRouteWork.Actions.cs
+// NavigationPlanarRouteWork.Actions.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -7,7 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
-internal sealed partial class NavigationTopDownRouteWork
+internal sealed partial class NavigationPlanarRouteWork
 {
     private void FillActionAt(NavigationAStarGuidePoint[] points, NavigationTransitionInstruction[] instructions,
         int point, int ordinal, int instructionIndex)
@@ -32,11 +32,11 @@ internal sealed partial class NavigationTopDownRouteWork
             _aStar.NodeTable.TryGetSlot(_aStar.PathNodes[index + 1], out int slot);
             ref NavigationAStarNodeRecord record = ref _aStar.NodeTable.GetRecord(slot);
             return record.ParentEdgeKind == NavigationTraversalEdgeKind.Transition
-                ? record.ParentEdgeOrdinal - NavigationTopDownSearch.FirstActionOrdinal : -1;
+                ? record.ParentEdgeOrdinal - NavigationPlanarSearch.FirstActionOrdinal : -1;
         }
 
         ref NavigationFlowFieldSearchNode current = ref _flow!.GetRecord(_flow.SettledSlots[index]);
         return current.SelectedIsTransition
-            ? current.SelectedEdge.CanonicalOutgoingOrdinal - NavigationTopDownSearch.FirstActionOrdinal : -1;
+            ? current.SelectedEdge.CanonicalOutgoingOrdinal - NavigationPlanarSearch.FirstActionOrdinal : -1;
     }
 }

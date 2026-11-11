@@ -18,17 +18,19 @@ internal sealed partial class NavigationPlanarWork
     internal NavigationGuideStatus ResolveSideViewAnchor(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance map, NavigationPlanarBinding binding, VoxelIndex index, int layerCount,
         in NavigationAgentProfile2D profile, NavigationAreaPolicy policy, NavigationWorkMeter meter,
-        out Vector2d center)
+        out Vector2d center, NavigationGuideStatus invalid = NavigationGuideStatus.InvalidStart)
     {
         center = default;
-        var status = ReadSupportAnchor(map, index, profile, policy, meter, NavigationGuideStatus.InvalidStart,
+        if (!meter.TryConsumeEndpointCandidates(1))
+            return NavigationGuideStatus.BudgetExceeded;
+        var status = ReadSupportAnchor(map, index, profile, policy, meter, invalid,
             out _, out Vector2d candidate);
         if (status != NavigationGuideStatus.Success)
             return status;
         WorldVoxelIndex pin = Pin(map, index);
         status = TraceBody(world, graph, layerCount, binding, pin, pin, candidate, candidate,
             profile.Radius, profile.AxisLength, TraversalMedia.Solid, profile.Capabilities, policy, meter,
-            NavigationGuideStatus.InvalidStart);
+            invalid);
         if (status == NavigationGuideStatus.Success)
             center = candidate;
         return status;
@@ -46,17 +48,33 @@ internal sealed partial class NavigationPlanarWork
         if (!meter.TryConsumeEvaluatedEdges(1))
             return NavigationGuideStatus.BudgetExceeded;
 
+        return TraceSideViewLeg(world, graph, source, binding, sourceIndex, target, destination.Index, layerCount,
+            profile, policy, meter, out _, out _, out _, chargeEndpointCandidates: true);
+    }
+
+    internal NavigationGuideStatus TraceSideViewLeg(GridWorld world, NavigationWorldGraph graph,
+        NavigationMapInstance source, NavigationPlanarBinding binding, VoxelIndex sourceIndex,
+        NavigationMapInstance target, VoxelIndex targetIndex, int layerCount, in NavigationAgentProfile2D profile,
+        NavigationAreaPolicy policy, NavigationWorkMeter meter, out Vector2d start, out Vector2d end,
+        out bool step, bool chargeEndpointCandidates = false)
+    {
+        start = end = default;
+        step = false;
+        if (chargeEndpointCandidates && !meter.TryConsumeEndpointCandidates(1))
+            return NavigationGuideStatus.BudgetExceeded;
         var status = ReadSupportAnchor(source, sourceIndex, profile, policy, meter, NavigationGuideStatus.InvalidStart,
-            out var from, out Vector2d start);
+            out var from, out start);
         if (status != NavigationGuideStatus.Success)
             return status;
-        status = ReadSupportAnchor(target, destination.Index, profile, policy, meter, NavigationGuideStatus.InvalidEnd,
-            out var to, out Vector2d end);
+        if (chargeEndpointCandidates && !meter.TryConsumeEndpointCandidates(1))
+            return NavigationGuideStatus.BudgetExceeded;
+        status = ReadSupportAnchor(target, targetIndex, profile, policy, meter, NavigationGuideStatus.InvalidEnd,
+            out var to, out end);
         if (status != NavigationGuideStatus.Success)
             return status;
         // Baked supports already certify their selected-layer footprints.
         source.Map.GridBinding.TryGetCellPrism(sourceIndex, out GridCellPrism fromPrism);
-        target.Map.GridBinding.TryGetCellPrism(destination.Index, out GridCellPrism toPrism);
+        target.Map.GridBinding.TryGetCellPrism(targetIndex, out GridCellPrism toPrism);
         if (!AreHorizontalLatticesCompatible(source.Map.GridBinding.Configuration, target.Map.GridBinding.Configuration)
             || !IsOrdinaryNeighbor(fromPrism.TopologyKind, fromPrism.Center.ToVector2d(), toPrism.Center.ToVector2d()))
             return NavigationGuideStatus.NoPath;
@@ -68,8 +86,8 @@ internal sealed partial class NavigationPlanarWork
             return NavigationGuideStatus.NoPath;
 
         WorldVoxelIndex sourcePin = Pin(source, sourceIndex);
-        WorldVoxelIndex targetPin = Pin(target, destination.Index);
-        if (left.Right == right.Left)
+        WorldVoxelIndex targetPin = Pin(target, targetIndex);
+        if (SideViewSupportsMeet(from, to))
         {
             // A chord between distinct surface offsets cannot certify a corner.
             if (Vector2d.OrientationSign(left.Left, left.Right, right.Right) != 0 || left.Normal != right.Normal)
@@ -95,7 +113,8 @@ internal sealed partial class NavigationPlanarWork
 
         // Trace the lift or descent in the lower owner, then the crossing between the two owners.
         // Traversal order determines which proof consumes the available budget first.
-        Vector2d lifted = new(lower.X, rising ? end.Y : start.Y);
+        Vector2d lifted = GetSideViewStepWaypoint(start, end);
+        step = true;
         if (rising)
         {
             status = TraceSideView(world, graph, binding, layerCount, sourcePin, sourcePin, start, lifted, profile, policy, meter);
@@ -106,6 +125,13 @@ internal sealed partial class NavigationPlanarWork
         return status != NavigationGuideStatus.Success ? status
             : TraceSideView(world, graph, binding, layerCount, targetPin, targetPin, lifted, end, profile, policy, meter);
     }
+
+    // The step proof certified horizontal anchors and a lift at the lower anchor's X.
+    internal static Vector2d GetSideViewStepWaypoint(Vector2d start, Vector2d end) =>
+        start.Y < end.Y ? new Vector2d(start.X, end.Y) : new Vector2d(end.X, start.Y);
+
+    internal static bool SideViewSupportsMeet(in NavigationPlanarSupport from, in NavigationPlanarSupport to) =>
+        from.Left.X < to.Left.X ? from.Right == to.Left : to.Right == from.Left;
 
     private NavigationGuideStatus TraceSideView(GridWorld world, NavigationWorldGraph graph, NavigationPlanarBinding binding,
         int layerCount, WorldVoxelIndex source, WorldVoxelIndex target, Vector2d start, Vector2d end,
@@ -119,7 +145,7 @@ internal sealed partial class NavigationPlanarWork
     {
         support = default;
         center = default;
-        if (!meter.TryConsumeEndpointCandidates(1) || !meter.TryConsumeLookupProbes(1))
+        if (!meter.TryConsumeLookupProbes(1))
             return NavigationGuideStatus.BudgetExceeded;
         Fixed64 height = profile.AxisLength + profile.Radius + profile.Radius;
         if (!map.Map.TryGetPlanarSupport(index, out support) || support.Normal.Y < profile.MinimumSupportNormalDot
@@ -131,6 +157,13 @@ internal sealed partial class NavigationPlanarWork
             || height > cell.HeightClearance)
             return invalid;
 
+        return MaterializeSupportAnchor(support, profile, invalid, out center);
+    }
+
+    internal static NavigationGuideStatus MaterializeSupportAnchor(in NavigationPlanarSupport support,
+        in NavigationAgentProfile2D profile, NavigationGuideStatus invalid, out Vector2d center)
+    {
+        center = default;
         // Authoring checked the delta. A rounded midpoint must still lie on the finite support.
         Vector2d witness = support.Left + (support.Right - support.Left) * Fixed64.Half;
         if (Vector2d.OrientationSign(support.Left, support.Right, witness) != 0)

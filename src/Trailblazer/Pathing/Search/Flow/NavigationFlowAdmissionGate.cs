@@ -77,21 +77,22 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
 
     internal NavigationFlowFieldPayloadCache PayloadCache => _cache;
 
-    internal NavigationTopDownRouteWork? BeginScheduledTopDown(GridWorld world, in NavigationTopDownRouteRequest request)
+    internal NavigationPlanarRouteWork? BeginScheduledTopDown(GridWorld world, in NavigationPlanarRouteRequest request)
     {
         lock (_sync)
         {
             if (!CanBegin() || request.GetLogicalRetainedBytes() > _limits.MaxBatchDescriptorBytes
                 || _coordinator.TryReservePrefix(PathAlgorithm.FlowField, 1, out var reservation) == 0)
                 return null;
-            return new NavigationTopDownRouteWork(world, _store, request, null, null, _queries[0].Workspace,
+            return new NavigationPlanarRouteWork(world, _store, request, null, null, _queries[0].Workspace,
                 reservation);
         }
     }
 
-    internal NavigationGuideStatus FindTopDown(GridWorld world, in NavigationTopDownRouteRequest request,
+    internal NavigationGuideStatus FindPlanar(GridWorld world, in NavigationPlanarRouteRequest request,
         Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
-        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)
+        NavigationAStarPayloadCache? retention, out NavigationAStarGuideLease? guide,
+        in NavigationAgentProfile2D sideViewProfile = default)
     {
         count = 0;
         cost = default;
@@ -106,8 +107,8 @@ internal sealed class NavigationFlowAdmissionGate : IDisposable
         }
         try
         {
-            return NavigationTopDownRouteWork.Find(world, _store, request, null, null,
-                query.Workspace, route, out count, out cost, retention, out guide);
+            return NavigationPlanarRouteWork.Find(world, _store, request, null, null,
+                query.Workspace, route, out count, out cost, retention, out guide, sideViewProfile);
         }
         finally
         {

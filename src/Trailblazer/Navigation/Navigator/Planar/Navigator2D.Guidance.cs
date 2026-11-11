@@ -95,7 +95,7 @@ public abstract partial class Navigator2D
                     NavigationProfile.Capabilities, _algorithm, _budget, out guide, _allowTransitions);
             }
         }
-        status = TrailblazerPathingService.ResolveTopDownSnapshotStatus(status, graph, pathing.NavigationGraphStore.Current,
+        status = TrailblazerPathingService.ResolvePlanarSnapshotStatus(status, graph, pathing.NavigationGraphStore.Current,
             epoch, (world.SpawnToken, world.Version, world.ChangeSequence));
         if (status == NavigationGuideStatus.Success)
             AdoptGuide(guide);

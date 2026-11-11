@@ -10,10 +10,10 @@ namespace Trailblazer.Pathing;
 /// <content>Uses the shared queue and cohort source pin for top-down routes.</content>
 internal sealed partial class NavigationGuideScheduler
 {
-    private NavigationTopDownRouteRequest _cohortTopDownQuery;
-    private NavigationTopDownRouteWork? _topDownWork;
+    private NavigationPlanarRouteRequest _cohortTopDownQuery;
+    private NavigationPlanarRouteWork? _topDownWork;
 
-    internal NavigationGuideStatus ScheduleTopDown(in NavigationTopDownRouteRequest query, PathAlgorithm algorithm,
+    internal NavigationGuideStatus ScheduleTopDown(in NavigationPlanarRouteRequest query, PathAlgorithm algorithm,
         out NavigationTopDownGuideRequest? request)
     {
         request = null;
@@ -63,7 +63,7 @@ internal sealed partial class NavigationGuideScheduler
         return true;
     }
 
-    private bool PublishTopDown(NavigationTopDownGuideRequest request, NavigationTopDownRouteWork work)
+    private bool PublishTopDown(NavigationTopDownGuideRequest request, NavigationPlanarRouteWork work)
     {
         if (_sharedAdmission)
         {

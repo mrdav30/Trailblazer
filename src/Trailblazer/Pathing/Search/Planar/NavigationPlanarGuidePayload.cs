@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownGuidePayload.cs
+// NavigationPlanarGuidePayload.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -12,7 +12,7 @@ using GridForge.Grids;
 namespace Trailblazer.Pathing;
 
 /// <summary>Retains a selected planar route without pinning its graph generation.</summary>
-internal sealed class NavigationTopDownGuidePayload : NavigationAStarPayload
+internal sealed class NavigationPlanarGuidePayload : NavigationAStarPayload
 {
     // Graph version, world spawn token and aligned world version.
     private const long SnapshotBytes = 24;
@@ -20,7 +20,7 @@ internal sealed class NavigationTopDownGuidePayload : NavigationAStarPayload
     private readonly long _spawn;
     private readonly uint _worldVersion;
 
-    internal NavigationTopDownGuidePayload(NavigationAStarGuidePoint[] points, Fixed64 cost,
+    internal NavigationPlanarGuidePayload(NavigationAStarGuidePoint[] points, Fixed64 cost,
         NavigationAreaPolicyKey policy, long graphVersion, (long Spawn, uint Version, ulong Sequence) epoch,
         NavigationTransitionInstruction[]? transitions = null)
         : base(default, points, transitions ?? Array.Empty<NavigationTransitionInstruction>(), cost,

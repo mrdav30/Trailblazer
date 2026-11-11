@@ -38,7 +38,7 @@ public sealed partial class TrailblazerPathingService
         if (destination.HasValue && destination.Value.MapId == null)
             return NavigationGuideStatus.InvalidEnd;
         areaPolicy.Validate(nameof(areaPolicy));
-        if (profile.Mode != NavigationMode2D.SideView || (profile.AllowedMedia & TraversalMedia.Solid) == 0)
+        if (!IsSideViewSolidProfile(profile))
             return NavigationGuideStatus.InvalidProfile;
 
         var immediate = _immediateRayWorkspace;
@@ -65,11 +65,14 @@ public sealed partial class TrailblazerPathingService
                 status = destination is NavigationCellAddress target
                     ? work.ValidateSideViewLeg(world, graph, map, binding, address.Index, target, layerCount, profile, policy, meter)
                     : work.ResolveSideViewAnchor(world, graph, map, binding, address.Index, layerCount, profile, policy, meter, out center);
-            status = ResolveTopDownSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
+            status = ResolvePlanarSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence));
             if (status != NavigationGuideStatus.Success)
                 center = default;
             return status;
         }
     }
+
+    internal static bool IsSideViewSolidProfile(in NavigationAgentProfile2D profile) =>
+        profile.Mode == NavigationMode2D.SideView && (profile.AllowedMedia & TraversalMedia.Solid) != 0;
 }

@@ -54,7 +54,7 @@ public sealed partial class TrailblazerPathingService
                 0, 0, 0, 0, 0, 0, 0, 0, 0));
             var status = immediate.RayWork.Workspace.Planar.FindControllerCell(world, graph, binding, center,
                 immediate.WorkMeter, out var map, out grid, out voxel, preferredMapId);
-            status = ResolveTopDownSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
+            status = ResolvePlanarSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence));
             if (status == NavigationGuideStatus.NoPath)
                 return NavigationCommittedCellResolveStatus.NoCell;

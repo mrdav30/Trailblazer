@@ -104,6 +104,7 @@ public sealed partial class NavigationSideViewTests
         Publish(context, builder.Build());
         var profile = Profile();
         Leg(context, Cell(0), Cell(1), profile, Budget(edges: 0)).Should().Be(NavigationGuideStatus.BudgetExceeded);
+        Leg(context, Cell(0), Cell(1), profile, Budget(candidates: 0)).Should().Be(NavigationGuideStatus.BudgetExceeded);
         Leg(context, Cell(0), Cell(1), profile, Budget(candidates: 1)).Should().Be(NavigationGuideStatus.BudgetExceeded);
         Leg(context, Cell(0), Cell(1), profile, Budget(lookups: 2)).Should().Be(NavigationGuideStatus.BudgetExceeded);
         Leg(context, Cell(0), Cell(1), profile, Budget(covered: 0)).Should().Be(NavigationGuideStatus.BudgetExceeded);
@@ -162,12 +163,12 @@ public sealed partial class NavigationSideViewTests
         Leg(context, Cell(0), Cell(1), Profile()).Should().Be(NavigationGuideStatus.Success);
     }
 
-    private static TrailblazerWorldContext Scene(out ushort slot)
+    private static TrailblazerWorldContext Scene(out ushort slot, NavigationAreaPolicy? policy = null)
     {
         var context = TrailblazerWorldContext.CreateOwned();
         context.SetFrameRate(16);
         context.World.TryAddGrid(Grid, out slot).Should().BeTrue();
-        context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(Policy, 1, 1)).Should().BeTrue();
+        context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(policy ?? Policy, 1, 1)).Should().BeTrue();
         return context;
     }
 

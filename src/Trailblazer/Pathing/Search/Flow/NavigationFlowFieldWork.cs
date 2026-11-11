@@ -79,7 +79,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         _heap = new NavigationFlowFieldOpenHeap(workspace);
         _resultStatus = NavigationFlowFieldStatus.Success;
 
-        if (query.TopDown == null)
+        if (query.Planar == null)
         {
             if (!TryRecordPage(query.Start.Node)
                 || !TryRecordPage(query.End.Node))
@@ -148,13 +148,13 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                     if (_stage != Stage.Search)
                         continue;
                 }
-                NavigationTopDownSearch? topDown = _query!.TopDown;
+                NavigationPlanarSearch? planar = _query!.Planar;
                 NavigationMediumStateRef predecessor = default;
                 Fixed64 cost = default;
                 int forwardOrdinal = default;
                 NavigationTraversalEdgeKind kind = default;
                 NavigationTraversalEdgeAdvanceStatus edgeStatus;
-                if (topDown == null)
+                if (planar == null)
                 {
                     edgeStatus = _incoming.AdvanceOne(
                         _meter,
@@ -166,7 +166,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 }
                 else
                 {
-                    edgeStatus = topDown.AdvanceEdge(ref remaining, out predecessor, out cost, out forwardOrdinal, out kind);
+                    edgeStatus = planar.AdvanceEdge(ref remaining, out predecessor, out cost, out forwardOrdinal, out kind);
                 }
                 edgeStatus = ResolvePostEnumerationStatus(
                     IsWorldCurrent(),
@@ -182,7 +182,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                     return Status;
                 if (edgeStatus != NavigationTraversalEdgeAdvanceStatus.Edge)
                     return Finish(NavigationGuideStatusMapper.ToFlowField(edgeStatus));
-                NavigationFlowFieldStatus applied = topDown == null
+                NavigationFlowFieldStatus applied = planar == null
                     ? ApplyIncoming(_incoming.CurrentPredecessor, _incoming.CurrentCost,
                         _incoming.CurrentOrdinal, _incoming.CurrentKind)
                     : ApplyIncoming(predecessor, cost, forwardOrdinal, kind);
@@ -372,10 +372,10 @@ internal sealed class NavigationFlowFieldWork : IDisposable
     private bool TryBeginCurrent(ref int nodeRemaining)
     {
         NavigationResolvedPathQuery query = _query!;
-        NavigationTopDownSearch? topDown = query.TopDown;
+        NavigationPlanarSearch? planar = query.Planar;
         if (!_heap.TryPeek(out int nextSlot))
         {
-            if (topDown != null)
+            if (planar != null)
             {
                 Finish(NavigationFlowFieldStatus.NoPath);
                 return false;
@@ -415,7 +415,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 query.Start.Node,
                 query.StartMedium)))
         {
-            if (topDown != null)
+            if (planar != null)
             {
                 // Positive leg costs ensure every selected successor has already settled.
                 Finish(NavigationFlowFieldStatus.Success);
@@ -431,7 +431,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
             }
             _originSettled = true;
         }
-        if (topDown == null)
+        if (planar == null)
         {
             _incoming = new NavigationIncomingTraversalEdgeEnumerator(
                 _world!,
@@ -444,7 +444,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         }
         else
         {
-            topDown.BeginEdges(currentState, incoming: true);
+            planar.BeginEdges(currentState, incoming: true);
         }
         _hasCurrent = true;
         return true;
@@ -453,7 +453,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
     private NavigationFlowFieldStatus ApplyIncoming(NavigationMediumStateRef predecessorState,
         Fixed64 edgeCost, int forwardOrdinal, NavigationTraversalEdgeKind edgeKind)
     {
-        if (_query!.TopDown == null && !TryRecordStateDependencies(predecessorState))
+        if (_query!.Planar == null && !TryRecordStateDependencies(predecessorState))
             return Finish(NavigationFlowFieldStatus.CapacityExceeded);
         ref NavigationFlowFieldSearchNode current =
             ref _workspace.GetRecord(_currentSlot);
@@ -706,7 +706,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         }
         if ((_query!.End.Media & NavigationCell.ToMedia(medium)) == 0)
             return true;
-        if (_query.TopDown == null)
+        if (_query.Planar == null)
         {
             _graph!.TryGetSurfaceComponent(
                 _query.End.Address,

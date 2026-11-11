@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownSearch.cs
+// NavigationPlanarSearch.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -13,7 +13,7 @@ using GridForge.Spatial;
 namespace Trailblazer.Pathing;
 
 /// <summary>Admits canonical planar endpoints and supplies swept native edges to either search.</summary>
-internal sealed partial class NavigationTopDownSearch
+internal partial class NavigationPlanarSearch
 {
     private const int CrossMapEdgeOrdinal = 6;
 
@@ -21,7 +21,7 @@ internal sealed partial class NavigationTopDownSearch
     private readonly NavigationPlanarWork _proof;
     private readonly NavigationMapInstance _map;
     private readonly NavigationPlanarBinding _binding;
-    private readonly NavigationTopDownRouteRequest _request;
+    private readonly NavigationPlanarRouteRequest _request;
     private readonly NavigationAreaPolicy _policy;
     private readonly NavigationWorkMeter _meter;
     private readonly TraversalMedia _media;
@@ -38,8 +38,8 @@ internal sealed partial class NavigationTopDownSearch
     private GridPlanarLayer _crossLayer;
     private bool _crossLayerBound;
 
-    internal NavigationTopDownSearch(GridWorld world, NavigationWorldGraph graph, NavigationPlanarWork proof,
-        NavigationMapInstance map, NavigationPlanarBinding binding, in NavigationTopDownRouteRequest request,
+    internal NavigationPlanarSearch(GridWorld world, NavigationWorldGraph graph, NavigationPlanarWork proof,
+        NavigationMapInstance map, NavigationPlanarBinding binding, in NavigationPlanarRouteRequest request,
         NavigationAreaPolicy policy, NavigationWorkMeter meter)
     {
         _world = world;
@@ -71,7 +71,7 @@ internal sealed partial class NavigationTopDownSearch
     internal NavigationGuideStatus ResolveEnd(out NavigationResolvedEndpoint endpoint)
     {
         endpoint = default;
-        if (!NavigationPlanarWork.TryGetMap(Graph, _request.End.MapId, out var map, out var binding))
+        if (!NavigationPlanarWork.TryGetMap(Graph, _request.End.MapId, out var map, out var binding, _binding.Mode))
             return NavigationGuideStatus.NoMap;
         if (binding.EmbeddingY != _binding.EmbeddingY)
             return NavigationGuideStatus.NoPath;
@@ -84,6 +84,17 @@ internal sealed partial class NavigationTopDownSearch
         out NavigationResolvedEndpoint endpoint)
     {
         endpoint = default;
+        if (this is NavigationSideViewSearch sideView)
+        {
+            var supportStatus = _proof.ResolveSideViewAnchor(_world, Graph, map, _binding, address.Index,
+                _layerCount, sideView.Profile, _policy, _meter, out Vector2d anchor, blocked);
+            if (supportStatus != NavigationGuideStatus.Success)
+                return supportStatus;
+            TryGetNode(map, mapOrdinal, address.Index, out var supportNode);
+            endpoint = new NavigationResolvedEndpoint(supportNode, address, _media, _request.Medium,
+                new Vector3d(anchor.X, _binding.EmbeddingY, anchor.Y), Fixed64.Zero);
+            return NavigationGuideStatus.Success;
+        }
         if (!_meter.TryConsumeEndpointCandidates(1))
             return NavigationGuideStatus.BudgetExceeded;
         if (!TryGetNode(map, mapOrdinal, address.Index, out var node))
@@ -225,30 +236,54 @@ internal sealed partial class NavigationTopDownSearch
         NavigationMapInstance toMap = _incoming ? _currentMap : adjacentMap;
         VoxelIndex from = _incoming ? adjacent : _current;
         VoxelIndex to = _incoming ? _current : adjacent;
-        fromMap.Map.GridBinding.TryGetCellPrism(from, out GridCellPrism source);
-        toMap.Map.GridBinding.TryGetCellPrism(to, out GridCellPrism destination);
-        Vector2d start = source.Center.ToVector2d();
-        Vector2d end = destination.Center.ToVector2d();
-        if (!NavigationPlanarWork.IsOrdinaryNeighbor(_topology, start, end))
-            return NavigationTraversalEdgeAdvanceStatus.Pending;
-        NavigationGuideStatus status = Trace(fromMap, from, toMap, to, start, end, NavigationGuideStatus.NoPath);
+        Vector2d start, end;
+        bool step = false;
+        NavigationGuideStatus status;
+        if (this is NavigationSideViewSearch sideView)
+            status = _proof.TraceSideViewLeg(_world, Graph, fromMap, _binding, from, toMap, to,
+                _layerCount, sideView.Profile, _policy, _meter, out start, out end, out step);
+        else
+        {
+            fromMap.Map.GridBinding.TryGetCellPrism(from, out GridCellPrism source);
+            toMap.Map.GridBinding.TryGetCellPrism(to, out GridCellPrism destination);
+            start = source.Center.ToVector2d();
+            end = destination.Center.ToVector2d();
+            if (!NavigationPlanarWork.IsOrdinaryNeighbor(_topology, start, end))
+                return NavigationTraversalEdgeAdvanceStatus.Pending;
+            status = Trace(fromMap, from, toMap, to, start, end, NavigationGuideStatus.NoPath);
+        }
         if (status != NavigationGuideStatus.Success)
             return MapTraceFailure(status);
 
         toMap.TryGetSlot(to, out int slot);
         toMap.TryGetEffectiveCell(slot, out NavigationCell cell);
         NavigationAreaRule rule = _policy.GetRequiredRule(cell.Area);
-        if (!NavigationVolumeEdgeEvaluator.TryGetCost(new Vector3d(start.X, Fixed64.Zero, start.Y),
-                new Vector3d(end.X, Fixed64.Zero, end.Y), cell.EnterCost, rule.AdditionalEnterCost, out cost))
+        bool costFits = step
+            ? TryGetStepCost(start, end, cell.EnterCost, rule.AdditionalEnterCost, out cost)
+            : NavigationVolumeEdgeEvaluator.TryGetCost(new Vector3d(start.X, Fixed64.Zero, start.Y),
+                new Vector3d(end.X, Fixed64.Zero, end.Y), cell.EnterCost, rule.AdditionalEnterCost, out cost);
+        if (!costFits)
             return NavigationTraversalEdgeAdvanceStatus.CostOverflow;
 
         neighbor = new NavigationMediumStateRef(node, _request.Medium);
         return NavigationTraversalEdgeAdvanceStatus.Edge;
     }
 
+    private static bool TryGetStepCost(Vector2d start, Vector2d end, Fixed64 enter, Fixed64 area, out Fixed64 cost)
+    {
+        // The proved path has one horizontal and one vertical stage, each with exact scalar length.
+        bool horizontalFits = Fixed64.TrySubtract(FixedMath.Max(start.X, end.X), FixedMath.Min(start.X, end.X),
+            out Fixed64 horizontal);
+        bool verticalFits = Fixed64.TrySubtract(FixedMath.Max(start.Y, end.Y), FixedMath.Min(start.Y, end.Y),
+            out Fixed64 vertical);
+        return horizontalFits & verticalFits & Fixed64.TryAdd(horizontal, vertical, out Fixed64 length)
+            & NavigationTransitionEdgeEvaluator.TryAddEntryCosts(length, enter, area, out cost);
+    }
+
     private static NavigationTraversalEdgeAdvanceStatus MapTraceFailure(NavigationGuideStatus status) => status switch
     {
-        NavigationGuideStatus.NoPath => NavigationTraversalEdgeAdvanceStatus.Pending,
+        NavigationGuideStatus.NoPath or NavigationGuideStatus.InvalidStart or NavigationGuideStatus.InvalidEnd
+            => NavigationTraversalEdgeAdvanceStatus.Pending,
         NavigationGuideStatus.CapacityExceeded => NavigationTraversalEdgeAdvanceStatus.CapacityExceeded,
         NavigationGuideStatus.CostOverflow => NavigationTraversalEdgeAdvanceStatus.CostOverflow,
         _ => NavigationTraversalEdgeAdvanceStatus.BudgetExceeded
@@ -260,7 +295,7 @@ internal sealed partial class NavigationTopDownSearch
     internal bool TryGetNode(NavigationCellAddress address, out NavigationMapInstance map, out NavigationNodeRef node)
     {
         node = default;
-        return NavigationPlanarWork.TryGetMap(Graph, address.MapId, out map, out var binding)
+        return NavigationPlanarWork.TryGetMap(Graph, address.MapId, out map, out var binding, _binding.Mode)
             && binding.EmbeddingY == _binding.EmbeddingY
             && TryGetNode(map, Graph.FindMapOrdinal(map.MapId), address.Index, out node);
     }

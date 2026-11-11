@@ -84,13 +84,14 @@ public sealed partial class TrailblazerPathingService
         count = 0;
         cost = default;
         guide = default;
-        var status = NavigationTopDownRouteRequest.TryCreate(start, end, radius, areaPolicy, medium, capabilities, algorithm,
+        var status = NavigationPlanarRouteRequest.TryCreate(start, end, radius, areaPolicy, medium, capabilities, algorithm,
             budget, allowTransitions, out var request);
         if (status != NavigationGuideStatus.Success)
             return status;
-        return algorithm == PathAlgorithm.AStar
-            ? _navigationAStarAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost, retention, out guide)
-            : _navigationFlowAdmissionGate.FindTopDown(_context.World, request, route, out count, out cost, retention, out guide);
+        status = FindPlanarRoute(request, algorithm, route, out count, out cost, retention, out var acquired);
+        if (acquired != null)
+            guide = new NavigationTopDownGuideLease(acquired);
+        return status;
     }
 
     private NavigationGuideStatus RunTopDownQuery(string mapId, VoxelIndex? sourceIndex, Vector2d center,
@@ -167,14 +168,10 @@ public sealed partial class TrailblazerPathingService
         (long Spawn, uint Version, ulong Sequence) before, (long Spawn, uint Version, ulong Sequence) after,
         ref NavigationCellAddress address)
     {
-        status = ResolveTopDownSnapshotStatus(status, captured, current, before, after);
+        status = ResolvePlanarSnapshotStatus(status, captured, current, before, after);
         if (status == NavigationGuideStatus.Stale)
             address = default;
         return status;
     }
 
-    internal static NavigationGuideStatus ResolveTopDownSnapshotStatus(NavigationGuideStatus status,
-        NavigationWorldGraph captured, NavigationWorldGraph current,
-        (long Spawn, uint Version, ulong Sequence) before, (long Spawn, uint Version, ulong Sequence) after) =>
-        ReferenceEquals(captured, current) && before.Equals(after) ? status : NavigationGuideStatus.Stale;
 }

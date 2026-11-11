@@ -52,7 +52,7 @@ internal sealed class NavigationAStarGuideLease
             _payloadLease = payloadLease;
             _currentWaypointOrdinal = 0;
             NavigationAStarPayload payload = payloadLease.Payload;
-            _currentMedium = payload is NavigationTopDownGuidePayload ? payload.GuidePoints[0].Medium : payload.Key.StartMedium;
+            _currentMedium = payload is NavigationPlanarGuidePayload ? payload.GuidePoints[0].Medium : payload.Key.StartMedium;
             _status = NavigationAStarQueryStatus.Success;
         }
     }
@@ -351,13 +351,13 @@ internal sealed class NavigationAStarGuideLease
         NavigationAStarPayloadLease payloadLease = _payloadLease!;
         NavigationWorldGraphLease? graphLease = store.TryAcquire();
         if (graphLease == null)
-            return payloadLease.Payload is NavigationTopDownGuidePayload && store.IsDisposed
+            return payloadLease.Payload is NavigationPlanarGuidePayload && store.IsDisposed
                 ? MarkStaleUnderLock()
                 : NavigationAStarQueryStatus.CapacityExceeded;
         using (graphLease)
         {
             payload = payloadLease.Payload;
-            if (payload is NavigationTopDownGuidePayload topDown)
+            if (payload is NavigationPlanarGuidePayload topDown)
             {
                 if (topDown.IsCurrent(_owner.World, store))
                     return NavigationAStarQueryStatus.Success;

@@ -11,13 +11,13 @@ namespace Trailblazer.Pathing;
 public sealed class NavigationTopDownGuideRequest : NavigationGuideRequest
 {
     internal NavigationTopDownGuideRequest(NavigationGuideScheduler owner, PathAlgorithm algorithm,
-        in NavigationTopDownRouteRequest query, long descriptorBytes)
+        in NavigationPlanarRouteRequest query, long descriptorBytes)
         : base(owner, algorithm, descriptorBytes)
     {
         TopDownQuery = query;
     }
 
-    internal NavigationTopDownRouteRequest TopDownQuery { get; set; }
+    internal NavigationPlanarRouteRequest TopDownQuery { get; set; }
     internal NavigationTopDownGuideLease? TopDownGuide { get; set; }
 
     /// <summary>Transfers the retained top-down route once when acquisition succeeds and its snapshot is current.</summary>

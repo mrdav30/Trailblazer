@@ -77,7 +77,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     internal NavigationAStarPayloadCache PayloadCache => _cache;
 
-    internal NavigationTopDownRouteWork? BeginScheduledTopDown(GridWorld world, in NavigationTopDownRouteRequest request)
+    internal NavigationPlanarRouteWork? BeginScheduledTopDown(GridWorld world, in NavigationPlanarRouteRequest request)
     {
         lock (_sync)
         {
@@ -85,14 +85,15 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 || _coordinator.TryReservePrefix(PathAlgorithm.AStar, 1, out var reservation) == 0)
                 return null;
             var query = _queries[0];
-            return new NavigationTopDownRouteWork(world, _store, request, query.Workspace, query.RayWork,
+            return new NavigationPlanarRouteWork(world, _store, request, query.Workspace, query.RayWork,
                 null, reservation);
         }
     }
 
-    internal NavigationGuideStatus FindTopDown(GridWorld world, in NavigationTopDownRouteRequest request,
+    internal NavigationGuideStatus FindPlanar(GridWorld world, in NavigationPlanarRouteRequest request,
         Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
-        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)
+        NavigationAStarPayloadCache? retention, out NavigationAStarGuideLease? guide,
+        in NavigationAgentProfile2D sideViewProfile = default)
     {
         count = 0;
         cost = default;
@@ -107,8 +108,8 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         }
         try
         {
-            return NavigationTopDownRouteWork.Find(world, _store, request, query.Workspace, query.RayWork,
-                null, route, out count, out cost, retention, out guide);
+            return NavigationPlanarRouteWork.Find(world, _store, request, query.Workspace, query.RayWork,
+                null, route, out count, out cost, retention, out guide, sideViewProfile);
         }
         finally
         {

@@ -12,8 +12,9 @@ compatible published maps and support formation goals and opted-in
 same-medium actions through accepted controller motion. See the
 [Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
 covers native manual motion, authored supports, canonical anchors, and
-ordinary side-view leg proofs. Search integration and profile changes remain
-open. Use `UseLocalLsfStack=true`
+immediate A* and Flow guides over proved ordinary side-view legs. Scheduled
+and controller guidance, authored traversal, and profile changes remain open.
+Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
 overload and Gravitas 1.1.0 for the adapter. Hard-budgeted
@@ -951,8 +952,10 @@ in the existing test projects.
   - [x] Authored support, canonical capsule anchors, continuous collinear legs,
     and bounded horizontal step/drop and headroom proofs through the shared
     planar coverage workspace.
-  - [ ] Supported route integration with A* and Flow, remaining surface joins,
-    and the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
+  - [x] Immediate A* and Flow guides over the proved ordinary legs, with exact
+    ordered step waypoints and forward entry costs.
+  - [ ] Scheduled and controller guidance, remaining surface joins, and
+    the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
 - [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
   ladder between supported regions over bounded frames. Test insufficient
   clearance/capability and invalidated actions without teleporting through guide
@@ -3006,3 +3009,88 @@ Raw evidence is under `artifacts/side-view-legs`. The final matrix is in
 captures are `frozen-baseline.log`, `candidate.log`, `*-repeat.log`,
 `*-no-tiering.log` and `planar-probes.log`. The earlier `baseline.log`
 launcher attempt produced no valid runs and is excluded.
+
+### 2026-11-11 - Phase 2 immediate side-view A* and Flow guides
+
+`RequestSideViewGuide` acquires an immediate ordinary Solid guide between
+canonical support addresses. `NavigationSideViewGuideLease` exposes native
+capsule centers and advances through the proved stages in order. A step
+retains the exact bend at the lower anchor's X and upper anchor's height.
+The bend names the lower support owner and does not assert current contact.
+Hosts own motion and waypoint acceptance. Scheduled acquisition, arbitrary
+foot-position admission, controller following, corners, and authored actions
+remain separate work within Phase 2.
+
+The existing top-down route request, search, and detached payload are shared
+planar owners. A* uses its existing planar zero heuristic and Flow evaluates
+predecessors' forward edges. Both use the same authored support and capsule
+proofs as immediate leg validation. Search charges an edge once, charges
+endpoint candidates only during endpoint admission, and budgets the lookup
+and coverage work. Step cost sums the two checked axis lengths. Continuous
+legs use the existing outward-rounded distance. Both charge the forward
+destination cell and area entry once.
+
+Publication counts the selected support and bend points before reserving
+bytes and materializes them from the same immutable bake without retracing.
+Each of the two passes charges its support reads. Retained capacity includes
+the actual bends. Graph or raw world changes invalidate the lease, and
+successful acquisitions own independent cursors. The SideView profile lives
+on the SideView search instance. The TopDown scheduled descriptor and
+TopDown search storage keep their existing layouts.
+
+Tests cover asymmetric step/drop and exact waypoints for both algorithms,
+charged entry and uncharged headroom, overflow, cross-map search past an
+unsupported candidate, stationary routes, independent cursors, graph and
+raw-world invalidation, one-byte-short payload capacity, and budget
+exhaustion before and during point publication. The shared path and final
+source passed independent review. No new upstream API is required.
+
+The diff adds 308 net runtime lines relative to `970881e`, including the
+native guide lease and its acquisition entry point. The existing planar
+search kernels, workspaces, capacity coordinator, and cursor owner are reused.
+
+Built both target frameworks using the same pinned sibling source graph as
+the preceding slice, with `UseLocalLsfStack=true` on Windows and Ubuntu.
+Each host passed 3,571 core and 90 adapter tests in Release and 3,471 core
+and 86 adapter tests in ReleaseLean. All four builds had zero warnings and
+errors. The Release DocFX build with `--warningsAsErrors` passed. After the
+content-preserving move of the shared neighbor helpers into `Search/Planar`,
+the Windows Release solution build and all 165 focused planar tests passed.
+
+Per-suite Coverlet reports combined with ReportGenerator included
+`Trailblazer` and `Trailblazer.Gravitas` in every lane. Each lane covered
+34,813/34,813 lines, 14,913/14,913 branches, and 3,480/3,480 fully covered methods.
+
+The two-cell planar probe ran one full context frame per acquisition and
+consumed every waypoint, checking exact addresses, centers, and cost. It used
+the frozen assemblies after verifying their hashes. Each process warmed 1,024
+frames per algorithm and measured five 128-frame blocks. The TopDown fixture
+ran in baseline, candidate, candidate, baseline order. Its measured allocations
+were identical across builds.
+
+| Planar workload | Baseline medians | Candidate medians | Baseline / candidate bytes per frame |
+| --- | ---: | ---: | ---: |
+| TopDown A* | 635.680 / 648.640 us | 630.701 / 652.300 us | 5,760 / 5,760 |
+| TopDown Flow | 325.751 / 329.129 us | 323.023 / 338.815 us | 12,384 / 12,384 |
+| SideView A* step | — | 358.767 us | — / 5,880 |
+| SideView Flow step | — | 348.370 us | — / 12,504 |
+
+The matched 3D baseline was frozen at `970881e` before shared source edits.
+The 100-agent balanced-phase A* and Flow workloads ran in baseline,
+candidate, candidate, baseline order with two launches, five warmups, and
+five actual iterations per algorithm per capture. All four children in each
+capture exited successfully. The 1,280 actual frame checksums per capture,
+phase assignments, and mandatory, preparation, and periodic ray counts
+matched exactly. Warm frames allocated zero bytes. Each first admission
+allocated 21,600 bytes.
+
+| 3D workload | Baseline 1 / 2 median 64-frame sum | Candidate 1 / 2 median 64-frame sum |
+| --- | ---: | ---: |
+| A* | 92.405 / 90.442 ms | 92.741 / 93.412 ms |
+| Flow | 48.730 / 50.909 ms | 56.084 / 49.273 ms |
+
+The Flow timing increase in the first comparison reversed when run order
+reversed. These measurements leave latency differences inconclusive.
+Raw evidence is under `artifacts/side-view-search` in `windows-final-*`,
+`linux-final-*`, `docfx.log`, `relocated-*`, `baseline.log`,
+`candidate.log`, `*-repeat.log`, and `planar-probes.log`.

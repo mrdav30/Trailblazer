@@ -266,9 +266,9 @@ public sealed partial class NavigationTopDownTests
         NavigationPlanarWork.TryGetMap(graph, start.MapId, out var map, out var binding).Should().BeTrue();
         var budget = RouteBudget();
         var meter = new NavigationWorkMeter(budget);
-        var request = new NavigationTopDownRouteRequest(start, end, Fixed64.Quarter, Policy.Key,
+        var request = new NavigationPlanarRouteRequest(start, end, Fixed64.Quarter, Policy.Key,
             TraversalMedium.Solid, TraversalCapability.None, budget);
-        var search = new NavigationTopDownSearch(context.World, graph,
+        var search = new NavigationPlanarSearch(context.World, graph,
             context.Pathing.ImmediateRayWorkspace.RayWork.Workspace.Planar, map, binding, request, Policy, meter);
         search.BindSource().Should().Be(NavigationGuideStatus.Success);
         search.ResolveStart(out var origin).Should().Be(NavigationGuideStatus.Success);

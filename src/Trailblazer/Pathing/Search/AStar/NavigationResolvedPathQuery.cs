@@ -45,16 +45,16 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         RequiresWorldStamp = requiresWorldStamp;
     }
 
-    internal NavigationWorldGraph Graph => TopDown?.Graph ?? _lease?.Graph
+    internal NavigationWorldGraph Graph => Planar?.Graph ?? _lease?.Graph
         ?? throw new ObjectDisposedException(nameof(NavigationResolvedPathQuery));
 
-    internal NavigationTopDownSearch? TopDown { get; private set; }
+    internal NavigationPlanarSearch? Planar { get; private set; }
 
     // The immediate route caller owns the snapshot through result extraction.
-    internal void BindTopDown(NavigationTopDownSearch search, NavigationResolvedEndpoint start,
+    internal void BindPlanar(NavigationPlanarSearch search, NavigationResolvedEndpoint start,
         NavigationResolvedEndpoint end, NavigationAreaPolicy policy, NavigationWorkMeter meter, ulong sequence)
     {
-        TopDown = search;
+        Planar = search;
         Start = start;
         End = end;
         AreaPolicy = policy;
@@ -93,7 +93,7 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
     public void Dispose()
     {
         ReleaseLease();
-        TopDown = null;
+        Planar = null;
         Query = default;
         Start = default;
         End = default;

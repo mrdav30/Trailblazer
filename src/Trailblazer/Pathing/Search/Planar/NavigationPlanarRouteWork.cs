@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationTopDownRouteWork.cs
+// NavigationPlanarRouteWork.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -12,18 +12,18 @@ using GridForge.Grids;
 namespace Trailblazer.Pathing;
 
 /// <summary>Owns the snapshot and shared search workspace while a planar route is being built.</summary>
-internal sealed partial class NavigationTopDownRouteWork : IDisposable
+internal sealed partial class NavigationPlanarRouteWork : IDisposable
 {
     private readonly GridWorld _world;
     private readonly NavigationWorldGraphStore _store;
     private readonly NavigationWorldGraphLease? _graphLease;
     private readonly NavigationQueryCapacityReservation _lane;
     private readonly (long Spawn, uint Version, ulong Sequence) _epoch;
-    private readonly NavigationTopDownRouteRequest _request;
+    private readonly NavigationPlanarRouteRequest _request;
     private readonly NavigationAStarWorkspace? _aStar;
     private readonly NavigationRayWork? _ray;
     private readonly NavigationFlowFieldWorkspace? _flow;
-    private readonly NavigationTopDownSearch? _planar;
+    private readonly NavigationPlanarSearch? _planar;
     private readonly NavigationAreaPolicy? _policy;
     private readonly NavigationWorkMeter? _meter;
     private readonly NavigationResolvedPathQuery _query = new();
@@ -45,9 +45,10 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
     private bool _flowCleared;
     private bool _disposed;
 
-    internal NavigationTopDownRouteWork(GridWorld world, NavigationWorldGraphStore store,
-        in NavigationTopDownRouteRequest request, NavigationAStarWorkspace? aStar, NavigationRayWork? ray,
-        NavigationFlowFieldWorkspace? flow, NavigationQueryCapacityReservation lane = default)
+    internal NavigationPlanarRouteWork(GridWorld world, NavigationWorldGraphStore store,
+        in NavigationPlanarRouteRequest request, NavigationAStarWorkspace? aStar, NavigationRayWork? ray,
+        NavigationFlowFieldWorkspace? flow, NavigationQueryCapacityReservation lane = default,
+        in NavigationAgentProfile2D sideViewProfile = default)
     {
         _world = world;
         _store = store;
@@ -64,7 +65,9 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
             return;
         }
         NavigationWorldGraph graph = _graphLease.Graph;
-        if (!NavigationPlanarWork.TryGetMap(graph, request.Start.MapId, out var map, out var binding))
+        NavigationMode2D mode = sideViewProfile.Mode == NavigationMode2D.SideView
+            ? NavigationMode2D.SideView : NavigationMode2D.TopDown;
+        if (!NavigationPlanarWork.TryGetMap(graph, request.Start.MapId, out var map, out var binding, mode))
         {
             Status = NavigationGuideStatus.NoMap;
             return;
@@ -77,21 +80,26 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
         NavigationRayWorkspace rayWorkspace = aStar?.RayWorkspace ?? flow!.RayWorkspace;
         _meter = new NavigationWorkMeter(request.Budget);
         _policy = policy;
-        _planar = new NavigationTopDownSearch(world, graph, rayWorkspace.Planar, map, binding, request, policy, _meter);
+        _planar = mode == NavigationMode2D.SideView
+            ? new NavigationSideViewSearch(world, graph, rayWorkspace.Planar, map, binding, request, policy, _meter,
+                sideViewProfile)
+            : new NavigationPlanarSearch(world, graph, rayWorkspace.Planar, map, binding, request, policy, _meter);
     }
 
     internal NavigationGuideStatus Status { get; private set; } = NavigationGuideStatus.Pending;
-    internal bool AdmissionComplete => _query.TopDown != null;
+    internal bool AdmissionComplete => _query.Planar != null;
 
     internal static NavigationGuideStatus Find(GridWorld world, NavigationWorldGraphStore store,
-        in NavigationTopDownRouteRequest request, NavigationAStarWorkspace? aStar, NavigationRayWork? ray,
+        in NavigationPlanarRouteRequest request, NavigationAStarWorkspace? aStar, NavigationRayWork? ray,
         NavigationFlowFieldWorkspace? flow, Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
-        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide)
+        NavigationAStarPayloadCache? retention, out NavigationAStarGuideLease? guide,
+        in NavigationAgentProfile2D sideViewProfile = default)
     {
         count = 0;
         cost = default;
         guide = default;
-        using var work = new NavigationTopDownRouteWork(world, store, request, aStar, ray, flow);
+        using var work = new NavigationPlanarRouteWork(world, store, request, aStar, ray, flow,
+            sideViewProfile: sideViewProfile);
         while (work.Status == NavigationGuideStatus.Pending)
         {
             var unlimited = new NavigationAcquisitionSlice(int.MaxValue, int.MaxValue, int.MaxValue,
@@ -105,7 +113,7 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
             var unlimited = new NavigationAcquisitionSlice(int.MaxValue, int.MaxValue, int.MaxValue);
             var status = work.PublishPin(retention, ref unlimited, out var pin);
             if (status == NavigationGuideStatus.Success)
-                guide = retention.CreateTopDownGuide(store, pin!);
+                guide = retention.BindGuide(store, pin!);
             return status;
         }
         NavigationGuideStatus copyStatus = work.ResolveSnapshotStatus(route.Length < work._length
@@ -138,7 +146,7 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
 
     private NavigationGuideStatus AdvanceAdmission(ref NavigationAcquisitionSlice remaining)
     {
-        NavigationTopDownSearch planar = _planar!;
+        NavigationPlanarSearch planar = _planar!;
         NavigationWorkMeter meter = _meter!;
         while (remaining.LookupRemaining > 0 && remaining.EndpointCandidateRemaining > 0)
         {
@@ -156,7 +164,7 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
             {
                 status = planar.ResolveEnd(out var end);
                 if (status == NavigationGuideStatus.Success)
-                    _query.BindTopDown(planar, _start, end, _policy!, meter, _epoch.Sequence);
+                    _query.BindPlanar(planar, _start, end, _policy!, meter, _epoch.Sequence);
             }
             NavigationAcquisitionSlice.ConsumeAtomicLookups(ref remaining.LookupRemaining, meter, lookups);
             remaining.EndpointCandidateRemaining -= meter.EndpointCandidates - candidates;
@@ -236,27 +244,39 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
                     _actionCount++;
             }
         }
+        var sideView = _planar as NavigationSideViewSearch;
         if (_points == null)
         {
             if (remaining.NodeRemaining == 0)
                 return NavigationGuideStatus.Pending;
-            if (!retention.TryReservePayload(NavigationTopDownGuidePayload.MeasureBytes(_length, _actionCount),
+            int pointCount = _length;
+            if (sideView != null && !TryCountSideViewPoints(out pointCount))
+                return NavigationGuideStatus.BudgetExceeded;
+            if (!retention.TryReservePayload(NavigationPlanarGuidePayload.MeasureBytes(pointCount, _actionCount),
                     out _payloadReservation))
                 return NavigationGuideStatus.CapacityExceeded;
-            _points = new NavigationAStarGuidePoint[_length];
+            _points = new NavigationAStarGuidePoint[pointCount];
             _instructions = _actionCount == 0
                 ? Array.Empty<NavigationTransitionInstruction>() : new NavigationTransitionInstruction[_actionCount];
         }
         NavigationWorldGraph graph = _graphLease!.Graph;
-        while (_pointWrite < _length)
+        if (sideView != null)
         {
-            if (remaining.NodeRemaining == 0)
-                return NavigationGuideStatus.Pending;
-            remaining.NodeRemaining--;
-            NavigationCellAddress address = GetAddress(_pointWrite);
-            graph.TryGetSeamPrism(address, out var prism);
-            var position = new Vector3d(prism.Center.X, _query.Start.FootAnchor.Y, prism.Center.Z);
-            _points[_pointWrite++] = new NavigationAStarGuidePoint(address, position, _request.Medium);
+            if (!TryWriteSideViewPoints(sideView.Profile, _points))
+                return NavigationGuideStatus.BudgetExceeded;
+        }
+        else
+        {
+            while (_pointWrite < _length)
+            {
+                if (remaining.NodeRemaining == 0)
+                    return NavigationGuideStatus.Pending;
+                remaining.NodeRemaining--;
+                NavigationCellAddress address = GetAddress(_pointWrite);
+                graph.TryGetSeamPrism(address, out var prism);
+                var position = new Vector3d(prism.Center.X, _query.Start.FootAnchor.Y, prism.Center.Z);
+                _points[_pointWrite++] = new NavigationAStarGuidePoint(address, position, _request.Medium);
+            }
         }
         while (_actionWrite < _actionCount)
         {
@@ -274,9 +294,9 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
             if (!_flowCleared)
                 return NavigationGuideStatus.Pending;
         }
-        var payload = new NavigationTopDownGuidePayload(_points, _cost, _request.AreaPolicy, graph.GraphVersion,
+        var payload = new NavigationPlanarGuidePayload(_points, _cost, _request.AreaPolicy, graph.GraphVersion,
             _epoch, _instructions!);
-        return retention.PublishTopDownPayload(_store, payload, ref _payloadReservation, out pin);
+        return retention.PublishPlanarPayload(_store, payload, ref _payloadReservation, out pin);
     }
 
     private NavigationCellAddress GetAddress(int index)
@@ -289,7 +309,7 @@ internal sealed partial class NavigationTopDownRouteWork : IDisposable
 
     // A missing footprint cell can lack a dependency page, so retain the exact graph and raw-world snapshot.
     private NavigationGuideStatus ResolveSnapshotStatus(NavigationGuideStatus status) =>
-        TrailblazerPathingService.ResolveTopDownSnapshotStatus(status, _graphLease!.Graph, _store.Current,
+        TrailblazerPathingService.ResolvePlanarSnapshotStatus(status, _graphLease!.Graph, _store.Current,
             _epoch, (_world.SpawnToken, _world.Version, _world.ChangeSequence));
 
     public void Dispose()

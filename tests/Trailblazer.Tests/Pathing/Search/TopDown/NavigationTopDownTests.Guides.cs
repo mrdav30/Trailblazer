@@ -96,7 +96,7 @@ public sealed partial class NavigationTopDownTests
             cache.ActiveLeaseCount.Should().Be(leases.Length);
             cache.ReservedLeaseCount.Should().Be(0);
             cache.Count.Should().Be(0);
-            cache.LeasedBytes.Should().Be(NavigationTopDownGuidePayload.MeasureBytes(5) * leases.Length);
+            cache.LeasedBytes.Should().Be(NavigationPlanarGuidePayload.MeasureBytes(5) * leases.Length);
             cache.DetachedBytes.Should().Be(cache.LeasedBytes);
             cache.TryReservePayload(0, out _).Should().BeFalse();
             RequestTopDownGuide(context, start, end, algorithm, out rejected, Fixed64.Half)
@@ -183,11 +183,11 @@ public sealed partial class NavigationTopDownTests
         using var store = new NavigationWorldGraphStore(4, 2, long.MaxValue, long.MaxValue, int.MaxValue, 1);
         store.TryPublish(root).Should().Be(NavigationCandidatePublication.Published);
         var address = RouteCell(0, 0);
-        var request = new NavigationTopDownRouteRequest(address, address, Fixed64.Quarter, Policy.Key,
+        var request = new NavigationPlanarRouteRequest(address, address, Fixed64.Quarter, Policy.Key,
             TraversalMedium.Solid, TraversalCapability.None, RouteBudget());
         var workspace = new NavigationAStarWorkspace(1, 1, 1, 2, 8, 0, 2);
         var ray = new NavigationRayWork(workspace.RayWorkspace);
-        long exact = NavigationTopDownGuidePayload.MeasureBytes(1);
+        long exact = NavigationPlanarGuidePayload.MeasureBytes(1);
         var small = new NavigationAStarPayloadCache(context.World, 1, exact, exact - 1, exact, 2);
         Find(small, out var guide).Should().Be(NavigationGuideStatus.CapacityExceeded);
         guide.Status.Should().Be(NavigationGuideStatus.Stale);
@@ -204,9 +204,13 @@ public sealed partial class NavigationTopDownTests
         guide.Dispose();
         cache.LeasedBytes.Should().Be(0);
 
-        NavigationGuideStatus Find(NavigationAStarPayloadCache retention, out NavigationTopDownGuideLease result) =>
-            NavigationTopDownRouteWork.Find(context.World, store, request, workspace, ray, null, default,
-                out _, out _, retention, out result);
+        NavigationGuideStatus Find(NavigationAStarPayloadCache retention, out NavigationTopDownGuideLease result)
+        {
+            var status = NavigationPlanarRouteWork.Find(context.World, store, request, workspace, ray, null, default,
+                out _, out _, retention, out var lease);
+            result = lease == null ? default : new NavigationTopDownGuideLease(lease);
+            return status;
+        }
     }
 
     [Fact]
@@ -216,19 +220,19 @@ public sealed partial class NavigationTopDownTests
         var store = context.Pathing.NavigationGraphStore;
         var world = context.World;
         var cache = context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
-        var payload = new NavigationTopDownGuidePayload(
+        var payload = new NavigationPlanarGuidePayload(
             new[] { new NavigationAStarGuidePoint(RouteCell(0, 0), Vector3d.Zero, TraversalMedium.Solid) },
             Fixed64.Zero, Policy.Key, store.Current.GraphVersion, (world.SpawnToken, world.Version, world.ChangeSequence));
         cache.TryReservePayload(payload.RetainedBytes, out var reservation).Should().BeTrue();
         try
         {
             store.MarkSafetyPending();
-            cache.PublishTopDownPayload(store, payload, ref reservation, out var guide)
+            cache.PublishPlanarPayload(store, payload, ref reservation, out var guide)
                 .Should().Be(NavigationGuideStatus.CapacityExceeded);
             guide.Should().BeNull();
             store.ClearSafetyPending();
             context.Pathing.Reset();
-            cache.PublishTopDownPayload(store, payload, ref reservation, out guide).Should().Be(NavigationGuideStatus.Stale);
+            cache.PublishPlanarPayload(store, payload, ref reservation, out guide).Should().Be(NavigationGuideStatus.Stale);
             guide.Should().BeNull();
             cache.ActiveLeaseCount.Should().Be(0);
         }

@@ -78,6 +78,9 @@ For a horizontal step, the lower center must be at least one capsule radius
 from the seam in X. This reserves clearance beside the step during the lift
 or descent.
 
+Use [side-view guides](Pathing.md#immediate-side-view-guides) to search these
+ordinary legs with A* or Flow.
+
 ## Complete Cell Payloads
 
 `NavigationCell` stores:

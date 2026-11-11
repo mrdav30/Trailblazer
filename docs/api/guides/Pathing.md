@@ -136,6 +136,30 @@ call `CompletePendingTransition` with the same token after the host accepts
 the destination pose. Disposed, replaced, and previously completed tokens
 return `Stale`.
 
+### Immediate side-view guides
+
+Call `context.Guides.RequestSideViewGuide` with two authored support addresses,
+a SideView profile that permits Solid, an area policy, a finite work budget,
+and either A* or Flow. The endpoints resolve to the canonical upright capsule
+centers above the two [support midpoints](NavigationMaps.md#side-view-support).
+Compatible maps at the same embedding can supply support and headroom. Flow
+evaluates each predecessor's forward leg so step-up and drop limits apply in
+the requested direction.
+
+Each successful `NavigationSideViewGuideLease` starts at the first capsule
+center. Use `TryGetCurrentStep` to read it and `TryAdvanceStep` after accepting
+that waypoint. Follow each waypoint in order. A step-up retains the lift before
+the crossing. A drop retains the crossing before the descent. The bend's
+address identifies the lower support owner and the capsule can be airborne at
+that point. Your host owns the actual motion. Advancing at the final waypoint
+leaves the cursor there.
+
+The cost sums the proved stage lengths rounded up to the fixed-point unit and
+the forward destination's cell and area entry costs. Headroom adds no entry
+cost. The route describes one publication and raw world snapshot. A change to
+either makes the lease stale. Dispose each successful lease to return its
+shared route capacity.
+
 ## Agent Profile
 
 `NavigationAgentProfile` is immutable and includes:

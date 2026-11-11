@@ -188,7 +188,7 @@ internal sealed partial class NavigationAStarPayloadCache
         return NavigationAStarQueryStatus.Success;
     }
 
-    private NavigationAStarGuideLease BindGuide(NavigationWorldGraphStore store, NavigationAStarPayloadLease payloadLease)
+    internal NavigationAStarGuideLease BindGuide(NavigationWorldGraphStore store, NavigationAStarPayloadLease payloadLease)
     {
         NavigationAStarGuideLease? guide;
         lock (_sync)
@@ -520,8 +520,8 @@ internal sealed partial class NavigationAStarPayloadCache
         return Checkout(detached);
     }
 
-    internal NavigationGuideStatus PublishTopDownPayload(NavigationWorldGraphStore store,
-        NavigationTopDownGuidePayload payload, ref NavigationAStarPayloadReservation reservation,
+    internal NavigationGuideStatus PublishPlanarPayload(NavigationWorldGraphStore store,
+        NavigationPlanarGuidePayload payload, ref NavigationAStarPayloadReservation reservation,
         out NavigationAStarPayloadLease? pin)
     {
         pin = null;
@@ -550,7 +550,7 @@ internal sealed partial class NavigationAStarPayloadCache
         {
             var pin = source.AStar;
             var entry = pin?.Generation == source.AStarGeneration ? pin!.GetOwnedEntry(this) : null;
-            if (entry?.Payload is not NavigationTopDownGuidePayload payload)
+            if (entry?.Payload is not NavigationPlanarGuidePayload payload)
                 return NavigationGuideStatus.Stale;
             // Planar Flow retains an exact selected route. Promote origins it did not cover.
             if (payload.GuidePoints[0].Address != start)

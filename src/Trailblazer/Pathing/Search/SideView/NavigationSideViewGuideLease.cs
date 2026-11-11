@@ -1,0 +1,48 @@
+//=======================================================================
+// NavigationSideViewGuideLease.cs
+//=======================================================================
+// MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using System;
+using FixedMathSharp;
+
+namespace Trailblazer.Pathing;
+
+/// <summary>Owns a side-view route cursor over proved upright capsule center waypoints.</summary>
+/// <remarks>Copies share the cursor and ownership. Each successful request owns an independent lease.</remarks>
+public readonly struct NavigationSideViewGuideLease : IDisposable
+{
+    private readonly NavigationGuideLease _lease;
+
+    internal NavigationSideViewGuideLease(NavigationAStarGuideLease lease) => _lease = new NavigationGuideLease(lease);
+
+    /// <summary>Gets the current snapshot-validated status.</summary>
+    public NavigationGuideStatus Status => _lease.Status;
+
+    /// <summary>Gets the zero-based cursor, or -1 for an unbound or disposed lease.</summary>
+    public int CurrentStepIndex => _lease.CurrentStepIndex;
+
+    /// <summary>Gets the number of waypoints, including both endpoints and any step bends.</summary>
+    public int StepCount => _lease.StepCount;
+
+    /// <summary>Gets the summed stage lengths and forward destination entry costs.</summary>
+    public Fixed64 TotalCost => _lease.TotalCost;
+
+    /// <summary>Reads the current snapshot-validated capsule center in world X/Z.</summary>
+    /// <remarks>A step bend names its lower support owner. The bend itself can be airborne.</remarks>
+    public NavigationGuideStatus TryGetCurrentStep(out NavigationCellAddress address, out Vector2d center)
+    {
+        var status = _lease.TryGetCurrentStep(out var step);
+        address = step.Address;
+        center = step.Position.ToVector2d();
+        return status;
+    }
+
+    /// <summary>Advances by one waypoint, or succeeds without moving at the final waypoint.</summary>
+    public NavigationGuideStatus TryAdvanceStep() => _lease.TryAdvancePlanarStep();
+
+    /// <inheritdoc />
+    public void Dispose() => _lease.Dispose();
+}

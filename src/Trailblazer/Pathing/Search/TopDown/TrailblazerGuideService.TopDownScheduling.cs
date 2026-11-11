@@ -26,7 +26,7 @@ public sealed partial class TrailblazerGuideService
     {
         EnsureUsable();
         request = null;
-        var status = NavigationTopDownRouteRequest.TryCreate(start, end, radius, areaPolicy, medium, capabilities, algorithm,
+        var status = NavigationPlanarRouteRequest.TryCreate(start, end, radius, areaPolicy, medium, capabilities, algorithm,
             budget, allowTransitions, out var query);
         return status == NavigationGuideStatus.Success
             ? _scheduler.ScheduleTopDown(query, algorithm, out request) : status;

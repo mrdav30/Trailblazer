@@ -12,52 +12,54 @@ namespace Trailblazer.Pathing;
 
 internal sealed partial class NavigationPlanarRouteWork
 {
-    private bool TryCountSideViewPoints(out int count)
+    private NavigationGuideStatus AdvanceSideViewPoints(NavigationSideViewSearch sideView,
+        ref NavigationAcquisitionSlice remaining)
     {
-        count = _length;
-        NavigationPlanarSupport previous = default;
-        for (int i = 0; i < _length; i++)
+        // Count before reserving exact payload bytes. Each counted or emitted support takes
+        // one work step. Emission writes its optional bend and anchor together.
+        while (sideView.RouteSupportCursor < _length)
         {
+            if (remaining.LookupRemaining == 0 || remaining.NodeRemaining == 0)
+                return NavigationGuideStatus.Pending;
             if (!_meter!.TryConsumeLookupProbes(1))
-                return false;
-            var support = GetRouteSupport(GetAddress(i));
-            if (i != 0 && !NavigationPlanarWork.SideViewSupportsMeet(previous, support))
-                count++;
-            previous = support;
+                return NavigationGuideStatus.BudgetExceeded;
+            remaining.LookupRemaining--;
+            remaining.NodeRemaining--;
+            int index = sideView.RouteSupportCursor++;
+            var address = GetAddress(index);
+            var support = GetRouteSupport(address);
+            bool hasBend = index != 0 && !NavigationPlanarWork.SideViewSupportsMeet(sideView.PreviousRouteSupport, support);
+            if (_points == null)
+            {
+                if (hasBend)
+                    sideView.RouteBendCount++;
+            }
+            else
+                WriteSideViewAnchor(sideView.Profile, address, support, hasBend);
+            sideView.PreviousRouteSupport = support;
         }
-        return true;
+        return NavigationGuideStatus.Success;
     }
 
-    private bool TryWriteSideViewPoints(in NavigationAgentProfile2D profile, NavigationAStarGuidePoint[] points)
+    private void WriteSideViewAnchor(in NavigationAgentProfile2D profile, NavigationCellAddress address,
+        in NavigationPlanarSupport support, bool hasBend)
     {
-        NavigationPlanarSupport previousSupport = default;
-        NavigationAStarGuidePoint previousPoint = default;
         Fixed64 embedding = _query.Start.FootAnchor.Y;
-        int written = 0;
-        for (int i = 0; i < _length; i++)
+        var status = NavigationPlanarWork.MaterializeSupportAnchor(support, profile,
+            NavigationGuideStatus.Stale, out Vector2d center);
+        Debug.Assert(status == NavigationGuideStatus.Success);
+        var points = _points!;
+        if (hasBend)
         {
-            if (!_meter!.TryConsumeLookupProbes(1))
-                return false;
-            var address = GetAddress(i);
-            var support = GetRouteSupport(address);
-            var status = NavigationPlanarWork.MaterializeSupportAnchor(support, profile,
-                NavigationGuideStatus.Stale, out Vector2d center);
-            Debug.Assert(status == NavigationGuideStatus.Success);
-            if (i != 0 && !NavigationPlanarWork.SideViewSupportsMeet(previousSupport, support))
-            {
-                Vector2d previous = previousPoint.Position.ToVector2d();
-                Vector2d bend = NavigationPlanarWork.GetSideViewStepWaypoint(previous, center);
-                var owner = previous.Y < center.Y ? previousPoint.Address : address;
-                points[written++] = new NavigationAStarGuidePoint(owner,
-                    new Vector3d(bend.X, embedding, bend.Y), TraversalMedium.Solid);
-            }
-            previousSupport = support;
-            previousPoint = new NavigationAStarGuidePoint(address, new Vector3d(center.X, embedding, center.Y),
-                TraversalMedium.Solid);
-            points[written++] = previousPoint;
+            var previousPoint = points[_pointWrite - 1];
+            Vector2d previous = previousPoint.Position.ToVector2d();
+            Vector2d bend = NavigationPlanarWork.GetSideViewStepWaypoint(previous, center);
+            var owner = previous.Y < center.Y ? previousPoint.Address : address;
+            points[_pointWrite++] = new NavigationAStarGuidePoint(owner,
+                new Vector3d(bend.X, embedding, bend.Y), TraversalMedium.Solid);
         }
-        Debug.Assert(written == points.Length);
-        return true;
+        points[_pointWrite++] = new NavigationAStarGuidePoint(address, new Vector3d(center.X, embedding, center.Y),
+            TraversalMedium.Solid);
     }
 
     private NavigationPlanarSupport GetRouteSupport(NavigationCellAddress address)

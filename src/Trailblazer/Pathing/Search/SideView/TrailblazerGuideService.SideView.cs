@@ -22,6 +22,41 @@ public sealed partial class TrailblazerGuideService
     {
         EnsureUsable();
         guide = default;
+        var status = TryCreateSideViewRequest(start, end, profile, areaPolicy, algorithm, budget, out var request);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        var pathing = _context.Pathing;
+        status = pathing.FindPlanarRoute(request, algorithm, default, out _, out _,
+            pathing.NavigationAStarAdmissionGate.PayloadCache, out var acquired, profile);
+        if (acquired != null)
+            guide = new NavigationSideViewGuideLease(acquired);
+        return status;
+    }
+
+    /// <summary>Schedules an ordinary Solid side-view guide between two authored support anchors.</summary>
+    /// <remarks>
+    /// Pending returns an owned request. The shared FIFO advances admission, search and waypoint publication
+    /// within context frame allowances. Dispose the request or take its result once.
+    /// </remarks>
+    public NavigationGuideStatus ScheduleSideViewGuide(NavigationCellAddress start, NavigationCellAddress end,
+        in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, PathAlgorithm algorithm,
+        NavigationWorkBudget budget, out NavigationSideViewGuideRequest? request)
+    {
+        EnsureUsable();
+        request = null;
+        var status = TryCreateSideViewRequest(start, end, profile, areaPolicy, algorithm, budget, out var query);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        status = _scheduler.SchedulePlanar(query, algorithm, out var queued, profile);
+        request = (NavigationSideViewGuideRequest?)queued;
+        return status;
+    }
+
+    private static NavigationGuideStatus TryCreateSideViewRequest(NavigationCellAddress start, NavigationCellAddress end,
+        in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, PathAlgorithm algorithm,
+        NavigationWorkBudget budget, out NavigationPlanarRouteRequest request)
+    {
+        request = default;
         areaPolicy.Validate(nameof(areaPolicy));
         if (start.MapId == null)
             return NavigationGuideStatus.InvalidStart;
@@ -32,13 +67,8 @@ public sealed partial class TrailblazerGuideService
         if (algorithm is not PathAlgorithm.AStar and not PathAlgorithm.FlowField)
             return NavigationGuideStatus.Unsupported;
 
-        var request = new NavigationPlanarRouteRequest(start, end, profile.Radius, areaPolicy,
+        request = new NavigationPlanarRouteRequest(start, end, profile.Radius, areaPolicy,
             TraversalMedium.Solid, profile.Capabilities, budget);
-        var pathing = _context.Pathing;
-        var status = pathing.FindPlanarRoute(request, algorithm, default, out _, out _,
-            pathing.NavigationAStarAdmissionGate.PayloadCache, out var acquired, profile);
-        if (acquired != null)
-            guide = new NavigationSideViewGuideLease(acquired);
-        return status;
+        return NavigationGuideStatus.Success;
     }
 }

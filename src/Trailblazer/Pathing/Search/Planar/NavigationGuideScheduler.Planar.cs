@@ -1,5 +1,5 @@
 //=======================================================================
-// NavigationGuideScheduler.TopDown.cs
+// NavigationGuideScheduler.Planar.cs
 //=======================================================================
 // MIT License, Copyright (c) 2026-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
@@ -7,49 +7,51 @@
 
 namespace Trailblazer.Pathing;
 
-/// <content>Uses the shared queue and cohort source pin for top-down routes.</content>
+/// <content>Uses the shared queue and cohort source pin for planar routes.</content>
 internal sealed partial class NavigationGuideScheduler
 {
-    private NavigationPlanarRouteRequest _cohortTopDownQuery;
-    private NavigationPlanarRouteWork? _topDownWork;
+    private NavigationPlanarRouteRequest _cohortPlanarQuery;
+    private NavigationAgentProfile2D _cohortSideViewProfile;
+    private NavigationPlanarRouteWork? _planarWork;
 
-    internal NavigationGuideStatus ScheduleTopDown(in NavigationPlanarRouteRequest query, PathAlgorithm algorithm,
-        out NavigationTopDownGuideRequest? request)
+    internal NavigationGuideStatus SchedulePlanar(in NavigationPlanarRouteRequest query, PathAlgorithm algorithm,
+        out NavigationGuideRequest? request, in NavigationAgentProfile2D sideViewProfile = default)
     {
         request = null;
-        long bytes = query.GetLogicalRetainedBytes();
+        long bytes = query.GetLogicalRetainedBytes(sideViewProfile);
         lock (_sync)
         {
             ChronicleGuard.ThrowIfDisposed(_closed, nameof(TrailblazerWorldContext));
             if (!HasRequestCapacity(bytes))
                 return NavigationGuideStatus.CapacityExceeded;
-            var candidate = new NavigationTopDownGuideRequest(this, algorithm, query, bytes)
-            { Flavor = NavigationGuideRequestFlavor.TopDown };
+            NavigationGuideRequest candidate = sideViewProfile.Mode == NavigationMode2D.SideView
+                ? new NavigationSideViewGuideRequest(this, algorithm, query, sideViewProfile, bytes)
+                : new NavigationTopDownGuideRequest(this, algorithm, query, bytes);
             Enqueue(candidate);
             request = candidate;
             return NavigationGuideStatus.Pending;
         }
     }
 
-    private void BeginTopDown(NavigationTopDownGuideRequest request)
+    private void BeginPlanar(NavigationGuideRequest request, INavigationPlanarGuideRequest planar)
     {
         var pathing = _context.Pathing;
         var world = _context.World;
-        _topDownWork = request.Algorithm == PathAlgorithm.FlowField
-            ? pathing.NavigationFlowAdmissionGate.BeginScheduledTopDown(world, request.TopDownQuery)
-            : pathing.NavigationAStarAdmissionGate.BeginScheduledTopDown(world, request.TopDownQuery);
-        if (_topDownWork == null)
+        _planarWork = request.Algorithm == PathAlgorithm.FlowField
+            ? pathing.NavigationFlowAdmissionGate.BeginScheduledPlanar(world, planar.PlanarQuery, planar.SideViewProfile)
+            : pathing.NavigationAStarAdmissionGate.BeginScheduledPlanar(world, planar.PlanarQuery, planar.SideViewProfile);
+        if (_planarWork == null)
             Complete(request, NavigationGuideStatus.CapacityExceeded);
         else
             SetPhase(NavigationGuideRequestPhase.Admission);
     }
 
     // True means the continuation is still active and may need to yield on a drained slice.
-    private bool AdvanceTopDown(NavigationTopDownGuideRequest request)
+    private bool AdvancePlanar(NavigationGuideRequest request, INavigationPlanarGuideRequest planar)
     {
-        var work = _topDownWork!;
+        var work = _planarWork!;
         if (_phase == NavigationGuideRequestPhase.Publication)
-            return PublishTopDown(request, work);
+            return PublishPlanar(request, planar, work);
         work.Advance(ref _frameRemaining, endpointOnly: _sharedAdmission);
         if (work.Status == NavigationGuideStatus.Success)
             SetPhase(NavigationGuideRequestPhase.Publication);
@@ -63,11 +65,12 @@ internal sealed partial class NavigationGuideScheduler
         return true;
     }
 
-    private bool PublishTopDown(NavigationTopDownGuideRequest request, NavigationPlanarRouteWork work)
+    private bool PublishPlanar(NavigationGuideRequest request, INavigationPlanarGuideRequest planar,
+        NavigationPlanarRouteWork work)
     {
         if (_sharedAdmission)
         {
-            Complete(request, CheckoutTopDown(request));
+            Complete(request, CheckoutPlanar(planar));
             return false;
         }
         var cache = _context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
@@ -84,30 +87,31 @@ internal sealed partial class NavigationGuideScheduler
         return false;
     }
 
-    private NavigationGuideStatus CheckoutTopDown(NavigationTopDownGuideRequest request)
+    private NavigationGuideStatus CheckoutPlanar(INavigationPlanarGuideRequest request)
     {
         _source.Transfer = _cohortPending == 1;
         var pathing = _context.Pathing;
-        var status = pathing.NavigationAStarAdmissionGate.PayloadCache.TryCheckoutTopDownGuide(
-            pathing.NavigationGraphStore, _source, request.TopDownQuery.Start, out var guide);
+        var status = pathing.NavigationAStarAdmissionGate.PayloadCache.TryCheckoutPlanarGuide(
+            pathing.NavigationGraphStore, _source, request.PlanarQuery.Start, out var guide);
         if (status == NavigationGuideStatus.Success)
-            request.TopDownGuide = guide;
+            request.PlanarGuide = guide;
         return status;
     }
 
-    internal bool TryTakeTopDownGuide(NavigationTopDownGuideRequest request, out NavigationTopDownGuideLease guide)
+    internal bool TryTakePlanarGuide<T>(T request, out NavigationGuideLease guide)
+        where T : NavigationGuideRequest, INavigationPlanarGuideRequest
     {
         lock (_sync)
         {
             guide = default;
-            if (request.Owner != this || request.TopDownGuide is not NavigationTopDownGuideLease candidate)
+            if (request.Owner != this || request.PlanarGuide is not NavigationGuideLease candidate)
                 return false;
             request.Status = IsWorldCurrent(request) ? candidate.Status : NavigationGuideStatus.Stale;
             bool transferred = request.Status == NavigationGuideStatus.Success;
             if (transferred)
             {
                 guide = candidate;
-                request.TopDownGuide = null;
+                request.PlanarGuide = null;
             }
             Release(request);
             return transferred;

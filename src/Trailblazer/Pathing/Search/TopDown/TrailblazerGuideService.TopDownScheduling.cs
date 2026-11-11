@@ -28,7 +28,10 @@ public sealed partial class TrailblazerGuideService
         request = null;
         var status = NavigationPlanarRouteRequest.TryCreate(start, end, radius, areaPolicy, medium, capabilities, algorithm,
             budget, allowTransitions, out var query);
-        return status == NavigationGuideStatus.Success
-            ? _scheduler.ScheduleTopDown(query, algorithm, out request) : status;
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        status = _scheduler.SchedulePlanar(query, algorithm, out var queued);
+        request = (NavigationTopDownGuideRequest?)queued;
+        return status;
     }
 }

@@ -538,11 +538,8 @@ internal sealed partial class NavigationAStarPayloadCache
         return NavigationGuideStatus.Success;
     }
 
-    internal NavigationTopDownGuideLease CreateTopDownGuide(NavigationWorldGraphStore store,
-        NavigationAStarPayloadLease lease) => new(BindGuide(store, lease));
-
-    internal NavigationGuideStatus TryCheckoutTopDownGuide(NavigationWorldGraphStore store,
-        NavigationCohortSource source, NavigationCellAddress start, out NavigationTopDownGuideLease guide)
+    internal NavigationGuideStatus TryCheckoutPlanarGuide(NavigationWorldGraphStore store,
+        NavigationCohortSource source, NavigationCellAddress start, out NavigationGuideLease guide)
     {
         guide = default;
         NavigationAStarPayloadLease lease;
@@ -567,7 +564,7 @@ internal sealed partial class NavigationAStarPayloadCache
             else
                 lease = Checkout(entry);
         }
-        guide = CreateTopDownGuide(store, lease);
+        guide = new NavigationGuideLease(BindGuide(store, lease));
         return NavigationGuideStatus.Success;
     }
 

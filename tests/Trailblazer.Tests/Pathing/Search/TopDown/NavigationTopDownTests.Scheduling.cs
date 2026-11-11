@@ -166,9 +166,9 @@ public sealed partial class NavigationTopDownTests
         var gate = context.Pathing.NavigationAStarAdmissionGate;
         var query = new NavigationPlanarRouteRequest(ScheduledCell(0), ScheduledCell(4), Fixed64.Quarter, Policy.Key,
             TraversalMedium.Solid, TraversalCapability.None, RouteBudget());
-        var first = TestRequire.NotNull(gate.BeginScheduledTopDown(context.World, query));
+        var first = TestRequire.NotNull(gate.BeginScheduledPlanar(context.World, query));
         first.Dispose();
-        using var second = TestRequire.NotNull(gate.BeginScheduledTopDown(context.World, query));
+        using var second = TestRequire.NotNull(gate.BeginScheduledPlanar(context.World, query));
         first.Dispose();
         context.Pathing.NavigationGraphStore.ActiveLeaseCount.Should().Be(1);
     }
@@ -255,8 +255,8 @@ public sealed partial class NavigationTopDownTests
         if (!spatial)
         {
             owner = TestRequire.NotNull(algorithm == PathAlgorithm.AStar
-                ? pathing.NavigationAStarAdmissionGate.BeginScheduledTopDown(context.World, query)
-                : pathing.NavigationFlowAdmissionGate.BeginScheduledTopDown(context.World, query));
+                ? pathing.NavigationAStarAdmissionGate.BeginScheduledPlanar(context.World, query)
+                : pathing.NavigationFlowAdmissionGate.BeginScheduledPlanar(context.World, query));
         }
         else if (algorithm == PathAlgorithm.AStar)
         {
@@ -360,7 +360,7 @@ public sealed partial class NavigationTopDownTests
         var cache = context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
         var origin = ScheduledCell(0);
         using var source = new NavigationCohortSource();
-        cache.TryCheckoutTopDownGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.Stale);
+        cache.TryCheckoutPlanarGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.Stale);
         var payload = new NavigationPlanarGuidePayload(
             new[] { new NavigationAStarGuidePoint(origin, Vector3d.Zero, TraversalMedium.Solid) },
             Fixed64.Zero, Policy.Key, store.Current.GraphVersion, (world.SpawnToken, world.Version, world.ChangeSequence));
@@ -369,13 +369,13 @@ public sealed partial class NavigationTopDownTests
         first.Dispose();
         using var reused = PublishPin();
         reused.Should().BeSameAs(source.AStar);
-        cache.TryCheckoutTopDownGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.Stale);
+        cache.TryCheckoutPlanarGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.Stale);
         source.AStar = reused;
         store.MarkSafetyPending();
-        cache.TryCheckoutTopDownGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
+        cache.TryCheckoutPlanarGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.CapacityExceeded);
         store.ClearSafetyPending();
         context.Pathing.Reset();
-        cache.TryCheckoutTopDownGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.Stale);
+        cache.TryCheckoutPlanarGuide(store, source, origin, out _).Should().Be(NavigationGuideStatus.Stale);
         source.AStar = null;
 
         NavigationAStarPayloadLease PublishPin()
@@ -472,27 +472,7 @@ public sealed partial class NavigationTopDownTests
     private static TrailblazerWorldContext CreateScheduledPlanarContext(NavigationSchedulingSettings? scheduling = null,
         long? maxBatchDescriptorBytes = null, bool jumpScene = false)
     {
-        var defaults = TrailblazerWorldContextSettings.Default;
-        var d = defaults.QueryLimits;
-        var limits = maxBatchDescriptorBytes is long bytes
-            ? new NavigationQueryLimits(d.MaxBatchItems, bytes, d.MaxConcurrentNavigationQueries,
-                d.AStarWorkspaceMapCapacity, d.AStarWorkspaceEndpointPageCapacity, d.AStarWorkspaceComponentCapacity,
-                d.AStarWorkspaceNodeCapacity, d.MaxAStarCacheEntries, d.MaxAStarReusablePayloadBytes,
-                d.MaxAStarSinglePayloadBytes, d.MaxAStarActivePayloadBytes, d.MaxAStarActivePayloadLeases,
-                d.FlowWorkspaceMapCapacity, d.FlowWorkspaceEndpointPageCapacity, d.FlowWorkspaceComponentCapacity,
-                d.FlowWorkspaceNodeCapacity, d.RayWorkspaceCoveredAddressCapacity, d.RayWorkspaceTraceIntervalCapacity,
-                d.AStarWorkspaceGuidePointCapacity, d.MaxFlowCacheEntries, d.MaxFlowReusablePayloadBytes,
-                d.MaxFlowSinglePayloadBytes, d.MaxFlowActivePayloadBytes, d.MaxFlowActivePayloadLeases)
-            : d;
-        scheduling ??= new NavigationSchedulingSettings(lookupStepLimit: 1, endpointCandidateStepLimit: 1,
-            nodeStepLimit: 1, edgeStepLimit: 1, connectionStepLimit: 1);
-        var settings = new TrailblazerWorldContextSettings(defaults.OperationLimits, defaults.MaintenanceBudget,
-            defaults.GuideSampleBudget, defaults.MovementGroupPadding, defaults.MaxIngressEntries,
-            defaults.MaxIngressBytes, defaults.MaxActiveSnapshots, defaults.MaxActiveSnapshotBytes,
-            defaults.MaxRetiredSnapshots, defaults.MaxRetiredSnapshotBytes, defaults.MaxPersistentGraphPages,
-            defaults.MaxDynamicCellSlotsPerMap, defaults.MaxDynamicCellSlots, defaults.NavigationAreaCount,
-            defaults.MaxAreaPolicies, defaults.MaxAreaRulesPerPolicy, defaults.MaxAreaRules,
-            defaults.MaxConcurrentSnapshotLeases, limits, scheduling);
+        var settings = PlanarSchedulingTestSettings.Create(scheduling, maxBatchDescriptorBytes);
         var context = TrailblazerWorldContext.CreateOwned(settings: settings);
         context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(Policy, 1, context.FrameCount + 1))
             .Should().BeTrue();

@@ -21,4 +21,7 @@ internal sealed class NavigationSideViewSearch : NavigationPlanarSearch
     }
 
     internal NavigationAgentProfile2D Profile { get; }
+    internal int RouteSupportCursor;
+    internal int RouteBendCount;
+    internal NavigationPlanarSupport PreviousRouteSupport;
 }

@@ -16,7 +16,9 @@ public readonly struct NavigationSideViewGuideLease : IDisposable
 {
     private readonly NavigationGuideLease _lease;
 
-    internal NavigationSideViewGuideLease(NavigationAStarGuideLease lease) => _lease = new NavigationGuideLease(lease);
+    internal NavigationSideViewGuideLease(NavigationAStarGuideLease lease) : this(new NavigationGuideLease(lease)) { }
+
+    internal NavigationSideViewGuideLease(NavigationGuideLease lease) => _lease = lease;
 
     /// <summary>Gets the current snapshot-validated status.</summary>
     public NavigationGuideStatus Status => _lease.Status;

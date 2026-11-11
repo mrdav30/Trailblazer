@@ -5,15 +5,15 @@
 
 **Created:** 2026-09-03
 
-**Status (2026-11-10):** Phase 1 and its hardening pass are complete in
+**Status (2026-11-11):** Phase 1 and its hardening pass are complete in
 coordinated source mode. Native top-down A* and Flow
 use the shared graph and scheduler. They prove swept-circle legs across
 compatible published maps and support formation goals and opted-in
 same-medium actions through accepted controller motion. See the
 [Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
 covers native manual motion, authored supports, canonical anchors, and
-immediate A* and Flow guides over proved ordinary side-view legs. Scheduled
-and controller guidance, authored traversal, and profile changes remain open.
+immediate and scheduled A* and Flow guides over proved ordinary side-view legs.
+Controller guidance, authored traversal, and profile changes remain open.
 Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
@@ -954,7 +954,9 @@ in the existing test projects.
     planar coverage workspace.
   - [x] Immediate A* and Flow guides over the proved ordinary legs, with exact
     ordered step waypoints and forward entry costs.
-  - [ ] Scheduled and controller guidance, remaining surface joins, and
+  - [x] Side-view guides use the shared scheduled acquisition FIFO and
+    materialize exact step waypoints within counted frame allowances.
+  - [ ] Controller guidance, remaining surface joins, and
     the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
 - [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
   ladder between supported regions over bounded frames. Test insufficient
@@ -3094,3 +3096,80 @@ reversed. These measurements leave latency differences inconclusive.
 Raw evidence is under `artifacts/side-view-search` in `windows-final-*`,
 `linux-final-*`, `docfx.log`, `relocated-*`, `baseline.log`,
 `candidate.log`, `*-repeat.log`, and `planar-probes.log`.
+
+### 2026-11-11 - Phase 2 scheduled side-view acquisition
+
+`ScheduleSideViewGuide` queues the same canonical-address Solid query as the
+immediate API. `NavigationSideViewGuideRequest` owns the pending interest and
+unclaimed result. It transfers the lease once through `TryTakeSideViewGuide`
+after checking the retained snapshot. The shared planar queue and payload
+owner serve both modes. Cohorts require the same mode and exact profile.
+Flow can serve a covered follower before rebuilding an uncovered origin.
+
+Side-view waypoint publication now resumes the count and emit passes under
+the frame lookup and node allowances. Each support read takes one step in
+each category. The optional bend and its anchor are written together.
+Exact bytes are reserved after counting, and resumed Flow cleanup does not
+read or emit any support twice. The same publication path serves immediate
+queries, preserving the total lookup boundary.
+
+The SideView ticket's profile is charged to the queue and algorithm gate.
+Spatial and TopDown ticket storage and logical descriptor sizes are
+preserved. The diff adds 125 net runtime lines relative to `ff42ad9`.
+No upstream API change is required. Both independent reviews verified the
+shared owner, profile barrier and partial-publication release path.
+
+Focused cases cover the exact immediate lookup boundary under one-step
+slices, the step bend, exactly-once typed transfer, shared payload and
+independent cursors, incompatible step limits, Flow origin promotion,
+one-byte-short queue and lane admission, and cancellation or invalidation
+of partial and unclaimed results. Controller-owned following and actual
+host motion through the bend remain separate Phase 2 work.
+
+Built the solution in Release and ReleaseLean on Windows and Ubuntu with
+`UseLocalLsfStack=true` and the same pinned sibling sources as the immediate
+slice. Each host passed 3,581 core and 90 adapter tests in Release and 3,481
+core and 86 adapter tests in ReleaseLean. Combined reports in every lane
+included both assemblies and covered 34,861/34,861 lines, 14,931/14,931
+branches, and 3,491/3,491 fully covered methods. All builds and Release DocFX
+with `--warningsAsErrors` passed with zero warnings and errors.
+
+The frozen `ff42ad9` 100-agent guided-frame control was captured before
+shared source edits. Both baseline and candidate used two launches, five
+warmups and five actual iterations per algorithm. All four children per
+capture succeeded. All 1,280 actual frame checksums, phase assignments and
+ray counts matched, with zero warm-frame bytes and 21,600 bytes per first
+admission. Median 64-frame sums were 97.055 to 94.070 ms for A* and
+54.094 to 46.822 ms for Flow.
+
+The two-cell planar probe warmed 256 routes per process and measured five
+blocks of 64. Each route advanced real context frames with one lookup and
+one node step per frame, transferred the lease and checked every waypoint
+and the total cost. TopDown ran baseline, candidate, candidate, baseline.
+Probe copies of the production assembly were verified by hash.
+
+| Scheduled planar workload | Frames per route | Baseline medians | Candidate medians | Baseline / candidate bytes per route |
+| --- | ---: | ---: | ---: | ---: |
+| TopDown A* | 20 | 725.100 / 760.316 us | 732.066 / 750.934 us | 6,280 / 6,280 |
+| TopDown Flow | 15 | 374.081 / 376.431 us | 381.839 / 386.953 us | 12,904 / 12,904 |
+| SideView A* step | 14 | — | 461.350 us | — / 6,536 |
+| SideView Flow step | 15 | — | 446.136 us | — / 13,160 |
+
+The 3D scheduled control used a 10,000-node plane, 100 moving agents, and
+one cold request. Each capture used two launches with three warmups and
+three actual iterations per algorithm. All four children per capture
+succeeded. Across baseline, candidate, candidate, baseline, the exact
+containing-frame counts, scheduler phases, completion masks and per-frame
+allocations matched in all actual iterations.
+
+| 3D scheduled workload | Frames per request | Bytes per request | Baseline median frame sum | Candidate median frame sum |
+| --- | ---: | ---: | ---: | ---: |
+| A* | 159 | 38,880 | 130.328 / 136.897 ms | 139.545 / 131.255 ms |
+| Flow | 1,138 | 792,816 | 580.398 / 588.311 ms | 556.593 / 554.818 ms |
+
+The first A* timing increase reversed when run order reversed. These
+captures establish matching work and allocations and leave latency
+differences inconclusive. Raw evidence is under
+`artifacts/side-view-scheduling` in `windows-final-*`, `linux-final-*`,
+`docfx.log`, `baseline.log`, `candidate.log`, `*-scheduled.log`, and
+`planar-scheduled-probes.log`.

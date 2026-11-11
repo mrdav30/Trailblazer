@@ -160,6 +160,9 @@ cost. The route describes one publication and raw world snapshot. A change to
 either makes the lease stale. Dispose each successful lease to return its
 shared route capacity.
 
+Use [scheduled acquisition](#scheduled-side-view-routes) to spread search
+and publication across fixed frames.
+
 ## Agent Profile
 
 `NavigationAgentProfile` is immutable and includes:
@@ -276,12 +279,25 @@ profile inputs, policy, and total work budget as an immediate top-down request.
 context frame and use `TryTakeTopDownGuide` to transfer a successful lease once.
 Dispose requests that no longer have a consumer.
 
+### Scheduled side-view routes
+
+For side-view routes, use `context.Guides.ScheduleSideViewGuide` with the same
+support addresses, capsule profile, policy, and total budget as the immediate
+request. Poll the `NavigationSideViewGuideRequest` and transfer its result with
+`TryTakeSideViewGuide`. Its retained waypoints and host motion contract match
+the immediate guide.
+
+### Planar scheduling rules
+
 Planar acquisition uses the same FIFO and frame allowances as spatial A* and
 Flow. It counts endpoint proofs, search, reconstruction, and payload copying
-against those allowances. An atomic swept-circle proof can overrun the frame's
-lookup allowance, within the query's total work budget.
+against those allowances. An atomic circle or capsule proof can overrun the
+frame's lookup allowance within the query's total work budget. For side-view
+publication, counting and emitting each support takes one node and one lookup
+step per pass. Emission writes the support's optional bend and anchor together.
 
 Contiguous planar A* requests with identical route intent share a build.
+Side-view sharing requires an identical capsule profile.
 Planar Flow cohorts share destination intent across origins. The retained
 result covers its selected origin, so other origins re-admit and build in
 order when the available result cannot serve them. Followers admit their own

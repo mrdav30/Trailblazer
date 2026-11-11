@@ -247,23 +247,32 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
         var sideView = _planar as NavigationSideViewSearch;
         if (_points == null)
         {
+            int pointCount = _length;
+            if (sideView != null)
+            {
+                var status = AdvanceSideViewPoints(sideView, ref remaining);
+                if (status != NavigationGuideStatus.Success)
+                    return status;
+                pointCount += sideView.RouteBendCount;
+            }
             if (remaining.NodeRemaining == 0)
                 return NavigationGuideStatus.Pending;
-            int pointCount = _length;
-            if (sideView != null && !TryCountSideViewPoints(out pointCount))
-                return NavigationGuideStatus.BudgetExceeded;
             if (!retention.TryReservePayload(NavigationPlanarGuidePayload.MeasureBytes(pointCount, _actionCount),
                     out _payloadReservation))
                 return NavigationGuideStatus.CapacityExceeded;
             _points = new NavigationAStarGuidePoint[pointCount];
+            if (sideView != null)
+                sideView.RouteSupportCursor = 0;
             _instructions = _actionCount == 0
                 ? Array.Empty<NavigationTransitionInstruction>() : new NavigationTransitionInstruction[_actionCount];
         }
         NavigationWorldGraph graph = _graphLease!.Graph;
         if (sideView != null)
         {
-            if (!TryWriteSideViewPoints(sideView.Profile, _points))
-                return NavigationGuideStatus.BudgetExceeded;
+            var status = AdvanceSideViewPoints(sideView, ref remaining);
+            if (status != NavigationGuideStatus.Success)
+                return status;
+            System.Diagnostics.Debug.Assert(_pointWrite == _points.Length);
         }
         else
         {

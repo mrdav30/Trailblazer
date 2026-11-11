@@ -77,16 +77,17 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
 
     internal NavigationAStarPayloadCache PayloadCache => _cache;
 
-    internal NavigationPlanarRouteWork? BeginScheduledTopDown(GridWorld world, in NavigationPlanarRouteRequest request)
+    internal NavigationPlanarRouteWork? BeginScheduledPlanar(GridWorld world, in NavigationPlanarRouteRequest request,
+        in NavigationAgentProfile2D sideViewProfile = default)
     {
         lock (_sync)
         {
-            if (!CanBegin() || request.GetLogicalRetainedBytes() > _limits.MaxBatchDescriptorBytes
+            if (!CanBegin() || request.GetLogicalRetainedBytes(sideViewProfile) > _limits.MaxBatchDescriptorBytes
                 || _coordinator.TryReservePrefix(PathAlgorithm.AStar, 1, out var reservation) == 0)
                 return null;
             var query = _queries[0];
             return new NavigationPlanarRouteWork(world, _store, request, query.Workspace, query.RayWork,
-                null, reservation);
+                null, reservation, sideViewProfile);
         }
     }
 

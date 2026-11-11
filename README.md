@@ -37,8 +37,8 @@ teleporters.
   to follow immediate or scheduled guides through a host-owned motion resolver.
 - **Side-view movement stays native.** Use an upright capsule profile with
   manual movement, gravity, jumping, and support sampled at host-accepted poses.
-  Author support segments to acquire A* or Flow guides with capsule clearance
-  and explicit step waypoints for host-executed movement.
+  Author support segments to acquire immediate or scheduled A* and Flow
+  guides with capsule clearance and step waypoints for host-executed movement.
 - **The engine stays outside.** Trailblazer has no Unity, Godot, Unreal, or
   renderer dependency.
 

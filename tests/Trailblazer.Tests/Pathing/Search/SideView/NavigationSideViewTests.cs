@@ -163,9 +163,10 @@ public sealed partial class NavigationSideViewTests
         Leg(context, Cell(0), Cell(1), Profile()).Should().Be(NavigationGuideStatus.Success);
     }
 
-    private static TrailblazerWorldContext Scene(out ushort slot, NavigationAreaPolicy? policy = null)
+    private static TrailblazerWorldContext Scene(out ushort slot, NavigationAreaPolicy? policy = null,
+        TrailblazerWorldContextSettings? settings = null)
     {
-        var context = TrailblazerWorldContext.CreateOwned();
+        var context = TrailblazerWorldContext.CreateOwned(settings: settings);
         context.SetFrameRate(16);
         context.World.TryAddGrid(Grid, out slot).Should().BeTrue();
         context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(policy ?? Policy, 1, 1)).Should().BeTrue();

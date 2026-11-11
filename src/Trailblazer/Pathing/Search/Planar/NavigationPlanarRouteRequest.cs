@@ -59,7 +59,9 @@ internal readonly struct NavigationPlanarRouteRequest
         && AreaPolicy == candidate.AreaPolicy && Medium == candidate.Medium && Capabilities == candidate.Capabilities
         && Budget == candidate.Budget && AllowTransitions == candidate.AllowTransitions;
 
-    internal long GetLogicalRetainedBytes() => PathQueryBatchItem.LogicalRetainedBytes
-        + Unsafe.SizeOf<NavigationPlanarRouteRequest>() + Unsafe.SizeOf<NavigationTopDownGuideLease?>()
+    internal long GetLogicalRetainedBytes(in NavigationAgentProfile2D sideViewProfile = default) =>
+        PathQueryBatchItem.LogicalRetainedBytes
+        + Unsafe.SizeOf<NavigationPlanarRouteRequest>() + Unsafe.SizeOf<NavigationGuideLease?>()
+        + (sideViewProfile.Mode == NavigationMode2D.SideView ? Unsafe.SizeOf<NavigationAgentProfile2D>() : 0)
         + ((long)Start.MapId.Length + End.MapId.Length + AreaPolicy.PolicyId.Length) * sizeof(char);
 }

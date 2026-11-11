@@ -174,8 +174,11 @@ internal sealed partial class NavigationGuideScheduler
                     if (queued.Status == NavigationGuideStatus.Pending)
                     {
                         _cohortQuery = queued.Query;
-                        if (queued is NavigationTopDownGuideRequest topDown)
-                            _cohortTopDownQuery = topDown.TopDownQuery;
+                        if (queued is INavigationPlanarGuideRequest planarQuery)
+                        {
+                            _cohortPlanarQuery = planarQuery.PlanarQuery;
+                            _cohortSideViewProfile = planarQuery.SideViewProfile;
+                        }
                         _cohortFlavor = queued.Flavor;
                         _cohortWorldSequence = _context.World.ChangeSequence;
                         _freezeSequence = _submissionSequence;
@@ -195,9 +198,9 @@ internal sealed partial class NavigationGuideScheduler
                 bool flow = request.Algorithm == PathAlgorithm.FlowField;
                 NavigationAcquisitionSlice before = _frameRemaining;
                 NavigationGuideRequestPhase phase = _phase;
-                if (request is NavigationTopDownGuideRequest planar)
+                if (request is INavigationPlanarGuideRequest planar)
                 {
-                    if (AdvanceTopDown(planar) && _phase == phase && _frameRemaining.HasSameRemaining(before))
+                    if (AdvancePlanar(request, planar) && _phase == phase && _frameRemaining.HasSameRemaining(before))
                         break;
                     continue;
                 }
@@ -282,9 +285,9 @@ internal sealed partial class NavigationGuideScheduler
 
     private void BeginGraph(NavigationGuideRequest request)
     {
-        if (request is NavigationTopDownGuideRequest topDown)
+        if (request is INavigationPlanarGuideRequest planar)
         {
-            BeginTopDown(topDown);
+            BeginPlanar(request, planar);
             return;
         }
         if (request.Algorithm == PathAlgorithm.FlowField)
@@ -378,8 +381,8 @@ internal sealed partial class NavigationGuideScheduler
         _sharing = true;
         _fanout = _nextBuild;
         if (request.Owner == this)
-            CompleteMember(request, request is NavigationTopDownGuideRequest topDown
-                ? CheckoutTopDown(topDown) : CheckoutSpatialLeader(request));
+            CompleteMember(request, request is INavigationPlanarGuideRequest planar
+                ? CheckoutPlanar(planar) : CheckoutSpatialLeader(request));
     }
 
     private NavigationGuideStatus CheckoutSpatialLeader(NavigationGuideRequest request)
@@ -457,7 +460,8 @@ internal sealed partial class NavigationGuideScheduler
     {
         _cohortCount = _cohortPending = _nextBuild = _fanout = _clearIndex = 0;
         _cohortQuery = default;
-        _cohortTopDownQuery = default;
+        _cohortPlanarQuery = default;
+        _cohortSideViewProfile = default;
         _grouping = _sharing = false;
         _source.Dispose();
     }
@@ -471,9 +475,10 @@ internal sealed partial class NavigationGuideScheduler
             && first.FlowField == candidate.FlowField;
 
     private bool MatchesCohort(NavigationGuideRequest request) =>
-        request is NavigationTopDownGuideRequest topDown
-            ? _cohort[0]!.Algorithm == topDown.Algorithm
-                && _cohortTopDownQuery.Matches(topDown.TopDownQuery, requireStart: topDown.Algorithm == PathAlgorithm.AStar)
+        request is INavigationPlanarGuideRequest planar
+            ? _cohort[0]!.Algorithm == request.Algorithm
+                && _cohortPlanarQuery.Matches(planar.PlanarQuery, requireStart: request.Algorithm == PathAlgorithm.AStar)
+                && _cohortSideViewProfile == planar.SideViewProfile
             : Compatible(_cohortQuery, request.Query);
 
     private void ReleaseActiveWork()
@@ -482,8 +487,8 @@ internal sealed partial class NavigationGuideScheduler
         _flowWork.Dispose();
         _aStarWork = default;
         _flowWork = default;
-        _topDownWork?.Dispose();
-        _topDownWork = null;
+        _planarWork?.Dispose();
+        _planarWork = null;
         _active = null;
     }
 
@@ -545,11 +550,11 @@ internal sealed partial class NavigationGuideScheduler
             request.Phase = NavigationGuideRequestPhase.Completed;
             request.Guide?.Dispose();
             request.FlowField?.Dispose();
-            if (request is NavigationTopDownGuideRequest topDown)
+            if (request is INavigationPlanarGuideRequest planar)
             {
-                topDown.TopDownGuide?.Dispose();
-                topDown.TopDownGuide = null;
-                topDown.TopDownQuery = default;
+                planar.PlanarGuide?.Dispose();
+                planar.PlanarGuide = null;
+                planar.PlanarQuery = default;
             }
             request.Guide = null;
             request.FlowField = null;

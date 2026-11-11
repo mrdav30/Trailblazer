@@ -16,7 +16,9 @@ public readonly struct NavigationTopDownGuideLease : IDisposable
 {
     private readonly NavigationGuideLease _lease;
 
-    internal NavigationTopDownGuideLease(NavigationAStarGuideLease lease) => _lease = new NavigationGuideLease(lease);
+    internal NavigationTopDownGuideLease(NavigationAStarGuideLease lease) : this(new NavigationGuideLease(lease)) { }
+
+    internal NavigationTopDownGuideLease(NavigationGuideLease lease) => _lease = lease;
 
     internal NavigationGuideLease RouteLease => _lease;
 

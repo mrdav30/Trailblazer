@@ -14,5 +14,6 @@ internal enum NavigationGuideRequestFlavor : byte
     NavigatorDirectFirst,
     NavigatorDirectOnly,
     NavigatorGraphOnly,
-    TopDown
+    TopDown,
+    SideView
 }

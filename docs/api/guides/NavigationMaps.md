@@ -24,7 +24,9 @@ publication.
 ## Top-Down Layer Binding
 
 `NavigationMapBuilder.SetPlanarLayer(NavigationMode2D.TopDown, layerIndex, embeddingY)`
-selects one topology-local layer for a top-down bake. The embedding must be
+selects one topology-local layer for a top-down bake. Use `SideView` for a
+host-resolved side-view controller domain. The modes cannot share route coverage
+or cross-mode actions. The embedding must be
 within that layer's closed world-Y range. Explicit cells must belong to the
 selected layer. `NavigationMap.PlanarBinding` preserves the mode, layer, and
 embedding in the bake's identity. It is null for spatial maps.

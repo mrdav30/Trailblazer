@@ -120,6 +120,13 @@ and scheduled A* and Flow can return a retained `NavigationTopDownGuideLease`
 with an acquisition-local cursor over the selected centers. Opted-in actions
 carry a lease-specific `NavigationTransitionInstruction2D`.
 
+`Navigator2D` also coordinates host-resolved manual side-view capsule motion.
+Its native profile owns geometry and traversal permissions, motor settings own
+speed and gravity, and the host owns physical support witnesses and accepted
+motion. Side-view gravity and support act in the native X/Z plane. Both modes
+share frame validation and accepted-cell occupancy publication. See
+[Navigator.md](Navigator.md#side-view-navigator2d).
+
 The host approaches the source position, performs the action, and calls
 `CompletePendingTransition(...)` with that exact instruction. Transient capacity
 pressure preserves the held action; affected publication makes it stale. No

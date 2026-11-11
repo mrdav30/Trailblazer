@@ -35,6 +35,9 @@ teleporters.
 - **Top-down routes use circle clearance.** Acquire A* or Flow guides over
   cell centers with swept clearance across compatible maps. Use `Navigator2D`
   to follow immediate or scheduled guides through a host-owned motion resolver.
+- **Side-view movement stays native.** Use an upright capsule profile with
+  manual movement, gravity, jumping, and support sampled at host-accepted poses.
+  Carrier motion keeps its own registration and anchor contract.
 - **The engine stays outside.** Trailblazer has no Unity, Godot, Unreal, or
   renderer dependency.
 

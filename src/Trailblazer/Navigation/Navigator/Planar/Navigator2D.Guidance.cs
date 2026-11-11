@@ -55,6 +55,8 @@ public abstract partial class Navigator2D
         PathAlgorithm algorithm, NavigationWorkBudget budget, int groupId = -1, bool allowTransitions = false)
     {
         EnsureIdle();
+        if (_binding.Mode != NavigationMode2D.TopDown)
+            return NavigationGuideStatus.InvalidProfile;
         policy.Validate(nameof(policy));
         ChronicleGuard.ThrowIfArgumentOutOfRange(groupId < -1, groupId, nameof(groupId));
         ResetGuidance();
@@ -76,21 +78,21 @@ public abstract partial class Navigator2D
         var graph = pathing.NavigationGraphStore.Current;
         var world = _context.World;
         var epoch = (world.SpawnToken, world.Version, world.ChangeSequence);
-        var status = pathing.ResolveTopDownControllerStart(_mapId, _binding, Pose.Center, _radius, _policy,
-            _medium, _capabilities, _budget, out NavigationCellAddress start, CurrentMapId);
+        var status = pathing.ResolveTopDownControllerStart(_mapId, _binding, Pose.Center, NavigationProfile.Radius, _policy,
+            _medium, NavigationProfile.Capabilities, _budget, out NavigationCellAddress start, CurrentMapId);
         NavigationTopDownGuideLease guide = default;
         if (status == NavigationGuideStatus.Success)
         {
             if (AcquisitionMode == NavigationAcquisitionMode.Scheduled)
             {
                 _queuedOrigin = Pose.Center;
-                status = _context.Guides.ScheduleTopDownGuide(start, _routeGoal, _radius, _policy, _medium,
-                    _capabilities, _algorithm, _budget, out _guideRequest, _allowTransitions);
+                status = _context.Guides.ScheduleTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
+                    NavigationProfile.Capabilities, _algorithm, _budget, out _guideRequest, _allowTransitions);
             }
             else
             {
-                status = _context.Guides.RequestTopDownGuide(start, _routeGoal, _radius, _policy, _medium,
-                    _capabilities, _algorithm, _budget, out guide, _allowTransitions);
+                status = _context.Guides.RequestTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
+                    NavigationProfile.Capabilities, _algorithm, _budget, out guide, _allowTransitions);
             }
         }
         status = TrailblazerPathingService.ResolveTopDownSnapshotStatus(status, graph, pathing.NavigationGraphStore.Current,
@@ -169,8 +171,8 @@ public abstract partial class Navigator2D
             GuidanceStatus = NavigationGuideStatus.Pending;
             return false;
         }
-        var status = _context.Pathing.ValidateTopDownMotion(_mapId, _binding, Pose.Center, waypoint, _radius,
-            _policy, _medium, _capabilities, _budget, (CurrentMapId, waypointMapId));
+        var status = _context.Pathing.ValidateTopDownMotion(_mapId, _binding, Pose.Center, waypoint, NavigationProfile.Radius,
+            _policy, _medium, NavigationProfile.Capabilities, _budget, (CurrentMapId, waypointMapId));
         if (status == NavigationGuideStatus.Success)
             return true;
         ReleaseGuide();

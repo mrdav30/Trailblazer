@@ -11,10 +11,11 @@ use the shared graph and scheduler. They prove swept-circle legs across
 compatible published maps and support formation goals and opted-in
 same-medium actions through accepted controller motion. See the
 [Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
-covers side-view traversal and profile changes. Use `UseLocalLsfStack=true`
-with the GridForge hardening changes. Hosted develop validation needs the
-updated GridForge pin. The released-package lane needs GridForge with the
-filtered trace overload and Gravitas 1.1.0 for the adapter. Hard-budgeted
+has started with native support and manual motor movement; side-view traversal
+and profile changes remain open. Use `UseLocalLsfStack=true`
+with the GridForge hardening changes. Hosted develop now pins GridForge
+`6aaf45c`. The released-package lane needs GridForge with the filtered trace
+overload and Gravitas 1.1.0 for the adapter. Hard-budgeted
 physics queries remain a separate
 [2D/3D workstream](physicsQueryBudgetPlan.md).
 
@@ -452,7 +453,7 @@ require the existing matched performance controls.
 | --- | --- | --- | --- |
 | 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
 | 1 | Native planar guidance and top-down movement | Complete | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
-| 2 | Side-view traversal and profile changes | Not started | In-plane support, locomotion, posture/capability sequences, and replay verified |
+| 2 | Side-view traversal and profile changes | In progress | In-plane support, locomotion, posture/capability sequences, and replay verified |
 | 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
 
 ## Phase 0 - Settle The 2D Contract
@@ -528,7 +529,8 @@ public abstract class Navigator2D : IDisposable, IRecordable
 {
     protected Navigator2D(
         TrailblazerWorldContext context, string initialMapId, Guid globalId, NavigationPose2D initialPose,
-        NavigationAgentProfile2D profile, NavigationMotorSettings2D motorSettings);
+        NavigationAgentProfile2D profile, NavigationMotorSettings2D motorSettings,
+        TraversalMedium medium = TraversalMedium.Solid);
 
     public Guid GlobalId { get; }
     public NavigationPose2D Pose { get; }
@@ -942,6 +944,11 @@ in the existing test projects.
   Cover standing, horizontal movement, slopes/steps, ceiling contact, jumping,
   falling, and landing using planar accepted poses and actual support snapshots.
   Apply gravity and grounding once; world Y must not become gameplay height.
+  - [x] Native profile/settings/input/result boundary, accepted support refresh,
+    horizontal and slope-tangent movement, gravity, jump admission, ceiling
+    clipping, fall/landing, logical facing, and exact carrier-anchor carry.
+  - [ ] Supported planar route legs and step/headroom proofs, with the bounded
+    first ladder/jump/drop fixtures. Manual physical stepping remains host-owned.
 - [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
   ladder between supported regions over bounded frames. Test insufficient
   clearance/capability and invalidated actions without teleporting through guide
@@ -2736,3 +2743,158 @@ at 7.385 B/frame for both algorithms. Scheduled allocations matched at
 The capture covers the original host fixture and pure-spatial workloads.
 Mixed-world exclusion and retirement are covered by behavioral tests.
 Raw evidence is under `artifacts/phase1-hardening-validation`.
+
+### 2026-11-10 - Phase 2 native support and manual motor slice
+
+This increment admits SideView map domains and adds the reviewed native profile,
+input, motor settings, support, carrier, and accepted-result contracts. The
+controller shares its existing frame guards, accepted-cell lookup, occupancy
+handoff, and notification comparison. Native vertical motor state stays beside
+Navigator2D instead of rotating the spatial motor's world-Y assumptions.
+
+The profile/settings constructor adds an explicit optional traversal medium,
+defaulting to Solid. AllowedMedia is a permission mask and cannot select a
+concrete manual medium. Physical support loss does not switch action/navigation
+intent. The original top-down convenience constructor remains available. Hosts
+implement the reviewed nullable-request ReadAcceptedMotion hook and return a
+NavigationMotionResult2D, including NotApplicable support for top-down motion.
+
+Prepare stages motor intent and logical facing. Commit validates the accepted
+pose, support snapshot, frame/lifetime, and displacement before publication.
+RefreshSupport samples the exact accepted pose without a motion request or
+occupancy publication. Carrier displacement uses FixedMathSharp's existing
+relative-transform operation on the same local witness anchor, with an exact
+zero shortcut for equal carrier poses. A fresh committed sample supplies the
+only next-frame carry baseline. Accepted velocity includes carry; motor ascent
+accounts for it separately and responds to ceiling clipping.
+
+SideView cannot supply top-down endpoint/leg coverage, spatial coverage, or
+cross-mode authored actions. Generic planar binding and accepted-cell service
+methods now live under Search/Planar. Side-view guide acquisition deliberately
+returns InvalidProfile until supported-route semantics are implemented.
+
+The behavioral red was Build_SideViewRetainsItsNativeModeAndSelectedLayer,
+which failed because the map builder rejected SideView before admission was
+changed. Focused tests cover the full context prepare/accept/commit/late loop,
+rotated stationary and moving carriers, a rotation-only carrier update, failed
+lookup and fresh reattachment, blocked ascent with carry, fresh support loss,
+callback reset, accepted-velocity and target overflow, exact local replay,
+zero warm allocation, cross-mode publication order/overlay rejection, and
+coincident-domain occupancy isolation. Independent controller and search reviews
+found no verified blocker. Review-driven cleanup removed duplicated profile
+fields and kept one shared accepted-cell owner.
+
+This is a manual support/motor increment. Supported route/step/headroom proofs,
+authored side-view actions, posture replacement, airborne extensions, and JSON/
+MemoryPack continuation remain open. No upstream source, version, or CI pin
+changes are required by this increment. Validation evidence follows below.
+
+Validation used frozen source with base Trailblazer `643ec77` plus this diff,
+Windows 11/.NET SDK 10.0.302 and Ubuntu/.NET SDK 10.0.203. The Windows timing
+host was an Intel i7-9700K with .NET 10.0.10, x64. Both library target frameworks
+built in Release and ReleaseLean with zero warnings. Core and adapter tests
+passed on both hosts:
+
+| Configuration | Core tests | Adapter tests | Exact combined coverage |
+| --- | ---: | ---: | --- |
+| Release | 3,525 | 90 | 34,485/34,485 lines; 14,683/14,683 branches; 3,444/3,444 fully covered methods |
+| ReleaseLean | 3,425 | 86 | Same exact totals |
+
+The frozen provider graph matches hosted develop's immutable pins. This avoids
+unrelated live Gravitas work while validating the adapter consumer.
+
+| Provider | Commit |
+| --- | --- |
+| Chronicler | `7b90d5923d4bb6e0e42c033ec697b9678d6b8ece` |
+| FixedMathSharp | `e2c325a827506419b1a04b2427d9bc77e629ab6f` |
+| SwiftCollections | `08b1b386353c66c7fa5d96a9c3e453eb19b9e39f` |
+| GridForge | `6aaf45ccaa999f018148e25a8ca387d61a117f18` |
+| Gravitas | `13f73bdc94397a8fdb324b1f67a0c92b472acaac` |
+
+The existing Vector2d.TryGetRelativeOffset overload is also present in the
+cached FixedMathSharp 8.0.0 standard and Lean package API XML for both target
+frameworks. Its first use here needs no new provider API or pin. Full released-
+package consumer validation still has the previously recorded upstream gates.
+
+Reproduction commands use the intended frozen sibling layout and source mode:
+
+```powershell
+$env:UseLocalLsfStack = 'true'
+dotnet build Trailblazer.slnx -c Release -p:DisableTransitiveProjectReferences=true -m:1 -p:BuildInParallel=false
+dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c Release --no-build --no-restore --settings tests/Trailblazer.Tests/coverlet.runsettings
+dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release --no-build --no-restore --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings
+# Repeat with ReleaseLean.
+dotnet tool restore
+dotnet tool run docfx docs/api/docfx.json --warningsAsErrors
+```
+
+ReportGenerator JsonSummary required both assemblies and exact covered/total
+line, branch, method, and fully covered method equality in each host/configuration.
+The final DocFX build passed with zero warnings. Source/test/config contents in
+the Windows snapshot matched the review worktree after newline normalization.
+The focused native/controller/publication suite passed all 275 tests. Runtime
+growth is nine new files containing 559 lines, including value contracts, XML and
+license headers. Existing source has a net reduction outside Navigator2D's new
+constructor and frame integration because the shared service methods moved.
+Net runtime source growth is 525 lines including comments and headers.
+No parallel motor hierarchy, geometry worker, cache, or upstream shim was added.
+
+Matched 3D controls were captured before shared edits. The longer confirmation
+alternated baseline, candidate, candidate, baseline using
+Simulate64GuidedFramesInstrumentedBalancedPhases, 100 agents, 32 Hz, 32 preparation
+frames and 64 measured frames, with three launches, ten warmups and twelve actual
+iterations. Each capture had six successful child exits, 72 actual records and
+six diagnostics. Every exported replay checksum, admission trace, clock origin
+and periodic phase trace matched across all four captures, with zero warm bytes.
+
+| Per-frame median | Baseline A1 / A2 | Candidate B1 / B2 |
+| --- | --- | --- |
+| 3D A* | 1.607 / 1.663 ms | 1.631 / 1.606 ms |
+| 3D Flow | 0.702 / 0.714 ms | 0.701 / 0.726 ms |
+
+The shorter initial capture had higher variance and is retained. The longer
+control did not reproduce its A* increase. This covers the existing pure-spatial
+guided-frame workload, not a universal timing guarantee. The later facing cleanup
+affects only Navigator2D and does not execute in these spatial controls.
+
+The existing disposable native route probe was reused with only the host hook
+adapted to the new result contract. At 16 Hz, radius 1/4 and speed 4, it takes the
+cost-6 detour around the unauthored cell, deliberately holds one requested move,
+and reaches the exact final address in 26 Immediate or 27 Scheduled frames.
+After 512 warm episodes per algorithm, five blocks of twenty episodes retained
+those outcomes and matching bytes per frame:
+
+| Native probe | Baseline A1 / A2 median | Candidate B1 / B2 median | Bytes/frame, both |
+| --- | --- | --- | --- |
+| Immediate A* | 74.988 / 73.597 us | 73.965 / 73.300 us | 7.385 |
+| Immediate Flow | 75.843 / 75.609 us | 73.903 / 72.033 us | 7.385 |
+| Scheduled A* | 137.420 / 136.337 us | 140.111 / 132.655 us | 230.815 |
+| Scheduled Flow | 130.918 / 133.688 us | 148.379 / 134.968 us | 476.148 |
+
+Review of the executed controller path found avoidable top-down facing trig on
+every commit. The final code restores the existing computed-on-access top-down
+Facing getter and stores only side-view logical facing. The final full matrix
+above was rerun after this cleanup. Native warm standing/manual host steps also
+have a separate exact zero-allocation gate.
+
+Scheduled Flow latency remains inconclusive. A no-tiering control retained a
+higher candidate result, while phase timing did not retain that large gap.
+The phase medians put Flow world/prepare/commit near 83-85/89/2.4-2.8 us before
+and 84-85/90-91/2.6-2.9 us after. Source and static DLL review found unchanged
+Flow kernel, edge, trace and extraction loop bodies. Only mode admission changed
+in the search helpers. A raw acquisition control outside Navigator then measured
+2.350 and 6.420 ms for the identical candidate scheduled Flow binary in separate
+runs, versus 2.770 and 2.455 ms before. The candidate immediate Flow control was
+2.272-2.285 ms versus 2.253-2.316 ms before. These captures do not establish native
+latency equivalence or an attributable algorithmic regression. Stop this bounded
+investigation here; reopen on a repeatable containing-frame increase with equal
+work and a profile that attributes it to changed runtime code. Keep the matching
+allocation and physical/semantic output evidence separate from that uncertainty.
+
+Raw evidence and disposable probes are under `artifacts/phase2`: `windows-handoff-*`,
+`linux-handoff-*`, `docfx-handoff.log`, `abba-*`, `planar-handoff-*`,
+`planar-no-tiering-*`, `planar-phase-*`, and `raw-valid-*`. The raw acquisition
+prototype's one-frame-ready assumption failed and its earlier `raw-*` capture is
+excluded; the valid control polls bounded context frames to completion. Probe
+outputs loaded the frozen assemblies directly and their copied DLL hashes were
+checked. No maintained benchmark/test-infrastructure harness was added.

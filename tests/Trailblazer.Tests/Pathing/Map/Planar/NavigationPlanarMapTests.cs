@@ -106,13 +106,22 @@ public sealed class NavigationPlanarMapTests
     }
 
     [Theory]
-    [InlineData(NavigationMode2D.SideView)]
+    [InlineData((NavigationMode2D)3)]
     [InlineData((NavigationMode2D)0)]
     public void SetPlanarLayer_RejectsUnsupportedModes(NavigationMode2D mode)
     {
         Action configure = () => new NavigationMapBuilder("map", Grid)
             .SetPlanarLayer(mode, 1, Fixed64.One);
         configure.Should().Throw<ArgumentException>().WithParameterName("mode");
+    }
+
+    [Fact]
+    public void Build_SideViewRetainsItsNativeModeAndSelectedLayer()
+    {
+        var map = new NavigationMapBuilder("side", Grid)
+            .SetPlanarLayer(NavigationMode2D.SideView, 1, Fixed64.One).Build();
+        map.PlanarBinding!.Value.Mode.Should().Be(NavigationMode2D.SideView);
+        map.PlanarBinding.Value.LayerIndex.Should().Be(1);
     }
 
     [Theory]

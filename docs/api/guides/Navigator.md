@@ -40,8 +40,9 @@ still requires its own accepted arrival.
 
 For each fixed frame, call `context.Simulate()`, prepare all controllers,
 resolve host motion once, commit all controllers, then call
-`context.LateSimulate()`. Return the accepted pose for the matching
-`NavigationMotionRequest2D`. Prepare leaves pose, velocity, and occupancy
+`context.LateSimulate()`. Return a `NavigationMotionResult2D` with the accepted
+pose and `NotApplicable` support for the matching `NavigationMotionRequest2D`.
+Prepare leaves pose, velocity, and occupancy
 intact. Commit derives velocity from the accepted displacement and the
 prepared timestep. It consumes the request before publishing cell changes.
 A short or blocked result holds the current waypoint. Arrival requires
@@ -63,6 +64,55 @@ occupancy ticket the accepted center has exited. A physical cell can keep its
 occupancy ticket even when it has no authored navigation semantics. Queue
 authoritative changes from host callbacks and cell notifications for the next
 ordered command boundary. Dispose the controller to release guidance and occupancy.
+
+## Side-view Navigator2D
+
+For host-resolved manual side-view movement, bind a `SideView` map with a
+`NavigationAgentProfile2D` and `NavigationMotorSettings2D`. The body is an
+upright capsule in world X/Z. Radius is positive and axis length is the
+non-negative distance between cap centers. The host keeps the physical collider
+consistent with this geometry and resolves collisions, steps, and support.
+Gravity acts along negative `Vector2d.Forward`. The constructor's explicit
+traversal medium defaults to Solid and must be allowed by the profile.
+Physical support loss does not change this navigation intent.
+
+Use `NavigationInput2D` to supply horizontal analog movement, a jump input edge,
+optional horizontal facing, and host jump permission. Null movement produces
+zero voluntary movement without an active guide. Side-view logical facing is
+Left or Right while physical rotation stays zero. Prepare keeps the last
+accepted pose, velocity, facing, and support intact until commit. A walkable
+support normal projects ordinary speed onto the surface tangent. A jump requires
+walkable support, the Jump capability, positive jump speed, and host permission.
+Airborne motion integrates gravity with the fixed step. Accepted ceiling
+clipping limits subsequent ascent, and a fresh walkable landing resets fall speed.
+
+`ReadAcceptedMotion` receives a nullable request and returns the accepted pose
+with a support status. Found carries a physical witness, unit normal,
+non-negative friction, and optional carrier binding. The controller applies its
+slope and upward-departure policy to decide `IsGrounded`. NoSupport is a complete
+miss. Unavailable discards the previous sample while still committing motion.
+Only Found has a support snapshot. Side-view results cannot use NotApplicable
+or nonzero physical rotation. Invalid results reject before pose or occupancy
+publication and consume the prepared request.
+
+Call `RefreshSupport()` between frames to seed support after constructing the
+host shell. It invokes `ReadAcceptedMotion(null)` and requires the exact current
+accepted pose. It submits no target and publishes no movement or occupancy.
+Construction invokes no host hooks.
+
+A carrier binding identifies a positive host-stable ID, its positive
+registration lifetime, the sampled carrier pose, and the witness in carrier-local
+coordinates. Override `TryReadCarrierPose` to resolve that exact registration.
+Carry is the difference between transforms of the same local anchor. Equal poses
+produce exact zero carry, including on rotated platforms. Failed lookup supplies
+no carry. Every accepted commit replaces the previous support sample, so fresh
+reattachment starts from its newly sampled carrier pose. Observable velocity
+includes accepted carry while the motor keeps carry out of its next integration.
+
+Top-down queries and guide acquisition require TopDown maps. SideView layers
+cannot supply circle-clearance coverage or publish actions to a different mode,
+even at the same embedding. `ApplyGuidedTrekRequest` on a side-view controller
+returns `InvalidProfile`.
 
 ## Setup
 

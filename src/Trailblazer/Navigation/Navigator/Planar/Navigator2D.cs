@@ -14,7 +14,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
 
-/// <summary>Follows top-down circle routes through a host-owned motion resolver.</summary>
+/// <summary>Coordinates native planar motion through a host-owned motion resolver.</summary>
 /// <remarks>
 /// Advance the context, prepare all controllers, resolve host motion, commit all controllers, then run the late step.
 /// Queue writes from motion and occupancy notifications for the next ordered host command boundary.
@@ -24,10 +24,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     private readonly TrailblazerWorldContext _context;
     private readonly string _mapId;
     private readonly NavigationPlanarBinding _binding;
-    private readonly Fixed64 _radius;
-    private readonly Fixed64 _moveSpeed;
     private readonly TraversalMedium _medium;
-    private readonly TraversalCapability _capabilities;
     private readonly IDisposable _resetHook;
     private NavigationTopDownGuideLease? _guide;
     private NavigationAreaPolicyKey _policy;
@@ -48,24 +45,37 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     protected Navigator2D(TrailblazerWorldContext context, string initialMapId, Guid globalId,
         NavigationPose2D initialPose, Fixed64 radius, Fixed64 moveSpeed, TraversalMedium medium,
         TraversalCapability capabilities = TraversalCapability.None)
+        : this(context, initialMapId, globalId, initialPose,
+            new NavigationAgentProfile2D(NavigationMode2D.TopDown, radius, Fixed64.Zero, Fixed64.Zero,
+                Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, NavigationCell.ToMedia(medium), capabilities),
+            new NavigationMotorSettings2D(moveSpeed, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero), medium) { }
+
+    /// <summary>Binds native body geometry and motor tuning to a published layer of the same mode.</summary>
+    /// <remarks>The explicit medium identifies navigation intent independently of physical grounding.</remarks>
+    protected Navigator2D(TrailblazerWorldContext context, string initialMapId, Guid globalId,
+        NavigationPose2D initialPose, NavigationAgentProfile2D profile, NavigationMotorSettings2D settings,
+        TraversalMedium medium = TraversalMedium.Solid)
     {
         ChronicleGuard.ThrowIfNull(context, nameof(context));
         ChronicleGuard.ThrowIfArgument(string.IsNullOrWhiteSpace(initialMapId), nameof(initialMapId));
         ChronicleGuard.ThrowIfArgument(globalId == Guid.Empty, nameof(globalId));
-        ChronicleGuard.ThrowIfArgument(radius <= Fixed64.Zero, nameof(radius));
-        ChronicleGuard.ThrowIfArgument(moveSpeed < Fixed64.Zero, nameof(moveSpeed));
+        profile.Validate(nameof(profile));
+        settings.Validate(profile.Mode);
         ChronicleGuard.ThrowIfArgument(NavigationCell.ToMedia(medium) == TraversalMedia.None, nameof(medium));
-        ChronicleGuard.ThrowIfArgument((capabilities & ~NavigationCell.KnownCapabilities) != 0, nameof(capabilities));
-        ChronicleGuard.ThrowIfArgument(!context.Pathing.TryGetTopDownBinding(initialMapId, out _binding),
-            nameof(initialMapId), "The initial map must be a materialized top-down layer.");
+        ChronicleGuard.ThrowIfArgument((profile.AllowedMedia & NavigationCell.ToMedia(medium)) == 0, nameof(medium));
+        ChronicleGuard.ThrowIfArgument(!context.Pathing.TryGetPlanarBinding(initialMapId, out _binding)
+            || _binding.Mode != profile.Mode, nameof(initialMapId), "The initial map must be a materialized matching planar layer.");
+        ChronicleGuard.ThrowIfArgument(profile.Mode == NavigationMode2D.SideView
+            && initialPose.RotationRadians != Fixed64.Zero, nameof(initialPose));
         _context = context;
         _mapId = initialMapId;
-        _radius = radius;
-        _moveSpeed = moveSpeed;
+        NavigationProfile = profile;
+        _motorSettings = settings;
         _medium = medium;
-        _capabilities = capabilities;
         GlobalId = globalId;
         Pose = initialPose;
+        SupportStatus = profile.Mode == NavigationMode2D.TopDown
+            ? NavigationSupportStatus2D.NotApplicable : NavigationSupportStatus2D.Unavailable;
         _resetHook = context.RegisterOnReset($"Navigator2D:{globalId:N}", 0, ResetNavigation);
         context.World.OnReset += ResetWorld;
     }
@@ -86,8 +96,9 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     /// <summary>Gets velocity derived from accepted displacement and the prepared timestep.</summary>
     public Vector2d Velocity { get; private set; }
 
-    /// <summary>Gets the facing of the accepted pose.</summary>
-    public Vector2d Facing => Vector2d.Rotate(Vector2d.Right, Pose.RotationRadians);
+    /// <summary>Gets accepted top-down rotation or the committed logical side-view facing.</summary>
+    public Vector2d Facing => NavigationProfile.Mode == NavigationMode2D.SideView ? _facing
+        : Vector2d.Rotate(Vector2d.Right, Pose.RotationRadians);
 
     /// <summary>Gets whether accepted motion reached the final center of the current trek.</summary>
     public bool HasArrived { get; private set; }
@@ -117,19 +128,21 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     /// The host resolves manual motion. Guided targets also pass the navigation sweep.
     /// </remarks>
     public void PrepareFrameMotion(Vector2d? move = null)
+        => PrepareFrameMotion(new NavigationInput2D(move, false));
+
+    /// <summary>Stages native movement, facing and an admitted jump without publishing accepted state.</summary>
+    public void PrepareFrameMotion(in NavigationInput2D input)
     {
         EnsureIdle();
-        var (lifetime, frame) = BeginPrepareFrame();
+        ValidateInput(input);
+        BeginPrepareFrame();
         try
         {
             Vector2d center = Pose.Center;
-            if (move is Vector2d input)
+            if (input.Move is Vector2d move)
             {
-                ChronicleGuard.ThrowIfArgument(Vector2d.CompareDistanceSquared(Vector2d.Zero, input,
-                    Vector2d.Zero, Vector2d.Right) > 0, nameof(move));
-                Fixed64 distance = _moveSpeed * _context.DeltaTime;
-                if (!Vector2d.TryAdd(center, LimitRoundedStep(input * distance, distance), out center))
-                    throw new OverflowException("The manual target is outside the representable plane.");
+                Fixed64 distance = Multiply(_motorSettings.MoveSpeed, _context.DeltaTime);
+                center = Add(center, LimitRoundedStep(move * distance, distance));
                 ResetGuidance();
             }
             else
@@ -139,7 +152,8 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
                     center = PrepareGuidedCenter(guide, out _mayAdvance);
             }
 
-            SubmitPreparedTarget(new NavigationPose2D(center, Pose.RotationRadians), lifetime, frame, isAction: false);
+            NavigationPose2D target = PrepareMotorTarget(center, input);
+            SubmitPreparedTarget(target, isAction: false);
         }
         finally
         {
@@ -158,22 +172,30 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         try
         {
             ValidatePreparedFrame();
-            NavigationPose2D accepted = ReadAcceptedMotion(request);
+            NavigationMotionResult2D result = ReadAcceptedMotion(request);
             ValidatePreparedFrame();
+            ValidateMotionResult(result);
+            NavigationPose2D accepted = result.Accepted;
             if (!Vector2d.TrySubtract(accepted.Center, Pose.Center, out Vector2d displacement)
                 || !Fixed64.TryMultiplyAdd(displacement.X, _preparedInvDelta, Fixed64.Zero, out Fixed64 x)
                 || !Fixed64.TryMultiplyAdd(displacement.Y, _preparedInvDelta, Fixed64.Zero, out Fixed64 z))
                 throw new OverflowException("The accepted displacement or velocity is outside the representable plane.");
 
+            Fixed64 motorVertical = ResolveMotorVertical(displacement.Y);
+            bool grounded = IsSupported(result) && motorVertical <= Fixed64.Zero;
             bool acceptedTarget = accepted.Center == request.Target.Center;
             string? actionMap = GetAcceptedActionMap(accepted.Center);
             string preferredMap = actionMap ?? (acceptedTarget ? _preparedDestinationMap : null) ?? CurrentMapId;
-            var cellStatus = _context.Pathing.ResolveTopDownCommittedCell(_mapId, _binding, accepted.Center, _medium,
+            var cellStatus = _context.Pathing.ResolvePlanarCommittedCell(_mapId, _binding, accepted.Center, _medium,
                 _guide.HasValue ? _policy : null, request.Frame, out var grid, out var voxel, out var cell,
                 out var acceptedMapId, CurrentMapId, preferredMap);
             Vector2d previousCenter = Pose.Center;
             Pose = accepted;
             Velocity = new Vector2d(x, z);
+            _verticalVelocity = grounded ? Fixed64.Zero : motorVertical;
+            if (NavigationProfile.Mode == NavigationMode2D.SideView)
+                _facing = _preparedFacing;
+            PublishSupport(result, grounded);
             CommitGuidance(acceptedTarget, previousCenter, request.Target.Center);
             CommitActionMotion(actionMap != null);
             if (cellStatus != NavigationCommittedCellResolveStatus.Unavailable)
@@ -193,10 +215,10 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     /// <summary>Submits the absolute request to the host motion resolver.</summary>
     protected abstract void SubmitMotionTarget(in NavigationMotionRequest2D request);
 
-    /// <summary>Reads the matching accepted host pose after the shared resolution barrier.</summary>
-    protected abstract NavigationPose2D ReadAcceptedMotion(in NavigationMotionRequest2D request);
+    /// <summary>Reads accepted pose and fresh support after resolution, or support at the current pose for a null request.</summary>
+    protected abstract NavigationMotionResult2D ReadAcceptedMotion(NavigationMotionRequest2D? request);
 
-    private (object Lifetime, long Frame) BeginPrepareFrame()
+    private void BeginPrepareFrame()
     {
         object lifetime = _context.ClockLifetime;
         long frame = _context.FrameCount;
@@ -206,16 +228,19 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         _mayAdvance = false;
         _preparedDestinationMap = null;
         _preparedVisibleAnchor = null;
-        return (lifetime, frame);
-    }
-
-    private void SubmitPreparedTarget(NavigationPose2D target, object lifetime, long frame, bool isAction)
-    {
-        var request = new NavigationMotionRequest2D(frame, target);
+        _preparedFacing = _facing;
+        _preparedCarry = Vector2d.Zero;
+        _preparedVertical = _verticalVelocity;
         _clockLifetime = lifetime;
         _preparedFrame = frame;
         _worldSpawn = _context.World.SpawnToken;
         _preparedInvDelta = _context.InvDeltaTime;
+    }
+
+    private void SubmitPreparedTarget(NavigationPose2D target, bool isAction)
+    {
+        var request = new NavigationMotionRequest2D(_preparedFrame, target);
+        ValidatePreparedFrame();
         _actionFrame = isAction;
         SubmitMotionTarget(request);
         ValidatePreparedFrame();
@@ -278,8 +303,8 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         }
         if (!_requiresConnector || target != waypoint)
         {
-            status = _context.Pathing.ValidateTopDownMotion(_mapId, _binding, Pose.Center, target, _radius,
-                _policy, _medium, _capabilities, _budget, (CurrentMapId, address.MapId));
+            status = _context.Pathing.ValidateTopDownMotion(_mapId, _binding, Pose.Center, target, NavigationProfile.Radius,
+                _policy, _medium, NavigationProfile.Capabilities, _budget, (CurrentMapId, address.MapId));
         }
         if (status == NavigationGuideStatus.Success)
             status = guide.Status;
@@ -302,7 +327,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
             || !delta.TryGetMagnitudeCeiling(out Fixed64 length))
             return false;
         target = waypoint;
-        Fixed64 distance = _moveSpeed * _context.DeltaTime;
+        Fixed64 distance = Multiply(_motorSettings.MoveSpeed, _context.DeltaTime);
         if (length > distance)
         {
             // The positive divisor exceeds the step distance and bounds both component magnitudes.
@@ -429,6 +454,11 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         ResetGuidance();
         _acceptedMapId = null;
         LastCommittedCell = null;
+        _verticalVelocity = Fixed64.Zero;
+        Support = null;
+        IsGrounded = false;
+        SupportStatus = NavigationProfile.Mode == NavigationMode2D.TopDown
+            ? NavigationSupportStatus2D.NotApplicable : NavigationSupportStatus2D.Unavailable;
         ReleaseOccupancy();
     }
 

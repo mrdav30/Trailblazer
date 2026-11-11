@@ -37,11 +37,11 @@ public abstract partial class Navigator2D
             return false;
         MovementGroupTarget groupTarget = _groupCoordinator.UpdateTarget(_groupSession!,
             new Vector3d(destination.X, _binding.EmbeddingY, destination.Y),
-            ((GridForge.Spatial.IVoxelOccupant)this).Position, _radius);
+            ((GridForge.Spatial.IVoxelOccupant)this).Position, NavigationProfile.Radius);
         if (_formationGoalChosen || groupTarget.TravelMode != MovementGroupTravelMode.Formation)
             return false;
         var status = _context.Pathing.ResolveTopDownEndpoint(_requestedGoal.MapId, groupTarget.Destination.ToVector2d(),
-            _radius, _policy, _medium, _capabilities, _budget, out var address);
+            NavigationProfile.Radius, _policy, _medium, NavigationProfile.Capabilities, _budget, out var address);
         if (status != NavigationGuideStatus.Success)
             return false;
         _formationGoalChosen = true;

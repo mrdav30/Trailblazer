@@ -85,6 +85,7 @@ public sealed partial class NavigationTopDownTests
     [Theory]
     [InlineData("compatible")]
     [InlineData("spatial")]
+    [InlineData("side-view")]
     [InlineData("other embedding")]
     public void Endpoint_BorrowsCoverageOnlyFromACompatiblePublishedLayer(string neighborKind)
     {
@@ -96,8 +97,8 @@ public sealed partial class NavigationTopDownTests
         Publish(context, TopDown("plane", first).SetDefaultCell(Open).Build(), 2);
         var neighbor = new NavigationMapBuilder("neighbor", second).SetDefaultCell(Open);
         if (neighborKind != "spatial")
-            neighbor.SetPlanarLayer(NavigationMode2D.TopDown, 1,
-                neighborKind == "compatible" ? Fixed64.Half : Fixed64.One);
+            neighbor.SetPlanarLayer(neighborKind == "side-view" ? NavigationMode2D.SideView : NavigationMode2D.TopDown, 1,
+                neighborKind is "compatible" or "side-view" ? Fixed64.Half : Fixed64.One);
         Publish(context, neighbor.Build(), 3);
 
         var center = new Vector2d(Fixed64.FromFraction(3, 8), Fixed64.Zero);
@@ -106,6 +107,9 @@ public sealed partial class NavigationTopDownTests
             .Should().Be(compatible ? NavigationGuideStatus.Success : NavigationGuideStatus.InvalidStart);
         if (compatible)
             address.Should().Be(new NavigationCellAddress("plane", new VoxelIndex(0, 1, 0)));
+        if (neighborKind == "side-view")
+            context.Pathing.ResolveTopDownEndpoint("neighbor", Vector2d.Right, Fixed64.Quarter, Policy.Key,
+                TraversalMedium.Solid, TraversalCapability.None, Budget(), out _).Should().Be(NavigationGuideStatus.NoMap);
     }
 
     [Theory]

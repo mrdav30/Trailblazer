@@ -722,8 +722,14 @@ internal sealed partial class NavigationOperationCandidate
             return true;
         if (!destination.Map.ContainsGridIndex(transition.Destination.Index))
             return false;
-        // Map authoring only admits top-down planar bindings.
-        if (sourceBinding?.EmbeddingY != destination.Map.PlanarBinding?.EmbeddingY)
+        NavigationPlanarBinding? destinationBinding = destination.Map.PlanarBinding;
+        if (sourceBinding is NavigationPlanarBinding sourcePlane)
+        {
+            if (destinationBinding is not NavigationPlanarBinding destinationPlane
+                || sourcePlane.Mode != destinationPlane.Mode || sourcePlane.EmbeddingY != destinationPlane.EmbeddingY)
+                return false;
+        }
+        else if (destinationBinding.HasValue)
             return false;
         if (!HasDefinitionMedium(
                 destination,

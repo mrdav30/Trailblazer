@@ -330,7 +330,7 @@ public sealed partial class Navigator2DTests
     {
         using var context = CreateScene(portal: false);
         var pathing = context.Pathing;
-        pathing.TryGetTopDownBinding("plane", out var binding).Should().BeTrue();
+        pathing.TryGetPlanarBinding("plane", out var binding).Should().BeTrue();
         pathing.TryGetTopDownCenter(default, binding, out _).Should().BeFalse();
         pathing.TryGetTopDownCenter(new NavigationCellAddress("missing", default), binding, out _).Should().BeFalse();
         pathing.TryGetTopDownCenter(new NavigationCellAddress("plane", new VoxelIndex(1, 0, 1)), binding, out _).Should().BeFalse();

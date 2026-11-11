@@ -104,7 +104,7 @@ internal sealed partial class NavigationTopDownWork
         out NavigationPlanarBinding binding)
     {
         if (graph.TryGetMap(mapId, out instance) && instance.IsMaterialized
-            && instance.Map.PlanarBinding is NavigationPlanarBinding planar)
+            && instance.Map.PlanarBinding is NavigationPlanarBinding planar && planar.Mode == NavigationMode2D.TopDown)
         {
             binding = planar;
             return true;
@@ -245,7 +245,7 @@ internal sealed partial class NavigationTopDownWork
                 continue;
             graph.TryGetMap(mapId, out NavigationMapInstance instance);
             if (instance.Map.PlanarBinding is not NavigationPlanarBinding candidate
-                || candidate.EmbeddingY != binding.EmbeddingY)
+                || candidate.Mode != NavigationMode2D.TopDown || candidate.EmbeddingY != binding.EmbeddingY)
             {
                 continue;
             }

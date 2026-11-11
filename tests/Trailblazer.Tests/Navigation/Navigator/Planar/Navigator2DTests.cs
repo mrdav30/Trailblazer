@@ -350,7 +350,7 @@ public sealed partial class Navigator2DTests
     public void MotionProofUsesFiniteBudgetsAndRejectsUncertifiedEndpoints()
     {
         using var context = CreateScene(portal: false);
-        context.Pathing.TryGetTopDownBinding("plane", out var binding).Should().BeTrue();
+        context.Pathing.TryGetPlanarBinding("plane", out var binding).Should().BeTrue();
         Vector2d from = Vector2d.Zero;
         var to = new Vector2d(Fixed64.Quarter, Fixed64.Zero);
         var outside = new Vector2d(9, 0);
@@ -560,10 +560,10 @@ public sealed partial class Navigator2DTests
             OnSubmit?.Invoke();
         }
 
-        protected override NavigationPose2D ReadAcceptedMotion(in NavigationMotionRequest2D request)
+        protected override NavigationMotionResult2D ReadAcceptedMotion(NavigationMotionRequest2D? request)
         {
             OnRead?.Invoke();
-            return _accepted;
+            return new NavigationMotionResult2D(_accepted, NavigationSupportStatus2D.NotApplicable);
         }
     }
 }

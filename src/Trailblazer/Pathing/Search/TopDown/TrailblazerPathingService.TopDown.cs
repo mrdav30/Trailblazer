@@ -25,7 +25,7 @@ public sealed partial class TrailblazerPathingService
     /// </remarks>
     /// <returns>
     /// Success returns the canonical address. InvalidStart means the center or footprint cannot be admitted.
-    /// NoMap means the named map is absent, dormant, or spatial. An unavailable policy or changed evidence returns Stale.
+    /// NoMap means the named map is not a materialized top-down layer. An unavailable policy or changed evidence returns Stale.
     /// </returns>
     /// <exception cref="System.ArgumentException">The map ID or area policy key is invalid.</exception>
     public NavigationGuideStatus ResolveTopDownEndpoint(string mapId, Vector2d center, Fixed64 radius,
@@ -158,55 +158,6 @@ public sealed partial class TrailblazerPathingService
         string preferredMapId) =>
         RunTopDownQuery(mapId, null, center, default, radius, policy, medium, capabilities, budget, out address,
             controllerBinding: binding, preferredMaps: (preferredMapId, null));
-
-    internal bool TryGetTopDownBinding(string mapId, out NavigationPlanarBinding binding)
-    {
-        using var lease = TryAcquireNavigationGraph();
-        binding = default;
-        return lease != null && NavigationTopDownWork.TryGetMap(lease.Graph, mapId, out _, out binding);
-    }
-
-    internal NavigationCommittedCellResolveStatus ResolveTopDownCommittedCell(string mapId, NavigationPlanarBinding binding,
-        Vector2d center, TraversalMedium medium, NavigationAreaPolicyKey? policy, long frame,
-        out VoxelGrid? grid, out Voxel? voxel, out NavigationCommittedCellState? state, out string? acceptedMapId,
-        string currentMapId, string preferredMapId)
-    {
-        grid = null;
-        voxel = null;
-        state = null;
-        acceptedMapId = null;
-        var immediate = _immediateRayWorkspace;
-        lock (immediate.SyncRoot)
-        {
-            var world = _context.World;
-            var epoch = (world.SpawnToken, world.Version, world.ChangeSequence);
-            using var lease = TryAcquireNavigationGraph();
-            if (lease == null)
-                return NavigationCommittedCellResolveStatus.Unavailable;
-            var graph = lease.Graph;
-            if (ResolveControllerReferenceMap(graph, mapId, binding, currentMapId, out _, out _)
-                != NavigationGuideStatus.Success)
-                return NavigationCommittedCellResolveStatus.NoCell;
-            GuideSampleWorkBudget sample = _context.Settings.GuideSampleBudget;
-            immediate.WorkMeter.Reset(new NavigationWorkBudget(sample.MaxCurrentNodeLookupProbes, sample.MaxPrismChecks,
-                0, 0, 0, 0, 0, 0, 0, 0, 0));
-            var status = immediate.RayWork.Workspace.TopDown.FindControllerCell(world, graph, binding, center,
-                immediate.WorkMeter, out var map, out grid, out voxel, preferredMapId);
-            status = ResolveTopDownSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
-                (world.SpawnToken, world.Version, world.ChangeSequence));
-            if (status == NavigationGuideStatus.NoPath)
-                return NavigationCommittedCellResolveStatus.NoCell;
-            if (status != NavigationGuideStatus.Success)
-                return NavigationCommittedCellResolveStatus.Unavailable;
-            acceptedMapId = map.MapId;
-            VoxelIndex index = voxel!.Index;
-            if (!map.TryGetSlot(index, out int slot) || !map.TryGetEffectiveCell(slot, out NavigationCell cell))
-                return NavigationCommittedCellResolveStatus.NoCell;
-            state = new NavigationCommittedCellState(new NavigationCellAddress(map.MapId, index),
-                cell.Area, medium, graph.GraphVersion, policy, frame);
-            return NavigationCommittedCellResolveStatus.Resolved;
-        }
-    }
 
     internal static bool IsTopDownProfileValid(Fixed64 radius, TraversalMedia media, TraversalCapability capabilities) =>
         radius > Fixed64.Zero && media != TraversalMedia.None && (capabilities & ~NavigationCell.KnownCapabilities) == 0;

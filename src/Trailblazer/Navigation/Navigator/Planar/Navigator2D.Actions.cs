@@ -33,10 +33,10 @@ public abstract partial class Navigator2D
             return status;
         if (!_actionStarted && Pose.Center != instruction.SourcePosition)
             return NavigationGuideStatus.InvalidStart;
-        var (lifetime, frame) = BeginPrepareFrame();
+        BeginPrepareFrame();
         try
         {
-            SubmitPreparedTarget(target, lifetime, frame, isAction: true);
+            SubmitPreparedTarget(target, isAction: true);
             return NavigationGuideStatus.Success;
         }
         finally

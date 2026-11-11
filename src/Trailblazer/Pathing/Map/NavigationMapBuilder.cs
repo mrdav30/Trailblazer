@@ -67,13 +67,12 @@ public sealed class NavigationMapBuilder
     {
     }
 
-    /// <summary>Sets the selected grid layer and world Y embedding for a top-down bake.</summary>
+    /// <summary>Sets the selected grid layer and world Y embedding for a planar bake.</summary>
     /// <remarks>Explicit cells and runtime defaults are scoped to the selected layer.</remarks>
     /// <exception cref="ArgumentException">The mode, layer, or embedding is unsupported.</exception>
     public NavigationMapBuilder SetPlanarLayer(NavigationMode2D mode, int layerIndex, Fixed64 embeddingY)
     {
-        ChronicleGuard.ThrowIfArgument(mode != NavigationMode2D.TopDown, nameof(mode),
-            "This authoring path supports top-down planar maps.");
+        ChronicleGuard.ThrowIfArgument(mode is not NavigationMode2D.TopDown and not NavigationMode2D.SideView, nameof(mode));
         bool hasLayer = GridBinding.TryGetCellPrism(new VoxelIndex(0, layerIndex, 0), out GridCellPrism prism);
         ChronicleGuard.ThrowIfArgument(!hasLayer, nameof(layerIndex),
             "The selected layer must belong to the normalized grid.");

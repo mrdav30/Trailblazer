@@ -454,6 +454,15 @@ public sealed class NavigationPlanarPublicationTests
     [InlineData(false)]
     [InlineData(true)]
     public void Publish_RejectsPlanarActionsAcrossDifferentEmbeddings(bool targetArrivesLast)
+        => AssertIncompatiblePlanarAction(targetArrivesLast, false);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Publish_RejectsPlanarActionsAcrossModesAtTheSameEmbedding(bool targetArrivesLast)
+        => AssertIncompatiblePlanarAction(targetArrivesLast, true);
+
+    private static void AssertIncompatiblePlanarAction(bool targetArrivesLast, bool modeMismatch)
     {
         using var context = TrailblazerWorldContext.CreateOwned();
         var source = new GridConfiguration(Vector3d.Zero, new Vector3d(2, 1, 0));
@@ -463,11 +472,32 @@ public sealed class NavigationPlanarPublicationTests
         NavigationMap owner = Planar(source).SetDefaultCell(Open)
             .AddTransition(new TraversalTransitionDefinition("wrong-plane", TraversalTransitionType.Jump,
                 new VoxelIndex(0, 1, 0), TraversalMedium.Solid,
-                new NavigationCellAddress("target", new VoxelIndex(0, 0, 0)), TraversalMedium.Solid)).Build();
+                new NavigationCellAddress("target", new VoxelIndex(0, modeMismatch ? 1 : 0, 0)), TraversalMedium.Solid)).Build();
         NavigationMap destination = new NavigationMapBuilder("target", target).SetDefaultCell(Open)
-            .SetPlanarLayer(NavigationMode2D.TopDown, 0, Fixed64.Zero).Build();
+            .SetPlanarLayer(modeMismatch ? NavigationMode2D.SideView : NavigationMode2D.TopDown,
+                modeMismatch ? 1 : 0, modeMismatch ? Fixed64.Half : Fixed64.Zero).Build();
         Commit(context, targetArrivesLast ? owner : destination, 1).Should().Be(NavigationOperationStatus.Applied);
         Commit(context, targetArrivesLast ? destination : owner, 2).Should().Be(NavigationOperationStatus.Rejected);
+    }
+
+    [Fact]
+    public void Publish_OverlayCannotJoinPlanarModesAtTheSameEmbedding()
+    {
+        using var context = TrailblazerWorldContext.CreateOwned();
+        var source = new GridConfiguration(Vector3d.Zero, new Vector3d(2, 1, 0));
+        var target = new GridConfiguration(new Vector3d(4, 0, 0), new Vector3d(5, 1, 0));
+        context.World.TryAddGrid(source, out _).Should().BeTrue();
+        context.World.TryAddGrid(target, out _).Should().BeTrue();
+        Commit(context, Planar(source).SetDefaultCell(Open).Build(), 1).Should().Be(NavigationOperationStatus.Applied);
+        Commit(context, new NavigationMapBuilder("target", target).SetDefaultCell(Open)
+            .SetPlanarLayer(NavigationMode2D.SideView, 1, Fixed64.Half).Build(), 2).Should().Be(NavigationOperationStatus.Applied);
+        var delta = new NavigationMapOverlayDelta("planar", transitions: new[]
+        {
+            TraversalTransitionOverlayOperation.Upsert(new TraversalTransitionDefinition("wrong-mode",
+                TraversalTransitionType.Jump, new VoxelIndex(0, 1, 0), TraversalMedium.Solid,
+                new NavigationCellAddress("target", new VoxelIndex(0, 1, 0)), TraversalMedium.Solid))
+        });
+        ApplyOverlay(context, 3, delta).Should().Be(NavigationOperationStatus.Rejected);
     }
 
     private static PathQuery Query(Vector3d start, Vector3d end, string? startMap = null, string? endMap = null) =>

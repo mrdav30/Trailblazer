@@ -410,6 +410,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     {
         _guide?.Dispose();
         _guide = null;
+        _sideViewContinuesStage = false;
         ReleaseConnectorValidation();
         ClearHeldAction();
     }

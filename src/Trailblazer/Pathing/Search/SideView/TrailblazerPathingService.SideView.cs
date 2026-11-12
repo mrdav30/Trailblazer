@@ -33,9 +33,16 @@ public sealed partial class TrailblazerPathingService
         NavigationAreaPolicyKey areaPolicy, NavigationWorkBudget budget, out Vector2d center) =>
         RunSideViewProof(address, null, profile, areaPolicy, budget, out center, (boundMapId, plane, currentMapId));
 
+    internal NavigationGuideStatus ValidateSideViewControllerMotion(NavigationCellAddress source,
+        NavigationCellAddress destination, string boundMapId, NavigationPlanarBinding plane, string currentMapId,
+        Vector2d start, Vector2d end, in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy,
+        NavigationWorkBudget budget) => RunSideViewProof(source, destination, profile, areaPolicy, budget, out _,
+            (boundMapId, plane, currentMapId), (start, end));
+
     private NavigationGuideStatus RunSideViewProof(NavigationCellAddress address, NavigationCellAddress? destination,
         in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, NavigationWorkBudget budget,
-        out Vector2d center, (string MapId, NavigationPlanarBinding Plane, string CurrentMapId)? controller = null)
+        out Vector2d center, (string MapId, NavigationPlanarBinding Plane, string CurrentMapId)? controller = null,
+        (Vector2d Start, Vector2d End)? motion = null)
     {
         EnsureUsable();
         center = default;
@@ -73,13 +80,22 @@ public sealed partial class TrailblazerPathingService
             var work = immediate.RayWork.Workspace.Planar;
             var meter = immediate.WorkMeter;
             meter.Reset(budget);
-            var minimum = map.Map.GridBinding.Configuration.BoundsMin;
-            var point = new Vector3d(minimum.X, binding.EmbeddingY, minimum.Z);
-            var status = work.BindLayers(world, graph, map, binding, point, meter, out int layerCount);
-            if (status == NavigationGuideStatus.Success)
-                status = destination is NavigationCellAddress target
-                    ? work.ValidateSideViewLeg(world, graph, map, binding, address.Index, target, layerCount, profile, policy, meter)
-                    : work.ResolveSideViewAnchor(world, graph, map, binding, address.Index, layerCount, profile, policy, meter, out center);
+            NavigationGuideStatus status;
+            if (motion is { } sweep)
+            {
+                status = work.ValidateRoundedSideViewMotion(world, graph, map, binding, address.Index,
+                    destination!.Value, sweep.Start, sweep.End, profile, policy, meter);
+            }
+            else
+            {
+                var minimum = map.Map.GridBinding.Configuration.BoundsMin;
+                var point = new Vector3d(minimum.X, binding.EmbeddingY, minimum.Z);
+                status = work.BindLayers(world, graph, map, binding, point, meter, out int layerCount);
+                if (status == NavigationGuideStatus.Success)
+                    status = destination is NavigationCellAddress target
+                        ? work.ValidateSideViewLeg(world, graph, map, binding, address.Index, target, layerCount, profile, policy, meter)
+                        : work.ResolveSideViewAnchor(world, graph, map, binding, address.Index, layerCount, profile, policy, meter, out center);
+            }
             status = ResolvePlanarSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence));
             if (status != NavigationGuideStatus.Success)

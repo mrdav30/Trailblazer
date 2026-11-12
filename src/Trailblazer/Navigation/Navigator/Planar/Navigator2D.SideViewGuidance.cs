@@ -19,6 +19,7 @@ public abstract partial class Navigator2D
     private NavigationCellAddress _sideViewSource;
     private VoxelIndex _sideViewPreparedSupport;
     private bool _sideViewStagePrepared;
+    private bool _sideViewContinuesStage;
 
     /// <summary>Replaces guidance from the accepted canonical Solid support anchor to the destination.</summary>
     /// <remarks>
@@ -90,18 +91,27 @@ public abstract partial class Navigator2D
         Vector2d start = source.Position.ToVector2d();
         Vector2d end = target.Position.ToVector2d();
         bool requiresSupport = !source.IsSideViewBend && (Pose.Center == start || !target.IsSideViewBend);
-        if ((requiresSupport && !IsGrounded) || !IsOnSegment(start, end, Pose.Center))
+        bool exactOrigin = IsOnSegment(start, end, Pose.Center);
+        if ((requiresSupport && !IsGrounded) || (!exactOrigin && !_sideViewContinuesStage))
             return RejectSideViewStage(NavigationGuideStatus.InvalidStart);
         // The pose lies on a certified stage whose checked length fits the route's cost.
         bool boundedTarget = TryGetStepTarget(end, out var bounded);
         Debug.Assert(boundedTarget);
-        // shortcut: inherit the capsule proof only on its exact segment, until rounded slope targets have their own proof.
-        if (!IsOnSegment(Pose.Center, end, bounded))
-            return RejectSideViewStage(NavigationGuideStatus.Unsupported);
         if (bounded == Pose.Center && bounded != end)
         {
             GuidanceStatus = NavigationGuideStatus.Pending;
             return false;
+        }
+        if (!exactOrigin || !IsOnSegment(Pose.Center, end, bounded))
+        {
+            if (bounded != end)
+                bounded = RoundSideViewTarget(start, end);
+            status = _context.Pathing.ValidateSideViewControllerMotion(source.Address, target.Address, _mapId, _binding,
+                CurrentMapId, Pose.Center, bounded, NavigationProfile, _policy, _budget);
+            if (status == NavigationGuideStatus.Success)
+                status = guide.Status;
+            if (status != NavigationGuideStatus.Success)
+                return RejectSideViewStage(status);
         }
 
         GuidanceStatus = NavigationGuideStatus.Success;
@@ -122,12 +132,22 @@ public abstract partial class Navigator2D
         {
             var current = guide.Status;
             if (current != NavigationGuideStatus.Success)
+            {
+                _sideViewContinuesStage = false;
                 ApplyGuideStatus(current);
-            else if (_sideViewStagePrepared && !IsOnSegment(previousCenter, requestedCenter, Pose.Center))
-                RejectSideViewStage(NavigationGuideStatus.InvalidStart);
+            }
+            else if (_sideViewStagePrepared)
+            {
+                _sideViewContinuesStage = IsOnSegment(previousCenter, requestedCenter, Pose.Center);
+                if (!_sideViewContinuesStage)
+                    RejectSideViewStage(NavigationGuideStatus.InvalidStart);
+            }
+            else if (Pose.Center != previousCenter)
+                _sideViewContinuesStage = false;
             return;
         }
 
+        _sideViewContinuesStage = false;
         string? supportMap = _preparedDestinationMap;
         if (supportMap != null && !IsGrounded)
         {

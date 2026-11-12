@@ -200,7 +200,7 @@ public sealed partial class Navigator2DSupportTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void GuidedSlopeUsesTheExactSweepOrRejectsAnOffSegmentRawStep(bool tiny)
+    public void GuidedSlopeUsesTheExactSweepOrProvesTheOneRawUphillStep(bool tiny)
     {
         using var context = GuidedStepScene(slope: true);
         context.Pathing.ResolveSideViewAnchor(GuidedAddress(0), Profile, SideViewPolicy, SideViewBudget, out var start)
@@ -215,9 +215,20 @@ public sealed partial class Navigator2DSupportTests
         ApplySideView(host).Should().Be(NavigationGuideStatus.Success);
         Step(context, host, default);
         Step(context, host, default);
-        host.Pose.Center.Should().Be(tiny ? start : end);
+        host.Pose.Center.Should().Be(tiny ? start + Vector2d.Forward * Fixed64.MinIncrement : end);
         host.HasArrived.Should().Be(!tiny);
-        host.GuidanceStatus.Should().Be(tiny ? NavigationGuideStatus.Unsupported : NavigationGuideStatus.Success);
+        host.GuidanceStatus.Should().Be(NavigationGuideStatus.Success);
+        if (tiny)
+        {
+            context.SetFrameRate(64);
+            Step(context, host, default);
+            host.Pose.Center.Should().Be(start + Vector2d.Forward * Fixed64.MinIncrement);
+            host.GuidanceStatus.Should().Be(NavigationGuideStatus.Pending);
+            context.SetFrameRate(16);
+            Step(context, host, default);
+            host.Pose.Center.Should().Be(start + new Vector2d(Fixed64.MinIncrement, Fixed64.MinIncrement));
+            host.GuidanceStatus.Should().Be(NavigationGuideStatus.Success);
+        }
     }
 
     [Fact]

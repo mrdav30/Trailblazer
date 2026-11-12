@@ -133,11 +133,17 @@ or missing landing support releases guidance while committing the accepted
 pose. A moving carrier likewise releases the static route and applies its
 sampled carry through the free motor.
 
-Only exact subsegments inherit a retained sweep. A rounded slope substep
-outside that segment returns `Unsupported` and releases guidance. A graph
-publication or raw world change invalidates the guide before any cursor
-advance. Reacquisition requires a currently accepted canonical support
-anchor in the bound plane.
+Exact subsegments inherit the retained sweep. Fixed-point slope substeps
+outside that line are rounded from the canonical stage within the move-speed
+cap. They stay on its open side within two raw units along the minor axis
+and require a new capsule sweep under the movement work budget. Each end of
+that sweep must contact a footprint owned by one of the route's two support
+cells. A rounded step that fails the proof releases guidance and reports the
+proof status.
+
+A graph publication or raw world change invalidates the guide before any
+cursor advance. Reacquisition requires a currently accepted canonical
+support anchor in the bound plane.
 
 ## Setup
 

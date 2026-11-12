@@ -88,27 +88,4 @@ internal sealed partial class NavigationPlanarWork
             Pin(target, destination.Index), start, end, radius, Fixed64.Zero, medium, capabilities, policy, meter,
             NavigationGuideStatus.NoPath);
     }
-
-    internal NavigationGuideStatus ValidateMotion(GridWorld world, NavigationWorldGraph graph,
-        NavigationMapInstance map, NavigationPlanarBinding binding, Vector2d start, Vector2d end, Fixed64 radius,
-        TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter,
-        (string? Start, string? End) preferredMaps)
-    {
-        if (!meter.TryConsumeEvaluatedEdges(1))
-            return NavigationGuideStatus.BudgetExceeded;
-        NavigationGuideStatus status = FindControllerCell(world, graph, binding, start, meter, out _, out _, out var source,
-            preferredMaps.Start);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        status = FindControllerCell(world, graph, binding, end, meter, out _, out _, out var target, preferredMaps.End);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        var point = new Vector3d(start.X, binding.EmbeddingY, start.Y);
-        status = BindLayers(world, graph, map, binding, point, meter, out int layerCount);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        return TraceBody(world, graph, layerCount, binding, source!.WorldIndex, target!.WorldIndex,
-            start, end, radius, Fixed64.Zero, medium, capabilities, policy, meter, NavigationGuideStatus.NoPath);
-    }
-
 }

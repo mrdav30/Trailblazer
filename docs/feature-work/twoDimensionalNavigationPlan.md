@@ -13,8 +13,9 @@ same-medium actions through accepted controller motion. See the
 [Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
 covers native manual motion, authored supports, canonical anchors, and
 immediate and scheduled A* and Flow guides over proved ordinary side-view legs.
-Navigator2D follows exact stages from a canonical support anchor. Rounded
-slope substeps, authored traversal, and profile changes remain open.
+Navigator2D follows supported stages from a canonical support anchor, with
+bounded rounded slope substeps. Moved-origin connectors, authored traversal,
+and profile changes remain open.
 Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
@@ -959,7 +960,9 @@ in the existing test projects.
     materialize exact step waypoints within counted frame allowances.
   - [x] Controller following from a canonical anchor through accepted exact
     subsegments, with live support required at landings.
-  - [ ] Rounded slope substeps, moved-origin connectors, remaining surface joins, and
+  - [x] Rounded slope substeps reprove the bounded capsule sweep on the retained
+    support lattice and preserve exact accepted-motion replay.
+  - [ ] Moved-origin connectors, remaining surface joins, and
     the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
 - [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
   ladder between supported regions over bounded frames. Test insufficient
@@ -3247,3 +3250,71 @@ remain inconclusive. Raw evidence is under `artifacts/side-view-following`
 in `*-landing-Release-*`, `*-final-ReleaseLean-*`, `docfx.log`,
 `baseline.log`, `candidate.log`, `*-repeat.log`, and
 `planar-following-probes.log`.
+
+### 2026-11-11 - Phase 2 rounded side-view slope substeps
+
+The one-raw uphill counterexample held the previous center at `e32dbc1`
+and reported `Unsupported`. A rounded target now derives its minor
+coordinate from the immutable stage. It rounds toward open space within
+two raw units along that axis. A four-raw speed margin covers lattice
+rounding and the accepted origin's offset. At the smallest cap, a
+deterministic cardinal substep preserves clearance-side progress.
+
+Exact subsegments keep using the retained sweep. Rounded targets and
+off-line accepted continuations use a new full-axis capsule sweep with
+the existing bounded workspace and movement meter. Both endpoints pin
+closed contacts to the two retained support owners, preserving the
+original lattice even when the center lies in headroom or an overlapping
+grid. If neither route footprint contacts an endpoint, the proof fails
+closed. A current guide is checked after a successful sweep and again on
+commit.
+
+Only exact clips of the submitted segment can retain off-line continuation.
+A zero-allowance frame preserves that proof when the accepted center is
+unchanged. Cursor advancement and grounded arrival still require the
+exact canonical waypoint. Moved-origin connectors remain open.
+
+The focused tests cover uphill and downhill cardinal rounding, shallow
+and steep slope replay with exact off-line clips, a tall capsule's
+headroom, tangent ceiling rejection, a separate headroom map with an
+overlapping grid of different width, bounded pin lookups and missing
+contacts. The split-headroom fixture's first alias normalized to congruent
+cells. A narrower width makes it genuinely incompatible and preserves the
+intended counterexample.
+
+The diff adds 188 net runtime lines relative to `e32dbc1`. The shared
+motion trace still uses GridForge's existing planar body API.
+FixedMathSharp's exact closed capsule predicate is already present in
+the pinned source and the cached standard and Lean 8.0.0 XML for both
+target frameworks. This slice needs no dependency pin changes.
+Final review added selected-layer and prism validation before contact
+testing. Missing and invalid route addresses now return `Stale`.
+
+Captured the frozen 100-agent 3D guided-frame baseline before changing
+shared source. Both builds ran two launches with five warmups and five
+actual iterations per algorithm. All four children per capture succeeded.
+All 1,280 actual frame checksums, phase assignments and ray counts matched,
+with zero warm-frame bytes and 21,600 bytes per first admission. Median
+64-frame sums were 93.968 to 94.259 ms for A* and 52.463 to 44.478 ms for Flow.
+
+The accepting-host probe warmed 256 routes and measured five blocks of
+128 routes per process. It timed full context and controller frames after
+acquisition, verified exact arrival in each direction, and checked the
+assembly hashes. TopDown used five frames per route and allocated 32 bytes
+per route in all four processes. Its baseline medians were 77.598 and
+79.157 us/frame, and candidate medians were 79.240 and 80.390 us/frame.
+The rounded SideView fixture used seven frames per route and a median
+124.537 us/frame, allocating the same 32 bytes per route. These timings
+describe the fixtures and leave small latency differences inconclusive.
+
+Both target frameworks built on Windows and Ubuntu in Release and
+ReleaseLean with `UseLocalLsfStack=true`. Each host passed 3,704 Release
+tests and 3,600 ReleaseLean tests. Each lane covered all 35,089 lines,
+15,085 branches, and 3,517 methods across core and the Gravitas adapter.
+DocFX passed with warnings treated as errors. The first Ubuntu Lean run
+reused binaries from before the retained-address guard and was excluded.
+Rebuilding the changed files in that snapshot restored matching coverage.
+Raw evidence is under `artifacts/side-view-rounded` in `windows-proof-*`,
+`linux-proof-Release-*`, `linux-proof-fresh-ReleaseLean-*`, `docfx.log`,
+`slope-red.log`, `baseline.log`, `candidate.log`, and
+`planar-rounded-probes.log`.

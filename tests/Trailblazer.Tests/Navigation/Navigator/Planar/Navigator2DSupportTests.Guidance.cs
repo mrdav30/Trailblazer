@@ -409,14 +409,17 @@ public sealed partial class Navigator2DSupportTests
 
     private static readonly GridConfiguration GuidedGrid = new(new Vector3d(0, 0, -1), new Vector3d(1, 1, 1));
 
-    private static TrailblazerWorldContext GuidedStepScene(bool slope = false, bool flat = false, Fixed64? embedding = null)
+    private static TrailblazerWorldContext GuidedStepScene(bool slope = false, bool flat = false, Fixed64? embedding = null) =>
+        GuidedScene(GuidedMap(GuidedGrid, 1, embedding ?? Fixed64.One, slope, flat));
+
+    private static TrailblazerWorldContext GuidedScene(NavigationMap map)
     {
         var context = TrailblazerWorldContext.CreateOwned(settings: PlanarSchedulingTestSettings.Create());
         context.SetFrameRate(16);
         context.World.TryAddGrid(GuidedGrid, out _).Should().BeTrue();
         var policy = new NavigationAreaPolicy(SideViewPolicy, new[] { new NavigationAreaRule(true, Fixed64.Zero) });
         context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(policy, 1, 1)).Should().BeTrue();
-        PublishGuidedMap(context, GuidedMap(GuidedGrid, 1, embedding ?? Fixed64.One, slope, flat), 2);
+        PublishGuidedMap(context, map, 2);
         return context;
     }
 

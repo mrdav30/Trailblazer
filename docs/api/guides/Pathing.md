@@ -151,8 +151,9 @@ center. Use `TryGetCurrentStep` to read it and `TryAdvanceStep` after accepting
 that waypoint. Follow each waypoint in order. A step-up retains the lift before
 the crossing. A drop retains the crossing before the descent. The bend's
 address identifies the lower support owner and the capsule can be airborne at
-that point. Your host owns the actual motion. Advancing at the final waypoint
-leaves the cursor there.
+that point. A valley retains a grounded bend owned by the left support in
+either travel direction. Your host owns the actual motion. Advancing at the
+final waypoint leaves the cursor there.
 
 The cost sums the proved stage lengths rounded up to the fixed-point unit and
 the forward destination's cell and area entry costs. Headroom adds no entry

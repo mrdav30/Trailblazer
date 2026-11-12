@@ -20,7 +20,8 @@ public sealed partial class TrailblazerPathingService
 
     /// <summary>Proves an ordinary side-view Solid leg between two authored support anchors.</summary>
     /// <remarks>
-    /// Continuous legs require collinear supports with a shared endpoint and equal materialized normals.
+    /// Adjoining supports use a straight leg when collinear with matching normals. A valley can use
+    /// two supported sweeps through an exact intersection of the finite capsule-center tracks.
     /// Horizontal steps in a rectangular row use the profile's directed step and drop limits.
     /// A step up lifts before crossing. A drop crosses at the source height before descending to support.
     /// </remarks>

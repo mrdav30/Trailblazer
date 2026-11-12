@@ -17,7 +17,7 @@ public abstract partial class Navigator2D
 {
     private NavigationCellAddress _sideViewSource;
     private Vector2d _sideViewConnectorStart;
-    private VoxelIndex _sideViewPreparedSupport;
+    private VoxelIndex? _sideViewPreparedSupport;
     private bool _sideViewStagePrepared;
     private bool _sideViewContinuesStage;
 
@@ -90,7 +90,7 @@ public abstract partial class Navigator2D
         }
         Vector2d start = _requiresConnector ? _sideViewConnectorStart : source.Position.ToVector2d();
         Vector2d end = target.Position.ToVector2d();
-        bool requiresSupport = !source.IsSideViewBend && (Pose.Center == start || !target.IsSideViewBend);
+        bool requiresSupport = !source.IsSideViewStepBend && (Pose.Center == start || !target.IsSideViewStepBend);
         bool exactOrigin = IsOnSegment(start, end, Pose.Center);
         if ((requiresSupport && !IsGrounded) || (!exactOrigin && !_sideViewContinuesStage))
             return RejectSideViewStage(NavigationGuideStatus.InvalidStart);
@@ -129,10 +129,10 @@ public abstract partial class Navigator2D
         GuidanceStatus = NavigationGuideStatus.Success;
         center = bounded;
         _mayAdvance = center == end;
-        if (_mayAdvance && !target.IsSideViewBend)
+        if (_mayAdvance && !target.IsSideViewStepBend)
         {
             _preparedDestinationMap = target.Address.MapId;
-            _sideViewPreparedSupport = target.Address.Index;
+            _sideViewPreparedSupport = target.IsSideViewGroundedBend ? null : target.Address.Index;
         }
         return true;
     }
@@ -167,8 +167,8 @@ public abstract partial class Navigator2D
             return;
         }
         // Accepted support is a candidate for a fresh proof even if the old route became stale.
-        if (supportMap != null)
-            _sideViewSource = new NavigationCellAddress(supportMap, _sideViewPreparedSupport);
+        if (supportMap != null && _sideViewPreparedSupport is VoxelIndex support)
+            _sideViewSource = new NavigationCellAddress(supportMap, support);
         bool arrived = guide.CurrentStepIndex == guide.StepCount - 1;
         var status = guide.TryAdvancePlanarStep();
         if (status != NavigationGuideStatus.Success)

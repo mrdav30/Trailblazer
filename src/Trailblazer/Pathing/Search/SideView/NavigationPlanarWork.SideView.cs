@@ -6,6 +6,7 @@
 //=======================================================================
 
 using FixedMathSharp;
+using FixedMathSharp.Geometry;
 using GridForge.Grids;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
@@ -84,10 +85,10 @@ internal sealed partial class NavigationPlanarWork
         NavigationMapInstance source, NavigationPlanarBinding binding, VoxelIndex sourceIndex,
         NavigationMapInstance target, VoxelIndex targetIndex, int layerCount, in NavigationAgentProfile2D profile,
         NavigationAreaPolicy policy, NavigationWorkMeter meter, out Vector2d start, out Vector2d end,
-        out bool step, bool chargeEndpointCandidates = false)
+        out Vector2d? bend, bool chargeEndpointCandidates = false)
     {
         start = end = default;
-        step = false;
+        bend = null;
         if (chargeEndpointCandidates && !meter.TryConsumeEndpointCandidates(1))
             return NavigationGuideStatus.BudgetExceeded;
         var status = ReadSupportAnchor(source, sourceIndex, profile, policy, meter, NavigationGuideStatus.InvalidStart,
@@ -115,51 +116,87 @@ internal sealed partial class NavigationPlanarWork
 
         WorldVoxelIndex sourcePin = Pin(source, sourceIndex);
         WorldVoxelIndex targetPin = Pin(target, targetIndex);
-        if (SideViewSupportsMeet(from, to))
-        {
-            // A chord between distinct surface offsets cannot certify a corner.
-            if (Vector2d.OrientationSign(left.Left, left.Right, right.Right) != 0 || left.Normal != right.Normal)
-                return NavigationGuideStatus.NoPath;
+        int bendOrdinal = GetSideViewBendOrdinal(left, right);
+        if (bendOrdinal == NavigationAStarGuidePoint.OrdinaryOrdinal)
             return TraceSideView(world, graph, binding, layerCount, sourcePin, targetPin, start, end, profile, policy, meter);
-        }
 
-        // An ordinary step can only join facing horizontal supports within one rectangular row.
-        if (fromPrism.TopologyKind != GridTopologyKind.RectangularPrism || fromPrism.Center.Z != toPrism.Center.Z
-            || from.Left.Y != from.Right.Y || to.Left.Y != to.Right.Y)
-            return NavigationGuideStatus.NoPath;
-        // The equal center offsets cancel within one representable rectangular row.
-        Fixed64 rise = end.Y - start.Y;
-        if (rise > profile.MaxStepUp || rise < -profile.MaxDropDown)
-            return NavigationGuideStatus.NoPath;
-
-        bool rising = rise > Fixed64.Zero;
-        Vector2d lower = rising ? start : end;
-        bool lowerOnLeft = rising == sourceOnLeft;
-        Fixed64 seamDistance = lowerOnLeft ? left.Right.X - lower.X : lower.X - right.Left.X;
-        if (seamDistance < profile.Radius)
-            return NavigationGuideStatus.NoPath;
-
-        // Trace the lift or descent in the lower owner, then the crossing between the two owners.
-        // Traversal order determines which proof consumes the available budget first.
-        Vector2d lifted = GetSideViewStepWaypoint(start, end);
-        step = true;
-        if (rising)
+        // The grounded bend contacts both exact owners, so both pins govern each stage's coverage.
+        WorldVoxelIndex firstTarget = targetPin;
+        WorldVoxelIndex secondSource = sourcePin;
+        Vector2d waypoint;
+        if (bendOrdinal == NavigationAStarGuidePoint.SideViewGroundedBendOrdinal)
         {
-            status = TraceSideView(world, graph, binding, layerCount, sourcePin, sourcePin, start, lifted, profile, policy, meter);
-            return status != NavigationGuideStatus.Success ? status
-                : TraceSideView(world, graph, binding, layerCount, sourcePin, targetPin, lifted, end, profile, policy, meter);
+            // Each support's closed capsule contact region is convex, so both endpoints prove contact along the stage.
+            if (!TryGetSideViewCorner(left, right, sourceOnLeft ? start : end, sourceOnLeft ? end : start, out waypoint)
+                || !(from.TouchesCapsule(start, profile) & from.TouchesCapsule(waypoint, profile)
+                    & to.TouchesCapsule(waypoint, profile) & to.TouchesCapsule(end, profile)))
+                return NavigationGuideStatus.NoPath;
         }
-        status = TraceSideView(world, graph, binding, layerCount, sourcePin, targetPin, start, lifted, profile, policy, meter);
+        else
+        {
+            // An ordinary step can only join facing horizontal supports within one rectangular row.
+            if (fromPrism.TopologyKind != GridTopologyKind.RectangularPrism || fromPrism.Center.Z != toPrism.Center.Z
+                || from.Left.Y != from.Right.Y || to.Left.Y != to.Right.Y)
+                return NavigationGuideStatus.NoPath;
+            // The equal center offsets cancel within one representable rectangular row.
+            Fixed64 rise = end.Y - start.Y;
+            if (rise > profile.MaxStepUp || rise < -profile.MaxDropDown)
+                return NavigationGuideStatus.NoPath;
+
+            bool rising = rise > Fixed64.Zero;
+            Vector2d lower = rising ? start : end;
+            bool lowerOnLeft = rising == sourceOnLeft;
+            Fixed64 seamDistance = lowerOnLeft ? left.Right.X - lower.X : lower.X - right.Left.X;
+            if (seamDistance < profile.Radius)
+                return NavigationGuideStatus.NoPath;
+
+            waypoint = GetSideViewStepWaypoint(start, end);
+            if (rising)
+                firstTarget = sourcePin;
+            else
+                secondSource = targetPin;
+        }
+        bend = waypoint;
+        status = TraceSideView(world, graph, binding, layerCount, sourcePin, firstTarget, start, waypoint, profile, policy, meter);
         return status != NavigationGuideStatus.Success ? status
-            : TraceSideView(world, graph, binding, layerCount, targetPin, targetPin, lifted, end, profile, policy, meter);
+            : TraceSideView(world, graph, binding, layerCount, secondSource, targetPin, waypoint, end, profile, policy, meter);
     }
 
     // The step proof certified horizontal anchors and a lift at the lower anchor's X.
     internal static Vector2d GetSideViewStepWaypoint(Vector2d start, Vector2d end) =>
         start.Y < end.Y ? new Vector2d(start.X, end.Y) : new Vector2d(end.X, start.Y);
 
-    internal static bool SideViewSupportsMeet(in NavigationPlanarSupport from, in NavigationPlanarSupport to) =>
-        from.Left.X < to.Left.X ? from.Right == to.Left : to.Right == from.Left;
+    internal static int GetSideViewBendOrdinal(in NavigationPlanarSupport left, in NavigationPlanarSupport right)
+    {
+        if (left.Right != right.Left)
+            return NavigationAStarGuidePoint.SideViewStepBendOrdinal;
+        return Vector2d.OrientationSign(left.Left, left.Right, right.Right) == 0 & left.Normal == right.Normal
+            ? NavigationAStarGuidePoint.OrdinaryOrdinal : NavigationAStarGuidePoint.SideViewGroundedBendOrdinal;
+    }
+
+    internal static bool TryGetSideViewCorner(in NavigationPlanarSupport left, in NavigationPlanarSupport right,
+        Vector2d leftAnchor, Vector2d rightAnchor, out Vector2d corner)
+    {
+        corner = default;
+        // A convex crest requires support around a vertex, outside these two tracks.
+        if (Vector2d.OrientationSign(left.Left, left.Right, right.Right) <= 0)
+            return false;
+        bool leftFits = Vector2d.TryAdd(leftAnchor, left.Right - SupportMidpoint(left), out var leftSeam);
+        bool rightFits = Vector2d.TryAdd(rightAnchor, right.Left - SupportMidpoint(right), out var rightSeam);
+        if (!(leftFits & rightFits))
+            return false;
+        var incoming = new FixedSegment2d(leftAnchor, leftSeam);
+        if (!incoming.TryGetUniqueIntersection(new FixedSegment2d(rightSeam, rightAnchor), out var parameter))
+            return false;
+        // shortcut: decline rounded intersections off either track until exact point materialization is available.
+        Vector2d point = Vector2d.Lerp(leftAnchor, leftSeam, parameter);
+        if (!(point.X >= rightSeam.X & point.X <= rightAnchor.X
+            & Vector2d.OrientationSign(leftAnchor, leftSeam, point) == 0
+            & Vector2d.OrientationSign(rightSeam, rightAnchor, point) == 0))
+            return false;
+        corner = point;
+        return true;
+    }
 
     private NavigationGuideStatus TraceSideView(GridWorld world, NavigationWorldGraph graph, NavigationPlanarBinding binding,
         int layerCount, WorldVoxelIndex source, WorldVoxelIndex target, Vector2d start, Vector2d end,

@@ -66,9 +66,15 @@ support surfaces in the selected coverage cells as well as the cells themselves.
 Exact tangency is allowed. A rounded center or an intermediate pose that
 penetrates a surface fails the proof.
 
-Continuous legs join collinear supports at an exact shared endpoint with a
-common fixed-point normal. Different-height horizontal supports may join at a
-shared X boundary in one rectangular row. A step up lifts before crossing at
+Collinear supports with an exact shared endpoint and a common fixed-point
+normal use a straight leg. At a valley, the finite capsule-center tracks from
+the two anchors toward the seam must intersect at an exact fixed-point
+waypoint. Each stage must keep contact with its own support and clear the full
+capsule sweep. A join whose intersection rounds off either track fails the
+leg check.
+
+Different-height horizontal supports may join at a shared X boundary in one
+rectangular row. A step up lifts before crossing at
 the higher center height. A drop crosses before descending. Each phase must
 clear the capsule and stay within the pinned support owners' trace closure.
 The profile supplies separate limits for rising and dropping. A gap or an

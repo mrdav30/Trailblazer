@@ -28,6 +28,13 @@ internal readonly struct NavigationPlanarSupport : IEquatable<NavigationPlanarSu
     internal Vector2d Right { get; }
     internal Vector2d Normal { get; }
 
+    internal bool TouchesCapsule(Vector2d center, in NavigationAgentProfile2D profile)
+    {
+        // A collapsed convex polygon represents the finite segment for exact closed contact.
+        Span<Vector2d> boundary = stackalloc Vector2d[3] { Vector2d.Zero, Right - Left, Vector2d.Zero };
+        return FixedConvex2dRelations.IntersectsUprightCapsule(center, profile.AxisLength, profile.Radius, Left, boundary);
+    }
+
     internal NavigationVolumeAnchorStatus CheckClearance(Vector2d start, Vector2d end, Fixed64 axisLength, Fixed64 radius)
     {
         Vector2d span = Right - Left;

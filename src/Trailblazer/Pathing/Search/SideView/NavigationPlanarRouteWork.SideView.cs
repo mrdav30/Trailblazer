@@ -28,36 +28,54 @@ internal sealed partial class NavigationPlanarRouteWork
             int index = sideView.RouteSupportCursor++;
             var address = GetAddress(index);
             var support = GetRouteSupport(address);
-            bool hasBend = index != 0 && !NavigationPlanarWork.SideViewSupportsMeet(sideView.PreviousRouteSupport, support);
+            var previous = sideView.PreviousRouteSupport;
+            bool previousOnLeft = previous.Left.X < support.Left.X;
+            int bendOrdinal = index == 0 ? NavigationAStarGuidePoint.OrdinaryOrdinal : previousOnLeft
+                ? NavigationPlanarWork.GetSideViewBendOrdinal(previous, support)
+                : NavigationPlanarWork.GetSideViewBendOrdinal(support, previous);
             if (_points == null)
             {
-                if (hasBend)
+                if (bendOrdinal != NavigationAStarGuidePoint.OrdinaryOrdinal)
                     sideView.RouteBendCount++;
             }
             else
-                WriteSideViewAnchor(sideView.Profile, address, support, hasBend);
+                WriteSideViewAnchor(sideView, address, support, previousOnLeft, bendOrdinal);
             sideView.PreviousRouteSupport = support;
         }
         return NavigationGuideStatus.Success;
     }
 
-    private void WriteSideViewAnchor(in NavigationAgentProfile2D profile, NavigationCellAddress address,
-        in NavigationPlanarSupport support, bool hasBend)
+    private void WriteSideViewAnchor(NavigationSideViewSearch sideView, NavigationCellAddress address,
+        in NavigationPlanarSupport support, bool previousOnLeft, int bendOrdinal)
     {
         Fixed64 embedding = _query.Start.FootAnchor.Y;
-        var status = NavigationPlanarWork.MaterializeSupportAnchor(support, profile,
+        var status = NavigationPlanarWork.MaterializeSupportAnchor(support, sideView.Profile,
             NavigationGuideStatus.Stale, out Vector2d center);
         Debug.Assert(status == NavigationGuideStatus.Success);
         var points = _points!;
-        if (hasBend)
+        if (bendOrdinal != NavigationAStarGuidePoint.OrdinaryOrdinal)
         {
             var previousPoint = points[_pointWrite - 1];
             Vector2d previous = previousPoint.Position.ToVector2d();
-            Vector2d bend = NavigationPlanarWork.GetSideViewStepWaypoint(previous, center);
-            var owner = previous.Y < center.Y ? previousPoint.Address : address;
+            Vector2d bend;
+            NavigationCellAddress owner;
+            if (bendOrdinal == NavigationAStarGuidePoint.SideViewStepBendOrdinal)
+            {
+                bend = NavigationPlanarWork.GetSideViewStepWaypoint(previous, center);
+                owner = previous.Y < center.Y ? previousPoint.Address : address;
+            }
+            else
+            {
+                var previousSupport = sideView.PreviousRouteSupport;
+                bool materialized = previousOnLeft
+                    ? NavigationPlanarWork.TryGetSideViewCorner(previousSupport, support, previous, center, out bend)
+                    : NavigationPlanarWork.TryGetSideViewCorner(support, previousSupport, center, previous, out bend);
+                Debug.Assert(materialized);
+                owner = previousOnLeft ? previousPoint.Address : address;
+            }
             points[_pointWrite++] = new NavigationAStarGuidePoint(owner,
                 new Vector3d(bend.X, embedding, bend.Y), TraversalMedium.Solid,
-                NavigationAStarGuidePoint.SideViewBendOrdinal);
+                bendOrdinal);
         }
         points[_pointWrite++] = new NavigationAStarGuidePoint(address, new Vector3d(center.X, embedding, center.Y),
             TraversalMedium.Solid);

@@ -15,8 +15,9 @@ covers native manual motion, authored supports, canonical anchors, and
 immediate and scheduled A* and Flow guides over proved ordinary side-view legs.
 Navigator2D follows supported stages from a canonical support anchor, with
 bounded rounded slope substeps and scheduled moved-origin connectors on the
-same finite authored support. Surface joins, authored traversal, and profile
-changes remain open.
+same finite authored support. Grounded valley joins use two supported capsule
+sweeps through an exact waypoint. Crest and other unsupported joins, authored
+traversal, and profile changes remain open.
 Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
@@ -458,7 +459,7 @@ require the existing matched performance controls.
 | --- | --- | --- | --- |
 | 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
 | 1 | Native planar guidance and top-down movement | Complete | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
-| 2 | Side-view traversal and profile changes | In progress | In-plane support, locomotion, posture/capability sequences, and replay verified |
+| 2 | Side-view traversal and profile changes | In progress | Remaining surface joins, bounded authored traversal, profile replacement, airborne sequences, and persistence/replay |
 | 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
 
 ## Phase 0 - Settle The 2D Contract
@@ -939,9 +940,8 @@ in the existing test projects.
   after each shared change; do not clone the whole search service or couple a
   planar consumer to the 3D motor merely to reuse its state fields.
 - [x] **Review native top-down delivery.** Verify fixed-point repeatability,
-  existing navigation work limits, ownership, and changed-path coverage. Mark
-  only this phase complete; side-view movement and real Gravitas2D collision
-  remain open.
+  navigation work limits, ownership, changed-path coverage, and matched 3D
+  controls.
 
 ## Phase 2 - Side-View Traversal And Runtime Changes
 
@@ -952,25 +952,27 @@ in the existing test projects.
   - [x] Native profile/settings/input/result boundary, accepted support refresh,
     horizontal and slope-tangent movement, gravity, jump admission, ceiling
     clipping, fall/landing, logical facing, and exact carrier-anchor carry.
-  - [x] Authored support, canonical capsule anchors, continuous collinear legs,
-    and bounded horizontal step/drop and headroom proofs through the shared
-    planar coverage workspace.
+  - [x] Authored support, canonical capsule anchors, collinear legs, grounded
+    valley joins, and bounded horizontal step/drop and headroom proofs through
+    the shared planar coverage workspace.
   - [x] Immediate A* and Flow guides over the proved ordinary legs, with exact
     ordered step waypoints and forward entry costs.
   - [x] Side-view guides use the shared scheduled acquisition FIFO and
     materialize exact step waypoints within counted frame allowances.
   - [x] Controller following from a canonical anchor through accepted exact
-    subsegments, with live support required at landings.
+    subsegments, with live support required at landings and grounded bends.
   - [x] Rounded slope substeps reprove the bounded capsule sweep on the retained
     support lattice and preserve exact accepted-motion replay.
   - [x] Scheduled moved-origin connectors reprove the return to the exact
     first anchor under the shared validation turn and movement budget.
-  - [ ] Remaining surface joins and
-    the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
-- [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
-  ladder between supported regions over bounded frames. Test insufficient
-  clearance/capability and invalidated actions without teleporting through guide
-  points or skipping completion tokens. Use both A* and Flow where applicable.
+  - [ ] Verify the remaining surface joins, including crests and nonhorizontal
+    steps. Reject ordinary legs where support or clearance cannot be proved.
+    Physical stepping stays host-owned.
+- [ ] **Prove authored traversal.** Run the bounded ladder, jump, and drop
+  fixtures with host-executed motion from approach through accepted landing
+  between supported regions. Test insufficient clearance, missing capability,
+  invalidated actions, and exact completion tokens. Use both A* and Flow where
+  applicable.
 - [ ] **Apply the reviewed replacement contract to 2D.** Reuse hardening Phase
   2's atomicity and lifecycle rules for stand/crouch/compact cycles, blocked
   growth, foot-anchor stability, preserved destinations, and gained/lost
@@ -3384,3 +3386,74 @@ Raw evidence is under `artifacts/side-view-connector` in `red.log`,
 `capacity-commit-red.log`, `final/*-proof*-*`, `final/docfx.log`,
 `baseline.log`, `candidate.log`, `connector-probe.log`, and
 `connector-probe-allocations.log`.
+
+### 2026-11-11 - Phase 2 grounded side-view valley joins
+
+The asymmetric flat-to-slope fixture had clear canonical anchors but returned
+`NoPath` in both directions at `f515a12`. The old rule recognized collinear
+supports and horizontal steps. A valley needs a waypoint on both finite
+capsule-center tracks so each stage can follow its own support.
+
+Build the tracks from the canonical anchors toward the shared authored
+endpoint. Materialize the intersection in left-to-right authoring order, then
+check exact finite membership. Closed capsule contact at both endpoints of a
+stage establishes support along the entire straight stage. The two existing
+GridForge sweeps independently require full-body clearance. The existing
+FixedMathSharp intersection and closed-contact predicates are available on
+the pinned source and in Standard and Lean 8.0.0 for both target frameworks.
+Dependency pins are unchanged.
+
+The shared search and route writer derive the same waypoint from the
+immutable support pair. A* and incoming Flow sum both stage lengths and
+charge forward entry once. The bend uses the existing retained waypoint
+layout, with a grounded ordinal and the left support address in either
+direction. The controller commits the host's accepted center and advances
+only at the exact bend with live support. The bend never becomes the
+canonical reacquisition anchor. A clipped result follows the existing stage
+continuation proof. Crests, disjoint sloped steps, and intersections that
+round off the finite tracks stay outside ordinary valley admission.
+
+Independent review found that a same-owner sweep could select a coincident
+footprint from an overlapping map instead of the opposite support owner.
+The split-map regression admitted both anchors but returned `NoPath` when
+the coincident footprint required Fly. Pinning both admitted owners in each
+valley sweep passes in both directions. Lift and drop keep their existing
+pin order. Rounded controller reproof uses the existing per-stage contact
+rules. Coincident coverage outside those pins can still cause a conservative
+stop.
+
+The flat-to-3/4-slope fixture retains the bend at `(27/64, 15/64)` and
+geometric cost `62/64` in both directions. The tests cover forward entry cost,
+scheduled and immediate controller replay, exact clipped acceptance, and
+support loss at the bend. Counterexamples cover a finite roof that misses both
+anchors, a crest, an odd raw axis with a contact gap, a rounded intersection,
+and tracks with an unrepresentable endpoint or an intersection outside their
+finite spans.
+
+Windows and Ubuntu built both target frameworks against the pinned source
+stack with `UseLocalLsfStack=true`. Each host passed 3,725 Release tests and
+3,621 ReleaseLean tests. Each lane covered all 35,169 lines, 15,153 branches,
+and 3,525 methods across core and the Gravitas adapter. DocFX passed with
+warnings treated as errors. The diff adds 69 net runtime and XML lines
+relative to `f515a12` without widening the retained waypoint type.
+
+The matched 100-agent 3D capture used two launches, five warmups, and five
+actual iterations per algorithm. All four children per capture succeeded.
+All 1,280 actual frame checksums, phase assignments, and ray counts matched.
+Warm frames allocated zero bytes and first admission allocated 21,600 bytes
+in both captures. Median 64-frame sums were 96.578 to 98.058 ms for A* and
+45.241 to 47.468 ms for Flow. The paired timings leave those small differences
+inconclusive.
+
+The accepting-host valley probe warmed 256 routes at 16 Hz and measured five
+blocks of 128 alternating routes after acquisition. Each route replayed its
+direction's raw centers and statuses in seven complete host frames, including
+the exact grounded bend. Median containing-frame time was 86.781 us. The
+guided replay allocated 64 bytes per route. Submitting the same accepted poses
+through the free motor without a guide also allocated 64 bytes per route over
+640 routes.
+
+Raw evidence is under `artifacts/side-view-joins` in `red.log`,
+`alias-red.log`, `alias-green.log`, `final/*-proof-*`, `final/docfx.log`,
+`baseline.log`, `candidate.log`, `valley-probe.log`, and
+`valley-probe-allocations.log`.

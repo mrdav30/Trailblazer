@@ -237,11 +237,11 @@ internal partial class NavigationPlanarSearch
         VoxelIndex from = _incoming ? adjacent : _current;
         VoxelIndex to = _incoming ? _current : adjacent;
         Vector2d start, end;
-        bool step = false;
+        Vector2d? bend = null;
         NavigationGuideStatus status;
         if (this is NavigationSideViewSearch sideView)
             status = _proof.TraceSideViewLeg(_world, Graph, fromMap, _binding, from, toMap, to,
-                _layerCount, sideView.Profile, _policy, _meter, out start, out end, out step);
+                _layerCount, sideView.Profile, _policy, _meter, out start, out end, out bend);
         else
         {
             fromMap.Map.GridBinding.TryGetCellPrism(from, out GridCellPrism source);
@@ -258,10 +258,12 @@ internal partial class NavigationPlanarSearch
         toMap.TryGetSlot(to, out int slot);
         toMap.TryGetEffectiveCell(slot, out NavigationCell cell);
         NavigationAreaRule rule = _policy.GetRequiredRule(cell.Area);
-        bool costFits = step
-            ? TryGetStepCost(start, end, cell.EnterCost, rule.AdditionalEnterCost, out cost)
-            : NavigationVolumeEdgeEvaluator.TryGetCost(new Vector3d(start.X, Fixed64.Zero, start.Y),
-                new Vector3d(end.X, Fixed64.Zero, end.Y), cell.EnterCost, rule.AdditionalEnterCost, out cost);
+        Vector3d fromAnchor = new(start.X, Fixed64.Zero, start.Y);
+        Vector3d toAnchor = new(end.X, Fixed64.Zero, end.Y);
+        bool costFits = bend is Vector2d waypoint
+            ? TryGetBentCost(fromAnchor, new Vector3d(waypoint.X, Fixed64.Zero, waypoint.Y), toAnchor,
+                cell.EnterCost, rule.AdditionalEnterCost, out cost)
+            : NavigationVolumeEdgeEvaluator.TryGetCost(fromAnchor, toAnchor, cell.EnterCost, rule.AdditionalEnterCost, out cost);
         if (!costFits)
             return NavigationTraversalEdgeAdvanceStatus.CostOverflow;
 
@@ -269,14 +271,11 @@ internal partial class NavigationPlanarSearch
         return NavigationTraversalEdgeAdvanceStatus.Edge;
     }
 
-    private static bool TryGetStepCost(Vector2d start, Vector2d end, Fixed64 enter, Fixed64 area, out Fixed64 cost)
+    private static bool TryGetBentCost(Vector3d start, Vector3d bend, Vector3d end, Fixed64 enter, Fixed64 area, out Fixed64 cost)
     {
-        // The proved path has one horizontal and one vertical stage, each with exact scalar length.
-        bool horizontalFits = Fixed64.TrySubtract(FixedMath.Max(start.X, end.X), FixedMath.Min(start.X, end.X),
-            out Fixed64 horizontal);
-        bool verticalFits = Fixed64.TrySubtract(FixedMath.Max(start.Y, end.Y), FixedMath.Min(start.Y, end.Y),
-            out Fixed64 vertical);
-        return horizontalFits & verticalFits & Fixed64.TryAdd(horizontal, vertical, out Fixed64 length)
+        bool firstFits = NavigationDistanceMath.TryCeiling(start, bend, out Fixed64 first);
+        bool secondFits = NavigationDistanceMath.TryCeiling(bend, end, out Fixed64 second);
+        return firstFits & secondFits & Fixed64.TryAdd(first, second, out Fixed64 length)
             & NavigationTransitionEdgeEvaluator.TryAddEntryCosts(length, enter, area, out cost);
     }
 

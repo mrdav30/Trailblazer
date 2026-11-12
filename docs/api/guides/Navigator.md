@@ -133,9 +133,9 @@ Guided motion follows the retained capsule sweep one stage at a time, at the
 configured move speed. A step-up lifts before crossing. A drop crosses before
 descending. The host resolves each target and reports the accepted pose and
 support. A clipped result on the prepared segment can continue that stage.
-Progress through the bend requires its exact accepted center. Progress through
-a support anchor also requires fresh walkable support. An off-segment result
-or missing landing support releases guidance while committing the accepted
+Progress through a bend requires its exact accepted center. A grounded valley
+bend and each support anchor also require fresh walkable support. An
+off-segment result or missing landing support releases guidance while committing the accepted
 pose. A moving carrier likewise releases the static route and applies its
 sampled carry through the free motor.
 

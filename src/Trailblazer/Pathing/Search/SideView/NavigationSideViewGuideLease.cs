@@ -28,14 +28,17 @@ public readonly struct NavigationSideViewGuideLease : IDisposable
     /// <summary>Gets the zero-based cursor, or -1 for an unbound or disposed lease.</summary>
     public int CurrentStepIndex => _lease.CurrentStepIndex;
 
-    /// <summary>Gets the number of waypoints, including both endpoints and any step bends.</summary>
+    /// <summary>Gets the number of waypoints, including both endpoints and any bends.</summary>
     public int StepCount => _lease.StepCount;
 
     /// <summary>Gets the summed stage lengths and forward destination entry costs.</summary>
     public Fixed64 TotalCost => _lease.TotalCost;
 
     /// <summary>Reads the current snapshot-validated capsule center in world X/Z.</summary>
-    /// <remarks>A step bend names its lower support owner. The bend itself can be airborne.</remarks>
+    /// <remarks>
+    /// A step bend names its lower support owner and can be airborne.
+    /// A grounded valley bend names its left support owner in either direction.
+    /// </remarks>
     public NavigationGuideStatus TryGetCurrentStep(out NavigationCellAddress address, out Vector2d center)
     {
         var status = _lease.TryGetCurrentStep(out var step);

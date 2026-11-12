@@ -77,8 +77,10 @@ Different-height horizontal supports may join at a shared X boundary in one
 rectangular row. A step up lifts before crossing at
 the higher center height. A drop crosses before descending. Each phase must
 clear the capsule and stay within the pinned support owners' trace closure.
-The profile supplies separate limits for rising and dropping. A gap or an
-unsupported corner fails the ordinary leg check.
+The profile supplies separate limits for rising and dropping. Ordinary leg
+checks reject gaps, crests, and height discontinuities involving a sloped
+support. Valid endpoint anchors and an allowed height difference are only
+part of the proof.
 
 For a horizontal step, the lower center must be at least one capsule radius
 from the seam in X. This reserves clearance beside the step during the lift

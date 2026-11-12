@@ -42,19 +42,19 @@ public static class PathTestFactory
         return TestRequire.NotNull(voxel);
     }
 
-    internal static NavigationMapBuilder BuildSideViewValley(GridConfiguration grid, bool crest = false)
+    internal static NavigationMapBuilder BuildSideViewValley(GridConfiguration grid)
     {
         var solid = new NavigationCell(TraversalMedia.Solid, TraversalCapability.None, default,
             Fixed64.Zero, Fixed64.One, Fixed64.Two);
         var left = new VoxelIndex(0, 1, 1);
         var right = new VoxelIndex(1, 1, 1);
-        var height = crest ? Fixed64.Quarter : -Fixed64.Quarter;
+        var height = -Fixed64.Quarter;
         return new NavigationMapBuilder("side", grid).SetPlanarLayer(NavigationMode2D.SideView, 1, Fixed64.One)
             .SetDefaultCell(solid)
             .AddPlanarSupport(left, new(-Fixed64.Half, height), new(Fixed64.Half, height))
             .AddCell(right, new NavigationCell(TraversalMedia.Solid, TraversalCapability.None, default,
                 Fixed64.Half, Fixed64.One, Fixed64.Two))
             .AddPlanarSupport(right, new(Fixed64.Half, height),
-                new(Fixed64.One + Fixed64.Half, crest ? -Fixed64.Half : Fixed64.Half));
+                new(Fixed64.One + Fixed64.Half, Fixed64.Half));
     }
 }

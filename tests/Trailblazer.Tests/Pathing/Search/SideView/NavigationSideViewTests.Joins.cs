@@ -46,13 +46,12 @@ public sealed partial class NavigationSideViewTests
 
     [Theory]
     [InlineData("roof")]
-    [InlineData("crest")]
     [InlineData("half-axis")]
     [InlineData("rounded-intersection")]
     public void ClearEndpointsDoNotCertifyAnUnsupportedOrObstructedJoin(string obstruction)
     {
         using var context = Scene(out _);
-        var builder = PathTestFactory.BuildSideViewValley(Grid, crest: obstruction == "crest");
+        var builder = PathTestFactory.BuildSideViewValley(Grid);
         if (obstruction == "roof")
         {
             var roof = Cell(0, 2).Index;
@@ -68,6 +67,56 @@ public sealed partial class NavigationSideViewTests
         Anchor(context, Cell(1), profile, out _).Should().Be(NavigationGuideStatus.Success);
         Leg(context, Cell(0), Cell(1), profile).Should().Be(NavigationGuideStatus.NoPath);
         Leg(context, Cell(1), Cell(0), profile).Should().Be(NavigationGuideStatus.NoPath);
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar, true)]
+    [InlineData(PathAlgorithm.FlowField, true)]
+    [InlineData(PathAlgorithm.AStar, false)]
+    [InlineData(PathAlgorithm.FlowField, false)]
+    public void CrestAndSlopedStepCannotSupplyAnOrdinaryRoute(PathAlgorithm algorithm, bool crest)
+    {
+        using var context = Scene(out _, settings: PlanarSchedulingTestSettings.Create());
+        var seam = new Vector2d(Fixed64.Half, Fixed64.Quarter);
+        var lowerHeight = crest ? seam.Y : -Fixed64.Half;
+        var builder = SideView("side", Grid).SetDefaultCell(Solid);
+        AddFloor(builder, 0, lowerHeight);
+        builder.AddPlanarSupport(Cell(1).Index, seam, new(Fixed64.One + Fixed64.Half, -Fixed64.Half));
+        Publish(context, builder.Build());
+        var profile = Profile(Fixed64.Half, up: Fixed64.One, down: Fixed64.One,
+            radius: Fixed64.FromFraction(15, 64), capabilities: TraversalCapability.Jump);
+        Anchor(context, Cell(0), profile, out var flat).Should().Be(NavigationGuideStatus.Success);
+        Anchor(context, Cell(1), profile, out var slope).Should().Be(NavigationGuideStatus.Success);
+
+        // Both the lifted crest chord and the horizontal crossing at the slope anchor's height cut the seam.
+        var halfAxis = Vector2d.Forward * (profile.AxisLength * Fixed64.Half);
+        var attempted = crest
+            ? Vector2d.Lerp(new Vector2d(seam.X, flat.Y), slope, Fixed64.Quarter)
+            : new Vector2d(seam.X, slope.Y);
+        Vector2d.CompareDistanceSquared(attempted - halfAxis, seam, Vector2d.Zero, Vector2d.Right * profile.Radius)
+            .Should().BeLessThan(0);
+        (seam.Y - lowerHeight).Should().BeLessThan(profile.MaxStepUp);
+        (slope.Y - flat.Y).Abs().Should().BeLessThan(profile.MaxDropDown);
+
+        CheckDirection(Cell(0), Cell(1));
+        CheckDirection(Cell(1), Cell(0));
+        context.Guides.Scheduler.RetainedRequestCount.Should().Be(0);
+        context.Pathing.NavigationAStarAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+
+        void CheckDirection(NavigationCellAddress from, NavigationCellAddress to)
+        {
+            Leg(context, from, to, profile).Should().Be(NavigationGuideStatus.NoPath);
+            var status = RequestSideView(context, from, to, profile, algorithm, out var acquired);
+            using var immediate = acquired;
+            status.Should().Be(NavigationGuideStatus.NoPath);
+            immediate.StepCount.Should().Be(0);
+
+            context.Guides.ScheduleSideViewGuide(from, to, profile, Policy.Key, algorithm, GuideBudget(), out var scheduled)
+                .Should().Be(NavigationGuideStatus.Pending);
+            using var request = TestRequire.NotNull(scheduled);
+            RunScheduled(context, request).Should().Be(NavigationGuideStatus.NoPath);
+            request.TryTakeSideViewGuide(out _).Should().BeFalse();
+        }
     }
 
     [Fact]

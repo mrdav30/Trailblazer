@@ -16,8 +16,8 @@ immediate and scheduled A* and Flow guides over proved ordinary side-view legs.
 Navigator2D follows supported stages from a canonical support anchor, with
 bounded rounded slope substeps and scheduled moved-origin connectors on the
 same finite authored support. Grounded valley joins use two supported capsule
-sweeps through an exact waypoint. Crest and other unsupported joins, authored
-traversal, and profile changes remain open.
+sweeps through an exact waypoint. Ordinary support and motor verification is
+complete. Bounded authored traversal is the next open gate.
 Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
@@ -459,7 +459,7 @@ require the existing matched performance controls.
 | --- | --- | --- | --- |
 | 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
 | 1 | Native planar guidance and top-down movement | Complete | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
-| 2 | Side-view traversal and profile changes | In progress | Remaining surface joins, bounded authored traversal, profile replacement, airborne sequences, and persistence/replay |
+| 2 | Side-view traversal and profile changes | In progress | Bounded authored traversal, profile replacement, airborne sequences, and persistence/replay |
 | 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
 
 ## Phase 0 - Settle The 2D Contract
@@ -945,7 +945,7 @@ in the existing test projects.
 
 ## Phase 2 - Side-View Traversal And Runtime Changes
 
-- [ ] **Implement the reviewed in-plane support/motor contract test-first.**
+- [x] **Implement the reviewed in-plane support/motor contract test-first.**
   Cover standing, horizontal movement, slopes/steps, ceiling contact, jumping,
   falling, and landing using planar accepted poses and actual support snapshots.
   Apply gravity and grounding once; world Y must not become gameplay height.
@@ -965,9 +965,9 @@ in the existing test projects.
     support lattice and preserve exact accepted-motion replay.
   - [x] Scheduled moved-origin connectors reprove the return to the exact
     first anchor under the shared validation turn and movement budget.
-  - [ ] Verify the remaining surface joins, including crests and nonhorizontal
-    steps. Reject ordinary legs where support or clearance cannot be proved.
-    Physical stepping stays host-owned.
+  - [x] Verify the remaining surface joins. Crest and nonhorizontal step
+    fixtures reject ordinary routing despite clear endpoints and permissive
+    step limits. Physical stepping stays host-owned.
 - [ ] **Prove authored traversal.** Run the bounded ladder, jump, and drop
   fixtures with host-executed motion from approach through accepted landing
   between supported regions. Test insufficient clearance, missing capability,
@@ -3457,3 +3457,37 @@ Raw evidence is under `artifacts/side-view-joins` in `red.log`,
 `alias-red.log`, `alias-green.log`, `final/*-proof-*`, `final/docfx.log`,
 `baseline.log`, `candidate.log`, `valley-probe.log`, and
 `valley-probe-allocations.log`.
+
+### 2026-11-11 - Phase 2 ordinary surface-join verification
+
+At `8231f1b`, both the crest and nonhorizontal step have clear canonical
+anchors for an upright capsule with radius `15/64` and axis length `1/2`.
+The left support ends at X `1/2`. The descending right support runs from
+`(1/2, 1/4)` to `(3/2, -1/2)`. The left support is flat at `1/4` for the
+crest and `-1/2` for the step. Both directed step limits are one unit.
+
+For the crest, the straight segment from the tangent pose over the seam to
+the right anchor puts the seam inside the lower cap one quarter of the way
+along the segment. The squared distance is `2770/65536` against a squared
+radius of `3600/65536`. For the step, crossing at the upper anchor height
+puts the seam `12/64` from the lower-cap center. The attempted crossing
+penetrates even though the anchor rise and facing height difference fit
+both directed limits. These cases exercise the existing ordinary route
+boundary. A crest would need a different proof of support around the vertex.
+
+Both directions return `NoPath` for the public leg check and for immediate
+and scheduled A* and Flow. Jump capability is available to the profile, and
+no guide or pending request remains after the failures. The existing flat
+step and valley controls still pass. The maintained cases are in
+[`NavigationSideViewTests.Joins.cs`](../../tests/Trailblazer.Tests/Pathing/Search/SideView/NavigationSideViewTests.Joins.cs).
+The support and motor checklist gate is complete. Bounded authored traversal
+remains the next open gate and keeps execution with the host.
+
+Windows and Ubuntu built both target frameworks with `UseLocalLsfStack=true`
+and each passed 3,728 Release tests and 3,624 ReleaseLean tests. Each lane
+covered all 35,169 lines, 15,153 branches, and 3,525 methods across core and
+the Gravitas adapter. DocFX passed with warnings treated as errors. This
+verification slice changes tests and documentation. The production source
+matches the previous matched performance capture. Raw evidence is under
+`artifacts/side-view-join-closeout` in `focused-*.log`, `*-proof-*`, and
+`docfx.log`.

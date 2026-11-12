@@ -18,11 +18,18 @@ public sealed partial class TrailblazerGuideService
     /// </remarks>
     public NavigationGuideStatus RequestSideViewGuide(NavigationCellAddress start, NavigationCellAddress end,
         in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, PathAlgorithm algorithm,
-        NavigationWorkBudget budget, out NavigationSideViewGuideLease guide)
+        NavigationWorkBudget budget, out NavigationSideViewGuideLease guide) =>
+        RequestSideViewGuide(start, end, profile, areaPolicy, algorithm, budget, out guide, allowTransitions: false);
+
+    /// <summary>Acquires a Solid side-view guide with optional authored actions between supported anchors.</summary>
+    /// <remarks>The host owns the action trajectory and completes the exact held token after accepting the landing.</remarks>
+    public NavigationGuideStatus RequestSideViewGuide(NavigationCellAddress start, NavigationCellAddress end,
+        in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, PathAlgorithm algorithm,
+        NavigationWorkBudget budget, out NavigationSideViewGuideLease guide, bool allowTransitions)
     {
         EnsureUsable();
         guide = default;
-        var status = TryCreateSideViewRequest(start, end, profile, areaPolicy, algorithm, budget, out var request);
+        var status = TryCreateSideViewRequest(start, end, profile, areaPolicy, algorithm, budget, allowTransitions, out var request);
         if (status != NavigationGuideStatus.Success)
             return status;
         var pathing = _context.Pathing;
@@ -40,11 +47,17 @@ public sealed partial class TrailblazerGuideService
     /// </remarks>
     public NavigationGuideStatus ScheduleSideViewGuide(NavigationCellAddress start, NavigationCellAddress end,
         in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, PathAlgorithm algorithm,
-        NavigationWorkBudget budget, out NavigationSideViewGuideRequest? request)
+        NavigationWorkBudget budget, out NavigationSideViewGuideRequest? request) =>
+        ScheduleSideViewGuide(start, end, profile, areaPolicy, algorithm, budget, out request, allowTransitions: false);
+
+    /// <summary>Schedules a Solid side-view guide with optional authored actions between supported anchors.</summary>
+    public NavigationGuideStatus ScheduleSideViewGuide(NavigationCellAddress start, NavigationCellAddress end,
+        in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, PathAlgorithm algorithm,
+        NavigationWorkBudget budget, out NavigationSideViewGuideRequest? request, bool allowTransitions)
     {
         EnsureUsable();
         request = null;
-        var status = TryCreateSideViewRequest(start, end, profile, areaPolicy, algorithm, budget, out var query);
+        var status = TryCreateSideViewRequest(start, end, profile, areaPolicy, algorithm, budget, allowTransitions, out var query);
         if (status != NavigationGuideStatus.Success)
             return status;
         status = _scheduler.SchedulePlanar(query, algorithm, out var queued, profile);
@@ -54,7 +67,7 @@ public sealed partial class TrailblazerGuideService
 
     private static NavigationGuideStatus TryCreateSideViewRequest(NavigationCellAddress start, NavigationCellAddress end,
         in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, PathAlgorithm algorithm,
-        NavigationWorkBudget budget, out NavigationPlanarRouteRequest request)
+        NavigationWorkBudget budget, bool allowTransitions, out NavigationPlanarRouteRequest request)
     {
         request = default;
         areaPolicy.Validate(nameof(areaPolicy));
@@ -68,7 +81,7 @@ public sealed partial class TrailblazerGuideService
             return NavigationGuideStatus.Unsupported;
 
         request = new NavigationPlanarRouteRequest(start, end, profile.Radius, areaPolicy,
-            TraversalMedium.Solid, profile.Capabilities, budget);
+            TraversalMedium.Solid, profile.Capabilities, budget, allowTransitions);
         return NavigationGuideStatus.Success;
     }
 }

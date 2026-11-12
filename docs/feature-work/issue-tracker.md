@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-160`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-161`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -26,7 +26,18 @@
 
 ## Active Issues
 
-None.
+### TRB-Issue-160 - Planar arrival radius has no movement effect
+
+- **Discovered** 2026-11-12 during the Phase 2 hardening review.
+- **Behavior** `NavigationAgentProfile2D.ArrivalRadius` is documented as an
+  arrival tolerance. Positive values participate in profile equality and the
+  planar record, while both planar controller modes still require exact
+  accepted arrival. The field has no controller consumer.
+- **Resolution criteria** Settle the public tolerance contract. If ordinary
+  arrival uses the field, prove the terminal movement and preserve exact
+  acceptance at authored actions and intermediate route stages. If exact
+  ordinary arrival is the public contract, align the profile API, record
+  compatibility, and guides with it.
 
 ## Closed Investigations
 

@@ -206,12 +206,14 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
             Vector2d previousCenter = Pose.Center;
             Pose = accepted;
             Velocity = new Vector2d(x, z);
-            _verticalVelocity = grounded ? Fixed64.Zero : motorVertical;
             if (NavigationProfile.Mode == NavigationMode2D.SideView)
+            {
                 _facing = _preparedFacing;
+                CommitMotorVertical(motorVertical, grounded);
+            }
             PublishSupport(result, grounded);
-            CommitGuidance(acceptedTarget, previousCenter, request.Target.Center);
             CommitActionMotion(actionMap != null);
+            CommitGuidance(acceptedTarget, previousCenter, request.Target.Center);
             if (cellStatus != NavigationCommittedCellResolveStatus.Unavailable)
             {
                 _acceptedMapId = acceptedMapId ?? _acceptedMapId;
@@ -246,6 +248,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         _preparedFacing = _facing;
         _preparedCarry = Vector2d.Zero;
         _preparedVertical = _verticalVelocity;
+        _preparedJump = false;
         _clockLifetime = lifetime;
         _preparedFrame = frame;
         _worldSpawn = _context.World.SpawnToken;
@@ -386,7 +389,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         if (!CommitVisibleLeg(guide, acceptedRequestedTarget, previousCenter, requestedCenter, ref reachedTarget))
             return;
         bool arrived = reachedTarget && guide.CurrentStepIndex == guide.StepCount - 1;
-        if (reachedTarget && HoldActionIfPresent(guide))
+        if (reachedTarget && HoldActionIfPresent(route))
             return;
         NavigationGuideStatus status = reachedTarget ? guide.TryAdvanceStep() : guide.Status;
         if (status != NavigationGuideStatus.Success)
@@ -425,7 +428,10 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         GuideCost = default;
     }
 
-    private void PublishCell(VoxelGrid? grid, Voxel? voxel, NavigationCommittedCellState? cell)
+    private bool CanPublishCell(Voxel? voxel) => voxel == null || voxel.HasVacancy
+        || GridOccupantManager.TryGetOccupancyTicket(_context.World, this, voxel.WorldIndex, out _);
+
+    private void PublishCell(VoxelGrid? grid, Voxel? voxel, NavigationCommittedCellState? cell, bool emitChange = true)
     {
         var previous = LastCommittedCell;
         LastCommittedCell = cell;
@@ -440,7 +446,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
             if (priorOccupancy is WorldVoxelIndex exited)
                 GridOccupantManager.TryRemoveVoxelOccupant(_context.World, exited, this);
         }
-        if (!NavigationCommittedCellState.RepresentsSameCellEntry(previous, cell))
+        if (emitChange && !NavigationCommittedCellState.RepresentsSameCellEntry(previous, cell))
             CommittedCellChanged?.Invoke(cell);
     }
 
@@ -470,18 +476,23 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         ResetNavigation();
     }
 
-    private void ResetNavigation()
+    private void ResetNavigation() => ResetNavigation(releaseOccupancy: true);
+
+    private void ResetNavigation(bool releaseOccupancy)
     {
         _pending = null;
         ResetGuidance();
         _acceptedMapId = null;
         LastCommittedCell = null;
         _verticalVelocity = Fixed64.Zero;
+        _jumpCount = 0;
+        ClearRestoredCarrier();
         Support = null;
         IsGrounded = false;
         SupportStatus = NavigationProfile.Mode == NavigationMode2D.TopDown
             ? NavigationSupportStatus2D.NotApplicable : NavigationSupportStatus2D.Unavailable;
-        ReleaseOccupancy();
+        if (releaseOccupancy)
+            ReleaseOccupancy();
     }
 
     private void ValidatePreparedFrame()

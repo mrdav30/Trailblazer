@@ -38,8 +38,12 @@ instead of burying it in notes.
     The hardening pass verified mixed-world volume coverage and accepted
     controller motion in coordinated source mode.
     [Hardening evidence](twoDimensionalNavigationPlan.md#2026-11-10---phase-1-hardening)
-  - Phase 2 covers side-view traversal and profile changes. Hard physics-query
-    budgets remain a separate 2D/3D workstream.
+  - Phase 2 completes side-view support and guidance, host-executed authored
+    traversal, atomic posture replacement, airborne motor continuation, and
+    deterministic record restore. Phase 3 covers the optional native Gravitas2D
+    adapter and real collision acceptance. Hard physics-query budgets remain a
+    separate 2D/3D workstream.
+    [Phase 2 evidence](twoDimensionalNavigationPlan.md#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence)
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
@@ -236,17 +240,16 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Continue the 2D plan with Phase 2 side-view support, authored traversal,
-   and profile changes. Capture matched 3D controls before changing shared
-   runtime paths. Validate the adapter against the pinned source stack as
-   its phase begins.
+1. Continue the 2D plan with Phase 3 native Gravitas2D integration and real
+   collision acceptance in both planar modes. Capture matched 3D controls
+   before changing shared runtime paths and validate against the pinned source
+   stack.
 2. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.
 
 The 3D Gravitas integration, navigation hardening, and separately approved
-scheduling/performance work are complete locally. The 2D plan continues
-through side-view movement and the native adapter. Public release validation
+scheduling/performance work are complete locally. Public release validation
 remains separate.
 The shared physics query budget plan is queued separately; settle its execution
 and release sequencing explicitly when taking it up. It does not gate native 2D

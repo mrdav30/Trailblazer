@@ -47,8 +47,16 @@ public readonly struct NavigationSideViewGuideLease : IDisposable
         return status;
     }
 
-    /// <summary>Advances by one waypoint, or succeeds without moving at the final waypoint.</summary>
+    /// <summary>Advances one waypoint, or returns Pending when an action holds the current center.</summary>
     public NavigationGuideStatus TryAdvanceStep() => _lease.TryAdvancePlanarStep();
+
+    /// <summary>Gets the current action, or returns Pending at an ordinary waypoint.</summary>
+    public NavigationGuideStatus TryGetPendingTransition(out NavigationTransitionInstruction2D instruction) =>
+        _lease.TryGetPendingPlanarTransition(out instruction);
+
+    /// <summary>Completes the exact held action after the host accepts its supported landing.</summary>
+    public NavigationGuideStatus CompletePendingTransition(in NavigationTransitionInstruction2D instruction) =>
+        _lease.CompletePendingTransition(instruction.Instruction);
 
     /// <inheritdoc />
     public void Dispose() => _lease.Dispose();

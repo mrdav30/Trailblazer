@@ -31,7 +31,9 @@ public sealed partial class TrailblazerPathingService
     internal NavigationCommittedCellResolveStatus ResolvePlanarCommittedCell(string mapId, NavigationPlanarBinding binding,
         Vector2d center, TraversalMedium medium, NavigationAreaPolicyKey? policy, long frame,
         out VoxelGrid? grid, out Voxel? voxel, out NavigationCommittedCellState? state, out string? acceptedMapId,
-        string currentMapId, string preferredMapId)
+        string currentMapId, string preferredMapId, in NavigationAgentProfile2D? replacement = null,
+        NavigationWorkBudget replacementBudget = default, Vector2d? replacementWitness = null,
+        Vector2d? detachedReplacementOrigin = null)
     {
         grid = null;
         voxel = null;
@@ -48,12 +50,21 @@ public sealed partial class TrailblazerPathingService
             var graph = lease.Graph;
             if (ResolveControllerReferenceMap(graph, mapId, binding, currentMapId, out _, out _)
                 != NavigationGuideStatus.Success)
-                return NavigationCommittedCellResolveStatus.NoCell;
+                return replacement.HasValue ? NavigationCommittedCellResolveStatus.Unavailable : NavigationCommittedCellResolveStatus.NoCell;
             GuideSampleWorkBudget sample = _context.Settings.GuideSampleBudget;
-            immediate.WorkMeter.Reset(new NavigationWorkBudget(sample.MaxCurrentNodeLookupProbes, sample.MaxPrismChecks,
-                0, 0, 0, 0, 0, 0, 0, 0, 0));
-            var status = immediate.RayWork.Workspace.Planar.FindControllerCell(world, graph, binding, center,
-                immediate.WorkMeter, out var map, out grid, out voxel, preferredMapId);
+            var prismBudget = GetPlanarPrismLookupBudget(sample);
+            immediate.WorkMeter.Reset(prismBudget);
+            var work = immediate.RayWork.Workspace.Planar;
+            var status = work.FindControllerCell(world, graph, binding, center,
+                immediate.WorkMeter, out var map, out grid, out voxel, preferredMapId, replacement.HasValue);
+            if (status == NavigationGuideStatus.NoPath && detachedReplacementOrigin is Vector2d origin && origin != center)
+            {
+                // Both centers must be detached in the same publication before the host-only fallback.
+                immediate.WorkMeter.Reset(prismBudget);
+                if (work.FindControllerCell(world, graph, binding, origin, immediate.WorkMeter,
+                    out _, out _, out _, preferredMapId, requireAuthoredCell: true) != NavigationGuideStatus.NoPath)
+                    return NavigationCommittedCellResolveStatus.Unavailable;
+            }
             status = ResolvePlanarSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
                 (world.SpawnToken, world.Version, world.ChangeSequence));
             if (status == NavigationGuideStatus.NoPath)
@@ -63,12 +74,31 @@ public sealed partial class TrailblazerPathingService
             acceptedMapId = map.MapId;
             VoxelIndex index = voxel!.Index;
             if (!map.TryGetSlot(index, out int slot) || !map.TryGetEffectiveCell(slot, out NavigationCell cell))
-                return NavigationCommittedCellResolveStatus.NoCell;
+                return replacement.HasValue ? NavigationCommittedCellResolveStatus.Unavailable : NavigationCommittedCellResolveStatus.NoCell;
+            if (replacement is NavigationAgentProfile2D profile)
+            {
+                NavigationAreaPolicy? rules = null;
+                if (policy is NavigationAreaPolicyKey key && !graph.AreaCatalog.TryGet(key, out rules))
+                    return NavigationCommittedCellResolveStatus.Unavailable;
+                immediate.WorkMeter.Reset(policy.HasValue ? replacementBudget : new NavigationWorkBudget(
+                    sample.MaxCurrentNodeLookupProbes, 0, 0, 0, 0, 0, 0, 0, 0,
+                    _context.Settings.QueryLimits.RayWorkspaceCoveredAddressCapacity, 0));
+                var pin = voxel.WorldIndex;
+                status = work.TraceBoundMotion(world, graph, map, map.Map.PlanarBinding!.Value,
+                    pin, pin, center, center, profile.Radius, profile.AxisLength, NavigationCell.ToMedia(medium),
+                    profile.Capabilities, rules, immediate.WorkMeter, (map, profile, replacementWitness, prismBudget));
+                if (ResolvePlanarSnapshotStatus(status, graph, _navigationGraph.Current, epoch,
+                    (world.SpawnToken, world.Version, world.ChangeSequence)) != NavigationGuideStatus.Success)
+                    return NavigationCommittedCellResolveStatus.Unavailable;
+            }
             state = new NavigationCommittedCellState(new NavigationCellAddress(map.MapId, index),
                 cell.Area, medium, graph.GraphVersion, policy, frame);
             return NavigationCommittedCellResolveStatus.Resolved;
         }
     }
+
+    private static NavigationWorkBudget GetPlanarPrismLookupBudget(GuideSampleWorkBudget sample) =>
+        new(sample.MaxCurrentNodeLookupProbes, sample.MaxPrismChecks, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     private static NavigationGuideStatus ResolveControllerReferenceMap(NavigationWorldGraph graph, string boundMapId,
         NavigationPlanarBinding plane, string? preferredMapId, out NavigationMapInstance map, out NavigationPlanarBinding layer)

@@ -180,6 +180,35 @@ The recorded Navigator branch includes:
 
 Context-owned world data is separate.
 
+## Planar Navigator Records
+
+`Navigator2D` uses the record kind `Trailblazer.Navigator2D` and schema version
+1. Create a shell
+with the matching identity, dimensional binding, current profile and motor
+settings. Publish the world and restore the host body's accepted pose before
+populating the controller. For a saved posture, initialize the body and shell
+with that posture's envelope.
+
+The record preserves accepted planar pose and velocity, facing, motor
+continuation, group and acquisition settings, and durable destination intent.
+Turning follows the host's ordered per-frame facing inputs from the restored
+accepted angle. After a successful population, refresh side-view support before
+the first frame's commands. A fresh carrier sample at the recorded prior pose
+with the recorded stable ID rebinds the saved local anchor to its new runtime
+registration. For side-view guidance saved between anchors, the refreshed
+support witness can identify the current authored support. The fresh route
+proves the return to its first anchor before advancing the cursor.
+
+Successful population silently rebuilds occupancy and the committed-cell
+sample. It retires prepared targets, route leases, scheduled requests, and
+action tokens. A frame already prepared on the same shell and clock lifetime
+remains consumed. The next eligible frame acquires a fresh guide. Capture
+keeps durable trek intent when its addresses and policy belong to the current
+publication, including while a transient acquisition is pending. A rejected
+population preserves the live shell.
+JSON supports both package families. MemoryPack is available in the standard
+package.
+
 ## Maps And Overlays
 
 `NavigationMap` bakes and runtime overlay events are host/world assets, not

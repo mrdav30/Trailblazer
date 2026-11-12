@@ -21,18 +21,22 @@ public abstract partial class Navigator2D
     /// <summary>Gets the exact current action stamp after its source center has been accepted.</summary>
     public NavigationTransitionInstruction2D? PendingTransition =>
         _heldTransition is NavigationTransitionInstruction2D instruction
-            && ValidateCurrentAction(instruction) == NavigationGuideStatus.Success
+            && _guide!.Value.Status == NavigationGuideStatus.Success
             ? instruction : null;
 
     /// <summary>Submits a host-owned target for the current held action.</summary>
     public NavigationGuideStatus PrepareActionFrameMotion(in NavigationTransitionInstruction2D instruction, NavigationPose2D target)
     {
         EnsureIdle();
-        var status = ValidateCurrentAction(instruction);
+        if (!MatchesHeldAction(instruction))
+            return NavigationGuideStatus.Stale;
+        var status = ValidateHeldAction();
         if (status != NavigationGuideStatus.Success)
             return status;
-        if (!_actionStarted && Pose.Center != instruction.SourcePosition)
+        if (!_actionStarted && (Pose.Center != instruction.SourcePosition || !HasActionSupport()))
             return NavigationGuideStatus.InvalidStart;
+        ChronicleGuard.ThrowIfArgument(_binding.Mode == NavigationMode2D.SideView && target.RotationRadians != Fixed64.Zero,
+            nameof(target), "A side-view action target must be upright.");
         BeginPrepareFrame();
         try
         {
@@ -51,9 +55,10 @@ public abstract partial class Navigator2D
         EnsureIdle();
         if (!MatchesHeldAction(instruction))
             return NavigationGuideStatus.Stale;
-        if (!_actionLandingAccepted || Pose.Center != instruction.DestinationPosition)
+        // Every committed pose updates the exact landing flag. A support refresh can change grounding between commits.
+        if (!_actionLandingAccepted || !HasActionSupport())
         {
-            var current = _guide!.Value.Status;
+            var current = ValidateHeldAction();
             return current == NavigationGuideStatus.Success ? NavigationGuideStatus.InvalidEnd : current;
         }
         // The current lease already certifies the exact landing center in this medium.
@@ -68,15 +73,20 @@ public abstract partial class Navigator2D
         return status;
     }
 
-    private NavigationGuideStatus ValidateCurrentAction(in NavigationTransitionInstruction2D instruction) =>
-        MatchesHeldAction(instruction) ? _guide!.Value.Status : NavigationGuideStatus.Stale;
+    private NavigationGuideStatus ValidateHeldAction()
+    {
+        var status = _guide!.Value.Status;
+        if (status == NavigationGuideStatus.Stale)
+            ApplyGuideStatus(status);
+        return status;
+    }
 
     private bool MatchesHeldAction(in NavigationTransitionInstruction2D instruction) =>
         _heldTransition is NavigationTransitionInstruction2D held && held.Matches(instruction);
 
-    private bool HoldActionIfPresent(NavigationTopDownGuideLease guide)
+    private bool HoldActionIfPresent(NavigationGuideLease guide)
     {
-        if (guide.TryGetPendingTransition(out var instruction) != NavigationGuideStatus.Success)
+        if (guide.TryGetPendingPlanarTransition(out var instruction) != NavigationGuideStatus.Success)
             return false;
         _heldTransition = instruction;
         ReleaseConnectorValidation();
@@ -92,11 +102,16 @@ public abstract partial class Navigator2D
 
     private void CommitActionMotion(bool acceptedLanding)
     {
-        if (!_heldTransition.HasValue)
+        if (_heldTransition is not NavigationTransitionInstruction2D action)
             return;
         _actionStarted |= _actionFrame;
-        _actionLandingAccepted = acceptedLanding;
+        _actionLandingAccepted = acceptedLanding && HasActionSupport();
+        // A stale lease can still leave the body at a candidate for a fresh anchor proof.
+        if (_actionLandingAccepted && _binding.Mode == NavigationMode2D.SideView)
+            _sideViewSource = action.DestinationAddress;
     }
+
+    private bool HasActionSupport() => _binding.Mode == NavigationMode2D.TopDown || IsGrounded;
 
     private void ClearHeldAction()
     {

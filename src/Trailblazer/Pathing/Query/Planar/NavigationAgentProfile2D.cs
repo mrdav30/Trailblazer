@@ -40,6 +40,10 @@ public readonly struct NavigationAgentProfile2D : IEquatable<NavigationAgentProf
     /// <summary>Gets the non-negative separation between cap centers.</summary>
     public Fixed64 AxisLength { get; }
 
+    internal Fixed64 HalfAxisCeiling => Fixed64.FromRaw((AxisLength.m_rawValue >> 1) + (AxisLength.m_rawValue & 1));
+
+    internal Fixed64 NominalFootOffset => Radius + Fixed64.FromRaw(AxisLength.m_rawValue >> 1);
+
     /// <summary>Gets the largest admitted upward support step.</summary>
     public Fixed64 MaxStepUp { get; }
 

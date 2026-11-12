@@ -358,6 +358,52 @@ public sealed partial class Navigator2DSupportTests
     }
 
     [Fact]
+    public void RestoredScheduledSideViewTrekRetriesWhenSupportReturnsAfterTransfer()
+    {
+        using var context = GuidedStepScene(flat: true);
+        using var host = new Host(context);
+        host.Sample(Ground);
+        host.RefreshSupport();
+        ApplySideView(host).Should().Be(NavigationGuideStatus.Success);
+        host.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
+        object payload = SerializationUtility.SerializeRecord(host, false);
+        SerializationUtility.PopulateRecord(host, payload, false);
+        host.Sample(Ground);
+        host.RefreshSupport();
+
+        var scheduler = context.Guides.Scheduler;
+        AdvanceWhileUnsupported();
+        scheduler.RetainedRequestCount.Should().Be(1);
+        for (int frame = 0; frame < 128 && scheduler.RetainedRequestCount != 0; frame++)
+            AdvanceWhileUnsupported();
+        scheduler.RetainedRequestCount.Should().Be(0);
+        context.Pathing.NavigationAStarAdmissionGate.PayloadCache.ActiveLeaseCount.Should().Be(0);
+        host.GuidanceStatus.Should().Be(NavigationGuideStatus.Pending);
+        AdvanceWhileUnsupported();
+        scheduler.RetainedRequestCount.Should().Be(0);
+
+        host.Sample(Ground);
+        host.RefreshSupport();
+        host.IsGrounded.Should().BeTrue();
+        Step(context, host, default);
+        scheduler.RetainedRequestCount.Should().Be(1);
+        for (int frame = 0; frame < 128 && !host.HasArrived; frame++)
+            Step(context, host, default);
+        host.HasArrived.Should().BeTrue();
+        host.Pose.Center.Should().Be(Vector2d.Right);
+        scheduler.RetainedRequestCount.Should().Be(0);
+
+        void AdvanceWhileUnsupported()
+        {
+            context.Simulate();
+            host.PrepareFrameMotion();
+            host.Accept(Vector2d.Zero, null);
+            host.CommitFrameMotion();
+            context.LateSimulate();
+        }
+    }
+
+    [Fact]
     public void SideViewStopsFollowingAContinuousLegThatLosesSupport()
     {
         using var context = GuidedStepScene(flat: true);

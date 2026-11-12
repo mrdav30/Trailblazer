@@ -55,7 +55,7 @@ internal sealed partial class NavigationPlanarWork
 
     internal NavigationGuideStatus TraceSideViewConnector(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance map, NavigationPlanarBinding binding, VoxelIndex index, int layerCount,
-        (Vector2d Origin, Vector2d Current, Vector2d Anchor, Vector2d? RoundedTarget) connector,
+        (Vector2d Origin, Vector2d Current, Vector2d Anchor, Vector2d? RoundedTarget, bool AllowRoundedOrigin) connector,
         in NavigationAgentProfile2D profile, NavigationAreaPolicy policy, NavigationWorkMeter meter)
     {
         if (!meter.TryConsumeEvaluatedEdges(1))
@@ -66,12 +66,7 @@ internal sealed partial class NavigationPlanarWork
             return status;
         if (anchor != connector.Anchor)
             return NavigationGuideStatus.Stale;
-        // Check the origin in the authored track's midpoint chart to keep the interval representable.
-        var span = support.Right - support.Left;
-        var midpointOffset = (SupportMidpoint(support) - support.Left).X;
-        if (!Vector2d.TrySubtract(connector.Origin, anchor, out var offset)
-            || offset.X < -midpointOffset || offset.X > span.X - midpointOffset
-            || Vector2d.OrientationSign(Vector2d.Zero, span, offset) != 0)
+        if (!IsSideViewConnectorOrigin(support, anchor, connector.Origin, connector.AllowRoundedOrigin))
             return NavigationGuideStatus.InvalidStart;
 
         var pin = Pin(map, index);
@@ -79,6 +74,36 @@ internal sealed partial class NavigationPlanarWork
         if (status == NavigationGuideStatus.Success && connector.RoundedTarget is Vector2d target)
             status = TraceSideView(world, graph, binding, layerCount, pin, pin, connector.Current, target, profile, policy, meter);
         return status;
+    }
+
+    private static bool IsSideViewConnectorOrigin(in NavigationPlanarSupport support, Vector2d anchor,
+        Vector2d origin, bool allowRoundedOrigin)
+    {
+        // Use the midpoint chart to keep both ends of the authored track representable.
+        var span = support.Right - support.Left;
+        var midpointOffset = (SupportMidpoint(support) - support.Left).X;
+        return Vector2d.TrySubtract(origin, anchor, out var offset)
+            && offset.X >= -midpointOffset && offset.X <= span.X - midpointOffset
+            && IsSideViewConnectorOffset(span, offset, allowRoundedOrigin);
+    }
+
+    private static bool IsSideViewConnectorOffset(Vector2d span, Vector2d offset, bool allowRoundedOrigin)
+    {
+        int side = Vector2d.OrientationSign(Vector2d.Zero, span, offset);
+        if (side == 0)
+            return true;
+        if (!allowRoundedOrigin | side < 0)
+            return false;
+
+        // Reacquisition can begin in the two-raw open strip used by rounded guided steps.
+        bool steep = span.X < span.Y.Abs();
+        var major = steep ? offset.Y : offset.X;
+        var minor = steep ? offset.X : offset.Y;
+        var numerator = steep ? span.X : span.Y;
+        var denominator = steep ? span.Y : span.X;
+        return Fixed64.TryMultiplyDivide(major, numerator, denominator, out var ideal)
+            & Fixed64.TrySubtract(minor, ideal, out var residual)
+            & residual >= Fixed64.FromRaw(-2) & residual <= Fixed64.FromRaw(2);
     }
 
     internal NavigationGuideStatus TraceSideViewLeg(GridWorld world, NavigationWorldGraph graph,
@@ -212,17 +237,34 @@ internal sealed partial class NavigationPlanarWork
         center = default;
         if (!meter.TryConsumeLookupProbes(1))
             return NavigationGuideStatus.BudgetExceeded;
-        Fixed64 height = profile.AxisLength + profile.Radius + profile.Radius;
-        if (!map.Map.TryGetPlanarSupport(index, out support) || support.Normal.Y < profile.MinimumSupportNormalDot
+        if (!map.Map.TryGetPlanarSupport(index, out support)
             || !map.TryGetSlot(index, out int slot) || !map.TryGetEffectiveCell(slot, out NavigationCell cell))
             return invalid;
         map.TryGetPhysicalState(slot, out bool present, out byte obstacles);
         if (!present || obstacles != 0
-            || !TraversalEvaluator.IsCellPassable(cell, TraversalMedia.Solid, profile.Capabilities, profile.Radius, policy, out _)
-            || height > cell.HeightClearance)
+            || !FitsSideViewSupport(support, cell, profile)
+            || !TraversalEvaluator.IsCellPassable(cell, TraversalMedia.None, profile.Capabilities, Fixed64.Zero, policy, out _))
             return invalid;
 
         return MaterializeSupportAnchor(support, profile, invalid, out center);
+    }
+
+    private static bool FitsSideViewSupport(in NavigationPlanarSupport support, in NavigationCell cell,
+        in NavigationAgentProfile2D profile) => (cell.Media & TraversalMedia.Solid) != 0
+        & support.Normal.Y >= profile.MinimumSupportNormalDot & profile.Radius <= cell.RadiusClearance
+        & profile.AxisLength + profile.Radius + profile.Radius <= cell.HeightClearance;
+
+    private static bool FitsReplacementContact(in NavigationPlanarSupport support, in NavigationCell cell,
+        Vector2d center, in NavigationAgentProfile2D profile) => !IsReplacementContact(support, center, profile)
+        || FitsSideViewSupport(support, cell, profile);
+
+    private static bool IsReplacementContact(in NavigationPlanarSupport support, Vector2d center,
+        in NavigationAgentProfile2D profile)
+    {
+        // Above-surface contact can support the lower cap. Roof contact still uses the headroom rules.
+        var cap = new Vector2d(center.X, center.Y - profile.HalfAxisCeiling);
+        return Vector2d.OrientationSign(support.Left, support.Right, cap) >= 0
+            && support.TouchesCapsule(center, profile);
     }
 
     internal static NavigationGuideStatus MaterializeSupportAnchor(in NavigationPlanarSupport support,
@@ -234,11 +276,9 @@ internal sealed partial class NavigationPlanarWork
         if (Vector2d.OrientationSign(support.Left, support.Right, witness) != 0)
             return invalid;
         // Round the center upward for an odd half-axis, then trace the original full axis.
-        long rawAxis = profile.AxisLength.m_rawValue;
-        Fixed64 halfAxis = Fixed64.FromRaw((rawAxis >> 1) + (rawAxis & 1));
         if (!Fixed64.TryMultiplyAdd(support.Normal.X, profile.Radius, witness.X, out Fixed64 x)
             || !Fixed64.TryMultiplyAdd(support.Normal.Y, profile.Radius, witness.Y, out Fixed64 y)
-            || !Fixed64.TryAdd(y, halfAxis, out y))
+            || !Fixed64.TryAdd(y, profile.HalfAxisCeiling, out y))
             return NavigationGuideStatus.CostOverflow;
         center = new Vector2d(x, y);
         return NavigationGuideStatus.Success;

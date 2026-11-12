@@ -99,6 +99,18 @@ public readonly struct NavigationGuideLease : IDisposable
             : NavigationGuideStatusMapper.ToPublic(status);
     }
 
+    internal NavigationGuideStatus TryGetPendingPlanarTransition(out NavigationTransitionInstruction2D instruction)
+    {
+        instruction = default;
+        var status = TryGetCurrentStep(out var step);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        if (!step.HasTransition)
+            return NavigationGuideStatus.Pending;
+        instruction = new NavigationTransitionInstruction2D(step.Transition);
+        return NavigationGuideStatus.Success;
+    }
+
     /// <summary>Completes the exact current pending semantic action.</summary>
     public NavigationGuideStatus CompletePendingTransition(
         in NavigationTransitionInstruction instruction) =>

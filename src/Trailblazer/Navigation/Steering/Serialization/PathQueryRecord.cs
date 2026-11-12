@@ -47,27 +47,7 @@ public sealed class PathQueryRecord : IRecordable
 
     private PathAlgorithm Algorithm;
 
-    private int MaxLookupProbes;
-
-    private int MaxEndpointCandidates;
-
-    private int MaxExpandedNodes;
-
-    private int MaxEvaluatedEdges;
-
-    private int MaxConnectionLegs;
-
-    private int MaxTransitionCandidates;
-
-    private int MaxTransitionPairs;
-
-    private int MaxStagedLegAttempts;
-
-    private int MaxTraceIntervals;
-
-    private int MaxCoveredVoxelIntervals;
-
-    private int MaxSimplificationRays;
+    private NavigationWorkBudgetRecord _budget;
 
     private bool AllowTransitions;
 
@@ -103,17 +83,7 @@ public sealed class PathQueryRecord : IRecordable
         StartMedium = value.Traversal.StartMedium;
         TargetMedia = value.Traversal.TargetMedia;
         Algorithm = value.Algorithm;
-        MaxLookupProbes = value.Budget.MaxLookupProbes;
-        MaxEndpointCandidates = value.Budget.MaxEndpointCandidates;
-        MaxExpandedNodes = value.Budget.MaxExpandedNodes;
-        MaxEvaluatedEdges = value.Budget.MaxEvaluatedEdges;
-        MaxConnectionLegs = value.Budget.MaxConnectionLegs;
-        MaxTransitionCandidates = value.Budget.MaxTransitionCandidates;
-        MaxTransitionPairs = value.Budget.MaxTransitionPairs;
-        MaxStagedLegAttempts = value.Budget.MaxStagedLegAttempts;
-        MaxTraceIntervals = value.Budget.MaxTraceIntervals;
-        MaxCoveredVoxelIntervals = value.Budget.MaxCoveredVoxelIntervals;
-        MaxSimplificationRays = value.Budget.MaxSimplificationRays;
+        _budget = new NavigationWorkBudgetRecord(value.Budget);
         AllowTransitions = value.AllowTransitions;
         ExtraIntegrationCost = value.FlowField.ExtraIntegrationCost;
     }
@@ -149,18 +119,7 @@ public sealed class PathQueryRecord : IRecordable
                 new NavigationAreaPolicyKey(AreaPolicyId!, AreaPolicyRevision),
                 new TraversalIntent(StartMedium, TargetMedia),
                 Algorithm,
-                new NavigationWorkBudget(
-                    MaxLookupProbes,
-                    MaxEndpointCandidates,
-                    MaxExpandedNodes,
-                    MaxEvaluatedEdges,
-                    MaxConnectionLegs,
-                    MaxTransitionCandidates,
-                    MaxTransitionPairs,
-                    MaxStagedLegAttempts,
-                    MaxTraceIntervals,
-                    MaxCoveredVoxelIntervals,
-                    MaxSimplificationRays),
+                _budget.CreateBudget(),
                 AllowTransitions,
                 Algorithm == PathAlgorithm.FlowField
                     ? new FlowFieldQueryOptions(ExtraIntegrationCost)
@@ -202,17 +161,7 @@ public sealed class PathQueryRecord : IRecordable
         RecordValues.Look(chronicler, ref StartMedium, "StartMedium", TraversalMedium.Unknown);
         RecordValues.Look(chronicler, ref TargetMedia, "TargetMedia", TraversalMedia.None);
         RecordValues.Look(chronicler, ref Algorithm, "Algorithm", PathAlgorithm.AStar);
-        RecordValues.Look(chronicler, ref MaxLookupProbes, "MaxLookupProbes", 0);
-        RecordValues.Look(chronicler, ref MaxEndpointCandidates, "MaxEndpointCandidates", 0);
-        RecordValues.Look(chronicler, ref MaxExpandedNodes, "MaxExpandedNodes", 0);
-        RecordValues.Look(chronicler, ref MaxEvaluatedEdges, "MaxEvaluatedEdges", 0);
-        RecordValues.Look(chronicler, ref MaxConnectionLegs, "MaxConnectionLegs", 0);
-        RecordValues.Look(chronicler, ref MaxTransitionCandidates, "MaxTransitionCandidates", 0);
-        RecordValues.Look(chronicler, ref MaxTransitionPairs, "MaxTransitionPairs", 0);
-        RecordValues.Look(chronicler, ref MaxStagedLegAttempts, "MaxStagedLegAttempts", 0);
-        RecordValues.Look(chronicler, ref MaxTraceIntervals, "MaxTraceIntervals", 0);
-        RecordValues.Look(chronicler, ref MaxCoveredVoxelIntervals, "MaxCoveredVoxelIntervals", 0);
-        RecordValues.Look(chronicler, ref MaxSimplificationRays, "MaxSimplificationRays", 0);
+        _budget.Look(chronicler);
         RecordValues.Look(chronicler, ref AllowTransitions, "AllowTransitions", false);
         RecordValues.Look(chronicler, ref ExtraIntegrationCost, "ExtraIntegrationCost", Fixed64.Zero);
 

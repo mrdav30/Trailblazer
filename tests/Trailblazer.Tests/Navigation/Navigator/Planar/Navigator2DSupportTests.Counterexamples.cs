@@ -123,27 +123,30 @@ public sealed partial class Navigator2DSupportTests
     [Fact]
     public void SideViewHostStepsReplayExactlyAndRemainAllocationFreeWhenWarm()
     {
-        List<(Vector2d Center, Vector2d Velocity, Vector2d Facing, bool Grounded)> Run()
+        List<(Vector2d Center, Vector2d Velocity, Vector2d Facing, bool Grounded)> Run(bool allowExtraJump)
         {
             using var context = Scene();
-            using var host = new Host(context);
+            using var host = new Host(context, settings: allowExtraJump ? ExtraJumpSettings : Settings);
             host.Sample(Ground);
             host.RefreshSupport();
             var result = new List<(Vector2d, Vector2d, Vector2d, bool)>();
             for (int i = 0; i < 32; i++)
             {
                 context.Simulate();
-                host.PrepareFrameMotion(new NavigationInput2D(i < 16 ? Vector2d.Right : -Vector2d.Right, i == 2));
+                host.PrepareFrameMotion(new NavigationInput2D(i < 16 ? Vector2d.Right : -Vector2d.Right, i is 2 or 3));
                 host.Accept(host.Request.Target.Center, i < 2 || i == 20 ? Ground : null);
                 host.CommitFrameMotion();
                 context.LateSimulate();
                 if (i == 2)
                     host.Velocity.Y.Should().Be(Fixed64.FromFraction(3, 1));
+                if (i == 3)
+                    host.Velocity.Y.Should().Be(allowExtraJump ? (Fixed64)3 : Fixed64.Two);
                 result.Add((host.Pose.Center, host.Velocity, host.Facing, host.IsGrounded));
             }
             return result;
         }
-        Run().Should().Equal(Run());
+        Run(false).Should().Equal(Run(false));
+        Run(true).Should().Equal(Run(true));
 
         using var context = Scene();
         using var host = new Host(context);

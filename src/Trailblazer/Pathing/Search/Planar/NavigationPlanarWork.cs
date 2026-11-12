@@ -43,7 +43,7 @@ internal sealed partial class NavigationPlanarWork
 
     private NavigationGuideStatus FindContainingCell(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance map, NavigationPlanarBinding binding, Vector2d center, NavigationWorkMeter meter,
-        out VoxelGrid? grid, out Voxel? voxel)
+        out VoxelGrid? grid, out Voxel? voxel, bool requireAuthoredCell)
     {
         grid = null;
         voxel = null;
@@ -58,8 +58,12 @@ internal sealed partial class NavigationPlanarWork
                 return status;
             if (!meter.TryConsumeLookupProbes(1))
                 return NavigationGuideStatus.BudgetExceeded;
+            if (requireAuthoredCell && !map.TryGetSlot(candidate, out _))
+                continue;
             if (world.TryGetGridAndVoxel(Pin(map, candidate), out grid, out voxel))
                 return NavigationGuideStatus.Success;
+            if (requireAuthoredCell)
+                return NavigationGuideStatus.InvalidStart;
         }
         grid = null;
         return NavigationGuideStatus.NoPath;
@@ -167,8 +171,10 @@ internal sealed partial class NavigationPlanarWork
 
     internal NavigationGuideStatus TraceBody(GridWorld world, NavigationWorldGraph graph,
         int layerCount, NavigationPlanarBinding binding, WorldVoxelIndex source, WorldVoxelIndex target, Vector2d start, Vector2d end,
-        Fixed64 radius, Fixed64 axisLength, TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy policy,
-        NavigationWorkMeter meter, NavigationGuideStatus blocked)
+        Fixed64 radius, Fixed64 axisLength, TraversalMedia medium, TraversalCapability capabilities, NavigationAreaPolicy? policy,
+        NavigationWorkMeter meter, NavigationGuideStatus blocked,
+        in (NavigationMapInstance Owner, NavigationAgentProfile2D Profile, Vector2d? Witness,
+            NavigationWorkBudget WitnessBudget)? replacement = null)
     {
         int gridLimit = Math.Min(_workspace.MapCapacity, meter.RemainingLookupProbes);
         int addressLimit = Math.Min(_workspace.CoveredAddressCapacity, meter.RemainingCoveredVoxelIntervals);
@@ -200,13 +206,19 @@ internal sealed partial class NavigationPlanarWork
                 {
                     instance.TryGetPhysicalState(slot, out bool present, out byte obstacleCount);
                     if ((present & (obstacleCount == 0))
-                        && TraversalEvaluator.IsCellPassable(semantics, coverageMedium, capabilities, coverageRadius, policy, out _))
+                        && IsPlanarCoveragePassable(semantics, coverageMedium, capabilities, coverageRadius, policy))
                     {
                         if (sideView && instance.Map.TryGetPlanarSupport(index, out var support))
                         {
                             status = support.CheckClearance(start, end, axisLength, radius);
                             if (status != NavigationVolumeAnchorStatus.Success)
                                 break;
+                            if (replacement is { } placement
+                                && !FitsReplacementContact(support, semantics, start, placement.Profile))
+                            {
+                                status = NavigationVolumeAnchorStatus.Unavailable;
+                                break;
+                            }
                         }
                         continue;
                     }
@@ -215,8 +227,7 @@ internal sealed partial class NavigationPlanarWork
                 break;
             }
         }
-        cells.Clear();
-        return status switch
+        var result = status switch
         {
             NavigationVolumeAnchorStatus.Success => NavigationGuideStatus.Success,
             NavigationVolumeAnchorStatus.Unavailable => blocked,
@@ -224,5 +235,19 @@ internal sealed partial class NavigationPlanarWork
             NavigationVolumeAnchorStatus.CostOverflow => NavigationGuideStatus.CostOverflow,
             _ => NavigationGuideStatus.BudgetExceeded
         };
+        if (result == NavigationGuideStatus.Success && replacement is { Witness: Vector2d witness } witnessedPlacement)
+        {
+            meter.Reset(witnessedPlacement.WitnessBudget);
+            result = ValidateReplacementWitness(world, graph, witnessedPlacement.Owner, binding, witness,
+                start, witnessedPlacement.Profile, policy, meter);
+        }
+        cells.Clear();
+        return result;
     }
+
+    private static bool IsPlanarCoveragePassable(in NavigationCell cell, TraversalMedia medium,
+        TraversalCapability capabilities, Fixed64 radius, NavigationAreaPolicy? policy) => policy != null
+        ? TraversalEvaluator.IsCellPassable(cell, medium, capabilities, radius, policy, out _)
+        : (cell.Media & medium) == medium & (cell.RequiredCapabilities & capabilities) == cell.RequiredCapabilities
+            & radius <= cell.RadiusClearance;
 }

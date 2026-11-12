@@ -81,10 +81,12 @@ optional horizontal facing, and host jump permission. Null movement produces
 zero voluntary movement without an active guide. Side-view logical facing is
 Left or Right while physical rotation stays zero. Prepare keeps the last
 accepted pose, velocity, facing, and support intact until commit. A walkable
-support normal projects ordinary speed onto the surface tangent. A jump requires
-walkable support, the Jump capability, positive jump speed, and host permission.
-Airborne motion integrates gravity with the fixed step. Accepted ceiling
-clipping limits subsequent ascent, and a fresh walkable landing resets fall speed.
+support normal projects ordinary speed onto the surface tangent. The first jump
+requires walkable support. Set `maxJumpCount` above one in `NavigationMotorSettings2D`
+to allow additional jumps during accepted ascent. Each jump requires the Jump
+capability, positive jump speed, and host permission. Airborne motion integrates
+gravity with the fixed step. Accepted ceiling clipping limits subsequent ascent.
+A fresh walkable landing resets fall speed and replenishes the jump allowance.
 
 `ReadAcceptedMotion` receives a nullable request and returns the accepted pose
 with a support status. Found carries a physical witness, unit normal,
@@ -126,8 +128,7 @@ a fresh capsule sweep to the anchor, plus a sweep to the actual target if
 rounding takes it off that line. Both sweeps share the movement work budget.
 The guide advances only after the host accepts the exact anchor with live
 walkable support. An explicit analog input or an admitted manual jump cancels
-the guide. Top-down formation, lookahead, and held-action APIs apply to
-top-down guidance.
+the guide. Formation and lookahead apply to top-down guidance.
 
 Guided motion follows the retained capsule sweep one stage at a time, at the
 configured move speed. A step-up lifts before crossing. A drop crosses before
@@ -148,8 +149,37 @@ cells. A rounded step that fails the proof releases guidance and reports the
 proof status.
 
 A graph publication or raw world change invalidates the guide before any
-cursor advance. Reacquisition requires a currently accepted canonical
-support anchor in the bound plane.
+cursor advance. Ordinary reacquisition starts at an accepted canonical
+support anchor. After population or posture replacement, a fresh support
+witness can also identify an anchor for a bounded return connector.
+
+### Replacing a planar profile
+
+Call `Navigator2D.TryReplaceNavigationProfile` between frames, after committing
+any prepared target. Side-view replacement preserves the nominal foot using
+the radius plus the half-axis rounded down to a raw unit. Top-down replacement
+preserves the center. If the center belongs to authored space, including a
+closed cell seam, the candidate envelope must fit the published coverage and
+applicable support limits. A tangent support from another map must belong to
+the traced lattice. The host also checks the complete physical shape before
+accepting the change.
+
+Override `TryCommitPhysicalProfileReplacement` to commit the host shape and
+center, then invoke the supplied publisher once before notifying host listeners.
+On a successful replacement, the controller keeps its destination and retires
+the old proofs. Call `RefreshSupport()` at the new side-view pose before the
+next prepared frame. A notification failure surfaces after the accepted change.
+A recovering side-view trek waits to reacquire if support is temporarily lost
+while a scheduled result is pending.
+
+Pass `allowTransitions: true` to use authored Solid-to-Solid actions. The
+controller holds at the accepted source anchor and exposes `PendingTransition`.
+For each action frame, pass that instruction and the host's upright target to
+`PrepareActionFrameMotion`, then resolve and commit through the usual barrier.
+The host owns the trajectory. Call `CompletePendingTransition` after the exact
+destination center is accepted with fresh walkable support. A displaced or
+unsupported landing returns `InvalidEnd` and the host can continue the held
+action. A cancelled, stale, or consumed token cannot submit another action.
 
 ## Setup
 

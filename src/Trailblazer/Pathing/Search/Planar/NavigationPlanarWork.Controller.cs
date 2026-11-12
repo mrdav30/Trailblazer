@@ -17,7 +17,8 @@ internal sealed partial class NavigationPlanarWork
 {
     internal NavigationGuideStatus FindControllerCell(GridWorld world, NavigationWorldGraph graph,
         NavigationPlanarBinding plane, Vector2d center, NavigationWorkMeter meter,
-        out NavigationMapInstance map, out VoxelGrid? grid, out Voxel? voxel, string? preferredMapId = null)
+        out NavigationMapInstance map, out VoxelGrid? grid, out Voxel? voxel, string? preferredMapId = null,
+        bool requireAuthoredCell = false)
     {
         grid = null;
         voxel = null;
@@ -27,7 +28,7 @@ internal sealed partial class NavigationPlanarWork
         while ((status = AdvanceControllerLayer(graph, plane, meter, preferred, ref next, out map, out var layer))
             == NavigationGuideStatus.Success)
         {
-            status = FindContainingCell(world, graph, map, layer, center, meter, out grid, out voxel);
+            status = FindContainingCell(world, graph, map, layer, center, meter, out grid, out voxel, requireAuthoredCell);
             if (status != NavigationGuideStatus.NoPath)
                 return status;
         }
@@ -52,16 +53,18 @@ internal sealed partial class NavigationPlanarWork
             start, end, radius, Fixed64.Zero, medium, capabilities, policy, meter);
     }
 
-    private NavigationGuideStatus TraceBoundMotion(GridWorld world, NavigationWorldGraph graph,
+    internal NavigationGuideStatus TraceBoundMotion(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance map, NavigationPlanarBinding binding, WorldVoxelIndex source, WorldVoxelIndex target,
         Vector2d start, Vector2d end, Fixed64 radius, Fixed64 axisLength, TraversalMedia medium,
-        TraversalCapability capabilities, NavigationAreaPolicy policy, NavigationWorkMeter meter)
+        TraversalCapability capabilities, NavigationAreaPolicy? policy, NavigationWorkMeter meter,
+        in (NavigationMapInstance Owner, NavigationAgentProfile2D Profile, Vector2d? Witness,
+            NavigationWorkBudget WitnessBudget)? replacement = null)
     {
         var point = new Vector3d(start.X, binding.EmbeddingY, start.Y);
         var status = BindLayers(world, graph, map, binding, point, meter, out int layerCount);
         return status == NavigationGuideStatus.Success
             ? TraceBody(world, graph, layerCount, binding, source, target, start, end, radius, axisLength, medium,
-                capabilities, policy, meter, NavigationGuideStatus.NoPath)
+                capabilities, policy, meter, NavigationGuideStatus.NoPath, replacement)
             : status;
     }
 

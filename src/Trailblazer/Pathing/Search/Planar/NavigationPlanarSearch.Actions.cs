@@ -81,6 +81,9 @@ internal partial class NavigationPlanarSearch
 
     private NavigationGuideStatus TraceActionAnchor(NavigationMapInstance map, NavigationCellAddress address)
     {
+        if (this is NavigationSideViewSearch sideView)
+            return _proof.ResolveSideViewAnchor(_world, Graph, map, _binding, address.Index, _layerCount,
+                sideView.Profile, _policy, _meter, out _, NavigationGuideStatus.NoPath);
         map.Map.GridBinding.TryGetCellPrism(address.Index, out var prism);
         Vector2d center = prism.Center.ToVector2d();
         return Trace(map, address.Index, map, address.Index, center, center, NavigationGuideStatus.NoPath);

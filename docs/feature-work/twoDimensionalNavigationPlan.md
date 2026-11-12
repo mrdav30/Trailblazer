@@ -5,23 +5,20 @@
 
 **Created:** 2026-09-03
 
-**Status (2026-11-11):** Phase 1 and its hardening pass are complete in
-coordinated source mode. Native top-down A* and Flow
-use the shared graph and scheduler. They prove swept-circle legs across
-compatible published maps and support formation goals and opted-in
-same-medium actions through accepted controller motion. See the
-[Phase 1 hardening evidence](#2026-11-10---phase-1-hardening). Phase 2
-covers native manual motion, authored supports, canonical anchors, and
-immediate and scheduled A* and Flow guides over proved ordinary side-view legs.
-Navigator2D follows supported stages from a canonical support anchor, with
-bounded rounded slope substeps and scheduled moved-origin connectors on the
-same finite authored support. Grounded valley joins use two supported capsule
-sweeps through an exact waypoint. Ordinary support and motor verification is
-complete. Bounded authored traversal is the next open gate.
+**Status (2026-11-12):** Phases 0 through 2 are complete in coordinated source
+mode. Native top-down and side-view A* and Flow use the shared graph and
+scheduler. Side-view navigation verifies ordinary supported legs and
+host-executed ladder, jump, and drop actions. The controller supports atomic
+posture changes, opt-in extra jumps during ascent, and deterministic record
+restore. See the [Phase 2 evidence](#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence).
+Phase 3 starts with the optional native Gravitas2D adapter and real collision
+acceptance.
 Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
-`6aaf45c`. The released-package lane needs GridForge with the filtered trace
-overload and Gravitas 1.1.0 for the adapter. Hard-budgeted
+`6aaf45c`. The Phase 2 review hardening also uses GridForge's exact planar
+coverage-neighbor query. Land the provider change before updating the hosted
+pin. The released-package lane needs GridForge with both navigation coverage
+APIs and Gravitas 1.1.0 for the adapter. Hard-budgeted
 physics queries remain a separate
 [2D/3D workstream](physicsQueryBudgetPlan.md).
 
@@ -459,7 +456,7 @@ require the existing matched performance controls.
 | --- | --- | --- | --- |
 | 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
 | 1 | Native planar guidance and top-down movement | Complete | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
-| 2 | Side-view traversal and profile changes | In progress | Bounded authored traversal, profile replacement, airborne sequences, and persistence/replay |
+| 2 | Side-view traversal and profile changes | Complete | Host-executed authored actions, atomic posture, airborne continuation, and exact record replay verified |
 | 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
 
 ## Phase 0 - Settle The 2D Contract
@@ -817,9 +814,10 @@ Successful load rebuilds occupancy and committed-cell state without emitting
 Rejected load preserves the old controller, lease, action, scheduled
 interest, prepared frame, and occupancy. Keep spatial schema 9 unchanged.
 
-Record pose, accepted velocity, logical facing and active/buffered turn,
+Record pose, including accepted rotation, accepted velocity, logical facing,
 motor and jump continuation, group and current medium, acquisition mode, and
-durable destination/query options. Preserve exact carry continuation as
+durable destination/query options. Replay turning through the host's ordered
+per-frame facing inputs. Preserve exact carry continuation as
 stable carrier ID, previous accepted carrier pose, and the raw carrier-local
 anchor used by the motor. This follows 3D's exact attachment replay rule.
 Rebind it only to a freshly sampled registration for the same stable carrier
@@ -968,26 +966,28 @@ in the existing test projects.
   - [x] Verify the remaining surface joins. Crest and nonhorizontal step
     fixtures reject ordinary routing despite clear endpoints and permissive
     step limits. Physical stepping stays host-owned.
-- [ ] **Prove authored traversal.** Run the bounded ladder, jump, and drop
+- [x] **Prove authored traversal.** Run the bounded ladder, jump, and drop
   fixtures with host-executed motion from approach through accepted landing
   between supported regions. Test insufficient clearance, missing capability,
   invalidated actions, and exact completion tokens. Use both A* and Flow where
   applicable.
-- [ ] **Apply the reviewed replacement contract to 2D.** Reuse hardening Phase
+- [x] **Apply the reviewed replacement contract to 2D.** Reuse hardening Phase
   2's atomicity and lifecycle rules for stand/crouch/compact cycles, blocked
   growth, foot-anchor stability, preserved destinations, and gained/lost
   capabilities. Keep collider and navigation envelope consistent.
-- [ ] **Port the relevant airborne sequences deliberately.** Test denied jumps
-  during falling/flight, permitted ascent-time extra jumps, flight loss and
-  recovery, and controlled descent where included by the approved 2D contract.
-  Do not copy world-Y calculations or turn a 3D test green by rotating its view.
-- [ ] **Verify persistence and deterministic replay.** Save/load each supported
+- [x] **Verify the reviewed airborne sequences.** Exercise the default one-jump
+  allowance, opt-in ascent-time extra jumps, clipped and denied jumps, apex and
+  fall gating, landing resets, and capability changes. The approved planar
+  motor has horizontal steering, gravity, and jump edges. Flight and controlled
+  descent were conditional on a motor contract that included them.
+- [x] **Verify persistence and deterministic replay.** Save/load each supported
   mode and changed posture; reject incompatible dimensional shells transactionally.
   Resume durable intent with fresh guides, comparing accepted states and event
   order over repeated inputs. Cover JSON and standard-package MemoryPack.
-  Preserve active/buffered turning, restore the body before the controller, and
-  clear prepared motion/support only after successful population; rejection
-  must preserve the valid live state. Never restore pending proof/lease ownership.
+  Preserve accepted rotation and logical facing and replay ordered host
+  per-frame facing inputs. Restore the body before the controller. Clear
+  prepared motion and support only after successful population. Rejection
+  preserves live state, and pending proof and lease ownership stay transient.
 
 ## Phase 3 - Gravitas2D Integration And Closeout
 
@@ -3491,3 +3491,162 @@ verification slice changes tests and documentation. The production source
 matches the previous matched performance capture. Raw evidence is under
 `artifacts/side-view-join-closeout` in `focused-*.log`, `*-proof-*`, and
 `docfx.log`.
+
+### 2026-11-12 - Phase 2 authored traversal, posture, airborne and persistence
+
+The closeout starts at `ac4231b`. Side-view A* and Flow use the existing
+published, opt-in same-medium action edge, shared planar route publisher, and
+exact lease token. Both endpoints prove canonical upright capsule support.
+The host supplies the action targets, and completion requires the exact
+accepted destination with fresh walkable support. The committed-source
+step-then-jump regression exposed an extra bend at the action edge. The
+separate stale-landing regression reproduced loss of the accepted source
+when the route retired before landing was recorded. The publisher now emits
+the selected action without an inferred step. A grounded landing seeds a
+fresh source before stale proof retirement.
+
+At 16 Hz, the bounded action fixtures use radius `1/4`, zero axis, speed 4,
+and an exact route cost of `11/2`. The host accepts ten quarter-unit jump
+targets and nine ladder or drop targets, with ordinary approach and exit.
+The ladder uses `Climb` and the drop uses a `Custom` action with an authored
+identity. Clearance, capability, opt-in, wrong or unsupported landing,
+staleness, repeated tokens, and held-action posture and restore are covered.
+
+Profile replacement stages the candidate occupancy and exact stationary
+footprint against one publication. The side-view nominal foot uses the
+floor-rounded half-axis, and the complete capsule uses its original axis
+length. Closed support contact receives authored radius, height, capability
+and area checks even when the support voxel sits outside strict footprint
+coverage. A shared witness at a floor seam checks both touching supports.
+The host commits the collider and center before the synchronous publisher.
+The publisher retires old proofs, keeps destination intent, updates occupancy
+and discards the old support sample. The tests cover posture cycles, blocked
+growth, a stale publication, a full voxel with and without an existing ticket,
+and post-commit notification failure.
+
+`NavigationMotorSettings2D.MaxJumpCount` defaults to one. Opt-in extra jumps
+require accepted upward motion from a launch, current Jump capability, and a
+host-permitted edge. Accepted positive movement spends the allowance, and
+live landing replenishes it. Capability loss and regain during ascent keep
+the current motor state. The reviewed planar input contract is horizontal
+steering, gravity, and jump edges. Traversal media remain route permissions.
+
+The distinct `Trailblazer.Navigator2D` schema validates the exact configured
+shell, accepted continuation, published domain, and occupancy before
+population. It preserves accepted rotation and facing for replay of the
+host's ordered per-frame inputs, as specified by the planar input contract.
+It also preserves motor continuation, posture, durable trek, and the carrier's
+stable ID, prior pose and local anchor. Fresh support rebinds the carrier and
+identifies the support owner for bounded one-time route recovery. This lookup
+uses the controller's sample budget, leaving the route and sweep budgets
+intact. Prepared motion, leases, scheduled requests and held stamps retire
+after successful population. JSON and standard MemoryPack cover changed
+posture, grounded and airborne continuation, accepted turning, refreshed
+support recovery, and malformed state with live rollback.
+
+Independent review found the nominal half-axis rounding case, authored
+clearance on tangent supports, and the two-owner closed seam. Regression
+tests cover those cases and the stationary footprint before the first host
+support refresh. The closeout adds 841 net runtime lines, including the
+native record and posture transaction. Three action files moved from
+`Search/TopDown` to `Search/Planar` for use by both modes. Geometry, storage,
+and ordering still use the shared trace, publisher, scheduler and lease owners.
+
+Source-mode validation used `UseLocalLsfStack=true` and the pinned sibling
+stack. On each of Windows and Ubuntu, Release passed 3,695 core and 90
+adapter tests, and ReleaseLean passed 3,588 core and 86 adapter tests. The
+final pre-refresh posture case was added after those runs and passed on all
+four lanes in the `FullyQualifiedName~Navigator2DSupportTests` rerun (144
+Release and 138 ReleaseLean). Combined coverage for each lane is exactly
+35,648/35,648 lines, 15,421/15,421 branches, and 3,565/3,565 fully covered
+methods across core and adapter. Both library targets built in both
+configurations. DocFX succeeded with warnings treated as errors.
+
+The Windows Release 100-agent 3D `BalancedPhases` control used
+`Simulate64GuidedFramesInstrumentedBalancedPhases`, two launches per
+algorithm, five warmups, and five actual iterations per launch. Each revision
+had four successful children and 20 actual iterations. All 1,280 frame
+checksums, phase assignments, and ray counts matched. The measured frames
+allocated 0 B and first admission allocated 21,600 B in both revisions.
+Median 64-frame sums were 107.961 to 106.346 ms for A* and 52.101 to
+48.831 ms for Flow, with overlapping ranges.
+
+Matched Windows Release top-down and side-view valley probes used both
+baseline/candidate/candidate/baseline and reversed process order, with 256
+warm routes and five 128-route measured blocks per process. Top-down still
+arrived in five frames per route and allocated 4,096 B per block. Valley
+routes preserved the seven-frame replay in both directions, with forward
+checksum `13397032978042514272`, reverse checksum `11750722503094330730`,
+and 8,192 B per block. The accepted-pose control without guidance allocated
+40,960 B across 640 routes in both revisions. Across 20 blocks per revision,
+top-down measured 76.825–120.725 to 75.571–127.703 µs/frame and valley
+79.898–121.146 to 80.699–127.952 µs/frame. In the reversed order, the median
+comparison changed direction for both probes. These samples establish exact
+route and allocation parity for the fixtures. Timing remains inconclusive.
+
+Local evidence is under `artifacts/phase2-closeout` (full matrix and coverage
+under `final`, 3D `baseline.log` and `candidate.log`, and planar
+`planar-abba.log` and `planar-baab.log`). Real collision acceptance and
+released-package validation remain separate.
+
+### 2026-11-12 - Phase 2 review hardening
+
+Six focused regressions cover same-frame record population, an unloadable
+off-grid request, closed-seam posture admission, a shifted hex support alias,
+stale action ownership, and temporary support loss during scheduled recovery.
+Record population preserves the consumed-frame guard. Capture and restore
+share published intent admission, including while acquisition is under
+transient pressure. The planar trek, spatial session, and standalone query
+now use one inline work-budget codec with the same eleven ordered fields,
+defaults, and validation points.
+
+Posture replacement checks authored candidates at the exact center seam.
+Both centers must be detached in one publication to take the free-motor
+fallback. Tangent support on another map is eligible only if a retained
+coverage member has a coincident footprint or is its exact GridForge
+neighbor. The new GridForge query uses immutable normalized bindings and
+the existing forward closure, including for translated hex grids. This
+avoids consulting pooled live grids after the trace. An aligned cross-map
+tangent floor remains part of the proof.
+
+A matching stale action retires its held lease, and temporary support loss
+keeps restored or replaced intent retryable. The connector reuses its exact
+segment result when rounding keeps the original target. Side-view publication
+counts actions during the bend pass. On the four-anchor step-then-jump
+fixture, this reduces counted publication node steps from 11 to 8 for A*
+and from 15 to 12 for Flow. The five emitted waypoints, exact cost, retained
+bytes, and jump token match.
+
+Coordinated source-mode validation passed on Windows and Ubuntu. Each host
+passed 1,176 GridForge tests in each configuration. Trailblazer's full
+matrix passed 3,714 core and 90 adapter tests in Release and 3,605 core and
+86 adapter tests in ReleaseLean. The final focused posture rerun passed 158
+Release and 152 ReleaseLean tests per host, including the added one-below
+witness budget and missing or suppressed authored cells. Both library targets
+built and both DocFX sites built with warnings as errors.
+
+Combined Trailblazer coverage for every lane is 35,623/35,623 lines,
+15,465/15,465 branches, and 3,569/3,569 fully covered methods across core
+and adapter. GridForge coverage is 9,354/9,354 lines, 4,149/4,149 branches,
+and 1,148/1,148 fully covered methods. The hardening adds two net Trailblazer
+runtime lines and 27 GridForge runtime lines. Independent review checked
+record layout, action ownership, work accounting, and the immutable geometry
+boundary.
+
+The 100-agent 3D `BalancedPhases` control matched all 1,280 frame checksums,
+phase assignments, ray counts, 0 B warm frame allocation, and 21,600 B
+first admission. Each capture has four successful benchmark children. The
+median 64-frame sums were 106.346 to 96.151 ms for A* and 48.831 to 52.965 ms
+for Flow, with overlapping ranges. Windows Release top-down and valley
+probes repeated both ABBA and BAAB process order. The top-down route stayed
+at five frames and 4,096 B per 128 routes. The valley replay kept seven
+frames in each direction, both prior checksums, and 8,192 B per 128 routes.
+The unassisted accepted-pose control kept 40,960 B per 640 routes. The
+planar timing ranges overlap, and valley timing changes direction with run
+order. These captures establish replay and allocation parity for the
+fixtures. Timing remains inconclusive.
+
+Local captures are under `artifacts/phase2-hardening`. The hosted Trailblazer
+develop pin needs an immutable GridForge revision containing the new query.
+The planar arrival-radius API discrepancy is tracked separately in
+[TRB-Issue-160](issue-tracker.md#trb-issue-160---planar-arrival-radius-has-no-movement-effect).

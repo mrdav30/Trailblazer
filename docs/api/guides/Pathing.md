@@ -155,11 +155,20 @@ that point. A valley retains a grounded bend owned by the left support in
 either travel direction. Your host owns the actual motion. Advancing at the
 final waypoint leaves the cursor there.
 
-The cost sums the proved stage lengths rounded up to the fixed-point unit and
-the forward destination's cell and area entry costs. Headroom adds no entry
-cost. The route describes one publication and raw world snapshot. A change to
-either makes the lease stale. Dispose each successful lease to return its
-shared route capacity.
+Opt in to authored actions with `allowTransitions: true` on immediate or
+scheduled acquisition. A side-view action connects two canonical Solid
+anchors with the requested profile's clearance and capabilities. Author a
+jump as `Jump`, a ladder as `Climb`, or a host-defined drop as `Custom` with
+its map-local action ID. At an action source, `TryAdvanceStep` returns
+`Pending`. Read the token through `TryGetPendingTransition` and complete the
+exact token after the host accepts the supported destination. The host
+resolves the trajectory between the two proved anchors.
+
+The cost sums the proved stage lengths rounded up to the fixed-point unit,
+authored action costs, and the forward destination's cell and area entry
+costs. Headroom adds no entry cost. The route describes one publication and
+raw world snapshot. A change to either makes the lease stale. Dispose each
+successful lease to return its shared route capacity.
 
 Use [scheduled acquisition](#scheduled-side-view-routes) to spread search
 and publication across fixed frames.

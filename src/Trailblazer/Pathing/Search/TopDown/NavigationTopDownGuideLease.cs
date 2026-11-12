@@ -55,17 +55,8 @@ public readonly struct NavigationTopDownGuideLease : IDisposable
     }
 
     /// <summary>Gets the exact held action, or returns Pending at an ordinary center.</summary>
-    public NavigationGuideStatus TryGetPendingTransition(out NavigationTransitionInstruction2D instruction)
-    {
-        instruction = default;
-        NavigationGuideStatus status = _lease.TryGetCurrentStep(out var step);
-        if (status != NavigationGuideStatus.Success)
-            return status;
-        if (!step.HasTransition)
-            return NavigationGuideStatus.Pending;
-        instruction = new NavigationTransitionInstruction2D(step.Transition);
-        return NavigationGuideStatus.Success;
-    }
+    public NavigationGuideStatus TryGetPendingTransition(out NavigationTransitionInstruction2D instruction) =>
+        _lease.TryGetPendingPlanarTransition(out instruction);
 
     /// <summary>Completes the exact held action after the host accepts its destination pose.</summary>
     public NavigationGuideStatus CompletePendingTransition(in NavigationTransitionInstruction2D instruction) =>

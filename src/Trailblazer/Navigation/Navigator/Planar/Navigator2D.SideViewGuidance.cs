@@ -27,13 +27,20 @@ public abstract partial class Navigator2D
     /// A scheduled guide can return from a moved, grounded center on the source support before advancing.
     /// </remarks>
     public NavigationGuideStatus ApplySideViewGuidedTrekRequest(NavigationCellAddress source,
-        NavigationCellAddress destination, NavigationAreaPolicyKey policy, PathAlgorithm algorithm, NavigationWorkBudget budget)
+        NavigationCellAddress destination, NavigationAreaPolicyKey policy, PathAlgorithm algorithm, NavigationWorkBudget budget) =>
+        ApplySideViewGuidedTrekRequest(source, destination, policy, algorithm, budget, allowTransitions: false);
+
+    /// <summary>Replaces side-view guidance with optional authored actions held for host execution.</summary>
+    public NavigationGuideStatus ApplySideViewGuidedTrekRequest(NavigationCellAddress source,
+        NavigationCellAddress destination, NavigationAreaPolicyKey policy, PathAlgorithm algorithm, NavigationWorkBudget budget,
+        bool allowTransitions)
     {
         EnsureIdle();
         if (_binding.Mode != NavigationMode2D.SideView || _medium != TraversalMedium.Solid)
             return NavigationGuideStatus.InvalidProfile;
         policy.Validate(nameof(policy));
         BeginTrek(destination, policy, algorithm, budget);
+        _allowTransitions = allowTransitions;
         _sideViewSource = source;
         return StartAcquisition();
     }
@@ -41,24 +48,40 @@ public abstract partial class Navigator2D
     private NavigationGuideStatus BeginSideViewAcquisition(out NavigationGuideLease guide)
     {
         guide = default;
-        if (!IsGrounded || _sideViewSource.MapId == null)
+        if (!IsGrounded)
+            return _resumeSideView ? NavigationGuideStatus.Pending : NavigationGuideStatus.InvalidStart;
+        if (_sideViewSource.MapId == null)
             return NavigationGuideStatus.InvalidStart;
         var status = _context.Pathing.ResolveSideViewControllerAnchor(_sideViewSource, _mapId, _binding, CurrentMapId,
             NavigationProfile, _policy, _budget, out var center);
+        if (_resumeSideView && (status != NavigationGuideStatus.Success | center != Pose.Center))
+        {
+            // The accepted pose can lie beyond the previous anchor's support. The fresh
+            // witness identifies its owner, then the connector proves actual motion to the anchor.
+            status = _context.Pathing.ResolveSideViewResumeSource(_mapId, _binding, CurrentMapId, Support!.Value.Point,
+                Pose.Center, NavigationProfile, _policy, out var restoredSource, out center);
+            if (status == NavigationGuideStatus.Success)
+                _sideViewSource = restoredSource;
+        }
         if (status != NavigationGuideStatus.Success)
             return status;
-        if (center != Pose.Center)
+        if (center != Pose.Center && !_resumeSideView)
             return NavigationGuideStatus.InvalidStart;
+        if (_resumeSideView)
+        {
+            _queuedOrigin = center;
+            _sideViewConnectorStart = Pose.Center;
+        }
         if (AcquisitionMode == NavigationAcquisitionMode.Scheduled)
         {
             _queuedOrigin = center;
             status = _context.Guides.ScheduleSideViewGuide(_sideViewSource, _routeGoal, NavigationProfile, _policy,
-                _algorithm, _budget, out var request);
+                _algorithm, _budget, out var request, _allowTransitions);
             _guideRequest = request;
             return status;
         }
         status = _context.Guides.RequestSideViewGuide(_sideViewSource, _routeGoal, NavigationProfile, _policy,
-            _algorithm, _budget, out var acquired);
+            _algorithm, _budget, out var acquired, _allowTransitions);
         guide = acquired.RouteLease;
         return status;
     }
@@ -70,10 +93,10 @@ public abstract partial class Navigator2D
         if (!IsGrounded)
         {
             guide.Dispose();
-            return NavigationGuideStatus.InvalidStart;
+            return _resumeSideView ? NavigationGuideStatus.Pending : NavigationGuideStatus.InvalidStart;
         }
         _sideViewConnectorStart = Pose.Center;
-        return AdoptScheduledPlanarGuide(guide.RouteLease);
+        return AdoptPlanarGuide(guide.RouteLease);
     }
 
     private bool TryPrepareSideViewStage(NavigationGuideLease guide, out Vector2d center)
@@ -101,17 +124,25 @@ public abstract partial class Navigator2D
             GuidanceStatus = NavigationGuideStatus.Pending;
             return false;
         }
-        bool rounded = !exactOrigin || !IsOnSegment(Pose.Center, end, bounded);
+        bool onRemainingSegment = exactOrigin && IsOnSegment(Pose.Center, end, bounded);
+        bool rounded = !onRemainingSegment;
+        Vector2d stepTarget = bounded;
         if (rounded && bounded != end)
             bounded = RoundSideViewTarget(start, end);
         if (_requiresConnector || rounded)
         {
             if (_requiresConnector)
-                status = TryConsumeConnectorValidationTurn()
-                    ? _context.Pathing.ValidateSideViewControllerConnector(target.Address, _mapId, _binding, CurrentMapId,
-                        start, Pose.Center, end, IsOnSegment(Pose.Center, end, bounded) ? null : bounded,
-                        NavigationProfile, _policy, _budget)
-                    : NavigationGuideStatus.Pending;
+            {
+                status = NavigationGuideStatus.Pending;
+                if (TryConsumeConnectorValidationTurn())
+                {
+                    bool connectorTargetOnSegment = exactOrigin && bounded == stepTarget
+                        ? onRemainingSegment : IsOnSegment(Pose.Center, end, bounded);
+                    status = _context.Pathing.ValidateSideViewControllerConnector(target.Address, _mapId, _binding, CurrentMapId,
+                        start, Pose.Center, end, connectorTargetOnSegment ? null : bounded,
+                        NavigationProfile, _policy, _budget, allowRoundedOrigin: _resumeSideView);
+                }
+            }
             else
                 status = _context.Pathing.ValidateSideViewControllerMotion(source.Address, target.Address, _mapId, _binding,
                     CurrentMapId, Pose.Center, bounded, NavigationProfile, _policy, _budget);
@@ -167,8 +198,17 @@ public abstract partial class Navigator2D
             return;
         }
         // Accepted support is a candidate for a fresh proof even if the old route became stale.
-        if (supportMap != null && _sideViewPreparedSupport is VoxelIndex support)
-            _sideViewSource = new NavigationCellAddress(supportMap, support);
+        bool reachedCanonicalSupport = supportMap != null && _sideViewPreparedSupport.HasValue;
+        if (reachedCanonicalSupport)
+        {
+            VoxelIndex support = _sideViewPreparedSupport!.Value;
+            _sideViewSource = new NavigationCellAddress(supportMap!, support);
+        }
+        if (_allowTransitions && HoldActionIfPresent(guide))
+        {
+            _resumeSideView &= !reachedCanonicalSupport;
+            return;
+        }
         bool arrived = guide.CurrentStepIndex == guide.StepCount - 1;
         var status = guide.TryAdvancePlanarStep();
         if (status != NavigationGuideStatus.Success)
@@ -176,6 +216,7 @@ public abstract partial class Navigator2D
             ApplyGuideStatus(status);
             return;
         }
+        _resumeSideView &= !reachedCanonicalSupport;
         ReleaseConnectorValidation();
         if (arrived)
             FinishArrival();

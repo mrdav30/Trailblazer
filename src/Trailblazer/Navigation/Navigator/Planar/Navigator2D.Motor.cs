@@ -17,12 +17,14 @@ public abstract partial class Navigator2D
     private readonly NavigationMotorSettings2D _motorSettings;
     private Fixed64 _verticalVelocity;
     private Fixed64 _preparedVertical;
+    private int _jumpCount;
+    private bool _preparedJump;
     private Vector2d _facing = Vector2d.Right;
     private Vector2d _preparedFacing;
     private Vector2d _preparedCarry;
 
     /// <summary>Gets the bound body geometry and navigation permissions.</summary>
-    public NavigationAgentProfile2D NavigationProfile { get; }
+    public NavigationAgentProfile2D NavigationProfile { get; private set; }
     /// <summary>Gets the status of the most recently committed physical support sample.</summary>
     public NavigationSupportStatus2D SupportStatus { get; private set; }
     /// <summary>Gets the fresh physical witness, if available.</summary>
@@ -51,7 +53,7 @@ public abstract partial class Navigator2D
             bool grounded = IsSupported(result) && _verticalVelocity <= Fixed64.Zero;
             if (grounded)
                 _verticalVelocity = Fixed64.Zero;
-            PublishSupport(result, grounded);
+            PublishSupport(RebindRestoredCarrier(result, grounded), grounded);
         }
         finally { _busy = false; }
     }
@@ -96,9 +98,9 @@ public abstract partial class Navigator2D
             _preparedVertical = Fixed64.Zero;
             return new NavigationPose2D(center, Fixed64.Zero);
         }
-        bool jump = CanStartJump(input);
-        _preparedVertical = jump ? _motorSettings.JumpSpeed : _verticalVelocity;
-        if (!IsGrounded || jump)
+        _preparedJump = CanStartJump(input);
+        _preparedVertical = _preparedJump ? _motorSettings.JumpSpeed : _verticalVelocity;
+        if (!IsGrounded || _preparedJump)
         {
             if (!Fixed64.TryMultiplyAdd(-_motorSettings.Gravity, _context.DeltaTime, _preparedVertical, out _preparedVertical))
                 throw new OverflowException("The vertical motor speed is outside the representable plane.");
@@ -131,8 +133,16 @@ public abstract partial class Navigator2D
         return carry;
     }
 
-    private bool CanStartJump(in NavigationInput2D input) => input.JumpRequested && !input.BlockJump && IsGrounded
+    private bool CanStartJump(in NavigationInput2D input) => input.JumpRequested && !input.BlockJump
+        && (IsGrounded || (_jumpCount < _motorSettings.MaxJumpCount && _verticalVelocity > Fixed64.Zero))
         && (NavigationProfile.Capabilities & TraversalCapability.Jump) != 0 && _motorSettings.JumpSpeed > Fixed64.Zero;
+
+    private void CommitMotorVertical(Fixed64 motorVertical, bool grounded)
+    {
+        _verticalVelocity = grounded ? Fixed64.Zero : motorVertical;
+        if (_preparedJump && motorVertical > Fixed64.Zero)
+            _jumpCount++;
+    }
 
     private Fixed64 ResolveMotorVertical(Fixed64 acceptedVerticalDisplacement)
     {
@@ -161,6 +171,9 @@ public abstract partial class Navigator2D
 
     private void PublishSupport(in NavigationMotionResult2D result, bool grounded)
     {
+        ClearRestoredCarrier();
+        if (grounded)
+            _jumpCount = 0;
         SupportStatus = result.SupportStatus;
         Support = result.Support;
         IsGrounded = grounded;

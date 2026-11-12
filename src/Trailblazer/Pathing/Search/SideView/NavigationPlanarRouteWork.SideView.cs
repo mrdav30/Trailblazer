@@ -30,16 +30,24 @@ internal sealed partial class NavigationPlanarRouteWork
             var support = GetRouteSupport(address);
             var previous = sideView.PreviousRouteSupport;
             bool previousOnLeft = previous.Left.X < support.Left.X;
-            int bendOrdinal = index == 0 ? NavigationAStarGuidePoint.OrdinaryOrdinal : previousOnLeft
+            int actionOrdinal = index != 0 && _request.AllowTransitions ? GetActionOrdinal(index - 1) : -1;
+            int bendOrdinal = index == 0 || actionOrdinal >= 0 ? NavigationAStarGuidePoint.OrdinaryOrdinal : previousOnLeft
                 ? NavigationPlanarWork.GetSideViewBendOrdinal(previous, support)
                 : NavigationPlanarWork.GetSideViewBendOrdinal(support, previous);
             if (_points == null)
             {
-                if (bendOrdinal != NavigationAStarGuidePoint.OrdinaryOrdinal)
+                if (actionOrdinal >= 0)
+                    _actionCount++;
+                else if (bendOrdinal != NavigationAStarGuidePoint.OrdinaryOrdinal)
                     sideView.RouteBendCount++;
             }
             else
+            {
                 WriteSideViewAnchor(sideView, address, support, previousOnLeft, bendOrdinal);
+                // Route-node ordinals exclude inserted bends. Stamp the emitted source once its landing exists.
+                if (actionOrdinal >= 0)
+                    FillActionAt(_points, _instructions!, _pointWrite - 2, actionOrdinal, _actionWrite++);
+            }
             sideView.PreviousRouteSupport = support;
         }
         return NavigationGuideStatus.Success;

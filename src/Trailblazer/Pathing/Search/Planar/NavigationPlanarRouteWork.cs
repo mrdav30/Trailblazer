@@ -233,7 +233,8 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
         pin = null;
         if (ResolveSnapshotStatus(NavigationGuideStatus.Success) == NavigationGuideStatus.Stale)
             return NavigationGuideStatus.Stale;
-        if (_request.AllowTransitions)
+        var sideView = _planar as NavigationSideViewSearch;
+        if (sideView == null && _request.AllowTransitions)
         {
             while (_countedActionsAt < _length - 1)
             {
@@ -244,7 +245,6 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
                     _actionCount++;
             }
         }
-        var sideView = _planar as NavigationSideViewSearch;
         if (_points == null)
         {
             int pointCount = _length;
@@ -273,6 +273,7 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
             if (status != NavigationGuideStatus.Success)
                 return status;
             System.Diagnostics.Debug.Assert(_pointWrite == _points.Length);
+            System.Diagnostics.Debug.Assert(_actionWrite == _actionCount);
         }
         else
         {
@@ -286,16 +287,16 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
                 var position = new Vector3d(prism.Center.X, _query.Start.FootAnchor.Y, prism.Center.Z);
                 _points[_pointWrite++] = new NavigationAStarGuidePoint(address, position, _request.Medium);
             }
-        }
-        while (_actionWrite < _actionCount)
-        {
-            if (remaining.NodeRemaining == 0)
-                return NavigationGuideStatus.Pending;
-            remaining.NodeRemaining--;
-            int point = _actionScan++;
-            int ordinal = GetActionOrdinal(point);
-            if (ordinal >= 0)
-                FillActionAt(_points, _instructions!, point, ordinal, _actionWrite++);
+            while (_actionWrite < _actionCount)
+            {
+                if (remaining.NodeRemaining == 0)
+                    return NavigationGuideStatus.Pending;
+                remaining.NodeRemaining--;
+                int point = _actionScan++;
+                int ordinal = GetActionOrdinal(point);
+                if (ordinal >= 0)
+                    FillActionAt(_points, _instructions!, point, ordinal, _actionWrite++);
+            }
         }
         if (_flow != null && !_flowCleared)
         {

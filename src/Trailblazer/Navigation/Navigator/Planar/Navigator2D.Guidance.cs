@@ -90,7 +90,12 @@ public abstract partial class Navigator2D
         status = TrailblazerPathingService.ResolvePlanarSnapshotStatus(status, graph, pathing.NavigationGraphStore.Current,
             epoch, (world.SpawnToken, world.Version, world.ChangeSequence));
         if (status == NavigationGuideStatus.Success)
-            AdoptGuide(guide);
+        {
+            if (_resumeSideView)
+                status = AdoptPlanarGuide(guide);
+            else
+                AdoptGuide(guide);
+        }
         else if (status != NavigationGuideStatus.Pending)
         {
             guide.Dispose();
@@ -151,10 +156,10 @@ public abstract partial class Navigator2D
     {
         if (!request.TryTakeTopDownGuide(out var guide))
             return FailedScheduledTransfer(request);
-        return AdoptScheduledPlanarGuide(guide.RouteLease);
+        return AdoptPlanarGuide(guide.RouteLease);
     }
 
-    private NavigationGuideStatus AdoptScheduledPlanarGuide(NavigationGuideLease guide)
+    private NavigationGuideStatus AdoptPlanarGuide(NavigationGuideLease guide)
     {
         AdoptGuide(guide);
         var status = NavigationGuideStatus.Success;
@@ -235,6 +240,7 @@ public abstract partial class Navigator2D
     {
         ReleaseRequest();
         _hasIntent = false;
+        _resumeSideView = false;
         _lastAcquisitionFrame = -1;
     }
 }

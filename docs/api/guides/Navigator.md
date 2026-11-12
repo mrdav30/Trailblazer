@@ -113,15 +113,21 @@ includes accepted carry while the motor keeps carry out of its next integration.
 
 Call `ApplySideViewGuidedTrekRequest` with the source and destination support
 addresses, area policy, search algorithm, and work budget. The accepted
-capsule center must equal the canonical source anchor and have walkable host
+capsule center must initially equal the canonical source anchor and have walkable host
 support. The support address is independent of the physical cell occupied by
 the center. Use `RefreshSupport()` to seed the host sample between frames.
 
 Immediate acquisition is the default. In Scheduled mode, waiting frames
-still run the free motor. The result requires the same grounded origin when
-the controller takes it. An explicit analog input or an admitted manual jump
-cancels the guide. Top-down formation, lookahead, and held-action APIs apply
-to top-down guidance.
+still run the free motor. If the accepted center moves while waiting, the
+controller can adopt the result while grounded and return to the exact first
+anchor. The moved origin must be on the finite authored support of that
+anchor. Each return target waits for a scheduler validation turn and requires
+a fresh capsule sweep to the anchor, plus a sweep to the actual target if
+rounding takes it off that line. Both sweeps share the movement work budget.
+The guide advances only after the host accepts the exact anchor with live
+walkable support. An explicit analog input or an admitted manual jump cancels
+the guide. Top-down formation, lookahead, and held-action APIs apply to
+top-down guidance.
 
 Guided motion follows the retained capsule sweep one stage at a time, at the
 configured move speed. A step-up lifts before crossing. A drop crosses before

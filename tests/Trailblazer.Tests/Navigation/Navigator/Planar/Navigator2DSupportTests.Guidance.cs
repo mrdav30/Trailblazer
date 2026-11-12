@@ -110,10 +110,8 @@ public sealed partial class Navigator2DSupportTests
         host.Request.Target.Center.Y.Should().Be(accepted.Y - Fixed64.FromFraction(1, 16));
     }
 
-    [Theory]
-    [InlineData(NavigationAcquisitionMode.Immediate)]
-    [InlineData(NavigationAcquisitionMode.Scheduled)]
-    public void SideViewGuidanceLetsCarrierMoveAndRejectsTheOldOrigin(NavigationAcquisitionMode mode)
+    [Fact]
+    public void ImmediateSideViewGuidanceLetsCarrierMoveAndRejectsTheOldOrigin()
     {
         using var context = GuidedStepScene();
         using var host = new Host(context);
@@ -121,9 +119,7 @@ public sealed partial class Navigator2DSupportTests
             new Vector2d(3, 2));
         host.Sample(new NavigationSupport2D(SupportAt(Vector2d.Zero)!.Value.Point, Vector2d.Forward, Fixed64.One, carrier));
         host.RefreshSupport();
-        host.ConfigureAcquisitionMode(mode);
-        ApplySideView(host).Should().Be(mode == NavigationAcquisitionMode.Immediate
-            ? NavigationGuideStatus.Success : NavigationGuideStatus.Pending);
+        ApplySideView(host).Should().Be(NavigationGuideStatus.Success);
         var moved = new Vector2d(Fixed64.FromFraction(1, 8), Fixed64.Zero);
         host.CarrierPose = new NavigationPose2D(moved, carrier.Pose.RotationRadians);
         int reads = 0;
@@ -135,8 +131,6 @@ public sealed partial class Navigator2DSupportTests
         host.CommitFrameMotion();
         context.LateSimulate();
         reads.Should().Be(1);
-        for (int frame = 0; frame < 128 && host.GuidanceStatus == NavigationGuideStatus.Pending; frame++)
-            Step(context, host, default);
         host.Pose.Center.Should().Be(moved);
         host.GuidanceStatus.Should().Be(NavigationGuideStatus.InvalidStart);
         host.HasArrived.Should().BeFalse();

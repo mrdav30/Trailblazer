@@ -29,7 +29,7 @@ internal sealed partial class NavigationGuideScheduler
         }
     }
 
-    internal NavigationGuideLease? RegisterTopDownConnectorValidation(NavigationValidationInterest interest,
+    internal NavigationGuideLease? RegisterPlanarConnectorValidation(NavigationValidationInterest interest,
         NavigationGuideLease guide, ref NavigationGuideStatus status)
     {
         lock (_sync)

@@ -14,8 +14,9 @@ same-medium actions through accepted controller motion. See the
 covers native manual motion, authored supports, canonical anchors, and
 immediate and scheduled A* and Flow guides over proved ordinary side-view legs.
 Navigator2D follows supported stages from a canonical support anchor, with
-bounded rounded slope substeps. Moved-origin connectors, authored traversal,
-and profile changes remain open.
+bounded rounded slope substeps and scheduled moved-origin connectors on the
+same finite authored support. Surface joins, authored traversal, and profile
+changes remain open.
 Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop now pins GridForge
 `6aaf45c`. The released-package lane needs GridForge with the filtered trace
@@ -962,7 +963,9 @@ in the existing test projects.
     subsegments, with live support required at landings.
   - [x] Rounded slope substeps reprove the bounded capsule sweep on the retained
     support lattice and preserve exact accepted-motion replay.
-  - [ ] Moved-origin connectors, remaining surface joins, and
+  - [x] Scheduled moved-origin connectors reprove the return to the exact
+    first anchor under the shared validation turn and movement budget.
+  - [ ] Remaining surface joins and
     the bounded ladder/jump/drop fixtures. Physical stepping stays host-owned.
 - [ ] **Prove authored traversal.** Approach and execute a jump, a drop, and a
   ladder between supported regions over bounded frames. Test insufficient
@@ -3318,3 +3321,66 @@ Raw evidence is under `artifacts/side-view-rounded` in `windows-proof-*`,
 `linux-proof-Release-*`, `linux-proof-fresh-ReleaseLean-*`, `docfx.log`,
 `slope-red.log`, `baseline.log`, `candidate.log`, and
 `planar-rounded-probes.log`.
+
+### 2026-11-11 - Phase 2 scheduled side-view moved-origin connectors
+
+At `7b8d66c`, A* and Flow discarded a successful scheduled lease when the
+free motor had carried the grounded controller away from its queued center.
+Both now share TopDown's fair validation interest and teardown. Initial
+acquisition still uses an explicit canonical source anchor. After transfer,
+the exact index-zero anchor owns the return stage until the host accepts it
+with walkable support. A mode change preserves this obligation.
+
+The connector origin must lie on the finite authored support track in the
+canonical anchor's midpoint chart. Each validation turn checks the source
+anchor identity and sweeps the upright capsule from the actual accepted center
+to the anchor on that owner's lattice. If rounding changes the submitted
+segment, its sweep consumes the same movement meter. This uses the existing
+planar workspace, fixed-point rounding and exact accepted clip handling.
+An off-track origin or exhausted sweep budget releases the guide. Transient
+graph snapshot exhaustion holds the route and preserves accepted clip
+provenance. World or graph invalidation still retires the lease and its
+validation interest before advancement. No dependency pins changed.
+
+The carrier regressions failed for both algorithms on the committed source.
+The snapshot-capacity regression also failed against the first connector
+implementation when the host consumed the remaining slots during commit of
+an off-line rounded target. The corrected controller preserves that accepted
+clip and an unchanged pose on a subsequent capacity-limited frame. Tests
+also cover exact first-anchor advancement after clipping, mode changes,
+grounded off-track origins, wrong anchor identity, shared dual-sweep budgets,
+unrepresentable distance, and stale teardown after target submission.
+Independent review verified the source pin's exact GridForge footprint
+contact and caught the commit-capacity case. The diff adds 64 net runtime
+lines relative to `7b8d66c`.
+
+Windows and Ubuntu built both target frameworks in Release and ReleaseLean
+with `UseLocalLsfStack=true` against the pinned source graph. Each host passed
+3,712 Release tests and 3,608 ReleaseLean tests. All four lanes covered all
+35,131 lines, 15,127 branches, and 3,522 methods across core and the Gravitas
+adapter. DocFX passed with warnings treated as errors. The initial final
+Windows Lean pass reused the pre-fix runtime DLL in the copied snapshot and
+failed the capacity regression. The rebuilt Lean lane used the reviewed
+source and matched the other three reports.
+
+The matched 100-agent 3D benchmark used two launches with five warmups
+and five actual iterations per algorithm. All four children per capture
+succeeded. The 1,280 actual frame checksums, phase assignments and ray counts
+matched, with zero warm-frame bytes and 21,600 bytes per first admission in
+each capture. Median 64-frame sums were 92.156 to 94.227 ms for A* and
+44.224 to 46.192 ms for Flow. These single paired timings leave the small
+latency differences inconclusive.
+
+The accepting-host probe used a 16 Hz slope and scheduled A*. It warmed
+256 routes and measured five blocks of 128 alternating routes, including
+acquisition, accepted waiting displacement, the return, and exact arrival.
+All measured routes replayed their direction's raw center and status hash
+in 22 frames, including two moving return frames. The median containing
+frame time was 77.907 us. The full route allocated 6,512 bytes, and the
+separate allocation capture measured zero bytes over all 1,280 moving
+return frames after warmup.
+
+Raw evidence is under `artifacts/side-view-connector` in `red.log`,
+`capacity-commit-red.log`, `final/*-proof*-*`, `final/docfx.log`,
+`baseline.log`, `candidate.log`, `connector-probe.log`, and
+`connector-probe-allocations.log`.

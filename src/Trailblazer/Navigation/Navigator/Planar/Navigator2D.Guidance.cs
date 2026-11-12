@@ -151,12 +151,17 @@ public abstract partial class Navigator2D
     {
         if (!request.TryTakeTopDownGuide(out var guide))
             return FailedScheduledTransfer(request);
-        AdoptGuide(guide.RouteLease);
+        return AdoptScheduledPlanarGuide(guide.RouteLease);
+    }
+
+    private NavigationGuideStatus AdoptScheduledPlanarGuide(NavigationGuideLease guide)
+    {
+        AdoptGuide(guide);
         var status = NavigationGuideStatus.Success;
         if (Pose.Center != _queuedOrigin)
         {
             _connectorValidation ??= new NavigationValidationInterest();
-            _guide = _context.Guides.Scheduler.RegisterTopDownConnectorValidation(_connectorValidation, guide.RouteLease, ref status);
+            _guide = _context.Guides.Scheduler.RegisterPlanarConnectorValidation(_connectorValidation, guide, ref status);
             _requiresConnector = _guide.HasValue;
         }
         return status;
@@ -187,17 +192,22 @@ public abstract partial class Navigator2D
     {
         if (!_requiresConnector)
             return true;
-        if (!_context.Guides.Scheduler.TryConsumeValidationTurn(_connectorValidation!))
-        {
-            GuidanceStatus = NavigationGuideStatus.Pending;
+        if (!TryConsumeConnectorValidationTurn())
             return false;
-        }
         var status = _context.Pathing.ValidateTopDownMotion(_mapId, _binding, Pose.Center, waypoint, NavigationProfile.Radius,
             _policy, _medium, NavigationProfile.Capabilities, _budget, (CurrentMapId, waypointMapId));
         if (status == NavigationGuideStatus.Success)
             return true;
         ReleaseGuide();
         GuidanceStatus = status == NavigationGuideStatus.NoPath ? NavigationGuideStatus.Stale : status;
+        return false;
+    }
+
+    private bool TryConsumeConnectorValidationTurn()
+    {
+        if (_context.Guides.Scheduler.TryConsumeValidationTurn(_connectorValidation!))
+            return true;
+        GuidanceStatus = NavigationGuideStatus.Pending;
         return false;
     }
 

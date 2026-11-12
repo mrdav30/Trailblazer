@@ -39,10 +39,17 @@ public sealed partial class TrailblazerPathingService
         NavigationWorkBudget budget) => RunSideViewProof(source, destination, profile, areaPolicy, budget, out _,
             (boundMapId, plane, currentMapId), (start, end));
 
+    internal NavigationGuideStatus ValidateSideViewControllerConnector(NavigationCellAddress source,
+        string boundMapId, NavigationPlanarBinding plane, string currentMapId, Vector2d origin, Vector2d current,
+        Vector2d anchor, Vector2d? roundedTarget, in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy,
+        NavigationWorkBudget budget) => RunSideViewProof(source, null, profile, areaPolicy, budget, out _,
+            (boundMapId, plane, currentMapId), connector: (origin, current, anchor, roundedTarget));
+
     private NavigationGuideStatus RunSideViewProof(NavigationCellAddress address, NavigationCellAddress? destination,
         in NavigationAgentProfile2D profile, NavigationAreaPolicyKey areaPolicy, NavigationWorkBudget budget,
         out Vector2d center, (string MapId, NavigationPlanarBinding Plane, string CurrentMapId)? controller = null,
-        (Vector2d Start, Vector2d End)? motion = null)
+        (Vector2d Start, Vector2d End)? motion = null,
+        (Vector2d Origin, Vector2d Current, Vector2d Anchor, Vector2d? RoundedTarget)? connector = null)
     {
         EnsureUsable();
         center = default;
@@ -61,7 +68,7 @@ public sealed partial class TrailblazerPathingService
             var epoch = (world.SpawnToken, world.Version, world.ChangeSequence);
             using var lease = TryAcquireNavigationGraph();
             if (lease == null)
-                return NavigationGuideStatus.CapacityExceeded;
+                return connector.HasValue ? NavigationGuideStatus.Pending : NavigationGuideStatus.CapacityExceeded;
             var graph = lease.Graph;
             if (!NavigationPlanarWork.TryGetMap(graph, address.MapId, out var map, out var binding, NavigationMode2D.SideView))
                 return NavigationGuideStatus.NoMap;
@@ -92,7 +99,10 @@ public sealed partial class TrailblazerPathingService
                 var point = new Vector3d(minimum.X, binding.EmbeddingY, minimum.Z);
                 status = work.BindLayers(world, graph, map, binding, point, meter, out int layerCount);
                 if (status == NavigationGuideStatus.Success)
-                    status = destination is NavigationCellAddress target
+                    status = connector is { } join
+                        ? work.TraceSideViewConnector(world, graph, map, binding, address.Index, layerCount,
+                            join, profile, policy, meter)
+                        : destination is NavigationCellAddress target
                         ? work.ValidateSideViewLeg(world, graph, map, binding, address.Index, target, layerCount, profile, policy, meter)
                         : work.ResolveSideViewAnchor(world, graph, map, binding, address.Index, layerCount, profile, policy, meter, out center);
             }

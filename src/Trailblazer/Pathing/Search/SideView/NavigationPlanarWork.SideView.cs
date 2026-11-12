@@ -52,6 +52,34 @@ internal sealed partial class NavigationPlanarWork
             profile, policy, meter, out _, out _, out _, chargeEndpointCandidates: true);
     }
 
+    internal NavigationGuideStatus TraceSideViewConnector(GridWorld world, NavigationWorldGraph graph,
+        NavigationMapInstance map, NavigationPlanarBinding binding, VoxelIndex index, int layerCount,
+        (Vector2d Origin, Vector2d Current, Vector2d Anchor, Vector2d? RoundedTarget) connector,
+        in NavigationAgentProfile2D profile, NavigationAreaPolicy policy, NavigationWorkMeter meter)
+    {
+        if (!meter.TryConsumeEvaluatedEdges(1))
+            return NavigationGuideStatus.BudgetExceeded;
+        var status = ReadSupportAnchor(map, index, profile, policy, meter, NavigationGuideStatus.InvalidStart,
+            out var support, out var anchor);
+        if (status != NavigationGuideStatus.Success)
+            return status;
+        if (anchor != connector.Anchor)
+            return NavigationGuideStatus.Stale;
+        // Check the origin in the authored track's midpoint chart to keep the interval representable.
+        var span = support.Right - support.Left;
+        var midpointOffset = (SupportMidpoint(support) - support.Left).X;
+        if (!Vector2d.TrySubtract(connector.Origin, anchor, out var offset)
+            || offset.X < -midpointOffset || offset.X > span.X - midpointOffset
+            || Vector2d.OrientationSign(Vector2d.Zero, span, offset) != 0)
+            return NavigationGuideStatus.InvalidStart;
+
+        var pin = Pin(map, index);
+        status = TraceSideView(world, graph, binding, layerCount, pin, pin, connector.Current, anchor, profile, policy, meter);
+        if (status == NavigationGuideStatus.Success && connector.RoundedTarget is Vector2d target)
+            status = TraceSideView(world, graph, binding, layerCount, pin, pin, connector.Current, target, profile, policy, meter);
+        return status;
+    }
+
     internal NavigationGuideStatus TraceSideViewLeg(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance source, NavigationPlanarBinding binding, VoxelIndex sourceIndex,
         NavigationMapInstance target, VoxelIndex targetIndex, int layerCount, in NavigationAgentProfile2D profile,
@@ -165,7 +193,7 @@ internal sealed partial class NavigationPlanarWork
     {
         center = default;
         // Authoring checked the delta. A rounded midpoint must still lie on the finite support.
-        Vector2d witness = support.Left + (support.Right - support.Left) * Fixed64.Half;
+        Vector2d witness = SupportMidpoint(support);
         if (Vector2d.OrientationSign(support.Left, support.Right, witness) != 0)
             return invalid;
         // Round the center upward for an odd half-axis, then trace the original full axis.
@@ -178,4 +206,7 @@ internal sealed partial class NavigationPlanarWork
         center = new Vector2d(x, y);
         return NavigationGuideStatus.Success;
     }
+
+    private static Vector2d SupportMidpoint(in NavigationPlanarSupport support) =>
+        support.Left + (support.Right - support.Left) * Fixed64.Half;
 }

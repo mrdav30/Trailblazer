@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System.Diagnostics;
 using FixedMathSharp;
 using GridForge.Spatial;
 using Trailblazer.Navigation.Steering;
@@ -17,14 +16,15 @@ namespace Trailblazer.Navigation;
 public abstract partial class Navigator2D
 {
     private NavigationCellAddress _sideViewSource;
+    private Vector2d _sideViewConnectorStart;
     private VoxelIndex _sideViewPreparedSupport;
     private bool _sideViewStagePrepared;
     private bool _sideViewContinuesStage;
 
     /// <summary>Replaces guidance from the accepted canonical Solid support anchor to the destination.</summary>
     /// <remarks>
-    /// The accepted center must match the source anchor and have walkable host support.
-    /// Guides follow their exact stages, including step bends. Use the configured acquisition mode.
+    /// The accepted center must initially match the source anchor and have walkable host support.
+    /// A scheduled guide can return from a moved, grounded center on the source support before advancing.
     /// </remarks>
     public NavigationGuideStatus ApplySideViewGuidedTrekRequest(NavigationCellAddress source,
         NavigationCellAddress destination, NavigationAreaPolicyKey policy, PathAlgorithm algorithm, NavigationWorkBudget budget)
@@ -67,13 +67,13 @@ public abstract partial class Navigator2D
     {
         if (!request.TryTakeSideViewGuide(out var guide))
             return FailedScheduledTransfer(request);
-        if (Pose.Center != _queuedOrigin || !IsGrounded)
+        if (!IsGrounded)
         {
             guide.Dispose();
             return NavigationGuideStatus.InvalidStart;
         }
-        AdoptGuide(guide.RouteLease);
-        return NavigationGuideStatus.Success;
+        _sideViewConnectorStart = Pose.Center;
+        return AdoptScheduledPlanarGuide(guide.RouteLease);
     }
 
     private bool TryPrepareSideViewStage(NavigationGuideLease guide, out Vector2d center)
@@ -88,30 +88,42 @@ public abstract partial class Navigator2D
             ApplyGuideStatus(status);
             return false;
         }
-        Vector2d start = source.Position.ToVector2d();
+        Vector2d start = _requiresConnector ? _sideViewConnectorStart : source.Position.ToVector2d();
         Vector2d end = target.Position.ToVector2d();
         bool requiresSupport = !source.IsSideViewBend && (Pose.Center == start || !target.IsSideViewBend);
         bool exactOrigin = IsOnSegment(start, end, Pose.Center);
         if ((requiresSupport && !IsGrounded) || (!exactOrigin && !_sideViewContinuesStage))
             return RejectSideViewStage(NavigationGuideStatus.InvalidStart);
-        // The pose lies on a certified stage whose checked length fits the route's cost.
-        bool boundedTarget = TryGetStepTarget(end, out var bounded);
-        Debug.Assert(boundedTarget);
+        if (!TryGetStepTarget(end, out var bounded))
+            return RejectSideViewStage(NavigationGuideStatus.CostOverflow);
         if (bounded == Pose.Center && bounded != end)
         {
             GuidanceStatus = NavigationGuideStatus.Pending;
             return false;
         }
-        if (!exactOrigin || !IsOnSegment(Pose.Center, end, bounded))
+        bool rounded = !exactOrigin || !IsOnSegment(Pose.Center, end, bounded);
+        if (rounded && bounded != end)
+            bounded = RoundSideViewTarget(start, end);
+        if (_requiresConnector || rounded)
         {
-            if (bounded != end)
-                bounded = RoundSideViewTarget(start, end);
-            status = _context.Pathing.ValidateSideViewControllerMotion(source.Address, target.Address, _mapId, _binding,
-                CurrentMapId, Pose.Center, bounded, NavigationProfile, _policy, _budget);
+            if (_requiresConnector)
+                status = TryConsumeConnectorValidationTurn()
+                    ? _context.Pathing.ValidateSideViewControllerConnector(target.Address, _mapId, _binding, CurrentMapId,
+                        start, Pose.Center, end, IsOnSegment(Pose.Center, end, bounded) ? null : bounded,
+                        NavigationProfile, _policy, _budget)
+                    : NavigationGuideStatus.Pending;
+            else
+                status = _context.Pathing.ValidateSideViewControllerMotion(source.Address, target.Address, _mapId, _binding,
+                    CurrentMapId, Pose.Center, bounded, NavigationProfile, _policy, _budget);
+            if (status is not (NavigationGuideStatus.Success or NavigationGuideStatus.Pending))
+                return RejectSideViewStage(status);
             if (status == NavigationGuideStatus.Success)
                 status = guide.Status;
             if (status != NavigationGuideStatus.Success)
-                return RejectSideViewStage(status);
+            {
+                ApplyGuideStatus(status);
+                return false;
+            }
         }
 
         GuidanceStatus = NavigationGuideStatus.Success;
@@ -132,11 +144,11 @@ public abstract partial class Navigator2D
         {
             var current = guide.Status;
             if (current != NavigationGuideStatus.Success)
-            {
-                _sideViewContinuesStage = false;
                 ApplyGuideStatus(current);
-            }
-            else if (_sideViewStagePrepared)
+            if (current == NavigationGuideStatus.Stale)
+                return;
+            // Snapshot pressure can delay validation without invalidating an accepted clip.
+            if (_sideViewStagePrepared)
             {
                 _sideViewContinuesStage = IsOnSegment(previousCenter, requestedCenter, Pose.Center);
                 if (!_sideViewContinuesStage)
@@ -164,6 +176,7 @@ public abstract partial class Navigator2D
             ApplyGuideStatus(status);
             return;
         }
+        ReleaseConnectorValidation();
         if (arrived)
             FinishArrival();
     }

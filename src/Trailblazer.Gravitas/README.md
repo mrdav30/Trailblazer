@@ -1,8 +1,8 @@
 # Trailblazer.Gravitas
 
-An optional, engine-agnostic 3D kinematic adapter between Trailblazer and
-Gravitas. `GravitasNavigator3D` prepares a target pose, then commits the pose
-actually accepted by Gravitas. Neither core library depends on the other.
+An optional, engine-agnostic kinematic adapter between Trailblazer and
+Gravitas. `GravitasNavigator2D` and `GravitasNavigator3D` prepare target poses
+and commit the poses accepted by Gravitas.
 
 Use `Trailblazer.Gravitas` with standard LSF packages, or
 `Trailblazer.Gravitas.Lean` with the Lean family. Both target `netstandard2.1`
@@ -21,6 +21,7 @@ packages.
   executable examples of guided movement, wall clipping, and the fixed-frame
   loop.
 - [API reference](https://mrdav30.github.io/Trailblazer/api/Trailblazer.Navigation.GravitasNavigator3D.html).
+- [Planar setup and support](https://mrdav30.github.io/Trailblazer/guides/Gravitas.html#native-planar-bodies).
 
 The host owns the world, physics bodies, colliders, and stable actor order.
 Every fixed frame runs Trailblazer simulate, Gravitas simulate, all Navigator

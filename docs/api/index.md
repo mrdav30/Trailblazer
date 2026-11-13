@@ -66,13 +66,14 @@ description: API reference and behavioral guides for deterministic navigation an
 | --------------------------- | ---------------------------------------------------------------- |
 | `Trailblazer`               | Standard LSF dependencies with JSON and MemoryPack support       |
 | `Trailblazer.Lean`          | Lean LSF dependencies and JSON without the MemoryPack transport  |
-| `Trailblazer.Gravitas`      | Optional Gravitas-backed 3D Navigator with standard dependencies |
+| `Trailblazer.Gravitas`      | Optional Gravitas-backed 2D and 3D Navigators with standard dependencies |
 | `Trailblazer.Gravitas.Lean` | The same optional adapter with Lean dependencies                 |
 
 Use one package family throughout the complete LSF dependency graph.
 
 The optional adapter commits collision-accepted motion through an explicit host
 loop. [Gravitas integration guide](guides/Gravitas.md),
+<xref:Trailblazer.Navigation.GravitasNavigator2D> and
 <xref:Trailblazer.Navigation.GravitasNavigator3D>.
 
 ## Part of the LSF ecosystem

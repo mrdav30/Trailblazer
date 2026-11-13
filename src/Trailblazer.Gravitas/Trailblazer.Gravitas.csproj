@@ -14,12 +14,12 @@
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
-		<GravitasPackageVersion Condition="'$(GravitasPackageVersion)' == ''">1.1.0</GravitasPackageVersion>
+		<GravitasPackageVersion Condition="'$(GravitasPackageVersion)' == ''">2.0.0</GravitasPackageVersion>
 		<DisableTransitiveProjectReferences Condition="'$(UseLocalLsfStack)' == 'true'">true</DisableTransitiveProjectReferences>
 	</PropertyGroup>
 	<PropertyGroup>
 		<Authors>mrdav30</Authors>
-		<Description>Engine-agnostic Gravitas-backed 3D kinematic navigation for Trailblazer. Commits collision-accepted motion through an explicit deterministic prepare/resolve/commit host loop.</Description>
+		<Description>Engine-agnostic Gravitas-backed 2D and 3D kinematic navigation for Trailblazer. Commits collision-accepted motion through an explicit deterministic prepare/resolve/commit host loop.</Description>
 		<PackageTags>navigation;kinematic;gravitas;trailblazer;deterministic;lockstep;fixed-point</PackageTags>
 		<RepositoryUrl>https://github.com/mrdav30/Trailblazer</RepositoryUrl>
 		<PackageReadmeFile>README.md</PackageReadmeFile>

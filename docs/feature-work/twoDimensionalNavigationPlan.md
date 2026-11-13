@@ -5,19 +5,18 @@
 
 **Created:** 2026-09-03
 
-**Status (2026-11-12):** Phases 0 through 2 are complete in coordinated source
+**Status (2026-11-13):** Phases 0 through 2 are complete in coordinated source
 mode. Native top-down and side-view A* and Flow use the shared graph and
 scheduler. Side-view navigation verifies ordinary supported legs and
 host-executed ladder, jump, and drop actions. The controller supports atomic
 posture changes, opt-in extra jumps during ascent, and deterministic record
 restore. See the [Phase 2 evidence](#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence).
-Phase 3 starts with the optional native Gravitas2D adapter and real collision
-acceptance.
-Use `UseLocalLsfStack=true`
+Phase 3 has the optional native Gravitas2D adapter and initial real collision
+fixtures for both modes. See the [Phase 3 checklist](#phase-3-gravitas2d-integration-and-closeout)
+for the remaining scenarios and closeout gates. Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop pins GridForge
 `269da48`, which provides the exact planar coverage-neighbor query.
-The released-package lane needs GridForge with both navigation coverage
-APIs and Gravitas 1.1.0 for the adapter. Hard-budgeted
+The adapter's package reference uses Gravitas 2.0.0. Hard-budgeted
 physics queries remain a separate
 [2D/3D workstream](physicsQueryBudgetPlan.md).
 
@@ -456,7 +455,7 @@ require the existing matched performance controls.
 | 0 | Reviewed dimensional and API contract | Complete | Exact geometry, support, graph, lifecycle, file, and serialization decisions plus early native physics proof |
 | 1 | Native planar guidance and top-down movement | Complete | A*/Flow, planar clearance, accepted motion, and action boundaries verified |
 | 2 | Side-view traversal and profile changes | Complete | Host-executed authored actions, atomic posture, airborne continuation, and exact record replay verified |
-| 3 | Gravitas2D integration and closeout | Not started | Real planar collisions, behavioral examples, full matrix, and review |
+| 3 | Gravitas2D integration and closeout | In progress | Real planar collisions, behavioral examples, full matrix, and review |
 
 ## Phase 0 - Settle The 2D Contract
 
@@ -672,7 +671,7 @@ separately from a rejected replacement.
 | --- | --- |
 | Trailblazer core | `src/Trailblazer/Navigation/Navigator/Planar/Navigator2D.cs` and native motion/support values in the same area. Own input interpretation, motor state, frame guards, accepted pose and velocity, support policy, carry, replacement coordination, and occupancy publication. |
 | Trailblazer pathing | `src/Trailblazer/Pathing/Query/NavigationAgentProfile2D.cs` owns geometry and traversal admission inputs. Existing graph/search owners supply dimensional clearance, leases, and scheduling. Existing `NavigationCommittedCellState` carries the committed cell without a pose conversion. |
-| Optional adapter | `src/Trailblazer.Gravitas/GravitasNavigator2D.cs` binds a host-owned kinematic `SolidBody2D` in the same GridWorld. It validates the centered circle or upright capsule, submits X/Z targets, and reads the accepted pose. In side-view it translates `QuerySupport` at the lower cap. An expired hit or a witness that `Physics2DHit.TryGetPoint` cannot materialize becomes `Unavailable`. It calls `TryReconfigureCollider` for physical fit. |
+| Optional adapter | `src/Trailblazer.Gravitas/Planar/GravitasNavigator2D.cs` binds a host-owned kinematic `SolidBody2D` in the same GridWorld. It validates the centered circle or upright capsule, submits X/Z targets, and reads the accepted pose. In side-view it translates `QuerySupport` at the lower cap. An expired hit or a witness that `Physics2DHit.TryGetPoint` cannot materialize becomes `Unavailable`. It calls `TryReconfigureCollider` for physical fit. |
 | Host and Gravitas | Host owns ordered input, time advancement, body and map setup, carrier identity, and semantic action execution. Gravitas owns colliders, filtering, physical witnesses, resolution, and accepted body pose. |
 | Existing test projects | `tests/Trailblazer.Tests/Navigation/Navigator/Planar/` covers accepted motion, stale and repeated frame calls, support/motor policy, and occupancy. `tests/Trailblazer.Gravitas.Tests/` covers the shared resolve barrier, native shape/support, carry, and posture with real bodies. |
 
@@ -991,7 +990,7 @@ in the existing test projects.
 
 ## Phase 3 - Gravitas2D Integration And Closeout
 
-- [ ] **Extend the optional adapter with native planar ownership.** Consume
+- [x] **Extend the optional adapter with native planar ownership.** Consume
   `SolidBody2D` accepted position, scalar rotation, and support data. Preserve
   host world Y, use exact X/Z conversion, and prepare/resolve/commit once per
   frame for all actors. Reuse the 3D adapter's ordering contract, not its vector
@@ -1000,6 +999,10 @@ in the existing test projects.
   corner, narrow portal and group; then a side-view slope, ceiling, ledge, ladder,
   translating and rotating supports, and posture change. Verify physics/Navigator pose agreement,
   guide cells, collision settings, and appropriate native 2D collider shapes.
+  - [x] Top-down wall and two actors through one shared resolve.
+  - [x] Side-view floor, translating support, and ceiling-blocked posture.
+  - [ ] Top-down corner, narrow portal, and guided group.
+  - [ ] Side-view slope, ledge, ladder, and rotating support.
 - [ ] **Verify headless movement quality and frame failures.** Assert bounded
   arrival, retreat/tangent movement, no action-entry oscillation, stable support
   and platform carry, and prepared-frame reset/load/abort behavior. Record exact
@@ -3650,3 +3653,45 @@ Local captures are under `artifacts/phase2-hardening`. The hosted Trailblazer
 develop pin needs an immutable GridForge revision containing the new query.
 The shared request-level arrival contract is tracked in
 [TRB-Issue-160](issue-tracker.md#trb-issue-160---arrival-radius-belongs-to-the-request).
+
+### 2026-11-13 - Phase 3 native Gravitas adapter and initial collision fixtures
+
+- Added `GravitasNavigator2D` to the optional adapter after Trailblazer
+  `683c547`. The adapter submits X/Z targets for a host-owned kinematic body
+  and reads the native accepted pose. The physics transform is unparented
+  with unit X/Z scale so native motion and posture writes preserve world Y
+  exactly. The host advances both clocks at matching rates, prepares all
+  actors, and commits after the single successful Gravitas late step. The
+  adapter checks the prepared physics frame, elapsed time, fixed step, and
+  collision-distribution version. The version proves one distribution pass.
+  The host still owns successful completion and checkpoint recovery.
+- The 16 Hz top-down wall fixture requests X = 4 from X = -4 with a circle
+  radius of 0.5 and a wall one unit wide. CCD accepts X = -1. The navigator
+  publishes velocity (48, 0), the accepted cell, and unchanged host Y = 7.
+  Two actors prepare before the same resolve. Commit rejects missing,
+  repeated, and stale physics passes. Circle replacement preserves pose and
+  collider identity.
+- The side-view fixtures sample the floor from the accepted capsule's lower
+  cap, verify witness, normal and friction, and distinguish removed support
+  from an unavailable probe. One-unit bodyless carrier translation applies
+  once, and changing or removing the host identity suppresses stale carry.
+  A real ceiling rejects growth. Removing the ceiling allows the same
+  capsule registration to grow at the same nominal foot, with its original
+  material and host Y.
+- The optional adapter now references Gravitas and Gravitas.Lean 2.0.0.
+  Both package families restore with `UseLocalLsfStack=false`. Builds
+  stop in the existing GridForge 10.0.0 dependency with CS0117 for
+  `GridTracer.ArePlanarCoverageNeighborsOrCoincident` and CS1501 for the
+  15-argument `TraceNavigationBodyInto`. The hosted GridForge source pin
+  `269da48` provides both APIs.
+- Windows coordinated-source validation used Gravitas `eb785a69`. The
+  solution builds for both library targets. The core passed 3,780 tests
+  in Release and 3,667 in ReleaseLean. The adapter passed 101 and 97 tests,
+  respectively, with 287/287 lines, 58/58 branches, and 22/22 fully covered
+  methods in each configuration. Commands were `dotnet build Trailblazer.slnx
+  -c <configuration>`, `dotnet test Trailblazer.slnx -c <configuration>
+  --no-build`, and the adapter test project with its `coverlet.runsettings`
+  using `UseLocalLsfStack=true`. DocFX built with `--warningsAsErrors`.
+- Ubuntu source-mode adapter tests used the hosted Gravitas pin `13f73bdc`
+  and GridForge pin `269da48`. Both configurations matched the Windows
+  adapter test counts and exact line and branch coverage.

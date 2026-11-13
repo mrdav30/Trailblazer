@@ -107,8 +107,8 @@ Do not mix standard and Lean LSF packages in one dependency graph.
 
 ## Gravitas integration
 
-For collision-backed 3D movement, the optional `Trailblazer.Gravitas` and
-`Trailblazer.Gravitas.Lean` adapters connect Navigator to host-owned Gravitas
+For collision-backed 2D and 3D movement, the optional `Trailblazer.Gravitas` and
+`Trailblazer.Gravitas.Lean` adapters connect Navigators to host-owned Gravitas
 bodies without coupling the core libraries. See the
 [integration guide](https://mrdav30.github.io/Trailblazer/guides/Gravitas.html).
 For coordinated source development, see the

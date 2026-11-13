@@ -1,17 +1,17 @@
 # Gravitas integration
 
-`Trailblazer.Gravitas` connects Trailblazer's 3D Navigator to a host-owned
-Gravitas kinematic body. Trailblazer requests movement; Gravitas resolves
-collisions; the adapter commits only the accepted pose. The core packages remain
+`Trailblazer.Gravitas` connects Trailblazer's Navigators to host-owned
+Gravitas kinematic bodies. Trailblazer requests movement, Gravitas resolves
+collisions, and the adapter commits the accepted pose. The core packages remain
 independent.
 
 Use the standard adapter with standard LSF dependencies, or
 `Trailblazer.Gravitas.Lean` with an entirely Lean stack. Both expose
-`Trailblazer.Navigation.GravitasNavigator3D` and target `netstandard2.1` and
-`net10.0`. The Lean family omits the MemoryPack transport, not physics behavior.
+`GravitasNavigator2D` and `GravitasNavigator3D` in `Trailblazer.Navigation`
+and target `netstandard2.1` and `net10.0`. The Lean family omits MemoryPack
+and uses the same physics behavior.
 
-The adapter is engine-agnostic and works with 3D bodies. Repository builds and
-package validation are documented in the
+Repository builds and package validation are documented in the
 [adapter README](https://github.com/mrdav30/Trailblazer/blob/main/src/Trailblazer.Gravitas/README.md).
 
 ## Who owns what?
@@ -64,14 +64,15 @@ are not automatically certified character-controller shapes by this adapter.
 ```mermaid
 flowchart TD
     Commands["Host applies ordered commands"] --> Simulate["navigation.Simulate() and physics.Simulate()"]
-    Simulate --> Prepare["Every adapter runs Simulate() in actor order"]
+    Simulate --> Prepare["Prepare all actors in order"]
     Prepare --> Resolve["physics.LateSimulate() resolves all targets"]
     Resolve --> Commit["Every adapter runs CommitFrameMotion() in the same order"]
     Commit --> Complete["navigation.LateSimulate()"]
 ```
 
 Advance each context once and prepare every kinematic target before the single
-physics resolution. During commit, each adapter reads the accepted pose, samples
+physics resolution. For 3D actors, prepare by calling `Simulate()` on each
+adapter. During commit, each adapter reads the accepted pose, samples
 support, and finalizes navigation. Read committed cells and publish presentation
 snapshots after `navigation.LateSimulate()`.
 
@@ -80,17 +81,52 @@ displacement by delta time again. Do not first commit the requested pose and
 then overwrite it with a collision correction. The accepted position, rotation,
 velocity, and committed navigation cell must describe the same movement.
 
-Duplicate prepare, commit without prepare, duplicate commit, and commit after
-the Trailblazer frame advances or its clock resets throw before accepted motion
-changes. The adapter cannot detect a commit that occurs after prepare but before
-physics late resolution: correct host ordering is required. A failed/discarded
+For `GravitasNavigator3D`, duplicate prepare, commit without prepare, duplicate
+commit, and commit after the Trailblazer frame advances or its clock resets
+throw before accepted motion changes. The host must finish physics late
+resolution before calling commit. A failed/discarded
 physics frame invalidates that authoritative frame. Reset is not rollback;
 restore a complete host checkpoint or rebuild the affected simulation before
 continuing.
 
+## Native planar bodies
+
+Attach a `GravitasNavigator2D` to an active kinematic `SolidBody2D` in a
+`PhysicsRuntimeMode.TwoD` context. Give the physics transform no parent and
+unit X/Z scale. Publish a planar map matching the profile's mode and bind a
+centered `LSCircleCollider2D` for top-down or a centered upright
+`LSCapsuleCollider2D` for side-view. The capsule's full height is its axis
+length plus twice its radius. Configure continuous collision detection for
+kinematic motion that must clip at blockers.
+
+Planar `Vector2d.X` and `Vector2d.Y` map to world X and Z. Positive planar
+rotation turns from Right toward Forward. The adapter preserves the physics
+transform's world Y, while navigation uses the map's embedding Y for occupancy.
+Use the shared frame order above. In the prepare step, call
+`PrepareFrameMotion()` for guidance or supply a manual planar input. The
+planar adapter checks for one collision-distribution pass on the prepared
+physics frame. The host must wait
+for `physics.LateSimulate()` to return successfully before committing any actor.
+
+Side-view needs a positive `supportProbeDistance`. The probe starts at the
+accepted lower cap center and sweeps toward negative planar Y. Gravitas applies
+its physical collision filters and the supplied layer mask, which defaults to
+all layers. The result carries the actual surface point, normal, and material
+friction. Call `RefreshSupport()`
+between frames after construction, restore, or successful posture replacement.
+An optional carrier lookup supplies a positive host-stable ID and registration
+lifetime. Publish carrier poses before rider preparation so Trailblazer can
+apply the difference from the previously committed support pose exactly once.
+
+Between frames, `TryReplaceNavigationProfile(...)` checks navigation clearance
+and native collider fit in the same transaction. Side-view replacement preserves
+the nominal foot. The [wall and shared-step tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.AcceptedMotion.Tests.cs)
+and [support and posture tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.Support.Tests.cs)
+show the setup and calls for both modes.
+
 ## Contacts and moving platforms
 
-After resolution, the adapter sweeps a sphere downward from the accepted foot
+After resolution, the 3D adapter sweeps a sphere downward from the accepted foot
 plus the configured origin offset. It excludes the mover and uses the supplied
 support mask. The closest hit must have a positive-Y normal and a representable
 contact point; otherwise the Navigator reports airborne. This is a support
@@ -128,7 +164,7 @@ must not be reported complete just because the requested target was valid. See
 
 ## Change posture and restore state
 
-For runtime posture changes, call `TryReplaceNavigationProfile(...)` at a safe
+For 3D posture changes, call `TryReplaceNavigationProfile(...)` at a safe
 frame boundary. The adapter supports coordinated replacement only for
 unit-world-scale `LSCapsuleCollider` bodies with positive radius and height at
 least twice the radius. It preserves the foot anchor, checks navigation and

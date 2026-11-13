@@ -28,7 +28,6 @@ instead of burying it in notes.
     tracing. Pinned Gravitas source supplies native support queries and atomic
     2D posture replacement. The September contact and hex issues are resolved.
     Trailblazer now references GridForge 10.0.0 in both package families.
-    Released-package validation of the adapter awaits Gravitas 1.1.0.
     [Phase 0 evidence](twoDimensionalNavigationPlan.md#2026-11-09---phase-0-contract-closeout)
   - Phase 1 is complete. Native top-down A* and Flow share the graph,
     search kernels, and acquisition queue. The controller follows certified
@@ -40,10 +39,12 @@ instead of burying it in notes.
     [Hardening evidence](twoDimensionalNavigationPlan.md#2026-11-10---phase-1-hardening)
   - Phase 2 completes side-view support and guidance, host-executed authored
     traversal, atomic posture replacement, airborne motor continuation, and
-    deterministic record restore. Phase 3 covers the optional native Gravitas2D
-    adapter and real collision acceptance. Hard physics-query budgets remain a
+    deterministic record restore. Hard physics-query budgets remain a
     separate 2D/3D workstream.
     [Phase 2 evidence](twoDimensionalNavigationPlan.md#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence)
+  - Phase 3 has a native Gravitas adapter for both planar modes, with initial
+    wall, floor, carrier, and posture tests. The adapter references Gravitas 2.0.0.
+    [Phase 3 checklist](twoDimensionalNavigationPlan.md#phase-3-gravitas2d-integration-and-closeout)
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
@@ -240,8 +241,8 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Continue the 2D plan with Phase 3 native Gravitas2D integration and real
-   collision acceptance in both planar modes. Capture matched 3D controls
+1. Continue Phase 3 with the remaining real collision scenarios in both
+   planar modes. Capture matched 3D controls
    before changing shared runtime paths and validate against the pinned source
    stack.
 2. After every active feature-work plan is complete, release any changed

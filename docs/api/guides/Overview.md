@@ -174,7 +174,7 @@ entered after motion. A version-only graph refresh updates metadata without
 repeating a stable entry event.
 
 For Gravitas-backed physical movement, the optional `Trailblazer.Gravitas`
-package supplies `GravitasNavigator3D`. Both contexts share a host-owned world;
+package supplies `GravitasNavigator2D` and `GravitasNavigator3D`. Both contexts share a host-owned world.
 all Navigators prepare before one physics resolution, then all commit accepted
 motion. Neither core acquires a dependency on the other. See the
 [Gravitas integration guide](Gravitas.md) for the complete host contract.

@@ -16,8 +16,8 @@ side-view routes from canonical support anchors, including directed step
 waypoints. Both modes share frame validation and occupancy publication while
 the host owns physical motion.
 
-The optional `Trailblazer.Gravitas` assembly adds `GravitasNavigator3D` without
-coupling the core libraries. Read the
+The optional `Trailblazer.Gravitas` assembly adds `GravitasNavigator2D` and
+`GravitasNavigator3D`. Read the
 [Gravitas integration guide](../guides/Gravitas.md) for shared-world ownership,
 prepare/resolve/commit ordering, and supported shapes.
 

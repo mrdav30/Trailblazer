@@ -647,8 +647,7 @@ public class NavSteeringConnectorTests
         steering.LastAcquisitionStatus.Should().Be(exhaustTraceBudget
             ? NavigationGuideStatus.BudgetExceeded : NavigationGuideStatus.Stale);
         invalid.Should().Be(exhaustTraceBudget ? 1 : 0);
-        arrived.Should().Be(exhaustTraceBudget ? 1 : 0,
-            "terminal invalid paths retain the existing HandleInvalidPath/Arrive event contract");
+        arrived.Should().Be(0, "an invalid path cannot complete the destination");
         steering.ShouldMove.Should().Be(!exhaustTraceBudget);
         cache.ReservedPayloadBytes.Should().Be(0);
         cache.LeasedBytes.Should().Be(exhaustTraceBudget ? 0 : baseline);
@@ -863,8 +862,8 @@ public class NavSteeringConnectorTests
         populate.Should().Throw<System.ArgumentOutOfRangeException>();
         agent.TryReplaceNavigationProfile(query.Agent).Should().Be(NavigationProfileReplacementStatus.Unchanged);
         agent.AcceptPhysicalReplacement = false;
-        var profile = new NavigationAgentProfile(query.Agent.Shape, query.Agent.MaxStepUp,
-            query.Agent.MaxDropDown, Fixed64.Quarter, query.Agent.AllowedMedia, query.Agent.Capabilities);
+        var profile = new NavigationAgentProfile(query.Agent.Shape, query.Agent.MaxStepUp + Fixed64.MinIncrement,
+            query.Agent.MaxDropDown, query.Agent.AllowedMedia, query.Agent.Capabilities);
         agent.TryReplaceNavigationProfile(profile).Should().Be(NavigationProfileReplacementStatus.PhysicalFitRejected);
         cache.LeasedBytes.Should().Be(bytes);
         context.Guides.Scheduler.RetainedValidationInterestCount.Should().Be(1);
@@ -933,6 +932,41 @@ public class NavSteeringConnectorTests
         cache.LeasedBytes.Should().Be(0);
     }
 
+    [Fact]
+    public void AdoptedConnector_ShouldFinishAtTheExactAnchorOfASingleStepArrivalRegion()
+    {
+        using var context = Trailblazer.Tests.Pathing.Graph.NavigationAStarConnectorTests.CreateLine(
+            TraversalMedium.Solid, out var exact);
+        var query = new PathQuery(exact.Start, exact.End, exact.Agent, exact.AreaPolicy,
+            exact.Traversal, exact.Algorithm, exact.Budget, exact.AllowTransitions, arrivalRadius: Fixed64.One);
+        var steering = new NavSteering(context);
+        int arrived = 0;
+        steering.Events.OnArrive += () => arrived++;
+        try
+        {
+            // The region contains the original anchor and the moved foot. Adoption still requires
+            // returning to the original anchor before it can complete this one-step route.
+            AdoptConnector(context, query, query.Start.Position + Vector3d.Right * Fixed64.Quarter, steering);
+            var guide = GetTestGuide(steering)!.Value;
+            guide.StepCount.Should().Be(1);
+            guide.HasConnector.Should().BeTrue();
+            steering.IsAtDestination.Should().BeFalse();
+            arrived.Should().Be(0);
+
+            var reached = new MockSteerAgent(query.Start.Position) { NavigationProfile = query.Agent, Speed = (Fixed64)20 };
+            context.Simulate();
+            steering.GetHeading(reached, out _).Should().Be(Vector3d.Zero);
+            steering.IsAtDestination.Should().BeTrue();
+            arrived.Should().Be(1);
+            context.Guides.Scheduler.RetainedValidationInterestCount.Should().Be(0);
+            context.Pathing.NavigationAStarAdmissionGate.PayloadCache.LeasedBytes.Should().Be(0);
+        }
+        finally
+        {
+            steering.StopMove();
+        }
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -958,8 +992,8 @@ public class NavSteeringConnectorTests
             case 3: agent.Reset(); break;
             case 4: agent.ApplyGuidedTrekRequest(query.WithStartState(agent.FootPosition, TraversalMedium.Solid)); break;
             case 5:
-                var profile = new NavigationAgentProfile(query.Agent.Shape, query.Agent.MaxStepUp,
-                    query.Agent.MaxDropDown, Fixed64.Quarter, query.Agent.AllowedMedia, query.Agent.Capabilities);
+                var profile = new NavigationAgentProfile(query.Agent.Shape, query.Agent.MaxStepUp + Fixed64.MinIncrement,
+                    query.Agent.MaxDropDown, query.Agent.AllowedMedia, query.Agent.Capabilities);
                 agent.TryReplaceNavigationProfile(profile).Should().Be(NavigationProfileReplacementStatus.Applied);
                 break;
             case 6: JsonRecordSerializer.Populate(agent, JsonRecordSerializer.Serialize(agent)); break;

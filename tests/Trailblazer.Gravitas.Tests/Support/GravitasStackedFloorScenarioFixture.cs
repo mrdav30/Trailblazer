@@ -54,7 +54,6 @@ internal sealed class GravitasStackedFloorScenarioFixture
             new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Half),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.FromFraction(1, 16),
             TraversalMedia.Solid,
             TraversalCapability.None);
         ConfigureScenario(

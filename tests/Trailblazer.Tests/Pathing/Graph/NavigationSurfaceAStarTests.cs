@@ -39,7 +39,7 @@ public sealed class NavigationSurfaceAStarTests
             new[] { gas, gas, gas, gas });
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.None);
         PathQuery surface = fixture.CreateQuery(cells[0], cells[3], fixture.DefaultProfile);
         var query = new PathQuery(surface.Start, surface.End, profile, surface.AreaPolicy,
             new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas), PathAlgorithm.AStar,
@@ -88,7 +88,7 @@ public sealed class NavigationSurfaceAStarTests
             world, NavigationAStarExitTestHarness.RectangularLine(3), cells, "atomic-rescan", meanings);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(incoming ? Fixed64.Quarter : Fixed64.One + Fixed64.Half,
-                Fixed64.One, Fixed64.Zero), Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
+                Fixed64.One, Fixed64.Zero), Fixed64.Zero, Fixed64.Zero,
             TraversalMedia.Gas, TraversalCapability.None);
         fixture.Graph.TryGetNodeRef(new NavigationCellAddress(fixture.MapId, new VoxelIndex(1, 0, 1)),
             out NavigationNodeRef source).Should().BeTrue();
@@ -2466,7 +2466,6 @@ public sealed class NavigationSurfaceAStarTests
                 Fixed64.Zero),
             maxStepUp: Fixed64.Zero,
             maxDropDown: Fixed64.Zero,
-            arrivalRadius: Fixed64.Zero,
             allowedMedia: TraversalMedia.Solid,
             capabilities: TraversalCapability.None);
 
@@ -2522,7 +2521,6 @@ public sealed class NavigationSurfaceAStarTests
                 Fixed64.Zero),
             maxStepUp: Fixed64.Zero,
             maxDropDown: Fixed64.Zero,
-            arrivalRadius: Fixed64.Zero,
             allowedMedia: TraversalMedia.Solid,
             capabilities: TraversalCapability.None);
 
@@ -2583,7 +2581,6 @@ public sealed class NavigationSurfaceAStarTests
                 Fixed64.Zero),
             maxStepUp: Fixed64.Zero,
             maxDropDown: Fixed64.Zero,
-            arrivalRadius: Fixed64.Zero,
             allowedMedia: TraversalMedia.Solid,
             capabilities: TraversalCapability.None);
         portal.TryResolveProfile(
@@ -2889,7 +2886,6 @@ public sealed class NavigationSurfaceAStarTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             maxStepUp: (Fixed64)2,
             maxDropDown: (Fixed64)2,
-            arrivalRadius: Fixed64.Zero,
             allowedMedia: TraversalMedia.Solid,
             capabilities: TraversalCapability.None);
         PathQuery query = fixture.CreateQuery(profile);
@@ -4036,7 +4032,6 @@ public sealed class NavigationSurfaceAStarTests
         new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
         maxStepUp: Fixed64.Zero,
         maxDropDown: Fixed64.Zero,
-        arrivalRadius: Fixed64.Zero,
         allowedMedia: TraversalMedia.Solid,
         capabilities: TraversalCapability.None);
 
@@ -4412,7 +4407,6 @@ public sealed class NavigationSurfaceAStarTests
         using NavigationWorldGraphStore store = CreateStore(fixture.Graph);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,

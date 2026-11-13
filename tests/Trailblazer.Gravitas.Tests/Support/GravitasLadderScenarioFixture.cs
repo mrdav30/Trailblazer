@@ -46,7 +46,7 @@ internal sealed class GravitasLadderScenarioFixture : GravitasNavigatorScenarioF
         SimulateUntilApplied(new[] { operation });
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.FromFraction(1, 8), Fixed64.Quarter, Fixed64.FromFraction(1, 8)),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.FromFraction(1, 32),
+            Fixed64.Zero, Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Gas, TraversalCapability.Climb);
         ConfigureScenario(profile, new Vector3d(Fixed64.Zero, -Fixed64.Half, Fixed64.Zero),
             new Vector3d((Fixed64)3, Fixed64.FromFraction(3, 2), Fixed64.Zero), MapId, MapId,
@@ -66,7 +66,7 @@ internal sealed class GravitasLadderScenarioFixture : GravitasNavigatorScenarioF
         Profile, new NavigationAreaPolicyKey("gravitas-proof", 1),
         new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), algorithm,
         new NavigationWorkBudget(8192, 128, 1024, 8192, 1024, 1024, 1024, 128, 1024, 1024, 1024),
-        allowTransitions: true);
+        allowTransitions: true, arrivalRadius: ArrivalRadius);
 
     protected override void PrepareHostMotion(GravitasNavigatorActor actor)
     {

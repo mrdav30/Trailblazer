@@ -954,6 +954,7 @@ internal sealed partial class NavigationFlowFieldPayloadCache : IDisposable
                 && left.Medium == right.Medium
                 && left.IntegrationCost == right.IntegrationCost
                 && left.SelectedEdge.Equals(right.SelectedEdge)
+                && left.SelectedTargetIsGoal == right.SelectedTargetIsGoal
                 && left.TransitionInstructionOrdinal
                     == right.TransitionInstructionOrdinal
                 && NodeTransitionInstructionsAreEqual(

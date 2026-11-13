@@ -81,7 +81,6 @@ internal sealed class GravitasStairScenarioFixture : GravitasNavigatorScenarioFi
                 Fixed64.FromFraction(1, 8)),
             Fixed64.FromFraction(3, 4),
             Fixed64.FromFraction(3, 4),
-            Fixed64.FromFraction(1, 16),
             TraversalMedia.Solid,
             TraversalCapability.None);
         Vector3d startFoot = Anchor(bindings[0], default);

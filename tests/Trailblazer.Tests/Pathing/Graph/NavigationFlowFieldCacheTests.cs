@@ -1328,8 +1328,10 @@ public sealed class NavigationFlowFieldCacheTests
         first.Dispose();
     }
 
-    [Fact]
-    public void SameKeyNonPrefixPublication_ShouldFailWithoutMutatingTheCache()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SameKeyNonPrefixPublication_ShouldFailWithoutMutatingTheCache(bool changeGoalFlag)
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.One);
@@ -1346,9 +1348,10 @@ public sealed class NavigationFlowFieldCacheTests
         malformedNodes[0] = new NavigationFlowFieldNode(
             first.Address,
             first.Medium,
-            Fixed64.One,
+            changeGoalFlag ? first.IntegrationCost : Fixed64.One,
             first.SelectedEdge,
-            first.TransitionInstructionOrdinal);
+            first.TransitionInstructionOrdinal,
+            changeGoalFlag ? !first.SelectedTargetIsGoal : first.SelectedTargetIsGoal);
         var malformed = new NavigationFlowFieldPayload(
             fixture.Far.Key,
             malformedNodes,

@@ -48,28 +48,24 @@ public sealed class NavigationProfileContractsTests
             shape,
             Fixed64.Half,
             Fixed64.One,
-            Fixed64.Half,
             TraversalMedia.Solid | TraversalMedia.Liquid,
             TraversalCapability.Jump | TraversalCapability.Swim);
         var same = new NavigationAgentProfile(
             shape,
             Fixed64.Half,
             Fixed64.One,
-            Fixed64.Half,
             TraversalMedia.Solid | TraversalMedia.Liquid,
             TraversalCapability.Jump | TraversalCapability.Swim);
         var different = new NavigationAgentProfile(
             shape,
             Fixed64.Half,
             Fixed64.One,
-            Fixed64.Half,
             TraversalMedia.Solid | TraversalMedia.Liquid,
             TraversalCapability.Swim);
 
         first.Shape.Should().Be(shape);
         first.MaxStepUp.Should().Be(Fixed64.Half);
         first.MaxDropDown.Should().Be(Fixed64.One);
-        first.ArrivalRadius.Should().Be(Fixed64.Half);
         first.AllowedMedia.Should().Be(TraversalMedia.Solid | TraversalMedia.Liquid);
         first.Capabilities.Should().Be(TraversalCapability.Jump | TraversalCapability.Swim);
         first.Should().Be(same);
@@ -79,12 +75,11 @@ public sealed class NavigationProfileContractsTests
 
         NavigationAgentProfile[] fieldMutations =
         {
-            CreateProfile(new KinematicBodyShape(Fixed64.One, (Fixed64)2, Fixed64.One), Fixed64.Half, Fixed64.One, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
-            CreateProfile(shape, Fixed64.One, Fixed64.One, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
-            CreateProfile(shape, Fixed64.Half, (Fixed64)2, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
-            CreateProfile(shape, Fixed64.Half, Fixed64.One, Fixed64.One, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
-            CreateProfile(shape, Fixed64.Half, Fixed64.One, Fixed64.Half, TraversalMedia.Solid, TraversalCapability.Jump | TraversalCapability.Swim),
-            CreateProfile(shape, Fixed64.Half, Fixed64.One, Fixed64.Half, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Swim)
+            CreateProfile(new KinematicBodyShape(Fixed64.One, (Fixed64)2, Fixed64.One), Fixed64.Half, Fixed64.One, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.One, Fixed64.One, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.Half, (Fixed64)2, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.Half, Fixed64.One, TraversalMedia.Solid, TraversalCapability.Jump | TraversalCapability.Swim),
+            CreateProfile(shape, Fixed64.Half, Fixed64.One, TraversalMedia.Solid | TraversalMedia.Liquid, TraversalCapability.Swim)
         };
 
         foreach (NavigationAgentProfile mutation in fieldMutations)
@@ -99,14 +94,12 @@ public sealed class NavigationProfileContractsTests
         Action invalidShape = () => _ = CreateProfile(default);
         Action negativeStep = () => _ = CreateProfile(shape, maxStepUp: -Fixed64.One);
         Action negativeDrop = () => _ = CreateProfile(shape, maxDropDown: -Fixed64.One);
-        Action negativeArrival = () => _ = CreateProfile(shape, arrivalRadius: -Fixed64.One);
         Action unknownMedia = () => _ = CreateProfile(shape, allowedMedia: (TraversalMedia)(1 << 10));
         Action unknownCapability = () => _ = CreateProfile(shape, capabilities: (TraversalCapability)(1 << 5));
 
         invalidShape.Should().Throw<ArgumentException>();
         negativeStep.Should().Throw<ArgumentOutOfRangeException>();
         negativeDrop.Should().Throw<ArgumentOutOfRangeException>();
-        negativeArrival.Should().Throw<ArgumentOutOfRangeException>();
         unknownMedia.Should().Throw<ArgumentOutOfRangeException>();
         unknownCapability.Should().Throw<ArgumentOutOfRangeException>();
     }
@@ -115,8 +108,7 @@ public sealed class NavigationProfileContractsTests
         KinematicBodyShape shape,
         Fixed64 maxStepUp = default,
         Fixed64 maxDropDown = default,
-        Fixed64 arrivalRadius = default,
         TraversalMedia allowedMedia = TraversalMedia.Solid,
         TraversalCapability capabilities = TraversalCapability.None) =>
-        new(shape, maxStepUp, maxDropDown, arrivalRadius, allowedMedia, capabilities);
+        new(shape, maxStepUp, maxDropDown, allowedMedia, capabilities);
 }

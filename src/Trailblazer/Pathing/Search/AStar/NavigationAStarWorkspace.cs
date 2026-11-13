@@ -29,7 +29,8 @@ internal sealed class NavigationAStarWorkspace
         EndpointWorkspace = new NavigationEndpointWorkspace(
             mapCapacity,
             endpointPageCapacity,
-            componentCapacity);
+            componentCapacity,
+            nodeCapacity);
         NodeTable = new NavigationAStarNodeTable(nodeCapacity);
         HeapNodes = nodeCapacity == 0
             ? Array.Empty<NavigationMediumStateRef>()

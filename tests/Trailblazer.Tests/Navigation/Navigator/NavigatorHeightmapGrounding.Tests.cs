@@ -433,7 +433,6 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
                 rootToFootOffsetY ?? defaultProfile.Shape.RootToFootOffsetY),
             defaultProfile.MaxStepUp,
             defaultProfile.MaxDropDown,
-            defaultProfile.ArrivalRadius,
             defaultProfile.AllowedMedia,
             defaultProfile.Capabilities);
         var navigator = new HeightmapTestNavigator(TestWorld.Context);

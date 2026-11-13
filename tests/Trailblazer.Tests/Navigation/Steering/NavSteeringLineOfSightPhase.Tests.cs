@@ -547,7 +547,6 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
         new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
         maxStepUp: Fixed64.Zero,
         maxDropDown: Fixed64.Zero,
-        arrivalRadius: Fixed64.Zero,
         allowedMedia: TraversalMedia.Solid,
         capabilities: TraversalCapability.None);
 
@@ -712,7 +711,6 @@ public sealed partial class NavSteeringLineOfSightPhaseTests : IDisposable
         new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
         maxStepUp: Fixed64.Zero,
         maxDropDown: Fixed64.Zero,
-        arrivalRadius: Fixed64.Zero,
         allowedMedia: TraversalMedia.Solid,
         capabilities: TraversalCapability.None);
 

@@ -12,7 +12,7 @@ namespace Trailblazer.Tests.Navigation;
 public sealed partial class Navigator2DSupportTests
 {
     private static readonly NavigationAgentProfile2D Profile = new(NavigationMode2D.SideView, Fixed64.Quarter,
-        Fixed64.Half, Fixed64.Quarter, Fixed64.Half, Fixed64.Half, Fixed64.Zero,
+        Fixed64.Half, Fixed64.Quarter, Fixed64.Half, Fixed64.Half,
         TraversalMedia.Solid, TraversalCapability.Jump);
     private static readonly NavigationMotorSettings2D Settings = new((Fixed64)4, Fixed64.Zero, (Fixed64)16, (Fixed64)4);
     private static readonly NavigationSupport2D Ground = new(Vector2d.Zero, Vector2d.Forward, Fixed64.One);
@@ -56,7 +56,7 @@ public sealed partial class Navigator2DSupportTests
     {
         using var context = Scene();
         var profile = new NavigationAgentProfile2D(NavigationMode2D.SideView, Fixed64.Quarter, Fixed64.Zero,
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Half, Fixed64.Zero, TraversalMedia.Solid,
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Half, TraversalMedia.Solid,
             noCapability ? TraversalCapability.None : TraversalCapability.Jump);
         using var host = new Host(context, profile);
         host.Sample(Ground);

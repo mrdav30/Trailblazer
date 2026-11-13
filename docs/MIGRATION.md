@@ -2,6 +2,18 @@
 
 ## Upcoming release
 
+### Request-level arrival range
+
+Remove the arrival-radius constructor argument from navigation profiles. Pass
+`arrivalRadius` on each `PathQuery` or planar route, guide, or trek request
+that allows a reachable approach inside a positive range. Omit the argument
+or pass zero for exact arrival at the resolved endpoint.
+
+Re-record spatial Navigator schema 9 and standalone query or trek records
+from before this change. Spatial Navigator uses schema 10, spatial queries
+and sessions use schema 2, and the planar Navigator and its trek both use
+schema 2. Older records reject before population.
+
 ### Shared diagnostics extraction
 
 Shared logging and exception guards now come from the independent

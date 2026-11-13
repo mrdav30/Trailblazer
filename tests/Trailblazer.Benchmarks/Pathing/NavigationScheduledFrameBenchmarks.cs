@@ -55,7 +55,7 @@ public class NavigationScheduledFrameBenchmarks
         {
             // Distinct profile keys preserve geometry/cost, preventing burst cache hits.
             var profile = new NavigationAgentProfile(query.Agent.Shape,
-                query.Agent.MaxStepUp, query.Agent.MaxDropDown, Fixed64.FromRaw(i + 1),
+                query.Agent.MaxStepUp, query.Agent.MaxDropDown,
                 query.Agent.AllowedMedia, query.Agent.Capabilities);
             _queries[i] = query.WithAgentAndStartState(profile, query.Start.Position,
                 query.Traversal.StartMedium, query.Start.MapId);

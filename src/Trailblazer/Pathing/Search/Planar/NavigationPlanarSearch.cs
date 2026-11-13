@@ -81,13 +81,13 @@ internal partial class NavigationPlanarSearch
 
     private NavigationGuideStatus Resolve(NavigationMapInstance map, int mapOrdinal,
         NavigationCellAddress address, NavigationGuideStatus blocked,
-        out NavigationResolvedEndpoint endpoint)
+        out NavigationResolvedEndpoint endpoint, (Vector2d Center, Fixed64 Radius)? goalRegion = null)
     {
         endpoint = default;
         if (this is NavigationSideViewSearch sideView)
         {
             var supportStatus = _proof.ResolveSideViewAnchor(_world, Graph, map, _binding, address.Index,
-                _layerCount, sideView.Profile, _policy, _meter, out Vector2d anchor, blocked);
+                _layerCount, sideView.Profile, _policy, _meter, out Vector2d anchor, blocked, goalRegion);
             if (supportStatus != NavigationGuideStatus.Success)
                 return supportStatus;
             TryGetNode(map, mapOrdinal, address.Index, out var supportNode);
@@ -101,6 +101,8 @@ internal partial class NavigationPlanarSearch
             return blocked;
         map.Map.GridBinding.TryGetCellPrism(address.Index, out GridCellPrism prism);
         Vector2d center = prism.Center.ToVector2d();
+        if (!NavigationPlanarWork.IsInsideGoalRegion(center, goalRegion))
+            return blocked;
         NavigationGuideStatus status = Trace(map, address.Index, map, address.Index, center, center, blocked);
         if (status == NavigationGuideStatus.Success)
             endpoint = new NavigationResolvedEndpoint(node, address, _media, _request.Medium,

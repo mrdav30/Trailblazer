@@ -28,6 +28,8 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
     private readonly NavigationWorkMeter? _meter;
     private readonly NavigationResolvedPathQuery _query = new();
     private NavigationResolvedEndpoint _start;
+    private NavigationResolvedEndpoint[]? _goals;
+    private int _goalCount;
     private bool _startResolved;
     private NavigationSurfaceAStarWork? _aStarWork;
     private NavigationFlowFieldWork? _flowWork;
@@ -162,14 +164,25 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
             }
             else
             {
-                status = planar.ResolveEnd(out var end);
-                if (status == NavigationGuideStatus.Success)
-                    _query.BindPlanar(planar, _start, end, _policy!, meter, _epoch.Sequence);
+                if (_request.ArrivalRadius > Fixed64.Zero)
+                {
+                    _goals ??= (_aStar?.EndpointWorkspace ?? _flow!.EndpointWorkspace).Goals;
+                    status = planar.AdvanceGoalCandidates(_goals, ref _goalCount);
+                    if (status == NavigationGuideStatus.Success)
+                        _query.BindPlanar(planar, _start, _goals[0], _policy!, meter, _epoch.Sequence,
+                            new ArraySegment<NavigationResolvedEndpoint>(_goals, 0, _goalCount));
+                }
+                else
+                {
+                    status = planar.ResolveEnd(out var end);
+                    if (status == NavigationGuideStatus.Success)
+                        _query.BindPlanar(planar, _start, end, _policy!, meter, _epoch.Sequence);
+                }
             }
             NavigationAcquisitionSlice.ConsumeAtomicLookups(ref remaining.LookupRemaining, meter, lookups);
             remaining.EndpointCandidateRemaining -= meter.EndpointCandidates - candidates;
             status = ResolveSnapshotStatus(status);
-            if (status != NavigationGuideStatus.Success || AdmissionComplete)
+            if (AdmissionComplete || status is not (NavigationGuideStatus.Success or NavigationGuideStatus.Pending))
                 return status;
         }
         return NavigationGuideStatus.Pending;
@@ -207,7 +220,7 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
         while (remaining.NodeRemaining > 0)
         {
             ref NavigationFlowFieldSearchNode current = ref workspace.GetRecord(_flowPathSlot);
-            bool atDestination = current.Address.Equals(_query.End.Address);
+            bool atDestination = _goalCount == 0 ? current.Address.Equals(_query.End.Address) : !current.SelectedEdge.IsValid;
             if (!atDestination && remaining.LookupRemaining == 0)
                 return NavigationGuideStatus.Pending;
             remaining.NodeRemaining--;
@@ -257,8 +270,10 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
             }
             if (remaining.NodeRemaining == 0)
                 return NavigationGuideStatus.Pending;
-            if (!retention.TryReservePayload(NavigationPlanarGuidePayload.MeasureBytes(pointCount, _actionCount),
-                    out _payloadReservation))
+            long bytes = NavigationPlanarGuidePayload.MeasureBytes(pointCount, _actionCount);
+            if (_goalCount != 0)
+                bytes += NavigationPlanarRegionGuidePayload.GoalCenterBytes;
+            if (!retention.TryReservePayload(bytes, out _payloadReservation))
                 return NavigationGuideStatus.CapacityExceeded;
             _points = new NavigationAStarGuidePoint[pointCount];
             if (sideView != null)
@@ -304,8 +319,11 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
             if (!_flowCleared)
                 return NavigationGuideStatus.Pending;
         }
-        var payload = new NavigationPlanarGuidePayload(_points, _cost, _request.AreaPolicy, graph.GraphVersion,
-            _epoch, _instructions!);
+        var payload = _goalCount == 0
+            ? new NavigationPlanarGuidePayload(_points, _cost, _request.AreaPolicy, graph.GraphVersion,
+                _epoch, _instructions!)
+            : new NavigationPlanarRegionGuidePayload(_points, _cost, _request.AreaPolicy, graph.GraphVersion,
+                _epoch, _instructions!, _planar!.GoalCenter);
         return retention.PublishPlanarPayload(_store, payload, ref _payloadReservation, out pin);
     }
 
@@ -333,6 +351,8 @@ internal sealed partial class NavigationPlanarRouteWork : IDisposable
             _flow!.ResetSearch();
         _payloadReservation.Owner?.ReleasePayloadReservation(ref _payloadReservation);
         _query.Dispose();
+        if (_goalCount != 0)
+            Array.Clear(_goals!, 0, _goalCount);
         _graphLease?.Dispose();
         _lane.Owner?.Release(_lane);
     }

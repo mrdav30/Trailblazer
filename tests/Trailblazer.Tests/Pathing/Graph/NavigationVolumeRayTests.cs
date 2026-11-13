@@ -1092,7 +1092,6 @@ public sealed class NavigationVolumeRayTests
             Fixed64.Zero),
         Fixed64.Zero,
         Fixed64.Zero,
-        Fixed64.Zero,
         media,
         capabilities);
 

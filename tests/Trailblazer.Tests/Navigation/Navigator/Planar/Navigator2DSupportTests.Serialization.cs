@@ -24,7 +24,7 @@ public sealed partial class Navigator2DSupportTests
         using var targetContext = Scene(NavigationMode2D.TopDown);
         using var incompatibleContext = Scene();
         var profile = new NavigationAgentProfile2D(NavigationMode2D.TopDown, Fixed64.Quarter,
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
             TraversalMedia.Solid, TraversalCapability.None);
         var motor = new NavigationMotorSettings2D(Fixed64.One, Fixed64.Two, Fixed64.Zero, Fixed64.Zero);
         using var source = new Host(sourceContext, profile, motor);
@@ -161,8 +161,11 @@ public sealed partial class Navigator2DSupportTests
         ApplySideView(host).Should().Be(NavigationGuideStatus.Success);
         Step(context, host, default);
         object payload = SerializationUtility.SerializeRecord(host, memoryPack);
+        object priorSchema = SerializationUtility.SetPayloadValue(payload, memoryPack, 1, "SchemaVersion");
+        priorSchema = SerializationUtility.SetPayloadValue(priorSchema, memoryPack, Fixed64.Zero, "ArrivalRadius");
         object[] invalidRecords =
         [
+            priorSchema,
             SerializationUtility.SetPayloadValue(payload, memoryPack, 0, "SchemaVersion"),
             SerializationUtility.SetPayloadValue(payload, memoryPack, "Trailblazer.Navigator", "Kind"),
             SerializationUtility.SetPayloadValue(payload, memoryPack, 0, "Layer"),
@@ -171,6 +174,8 @@ public sealed partial class Navigator2DSupportTests
             SerializationUtility.SetPayloadValue(payload, memoryPack, (NavigationAcquisitionMode)127, "AcquisitionMode"),
             SerializationUtility.SetPayloadValue(payload, memoryPack, "missing", "AcceptedMap"),
             SerializationUtility.SetPayloadValue(payload, memoryPack, 0, "Trek", "SchemaVersion"),
+            SerializationUtility.SetPayloadValue(payload, memoryPack, 1, "Trek", "SchemaVersion"),
+            SerializationUtility.SetPayloadValue(payload, memoryPack, -Fixed64.One, "Trek", "ArrivalRadius"),
             SerializationUtility.SetPayloadValue(payload, memoryPack, -1, "Trek", "MaxLookupProbes"),
             SerializationUtility.SetPayloadValue(payload, memoryPack, 99L, "Trek", "PolicyRevision"),
             SerializationUtility.SetPayloadValue(payload, memoryPack, -2, "Trek", "MovementGroupId"),

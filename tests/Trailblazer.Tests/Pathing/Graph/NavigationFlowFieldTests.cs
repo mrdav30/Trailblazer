@@ -120,7 +120,6 @@ public sealed class NavigationFlowFieldTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
         var query = new PathQuery(
@@ -213,7 +212,6 @@ public sealed class NavigationFlowFieldTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             media,

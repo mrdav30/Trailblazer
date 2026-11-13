@@ -28,7 +28,8 @@ The fields are:
 | Field                   | Meaning                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------- |
 | `Start`, `End`          | World-space foot endpoints, optional map filters, and resolution policy       |
-| `Agent`                 | Body shape, step/drop limits, arrival radius, allowed media, and capabilities |
+| `Agent`                 | Body shape, step/drop limits, allowed media, and capabilities                 |
+| `ArrivalRadius`         | Optional inclusive range for a reachable approach to `End`                   |
 | `AreaPolicy`            | Exact published policy ID and revision                                        |
 | `Traversal.StartMedium` | Exact current Solid, Gas, or Liquid state                                     |
 | `Traversal.TargetMedia` | Nonempty requested target-medium mask                                         |
@@ -42,12 +43,32 @@ sentinel and is invalid query intent.
 
 ## Endpoints
 
+Pass `arrivalRadius` to `PathQuery` or to a planar route, guide, or trek
+request to approach an interaction target. Null and zero keep the usual exact
+arrival at the resolved endpoint. A positive radius lets A* and Flow choose a
+reachable, clearance-valid endpoint within that inclusive distance. The
+target center may be blocked. The request's destination map bounds endpoint
+selection when specified. Travel can use other compatible published maps.
+Hosts sampling spatial Flow guidance can check `NavigationFlowSample.IsGoalReached`
+for the accepted foot, including when it differs from the selected terminal anchor.
+Candidate discovery and route proof use the request's finite work budget.
+Negative radii are invalid.
+
+Spatial requests measure range from the requested foot position. Top-down
+requests measure from the destination cell center. Side-view requests use the
+canonical capsule anchor of an authored destination support, or the cell
+center when no support is authored. Planar distances use world X/Z.
+
 `NavigationEndpoint` supports:
 
 - `EndpointResolutionPolicy.Strict` for the requested point only;
 - `EndpointResolutionPolicy.NearestNavigable` with an explicit maximum
   resolution distance;
 - an optional stable map ID filter.
+
+For positive spatial arrival radii, the radius supplies the destination
+search bounds and the destination map filter still applies. The start
+continues to use its own resolution policy.
 
 Endpoint resolution evaluates physical presence, effective cell data, exact
 medium, body clearance, capabilities, area policy, and bounded ray evidence.
@@ -181,7 +202,6 @@ accepted motion through the stages from a canonical support anchor.
 
 - `KinematicBodyShape` radius, body height, and root-to-foot offset;
 - maximum surface step up and drop down;
-- arrival radius;
 - allowed media;
 - traversal capabilities such as Jump, Climb, Swim, Fly, and Teleport.
 

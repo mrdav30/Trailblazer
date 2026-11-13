@@ -16,7 +16,6 @@ public sealed partial class Navigator2DSupportTests
     [InlineData("height")]
     [InlineData("step")]
     [InlineData("drop")]
-    [InlineData("arrival")]
     [InlineData("media")]
     [InlineData("unknown-media")]
     [InlineData("capabilities")]
@@ -31,7 +30,6 @@ public sealed partial class Navigator2DSupportTests
             field == "step" ? -Fixed64.One : Fixed64.Zero,
             field == "drop" ? -Fixed64.One : Fixed64.Zero,
             field == "normal-low" ? Fixed64.Zero : field == "normal-high" ? Fixed64.Two : Fixed64.Half,
-            field == "arrival" ? -Fixed64.One : Fixed64.Zero,
             field == "media" ? TraversalMedia.None : field == "unknown-media" ? (TraversalMedia)128 : TraversalMedia.Solid,
             field == "capabilities" ? (TraversalCapability)128 : TraversalCapability.None);
         create.Should().Throw<ArgumentException>();
@@ -41,7 +39,7 @@ public sealed partial class Navigator2DSupportTests
     public void ProfileEqualityIncludesEveryGeometryAndPermissionField()
     {
         var same = new NavigationAgentProfile2D(Profile.Mode, Profile.Radius, Profile.AxisLength, Profile.MaxStepUp,
-            Profile.MaxDropDown, Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities);
+            Profile.MaxDropDown, Profile.MinimumSupportNormalDot, Profile.AllowedMedia, Profile.Capabilities);
         same.Equals(Profile).Should().BeTrue();
         same.Equals((object)Profile).Should().BeTrue();
         same.Equals(new object()).Should().BeFalse();
@@ -51,23 +49,21 @@ public sealed partial class Navigator2DSupportTests
         NavigationAgentProfile2D[] different =
         [
             new(NavigationMode2D.TopDown, Profile.Radius, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
-                Fixed64.Zero, Profile.AllowedMedia, Profile.Capabilities),
+                Profile.AllowedMedia, Profile.Capabilities),
             new(Profile.Mode, Fixed64.Half, Profile.AxisLength, Profile.MaxStepUp, Profile.MaxDropDown,
-                Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities),
+                Profile.MinimumSupportNormalDot, Profile.AllowedMedia, Profile.Capabilities),
             new(Profile.Mode, Profile.Radius, Fixed64.Zero, Profile.MaxStepUp, Profile.MaxDropDown,
-                Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities),
+                Profile.MinimumSupportNormalDot, Profile.AllowedMedia, Profile.Capabilities),
             new(Profile.Mode, Profile.Radius, Profile.AxisLength, Fixed64.Zero, Profile.MaxDropDown,
-                Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities),
+                Profile.MinimumSupportNormalDot, Profile.AllowedMedia, Profile.Capabilities),
             new(Profile.Mode, Profile.Radius, Profile.AxisLength, Profile.MaxStepUp, Fixed64.Zero,
-                Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities),
+                Profile.MinimumSupportNormalDot, Profile.AllowedMedia, Profile.Capabilities),
             new(Profile.Mode, Profile.Radius, Profile.AxisLength, Profile.MaxStepUp, Profile.MaxDropDown,
-                Fixed64.One, Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities),
+                Fixed64.One, Profile.AllowedMedia, Profile.Capabilities),
             new(Profile.Mode, Profile.Radius, Profile.AxisLength, Profile.MaxStepUp, Profile.MaxDropDown,
-                Profile.MinimumSupportNormalDot, Fixed64.One, Profile.AllowedMedia, Profile.Capabilities),
+                Profile.MinimumSupportNormalDot, TraversalMedia.Gas, Profile.Capabilities),
             new(Profile.Mode, Profile.Radius, Profile.AxisLength, Profile.MaxStepUp, Profile.MaxDropDown,
-                Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, TraversalMedia.Gas, Profile.Capabilities),
-            new(Profile.Mode, Profile.Radius, Profile.AxisLength, Profile.MaxStepUp, Profile.MaxDropDown,
-                Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, Profile.AllowedMedia, TraversalCapability.None)
+                Profile.MinimumSupportNormalDot, Profile.AllowedMedia, TraversalCapability.None)
         ];
         foreach (var profile in different)
         {
@@ -144,7 +140,7 @@ public sealed partial class Navigator2DSupportTests
     {
         using var context = Scene(NavigationMode2D.TopDown);
         var profile = new NavigationAgentProfile2D(NavigationMode2D.TopDown, Fixed64.Quarter, Fixed64.Zero,
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         using var host = new Host(context, profile, new NavigationMotorSettings2D((Fixed64)4, (Fixed64)4,
             Fixed64.Zero, Fixed64.Zero));
         context.Simulate();
@@ -201,7 +197,7 @@ public sealed partial class Navigator2DSupportTests
         Action create = () => new NavigationAgentProfile2D(NavigationMode2D.TopDown, Fixed64.One,
             field == 0 ? Fixed64.One : Fixed64.Zero, field == 1 ? Fixed64.One : Fixed64.Zero,
             field == 2 ? Fixed64.One : Fixed64.Zero, field == 3 ? Fixed64.One : Fixed64.Zero,
-            Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            TraversalMedia.Solid, TraversalCapability.None);
         create.Should().Throw<ArgumentException>();
     }
 

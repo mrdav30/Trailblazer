@@ -32,7 +32,8 @@ public abstract partial class Navigator2D
 
     private bool RefreshGroupTarget()
     {
-        if (_groupCoordinator == null
+        // A formation offset cannot replace the target that defines a requested arrival region.
+        if (_arrivalRadius.HasValue || _groupCoordinator == null
             || !_context.Pathing.TryGetTopDownCenter(_requestedGoal, _binding, out Vector2d destination))
             return false;
         MovementGroupTarget groupTarget = _groupCoordinator.UpdateTarget(_groupSession!,

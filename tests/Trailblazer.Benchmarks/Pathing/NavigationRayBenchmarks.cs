@@ -912,13 +912,11 @@ public class NavigationRayBenchmarks
         new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
         Fixed64.Zero,
         Fixed64.Zero,
-        Fixed64.Zero,
         TraversalMedia.Solid,
         TraversalCapability.None);
 
     private static NavigationAgentProfile ZeroRadiusProfile => new(
         new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-        Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.Zero,
         TraversalMedia.Solid,

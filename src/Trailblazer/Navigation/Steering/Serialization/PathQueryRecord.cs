@@ -15,7 +15,7 @@ namespace Trailblazer.Pathing;
 /// <summary>Records exact durable graph-query intent.</summary>
 public sealed class PathQueryRecord : IRecordable
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
 
     private int SchemaVersion;
 
@@ -34,6 +34,8 @@ public sealed class PathQueryRecord : IRecordable
     private EndpointResolutionPolicy EndResolution;
 
     private Fixed64 EndMaxResolutionDistance;
+
+    private Fixed64 ArrivalRadius;
 
     private NavigationAgentProfileRecord Agent = new();
 
@@ -77,6 +79,7 @@ public sealed class PathQueryRecord : IRecordable
         EndMapId = value.End.MapId;
         EndResolution = value.End.Resolution;
         EndMaxResolutionDistance = value.End.MaxResolutionDistance;
+        ArrivalRadius = value.ArrivalRadius.GetValueOrDefault();
         Agent.Capture(value.Agent);
         AreaPolicyId = value.AreaPolicy.PolicyId;
         AreaPolicyRevision = value.AreaPolicy.Revision;
@@ -123,7 +126,8 @@ public sealed class PathQueryRecord : IRecordable
                 AllowTransitions,
                 Algorithm == PathAlgorithm.FlowField
                     ? new FlowFieldQueryOptions(ExtraIntegrationCost)
-                    : default);
+                    : default,
+                ArrivalRadius);
             return true;
         }
         catch (ArgumentException)
@@ -155,6 +159,7 @@ public sealed class PathQueryRecord : IRecordable
         RecordValues.Look(chronicler, ref EndMapId, "EndMapId", null);
         RecordValues.Look(chronicler, ref EndResolution, "EndResolution", EndpointResolutionPolicy.Strict);
         RecordValues.Look(chronicler, ref EndMaxResolutionDistance, "EndMaxResolutionDistance", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref ArrivalRadius, "ArrivalRadius", Fixed64.Zero);
         RecordDeep.Look(chronicler, ref Agent, "Agent");
         RecordValues.Look(chronicler, ref AreaPolicyId, "AreaPolicyId", null);
         RecordValues.Look(chronicler, ref AreaPolicyRevision, "AreaPolicyRevision", 0L);

@@ -848,7 +848,6 @@ public sealed class NavigationEndpointResolutionTests
             new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             requestedMedia,
             TraversalCapability.None);
         var workspace = new NavigationAStarWorkspace(2, 4, 4, 2, 64, 32, 2);
@@ -1203,7 +1202,6 @@ public sealed class NavigationEndpointResolutionTests
         binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -1572,7 +1570,6 @@ public sealed class NavigationEndpointResolutionTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
         var workspace = new NavigationAStarWorkspace(2, 2, 4, 2, 8, 0, 2);
@@ -1705,7 +1702,6 @@ public sealed class NavigationEndpointResolutionTests
                 query.Agent.Shape,
                 query.Agent.MaxStepUp,
                 query.Agent.MaxDropDown,
-                query.Agent.ArrivalRadius,
                 (TraversalMedia)allowedMediaValue,
                 query.Agent.Capabilities),
             query.AreaPolicy,
@@ -1750,7 +1746,6 @@ public sealed class NavigationEndpointResolutionTests
         using NavigationWorldGraphStore store = CreateStore(graph);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas | TraversalMedia.Liquid,
@@ -1810,7 +1805,6 @@ public sealed class NavigationEndpointResolutionTests
         using NavigationWorldGraphStore store = CreateStore(graph);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -1877,7 +1871,6 @@ public sealed class NavigationEndpointResolutionTests
         using NavigationWorldGraphStore store = CreateStore(graph);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             media,
@@ -1950,7 +1943,6 @@ public sealed class NavigationEndpointResolutionTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
         var workspace = new NavigationRayWorkspace(
@@ -2017,7 +2009,6 @@ public sealed class NavigationEndpointResolutionTests
             .Should().BeTrue();
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -2117,7 +2108,6 @@ public sealed class NavigationEndpointResolutionTests
                 Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
         NavigationAreaPolicy policy = failureKind == 2
@@ -2182,7 +2172,6 @@ public sealed class NavigationEndpointResolutionTests
             new KinematicBodyShape(radius, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
         var workspace = new NavigationRayWorkspace(1, 2, 2, 64, 0);
@@ -2234,7 +2223,6 @@ public sealed class NavigationEndpointResolutionTests
             .Should().BeTrue();
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.MaxValue, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -2296,7 +2284,6 @@ public sealed class NavigationEndpointResolutionTests
             .Should().BeTrue();
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.One, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -2364,7 +2351,6 @@ public sealed class NavigationEndpointResolutionTests
             .Should().BeTrue();
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape((Fixed64)1.5, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -2454,7 +2440,6 @@ public sealed class NavigationEndpointResolutionTests
             .Should().BeTrue();
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape((Fixed64)0.75, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -2730,7 +2715,6 @@ public sealed class NavigationEndpointResolutionTests
         using NavigationWorldGraphStore store = CreateStore(graph);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -4052,7 +4036,6 @@ public sealed class NavigationEndpointResolutionTests
         new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
         maxStepUp: Fixed64.Zero,
         maxDropDown: Fixed64.Zero,
-        arrivalRadius: Fixed64.Zero,
         allowedMedia: TraversalMedia.Solid,
         capabilities: TraversalCapability.None);
 
@@ -4060,7 +4043,6 @@ public sealed class NavigationEndpointResolutionTests
         new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
         maxStepUp: Fixed64.Zero,
         maxDropDown: Fixed64.Zero,
-        arrivalRadius: Fixed64.Zero,
         allowedMedia: TraversalMedia.Solid,
         capabilities: TraversalCapability.None);
 

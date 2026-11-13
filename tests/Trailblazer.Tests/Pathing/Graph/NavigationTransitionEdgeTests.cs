@@ -525,7 +525,6 @@ public sealed class NavigationTransitionEdgeTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.MaxValue, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Gas,
             TraversalCapability.None);
         var evaluator = new NavigationTransitionEdgeEvaluator(
@@ -3679,7 +3678,6 @@ public sealed class NavigationTransitionEdgeTests
             radius == Fixed64.Zero ? Fixed64.Half : radius,
             Fixed64.One,
             Fixed64.Zero),
-        Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.Zero,
         media,

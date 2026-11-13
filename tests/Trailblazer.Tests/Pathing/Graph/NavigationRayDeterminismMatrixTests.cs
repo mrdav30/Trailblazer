@@ -496,7 +496,6 @@ public sealed class NavigationRayDeterminismMatrixTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
         query = CreateQuery(

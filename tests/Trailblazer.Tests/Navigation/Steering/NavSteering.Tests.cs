@@ -69,7 +69,7 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
-    public void GetHeading_ShouldArriveWhenCustomPathValidationRejectsTheRequest()
+    public void GetHeading_ShouldStopWhenCustomPathValidationRejectsTheRequest()
     {
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new SequencedPathValidationNavSteering(false);
@@ -80,7 +80,7 @@ public class NavSteeringTests : IDisposable
         heading.Should().Be(Vector3d.Zero);
         pending.Should().BeNull();
         steer.ShouldMove.Should().BeFalse();
-        steer.IsAtDestination.Should().BeTrue();
+        steer.IsAtDestination.Should().BeFalse();
         steer.CurrentQuery.Should().BeNull();
     }
 
@@ -844,7 +844,7 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
-    public void ArrivalRadius_ShouldAdvanceIntermediateStepsOnlyAfterAHeadingReversal()
+    public void ArrivalRadius_DoesNotAdvanceIntermediateSteps()
     {
         var steer = new TestableNavSteering
         {
@@ -859,25 +859,25 @@ public class NavSteeringTests : IDisposable
             new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
-            allowTransitions: false));
+            allowTransitions: false, arrivalRadius: Fixed64.Half));
 
         steer.ForceHeadingState(
             Vector3d.Right,
-            profile.ArrivalRadius,
+            Fixed64.Half,
             lastTargetDirection: Vector3d.Zero);
         steer.ShouldAdvanceToNextWaypoint().Should().BeFalse();
 
         steer.ForceHeadingState(
             Vector3d.Right,
-            profile.ArrivalRadius,
+            Fixed64.Half,
             lastTargetDirection: Vector3d.Forward);
         steer.ShouldAdvanceToNextWaypoint().Should().BeFalse();
 
         steer.ForceHeadingState(
             Vector3d.Right,
-            profile.ArrivalRadius,
+            Fixed64.Half,
             lastTargetDirection: Vector3d.Left);
-        steer.ShouldAdvanceToNextWaypoint().Should().BeTrue();
+        steer.ShouldAdvanceToNextWaypoint().Should().BeFalse();
     }
 
     [Fact]
@@ -1105,7 +1105,6 @@ public class NavSteeringTests : IDisposable
             new KinematicBodyShape(Fixed64.FromFraction(1, 8), Fixed64.One, Fixed64.Quarter),
             Fixed64.One,
             Fixed64.One,
-            Fixed64.Half,
             TraversalMedia.Solid | TraversalMedia.Gas,
             TraversalCapability.Climb);
         var agent = new MockSteerAgent(start + Vector3d.Up * profile.Shape.RootToFootOffsetY)
@@ -1153,7 +1152,7 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
-    public void GetHeading_ShouldArriveAfterBoundedStuckRecoveryIsExhausted()
+    public void GetHeading_ShouldStopWithoutArrivingAfterBoundedStuckRecoveryIsExhausted()
     {
         var agent = new MockSteerAgent(Vector3d.Zero)
         {
@@ -1176,15 +1175,15 @@ public class NavSteeringTests : IDisposable
         steer.ApplyPathQuery(query);
 
         int frameCount = 0;
-        while (!steer.IsAtDestination && frameCount++ < 64)
+        while (steer.ShouldMove && frameCount++ < 64)
             steer.GetHeading(agent, out _);
 
         frameCount.Should().BeLessThanOrEqualTo(64);
-        steer.IsAtDestination.Should().BeTrue();
+        steer.IsAtDestination.Should().BeFalse();
         steer.IsStuck.Should().BeTrue();
         steer.ShouldMove.Should().BeFalse();
         stuckEvents.Should().Be(1);
-        arrivalEvents.Should().Be(1);
+        arrivalEvents.Should().Be(0);
     }
 
     [Fact]

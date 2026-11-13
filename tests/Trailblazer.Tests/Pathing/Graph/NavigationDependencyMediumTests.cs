@@ -206,7 +206,6 @@ public sealed class NavigationDependencyMediumTests
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.Half, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Gas,
             TraversalCapability.None);
         return new PathQuery(

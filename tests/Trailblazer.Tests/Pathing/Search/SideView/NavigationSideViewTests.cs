@@ -194,7 +194,7 @@ public sealed partial class NavigationSideViewTests
     private static NavigationAgentProfile2D Profile(Fixed64 axis = default, Fixed64 up = default,
         Fixed64 down = default, Fixed64? normal = null, Fixed64? radius = null,
         TraversalCapability capabilities = TraversalCapability.None) => new(NavigationMode2D.SideView,
-            radius ?? Fixed64.Quarter, axis, up, down, normal ?? Fixed64.Half, Fixed64.Zero,
+            radius ?? Fixed64.Quarter, axis, up, down, normal ?? Fixed64.Half,
             TraversalMedia.Solid, capabilities);
 
     private static NavigationWorkBudget Budget(int lookups = 256, int candidates = 2, int edges = 1, int covered = 256) =>

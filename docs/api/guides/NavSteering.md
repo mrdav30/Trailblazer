@@ -133,8 +133,9 @@ own a second public pending-action queue. Navigator copies it into its sole
 
 Direct heading uses Trailblazer's internal graph navigation ray with the query's
 exact start medium, profile, policy, and work budget. It is skipped when
-reaching the target requires a medium change. A transition-required query
-therefore cannot bypass its action through a geometric line-of-sight shortcut.
+reaching the target requires a medium change or the request has a positive
+arrival radius. Those requests use a graph guide to preserve the required
+action or select a reachable approach.
 
 A direct check can stop once a complete, current obstruction proof rules out the
 route. It need not inspect the remaining segment after that proof, but a clear
@@ -155,8 +156,8 @@ public steering contract.
 
 `CanPathfind = false` disables graph-guide acquisition; it does not disable
 direct line-of-sight checks. Direct-only steering still applies the query's
-profile, policy, medium, budget, and current published graph. Periodic phasing
-is not a way to bypass that validation.
+profile, policy, medium, budget, and current published graph. It reports
+`Unsupported` for a positive arrival radius.
 
 ## Periodic Line-Of-Sight Rechecks
 

@@ -189,7 +189,6 @@ var profile = new NavigationAgentProfile(
         rootToFootOffsetY: Fixed64.Zero),
     maxStepUp: Fixed64.One,
     maxDropDown: Fixed64.One,
-    arrivalRadius: Fixed64.Quarter,
     allowedMedia: TraversalMedia.Solid,
     capabilities: TraversalCapability.None);
 

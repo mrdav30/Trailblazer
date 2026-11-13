@@ -26,7 +26,6 @@ public class MockSteerAgent : ISteer
             new KinematicBodyShape(value * Fixed64.Half, Fixed64.One, Fixed64.Quarter),
             Fixed64.One,
             Fixed64.One,
-            Fixed64.Half,
             TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid,
             TraversalCapability.Jump
                 | TraversalCapability.Climb

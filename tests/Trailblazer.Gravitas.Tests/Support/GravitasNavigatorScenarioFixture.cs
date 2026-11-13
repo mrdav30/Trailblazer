@@ -46,7 +46,6 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
             new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Half),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
         StartFoot = Vector3d.Zero;
@@ -146,6 +145,7 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
     internal GravitasWorldContext Gravitas { get; }
 
     internal NavigationAgentProfile Profile { get; private set; }
+    internal Fixed64 ArrivalRadius { get; private protected set; } = Fixed64.FromFraction(1, 16);
 
     internal Vector3d StartFoot { get; private set; }
 
@@ -212,7 +212,7 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
         new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
         algorithm,
         new NavigationWorkBudget(4096, 4096, 4096, 4096, 4096, 0, 0, 0, 0, 0, 0),
-        allowTransitions: false);
+        allowTransitions: false, arrivalRadius: ArrivalRadius);
 
     internal PathQuery CreateQueryForProfile(
         PathAlgorithm algorithm,

@@ -49,7 +49,7 @@ public sealed class GravitasNavigator3DRestoreLifecycleTests
         using GravitasNavigatorActor actor = fixture.CreateActor();
         var different = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.Half, Fixed64.Quarter),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         object incompatible;
         using (GravitasNavigatorActor other = fixture.CreateActor(profile: different))
             incompatible = GravitasRecordSnapshot.Save(other.Navigator, memoryPack);

@@ -19,6 +19,7 @@ internal sealed class NavigationDependencyStampWork
     private readonly GraphComponentDependency[] _components;
     private readonly GraphPageDependency[] _pages;
     private readonly bool _includeTransitionRules;
+    private readonly long _requiredGraphVersion;
     private int _componentOrdinal;
     private int _pageOrdinal;
 
@@ -29,7 +30,8 @@ internal sealed class NavigationDependencyStampWork
         int componentCount,
         GraphPageDependencyAddress[] pageAddresses,
         int pageCount,
-        bool includeTransitionRules = false)
+        bool includeTransitionRules = false,
+        bool requireGraphVersion = false)
     {
         ChronicleGuard.ThrowIfNull(graph, nameof(graph));
         ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
@@ -49,7 +51,8 @@ internal sealed class NavigationDependencyStampWork
         _pageAddresses = pageAddresses;
         _components = new GraphComponentDependency[componentCount];
         _pages = new GraphPageDependency[pageCount];
-        _includeTransitionRules = includeTransitionRules;
+        _includeTransitionRules = includeTransitionRules && !requireGraphVersion;
+        _requiredGraphVersion = requireGraphVersion ? graph.GraphVersion : -1;
         IsValid = true;
     }
 
@@ -106,7 +109,8 @@ internal sealed class NavigationDependencyStampWork
             _components,
             _pages,
             _includeTransitionRules,
-            _graph.TransitionRules.Version);
+            _graph.TransitionRules.Version,
+            _requiredGraphVersion);
         IsComplete = true;
         return true;
     }

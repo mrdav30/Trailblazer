@@ -28,7 +28,8 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         TraversalMedia targetMedia,
         NavigationWorkMeter meter,
         ulong worldChangeSequence,
-        bool requiresWorldStamp)
+        bool requiresWorldStamp,
+        ArraySegment<NavigationResolvedEndpoint> goals = default)
     {
         ChronicleGuard.ThrowIfNull(lease, nameof(lease));
         ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
@@ -43,6 +44,7 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         Meter = meter;
         WorldChangeSequence = worldChangeSequence;
         RequiresWorldStamp = requiresWorldStamp;
+        Goals = goals;
     }
 
     internal NavigationWorldGraph Graph => Planar?.Graph ?? _lease?.Graph
@@ -52,7 +54,8 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
 
     // The immediate route caller owns the snapshot through result extraction.
     internal void BindPlanar(NavigationPlanarSearch search, NavigationResolvedEndpoint start,
-        NavigationResolvedEndpoint end, NavigationAreaPolicy policy, NavigationWorkMeter meter, ulong sequence)
+        NavigationResolvedEndpoint end, NavigationAreaPolicy policy, NavigationWorkMeter meter, ulong sequence,
+        ArraySegment<NavigationResolvedEndpoint> goals = default)
     {
         Planar = search;
         Start = start;
@@ -63,6 +66,7 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
         Meter = meter;
         WorldChangeSequence = sequence;
         RequiresWorldStamp = true;
+        Goals = goals;
     }
 
     internal PathQuery Query { get; private set; }
@@ -70,6 +74,8 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
     internal NavigationResolvedEndpoint Start { get; private set; }
 
     internal NavigationResolvedEndpoint End { get; private set; }
+
+    internal ArraySegment<NavigationResolvedEndpoint> Goals { get; private set; }
 
     internal NavigationAreaPolicy AreaPolicy { get; private set; } = null!;
 
@@ -93,10 +99,13 @@ internal sealed class NavigationResolvedPathQuery : IDisposable
     public void Dispose()
     {
         ReleaseLease();
+        if (Planar == null)
+            Goals.AsSpan().Clear();
         Planar = null;
         Query = default;
         Start = default;
         End = default;
+        Goals = default;
         AreaPolicy = null!;
         StartMedium = default;
         TargetMedia = default;

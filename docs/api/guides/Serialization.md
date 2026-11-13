@@ -45,6 +45,8 @@ for namespace changes and typed payload-editor replacements.
 It round-trips:
 
 - exact start and end endpoints;
+- optional inclusive arrival radius, where a missing or zero value requests
+  exact arrival;
 - exact agent profile/body shape;
 - area-policy key/revision;
 - exact start medium and target-media mask;
@@ -59,8 +61,8 @@ unsupported record rejects rather than producing a default query.
 ## Navigator Path Session
 
 Navigator stores a different durable session shape. It preserves destination,
-map filters, endpoint policies, target media, area policy, algorithm, budget,
-Flow options, and transition permission. On load it rebuilds:
+arrival radius, map filters, endpoint policies, target media, area policy,
+algorithm, budget, Flow options, and transition permission. On load it rebuilds:
 
 - start position from the restored Navigator foot position;
 - start medium from the restored `TrekCondition.Medium`;
@@ -70,16 +72,18 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 9. The nested path-session and
-standalone `PathQueryRecord` schemas are version 1. Navigator records include
-the explicit world-space ground `SurfaceNormal`, controlled-descent state,
-periodic direct-LOS interval and nullable phase, durable acquisition policy, and
-active/buffered turn continuation.
+The outer Navigator record is schema version 10. The nested path-session and
+standalone `PathQueryRecord` schemas are version 2. These versions store
+the arrival radius with the query. Population rejects outer version 9 and
+earlier, and version 1 path-session and standalone query records. Navigator
+records include the explicit world-space ground `SurfaceNormal`,
+controlled-descent state, periodic direct-LOS interval and nullable phase,
+durable acquisition policy, and active/buffered turn continuation.
 
 Platform locomotion records the exact height-adjusted world attachment point
 when it was sampled against the current carrier pose. A recorded point must
-match the active carrier and the local attachment. Older version-9 records
-without this optional point use the local attachment until the next accepted
+match the active carrier and the local attachment. A current record that
+omits this optional point uses the local attachment until the next accepted
 sample establishes the exact point.
 
 `JumpLocomotion` has its own required version-1 schema. `JumpStartTime` is a
@@ -120,9 +124,9 @@ Navigator does not serialize or restore:
 - the context logical clock, clock lifetime, or a phased due marker;
 - `LastCommittedCell` or committed-cell notifications.
 
-With a configured phase or Scheduled acquisition mode, restore discards
-serialized direct-LOS trust and requires a fresh admission decision on the next
-eligible steering update, whether loading into the same context or a new one. It
+With a configured phase, Scheduled acquisition mode, or a positive arrival
+radius, restore discards serialized direct-LOS trust and requires fresh
+admission on the next eligible steering update in the same or a new context. It
 does not acquire a guide during population. With no phase, the established
 direct/countdown restore behavior remains unchanged in Immediate mode. Navigator
 population does not restore or advance the context clock.
@@ -183,7 +187,9 @@ Context-owned world data is separate.
 ## Planar Navigator Records
 
 `Navigator2D` uses the record kind `Trailblazer.Navigator2D` and schema version
-1. Create a shell
+2. The nested trek uses schema version 2 and records the optional arrival
+radius with the requested destination. Population rejects version 1 shell
+and trek records before changing the live shell. Create a shell
 with the matching identity, dimensional binding, current profile and motor
 settings. Publish the world and restore the host body's accepted pose before
 populating the controller. For a saved posture, initialize the body and shell
@@ -191,6 +197,8 @@ with that posture's envelope.
 
 The record preserves accepted planar pose and velocity, facing, motor
 continuation, group and acquisition settings, and durable destination intent.
+A ranged trek reacquires a reachable approach to its original requested
+destination after load. The selected route endpoint is transient.
 Turning follows the host's ordered per-frame facing inputs from the restored
 accepted angle. After a successful population, refresh side-view support before
 the first frame's commands. A fresh carrier sample at the recorded prior pose

@@ -25,21 +25,26 @@ public abstract partial class Navigator2D
     /// <remarks>
     /// The accepted center must initially match the source anchor and have walkable host support.
     /// A scheduled guide can return from a moved, grounded center on the source support before advancing.
+    /// A positive arrival radius allows reachable support anchors within the inclusive range on the
+    /// destination map. The accepted pose can complete the final proved leg within that range with walkable support.
     /// </remarks>
     public NavigationGuideStatus ApplySideViewGuidedTrekRequest(NavigationCellAddress source,
-        NavigationCellAddress destination, NavigationAreaPolicyKey policy, PathAlgorithm algorithm, NavigationWorkBudget budget) =>
-        ApplySideViewGuidedTrekRequest(source, destination, policy, algorithm, budget, allowTransitions: false);
+        NavigationCellAddress destination, NavigationAreaPolicyKey policy, PathAlgorithm algorithm, NavigationWorkBudget budget,
+        Fixed64? arrivalRadius = null) =>
+        ApplySideViewGuidedTrekRequest(source, destination, policy, algorithm, budget, allowTransitions: false,
+            arrivalRadius: arrivalRadius);
 
     /// <summary>Replaces side-view guidance with optional authored actions held for host execution.</summary>
+    /// <remarks>A positive arrival radius affects only the final destination.</remarks>
     public NavigationGuideStatus ApplySideViewGuidedTrekRequest(NavigationCellAddress source,
         NavigationCellAddress destination, NavigationAreaPolicyKey policy, PathAlgorithm algorithm, NavigationWorkBudget budget,
-        bool allowTransitions)
+        bool allowTransitions, Fixed64? arrivalRadius = null)
     {
         EnsureIdle();
         if (_binding.Mode != NavigationMode2D.SideView || _medium != TraversalMedium.Solid)
             return NavigationGuideStatus.InvalidProfile;
         policy.Validate(nameof(policy));
-        BeginTrek(destination, policy, algorithm, budget);
+        BeginTrek(destination, policy, algorithm, budget, arrivalRadius);
         _allowTransitions = allowTransitions;
         _sideViewSource = source;
         return StartAcquisition();
@@ -76,12 +81,12 @@ public abstract partial class Navigator2D
         {
             _queuedOrigin = center;
             status = _context.Guides.ScheduleSideViewGuide(_sideViewSource, _routeGoal, NavigationProfile, _policy,
-                _algorithm, _budget, out var request, _allowTransitions);
+                _algorithm, _budget, out var request, _allowTransitions, _arrivalRadius);
             _guideRequest = request;
             return status;
         }
         status = _context.Guides.RequestSideViewGuide(_sideViewSource, _routeGoal, NavigationProfile, _policy,
-            _algorithm, _budget, out var acquired, _allowTransitions);
+            _algorithm, _budget, out var acquired, _allowTransitions, _arrivalRadius);
         guide = acquired.RouteLease;
         return status;
     }
@@ -165,14 +170,26 @@ public abstract partial class Navigator2D
             _preparedDestinationMap = target.Address.MapId;
             _sideViewPreparedSupport = target.IsSideViewGroundedBend ? null : target.Address.Index;
         }
+        // Side-view bends are written before their canonical destination support.
+        if (_arrivalRadius.HasValue && guide.CurrentStepIndex == guide.StepCount - 1)
+            _preparedRegionalMap = target.Address.MapId;
         return true;
     }
 
     private void CommitSideViewStage(NavigationGuideLease guide, bool acceptedTarget,
-        Vector2d previousCenter, Vector2d requestedCenter)
+        Vector2d previousCenter, Vector2d requestedCenter, string? acceptedMapId, bool? acceptedRegionalSegment)
     {
         if (!_mayAdvance || !acceptedTarget)
         {
+            if (_sideViewStagePrepared && IsGrounded
+                && IsAcceptedRegionalArrival(guide, acceptedMapId, acceptedRegionalSegment))
+            {
+                var arrivalStatus = guide.TryAdvancePlanarStep();
+                ApplyGuideStatus(arrivalStatus);
+                if (arrivalStatus == NavigationGuideStatus.Success)
+                    FinishArrival();
+                return;
+            }
             var current = guide.Status;
             if (current != NavigationGuideStatus.Success)
                 ApplyGuideStatus(current);
@@ -181,7 +198,7 @@ public abstract partial class Navigator2D
             // Snapshot pressure can delay validation without invalidating an accepted clip.
             if (_sideViewStagePrepared)
             {
-                _sideViewContinuesStage = IsOnSegment(previousCenter, requestedCenter, Pose.Center);
+                _sideViewContinuesStage = acceptedRegionalSegment ?? IsOnSegment(previousCenter, requestedCenter, Pose.Center);
                 if (!_sideViewContinuesStage)
                     RejectSideViewStage(NavigationGuideStatus.InvalidStart);
             }

@@ -258,7 +258,6 @@ public class NavigationVolumeRoutingBenchmarks
                     definition.Shape,
                     Fixed64.Zero,
                     Fixed64.Zero,
-                    Fixed64.Zero,
                     TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid,
                     TraversalCapability.Jump
                         | TraversalCapability.Climb

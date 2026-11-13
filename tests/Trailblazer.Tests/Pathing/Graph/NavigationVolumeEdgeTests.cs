@@ -1610,7 +1610,6 @@ public sealed class NavigationVolumeEdgeTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.MaxValue, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
         var workspace = new NavigationRayWorkspace(1, 8, 8, 16, 0);
@@ -2061,7 +2060,6 @@ public sealed class NavigationVolumeEdgeTests
             radius == Fixed64.Zero ? Fixed64.Half : radius,
             height == Fixed64.Zero ? Fixed64.One : height,
             Fixed64.Zero),
-        Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.Zero,
         media,

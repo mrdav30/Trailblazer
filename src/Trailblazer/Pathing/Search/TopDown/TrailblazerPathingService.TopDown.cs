@@ -68,24 +68,27 @@ public sealed partial class TrailblazerPathingService
     /// The caller supplies a buffer for the route, including both endpoints. Success writes the ordered addresses and
     /// exact fixed-point cost. Other outcomes leave the buffer unchanged with zero count and cost. The result describes
     /// one graph snapshot. Both algorithms use ordinary swept-circle legs and charge forward destination entry costs.
+    /// A positive arrival radius allows reachable centers within the inclusive range of the destination center on its map.
     /// </remarks>
     public NavigationGuideStatus FindTopDownRoute(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
         NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
-        NavigationWorkBudget budget, Span<NavigationCellAddress> route, out int count, out Fixed64 cost)
+        NavigationWorkBudget budget, Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
+        Fixed64? arrivalRadius = null)
         => RunTopDownRoute(start, end, radius, areaPolicy, medium, capabilities, algorithm, budget, route,
-            out count, out cost, null, out _);
+            out count, out cost, null, out _, arrivalRadius: arrivalRadius);
 
     internal NavigationGuideStatus RunTopDownRoute(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
         NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
         NavigationWorkBudget budget, Span<NavigationCellAddress> route, out int count, out Fixed64 cost,
-        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide, bool allowTransitions = false)
+        NavigationAStarPayloadCache? retention, out NavigationTopDownGuideLease guide, bool allowTransitions = false,
+        Fixed64? arrivalRadius = null)
     {
         EnsureUsable();
         count = 0;
         cost = default;
         guide = default;
         var status = NavigationPlanarRouteRequest.TryCreate(start, end, radius, areaPolicy, medium, capabilities, algorithm,
-            budget, allowTransitions, out var request);
+            budget, allowTransitions, out var request, arrivalRadius);
         if (status != NavigationGuideStatus.Success)
             return status;
         status = FindPlanarRoute(request, algorithm, route, out count, out cost, retention, out var acquired);

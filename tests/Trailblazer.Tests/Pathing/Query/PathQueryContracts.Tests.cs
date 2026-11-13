@@ -143,6 +143,12 @@ public sealed class PathQueryContractsTests
         first.Should().NotBe(different);
         (first != different).Should().BeTrue();
         first.Equals((object)"not a path query").Should().BeFalse();
+        var zeroRadius = CreateQuery(arrivalRadius: Fixed64.Zero);
+        zeroRadius.Should().Be(first);
+        zeroRadius.GetHashCode().Should().Be(first.GetHashCode());
+        var ranged = CreateQuery(arrivalRadius: Fixed64.One);
+        ranged.Should().NotBe(first);
+        ranged.ArrivalRadius.Should().Be(Fixed64.One);
     }
 
     [Fact]
@@ -187,21 +193,25 @@ public sealed class PathQueryContractsTests
             PathAlgorithm.AStar,
             valid.Budget,
             allowTransitions: true);
+        Action negativeRadius = () => _ = CreateQuery(arrivalRadius: -Fixed64.MinIncrement);
 
         invalidAgent.Should().Throw<ArgumentException>();
         unknownAlgorithm.Should().Throw<ArgumentOutOfRangeException>();
         flowOptionsOnAStar.Should().Throw<ArgumentException>();
         targetOutsideAgent.Should().Throw<ArgumentException>();
+        negativeRadius.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("arrivalRadius");
     }
 
     [Theory]
-    [InlineData(false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
 #endif
-    public void PathQueryRecord_ShouldRoundTripExactIntent(bool useMemoryPack)
+    public void PathQueryRecord_ShouldRoundTripExactIntent(bool useMemoryPack, bool ranged)
     {
-        PathQuery query = CreateQuery();
+        PathQuery query = CreateQuery(arrivalRadius: ranged ? Fixed64.One : null);
         var source = new PathQueryRecord(query);
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
         var target = new PathQueryRecord();
@@ -209,6 +219,7 @@ public sealed class PathQueryContractsTests
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         target.Query.Should().Be(query);
+        target.Query!.Value.ArrivalRadius.Should().Be(query.ArrivalRadius);
     }
 
     [Theory]
@@ -226,7 +237,7 @@ public sealed class PathQueryContractsTests
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
         payload = removeSchema
             ? SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "SchemaVersion")
-            : SerializationUtility.SetPayloadValue(payload, useMemoryPack, 0, "SchemaVersion");
+            : SerializationUtility.SetPayloadValue(payload, useMemoryPack, 1, "SchemaVersion");
         PathQuery shellQuery = CreateQuery(allowTransitions: false);
         var target = new PathQueryRecord(shellQuery);
 
@@ -283,6 +294,7 @@ public sealed class PathQueryContractsTests
     [InlineData(false, 3)]
     [InlineData(false, 4)]
     [InlineData(false, 5)]
+    [InlineData(false, 6)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true, 0)]
     [InlineData(true, 1)]
@@ -290,6 +302,7 @@ public sealed class PathQueryContractsTests
     [InlineData(true, 3)]
     [InlineData(true, 4)]
     [InlineData(true, 5)]
+    [InlineData(true, 6)]
 #endif
     public void PathQueryRecord_ShouldRejectEachInvalidIntentDiscriminatorTransactionally(
         bool useMemoryPack,
@@ -311,6 +324,7 @@ public sealed class PathQueryContractsTests
                 -Fixed64.One,
                 "Agent",
                 "Radius"),
+            6 => SerializationUtility.SetPayloadValue(payload, useMemoryPack, -Fixed64.One, "ArrivalRadius"),
             _ => throw new InvalidOperationException()
         };
         PathQuery shellQuery = CreateQuery(allowTransitions: false);
@@ -322,14 +336,13 @@ public sealed class PathQueryContractsTests
         target.Query.Should().Be(shellQuery);
     }
 
-    private static PathQuery CreateQuery(bool allowTransitions = true)
+    private static PathQuery CreateQuery(bool allowTransitions = true, Fixed64? arrivalRadius = null)
     {
         KinematicBodyShape shape = new(Fixed64.Half, (Fixed64)2, Fixed64.One);
         NavigationAgentProfile agent = new(
             shape,
             Fixed64.Half,
             Fixed64.One,
-            Fixed64.Half,
             TraversalMedia.Solid | TraversalMedia.Liquid,
             TraversalCapability.Jump | TraversalCapability.Swim);
         NavigationWorkBudget budget = new(10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20);
@@ -345,6 +358,7 @@ public sealed class PathQueryContractsTests
             PathAlgorithm.FlowField,
             budget,
             allowTransitions,
-            new FlowFieldQueryOptions(Fixed64.Half));
+            new FlowFieldQueryOptions(Fixed64.Half),
+            arrivalRadius);
     }
 }

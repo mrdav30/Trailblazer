@@ -23,6 +23,7 @@ internal sealed class GravitasOffAxisCorridorScenarioFixture
         Fixed64 radius,
         Fixed64 arrivalRadius)
     {
+        ArrivalRadius = arrivalRadius;
         const string mapId = "gravitas-off-axis";
         VoxelIndex source = default;
         var middle = new VoxelIndex(1, 0, 0);
@@ -88,7 +89,6 @@ internal sealed class GravitasOffAxisCorridorScenarioFixture
             new KinematicBodyShape(radius, Fixed64.One, Fixed64.Half),
             Fixed64.Zero,
             Fixed64.Zero,
-            arrivalRadius,
             TraversalMedia.Solid,
             TraversalCapability.None);
         ConfigureScenario(

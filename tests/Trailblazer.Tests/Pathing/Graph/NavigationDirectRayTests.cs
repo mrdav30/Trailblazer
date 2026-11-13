@@ -723,7 +723,7 @@ public sealed partial class NavigationDirectRayTests
     {
         internal static readonly NavigationAgentProfile Profile = new(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
+            Fixed64.Zero, Fixed64.Zero,
             TraversalMedia.Solid, TraversalCapability.None);
         internal static readonly NavigationWorkBudget Budget = new(
             65536, 4096, 4096, 65536, 4096, 0, 0, 0, 256, 256, 0);

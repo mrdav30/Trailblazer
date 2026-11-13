@@ -17,7 +17,7 @@ namespace Trailblazer.Navigation;
 public abstract partial class Navigator2D : IRecordable
 {
     private const string RecordKind = "Trailblazer.Navigator2D";
-    private const int RecordSchemaVersion = 1;
+    private const int RecordSchemaVersion = 2;
 
     private (int Id, NavigationPose2D Pose, Vector2d Anchor)? _restoredCarrier;
     private bool _resumeSideView;
@@ -66,9 +66,9 @@ public abstract partial class Navigator2D : IRecordable
         Fixed64 embedding = _binding.EmbeddingY;
         TraversalMedium medium = _medium;
         var profile = NavigationProfile;
-        var (mode, radius, axis, step, drop, normal, arrival, media, capabilities) = (profile.Mode, profile.Radius,
+        var (mode, radius, axis, step, drop, normal, media, capabilities) = (profile.Mode, profile.Radius,
             profile.AxisLength, profile.MaxStepUp, profile.MaxDropDown, profile.MinimumSupportNormalDot,
-            profile.ArrivalRadius, profile.AllowedMedia, profile.Capabilities);
+            profile.AllowedMedia, profile.Capabilities);
         var settings = _motorSettings;
         var (speed, turn, gravity, jump, jumps) = (settings.MoveSpeed, settings.TurnRateRadians, settings.Gravity,
             settings.JumpSpeed, settings.MaxJumpCount);
@@ -85,7 +85,6 @@ public abstract partial class Navigator2D : IRecordable
         RecordValues.Look(chronicler, ref step, "MaxStepUp", Fixed64.Zero);
         RecordValues.Look(chronicler, ref drop, "MaxDropDown", Fixed64.Zero);
         RecordValues.Look(chronicler, ref normal, "MinimumSupportNormalDot", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref arrival, "ArrivalRadius", Fixed64.Zero);
         RecordValues.Look(chronicler, ref media, "AllowedMedia", TraversalMedia.None);
         RecordValues.Look(chronicler, ref capabilities, "Capabilities", TraversalCapability.None);
         RecordValues.Look(chronicler, ref speed, "MoveSpeed", Fixed64.Zero);
@@ -100,9 +99,9 @@ public abstract partial class Navigator2D : IRecordable
             message: "Serialized Navigator2D kind or schema is missing or unsupported.");
         ChronicleGuard.ThrowIfTrue(id != GlobalId | map != _mapId | layer != _binding.LayerIndex
             | embedding != _binding.EmbeddingY | medium != _medium
-            | !(mode, radius, axis, step, drop, normal, arrival, media, capabilities).Equals((profile.Mode, profile.Radius,
+            | !(mode, radius, axis, step, drop, normal, media, capabilities).Equals((profile.Mode, profile.Radius,
                 profile.AxisLength, profile.MaxStepUp, profile.MaxDropDown, profile.MinimumSupportNormalDot,
-                profile.ArrivalRadius, profile.AllowedMedia, profile.Capabilities))
+                profile.AllowedMedia, profile.Capabilities))
             | !(speed, turn, gravity, jump, jumps).Equals((settings.MoveSpeed, settings.TurnRateRadians, settings.Gravity,
                 settings.JumpSpeed, settings.MaxJumpCount)),
             message: "Serialized Navigator2D must exactly match the configured identity, domain, and tuning.");
@@ -134,6 +133,7 @@ public abstract partial class Navigator2D : IRecordable
             {
                 Source = _binding.Mode == NavigationMode2D.SideView ? _sideViewSource : default,
                 Destination = _requestedGoal,
+                ArrivalRadius = _arrivalRadius.GetValueOrDefault(),
                 Policy = _policy,
                 Budget = _budget,
                 Algorithm = _algorithm,
@@ -169,6 +169,7 @@ public abstract partial class Navigator2D : IRecordable
         {
             ChronicleGuard.ThrowIfTrue((trek.Algorithm != PathAlgorithm.AStar & trek.Algorithm != PathAlgorithm.FlowField)
                 | trek.MovementGroupId < -1 | ((sideView | trek.Arrived) & trek.MovementGroupId >= 0)
+                | trek.ArrivalRadius < Fixed64.Zero
                 | (sideView != (trek.Source.MapId != null)), message: "Serialized Navigator2D trek options are invalid.");
         }
     }
@@ -221,6 +222,7 @@ public abstract partial class Navigator2D : IRecordable
         {
             _hasIntent = true;
             _requestedGoal = _routeGoal = restored.Destination;
+            _arrivalRadius = restored.ArrivalRadius == Fixed64.Zero ? null : restored.ArrivalRadius;
             _sideViewSource = restored.Source;
             _policy = restored.Policy;
             _budget = restored.Budget;

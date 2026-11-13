@@ -65,7 +65,7 @@ public sealed class NavigationVolumeTransitionDeterminismMatrixTests
         "5B83DA6F84E08450168C637A4FBCEACED1FA367581D1AAB66EB565588F6E79E4")]
     [InlineData(
         "dynamic-publication",
-        "3A406EA2C889970BB83F77F165AFED46F968160E916BFEF454367D1E33ADDAB2")]
+        "B91273FE0D3D970AD0702CD4702B23672233A2DDBB048F3EC62BB8FF1B5136F2")]
     public void CanonicalCase_ShouldMatchCheckedInDigest(
         string caseName,
         string expectedDigest)
@@ -106,7 +106,7 @@ public sealed class NavigationVolumeTransitionDeterminismMatrixTests
                 "5B83DA6F84E08450168C637A4FBCEACED1FA367581D1AAB66EB565588F6E79E4");
             AssertDigest(
                 "dynamic-publication",
-                "3A406EA2C889970BB83F77F165AFED46F968160E916BFEF454367D1E33ADDAB2");
+                "B91273FE0D3D970AD0702CD4702B23672233A2DDBB048F3EC62BB8FF1B5136F2");
         }
         finally
         {
@@ -713,7 +713,6 @@ public sealed class NavigationVolumeTransitionDeterminismMatrixTests
                 duckQuery.Agent.Shape,
                 duckQuery.Agent.MaxStepUp,
                 duckQuery.Agent.MaxDropDown,
-                duckQuery.Agent.ArrivalRadius,
                 duckQuery.Agent.AllowedMedia,
                 TraversalCapability.Swim),
             duckQuery.AreaPolicy,
@@ -875,7 +874,6 @@ public sealed class NavigationVolumeTransitionDeterminismMatrixTests
                 Fixed64.One / (Fixed64)4,
                 Fixed64.One,
                 Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Gas | TraversalMedia.Liquid,

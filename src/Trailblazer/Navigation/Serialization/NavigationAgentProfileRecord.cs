@@ -31,8 +31,6 @@ internal sealed class NavigationAgentProfileRecord : IRecordable
 
     public Fixed64 MaxDropDown;
 
-    public Fixed64 ArrivalRadius;
-
     public TraversalMedia AllowedMedia;
 
     public TraversalCapability Capabilities;
@@ -44,7 +42,6 @@ internal sealed class NavigationAgentProfileRecord : IRecordable
         RootToFootOffsetY = profile.Shape.RootToFootOffsetY;
         MaxStepUp = profile.MaxStepUp;
         MaxDropDown = profile.MaxDropDown;
-        ArrivalRadius = profile.ArrivalRadius;
         AllowedMedia = profile.AllowedMedia;
         Capabilities = profile.Capabilities;
     }
@@ -58,7 +55,6 @@ internal sealed class NavigationAgentProfileRecord : IRecordable
                 new KinematicBodyShape(Radius, Height, RootToFootOffsetY),
                 MaxStepUp,
                 MaxDropDown,
-                ArrivalRadius,
                 AllowedMedia,
                 Capabilities);
             return true;
@@ -76,7 +72,6 @@ internal sealed class NavigationAgentProfileRecord : IRecordable
         RecordValues.Look(chronicler, ref RootToFootOffsetY, "RootToFootOffsetY", Fixed64.Zero);
         RecordValues.Look(chronicler, ref MaxStepUp, "MaxStepUp", Fixed64.Zero);
         RecordValues.Look(chronicler, ref MaxDropDown, "MaxDropDown", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref ArrivalRadius, "ArrivalRadius", Fixed64.Zero);
         RecordValues.Look(chronicler, ref AllowedMedia, "AllowedMedia", TraversalMedia.None);
         RecordValues.Look(chronicler, ref Capabilities, "Capabilities", TraversalCapability.None);
     }

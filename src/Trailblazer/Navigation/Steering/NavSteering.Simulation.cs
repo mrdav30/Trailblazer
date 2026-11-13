@@ -110,6 +110,13 @@ public partial class NavSteering
             if (!TryEnsureCurrentRequest(out Vector3d heading))
                 return heading;
 
+            if (_currentQuery!.Value.ArrivalRadius.HasValue && !CanPathfind)
+            {
+                LastAcquisitionStatus = NavigationGuideStatus.Unsupported;
+                HandleInvalidPath("Goal range requires graph pathfinding.");
+                return Vector3d.Zero;
+            }
+
             Vector3d pathPosition = vessel.Position
                 + Vector3d.Down * vessel.BodyShape.RootToFootOffsetY;
             UpdateMovementGroupState(vessel.Position, vessel.Radius);
@@ -133,7 +140,7 @@ public partial class NavSteering
             if (_currentQuery.HasValue && _shouldRequestPathThisFrame)
                 return FinalizeHeadingFrame();
 
-            if (ShouldArriveWithoutNavigationGuidance())
+            if (ShouldArriveWithoutNavigationGuidance(pathPosition))
             {
                 Arrive();
                 return Vector3d.Zero;
@@ -141,19 +148,12 @@ public partial class NavSteering
 
             if (!CheckStuckStatus(vessel.Position, vessel.Speed, vessel.StuckThresholdSpeed))
             {
-                TrailblazerLogger.DebugChannel.Info($"Stuck agent arriving!");
-                Arrive();
+                TrailblazerLogger.DebugChannel.Info($"Stuck agent stopping before arrival.");
+                StopMove();
                 return Vector3d.Zero;
             }
 
-            if (UpdateNavigationGuidanceProgress(
-                    vessel.Acceleration,
-                    vessel.Speed,
-                    isAStarTransitionApproach))
-            {
-                Arrive();
-                return Vector3d.Zero;
-            }
+            UpdateNavigationGuidanceProgress(vessel.Acceleration, vessel.Speed, isAStarTransitionApproach);
             return FinalizeHeadingFrame();
         }
         finally
@@ -290,7 +290,7 @@ public partial class NavSteering
 
     private bool TryHandleInitialGraphDirectTravel(PathQuery query, Vector3d origin)
     {
-        if ((query.Traversal.TargetMedia
+        if (query.ArrivalRadius.HasValue || (query.Traversal.TargetMedia
                 & NavigationCell.ToMedia(query.Traversal.StartMedium)) == 0)
         {
             _hasLineOfSightPath = false;
@@ -327,7 +327,10 @@ public partial class NavSteering
         pendingTransition = null;
         Vector3d targetDirection = Vector3d.Zero;
         if (HasLineOfSightPath)
+        {
             targetDirection = Destination - position;
+            TransitionApproachTarget = Destination;
+        }
         else if (_navigationFlowFieldLease is NavigationFlowFieldLease flowGuide)
         {
             NavigationFlowSample sample;
@@ -344,21 +347,19 @@ public partial class NavSteering
                 PreparePathRetry();
                 return Vector3d.Zero;
             }
-            if (status == NavigationGuideStatus.BudgetExceeded)
-                return Vector3d.Zero;
-            if (status == NavigationGuideStatus.LocalRecoveryRequired)
+            if (status != NavigationGuideStatus.Success)
                 return Vector3d.Zero;
             if (sample.HasTransition)
             {
                 pendingTransition = sample.Transition;
                 return Vector3d.Zero;
             }
-            if (sample.IsTransitionApproach)
+            if (sample.IsTransitionApproach || sample.IsGoalApproach)
             {
                 TransitionApproachTarget = sample.Target;
                 targetDirection = sample.Target - position;
             }
-            if (targetDirection == Vector3d.Zero)
+            if (sample.IsGoalReached)
             {
                 Arrive();
                 return Vector3d.Zero;
@@ -367,57 +368,44 @@ public partial class NavSteering
         else if (_navigationGuideLease != null)
         {
             NavigationGuideLease guide = _navigationGuideLease.Value;
-            NavigationGuideStatus status = guide.TryGetCurrentStep(position, out NavigationGuideStep step);
-            if (status != NavigationGuideStatus.Success)
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                DeferAStarHeading(status);
-                return Vector3d.Zero;
-            }
-
-            if (step.HasTransition)
-            {
-                TransitionApproachTarget = step.Position;
-                targetDirection = step.Position - position;
-                if (targetDirection == Vector3d.Zero)
-                {
-                    pendingTransition = step.Transition;
-                    return Vector3d.Zero;
-                }
-            }
-            else
-            {
-                targetDirection = step.Position - position;
-            }
-            if (targetDirection == Vector3d.Zero)
-            {
-                if (IsAtFinalWaypoint(guide))
-                {
-                    ReleaseNavigationGuidance();
-                    return Vector3d.Zero;
-                }
-
-                guide.TryAdvanceStep();
-                status = guide.TryGetCurrentStep(position, out step);
+                NavigationGuideStatus status = guide.TryGetCurrentStep(position, out NavigationGuideStep step);
                 if (status != NavigationGuideStatus.Success)
                 {
                     DeferAStarHeading(status);
                     return Vector3d.Zero;
                 }
 
+                targetDirection = step.Position - position;
                 if (step.HasTransition)
                 {
                     TransitionApproachTarget = step.Position;
-                    targetDirection = step.Position - position;
                     if (targetDirection == Vector3d.Zero)
                     {
                         pendingTransition = step.Transition;
                         return Vector3d.Zero;
                     }
+                    break;
                 }
-                else
+                bool reachedGoal = CanCompleteAStarGoal(guide, step, position, out status);
+                if (status != NavigationGuideStatus.Success)
                 {
-                    targetDirection = step.Position - position;
+                    DeferAStarHeading(status);
+                    return Vector3d.Zero;
                 }
+                if (reachedGoal)
+                {
+                    Arrive();
+                    return Vector3d.Zero;
+                }
+                if (IsAtFinalWaypoint(guide))
+                    TransitionApproachTarget = step.Position;
+
+                // The second read can supply a heading or action, but cannot advance another coincident step.
+                if (targetDirection != Vector3d.Zero || attempt == 1)
+                    break;
+                guide.TryAdvanceStep();
             }
         }
         if (targetDirection == Vector3d.Zero)
@@ -431,17 +419,10 @@ public partial class NavSteering
     }
 
     /// <summary>
-    /// Returns true if the agent passed a step within its arrival radius,
-    /// or entered the explicit ordinary-step tolerance.
+    /// Returns true when the agent enters the ordinary-step tolerance.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ShouldAdvanceToNextWaypoint()
-    {
-        Fixed64 arrivalRadius = _currentQuery?.Agent.ArrivalRadius ?? Fixed64.Zero;
-        return (_distanceToTarget <= arrivalRadius
-                    && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Zero)
-            || _distanceToTarget <= WaypointTolerance;
-    }
+    public bool ShouldAdvanceToNextWaypoint() => _distanceToTarget <= WaypointTolerance;
 
     /// <summary>
     /// Evaluates the agent's current movement direction and velocity, updating stuck and arrival state.
@@ -518,7 +499,7 @@ public partial class NavSteering
 
     private void RefreshLineOfSightState(Vector3d position)
     {
-        if (!IsPeriodicPathRecheckDue())
+        if (_currentQuery!.Value.ArrivalRadius.HasValue || !IsPeriodicPathRecheckDue())
             return;
 
         // The post-validation-hook heading gate established this session's query.
@@ -617,7 +598,7 @@ public partial class NavSteering
     {
         TrailblazerLogger.DebugChannel.Info($"{debugMessage}");
         Events.OnInvalidPath?.Invoke();
-        Arrive();
+        StopMove();
     }
 
     private void UpdateTargetDirection(
@@ -661,36 +642,20 @@ public partial class NavSteering
         return step.HasTransition;
     }
 
-    private bool ShouldArriveWithoutNavigationGuidance()
-    {
-        if (HasNavigationGuidance)
-            return false;
+    private bool ShouldArriveWithoutNavigationGuidance(Vector3d acceptedFoot) =>
+        HasLineOfSightPath && acceptedFoot == Destination;
 
-        Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.Magnitude);
-        bool reachedTarget = _distanceToTarget <= _currentQuery!.Value.Agent.ArrivalRadius;
-        bool noInput = moveAmount == Fixed64.Zero;
-        return reachedTarget || (!IsStuck && noInput);
-    }
-
-    private bool UpdateNavigationGuidanceProgress(
+    private void UpdateNavigationGuidanceProgress(
         Vector3d acceleration,
         Fixed64 speed,
         bool isAStarTransitionApproach)
     {
         if (TargetDirection == Vector3d.Zero)
-            return false;
+            return;
 
         if (!isAStarTransitionApproach && _navigationGuideLease is NavigationGuideLease currentGuide)
         {
-            if (IsAtFinalWaypoint(currentGuide))
-            {
-                if (_distanceToTarget <= _currentQuery!.Value.Agent.ArrivalRadius)
-                {
-                    ReleaseNavigationGuidance();
-                    return true;
-                }
-            }
-            else if (ShouldAdvanceToNextWaypoint())
+            if (!IsAtFinalWaypoint(currentGuide) && ShouldAdvanceToNextWaypoint())
             {
                 currentGuide.TryAdvanceStep();
             }
@@ -699,11 +664,28 @@ public partial class NavSteering
         if (HasNavigationGuidance)
             SetDeceleration(acceleration, speed);
 
-        return false;
     }
 
     private static bool IsAtFinalWaypoint(NavigationGuideLease guide) =>
         guide.CurrentStepIndex == guide.StepCount - 1;
+
+    private bool CanCompleteAStarGoal(NavigationGuideLease guide, in NavigationGuideStep step, Vector3d foot,
+        out NavigationGuideStatus status)
+    {
+        status = NavigationGuideStatus.Success;
+        PathQuery query = _currentQuery!.Value;
+        if (!IsAtFinalWaypoint(guide) || step.Medium != query.Traversal.StartMedium)
+            return false;
+        if (foot == step.Position)
+            return true;
+        if (guide.HasConnector || query.ArrivalRadius is not Fixed64 radius
+            || Vector3d.CompareDistanceSquared(foot, query.End.Position, Vector3d.Zero,
+                new Vector3d(radius, Fixed64.Zero, Fixed64.Zero)) > 0)
+            return false;
+        bool fits = ResolveContext().Guides.IsAStarGoalFootValid(query, step, foot);
+        status = guide.Status;
+        return fits;
+    }
 
     internal NavigationGuideStatus CompletePendingTransition(
         in NavigationTransitionInstruction instruction)

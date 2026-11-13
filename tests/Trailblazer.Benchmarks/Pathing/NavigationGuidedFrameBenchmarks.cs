@@ -105,7 +105,7 @@ public class NavigationGuidedFrameBenchmarks
         Vector3d destination = NavigationGraphBenchmarkScenario.GetFoot(binding, new VoxelIndex(98, 0, 50));
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Quarter, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         // Real ray capacity is essential: the wall, not budget exhaustion, must prevent direct travel.
         var budget = new NavigationWorkBudget(
             maxLookupProbes: 10_240_000, maxEndpointCandidates: 16,
@@ -505,7 +505,7 @@ public class NavigationGuidedFrameBenchmarks
 
         var replacementProfile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.FromFraction(1, 5), Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Quarter,
+            Fixed64.Zero, Fixed64.Zero,
             TraversalMedia.Solid, TraversalCapability.None);
         for (int i = 0; i < AgentCount; i++)
         {

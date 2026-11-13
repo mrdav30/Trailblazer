@@ -214,7 +214,6 @@ public sealed class NavigationAreaContractsTests
             shape,
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
 

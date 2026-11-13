@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using FixedMathSharp;
 using SwiftCollections.Utility;
 
 namespace Trailblazer.Pathing;
@@ -30,6 +31,7 @@ internal readonly struct NavigationFlowFieldPayloadKey :
         Budget = query.Budget;
         AllowTransitions = query.AllowTransitions;
         FlowField = query.FlowField;
+        _arrivalRadius = query.ArrivalRadius.GetValueOrDefault();
     }
 
     internal NavigationEndpoint Destination { get; }
@@ -44,6 +46,9 @@ internal readonly struct NavigationFlowFieldPayloadKey :
     internal TraversalMedium StartMedium => (TraversalMedium)_startMedium;
     internal TraversalMedia TargetMedia => (TraversalMedia)_targetMedia;
     internal FlowFieldQueryOptions FlowField { get; }
+    private readonly Fixed64 _arrivalRadius;
+    internal bool HasGoalRegion => _arrivalRadius > Fixed64.Zero;
+    internal Fixed64 ArrivalRadius => _arrivalRadius;
 
     public bool Equals(NavigationFlowFieldPayloadKey other) =>
         Destination == other.Destination
@@ -55,7 +60,8 @@ internal readonly struct NavigationFlowFieldPayloadKey :
         && Traversal == other.Traversal
         && Budget == other.Budget
         && AllowTransitions == other.AllowTransitions
-        && FlowField == other.FlowField;
+        && FlowField == other.FlowField
+        && _arrivalRadius == other._arrivalRadius;
 
     public override int GetHashCode()
     {
@@ -69,7 +75,8 @@ internal readonly struct NavigationFlowFieldPayloadKey :
         hash = SwiftHashTools.CombineHashCodes(hash, Traversal.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, Budget.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, AllowTransitions ? 1 : 0);
-        return SwiftHashTools.CombineHashCodes(hash, FlowField.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, FlowField.GetHashCode());
+        return SwiftHashTools.CombineHashCodes(hash, _arrivalRadius.GetHashCode());
     }
 
 }

@@ -1357,7 +1357,6 @@ public sealed class NavigatorProfileReplacementTests : IDisposable
             new KinematicBodyShape(radius, height, rootToFootOffset),
             maxStepUp: Fixed64.Half,
             maxDropDown: Fixed64.One,
-            arrivalRadius: Fixed64.Quarter,
             allowedMedia,
             capabilities);
     }

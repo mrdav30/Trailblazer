@@ -16,6 +16,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public readonly struct PathQuery : IEquatable<PathQuery>
 {
+    private readonly Fixed64 _arrivalRadius;
+
     /// <summary>Gets the requested start endpoint.</summary>
     public NavigationEndpoint Start { get; }
 
@@ -43,11 +45,14 @@ public readonly struct PathQuery : IEquatable<PathQuery>
     /// <summary>Gets the options used when <see cref="Algorithm"/> is <see cref="PathAlgorithm.FlowField"/>.</summary>
     public FlowFieldQueryOptions FlowField { get; }
 
+    /// <summary>Gets the inclusive distance from the destination to an admissible route endpoint. Null requests exact arrival.</summary>
+    public Fixed64? ArrivalRadius => _arrivalRadius > Fixed64.Zero ? _arrivalRadius : null;
+
     /// <summary>
     /// Creates complete immutable navigation query intent.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown when a nested value is invalid or incompatible with the algorithm.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the algorithm is unknown.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The algorithm is unknown or the arrival radius is negative.</exception>
     public PathQuery(
         NavigationEndpoint start,
         NavigationEndpoint end,
@@ -57,7 +62,8 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         PathAlgorithm algorithm,
         NavigationWorkBudget budget,
         bool allowTransitions,
-        FlowFieldQueryOptions flowField = default)
+        FlowFieldQueryOptions flowField = default,
+        Fixed64? arrivalRadius = null)
     {
         agent.Validate(nameof(agent));
         areaPolicy.Validate(nameof(areaPolicy));
@@ -75,6 +81,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
             (traversal.TargetMedia & ~agent.AllowedMedia) != 0,
             nameof(traversal),
             "Target media must be a subset of the agent's allowed media.");
+        ChronicleGuard.ThrowIfArgumentOutOfRange(arrivalRadius < Fixed64.Zero, actualValue: null, nameof(arrivalRadius));
 
         Start = start;
         End = end;
@@ -85,6 +92,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         Budget = budget;
         AllowTransitions = allowTransitions;
         FlowField = flowField;
+        _arrivalRadius = arrivalRadius.GetValueOrDefault();
     }
 
     internal PathQuery WithStartState(
@@ -102,7 +110,8 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         Algorithm,
         Budget,
         AllowTransitions,
-        FlowField);
+        FlowField,
+        ArrivalRadius);
 
     internal PathQuery WithAgentAndStartState(
         NavigationAgentProfile agent,
@@ -121,7 +130,8 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         Algorithm,
         Budget,
         AllowTransitions,
-        FlowField);
+        FlowField,
+        ArrivalRadius);
 
     /// <inheritdoc/>
     public bool Equals(PathQuery other) =>
@@ -133,7 +143,8 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         && Algorithm == other.Algorithm
         && Budget == other.Budget
         && AllowTransitions == other.AllowTransitions
-        && FlowField == other.FlowField;
+        && FlowField == other.FlowField
+        && _arrivalRadius == other._arrivalRadius;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is PathQuery other && Equals(other);
@@ -148,7 +159,8 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         hash = SwiftHashTools.CombineHashCodes(hash, (int)Algorithm);
         hash = SwiftHashTools.CombineHashCodes(hash, Budget.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, AllowTransitions ? 1 : 0);
-        return SwiftHashTools.CombineHashCodes(hash, FlowField.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, FlowField.GetHashCode());
+        return SwiftHashTools.CombineHashCodes(hash, _arrivalRadius.GetHashCode());
     }
 
     /// <summary>Returns whether two queries have exactly equal intent.</summary>

@@ -167,7 +167,7 @@ public partial class NavSteering
                 resetFormationOffset);
         }
 
-        _destination = target.Destination;
+        _destination = _currentQuery.GetValueOrDefault().ArrivalRadius.HasValue ? _requestedDestination : target.Destination;
         _movementGroupMode = target.TravelMode;
     }
 

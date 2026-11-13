@@ -14,8 +14,9 @@ internal readonly struct NavigationPlanarRouteRequest
 {
     internal NavigationPlanarRouteRequest(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
         NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities,
-        NavigationWorkBudget budget, bool allowTransitions = false)
+        NavigationWorkBudget budget, bool allowTransitions = false, Fixed64? arrivalRadius = null)
     {
+        ChronicleGuard.ThrowIfArgumentOutOfRange(arrivalRadius < Fixed64.Zero, actualValue: null, nameof(arrivalRadius));
         Start = start;
         End = end;
         Radius = radius;
@@ -24,6 +25,7 @@ internal readonly struct NavigationPlanarRouteRequest
         Capabilities = capabilities;
         Budget = budget;
         AllowTransitions = allowTransitions;
+        ArrivalRadius = arrivalRadius.GetValueOrDefault();
     }
 
     internal NavigationCellAddress Start { get; }
@@ -34,10 +36,12 @@ internal readonly struct NavigationPlanarRouteRequest
     internal TraversalCapability Capabilities { get; }
     internal NavigationWorkBudget Budget { get; }
     internal bool AllowTransitions { get; }
+    internal Fixed64 ArrivalRadius { get; }
 
     internal static NavigationGuideStatus TryCreate(NavigationCellAddress start, NavigationCellAddress end, Fixed64 radius,
         NavigationAreaPolicyKey areaPolicy, TraversalMedium medium, TraversalCapability capabilities, PathAlgorithm algorithm,
-        NavigationWorkBudget budget, bool allowTransitions, out NavigationPlanarRouteRequest request)
+        NavigationWorkBudget budget, bool allowTransitions, out NavigationPlanarRouteRequest request,
+        Fixed64? arrivalRadius = null)
     {
         areaPolicy.Validate(nameof(areaPolicy));
         request = default;
@@ -50,14 +54,15 @@ internal readonly struct NavigationPlanarRouteRequest
         if (algorithm != PathAlgorithm.AStar && algorithm != PathAlgorithm.FlowField)
             return NavigationGuideStatus.Unsupported;
         request = new NavigationPlanarRouteRequest(start, end, radius, areaPolicy, medium, capabilities, budget,
-            allowTransitions);
+            allowTransitions, arrivalRadius);
         return NavigationGuideStatus.Success;
     }
 
     internal bool Matches(in NavigationPlanarRouteRequest candidate, bool requireStart) =>
         (!requireStart || Start == candidate.Start) && End == candidate.End && Radius == candidate.Radius
         && AreaPolicy == candidate.AreaPolicy && Medium == candidate.Medium && Capabilities == candidate.Capabilities
-        && Budget == candidate.Budget && AllowTransitions == candidate.AllowTransitions;
+        && Budget == candidate.Budget && AllowTransitions == candidate.AllowTransitions
+        && ArrivalRadius == candidate.ArrivalRadius;
 
     internal long GetLogicalRetainedBytes(in NavigationAgentProfile2D sideViewProfile = default) =>
         PathQueryBatchItem.LogicalRetainedBytes

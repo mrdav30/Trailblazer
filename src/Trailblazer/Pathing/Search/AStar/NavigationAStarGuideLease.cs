@@ -95,6 +95,22 @@ internal sealed class NavigationAStarGuideLease
         }
     }
 
+    internal bool IsPlanarArrivalInRange(long generation, Vector2d accepted, string mapId, Fixed64 radius)
+    {
+        lock (_sync)
+        {
+            if (!IsGenerationActiveUnderLock(generation)
+                || _payloadLease!.Payload is not NavigationPlanarRegionGuidePayload region
+                || _currentWaypointOrdinal != region.GuidePoints.Length - 1)
+                return false;
+            var point = region.GuidePoints[_currentWaypointOrdinal];
+            // Authored actions occupy their source waypoint and always have a following destination.
+            Debug.Assert(!point.HasTransition);
+            return point.Address.MapId == mapId
+                && NavigationPlanarWork.IsInsideGoalRegion(accepted, (region.GoalCenter, radius));
+        }
+    }
+
     internal NavigationAStarQueryStatus TryAdvanceWaypoint(long generation)
     {
         long released = 0;

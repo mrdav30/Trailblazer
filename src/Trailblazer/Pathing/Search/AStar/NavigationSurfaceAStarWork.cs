@@ -24,7 +24,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         CopyRaw = 5,
         SortDependencies = 6,
         CaptureDependencies = 7,
-        BuildPayload = 8
+        BuildPayload = 8,
+        SeedGoals = 9
     }
 
     private NavigationResolvedPathQuery? _query;
@@ -48,6 +49,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
     private NavigationSurfaceAStarStatus _resultStatus;
     private Stage _stage;
     private int _pathWrite;
+    private int _goalSeedOrdinal;
     private int _reverseLeft;
     private int _reverseRight;
     private int _pathEdgeOrdinal;
@@ -97,6 +99,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             || query.StartMedium == TraversalMedium.Liquid;
         _resultStatus = NavigationSurfaceAStarStatus.Success;
         _useEuclideanHeuristic = query.Planar == null
+            && query.Goals.Count == 0
             && !query.Query.AllowTransitions
             && _graph.SurfaceComponents.TryGet(
                 query.Start.Address,
@@ -105,6 +108,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             && startComponent.AllSurfaceEdgesEuclideanCertified;
         _targetFootAnchor = query.End.FootAnchor;
         if (query.Planar == null
+            && query.Goals.Count == 0
             && !query.Query.AllowTransitions
             && !_graph.AreInSameSurfaceComponent(
                 query.Start.Address,
@@ -134,6 +138,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         start.Heuristic = GetHeuristic(startStateRef);
         start.EstimatedTotalCost = start.Heuristic;
         Push(startStateRef, startSlot);
+        if (query.Goals.Count > 0)
+            _stage = Stage.SeedGoals;
     }
 
     internal NavigationSurfaceAStarStatus Status { get; private set; }
@@ -164,6 +170,12 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
 
         while (Status == NavigationSurfaceAStarStatus.Pending)
         {
+            if (_stage == Stage.SeedGoals)
+            {
+                if (!TrySeedGoals(ref nodeRemaining))
+                    return Status;
+                _stage = Stage.Search;
+            }
             if (_stage == Stage.Search)
             {
                 if (!_hasCurrent)
@@ -192,7 +204,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     ref NavigationAStarNodeRecord current =
                         ref _workspace.NodeTable.GetRecord(currentSlot);
                     current.Closed = true;
-                    if (IsTarget(_current))
+                    if (current.IsGoal || IsTarget(_current))
                     {
                         _goal = _current;
                         _pathCursor = _current;
@@ -809,7 +821,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                 _workspace.EndpointComponentCount,
                 _workspace.EndpointPages,
                 _workspace.EndpointPageCount,
-                _workspace.EndpointWorkspace.Dependencies.HasTransitionDependency);
+                _workspace.EndpointWorkspace.Dependencies.HasTransitionDependency,
+                requireGraphVersion: _query.Goals.Count > 0);
             int lookupBefore = _meter.LookupProbes;
             complete = _dependencyStamp.Advance(_meter, lookupRemaining);
             lookupRemaining -= _meter.LookupProbes - lookupBefore;
@@ -919,8 +932,37 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
     }
 
     private bool IsTarget(NavigationMediumStateRef state) =>
-        state.Node.Equals(_query!.End.Node)
+        _query!.Goals.Count == 0
+        && state.Node.Equals(_query.End.Node)
         && (_query.TargetMedia & NavigationCell.ToMedia(state.Medium)) != 0;
+
+    private bool TrySeedGoals(ref int nodeRemaining)
+    {
+        var goals = _query!.Goals;
+        while (_goalSeedOrdinal < goals.Count)
+        {
+            if (nodeRemaining == 0)
+                return false;
+            nodeRemaining--;
+            var goal = goals.Array![goals.Offset + _goalSeedOrdinal++];
+            for (TraversalMedium medium = TraversalMedium.Solid; medium <= TraversalMedium.Liquid; medium++)
+            {
+                if ((goal.Media & NavigationCell.ToMedia(medium)) == 0)
+                    continue;
+                var state = new NavigationMediumStateRef(goal.Node, medium);
+                if (!_workspace.NodeTable.TryGetOrAdd(state, out int slot, out bool added))
+                {
+                    Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
+                    return false;
+                }
+                ref var record = ref _workspace.NodeTable.GetRecord(slot);
+                record.IsGoal = true;
+                if (added)
+                    record.HeapIndex = -1;
+            }
+        }
+        return true;
+    }
 
     private Vector3d GetGuideAnchor(
         NavigationNodeState state,
@@ -968,7 +1010,8 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         Fixed64 sourceCost = _workspace.NodeTable.GetRecord(sourceSlot).Cost;
         if (!Fixed64.TryAdd(sourceCost, edgeCost, out Fixed64 nextCost))
             return Finish(NavigationSurfaceAStarStatus.CostOverflow);
-        if (!added && nextCost >= target.Cost)
+        bool unvisitedGoal = target.IsGoal && !target.HasParent && !target.Closed && target.HeapIndex < 0;
+        if (!added && !unvisitedGoal && nextCost >= target.Cost)
             return Status;
         target.Cost = nextCost;
         target.Heuristic = GetHeuristic(targetState);
@@ -983,7 +1026,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         target.ParentEdgeOrdinal = edgeOrdinal;
         target.ParentEdgeKind = edgeKind;
         target.HasParent = true;
-        if (added)
+        if (added || unvisitedGoal)
             Push(targetState, targetSlot);
         else
             SortUp(target.HeapIndex);

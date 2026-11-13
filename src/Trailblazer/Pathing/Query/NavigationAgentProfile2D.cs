@@ -17,7 +17,7 @@ public readonly struct NavigationAgentProfile2D : IEquatable<NavigationAgentProf
     /// <summary>Creates an upright capsule profile, or a top-down circle with zero support fields.</summary>
     public NavigationAgentProfile2D(NavigationMode2D mode, Fixed64 radius, Fixed64 axisLength,
         Fixed64 maxStepUp, Fixed64 maxDropDown, Fixed64 minimumSupportNormalDot,
-        Fixed64 arrivalRadius, TraversalMedia allowedMedia, TraversalCapability capabilities)
+        TraversalMedia allowedMedia, TraversalCapability capabilities)
     {
         Mode = mode;
         Radius = radius;
@@ -25,7 +25,6 @@ public readonly struct NavigationAgentProfile2D : IEquatable<NavigationAgentProf
         MaxStepUp = maxStepUp;
         MaxDropDown = maxDropDown;
         MinimumSupportNormalDot = minimumSupportNormalDot;
-        ArrivalRadius = arrivalRadius;
         AllowedMedia = allowedMedia;
         Capabilities = capabilities;
         Validate(nameof(radius));
@@ -53,9 +52,6 @@ public readonly struct NavigationAgentProfile2D : IEquatable<NavigationAgentProf
     /// <summary>Gets the minimum unit support-normal component along planar Forward.</summary>
     public Fixed64 MinimumSupportNormalDot { get; }
 
-    /// <summary>Gets the non-negative arrival tolerance.</summary>
-    public Fixed64 ArrivalRadius { get; }
-
     /// <summary>Gets the permitted traversal media.</summary>
     public TraversalMedia AllowedMedia { get; }
 
@@ -67,7 +63,7 @@ public readonly struct NavigationAgentProfile2D : IEquatable<NavigationAgentProf
         ChronicleGuard.ThrowIfArgument(Mode is not NavigationMode2D.TopDown and not NavigationMode2D.SideView
             || Radius <= Fixed64.Zero || AxisLength < Fixed64.Zero
             || Radius.m_rawValue > (long.MaxValue - AxisLength.m_rawValue) / 2
-            || MaxStepUp < Fixed64.Zero || MaxDropDown < Fixed64.Zero || ArrivalRadius < Fixed64.Zero
+            || MaxStepUp < Fixed64.Zero || MaxDropDown < Fixed64.Zero
             || AllowedMedia == TraversalMedia.None || (AllowedMedia & ~NavigationCell.KnownMedia) != 0
             || (Capabilities & ~NavigationCell.KnownCapabilities) != 0, parameterName);
         ChronicleGuard.ThrowIfArgument(Mode == NavigationMode2D.TopDown
@@ -79,7 +75,7 @@ public readonly struct NavigationAgentProfile2D : IEquatable<NavigationAgentProf
     /// <inheritdoc/>
     public bool Equals(NavigationAgentProfile2D other) => Mode == other.Mode && Radius == other.Radius
         && AxisLength == other.AxisLength && MaxStepUp == other.MaxStepUp && MaxDropDown == other.MaxDropDown
-        && MinimumSupportNormalDot == other.MinimumSupportNormalDot && ArrivalRadius == other.ArrivalRadius
+        && MinimumSupportNormalDot == other.MinimumSupportNormalDot
         && AllowedMedia == other.AllowedMedia && Capabilities == other.Capabilities;
 
     /// <inheritdoc/>
@@ -93,7 +89,6 @@ public readonly struct NavigationAgentProfile2D : IEquatable<NavigationAgentProf
         hash = SwiftHashTools.CombineHashCodes(hash, MaxStepUp.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, MaxDropDown.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, MinimumSupportNormalDot.GetHashCode());
-        hash = SwiftHashTools.CombineHashCodes(hash, ArrivalRadius.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, (int)AllowedMedia);
         return SwiftHashTools.CombineHashCodes(hash, (int)Capabilities);
     }

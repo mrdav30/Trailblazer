@@ -122,7 +122,6 @@ public sealed class NavigationFlowAdmissionTests
                 new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
                 maxStepUp: Fixed64.Zero,
                 maxDropDown: Fixed64.Zero,
-                arrivalRadius: Fixed64.Zero,
                 allowedMedia: TraversalMedia.Solid,
                 capabilities: TraversalCapability.None),
             new NavigationAreaPolicyKey("flow-reset", 1),

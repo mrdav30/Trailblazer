@@ -108,7 +108,8 @@ public partial class NavSteering
             return;
 
         _requestedDestination = query.Value.End.Position;
-        if (_pathRecheckPhase.HasValue || _acquisitionMode == NavigationAcquisitionMode.Scheduled)
+        if (_pathRecheckPhase.HasValue || _acquisitionMode == NavigationAcquisitionMode.Scheduled
+            || query.Value.ArrivalRadius.HasValue)
         {
             _hasLineOfSightPath = false;
             _shouldRequestPathThisFrame = _shouldMove;

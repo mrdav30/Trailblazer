@@ -145,7 +145,7 @@ public partial class NavMotor
             movement.Y = Fixed64.Zero;
         }
 
-        // Bound only controlled approach motion at an exact action entry. Keep
+        // Bound controlled approach motion at an exact waypoint. Keep
         // the correction in displacement units: velocity round-tripping loses
         // low bits. Gravity, jumping and platform carry are applied independently.
         if (remaining == Vector3d.Zero

@@ -2348,7 +2348,6 @@ public sealed class NavigationExplicitConnectionTests
                 new KinematicBodyShape((Fixed64)0.5001m, Fixed64.One, Fixed64.Zero),
                 Fixed64.Zero,
                 Fixed64.Zero,
-                Fixed64.Zero,
                 TraversalMedia.Solid,
                 TraversalCapability.None),
             CreateExplicitEvaluationPolicy(),
@@ -2684,7 +2683,6 @@ public sealed class NavigationExplicitConnectionTests
                 new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
                 Fixed64.Zero,
                 Fixed64.Zero,
-                Fixed64.Zero,
                 TraversalMedia.Solid,
                 TraversalCapability.None),
             new NavigationAreaPolicy(
@@ -2900,7 +2898,6 @@ public sealed class NavigationExplicitConnectionTests
                 new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
                 maxStepUp,
                 maxDropDown,
-                Fixed64.Zero,
                 TraversalMedia.Solid,
                 TraversalCapability.None),
             new NavigationAreaPolicy(
@@ -2963,7 +2960,6 @@ public sealed class NavigationExplicitConnectionTests
 
     private static NavigationAgentProfile CreateExplicitEvaluationProfile() => new(
         new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
-        Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.Zero,
         TraversalMedia.Solid,

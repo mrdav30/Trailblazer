@@ -1184,6 +1184,8 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool IsDependencyCurrent(GraphDependencyStamp stamp)
     {
+        if (stamp.RequiredGraphVersion >= 0 && stamp.RequiredGraphVersion != GraphVersion)
+            return false;
         if (!AreaCatalog.TryGet(stamp.AreaPolicy, out _))
             return false;
         if (stamp.HasTransitionRuleDependency

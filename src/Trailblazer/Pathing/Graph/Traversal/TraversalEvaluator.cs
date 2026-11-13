@@ -548,7 +548,7 @@ internal readonly struct TraversalEvaluator
             && radius <= cell.RadiusClearance;
     }
 
-    private bool TryGetPassableNode(
+    internal bool TryGetPassableNode(
         NavigationNodeRef node,
         out NavigationNodeState state,
         out NavigationAreaRule areaRule,

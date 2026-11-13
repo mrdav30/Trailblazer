@@ -63,12 +63,10 @@ public sealed class NavigationFlowFieldEquivalenceTests
                 new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
                 Fixed64.Zero,
                 Fixed64.Zero,
-                Fixed64.Zero,
                 TraversalMedia.Solid,
                 TraversalCapability.None);
             var wide = new NavigationAgentProfile(
                 new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
-                Fixed64.Zero,
                 Fixed64.Zero,
                 Fixed64.Zero,
                 TraversalMedia.Solid,
@@ -139,7 +137,6 @@ public sealed class NavigationFlowFieldEquivalenceTests
             new KinematicBodyShape(radius, Fixed64.One, Fixed64.Zero),
             maxStepUp: Fixed64.Zero,
             maxDropDown: Fixed64.Zero,
-            arrivalRadius: Fixed64.Zero,
             allowedMedia: TraversalMedia.Solid,
             capabilities: TraversalCapability.None);
         PathQuery query = fixture.CreateQuery(source, destination, profile);
@@ -940,7 +937,6 @@ public sealed class NavigationFlowFieldEquivalenceTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             maxStepUp: (Fixed64)2,
             maxDropDown: (Fixed64)2,
-            arrivalRadius: Fixed64.Zero,
             allowedMedia: TraversalMedia.Solid,
             capabilities: TraversalCapability.None);
         PathQuery query = NavigationAStarExitTestHarness.Query(

@@ -115,4 +115,34 @@ public sealed partial class Navigator2DTests
             context.LateSimulate();
         }
     }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void TopDownPopulationReacquiresAReachableApproachToTheBlockedRequestedCell(bool memoryPack)
+    {
+        using var context = CreateScene(portal: false);
+        using var navigator = new Host(context, Vector2d.Zero, Fixed64.Quarter);
+        navigator.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
+        var blockedCenter = new Vector2d(2, 0);
+        navigator.ApplyGuidedTrekRequest(Cell(2, 0), Policy.Key, PathAlgorithm.AStar, Budget,
+            arrivalRadius: Fixed64.One).Should().Be(NavigationGuideStatus.Pending);
+        object pending = SerializationUtility.SerializeRecord(navigator, memoryPack);
+        SerializationUtility.PopulateRecord(navigator, pending, memoryPack);
+        context.Guides.Scheduler.RetainedRequestCount.Should().Be(0);
+
+        for (int frame = 0; frame < 128 && !navigator.HasArrived; frame++)
+        {
+            context.Simulate();
+            navigator.PrepareFrameMotion();
+            navigator.Accept(navigator.Request.Target.Center);
+            navigator.CommitFrameMotion();
+            context.LateSimulate();
+        }
+
+        navigator.HasArrived.Should().BeTrue();
+        (navigator.Pose.Center - blockedCenter).Magnitude.Should().Be(Fixed64.One);
+    }
 }

@@ -270,7 +270,7 @@ public sealed class NavigationPlanarPublicationTests
 
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.FromFraction(3, 4), Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.Fly);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.Fly);
         var endpoint = new NavigationEndpoint(
             new Vector3d(required ? -Fixed64.One : Fixed64.Zero, Fixed64.Half, Fixed64.Zero), "spatial");
         var query = new PathQuery(endpoint, endpoint, profile, Policy.Key,
@@ -316,7 +316,7 @@ public sealed class NavigationPlanarPublicationTests
 
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.FromFraction(3, 4), Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.Fly);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.Fly);
         var endpoint = new NavigationEndpoint(new Vector3d(Fixed64.Zero, Fixed64.Half, Fixed64.Zero), "spatial");
         var query = new PathQuery(endpoint, endpoint, profile, Policy.Key,
             new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas), PathAlgorithm.AStar,

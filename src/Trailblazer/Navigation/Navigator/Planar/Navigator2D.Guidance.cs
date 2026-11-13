@@ -16,6 +16,7 @@ public abstract partial class Navigator2D
 {
     private NavigationCellAddress _requestedGoal;
     private NavigationCellAddress _routeGoal;
+    private Fixed64? _arrivalRadius;
     private PathAlgorithm _algorithm;
     private bool _allowTransitions;
     private bool _hasIntent;
@@ -50,16 +51,21 @@ public abstract partial class Navigator2D
         ApplyGuidedTrekRequest(destination, policy, algorithm, budget, -1);
 
     /// <summary>Replaces guidance and optionally joins a movement group or admits authored actions.</summary>
-    /// <remarks>The supplied budget bounds acquisition and each separate guided movement proof.</remarks>
+    /// <remarks>
+    /// The supplied budget bounds acquisition and each separate guided movement proof.
+    /// A positive arrival radius allows reachable centers within the inclusive range of the requested
+    /// destination center on its map. The accepted pose can complete the final proved leg within that range.
+    /// </remarks>
     public NavigationGuideStatus ApplyGuidedTrekRequest(NavigationCellAddress destination, NavigationAreaPolicyKey policy,
-        PathAlgorithm algorithm, NavigationWorkBudget budget, int groupId = -1, bool allowTransitions = false)
+        PathAlgorithm algorithm, NavigationWorkBudget budget, int groupId = -1, bool allowTransitions = false,
+        Fixed64? arrivalRadius = null)
     {
         EnsureIdle();
         if (_binding.Mode != NavigationMode2D.TopDown)
             return NavigationGuideStatus.InvalidProfile;
         policy.Validate(nameof(policy));
         ChronicleGuard.ThrowIfArgumentOutOfRange(groupId < -1, groupId, nameof(groupId));
-        BeginTrek(destination, policy, algorithm, budget);
+        BeginTrek(destination, policy, algorithm, budget, arrivalRadius);
         _allowTransitions = allowTransitions;
         JoinGroup(groupId);
         RefreshGroupTarget();
@@ -67,11 +73,13 @@ public abstract partial class Navigator2D
     }
 
     private void BeginTrek(NavigationCellAddress destination, NavigationAreaPolicyKey policy,
-        PathAlgorithm algorithm, NavigationWorkBudget budget)
+        PathAlgorithm algorithm, NavigationWorkBudget budget, Fixed64? arrivalRadius)
     {
+        ChronicleGuard.ThrowIfArgumentOutOfRange(arrivalRadius < Fixed64.Zero, actualValue: null, nameof(arrivalRadius));
         ResetGuidance();
         _hasIntent = true;
         _requestedGoal = _routeGoal = destination;
+        _arrivalRadius = arrivalRadius > Fixed64.Zero ? arrivalRadius : null;
         _policy = policy;
         _budget = budget;
         _algorithm = algorithm;
@@ -115,12 +123,12 @@ public abstract partial class Navigator2D
         {
             _queuedOrigin = Pose.Center;
             status = _context.Guides.ScheduleTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
-                NavigationProfile.Capabilities, _algorithm, _budget, out var request, _allowTransitions);
+                NavigationProfile.Capabilities, _algorithm, _budget, out var request, _allowTransitions, _arrivalRadius);
             _guideRequest = request;
             return status;
         }
         status = _context.Guides.RequestTopDownGuide(start, _routeGoal, NavigationProfile.Radius, _policy, _medium,
-            NavigationProfile.Capabilities, _algorithm, _budget, out var acquired, _allowTransitions);
+            NavigationProfile.Capabilities, _algorithm, _budget, out var acquired, _allowTransitions, _arrivalRadius);
         guide = acquired.RouteLease;
         return status;
     }
@@ -240,6 +248,7 @@ public abstract partial class Navigator2D
     {
         ReleaseRequest();
         _hasIntent = false;
+        _arrivalRadius = null;
         _resumeSideView = false;
         _lastAcquisitionFrame = -1;
     }

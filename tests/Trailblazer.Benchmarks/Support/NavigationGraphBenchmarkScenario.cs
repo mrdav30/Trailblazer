@@ -97,7 +97,6 @@ internal static class NavigationGraphBenchmarkScenario
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
         return new PathQuery(

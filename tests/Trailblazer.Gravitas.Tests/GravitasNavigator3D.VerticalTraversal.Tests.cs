@@ -70,7 +70,7 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
                 $"f{frame}:navigatorRequest={actor.NavigatorRequestedPosition},hostRequest={actor.HostRequestedPosition},requestedRotation={actor.Body.PositionTransform.WorldRotation},accepted={actor.Body.Position3d},acceptedRotation={actor.Body.Rotation},foot={actor.Navigator.FootPosition},surface={actor.Navigator.Motor!.CurrentState.SurfaceLevel},heading={actor.Navigator.Steering!.TargetDirection},velocity={actor.Navigator.Velocity},guided={actor.Navigator.IsGuided},stuck={actor.Navigator.Steering.IsStuck}";
 
             if ((actor.Navigator.FootPosition - expectedFoot).Magnitude
-                    <= actor.Navigator.NavigationProfile.ArrivalRadius
+                    <= Fixed64.FromFraction(1, 16)
                 && actor.Navigator.LastCommittedCell?.Address == expectedAddress
                 && !actor.Navigator.IsGuided)
             {
@@ -97,7 +97,7 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
             string.Join("; ", observationTail));
         arrivalFrame!.Value.Should().BeLessThanOrEqualTo(512);
         (actor.Navigator.FootPosition - expectedFoot).Magnitude.Should()
-            .BeLessThanOrEqualTo(actor.Navigator.NavigationProfile.ArrivalRadius);
+            .BeLessThanOrEqualTo(Fixed64.FromFraction(1, 16));
         actor.Navigator.LastCommittedCell!.Value.Address.Should().Be(
             expectedAddress);
         actor.Navigator.IsGuided.Should().BeFalse();
@@ -144,7 +144,7 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
                 actor.Navigator.Position, actor.Navigator.Velocity);
             actor.Navigator.Position.Should().Be(actor.Body.Position3d);
             if ((actor.Navigator.FootPosition - fixture.EndFoot).Magnitude
-                    <= actor.Navigator.NavigationProfile.ArrivalRadius
+                    <= Fixed64.FromFraction(1, 16)
                 && actor.Navigator.LastCommittedCell?.Address == expectedAddress
                 && !actor.Navigator.IsGuided)
             {
@@ -161,7 +161,7 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
             actor.Navigator.Steering!.TargetDirection);
         arrivalFrame!.Value.Should().BeLessThanOrEqualTo(256);
         (actor.Navigator.FootPosition - fixture.EndFoot).Magnitude.Should()
-            .BeLessThanOrEqualTo(actor.Navigator.NavigationProfile.ArrivalRadius);
+            .BeLessThanOrEqualTo(Fixed64.FromFraction(1, 16));
         actor.Navigator.LastCommittedCell!.Value.Address.Should().Be(expectedAddress);
         actor.Navigator.IsGuided.Should().BeFalse();
         invalidPathCount.Should().Be(0);
@@ -188,7 +188,6 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
             baseline.Shape,
             Fixed64.FromFraction(3, 4) - Fixed64.MinIncrement,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
 
@@ -225,7 +224,6 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
             baseline.Shape,
             baseline.MaxStepUp,
             Fixed64.FromFraction(3, 4) - Fixed64.MinIncrement,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
 
@@ -253,7 +251,6 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
                 baseline.Shape.RootToFootOffsetY),
             Fixed64.FromFraction(3, 4),
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
 
@@ -276,7 +273,6 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
                 baseline.Shape.RootToFootOffsetY),
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
 
@@ -299,7 +295,6 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
                 baseline.Shape.RootToFootOffsetY),
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
 
@@ -519,7 +514,7 @@ public sealed class GravitasNavigator3DVerticalTraversalTests
         {
             actors[i].Navigator.LastCommittedCell!.Value.Address.Should().Be(destination);
             (actors[i].Navigator.FootPosition - fixture.EndFoot).Magnitude.Should()
-                .BeLessThanOrEqualTo(actors[i].Navigator.NavigationProfile.ArrivalRadius);
+                .BeLessThanOrEqualTo(fixture.ArrivalRadius);
         }
     }
 

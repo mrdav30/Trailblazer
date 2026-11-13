@@ -209,7 +209,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             || policyPublication.Receipt.Status != NavigationOperationStatus.Applied, "Recovery publication failed.");
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Quarter, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         var budget = new NavigationWorkBudget(10_240_000, 16, 10_000, 320_000,
             0, 0, 0, 0, 160_000, 320_000, 1_024);
         for (int i = 0; i < count; i++)
@@ -275,7 +275,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
         {
             var replacement = new NavigationAgentProfile(
                 new KinematicBodyShape(Fixed64.FromFraction(1, 5), Fixed64.One, Fixed64.Zero),
-                Fixed64.Zero, Fixed64.Zero, Fixed64.Quarter, TraversalMedia.Solid, TraversalCapability.None);
+                Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
             foreach (BenchmarkNavigator agent in _agents)
                 ChronicleGuard.ThrowIfTrue(agent.TryReplaceNavigationProfile(replacement)
                     != NavigationProfileReplacementStatus.Applied, "Recovery profile replacement rejected.");
@@ -449,8 +449,7 @@ internal sealed class NavigationRecoveryScenario : IDisposable
             ChronicleGuard.ThrowIfTrue(agent.PendingTransition.HasValue,
                 "This wall-gap episode contains no authored action; an action cannot stand in for readiness.");
             bool arrival = agent.Steering.IsAtDestination
-                && (agent.FootPosition - _queries[i].End.Position).MagnitudeSquared
-                    <= _queries[i].Agent.ArrivalRadius * _queries[i].Agent.ArrivalRadius;
+                && agent.FootPosition == _queries[i].End.Position;
             if (agent.Steering.IsAtDestination && !arrival)
                 RecordOriginalFailure(i);
             // A direct-first result is accepted only after current-foot proof, not cached LOS trust.

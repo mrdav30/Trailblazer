@@ -264,7 +264,7 @@ public sealed class TraversalEvaluatorTests
         NavigationGraphEdge edge = FindEdge(lease.Graph, source, Resolve(lease.Graph, targetIndex));
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero,
+            Fixed64.Zero, Fixed64.Zero,
             TraversalMedia.Solid, TraversalCapability.None);
 
         new TraversalEvaluator(lease.Graph, profile, DefaultPolicy, TraversalMedium.Solid)
@@ -655,7 +655,6 @@ public sealed class TraversalEvaluatorTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
 
@@ -931,7 +930,6 @@ public sealed class TraversalEvaluatorTests
                 Fixed64.Zero),
             maxStepUp,
             maxDropDown,
-            Fixed64.Zero,
             allowedMedia,
             capabilities);
 

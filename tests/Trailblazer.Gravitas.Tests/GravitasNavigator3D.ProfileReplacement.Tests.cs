@@ -30,7 +30,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 Fixed64.Zero),
             original.MaxStepUp,
             original.MaxDropDown,
-            original.ArrivalRadius,
             original.AllowedMedia,
             original.Capabilities);
 
@@ -59,7 +58,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 Fixed64.Half),
             original.MaxStepUp,
             original.MaxDropDown,
-            original.ArrivalRadius,
             original.AllowedMedia,
             original.Capabilities);
         var widerThanTall = new NavigationAgentProfile(
@@ -69,7 +67,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 Fixed64.Half),
             original.MaxStepUp,
             original.MaxDropDown,
-            original.ArrivalRadius,
             original.AllowedMedia,
             original.Capabilities);
 
@@ -94,9 +91,8 @@ public sealed class GravitasNavigator3DProfileReplacementTests
         LSCollider originalCollider = actor.Body.Collider;
         var replacement = new NavigationAgentProfile(
             original.Shape,
-            original.MaxStepUp,
+            original.MaxStepUp + Fixed64.MinIncrement,
             original.MaxDropDown,
-            Fixed64.Quarter,
             original.AllowedMedia,
             original.Capabilities);
 
@@ -122,9 +118,8 @@ public sealed class GravitasNavigator3DProfileReplacementTests
         actor.Body.PositionTransform.LocalScale = scaled;
         var replacement = new NavigationAgentProfile(
             original.Shape,
-            original.MaxStepUp,
+            original.MaxStepUp + Fixed64.MinIncrement,
             original.MaxDropDown,
-            Fixed64.Quarter,
             original.AllowedMedia,
             original.Capabilities);
 
@@ -152,7 +147,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 Fixed64.Zero),
             actor.Navigator.NavigationProfile.MaxStepUp,
             actor.Navigator.NavigationProfile.MaxDropDown,
-            actor.Navigator.NavigationProfile.ArrivalRadius,
             actor.Navigator.NavigationProfile.AllowedMedia,
             actor.Navigator.NavigationProfile.Capabilities);
         Vector3d foot = actor.Navigator.FootPosition;
@@ -188,7 +182,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 Fixed64.Zero),
             original.MaxStepUp,
             original.MaxDropDown,
-            original.ArrivalRadius,
             original.AllowedMedia,
             original.Capabilities);
         Vector3d foot = actor.Navigator.FootPosition;
@@ -250,7 +243,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 ballPresentation ? Fixed64.Quarter : Fixed64.Zero),
             standing.MaxStepUp,
             standing.MaxDropDown,
-            Fixed64.FromFraction(1, 64),
             standing.AllowedMedia,
             standing.Capabilities);
         Vector3d passageCenter = (fixture.StartFoot + fixture.EndFoot) * Fixed64.Half
@@ -310,7 +302,7 @@ public sealed class GravitasNavigator3DProfileReplacementTests
             actor.Navigator.Motor!.CurrentState.Medium,
             actor.Body.LinearVelocity);
         (actor.Navigator.FootPosition - fixture.EndFoot).Magnitude.Should()
-            .BeLessThanOrEqualTo(compact.ArrivalRadius);
+            .BeLessThanOrEqualTo(Fixed64.FromFraction(1, 16));
         Vector3d exitFoot = actor.Navigator.FootPosition;
 
         actor.Navigator.TryReplaceNavigationProfile(standing)
@@ -343,7 +335,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 Fixed64.Zero),
             standing.MaxStepUp,
             standing.MaxDropDown,
-            Fixed64.FromFraction(1, 64),
             standing.AllowedMedia,
             standing.Capabilities);
         Vector3d passageCenter = (fixture.StartFoot + fixture.EndFoot) * Fixed64.Half
@@ -418,7 +409,6 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 ballPresentation ? Fixed64.Quarter : Fixed64.Zero),
             standing.MaxStepUp,
             standing.MaxDropDown,
-            standing.ArrivalRadius,
             standing.AllowedMedia,
             standing.Capabilities);
         Vector3d initialFoot = actor.Navigator.FootPosition;

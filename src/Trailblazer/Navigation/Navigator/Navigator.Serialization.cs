@@ -19,7 +19,7 @@ namespace Trailblazer.Navigation;
 /// <content>Stages and applies recorded navigator state.</content>
 public abstract partial class Navigator
 {
-    private const int CurrentSerializationSchemaVersion = 9;
+    private const int CurrentSerializationSchemaVersion = 10;
 
     #region Serialization
 

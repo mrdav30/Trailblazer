@@ -17,5 +17,6 @@ internal struct NavigationFlowFieldSearchNode
     internal NavigationSelectedEdgeRef SelectedEdge;
     internal int HeapIndex;
     internal bool SelectedIsTransition;
+    internal bool SelectedTargetIsGoal;
     internal bool Closed;
 }

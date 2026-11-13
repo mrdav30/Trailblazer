@@ -103,7 +103,7 @@ public sealed partial class Navigator2DSupportTests
         PublishGuidedMap(context, builder.Build(), 2);
 
         var profile = new NavigationAgentProfile2D(NavigationMode2D.SideView, Fixed64.Quarter, Fixed64.Zero,
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Half, Fixed64.Zero, TraversalMedia.Solid, capability);
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Half, TraversalMedia.Solid, capability);
         var budget = new NavigationWorkBudget(8192, 128, 128, 512, 512, 128, 128, 128, 1024, 4096, 0);
         using var host = new Host(context, profile,
             pose: new NavigationPose2D(new(Fixed64.Zero, fromHeight + profile.Radius), Fixed64.Zero));

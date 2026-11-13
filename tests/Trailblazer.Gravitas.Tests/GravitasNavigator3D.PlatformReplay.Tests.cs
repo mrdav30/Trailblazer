@@ -29,7 +29,7 @@ public sealed class GravitasNavigator3DPlatformReplayTests
         NavigationAgentProfile standing = source.Navigator.NavigationProfile;
         var compact = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.Half, Fixed64.Quarter),
-            standing.MaxStepUp, standing.MaxDropDown, standing.ArrivalRadius,
+            standing.MaxStepUp, standing.MaxDropDown,
             standing.AllowedMedia, standing.Capabilities);
         source.Navigator.TryReplaceNavigationProfile(compact).Should().Be(NavigationProfileReplacementStatus.Applied);
         for (int frame = 0; frame < 8; frame++)

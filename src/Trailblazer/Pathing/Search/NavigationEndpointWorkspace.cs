@@ -13,10 +13,14 @@ namespace Trailblazer.Pathing;
 /// <summary>Owns reusable endpoint-resolution buffers and exact dependencies.</summary>
 internal sealed class NavigationEndpointWorkspace
 {
+    private readonly int _goalCapacity;
+    private NavigationResolvedEndpoint[]? _goals;
+
     internal NavigationEndpointWorkspace(
         int mapCapacity,
         int pageCapacity,
-        int componentCapacity)
+        int componentCapacity,
+        int goalCapacity = 0)
     {
         ChronicleGuard.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
         ChronicleGuard.ThrowIfNegative(pageCapacity, nameof(pageCapacity));
@@ -27,6 +31,7 @@ internal sealed class NavigationEndpointWorkspace
             : new GridCoveredAddressGeneration[mapCapacity];
         CoveredAddressOutput = new GridCoveredAddress[1];
         Dependencies = new NavigationDependencyWorkspace(pageCapacity, componentCapacity);
+        _goalCapacity = goalCapacity;
     }
 
     internal NavigationDependencyWorkspace Dependencies { get; }
@@ -38,6 +43,7 @@ internal sealed class NavigationEndpointWorkspace
     internal int CoveredAddressGenerationCount { get; set; }
     internal int PageCount => Dependencies.PageCount;
     internal int ComponentCount => Dependencies.ComponentCount;
+    internal NavigationResolvedEndpoint[] Goals => _goals ??= new NavigationResolvedEndpoint[_goalCapacity];
 
     internal void Reset()
     {

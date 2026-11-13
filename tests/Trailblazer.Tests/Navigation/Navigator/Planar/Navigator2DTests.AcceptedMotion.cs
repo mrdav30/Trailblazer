@@ -12,6 +12,168 @@ namespace Trailblazer.Tests.Navigation;
 public sealed partial class Navigator2DTests
 {
     [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void ArrivalRegionSelectsTheReachableBoundaryBesideABlockedCenter(PathAlgorithm algorithm)
+    {
+        using var context = CreateScene(portal: false);
+        using var navigator = new Host(context, Vector2d.Zero, Fixed64.Quarter);
+        var goal = Cell(2, 0);
+        Assert.Throws<System.ArgumentOutOfRangeException>(() =>
+            navigator.ApplyGuidedTrekRequest(goal, Policy.Key, algorithm, Budget, arrivalRadius: -Fixed64.MinIncrement));
+        navigator.ApplyGuidedTrekRequest(goal, Policy.Key, algorithm, Budget)
+            .Should().Be(NavigationGuideStatus.InvalidEnd);
+        navigator.ApplyGuidedTrekRequest(goal, Policy.Key, algorithm, Budget, arrivalRadius: Fixed64.Zero)
+            .Should().Be(NavigationGuideStatus.InvalidEnd);
+        navigator.ApplyGuidedTrekRequest(goal, Policy.Key, algorithm, Budget,
+            arrivalRadius: Fixed64.One - Fixed64.MinIncrement).Should().Be(NavigationGuideStatus.InvalidEnd);
+        navigator.ApplyGuidedTrekRequest(goal, Policy.Key, algorithm, Budget, arrivalRadius: Fixed64.One)
+            .Should().Be(NavigationGuideStatus.Success);
+        var approach = Vector2d.Right;
+        bool clipped = false;
+        for (int frame = 0; frame < 24 && !navigator.HasArrived; frame++)
+        {
+            context.Simulate();
+            navigator.PrepareFrameMotion();
+            Vector2d target = navigator.Request.Target.Center;
+            bool outside = !clipped && target == approach;
+            navigator.Accept(outside ? approach - Vector2d.Right * Fixed64.MinIncrement : target);
+            navigator.CommitFrameMotion();
+            context.LateSimulate();
+            if (outside)
+            {
+                navigator.HasArrived.Should().BeFalse();
+                clipped = true;
+            }
+        }
+        clipped.Should().BeTrue();
+        navigator.HasArrived.Should().BeTrue();
+        navigator.Pose.Center.Should().Be(approach);
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar, false)]
+    [InlineData(PathAlgorithm.FlowField, false)]
+    [InlineData(PathAlgorithm.AStar, true)]
+    [InlineData(PathAlgorithm.FlowField, true)]
+    public void ArrivalRegionCanFinishOnTheProvedFinalLegBeforeItsCanonicalCenter(PathAlgorithm algorithm,
+        bool lookAhead)
+    {
+        using var context = CreateScene(portal: false);
+        using var navigator = new Host(context, Vector2d.Zero, Fixed64.Quarter);
+        if (lookAhead)
+            navigator.ConfigurePathRechecks(1, 0);
+        navigator.ApplyGuidedTrekRequest(Cell(2, 0), Policy.Key, algorithm, Budget,
+            arrivalRadius: Fixed64.One + Fixed64.Half).Should().Be(NavigationGuideStatus.Success);
+        var approach = Vector2d.Right * Fixed64.Half;
+        bool clipped = false;
+        for (int frame = 0; frame < 24 && !navigator.HasArrived; frame++)
+        {
+            context.Simulate();
+            navigator.PrepareFrameMotion();
+            Vector2d target = navigator.Request.Target.Center;
+            bool justOutside = !clipped && target == approach;
+            navigator.Accept(justOutside ? approach - Vector2d.Right * Fixed64.MinIncrement : target);
+            navigator.CommitFrameMotion();
+            context.LateSimulate();
+            if (justOutside)
+            {
+                navigator.HasArrived.Should().BeFalse();
+                clipped = true;
+            }
+        }
+        clipped.Should().BeTrue();
+        navigator.HasArrived.Should().BeTrue();
+        navigator.Pose.Center.X.Should().BeGreaterThanOrEqualTo(approach.X).And.BeLessThan(Fixed64.One);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ArrivalRegionLookaheadAdvancesOnlyForAnAcceptedClipOnTheSegment(bool onSegment)
+    {
+        using var context = CreateScene(portal: false);
+        using var navigator = new Host(context, Vector2d.Zero, Fixed64.Quarter);
+        navigator.ConfigurePathRechecks(1, 0);
+        navigator.ApplyGuidedTrekRequest(Cell(2, 0), Policy.Key, PathAlgorithm.AStar, Budget,
+            arrivalRadius: Fixed64.One + Fixed64.Half).Should().Be(NavigationGuideStatus.Success);
+
+        context.Simulate();
+        navigator.PrepareFrameMotion();
+        var target = navigator.Request.Target.Center;
+        target.X.Should().BeGreaterThan(Fixed64.Zero);
+        var accepted = new Vector2d(target.X * Fixed64.Half, onSegment ? Fixed64.Zero : Fixed64.MinIncrement);
+        navigator.Accept(accepted);
+        navigator.CommitFrameMotion();
+        context.LateSimulate();
+        navigator.Pose.Center.Should().Be(accepted);
+        navigator.HasArrived.Should().BeFalse();
+
+        context.Simulate();
+        navigator.PrepareFrameMotion();
+        if (onSegment)
+            navigator.Request.Target.Center.X.Should().BeGreaterThan(accepted.X);
+        else
+            navigator.Request.Target.Center.X.Should().BeLessThan(accepted.X);
+        navigator.Accept(navigator.Request.Target.Center);
+        navigator.CommitFrameMotion();
+        context.LateSimulate();
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void ArrivalRegionRejectsAClipWhenAcceptedMotionInvalidatesTheGuide(PathAlgorithm algorithm)
+    {
+        using var context = CreateScene(portal: false);
+        using var navigator = new Host(context, Vector2d.Zero, Fixed64.Quarter);
+        navigator.ApplyGuidedTrekRequest(Cell(2, 0), Policy.Key, algorithm, Budget,
+            arrivalRadius: Fixed64.One + Fixed64.Half).Should().Be(NavigationGuideStatus.Success);
+        for (int frame = 0; frame < 24; frame++)
+        {
+            context.Simulate();
+            navigator.PrepareFrameMotion();
+            Vector2d target = navigator.Request.Target.Center;
+            bool wouldArrive = target == Vector2d.Right * Fixed64.Half;
+            navigator.Accept(target);
+            if (wouldArrive)
+            {
+                navigator.OnRead = () => context.World.TryAddGrid(
+                    new GridConfiguration(new Vector3d(10, 0, 10), new Vector3d(11, 1, 11)), out _).Should().BeTrue();
+            }
+            navigator.CommitFrameMotion();
+            context.LateSimulate();
+            if (wouldArrive)
+            {
+                navigator.Pose.Center.Should().Be(target);
+                navigator.HasArrived.Should().BeFalse();
+                navigator.GuidanceStatus.Should().Be(NavigationGuideStatus.Stale);
+                return;
+            }
+        }
+        Assert.Fail("The route did not prepare a target inside the goal region.");
+    }
+
+    [Fact]
+    public void ArrivalRegionLookaheadKeepsIntermediateLegsBeforeTheFinalApproach()
+    {
+        using var context = CreateScene(portal: false);
+        using var navigator = new Host(context, Vector2d.Zero, Fixed64.Quarter);
+        navigator.ConfigurePathRechecks(1, 0);
+        navigator.ApplyGuidedTrekRequest(Cell(3, 1), Policy.Key, PathAlgorithm.AStar, Budget,
+            arrivalRadius: Fixed64.One).Should().Be(NavigationGuideStatus.Success);
+
+        Step(context, navigator);
+        navigator.HasArrived.Should().BeFalse();
+        for (int frame = 0; frame < 24 && !navigator.HasArrived; frame++)
+            Step(context, navigator);
+        navigator.HasArrived.Should().BeTrue();
+        Vector2d goal = new(Fixed64.Three, Fixed64.One);
+        Vector2d.CompareDistanceSquared(navigator.Pose.Center, goal, Vector2d.Zero, Vector2d.Right)
+            .Should().BeLessThanOrEqualTo(0);
+    }
+
+    [Theory]
     [InlineData(8, 8, 7, 8)]
     [InlineData(8, 9, 8, 8)]
     public void GuidedStepMakesProgressAtOneRawUnit(int startX, int startZ, int nextX, int nextZ)
@@ -24,8 +186,11 @@ public sealed partial class Navigator2DTests
 
         Step(context, navigator);
         navigator.Pose.Center.Should().Be(new Vector2d(Fixed64.FromRaw(nextX), Fixed64.FromRaw(nextZ)));
-        for (int i = 1; i < startX + startZ && !navigator.HasArrived; i++)
+        for (int i = 1; i < startX + startZ && navigator.Pose.Center != Vector2d.Zero; i++)
+        {
+            navigator.HasArrived.Should().BeFalse();
             Step(context, navigator);
+        }
         navigator.HasArrived.Should().BeTrue();
         navigator.Pose.Center.Should().Be(Vector2d.Zero);
     }

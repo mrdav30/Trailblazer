@@ -5,17 +5,18 @@ namespace Trailblazer.Tests;
 internal static class PlanarSchedulingTestSettings
 {
     internal static TrailblazerWorldContextSettings Create(NavigationSchedulingSettings? scheduling = null,
-        long? maxBatchDescriptorBytes = null, GuideSampleWorkBudget? guideSampleBudget = null)
+        long? maxBatchDescriptorBytes = null, GuideSampleWorkBudget? guideSampleBudget = null,
+        int? goalNodeCapacity = null)
     {
         var defaults = TrailblazerWorldContextSettings.Default;
         var d = defaults.QueryLimits;
-        var limits = maxBatchDescriptorBytes is long bytes
-            ? new NavigationQueryLimits(d.MaxBatchItems, bytes, d.MaxConcurrentNavigationQueries,
+        var limits = maxBatchDescriptorBytes.HasValue || goalNodeCapacity.HasValue
+            ? new NavigationQueryLimits(d.MaxBatchItems, maxBatchDescriptorBytes ?? d.MaxBatchDescriptorBytes, d.MaxConcurrentNavigationQueries,
                 d.AStarWorkspaceMapCapacity, d.AStarWorkspaceEndpointPageCapacity, d.AStarWorkspaceComponentCapacity,
-                d.AStarWorkspaceNodeCapacity, d.MaxAStarCacheEntries, d.MaxAStarReusablePayloadBytes,
+                goalNodeCapacity ?? d.AStarWorkspaceNodeCapacity, d.MaxAStarCacheEntries, d.MaxAStarReusablePayloadBytes,
                 d.MaxAStarSinglePayloadBytes, d.MaxAStarActivePayloadBytes, d.MaxAStarActivePayloadLeases,
                 d.FlowWorkspaceMapCapacity, d.FlowWorkspaceEndpointPageCapacity, d.FlowWorkspaceComponentCapacity,
-                d.FlowWorkspaceNodeCapacity, d.RayWorkspaceCoveredAddressCapacity, d.RayWorkspaceTraceIntervalCapacity,
+                goalNodeCapacity ?? d.FlowWorkspaceNodeCapacity, d.RayWorkspaceCoveredAddressCapacity, d.RayWorkspaceTraceIntervalCapacity,
                 d.AStarWorkspaceGuidePointCapacity, d.MaxFlowCacheEntries, d.MaxFlowReusablePayloadBytes,
                 d.MaxFlowSinglePayloadBytes, d.MaxFlowActivePayloadBytes, d.MaxFlowActivePayloadLeases)
             : d;

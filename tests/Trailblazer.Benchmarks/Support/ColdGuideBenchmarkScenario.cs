@@ -314,7 +314,7 @@ internal sealed class ColdGuideBenchmarkScenario : IDisposable
         ChronicleGuard.ThrowIfTrue(map.Receipt.Status != NavigationOperationStatus.Applied
             || policy.Receipt.Status != NavigationOperationStatus.Applied, "Ladder publication failed.");
         var agent = new NavigationAgentProfile(new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.Climb);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.Climb);
         return new PathQuery(new NavigationEndpoint(NavigationGraphBenchmarkScenario.GetFoot(binding, _start.Index), mapId),
             new NavigationEndpoint(NavigationGraphBenchmarkScenario.GetFoot(binding, _end.Index), mapId), agent,
             policyKey, new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), PathAlgorithm.AStar, budget, true);

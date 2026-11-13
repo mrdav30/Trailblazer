@@ -472,7 +472,8 @@ internal sealed partial class NavigationGuideScheduler
             && first.End == candidate.End && first.Agent == candidate.Agent
             && first.AreaPolicy == candidate.AreaPolicy && first.Traversal == candidate.Traversal
             && first.Budget == candidate.Budget && first.AllowTransitions == candidate.AllowTransitions
-            && first.FlowField == candidate.FlowField;
+            && first.FlowField == candidate.FlowField
+            && first.ArrivalRadius.GetValueOrDefault() == candidate.ArrivalRadius.GetValueOrDefault();
 
     private bool MatchesCohort(NavigationGuideRequest request) =>
         request is INavigationPlanarGuideRequest planar

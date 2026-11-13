@@ -862,7 +862,6 @@ public sealed class NavigationTransitionGuideTests
             baseline.Shape,
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            arrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
         var query = new PathQuery(
@@ -1044,7 +1043,7 @@ public sealed class NavigationTransitionGuideTests
         });
         sampled.Should().BeTrue();
         allocated.Should().Be(0);
-        Vector3d radiusVector = new(profile.ArrivalRadius, Fixed64.Zero, Fixed64.Zero);
+        Vector3d radiusVector = new(arrivalRadius, Fixed64.Zero, Fixed64.Zero);
         Vector3d.CompareDistanceSquared(
                 arrivalBoundary,
                 end,
@@ -1074,7 +1073,7 @@ public sealed class NavigationTransitionGuideTests
         outsideSample.Medium.Should().Be(TraversalMedium.Gas);
         outsideSample.Heading.Should().Be((end - outsideArrival).Normalized);
         boundarySample.Medium.Should().Be(TraversalMedium.Gas);
-        boundarySample.Heading.Should().Be(Vector3d.Zero);
+        boundarySample.Heading.Should().Be((end - arrivalBoundary).Normalized);
         var noRebaseBudget = new GuideSampleWorkBudget(
             maxCurrentNodeLookupProbes: 256,
             maxCursorLegScans: 256,
@@ -2553,7 +2552,6 @@ public sealed class NavigationTransitionGuideTests
 
     private static NavigationAgentProfile Profile(TraversalMedia media) => new(
         new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
-        Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.Zero,
         media,

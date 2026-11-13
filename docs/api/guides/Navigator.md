@@ -38,6 +38,10 @@ The lookahead keeps the selected edge and checks the actual sweep. A clipped
 result on that sweep can leave the source waypoint behind. The next waypoint
 still requires its own accepted arrival.
 
+A positive arrival range keeps the requested target as the center of the goal
+region. Use distinct reachable endpoints when a group must reserve separate
+interaction positions.
+
 For each fixed frame, call `context.Simulate()`, prepare all controllers,
 resolve host motion once, commit all controllers, then call
 `context.LateSimulate()`. Return a `NavigationMotionResult2D` with the accepted
@@ -45,8 +49,9 @@ pose and `NotApplicable` support for the matching `NavigationMotionRequest2D`.
 Prepare leaves pose, velocity, and occupancy
 intact. Commit derives velocity from the accepted displacement and the
 prepared timestep. It consumes the request before publishing cell changes.
-A short or blocked result holds the current waypoint. Arrival requires
-accepted motion at the exact final center on a current guide.
+A short or blocked result holds the current waypoint. An exact request
+requires the final center. A ranged request may finish on the proved final
+segment after the accepted center enters the original goal region.
 
 Opt in to authored same-medium actions with `allowTransitions`. Once the
 controller accepts the action's source center, `PendingTransition` exposes
@@ -126,19 +131,22 @@ anchor. The moved origin must be on the finite authored support of that
 anchor. Each return target waits for a scheduler validation turn and requires
 a fresh capsule sweep to the anchor, plus a sweep to the actual target if
 rounding takes it off that line. Both sweeps share the movement work budget.
-The guide advances only after the host accepts the exact anchor with live
-walkable support. An explicit analog input or an admitted manual jump cancels
+The scheduled return completes when the host accepts the exact first anchor
+with live walkable support. An explicit analog input or an admitted manual jump cancels
 the guide. Formation and lookahead apply to top-down guidance.
 
 Guided motion follows the retained capsule sweep one stage at a time, at the
 configured move speed. A step-up lifts before crossing. A drop crosses before
 descending. The host resolves each target and reports the accepted pose and
 support. A clipped result on the prepared segment can continue that stage.
-Progress through a bend requires its exact accepted center. A grounded valley
-bend and each support anchor also require fresh walkable support. An
-off-segment result or missing landing support releases guidance while committing the accepted
-pose. A moving carrier likewise releases the static route and applies its
-sampled carry through the free motor.
+Each bend requires exact acceptance of its center. A positive request
+radius can complete the proved final leg at an accepted pose inside the
+arrival region with live walkable support. Exact requests require acceptance
+of the final center.
+A grounded valley bend and each support anchor also require fresh walkable
+support. An off-segment result or missing landing support releases guidance
+while committing the accepted pose. A moving carrier likewise releases the
+static route and applies its sampled carry through the free motor.
 
 Exact subsegments inherit the retained sweep. Fixed-point slope substeps
 outside that line are rounded from the canonical stage within the move-speed
@@ -291,12 +299,16 @@ The query must:
 Navigator does not infer or prioritize another start medium. Construct the query
 for the physical state the host has actually committed.
 
-`NavigationAgentProfile.ArrivalRadius` is the inclusive final-destination
-radius. `NavSteering.WaypointTolerance` is a separate non-negative world-unit
-tolerance for ordinary intermediate guide steps. Intermediate steps advance when
-they enter that tolerance, or when a heading reversal proves the body passed the
-step within the arrival radius. Neither rule can cross a pending transition
-action.
+`arrivalRadius` on a guided request defines where navigation may end. A
+positive value lets the route end at a clearance-valid approach to a target,
+including a blocked target such as a mine. The controller can finish in range
+once accepted motion reaches the proved terminal approach. Null and zero require
+exact arrival at the resolved destination. Spatial arrival regions require
+graph pathfinding and stop if the host changes traversal medium outside a
+pending action. The host owns any mining range,
+line-of-sight, or spot reservation rules beyond the navigation request.
+`NavSteering.WaypointTolerance` applies to ordinary intermediate 3D steps.
+Authored actions retain exact source and landing checks.
 
 ## Fixed-Step Lifecycle
 

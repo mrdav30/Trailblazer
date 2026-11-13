@@ -134,7 +134,7 @@ public class NavigationDirectVisibilityFrameBenchmarks
         ValidateScene(sparse ? physical.Count : Width * Length);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.FromFraction(1, 8), Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Quarter, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         var budget = new NavigationWorkBudget(
             maxLookupProbes: 10_240_000, maxEndpointCandidates: 16,
             maxExpandedNodes: Width * Length, maxEvaluatedEdges: Math.Max(320_000, checked(32 * Width * Length)),

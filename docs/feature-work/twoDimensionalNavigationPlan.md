@@ -14,10 +14,9 @@ restore. See the [Phase 2 evidence](#2026-11-12---phase-2-authored-traversal-pos
 Phase 3 starts with the optional native Gravitas2D adapter and real collision
 acceptance.
 Use `UseLocalLsfStack=true`
-with the GridForge hardening changes. Hosted develop now pins GridForge
-`6aaf45c`. The Phase 2 review hardening also uses GridForge's exact planar
-coverage-neighbor query. Land the provider change before updating the hosted
-pin. The released-package lane needs GridForge with both navigation coverage
+with the GridForge hardening changes. Hosted develop pins GridForge
+`269da48`, which provides the exact planar coverage-neighbor query.
+The released-package lane needs GridForge with both navigation coverage
 APIs and Gravitas 1.1.0 for the adapter. Hard-budgeted
 physics queries remain a separate
 [2D/3D workstream](physicsQueryBudgetPlan.md).
@@ -505,7 +504,7 @@ public enum NavigationMode2D : byte { TopDown = 1, SideView = 2 }
 public NavigationAgentProfile2D(
     NavigationMode2D mode, Fixed64 radius, Fixed64 axisLength,
     Fixed64 maxStepUp, Fixed64 maxDropDown, Fixed64 minimumSupportNormalDot,
-    Fixed64 arrivalRadius, TraversalMedia allowedMedia, TraversalCapability capabilities);
+    TraversalMedia allowedMedia, TraversalCapability capabilities);
 ```
 
 In `Trailblazer.Navigation`, the value-type constructor signatures below
@@ -802,7 +801,7 @@ around the existing GridForge owner without exposing a 3D pose on the controller
 
 ### Records, proof identity, and parity gates
 
-Use a distinct `Trailblazer.Navigator2D` record kind and schema version 1
+Use a distinct `Trailblazer.Navigator2D` record kind and schema version 2
 under `Navigation/Navigator`. Reuse the existing Chronicler staging and
 populate-existing-shell pattern. Validate kind, version, mode, exact shell
 profile and motor settings, stable ID, published map/policy binding, pose,
@@ -812,7 +811,8 @@ at a completed-frame boundary with no unresolved target.
 Successful load rebuilds occupancy and committed-cell state without emitting
 `CommittedCellChanged`. GridForge retains its normal occupancy events.
 Rejected load preserves the old controller, lease, action, scheduled
-interest, prepared frame, and occupancy. Keep spatial schema 9 unchanged.
+interest, prepared frame, and occupancy. The optional request arrival radius
+is recorded by both controllers under their respective schemas.
 
 Record pose, including accepted rotation, accepted velocity, logical facing,
 motor and jump continuation, group and current medium, acquisition mode, and
@@ -861,7 +861,7 @@ Use a dense rectangular unit grid with center bounds `(-1,0,-1)` through
 `(5,1,2)`, selected layer 1 and embedding Y = 1. The tables below use
 planar coordinates `(x,z)`, corresponding to `VoxelIndex(x+1,1,z+1)` at
 integer centers. Use separate maps/worlds for the two modes. Use Strict
-endpoints, Solid intent, zero arrival radius, zero step/drop limits, and an
+endpoints, Solid intent, exact arrival, zero step/drop limits, and an
 allowed zero-cost area except where specified. On open cells set the authored
 radius and height limits to 1 and 2 respectively so the footprint decides fit.
 Run A* and Flow with the same intent, first Immediate, then
@@ -3648,5 +3648,5 @@ fixtures. Timing remains inconclusive.
 
 Local captures are under `artifacts/phase2-hardening`. The hosted Trailblazer
 develop pin needs an immutable GridForge revision containing the new query.
-The planar arrival-radius API discrepancy is tracked separately in
-[TRB-Issue-160](issue-tracker.md#trb-issue-160---planar-arrival-radius-has-no-movement-effect).
+The shared request-level arrival contract is tracked in
+[TRB-Issue-160](issue-tracker.md#trb-issue-160---arrival-radius-belongs-to-the-request).

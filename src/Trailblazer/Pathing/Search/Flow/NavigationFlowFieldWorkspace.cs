@@ -51,7 +51,8 @@ internal sealed class NavigationFlowFieldWorkspace
         EndpointWorkspace = new NavigationEndpointWorkspace(
             mapCapacity,
             dependencyPageCapacity,
-            dependencyComponentCapacity);
+            dependencyComponentCapacity,
+            nodeCapacity);
         RayWorkspace = new NavigationRayWorkspace(
             mapCapacity,
             dependencyPageCapacity,

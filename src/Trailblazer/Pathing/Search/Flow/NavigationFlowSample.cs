@@ -18,7 +18,9 @@ public readonly struct NavigationFlowSample
         TraversalMedium medium,
         NavigationTransitionInstruction transition,
         bool hasTransition,
-        bool isTransitionApproach = false)
+        bool isTransitionApproach = false,
+        bool isGoalApproach = false,
+        bool isGoalReached = false)
     {
         Heading = heading;
         Target = target;
@@ -26,9 +28,12 @@ public readonly struct NavigationFlowSample
         Transition = transition;
         HasTransition = hasTransition;
         IsTransitionApproach = isTransitionApproach;
+        IsGoalApproach = isGoalApproach;
+        IsGoalReached = isGoalReached;
     }
 
-    /// <summary>Gets the deterministic ordinary movement heading, or zero for a pending action.</summary>
+    /// <summary>Gets the deterministic ordinary movement heading.</summary>
+    /// <remarks>Use <see cref="IsGoalReached"/> to distinguish arrival from a heading that rounds to zero.</remarks>
     public Vector3d Heading { get; }
 
     /// <summary>Gets the exact movement or action-approach target.</summary>
@@ -43,5 +48,9 @@ public readonly struct NavigationFlowSample
     /// <summary>Gets whether this sample requires explicit semantic-action completion.</summary>
     public bool HasTransition { get; }
 
+    /// <summary>Gets whether the sampled foot satisfies the request's arrival condition at the proved terminal approach.</summary>
+    public bool IsGoalReached { get; }
+
     internal bool IsTransitionApproach { get; }
+    internal bool IsGoalApproach { get; }
 }

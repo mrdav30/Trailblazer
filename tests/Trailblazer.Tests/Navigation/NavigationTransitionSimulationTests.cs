@@ -167,7 +167,6 @@ public sealed class NavigationTransitionSimulationTests
                 Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Liquid,
             TraversalCapability.Climb | TraversalCapability.Swim);
         Vector3d waterAnchor = GuidedPathTestScene.Anchor(binding, water);
@@ -332,7 +331,6 @@ public sealed class NavigationTransitionSimulationTests
                 Fixed64.One / (Fixed64)4,
                 Fixed64.One,
                 Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Liquid,

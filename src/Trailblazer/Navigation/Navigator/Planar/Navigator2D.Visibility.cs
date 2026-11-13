@@ -55,12 +55,12 @@ public abstract partial class Navigator2D
     }
 
     private bool CommitVisibleLeg(NavigationTopDownGuideLease guide, bool acceptedRequestedTarget,
-        Vector2d previousCenter, Vector2d requestedCenter, ref bool reachedTarget)
+        Vector2d previousCenter, bool acceptedGuidedSegment, ref bool reachedTarget)
     {
         if (_preparedVisibleAnchor is not Vector2d next || Pose.Center == previousCenter)
             return true;
         // Only a clipped point on the proved segment can retire the source waypoint.
-        if (!acceptedRequestedTarget && !IsOnSegment(previousCenter, requestedCenter, Pose.Center))
+        if (!acceptedGuidedSegment)
             return true;
         NavigationGuideStatus status = guide.TryAdvanceStep();
         if (status != NavigationGuideStatus.Success)

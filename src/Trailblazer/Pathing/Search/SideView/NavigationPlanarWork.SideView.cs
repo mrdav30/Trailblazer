@@ -19,7 +19,8 @@ internal sealed partial class NavigationPlanarWork
     internal NavigationGuideStatus ResolveSideViewAnchor(GridWorld world, NavigationWorldGraph graph,
         NavigationMapInstance map, NavigationPlanarBinding binding, VoxelIndex index, int layerCount,
         in NavigationAgentProfile2D profile, NavigationAreaPolicy policy, NavigationWorkMeter meter,
-        out Vector2d center, NavigationGuideStatus invalid = NavigationGuideStatus.InvalidStart)
+        out Vector2d center, NavigationGuideStatus invalid = NavigationGuideStatus.InvalidStart,
+        (Vector2d Center, Fixed64 Radius)? goalRegion = null)
     {
         center = default;
         if (!meter.TryConsumeEndpointCandidates(1))
@@ -28,6 +29,8 @@ internal sealed partial class NavigationPlanarWork
             out _, out Vector2d candidate);
         if (status != NavigationGuideStatus.Success)
             return status;
+        if (!IsInsideGoalRegion(candidate, goalRegion))
+            return invalid;
         WorldVoxelIndex pin = Pin(map, index);
         status = TraceBody(world, graph, layerCount, binding, pin, pin, candidate, candidate,
             profile.Radius, profile.AxisLength, TraversalMedia.Solid, profile.Capabilities, policy, meter,

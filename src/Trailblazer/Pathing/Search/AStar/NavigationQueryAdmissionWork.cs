@@ -202,6 +202,7 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                 if (_world.ChangeSequence != _worldChangeSequence)
                     return Finish(NavigationQueryAdmissionStatus.Stale);
                 _end = _endpointWork.Result;
+                var goals = _endpointWork.TakeGoals();
                 _endpointWork.Reset();
                 NavigationWorldGraphLease lease = _lease!;
                 _result.Bind(
@@ -214,7 +215,8 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
                     _targetMedia,
                     _meter,
                     _worldChangeSequence,
-                    _requiresWorldStamp);
+                    _requiresWorldStamp,
+                    goals);
                 _lease = null;
                 Status = NavigationQueryAdmissionStatus.Success;
                 _endpointActive = false;
@@ -257,7 +259,8 @@ internal sealed class NavigationQueryAdmissionWork : IDisposable
             _areaPolicy!,
             role == NavigationEndpointRole.Start
                 ? NavigationCell.ToMedia(_startMedium)
-                : effectiveTargetMedia);
+                : effectiveTargetMedia,
+            role == NavigationEndpointRole.Destination ? _query.ArrivalRadius : null);
     }
 
     private NavigationQueryAdmissionStatus Finish(

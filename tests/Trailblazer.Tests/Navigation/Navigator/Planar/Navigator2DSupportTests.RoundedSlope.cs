@@ -202,7 +202,7 @@ public sealed partial class Navigator2DSupportTests
         Fixed64 radius = Fixed64.FromRaw(500_000_000);
         Fixed64 axis = Fixed64.FromFraction(7, 4);
         profile = new NavigationAgentProfile2D(NavigationMode2D.SideView, radius, axis, Fixed64.Zero, Fixed64.Zero,
-            Fixed64.Half, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Half, TraversalMedia.Solid, TraversalCapability.None);
         Fixed64 ceilingHeight = axis + Fixed64.FromRaw(1_250_000_000);
         var builder = new NavigationMapBuilder("side", grid).SetPlanarLayer(NavigationMode2D.SideView, 1, Fixed64.One);
         var headroomGrid = new GridConfiguration(new Vector3d(Fixed64.Zero, Fixed64.Zero, Fixed64.Two),

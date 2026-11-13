@@ -25,7 +25,7 @@ public sealed partial class Navigator2DSupportTests
             var from = GuidedAddress(reverse ? 1 : 0);
             var to = GuidedAddress(reverse ? 0 : 1);
             var profile = new NavigationAgentProfile2D(NavigationMode2D.SideView, Fixed64.FromFraction(15, 64),
-                Fixed64.Half, Fixed64.Zero, Fixed64.Zero, Fixed64.Half, Fixed64.Zero, TraversalMedia.Solid,
+                Fixed64.Half, Fixed64.Zero, Fixed64.Zero, Fixed64.Half, TraversalMedia.Solid,
                 TraversalCapability.None);
             context.Pathing.ResolveSideViewAnchor(from, profile, SideViewPolicy, SideViewBudget, out var start)
                 .Should().Be(NavigationGuideStatus.Success);

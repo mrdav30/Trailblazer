@@ -675,7 +675,6 @@ public sealed class NavigationFlowFieldGuideTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
         var query = new PathQuery(
@@ -741,7 +740,6 @@ public sealed class NavigationFlowFieldGuideTests
         Vector3d destinationFoot = NavigationAStarExitTestHarness.GetFoot(binding, destination);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid,
@@ -851,7 +849,6 @@ public sealed class NavigationFlowFieldGuideTests
         Vector3d destinationFoot = NavigationAStarExitTestHarness.GetFoot(binding, destination);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid,
@@ -995,7 +992,6 @@ public sealed class NavigationFlowFieldGuideTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -1347,7 +1343,9 @@ public sealed class NavigationFlowFieldGuideTests
                 out NavigationFlowFieldNode currentNode,
                 out NavigationCellAddress nextSource,
                 out Vector3d target,
-                out Vector3d heading)
+                out Vector3d heading,
+                out _,
+                out _)
             .Should().Be(NavigationGuideStatus.Stale);
 
         currentNode.Should().Be(default(NavigationFlowFieldNode));
@@ -1390,7 +1388,7 @@ public sealed class NavigationFlowFieldGuideTests
     }
 
     [Fact]
-    public void DestinationArrivalRadius_ShouldBeInclusiveForSurfaceSampling()
+    public void DestinationRequiresExactSurfaceSample()
     {
         using NavigationFlowFieldCacheTestHarness.LineFixture fixture =
             NavigationFlowFieldCacheTestHarness.CreateLine(extraIntegrationCost: Fixed64.Zero);
@@ -1399,7 +1397,6 @@ public sealed class NavigationFlowFieldGuideTests
             baseline.Shape,
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            Fixed64.Quarter,
             baseline.AllowedMedia,
             baseline.Capabilities);
         PathQuery source = fixture.FarQuery;
@@ -1438,9 +1435,8 @@ public sealed class NavigationFlowFieldGuideTests
         fixture.Graph.TryGetNodeState(destinationRef, out NavigationNodeState destination)
             .Should().BeTrue();
         Vector3d outside = destination.FootAnchor
-            + Vector3d.Right * (profile.ArrivalRadius + Fixed64.FromRaw(1));
-        Vector3d boundary = destination.FootAnchor
-            + Vector3d.Right * profile.ArrivalRadius;
+            + Vector3d.Right * (Fixed64.MinIncrement);
+        Vector3d boundary = destination.FootAnchor;
 
         guide.TrySampleHeading(outside, GenerousSampleBudget, out Vector3d outsideHeading)
             .Should().Be(NavigationGuideStatus.Success);
@@ -1821,7 +1817,6 @@ public sealed class NavigationFlowFieldGuideTests
             baseline.Shape,
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            Fixed64.Quarter,
             baseline.AllowedMedia,
             baseline.Capabilities);
         PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(
@@ -1950,10 +1945,9 @@ public sealed class NavigationFlowFieldGuideTests
             (record.Definition.ExitAnchor - sourcePortal).Normalized,
             "a zero-width portal is already crossed at its resolved anchor");
 
-        Vector3d withinArrival = targetState.FootAnchor
-            - Vector3d.Right * profile.ArrivalRadius;
+        Vector3d withinArrival = targetState.FootAnchor;
         Vector3d outsideArrival = targetState.FootAnchor
-            - Vector3d.Right * (profile.ArrivalRadius + Fixed64.FromRaw(1));
+            - Vector3d.Right * (Fixed64.MinIncrement);
         guide.TrySampleHeading(outsideArrival, GenerousSampleBudget, out heading)
             .Should().Be(NavigationGuideStatus.Success);
         heading.Should().NotBe(Vector3d.Zero);
@@ -2009,7 +2003,6 @@ public sealed class NavigationFlowFieldGuideTests
                 Fixed64.Zero),
             (Fixed64)2,
             (Fixed64)2,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
         using NavigationWorldGraphStore store =
@@ -2195,7 +2188,6 @@ public sealed class NavigationFlowFieldGuideTests
                 fixture.DefaultProfile.Shape,
                 maxStepUp: (Fixed64)2,
                 maxDropDown: (Fixed64)2,
-                fixture.DefaultProfile.ArrivalRadius,
                 fixture.DefaultProfile.AllowedMedia,
                 fixture.DefaultProfile.Capabilities)
             : fixture.DefaultProfile;
@@ -2431,7 +2423,6 @@ public sealed class NavigationFlowFieldGuideTests
             shape,
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
         PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(
@@ -2521,7 +2512,6 @@ public sealed class NavigationFlowFieldGuideTests
             shape,
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
         PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(
@@ -2609,7 +2599,6 @@ public sealed class NavigationFlowFieldGuideTests
             shape,
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
         PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(
@@ -2880,7 +2869,6 @@ public sealed class NavigationFlowFieldGuideTests
                 baseline.Shape.RootToFootOffsetY),
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
         PathQuery query = NavigationFlowFieldCacheTestHarness.ToFlowField(

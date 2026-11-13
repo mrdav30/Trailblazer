@@ -108,7 +108,6 @@ public sealed class NavigationRayTests
             new KinematicBodyShape(radius, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             allowsMedium ? TraversalMedia.Solid : TraversalMedia.Gas,
             hasCapability ? TraversalCapability.Climb : TraversalCapability.None);
         Vector3d foot = NavigationAStarExitTestHarness.GetFoot(fixture.Binding, default);
@@ -786,7 +785,6 @@ public sealed class NavigationRayTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             media,
             TraversalCapability.None);
         var sourceAddress = new NavigationCellAddress(fixture.MapId, source);
@@ -884,7 +882,6 @@ public sealed class NavigationRayTests
                 (Fixed64)3 / (Fixed64)2,
                 Fixed64.One,
                 Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -1073,7 +1070,6 @@ public sealed class NavigationRayTests
                 Fixed64.One / (Fixed64)4,
                 Fixed64.One,
                 Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -1367,7 +1363,6 @@ public sealed class NavigationRayTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Gas,
             TraversalCapability.None);
         NavigationCellAddress sourceAddress = new(fixture.MapId, source);
@@ -1443,7 +1438,6 @@ public sealed class NavigationRayTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape((Fixed64)2, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -1619,7 +1613,6 @@ public sealed class NavigationRayTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             media,
             TraversalCapability.None);
         var request = new NavigationRayRequest(
@@ -1775,7 +1768,6 @@ public sealed class NavigationRayTests
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 2);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Gas,
@@ -2062,7 +2054,6 @@ public sealed class NavigationRayTests
                 new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
                 (Fixed64)2,
                 (Fixed64)2,
-                Fixed64.Zero,
                 TraversalMedia.Solid,
                 TraversalCapability.None)
             : fixture.DefaultProfile;
@@ -2248,7 +2239,6 @@ public sealed class NavigationRayTests
                     Fixed64.Zero),
                 maxStepUp: Fixed64.Zero,
                 maxDropDown: Fixed64.Zero,
-                arrivalRadius: Fixed64.Zero,
                 allowedMedia: TraversalMedia.Solid,
                 capabilities: TraversalCapability.None);
         if (exitAtTargetWall)
@@ -2351,7 +2341,6 @@ public sealed class NavigationRayTests
                 Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
         Vector3d start = sourceState.FootAnchor + wallOffset;
@@ -2426,7 +2415,6 @@ public sealed class NavigationRayTests
                 Fixed64.One / (Fixed64)4,
                 Fixed64.One,
                 Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid,
@@ -2533,7 +2521,6 @@ public sealed class NavigationRayTests
                 Fixed64.One / (Fixed64)4,
                 Fixed64.One,
                 Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid,
@@ -2675,7 +2662,6 @@ public sealed class NavigationRayTests
                 baseline.Shape.RootToFootOffsetY),
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
 
@@ -2715,7 +2701,6 @@ public sealed class NavigationRayTests
                 baseline.Shape.RootToFootOffsetY),
             baseline.MaxStepUp,
             baseline.MaxDropDown,
-            baseline.ArrivalRadius,
             baseline.AllowedMedia,
             baseline.Capabilities);
         var address = new NavigationCellAddress(fixture.MapId, cell);
@@ -2988,7 +2973,6 @@ public sealed class NavigationRayTests
             baselineProfile.Shape,
             baselineProfile.MaxStepUp,
             baselineProfile.MaxDropDown,
-            baselineProfile.ArrivalRadius,
             baselineProfile.AllowedMedia,
             TraversalCapability.Climb);
         NavigationRayRequest request = CreateRequest(
@@ -3115,7 +3099,6 @@ public sealed class NavigationRayTests
                 baselineProfile.Shape.RootToFootOffsetY),
             baselineProfile.MaxStepUp,
             baselineProfile.MaxDropDown,
-            baselineProfile.ArrivalRadius,
             baselineProfile.AllowedMedia,
             TraversalCapability.Climb);
         NavigationRayResult oversizedProfile = RunRay(CreateRequest(
@@ -3138,7 +3121,6 @@ public sealed class NavigationRayTests
                 baselineProfile.Shape.RootToFootOffsetY),
             baselineProfile.MaxStepUp,
             baselineProfile.MaxDropDown,
-            baselineProfile.ArrivalRadius,
             baselineProfile.AllowedMedia,
             TraversalCapability.Climb);
         Vector3d wallOffset = new(

@@ -462,7 +462,7 @@ public sealed partial class NavigationTopDownTests
     private static PathQuery SpatialRequest(PathAlgorithm algorithm)
     {
         var profile = new NavigationAgentProfile(new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         return new PathQuery(
             new NavigationEndpoint(Vector3d.Zero, "spatial"), new NavigationEndpoint(Vector3d.Zero, "spatial"),
             profile, Policy.Key, new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
@@ -470,9 +470,10 @@ public sealed partial class NavigationTopDownTests
     }
 
     private static TrailblazerWorldContext CreateScheduledPlanarContext(NavigationSchedulingSettings? scheduling = null,
-        long? maxBatchDescriptorBytes = null, bool jumpScene = false)
+        long? maxBatchDescriptorBytes = null, bool jumpScene = false, int? goalNodeCapacity = null)
     {
-        var settings = PlanarSchedulingTestSettings.Create(scheduling, maxBatchDescriptorBytes);
+        var settings = PlanarSchedulingTestSettings.Create(scheduling, maxBatchDescriptorBytes,
+            goalNodeCapacity: goalNodeCapacity);
         var context = TrailblazerWorldContext.CreateOwned(settings: settings);
         context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(Policy, 1, context.FrameCount + 1))
             .Should().BeTrue();

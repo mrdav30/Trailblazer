@@ -91,7 +91,7 @@ public sealed partial class Navigator2DSupportTests
 
         using var context = Scene(NavigationMode2D.TopDown);
         var profile = new NavigationAgentProfile2D(NavigationMode2D.TopDown, Fixed64.Quarter, Fixed64.Zero,
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         create = () => new Host(context, profile, new NavigationMotorSettings2D(Fixed64.Zero, Fixed64.Zero,
             Fixed64.Zero, Fixed64.Zero, maxJumpCount: 2));
         create.Should().Throw<ArgumentException>();

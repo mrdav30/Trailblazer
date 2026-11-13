@@ -22,4 +22,5 @@ internal struct NavigationAStarNodeRecord
     internal int ParentEdgeOrdinal;
     internal bool HasParent;
     internal bool Closed;
+    internal bool IsGoal;
 }

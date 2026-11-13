@@ -161,7 +161,9 @@ internal sealed class NavigationFlowFieldGuideLease
                         out currentNode,
                         out candidateSource,
                         out target,
-                        out candidateHeading);
+                        out candidateHeading,
+                        out bool isGoalApproach,
+                        out bool isGoalReached);
                 if (!dependencyCurrent
                     || !TryGetCurrentPayloadUnderLock(out _, out _, graph)
                     || world.ChangeSequence != worldSequence)
@@ -219,7 +221,9 @@ internal sealed class NavigationFlowFieldGuideLease
                         target,
                         _currentMedium,
                         default,
-                        hasTransition: false);
+                        hasTransition: false,
+                        isGoalApproach: isGoalApproach,
+                        isGoalReached: isGoalReached);
                 }
                 return status;
             }

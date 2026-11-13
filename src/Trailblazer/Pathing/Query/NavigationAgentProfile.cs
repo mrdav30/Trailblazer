@@ -39,11 +39,6 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
     public Fixed64 MaxDropDown { get; }
 
     /// <summary>
-    /// Gets the non-negative distance at which the agent is considered to have arrived.
-    /// </summary>
-    public Fixed64 ArrivalRadius { get; }
-
-    /// <summary>
     /// Gets the traversal media this agent may enter.
     /// </summary>
     public TraversalMedia AllowedMedia { get; }
@@ -62,7 +57,6 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
         KinematicBodyShape shape,
         Fixed64 maxStepUp,
         Fixed64 maxDropDown,
-        Fixed64 arrivalRadius,
         TraversalMedia allowedMedia,
         TraversalCapability capabilities)
     {
@@ -78,11 +72,6 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
             nameof(maxDropDown),
             "Maximum drop-down distance cannot be negative.");
         ChronicleGuard.ThrowIfArgumentOutOfRange(
-            arrivalRadius < Fixed64.Zero,
-            actualValue: null,
-            nameof(arrivalRadius),
-            "Arrival radius cannot be negative.");
-        ChronicleGuard.ThrowIfArgumentOutOfRange(
             (allowedMedia & ~NavigationCell.KnownMedia) != 0,
             (int)allowedMedia,
             nameof(allowedMedia),
@@ -96,7 +85,6 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
         Shape = shape;
         MaxStepUp = maxStepUp;
         MaxDropDown = maxDropDown;
-        ArrivalRadius = arrivalRadius;
         AllowedMedia = allowedMedia;
         Capabilities = capabilities;
     }
@@ -106,7 +94,6 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
         Shape == other.Shape
         && MaxStepUp == other.MaxStepUp
         && MaxDropDown == other.MaxDropDown
-        && ArrivalRadius == other.ArrivalRadius
         && AllowedMedia == other.AllowedMedia
         && Capabilities == other.Capabilities;
 
@@ -118,7 +105,6 @@ public readonly struct NavigationAgentProfile : IEquatable<NavigationAgentProfil
     {
         int hash = SwiftHashTools.CombineHashCodes(Shape.GetHashCode(), MaxStepUp.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, MaxDropDown.GetHashCode());
-        hash = SwiftHashTools.CombineHashCodes(hash, ArrivalRadius.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, (int)AllowedMedia);
         return SwiftHashTools.CombineHashCodes(hash, (int)Capabilities);
     }

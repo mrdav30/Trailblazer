@@ -93,7 +93,7 @@ public sealed partial class NavigationDirectRayTests
         NavigationRayRequest request = scene.Request();
         CompareMappingAttempt(warm, request, Scene.Budget).Should().Be(NavigationRayStatus.CertifiedObstruction);
         var jumping = new NavigationAgentProfile(Scene.Profile.Shape, Fixed64.Zero, Fixed64.Zero,
-            Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.Jump);
+            TraversalMedia.Solid, TraversalCapability.Jump);
         NavigationRayRequest allowed = WithAdmission(request, jumping, Scene.Policy);
         CompareMappingAttempt(warm, allowed, Scene.Budget).Should().Be(NavigationRayStatus.Success);
 
@@ -102,7 +102,7 @@ public sealed partial class NavigationDirectRayTests
         CompareMappingAttempt(warm, WithAdmission(request, jumping, denied), Scene.Budget)
             .Should().NotBe(NavigationRayStatus.Success);
         var tall = new NavigationAgentProfile(new KinematicBodyShape(Fixed64.Zero, (Fixed64)2, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.Jump);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.Jump);
         CompareMappingAttempt(warm, WithAdmission(request, tall, Scene.Policy), Scene.Budget)
             .Should().NotBe(NavigationRayStatus.Success);
         CompareMappingAttempt(warm, Copy(allowed, medium: TraversalMedium.Gas), Scene.Budget)

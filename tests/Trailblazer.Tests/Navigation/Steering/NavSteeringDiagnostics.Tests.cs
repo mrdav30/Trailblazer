@@ -44,19 +44,21 @@ public sealed class NavSteeringDiagnosticsTests : IDisposable
         var invalid = new DiagnosticSteering(DiagnosticSteeringMode.InvalidPath);
         invalid.ApplyPathQuery(CreateQuery());
         invalid.GetHeading(vessel, out _).Should().Be(Vector3d.Zero);
-        invalid.IsAtDestination.Should().BeTrue();
+        invalid.IsAtDestination.Should().BeFalse();
+        invalid.ShouldMove.Should().BeFalse();
 
         var noHeading = new DiagnosticSteering(DiagnosticSteeringMode.NoHeading);
         noHeading.ApplyPathQuery(CreateQuery());
         noHeading.GetHeading(vessel, out _);
-        noHeading.IsAtDestination.Should().BeTrue();
+        noHeading.IsAtDestination.Should().BeFalse();
 
         var stuck = new DiagnosticSteering(DiagnosticSteeringMode.Stuck);
         stuck.ApplyPathQuery(CreateQuery());
-        for (int frame = 0; !stuck.IsAtDestination && frame < 64; frame++)
+        for (int frame = 0; stuck.ShouldMove && frame < 64; frame++)
             stuck.GetHeading(vessel, out _);
         stuck.IsStuck.Should().BeTrue();
-        stuck.IsAtDestination.Should().BeTrue();
+        stuck.IsAtDestination.Should().BeFalse();
+        stuck.ShouldMove.Should().BeFalse();
 
         var motorAgent = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Solid,
@@ -66,7 +68,7 @@ public sealed class NavSteeringDiagnosticsTests : IDisposable
 
         entries.Should().Contain("Invalid path detected!");
         entries.Should().Contain("No viable movement direction found.");
-        entries.Should().Contain("Stuck agent arriving!");
+        entries.Should().Contain("Stuck agent stopping before arrival.");
         entries.Should().Contain(message => message.StartsWith("NavMotor State:", StringComparison.Ordinal));
     }
 

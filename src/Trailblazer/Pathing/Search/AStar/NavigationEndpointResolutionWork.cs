@@ -36,6 +36,8 @@ internal sealed class NavigationEndpointResolutionWork
     private bool _cursorComplete;
     private bool _hasResult;
     private bool _requiresWorldStamp;
+    private Fixed64? _arrivalRadius;
+    private int _goalCount;
 
     internal NavigationEndpointResolutionWork(
         GridWorld world,
@@ -65,7 +67,8 @@ internal sealed class NavigationEndpointResolutionWork
         NavigationEndpointRole role,
         NavigationAgentProfile profile,
         NavigationAreaPolicy areaPolicy,
-        TraversalMedia media)
+        TraversalMedia media,
+        Fixed64? arrivalRadius = null)
     {
         ChronicleGuard.ThrowIfNull(graph, nameof(graph));
         ChronicleGuard.ThrowIfNull(areaPolicy, nameof(areaPolicy));
@@ -76,6 +79,8 @@ internal sealed class NavigationEndpointResolutionWork
             "Endpoint role must be start or destination.");
         _graph = graph;
         _endpoint = endpoint;
+        _arrivalRadius = arrivalRadius;
+        _goalCount = 0;
         _role = role;
         _media = media;
         _evaluator = new TraversalEvaluator(
@@ -96,7 +101,7 @@ internal sealed class NavigationEndpointResolutionWork
         _cursorBegun = false;
         _cursorComplete = false;
         _hasResult = false;
-        _requiresWorldStamp = false;
+        _requiresWorldStamp = arrivalRadius.HasValue;
         Result = default;
         _rayWork.Reset();
         _workspace.ResetResolution();
@@ -111,6 +116,10 @@ internal sealed class NavigationEndpointResolutionWork
 
     internal void Reset()
     {
+        if (_goalCount > 0)
+            Array.Clear(_workspace.Goals, 0, _goalCount);
+        _goalCount = 0;
+        _arrivalRadius = null;
         _graph = null!;
         _endpoint = default;
         _evaluator = default;
@@ -136,6 +145,15 @@ internal sealed class NavigationEndpointResolutionWork
     internal NavigationResolvedEndpoint Result { get; private set; }
 
     internal bool RequiresWorldStamp => _requiresWorldStamp;
+
+    internal ArraySegment<NavigationResolvedEndpoint> TakeGoals()
+    {
+        if (_goalCount == 0)
+            return default;
+        var goals = new ArraySegment<NavigationResolvedEndpoint>(_workspace.Goals, 0, _goalCount);
+        _goalCount = 0;
+        return goals;
+    }
 
     internal NavigationEndpointResolutionStatus Advance(
         int lookupStepLimit,
@@ -300,10 +318,8 @@ internal sealed class NavigationEndpointResolutionWork
             return false;
         }
         bool consumedVolumeWork = false;
-        _graph.TryGetNodeState(node, out NavigationNodeState state);
         bool qualified = TryQualifyCandidate(
                 node,
-                state,
                 out TraversalMedia qualifyingMedia,
                 out TraversalMedium resolutionMedium,
                 out Vector3d footAnchor,
@@ -322,6 +338,24 @@ internal sealed class NavigationEndpointResolutionWork
             resolutionMedium,
             footAnchor,
             distance);
+        if (_arrivalRadius.HasValue)
+        {
+            var goals = _workspace.Goals;
+            if (_goalCount == goals.Length)
+            {
+                Finish(NavigationEndpointResolutionStatus.CapacityExceeded);
+                return false;
+            }
+            if (!TryRecordComponents(resolved))
+            {
+                Finish(NavigationEndpointResolutionStatus.CapacityExceeded);
+                return false;
+            }
+            goals[_goalCount++] = resolved;
+            if (!_hasResult)
+                AcceptCandidate(resolved);
+            return !consumedVolumeWork;
+        }
         if (!SelectPreferredCandidate(
                 _hasResult,
                 Result,
@@ -339,6 +373,7 @@ internal sealed class NavigationEndpointResolutionWork
         }
 
         _pendingCandidate = resolved;
+        _graph.TryGetNodeState(node, out NavigationNodeState state);
         Vector3d start = _role == NavigationEndpointRole.Start
             ? _endpoint.Position
             : state.FootAnchor;
@@ -453,6 +488,14 @@ internal sealed class NavigationEndpointResolutionWork
 
     private bool TryGetBounds(out Vector3d minimum, out Vector3d maximum)
     {
+        if (_arrivalRadius is Fixed64 radius)
+        {
+            var extent = new Vector3d(radius, radius, radius);
+            // Only the candidate box clips to representable space. Admission uses the exact squared distance.
+            minimum = _endpoint.Position - extent;
+            maximum = _endpoint.Position + extent;
+            return true;
+        }
         Fixed64 distance = _endpoint.Resolution == EndpointResolutionPolicy.Strict
             ? Fixed64.Zero
             : _endpoint.MaxResolutionDistance;
@@ -487,10 +530,9 @@ internal sealed class NavigationEndpointResolutionWork
     {
         _pendingCandidate = default;
         _rayWork.Reset();
-        if (status == NavigationEndpointResolutionStatus.Success)
-        {
-            status = RecordResultComponents();
-        }
+        if (status == NavigationEndpointResolutionStatus.Success
+            && !_arrivalRadius.HasValue && !TryRecordComponents(Result))
+            status = NavigationEndpointResolutionStatus.CapacityExceeded;
         bool dependenciesWereRead = status == NavigationEndpointResolutionStatus.Success
             || (status == NavigationEndpointResolutionStatus.InvalidEndpoint
                 && (_workspace.PageCount != 0 || _workspace.ComponentCount != 0));
@@ -503,6 +545,7 @@ internal sealed class NavigationEndpointResolutionWork
         // Dependency validation can observe several immutable records, so recheck the
         // world epoch before publishing the terminal result.
         bool epochIsCurrent = epochWasCurrent
+            && (!_arrivalRadius.HasValue || ReferenceEquals(_graph, _store.Current))
             && NavigationSearchFinalizationRules.IsEpochCurrent(
                 epochRequired: true,
                 expectedEpoch: _worldChangeSequence,
@@ -558,7 +601,6 @@ internal sealed class NavigationEndpointResolutionWork
 
     private bool TryQualifyCandidate(
         NavigationNodeRef node,
-        NavigationNodeState state,
         out TraversalMedia qualifyingMedia,
         out TraversalMedium resolutionMedium,
         out Vector3d footAnchor,
@@ -571,7 +613,9 @@ internal sealed class NavigationEndpointResolutionWork
         distance = default;
         consumedVolumeWork = false;
         if ((_media & TraversalMedia.Solid) != 0
-            && _evaluator.TryGetPassableNodeState(node, out _))
+            && _evaluator.TryGetPassableNode(node, out var state, out _, out var prism)
+            && (!_arrivalRadius.HasValue || GridCellGeometry.IsNavigationBodyAnchorValid(
+                prism, state.FootAnchor, _evaluator.Profile.Shape.Radius, _evaluator.Profile.Shape.Height, default)))
         {
             if (!ConsiderMedium(
                     TraversalMedium.Solid,
@@ -634,12 +678,20 @@ internal sealed class NavigationEndpointResolutionWork
         ref Vector3d footAnchor,
         ref Fixed64 distance)
     {
-        if (!Vector3d.TryGetDistance(_endpoint.Position, anchor, out Fixed64 candidateDistance))
-            return false;
-        if (_endpoint.Resolution == EndpointResolutionPolicy.NearestNavigable
-            && candidateDistance > _endpoint.MaxResolutionDistance)
+        Fixed64 candidateDistance = default;
+        if (_arrivalRadius is Fixed64 radius)
         {
-            return true;
+            if (Vector3d.CompareDistanceSquared(_endpoint.Position, anchor, Vector3d.Zero,
+                new Vector3d(radius, Fixed64.Zero, Fixed64.Zero)) > 0)
+                return true;
+        }
+        else
+        {
+            if (!Vector3d.TryGetDistance(_endpoint.Position, anchor, out candidateDistance))
+                return false;
+            if (_endpoint.Resolution == EndpointResolutionPolicy.NearestNavigable
+                && candidateDistance > _endpoint.MaxResolutionDistance)
+                return true;
         }
         qualifyingMedia |= NavigationCell.ToMedia(medium);
         if (resolutionMedium == TraversalMedium.Unknown
@@ -653,23 +705,23 @@ internal sealed class NavigationEndpointResolutionWork
         return true;
     }
 
-    private NavigationEndpointResolutionStatus RecordResultComponents()
+    private bool TryRecordComponents(in NavigationResolvedEndpoint endpoint)
     {
         for (TraversalMedium medium = TraversalMedium.Solid;
              medium <= TraversalMedium.Liquid;
              medium++)
         {
-            if ((Result.Media & NavigationCell.ToMedia(medium)) == 0)
+            if ((endpoint.Media & NavigationCell.ToMedia(medium)) == 0)
                 continue;
             _graph.TryGetSurfaceComponent(
-                Result.Address,
+                endpoint.Address,
                 medium,
                 out NavigationSurfaceComponentKey componentKey,
                 out _);
             if (!_workspace.TryRecordComponent(componentKey))
-                return NavigationEndpointResolutionStatus.CapacityExceeded;
+                return false;
         }
-        return NavigationEndpointResolutionStatus.Success;
+        return true;
     }
 
     private static TraversalMedium FirstVolumeMedium(TraversalMedia media)

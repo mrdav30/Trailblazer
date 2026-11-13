@@ -51,13 +51,16 @@ public class NavigatorSerializationTests : IDisposable
     public void JsonWire_ShouldPublishCurrentNavigatorSchemaAndGuidedStateKey()
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        ApplyGuidedRequest(source);
+        ApplyGuidedRequest(source, arrivalRadius: Fixed64.Half);
 
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(9);
-        document.RootElement.GetProperty("PathSession").GetProperty("SchemaVersion").GetInt32().Should().Be(1);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(10);
+        JsonElement session = document.RootElement.GetProperty("PathSession");
+        session.GetProperty("SchemaVersion").GetInt32().Should().Be(2);
+        session.TryGetProperty("ArrivalRadius", out _).Should().BeTrue();
+        document.RootElement.GetProperty("NavigationProfile").TryGetProperty("ArrivalRadius", out _).Should().BeFalse();
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
     }
 
@@ -268,6 +271,45 @@ public class NavigatorSerializationTests : IDisposable
         populate.Should().Throw<InvalidOperationException>();
         target.Position.Should().Be(shellPosition);
         TestRequire.NotNull(target.Steering).CurrentQuery.Should().Be(shellQuery);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void RoundTrip_ShouldPreserveRequestRadiusAndRejectRetiredArrivalRecords(bool useMemoryPack)
+    {
+        var source = CreateNavigator(Vector3d.Zero);
+        var target = CreateNavigator(new Vector3d(-3, 0, -3), profile: source.NavigationProfile);
+        try
+        {
+            ApplyGuidedRequest(source, arrivalRadius: Fixed64.Half);
+            ApplyGuidedRequest(target);
+            var steering = TestRequire.NotNull(target.Steering);
+            PathQuery shellQuery = steering.CurrentQuery!.Value;
+            Vector3d shellPosition = target.Position;
+            object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+            object[] invalidRecords =
+            [
+                SerializationUtility.SetPayloadValue(payload, useMemoryPack, 9, "SchemaVersion"),
+                SerializationUtility.SetPayloadValue(payload, useMemoryPack, 1, "PathSession", "SchemaVersion"),
+                SerializationUtility.SetPayloadValue(payload, useMemoryPack, -Fixed64.One, "PathSession", "ArrivalRadius")
+            ];
+            foreach (object invalid in invalidRecords)
+            {
+                Assert.Throws<InvalidOperationException>(() => SerializationUtility.PopulateRecord(target, invalid, useMemoryPack));
+                target.Position.Should().Be(shellPosition);
+                steering.CurrentQuery.Should().Be(shellQuery);
+            }
+
+            // A saved direct hint cannot authorize an unresolved goal-region route.
+            object directHint = SerializationUtility.SetPayloadValue(payload, useMemoryPack, true, "Steering", "HasLineOfSightPath");
+            SerializationUtility.PopulateRecord(target, directHint, useMemoryPack);
+            steering.CurrentQuery!.Value.ArrivalRadius.Should().Be(Fixed64.Half);
+            steering.HasLineOfSightPath.Should().BeFalse();
+        }
+        finally { source.Reset(); target.Reset(); }
     }
 
     [Theory]
@@ -1123,7 +1165,6 @@ public class NavigatorSerializationTests : IDisposable
                 rootToFootOffsetY ?? defaultProfile.Shape.RootToFootOffsetY),
             defaultProfile.MaxStepUp,
             defaultProfile.MaxDropDown,
-            defaultProfile.ArrivalRadius,
             defaultProfile.AllowedMedia,
             defaultProfile.Capabilities);
         var navigator = new TestNavigator(TestWorld.Context);
@@ -1141,7 +1182,7 @@ public class NavigatorSerializationTests : IDisposable
         return navigator;
     }
 
-    private static void ApplyGuidedRequest(TestNavigator navigator)
+    private static void ApplyGuidedRequest(TestNavigator navigator, Fixed64? arrivalRadius = null)
     {
         PathQuery query = new(
             new NavigationEndpoint(navigator.FootPosition),
@@ -1151,7 +1192,8 @@ public class NavigatorSerializationTests : IDisposable
             new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             PathAlgorithm.AStar,
             new NavigationWorkBudget(8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1),
-            allowTransitions: true);
+            allowTransitions: true,
+            arrivalRadius: arrivalRadius);
         navigator.ApplyGuidedTrekRequest(query);
     }
 

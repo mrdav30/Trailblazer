@@ -53,6 +53,15 @@ internal sealed partial class NavigationPlanarWork
         return world.TryBeginCoveredAddresses(_cursor, minimum, maximum, 1, layer.Generation.ConfigurationKey);
     }
 
+    internal void BeginGoalCandidates(GridWorld world, GridCoveredAddressGeneration generation,
+        Vector2d center, Fixed64 layerCenter, Vector2d extent) =>
+        world.TryBeginCoveredAddresses(_cursor, new Vector3d(center.X - extent.X, layerCenter, center.Y - extent.Y),
+            new Vector3d(center.X + extent.X, layerCenter, center.Y + extent.Y), 1, generation.ConfigurationKey);
+
+    internal static bool IsInsideGoalRegion(Vector2d position, (Vector2d Center, Fixed64 Radius)? goalRegion) =>
+        goalRegion is not { } region || Vector2d.CompareDistanceSquared(position, region.Center,
+            Vector2d.Zero, new Vector2d(region.Radius, Fixed64.Zero)) <= 0;
+
     internal NavigationTraversalEdgeAdvanceStatus BindNeighborCandidateLayer(GridWorld world,
         GridPlanarLayer layer, NavigationWorkMeter meter)
     {

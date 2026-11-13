@@ -38,6 +38,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
     private Fixed64 _preparedInvDelta;
     private bool _mayAdvance;
     private string? _preparedDestinationMap;
+    private string? _preparedRegionalMap;
     private bool _busy;
     private bool _disposed;
 
@@ -47,7 +48,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         TraversalCapability capabilities = TraversalCapability.None)
         : this(context, initialMapId, globalId, initialPose,
             new NavigationAgentProfile2D(NavigationMode2D.TopDown, radius, Fixed64.Zero, Fixed64.Zero,
-                Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, NavigationCell.ToMedia(medium), capabilities),
+                Fixed64.Zero, Fixed64.Zero, NavigationCell.ToMedia(medium), capabilities),
             new NavigationMotorSettings2D(moveSpeed, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero), medium) { }
 
     /// <summary>Binds native body geometry and motor tuning to a published layer of the same mode.</summary>
@@ -199,7 +200,11 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
             bool grounded = IsSupported(result) && motorVertical <= Fixed64.Zero;
             bool acceptedTarget = accepted.Center == request.Target.Center;
             string? actionMap = GetAcceptedActionMap(accepted.Center);
-            string preferredMap = actionMap ?? (acceptedTarget ? _preparedDestinationMap : null) ?? CurrentMapId;
+            bool? acceptedGuidedSegment = _preparedRegionalMap != null || _preparedVisibleAnchor.HasValue
+                ? IsOnSegment(Pose.Center, request.Target.Center, accepted.Center) : null;
+            string? preparedMap = (acceptedTarget ? _preparedDestinationMap : null)
+                ?? (acceptedGuidedSegment == true ? _preparedRegionalMap : null);
+            string preferredMap = actionMap ?? preparedMap ?? CurrentMapId;
             var cellStatus = _context.Pathing.ResolvePlanarCommittedCell(_mapId, _binding, accepted.Center, _medium,
                 _guide.HasValue ? _policy : null, request.Frame, out var grid, out var voxel, out var cell,
                 out var acceptedMapId, CurrentMapId, preferredMap);
@@ -213,7 +218,8 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
             }
             PublishSupport(result, grounded);
             CommitActionMotion(actionMap != null);
-            CommitGuidance(acceptedTarget, previousCenter, request.Target.Center);
+            CommitGuidance(acceptedTarget, previousCenter, request.Target.Center, cell?.Address.MapId,
+                acceptedGuidedSegment);
             if (cellStatus != NavigationCommittedCellResolveStatus.Unavailable)
             {
                 _acceptedMapId = acceptedMapId ?? _acceptedMapId;
@@ -244,6 +250,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         _mayAdvance = false;
         _sideViewStagePrepared = false;
         _preparedDestinationMap = null;
+        _preparedRegionalMap = null;
         _preparedVisibleAnchor = null;
         _preparedFacing = _facing;
         _preparedCarry = Vector2d.Zero;
@@ -335,6 +342,9 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         mayAdvance = reachedCenter && !visible;
         if (reachedCenter)
             _preparedDestinationMap = address.MapId;
+        if (_arrivalRadius.HasValue
+            && guide.CurrentStepIndex == guide.StepCount - (visible ? 2 : 1))
+            _preparedRegionalMap = address.MapId;
         return target;
     }
 
@@ -375,19 +385,23 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         return step;
     }
 
-    private void CommitGuidance(bool acceptedRequestedTarget, Vector2d previousCenter, Vector2d requestedCenter)
+    private void CommitGuidance(bool acceptedRequestedTarget, Vector2d previousCenter, Vector2d requestedCenter,
+        string? acceptedMapId, bool? acceptedGuidedSegment)
     {
         if (_guide is not NavigationGuideLease route)
             return;
         if (_binding.Mode == NavigationMode2D.SideView)
         {
-            CommitSideViewStage(route, acceptedRequestedTarget, previousCenter, requestedCenter);
+            CommitSideViewStage(route, acceptedRequestedTarget, previousCenter, requestedCenter, acceptedMapId,
+                acceptedGuidedSegment);
             return;
         }
         var guide = new NavigationTopDownGuideLease(route);
         bool reachedTarget = _mayAdvance && acceptedRequestedTarget;
-        if (!CommitVisibleLeg(guide, acceptedRequestedTarget, previousCenter, requestedCenter, ref reachedTarget))
+        if (!CommitVisibleLeg(guide, acceptedRequestedTarget, previousCenter, acceptedGuidedSegment.GetValueOrDefault(),
+            ref reachedTarget))
             return;
+        reachedTarget = reachedTarget || IsAcceptedRegionalArrival(route, acceptedMapId, acceptedGuidedSegment);
         bool arrived = reachedTarget && guide.CurrentStepIndex == guide.StepCount - 1;
         if (reachedTarget && HoldActionIfPresent(route))
             return;
@@ -401,6 +415,11 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
                 FinishArrival();
         }
     }
+
+    private bool IsAcceptedRegionalArrival(NavigationGuideLease route, string? acceptedMapId, bool? acceptedRegionalSegment) =>
+        acceptedRegionalSegment == true && _arrivalRadius is Fixed64 radius && !_requiresConnector
+        && !_heldTransition.HasValue && _preparedRegionalMap is string map && acceptedMapId == map
+        && route.IsPlanarArrivalInRange(Pose.Center, map, radius);
 
     private void ApplyGuideStatus(NavigationGuideStatus status)
     {

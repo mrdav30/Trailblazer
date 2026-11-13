@@ -17,6 +17,65 @@ public sealed partial class Navigator2DSupportTests
     private static readonly Vector2d Bend = new(Fixed64.Zero, Fixed64.Quarter);
 
     [Theory]
+    [InlineData(PathAlgorithm.AStar, false)]
+    [InlineData(PathAlgorithm.FlowField, false)]
+    [InlineData(PathAlgorithm.AStar, true)]
+    [InlineData(PathAlgorithm.FlowField, true)]
+    public void SideViewArrivalRegionFinishesTheProvedFinalLegWithFreshSupport(PathAlgorithm algorithm,
+        bool invalidateAtCommit)
+    {
+        var grid = new GridConfiguration(GuidedGrid.BoundsMin, new Vector3d(2, 1, 1));
+        using var context = TrailblazerWorldContext.CreateOwned();
+        context.SetFrameRate(16);
+        context.World.TryAddGrid(grid, out _).Should().BeTrue();
+        var policy = new NavigationAreaPolicy(SideViewPolicy, new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+        context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(policy, 1, 1)).Should().BeTrue();
+        PublishGuidedMap(context, GuidedMap(grid, 1, Fixed64.One, flat: true), 2);
+        using var host = new Host(context);
+        host.Sample(SupportAt(Vector2d.Zero));
+        host.RefreshSupport();
+        var blocked = GuidedAddress(2);
+        var budget = new NavigationWorkBudget(4096, 32, 64, 128, 0, 0, 0, 0, 0, 4096, 0);
+        host.ApplySideViewGuidedTrekRequest(GuidedAddress(0), blocked, SideViewPolicy, algorithm, budget,
+            arrivalRadius: Fixed64.One + Fixed64.Half).Should().Be(NavigationGuideStatus.Success);
+        var boundary = Vector2d.Right * Fixed64.Half;
+        bool clipped = false;
+        for (int frame = 0; frame < 24 && !host.HasArrived; frame++)
+        {
+            context.Simulate();
+            host.PrepareFrameMotion();
+            Vector2d target = host.Request.Target.Center;
+            bool justOutside = !clipped && target == boundary;
+            Vector2d accepted = justOutside ? boundary - Vector2d.Right * Fixed64.MinIncrement : target;
+            host.Accept(accepted, new NavigationSupport2D(new Vector2d(accepted.X, -Fixed64.Half),
+                Vector2d.Forward, Fixed64.One));
+            bool invalidated = invalidateAtCommit && accepted.X >= boundary.X;
+            if (invalidated)
+                host.OnRead = () => context.World.TryAddGrid(
+                    new GridConfiguration(new Vector3d(10, 0, 10), new Vector3d(11, 1, 11)), out _).Should().BeTrue();
+            host.CommitFrameMotion();
+            context.LateSimulate();
+            if (invalidated)
+            {
+                host.Pose.Center.Should().Be(accepted);
+                host.HasArrived.Should().BeFalse();
+                host.GuidanceStatus.Should().Be(NavigationGuideStatus.Stale);
+                return;
+            }
+            if (justOutside)
+            {
+                host.HasArrived.Should().BeFalse();
+                clipped = true;
+            }
+        }
+        clipped.Should().BeTrue();
+        invalidateAtCommit.Should().BeFalse();
+        host.IsGrounded.Should().BeTrue();
+        host.HasArrived.Should().BeTrue();
+        host.Pose.Center.X.Should().BeGreaterThanOrEqualTo(boundary.X).And.BeLessThan(Fixed64.One);
+    }
+
+    [Theory]
     [InlineData(PathAlgorithm.AStar, NavigationAcquisitionMode.Immediate, false)]
     [InlineData(PathAlgorithm.FlowField, NavigationAcquisitionMode.Immediate, true)]
     [InlineData(PathAlgorithm.AStar, NavigationAcquisitionMode.Scheduled, true)]
@@ -36,6 +95,7 @@ public sealed partial class Navigator2DSupportTests
         ApplySideView(host, descending, algorithm).Should().Be(mode == NavigationAcquisitionMode.Scheduled
             ? NavigationGuideStatus.Pending : NavigationGuideStatus.Success);
         bool clipped = false;
+        bool clippedArrival = false;
         bool acceptedBend = false;
         for (int frame = 0; frame < 128 && !host.HasArrived; frame++)
         {
@@ -61,12 +121,25 @@ public sealed partial class Navigator2DSupportTests
                 target = (before + target) * Fixed64.Half;
                 clipped = true;
             }
-            host.Accept(target, SupportAt(target));
+            bool oneRawShort = !clippedArrival && target == end;
+            if (oneRawShort)
+                target += Vector2d.Sign(before - end) * Fixed64.MinIncrement;
+            var support = oneRawShort
+                ? new NavigationSupport2D(new Vector2d(target.X, end.Y - Fixed64.Half), Vector2d.Forward, Fixed64.One)
+                : SupportAt(target);
+            host.Accept(target, support);
             host.CommitFrameMotion();
             context.LateSimulate();
+            if (oneRawShort)
+            {
+                host.IsGrounded.Should().BeTrue();
+                host.HasArrived.Should().BeFalse();
+                clippedArrival = true;
+            }
             acceptedBend |= target == Bend;
         }
         clipped.Should().BeTrue();
+        clippedArrival.Should().BeTrue();
         acceptedBend.Should().BeTrue();
         host.Pose.Center.Should().Be(end);
         host.IsGrounded.Should().BeTrue();
@@ -317,7 +390,7 @@ public sealed partial class Navigator2DSupportTests
         var mode = sideView ? NavigationMode2D.SideView : NavigationMode2D.TopDown;
         using var context = Scene(mode);
         var profile = new NavigationAgentProfile2D(mode, Fixed64.Quarter, Fixed64.Zero, Fixed64.Zero,
-            Fixed64.Zero, sideView ? Fixed64.Half : Fixed64.Zero, Fixed64.Zero, TraversalMedia.Gas,
+            Fixed64.Zero, sideView ? Fixed64.Half : Fixed64.Zero, TraversalMedia.Gas,
             TraversalCapability.None);
         using var host = new Host(context, profile, sideView ? Settings : default(NavigationMotorSettings2D),
             medium: TraversalMedium.Gas);

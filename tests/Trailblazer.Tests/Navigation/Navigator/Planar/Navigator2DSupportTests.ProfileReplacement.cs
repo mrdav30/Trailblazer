@@ -34,7 +34,7 @@ public sealed partial class Navigator2DSupportTests
         host.HostCalls.Should().Be(0);
 
         static NavigationAgentProfile2D Circle(Fixed64 radius) => new(NavigationMode2D.TopDown, radius, Fixed64.Zero,
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
     }
 
     [Theory]
@@ -337,7 +337,7 @@ public sealed partial class Navigator2DSupportTests
             host.RefreshSupport();
         var replacement = radius
             ? new NavigationAgentProfile2D(Profile.Mode, Fixed64.FromFraction(3, 8), Profile.AxisLength, Profile.MaxStepUp,
-                Profile.MaxDropDown, Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities)
+                Profile.MaxDropDown, Profile.MinimumSupportNormalDot, Profile.AllowedMedia, Profile.Capabilities)
             : Posture(Fixed64.One);
         host.TryReplaceNavigationProfile(replacement).Should().Be(NavigationProfileReplacementStatus.NavigationClearanceRejected);
         host.HostCalls.Should().Be(0);
@@ -413,7 +413,7 @@ public sealed partial class Navigator2DSupportTests
     {
         using var context = GuidedScene(PathTestFactory.BuildSideViewValley(GuidedGrid).Build());
         var profile = new NavigationAgentProfile2D(Profile.Mode, Fixed64.FromFraction(15, 64), Profile.AxisLength,
-            Profile.MaxStepUp, Profile.MaxDropDown, Profile.MinimumSupportNormalDot, Profile.ArrivalRadius,
+            Profile.MaxStepUp, Profile.MaxDropDown, Profile.MinimumSupportNormalDot,
             Profile.AllowedMedia, Profile.Capabilities);
         context.Pathing.ResolveSideViewAnchor(GuidedAddress(1), profile, SideViewPolicy, SideViewBudget, out var start)
             .Should().Be(NavigationGuideStatus.Success);
@@ -423,7 +423,7 @@ public sealed partial class Navigator2DSupportTests
         host.RefreshSupport();
         var smaller = new NavigationAgentProfile2D(Profile.Mode, profile.Radius - Fixed64.FromFraction(1, 32),
             Profile.AxisLength, Profile.MaxStepUp, Profile.MaxDropDown, Profile.MinimumSupportNormalDot,
-            Profile.ArrivalRadius, Profile.AllowedMedia, Profile.Capabilities);
+            Profile.AllowedMedia, Profile.Capabilities);
         host.TryReplaceNavigationProfile(smaller).Should().Be(NavigationProfileReplacementStatus.Applied);
         host.Pose.Center.X.Should().Be(start.X);
         host.IsGrounded.Should().BeFalse();
@@ -516,7 +516,7 @@ public sealed partial class Navigator2DSupportTests
         host.HostCalls.Should().Be(1);
 
         static NavigationAgentProfile2D TopDownProfile(Fixed64 radius) => new(NavigationMode2D.TopDown, radius,
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid,
+            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid,
             TraversalCapability.None);
     }
 
@@ -557,7 +557,7 @@ public sealed partial class Navigator2DSupportTests
         using var host = new PostureHost(context);
         var compact = Posture(Fixed64.Zero);
         var gas = new NavigationAgentProfile2D(Profile.Mode, Profile.Radius, Profile.AxisLength, Profile.MaxStepUp,
-            Profile.MaxDropDown, Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, TraversalMedia.Gas,
+            Profile.MaxDropDown, Profile.MinimumSupportNormalDot, TraversalMedia.Gas,
             Profile.Capabilities);
         host.TryReplaceNavigationProfile(default).Should().Be(NavigationProfileReplacementStatus.InvalidProfile);
         host.TryReplaceNavigationProfile(gas).Should().Be(NavigationProfileReplacementStatus.CurrentMediumNotAllowed);
@@ -580,7 +580,7 @@ public sealed partial class Navigator2DSupportTests
 
     private static NavigationAgentProfile2D Posture(Fixed64 axis, TraversalCapability capabilities = TraversalCapability.Jump) =>
         new(NavigationMode2D.SideView, Profile.Radius, axis, Profile.MaxStepUp, Profile.MaxDropDown,
-            Profile.MinimumSupportNormalDot, Profile.ArrivalRadius, TraversalMedia.Solid, capabilities);
+            Profile.MinimumSupportNormalDot, TraversalMedia.Solid, capabilities);
 
     private sealed record OccupancyFixture(Guid GlobalId, Vector3d Position) : IVoxelOccupant
     {

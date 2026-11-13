@@ -135,7 +135,7 @@ public partial class NavSteering
             _destination = _requestedDestination = query.End.Position;
             LastAcquisitionStatus = ResolveContext().Guides.Scheduler.Schedule(query, out state.Request,
                 !CanPathfind ? NavigationGuideRequestFlavor.NavigatorDirectOnly
-                    : state.GraphOnlyRetry ? NavigationGuideRequestFlavor.NavigatorGraphOnly
+                    : state.GraphOnlyRetry || query.ArrivalRadius.HasValue ? NavigationGuideRequestFlavor.NavigatorGraphOnly
                     : NavigationGuideRequestFlavor.NavigatorDirectFirst);
             state.GraphOnlyRetry = false;
             return IsRetryableAcquisition(LastAcquisitionStatus.Value);
@@ -362,8 +362,9 @@ public partial class NavSteering
 
     internal void ValidateActualMedium(TraversalMedium medium)
     {
-        if ((_acquisitionMode == NavigationAcquisitionMode.Scheduled || HasNavigationConnector)
-            && _currentQuery is PathQuery query && query.Traversal.StartMedium != medium
+        if (_currentQuery is PathQuery query && query.Traversal.StartMedium != medium
+            && (_acquisitionMode == NavigationAcquisitionMode.Scheduled || HasNavigationConnector
+                || query.ArrivalRadius.HasValue)
             && _pendingTransitionOwner?.PendingTransition == null)
         {
             LastAcquisitionStatus = NavigationGuideStatus.Unsupported;

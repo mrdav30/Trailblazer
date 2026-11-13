@@ -7,6 +7,7 @@
 
 using System;
 using FixedMathSharp;
+using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 
@@ -45,6 +46,26 @@ public sealed partial class TrailblazerGuideService
     internal void DisposeScheduled() => _scheduler.Dispose();
     internal NavigationGuideScheduler Scheduler => _scheduler;
 
+    internal bool IsAStarGoalFootValid(in PathQuery query, in NavigationGuideStep step, Vector3d foot)
+    {
+        var pathing = _context.Pathing;
+        NavigationWorldGraphStore store = pathing.NavigationGraphStore;
+        using var lease = store.TryAcquire();
+        if (lease == null || !lease.Graph.TryGetSeamPrism(step.Address, out var prism) || !prism.Contains(foot))
+            return false;
+        if (step.Medium == TraversalMedium.Solid)
+            return GridCellGeometry.IsNavigationBodyAnchorValid(prism, foot, query.Agent.Shape.Radius,
+                query.Agent.Shape.Height, default);
+        if (!lease.Graph.AreaCatalog.TryGet(query.AreaPolicy, out NavigationAreaPolicy policy))
+            return false;
+
+        var meter = new GuideSampleWorkMeter(_context.Settings.GuideSampleBudget);
+        return NavigationSelectedEdgeProgressWork.RunRay(_context.World, store, lease.Graph, query.Agent,
+            policy, step.Medium, foot, step.Position, NavigationRayChainConstraint.SourceOnly(step.Address),
+            ref meter, pathing.ImmediateRayWorkspace, NavigationRayEndpointAllowance.None)
+            == NavigationGuideStatus.Success;
+    }
+
     /// <summary>Proves one cost-neutral graph-direct surface heading.</summary>
     internal NavigationRayStatus TryGetDirectHeading(
         PathQuery query,
@@ -53,6 +74,8 @@ public sealed partial class TrailblazerGuideService
     {
         EnsureUsable();
         heading = Vector3d.Zero;
+        if (query.ArrivalRadius.HasValue)
+            return NavigationRayStatus.Blocked;
         NavigationImmediateRayWorkspace immediate = _context.Pathing.ImmediateRayWorkspace;
         lock (immediate.SyncRoot)
         {

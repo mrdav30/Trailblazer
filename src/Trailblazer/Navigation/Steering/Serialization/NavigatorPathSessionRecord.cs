@@ -17,7 +17,7 @@ namespace Trailblazer.Navigation.Steering;
 /// </summary>
 internal sealed class NavigatorPathSessionRecord : IRecordable
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion;
 
@@ -36,6 +36,8 @@ internal sealed class NavigatorPathSessionRecord : IRecordable
     public EndpointResolutionPolicy EndResolution;
 
     public Fixed64 EndMaxResolutionDistance;
+
+    private Fixed64 ArrivalRadius;
 
     public string? AreaPolicyId;
 
@@ -66,6 +68,7 @@ internal sealed class NavigatorPathSessionRecord : IRecordable
         EndMapId = value.End.MapId;
         EndResolution = value.End.Resolution;
         EndMaxResolutionDistance = value.End.MaxResolutionDistance;
+        ArrivalRadius = value.ArrivalRadius.GetValueOrDefault();
         AreaPolicyId = value.AreaPolicy.PolicyId;
         AreaPolicyRevision = value.AreaPolicy.Revision;
         TargetMedia = value.Traversal.TargetMedia;
@@ -115,7 +118,8 @@ internal sealed class NavigatorPathSessionRecord : IRecordable
                 AllowTransitions,
                 Algorithm == PathAlgorithm.FlowField
                     ? new FlowFieldQueryOptions(ExtraIntegrationCost)
-                    : default);
+                    : default,
+                ArrivalRadius);
             return true;
         }
         catch (ArgumentException)
@@ -135,6 +139,7 @@ internal sealed class NavigatorPathSessionRecord : IRecordable
         RecordValues.Look(chronicler, ref EndMapId, "EndMapId", null);
         RecordValues.Look(chronicler, ref EndResolution, "EndResolution", EndpointResolutionPolicy.Strict);
         RecordValues.Look(chronicler, ref EndMaxResolutionDistance, "EndMaxResolutionDistance", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref ArrivalRadius, "ArrivalRadius", Fixed64.Zero);
         RecordValues.Look(chronicler, ref AreaPolicyId, "AreaPolicyId", null);
         RecordValues.Look(chronicler, ref AreaPolicyRevision, "AreaPolicyRevision", 0L);
         RecordValues.Look(chronicler, ref TargetMedia, "TargetMedia", TraversalMedia.None);

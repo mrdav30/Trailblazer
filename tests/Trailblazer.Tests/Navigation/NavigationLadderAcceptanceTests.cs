@@ -115,7 +115,7 @@ public sealed class NavigationLadderAcceptanceTests
         continuationFrames.Should().BeInRange(2, 512);
         climbStarts.Should().Be(1);
         (scenario.EndRoot - navigator.Position).Magnitude.Should()
-            .BeLessThanOrEqualTo(profile.ArrivalRadius);
+            .BeLessThanOrEqualTo(Fixed64.FromFraction(1, 8));
         navigator.Position.Y.Should().Be(scenario.EndRoot.Y);
         navigator.IsGuided.Should().BeFalse();
         navigator.LastCommittedCell!.Value.Address.Should().Be(
@@ -242,7 +242,6 @@ public sealed class NavigationLadderAcceptanceTests
             Fixed64.One / (Fixed64)4),
         maxStepUp: Fixed64.Zero,
         maxDropDown: Fixed64.Zero,
-        arrivalRadius: Fixed64.One / (Fixed64)8,
         allowedMedia: TraversalMedia.Solid,
         capabilities);
 
@@ -354,7 +353,7 @@ public sealed class NavigationLadderAcceptanceTests
             new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid),
             algorithm,
             Budget,
-            allowTransitions: true);
+            allowTransitions: true, arrivalRadius: Fixed64.FromFraction(1, 8));
 
         internal void SuppressTransition()
         {

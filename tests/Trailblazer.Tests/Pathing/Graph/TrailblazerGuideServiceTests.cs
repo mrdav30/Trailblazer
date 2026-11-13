@@ -168,6 +168,49 @@ public sealed class TrailblazerGuideServiceTests
     }
 
     [Fact]
+    public void TryGetDirectHeading_ArrivalRegion_ShouldLeaveEndpointSelectionToSearch()
+    {
+        using var context = CreateThreeCellContext(out PathQuery exact);
+        exact = ResolveDirectRoute(context, exact);
+        var query = new PathQuery(exact.Start, exact.End, exact.Agent, exact.AreaPolicy, exact.Traversal,
+            exact.Algorithm, exact.Budget, exact.AllowTransitions, arrivalRadius: Fixed64.One);
+
+        context.Guides.TryGetDirectHeading(query, query.Start.Position, out var heading)
+            .Should().Be(NavigationRayStatus.Blocked);
+        heading.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void IsAStarGoalFootValid_ShouldRequireAvailableGraphAndTheAdmittedCellAndPolicy()
+    {
+        using var context = CreateThreeCellContext(out PathQuery query);
+        NavigationWorldGraphStore store = context.Pathing.NavigationGraphStore;
+        var address = new NavigationCellAddress(query.End.MapId!, new VoxelIndex(6, 4, 4));
+        var step = new NavigationGuideStep(address, query.End.Position, TraversalMedium.Gas, default, false);
+        var missing = new NavigationGuideStep(new NavigationCellAddress("missing", address.Index),
+            step.Position, step.Medium, default, false);
+        context.Guides.IsAStarGoalFootValid(query, missing, step.Position).Should().BeFalse();
+        context.Guides.IsAStarGoalFootValid(query, step, step.Position + Vector3d.Right * (Fixed64)5).Should().BeFalse();
+        var wrongPolicy = new PathQuery(query.Start, query.End, query.Agent,
+            new NavigationAreaPolicyKey("missing", 1), query.Traversal, query.Algorithm,
+            query.Budget, query.AllowTransitions, arrivalRadius: Fixed64.One);
+        context.Guides.IsAStarGoalFootValid(wrongPolicy, step, step.Position).Should().BeFalse();
+
+        var leases = new NavigationWorldGraphLease?[context.Settings.MaxConcurrentSnapshotLeases];
+        try
+        {
+            for (int i = 0; i < leases.Length; i++)
+                leases[i] = TestRequire.NotNull(store.TryAcquire());
+            context.Guides.IsAStarGoalFootValid(query, step, step.Position).Should().BeFalse();
+        }
+        finally
+        {
+            foreach (var lease in leases)
+                lease?.Dispose();
+        }
+    }
+
+    [Fact]
     public void TryGetDirectHeading_ExhaustedGraphLeaseCapacity_ShouldFailWithoutAHeading()
     {
         using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery query);
@@ -639,7 +682,6 @@ public sealed class TrailblazerGuideServiceTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
         var query = new PathQuery(
@@ -665,7 +707,6 @@ public sealed class TrailblazerGuideServiceTests
         using TrailblazerWorldContext context = CreateThreeCellContext(out PathQuery aStarQuery);
         var flowProfile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid,
@@ -776,7 +817,6 @@ public sealed class TrailblazerGuideServiceTests
                     flowQuery.Agent.Shape,
                     flowQuery.Agent.MaxStepUp,
                     flowQuery.Agent.MaxDropDown,
-                    flowQuery.Agent.ArrivalRadius,
                     flowQuery.Agent.AllowedMedia | TraversalMedia.Gas,
                     flowQuery.Agent.Capabilities),
                 flowQuery.AreaPolicy,
@@ -861,7 +901,6 @@ public sealed class TrailblazerGuideServiceTests
         new NavigationEndpoint(Vector3d.Right),
         new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid,
@@ -975,7 +1014,6 @@ public sealed class TrailblazerGuideServiceTests
             new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Quarter),
             Fixed64.One,
             Fixed64.One,
-            Fixed64.Half,
             TraversalMedia.Solid,
             TraversalCapability.None);
         return new PathQuery(
@@ -1155,7 +1193,6 @@ public sealed class TrailblazerGuideServiceTests
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid,
             TraversalCapability.None);
         query = new PathQuery(
@@ -1273,7 +1310,6 @@ public sealed class TrailblazerGuideServiceTests
         Vector3d end = new(endPrism.Center.X, endPrism.VerticalMin, endPrism.Center.Z);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Solid,

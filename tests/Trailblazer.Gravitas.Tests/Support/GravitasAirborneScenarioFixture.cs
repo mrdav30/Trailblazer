@@ -39,7 +39,6 @@ internal sealed class GravitasAirborneScenarioFixture : IDisposable
             new KinematicBodyShape(Fixed64.Quarter, Fixed64.One, Fixed64.Half),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Gas,
             TraversalCapability.Jump | TraversalCapability.Fly);
 

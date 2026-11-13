@@ -10,6 +10,88 @@ namespace Trailblazer.Tests.Pathing.Graph;
 public sealed partial class NavigationSideViewTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ArrivalRegionUsesTheAuthoredSupportEvenWhenTheDestinationIsBlocked(bool representableMidpoint)
+    {
+        using var context = Scene(out _);
+        var builder = SideView("side", Grid);
+        AddFloor(builder, 0, -Fixed64.Half);
+        AddFloor(builder, 1, -Fixed64.Half);
+        var goal = Cell(2);
+        var left = new Vector2d(Fixed64.One + Fixed64.Half, -Fixed64.Half);
+        var right = representableMidpoint
+            ? new Vector2d(Fixed64.Two, -Fixed64.Half)
+            : left + new Vector2d(Fixed64.MinIncrement, Fixed64.FromRaw(2));
+        builder.AddPlanarSupport(goal.Index, left, right);
+        Publish(context, builder.Build());
+
+        // The requested cell center is one unit from x=1. Its authored anchor is only 0.75 units away.
+        var status = context.Guides.RequestSideViewGuide(Cell(0), goal, Profile(Fixed64.Half), Policy.Key,
+            PathAlgorithm.AStar, GuideBudget(candidates: 32), out var guide,
+            arrivalRadius: Fixed64.Half + Fixed64.Quarter);
+        using (guide)
+        {
+            status.Should().Be(representableMidpoint ? NavigationGuideStatus.Success : NavigationGuideStatus.InvalidEnd);
+            if (!representableMidpoint)
+                return;
+            guide.StepCount.Should().Be(2);
+            guide.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
+            guide.TryGetCurrentStep(out var terminal, out _).Should().Be(NavigationGuideStatus.Success);
+            terminal.Should().Be(Cell(1));
+        }
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar, false)]
+    [InlineData(PathAlgorithm.FlowField, false)]
+    [InlineData(PathAlgorithm.AStar, true)]
+    [InlineData(PathAlgorithm.FlowField, true)]
+    public void ArrivalRegionSkipsTheDisconnectedApproachToABlockedCenter(PathAlgorithm algorithm, bool scheduled)
+    {
+        using var context = Scene(out _, settings: PlanarSchedulingTestSettings.Create());
+        var builder = SideView("side", Grid);
+        AddFloor(builder, 0, -Fixed64.Half);
+        AddFloor(builder, 1, -Fixed64.Half);
+        builder.AddCell(Cell(3).Index, Solid).AddPlanarSupport(Cell(3).Index,
+            new Vector2d(Fixed64.Two + Fixed64.Half, -Fixed64.Half), new Vector2d(Fixed64.Three, -Fixed64.Half));
+        // The x=2 center is blocked. Its closer x=2.75 approach is isolated from x=0.
+        Publish(context, builder.Build());
+        var profile = Profile(Fixed64.Half);
+        var start = Cell(0);
+        var destination = Cell(2);
+        var radius = Fixed64.One;
+        var budget = GuideBudget(candidates: 32);
+        Assert.Throws<System.ArgumentOutOfRangeException>(() => context.Guides.RequestSideViewGuide(start, destination,
+            profile, Policy.Key, algorithm, budget, out _, arrivalRadius: -Fixed64.MinIncrement));
+        context.Guides.RequestSideViewGuide(start, destination, profile, Policy.Key, algorithm, budget, out _)
+            .Should().Be(NavigationGuideStatus.InvalidEnd);
+
+        NavigationSideViewGuideLease guide;
+        if (scheduled)
+        {
+            context.Guides.ScheduleSideViewGuide(start, destination, profile, Policy.Key, algorithm, budget,
+                out var pending, arrivalRadius: radius).Should().Be(NavigationGuideStatus.Pending);
+            using var request = TestRequire.NotNull(pending);
+            RunScheduled(context, request).Should().Be(NavigationGuideStatus.Success);
+            request.TryTakeSideViewGuide(out guide).Should().BeTrue();
+        }
+        else
+        {
+            context.Guides.RequestSideViewGuide(start, destination, profile, Policy.Key, algorithm, budget,
+                out guide, arrivalRadius: radius).Should().Be(NavigationGuideStatus.Success);
+        }
+        using (guide)
+        {
+            guide.StepCount.Should().Be(2);
+            guide.TryAdvanceStep().Should().Be(NavigationGuideStatus.Success);
+            guide.TryGetCurrentStep(out var address, out var center).Should().Be(NavigationGuideStatus.Success);
+            address.Should().Be(Cell(1));
+            center.Should().Be(Vector2d.Right);
+        }
+    }
+
+    [Theory]
     [InlineData(PathAlgorithm.AStar)]
     [InlineData(PathAlgorithm.FlowField)]
     public void ScheduledGuidePublishesExactStepAtTheImmediateLookupBoundary(PathAlgorithm algorithm)

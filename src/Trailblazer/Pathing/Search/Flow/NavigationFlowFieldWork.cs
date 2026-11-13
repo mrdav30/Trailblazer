@@ -24,7 +24,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         BuildPayload = 5,
         SortPayloadNodes = 6,
         SortPayloadLookup = 7,
-        ResetSearch = 8
+        ResetSearch = 8,
+        SeedGoals = 9
     }
 
     private NavigationResolvedPathQuery? _query;
@@ -45,6 +46,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
     private NavigationFlowFieldStatus _resultStatus;
     private Stage _stage;
     private int _currentSlot;
+    private int _goalSeedOrdinal;
     private int _postNodeOrdinal;
     private int _transitionOrdinal;
     private readonly ulong _worldChangeSequence;
@@ -87,7 +89,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 Finish(NavigationFlowFieldStatus.CapacityExceeded);
                 return;
             }
-            if (!query.Query.AllowTransitions
+            if (query.Goals.Count == 0 && !query.Query.AllowTransitions
                 && !_graph.AreInSameSurfaceComponent(
                     query.Start.Address,
                     query.StartMedium,
@@ -138,6 +140,19 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                 {
                     return Status;
                 }
+            }
+            if (_stage == Stage.SeedGoals)
+            {
+                var goals = _query!.Goals;
+                while (_goalSeedOrdinal < goals.Count)
+                {
+                    if (nodeRemaining == 0)
+                        return Status;
+                    nodeRemaining--;
+                    if (!TrySeedGoal(goals.Array![goals.Offset + _goalSeedOrdinal++]))
+                        return Finish(NavigationFlowFieldStatus.CapacityExceeded);
+                }
+                _stage = Stage.Search;
             }
             if (_stage == Stage.Search)
             {
@@ -251,7 +266,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                     _workspace.DependencyPages,
                     _workspace.DependencyPageCount,
                     _workspace.EndpointWorkspace.Dependencies
-                        .HasTransitionDependency);
+                        .HasTransitionDependency,
+                    requireGraphVersion: _query.Goals.Count > 0);
                 int lookupBefore = _meter.LookupProbes;
                 bool complete = _dependencyStamp.Advance(_meter, lookupRemaining);
                 lookupRemaining -= _meter.LookupProbes - lookupBefore;
@@ -281,7 +297,8 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                         record.SelectedEdge,
                         record.SelectedIsTransition
                             ? _transitionOrdinal++
-                            : -1);
+                            : -1,
+                        record.SelectedTargetIsGoal);
                     _payloadLookup![_postNodeOrdinal] = _postNodeOrdinal;
                     _postNodeOrdinal++;
                     nodeRemaining--;
@@ -477,7 +494,7 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         {
             _graph!.TryGetNodeAddress(predecessorState.Node, out predecessor.Address);
             predecessor.IntegrationCost = candidate;
-            SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot),
+            SetSelectedEdge(ref predecessor, current, _workspace.GetNode(_currentSlot),
                 forwardOrdinal, edgeKind);
             predecessor.HeapIndex = -1;
             _heap.Push(predecessorSlot);
@@ -494,13 +511,13 @@ internal sealed class NavigationFlowFieldWork : IDisposable
                     CreateSelectedEdge(current.Address, _workspace.GetNode(_currentSlot), forwardOrdinal),
                     predecessor.SelectedEdge) < 0)
             {
-                SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot),
+                SetSelectedEdge(ref predecessor, current, _workspace.GetNode(_currentSlot),
                     forwardOrdinal, edgeKind);
             }
             return Status;
         }
         predecessor.IntegrationCost = candidate;
-        SetSelectedEdge(ref predecessor, current.Address, _workspace.GetNode(_currentSlot),
+        SetSelectedEdge(ref predecessor, current, _workspace.GetNode(_currentSlot),
             forwardOrdinal, edgeKind);
         _heap.DecreaseKey(predecessorSlot);
         return Status;
@@ -675,20 +692,24 @@ internal sealed class NavigationFlowFieldWork : IDisposable
 
     private static void SetSelectedEdge(
         ref NavigationFlowFieldSearchNode record,
-        NavigationCellAddress target,
+        in NavigationFlowFieldSearchNode target,
         NavigationMediumStateRef currentState,
         int forwardOrdinal,
         NavigationTraversalEdgeKind edgeKind)
     {
-        record.SelectedEdge = CreateSelectedEdge(target, currentState, forwardOrdinal);
+        record.SelectedEdge = CreateSelectedEdge(target.Address, currentState, forwardOrdinal);
         record.SelectedIsTransition = edgeKind == NavigationTraversalEdgeKind.Transition;
+        record.SelectedTargetIsGoal = !target.SelectedEdge.IsValid;
     }
 
     private bool TryBeginSearch()
     {
-        if (!TrySeedTargetMedium(TraversalMedium.Solid)
-            || !TrySeedTargetMedium(TraversalMedium.Gas)
-            || !TrySeedTargetMedium(TraversalMedium.Liquid))
+        if (_query!.Goals.Count > 0)
+        {
+            _stage = Stage.SeedGoals;
+            return true;
+        }
+        if (!TrySeedGoal(_query.End))
         {
             Finish(NavigationFlowFieldStatus.CapacityExceeded);
             return false;
@@ -697,33 +718,36 @@ internal sealed class NavigationFlowFieldWork : IDisposable
         return true;
     }
 
-    private bool TrySeedTargetMedium(TraversalMedium medium)
+    private bool TrySeedGoal(in NavigationResolvedEndpoint goal) =>
+        TrySeedTargetMedium(goal, TraversalMedium.Solid)
+        && TrySeedTargetMedium(goal, TraversalMedium.Gas)
+        && TrySeedTargetMedium(goal, TraversalMedium.Liquid);
+
+    private bool TrySeedTargetMedium(in NavigationResolvedEndpoint goal, TraversalMedium medium)
     {
         if (medium is TraversalMedium.Gas or TraversalMedium.Liquid)
         {
             if ((_query!.TargetMedia & NavigationCell.ToMedia(medium)) != 0)
                 _requiresWorldStamp = true;
         }
-        if ((_query!.End.Media & NavigationCell.ToMedia(medium)) == 0)
+        if ((goal.Media & NavigationCell.ToMedia(medium)) == 0)
             return true;
-        if (_query.Planar == null)
+        if (_query!.Planar == null)
         {
             _graph!.TryGetSurfaceComponent(
-                _query.End.Address,
+                goal.Address,
                 medium,
                 out NavigationSurfaceComponentKey component,
                 out _);
             if (!_workspace.TryRecordComponent(component))
                 return false;
         }
-        var state = new NavigationMediumStateRef(_query.End.Node, medium);
+        var state = new NavigationMediumStateRef(goal.Node, medium);
         if (!_workspace.TryGetOrAdd(state, out int slot, out _))
-        {
             return false;
-        }
         ref NavigationFlowFieldSearchNode destination =
             ref _workspace.GetRecord(slot);
-        destination.Address = _query.End.Address;
+        destination.Address = goal.Address;
         destination.IntegrationCost = Fixed64.Zero;
         destination.HeapIndex = -1;
         _heap.Push(slot);

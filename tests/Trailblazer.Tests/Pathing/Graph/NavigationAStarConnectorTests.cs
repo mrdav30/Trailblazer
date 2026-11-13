@@ -605,7 +605,7 @@ public class NavigationAStarConnectorTests
         GuidedPathTestScene.PublishMapAndPolicy(context, builder.Build(), 1, OverlayReplacementPolicy.Clear, 1, policy, 2);
         var profile = new NavigationAgentProfile(new KinematicBodyShape(wide ? (Fixed64)0.6m : Fixed64.Zero,
             wide ? Fixed64.Half : Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, media, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, media, TraversalCapability.None);
         Fixed64 footY = wide ? -Fixed64.Quarter : -Fixed64.Half;
         Fixed64 footZ = wide ? Fixed64.One : Fixed64.Zero;
         query = new PathQuery(new NavigationEndpoint(new Vector3d((Fixed64)96, footY, footZ), "connector"),

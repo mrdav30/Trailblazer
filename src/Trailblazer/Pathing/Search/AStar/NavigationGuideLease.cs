@@ -37,6 +37,9 @@ public readonly struct NavigationGuideLease : IDisposable
 
     internal bool HasConnector => _inner?.HasConnector(_generation) ?? false;
 
+    internal bool IsPlanarArrivalInRange(Vector2d accepted, string mapId, Fixed64 radius) =>
+        _inner?.IsPlanarArrivalInRange(_generation, accepted, mapId, radius) ?? false;
+
     internal NavigationGuideStatus GetSideViewStage(out NavigationAStarGuidePoint source,
         out NavigationAStarGuidePoint target)
     {

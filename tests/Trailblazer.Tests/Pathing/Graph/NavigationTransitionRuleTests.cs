@@ -618,7 +618,6 @@ public sealed class NavigationTransitionRuleTests
                 Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Liquid | TraversalMedia.Gas,
             TraversalCapability.Fly
                 | TraversalCapability.Jump
@@ -662,7 +661,6 @@ public sealed class NavigationTransitionRuleTests
                 Fixed64.Zero),
             Fixed64.Zero,
             Fixed64.Zero,
-            Fixed64.Zero,
             TraversalMedia.Solid | TraversalMedia.Liquid | TraversalMedia.Gas,
             TraversalCapability.Fly);
         return new PathQuery(
@@ -700,7 +698,6 @@ public sealed class NavigationTransitionRuleTests
                 Fixed64.One / (Fixed64)4,
                 Fixed64.One,
                 Fixed64.Zero),
-            Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero,
             TraversalMedia.Liquid | TraversalMedia.Gas,

@@ -89,12 +89,16 @@ internal static class NavigationSelectedEdgeProgressWork
         out NavigationFlowFieldNode currentNode,
         out NavigationCellAddress nextSourceAddress,
         out Vector3d target,
-        out Vector3d heading)
+        out Vector3d heading,
+        out bool isGoalApproach,
+        out bool isGoalReached)
     {
         currentNode = default;
         nextSourceAddress = sourceAddress;
         target = default;
         heading = Vector3d.Zero;
+        isGoalApproach = false;
+        isGoalReached = false;
         if (!dependencyCurrent)
             return NavigationGuideStatus.Stale;
         if (medium is TraversalMedium.Gas or TraversalMedium.Liquid)
@@ -112,12 +116,16 @@ internal static class NavigationSelectedEdgeProgressWork
                 out currentNode,
                 out nextSourceAddress,
                 out target,
-                out heading);
+                out heading,
+                out isGoalApproach,
+                out isGoalReached);
         }
         NavigationCellAddress currentSource = sourceAddress;
         bool allowRecovery = true;
         while (true)
         {
+            isGoalApproach = false;
+            isGoalReached = false;
             int initialNodeAllowance = meter.GetCurrentNodeLookupAllowance();
             bool reuseNode = selectedEdgeResolver.TryGetNode(
                 graph,
@@ -154,7 +162,7 @@ internal static class NavigationSelectedEdgeProgressWork
                 return NavigationGuideStatus.BudgetExceeded;
             bool sourceContains = sourcePrism.Contains(actualFootPosition);
             target = sourceState.FootAnchor;
-            if (currentSource == payload.Key.DestinationAddress)
+            if (!node.SelectedEdge.IsValid)
             {
                 if (sourceContains
                     && GridCellGeometry.IsNavigationBodyAnchorValid(
@@ -165,11 +173,10 @@ internal static class NavigationSelectedEdgeProgressWork
                         default))
                 {
                     nextSourceAddress = currentSource;
-                    if (IsWithinArrivalRadius(
-                            actualFootPosition,
-                            sourceState.FootAnchor,
-                            payload.Key.Agent.ArrivalRadius))
+                    isGoalApproach = true;
+                    if (IsGoalReached(payload, actualFootPosition, sourceState.FootAnchor))
                     {
+                        isGoalReached = true;
                         heading = Vector3d.Zero;
                         return NavigationGuideStatus.Success;
                     }
@@ -255,12 +262,14 @@ internal static class NavigationSelectedEdgeProgressWork
                     sourceContains,
                     targetContains,
                     actualFootPosition,
-                    payload.Key.Agent.Shape,
-                    node.SelectedEdge.Target == payload.Key.DestinationAddress,
-                    payload.Key.Agent.ArrivalRadius,
+                    payload,
+                    node.SelectedTargetIsGoal,
                     ref meter,
                     out NavigationCellAddress explicitSource,
-                    out heading);
+                    out target,
+                    out heading,
+                    out isGoalApproach,
+                    out isGoalReached);
                 if (explicitStatus == NavigationGuideStatus.LocalRecoveryRequired)
                 {
                     NavigationGuideStatus recovery = TryAdvanceRecovery(
@@ -365,15 +374,11 @@ internal static class NavigationSelectedEdgeProgressWork
                 allowRecovery = false;
                 continue;
             }
-            if (targetBodyValid
-                && node.SelectedEdge.Target == payload.Key.DestinationAddress
-                && IsWithinArrivalRadius(
-                    actualFootPosition,
-                    targetState.FootAnchor,
-                    payload.Key.Agent.ArrivalRadius))
+            if (node.SelectedTargetIsGoal && targetBodyValid && actualFootPosition == targetState.FootAnchor)
             {
+                isGoalApproach = true;
+                isGoalReached = true;
                 nextSourceAddress = currentSource;
-                heading = Vector3d.Zero;
                 return NavigationGuideStatus.Success;
             }
             if (sourceBodyValid)
@@ -389,15 +394,28 @@ internal static class NavigationSelectedEdgeProgressWork
                     out heading);
             }
 
+            bool approachesGoal = node.SelectedTargetIsGoal;
             NavigationGuideStatus targetProgress = HasReachedOrPassed(
                 targetPortal,
                 targetState.FootAnchor,
                 actualFootPosition,
-                out bool passedTarget);
+                out bool passedTarget,
+                exact: approachesGoal);
             if (targetProgress != NavigationGuideStatus.Success)
                 return targetProgress;
             if (!passedTarget)
             {
+                if (approachesGoal && targetContains
+                    && GridCellGeometry.IsNavigationBodyAnchorValid(targetPrism, actualFootPosition,
+                        payload.Key.Agent.Shape.Radius, payload.Key.Agent.Shape.Height, default)
+                    && IsGoalReached(payload, actualFootPosition, targetState.FootAnchor))
+                {
+                    isGoalApproach = true;
+                    isGoalReached = true;
+                    nextSourceAddress = currentSource;
+                    return NavigationGuideStatus.Success;
+                }
+                isGoalApproach = approachesGoal;
                 nextSourceAddress = currentSource;
                 return TrySetHeading(
                     actualFootPosition,
@@ -424,12 +442,16 @@ internal static class NavigationSelectedEdgeProgressWork
         out NavigationFlowFieldNode currentNode,
         out NavigationCellAddress nextSourceAddress,
         out Vector3d target,
-        out Vector3d heading)
+        out Vector3d heading,
+        out bool isGoalApproach,
+        out bool isGoalReached)
     {
         currentNode = default;
         nextSourceAddress = sourceAddress;
         target = default;
         heading = Vector3d.Zero;
+        isGoalApproach = false;
+        isGoalReached = false;
         NavigationCellAddress currentSource = sourceAddress;
         graph.AreaCatalog.TryGet(
             payload.Key.AreaPolicy,
@@ -452,37 +474,35 @@ internal static class NavigationSelectedEdgeProgressWork
                 nextSourceAddress = currentSource;
                 return NavigationGuideStatus.Success;
             }
-            graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef);
-            graph.TryGetNodeState(
-                sourceRef,
-                medium,
-                out NavigationNodeState sourceState);
-            sourceState.TryGetCenteredVolumeFootAnchor(
-                payload.Key.Agent.Shape.Height,
-                out Vector3d sourceAnchor);
-            target = sourceAnchor;
             if (!node.SelectedEdge.IsValid)
             {
+                graph.TryGetNodeRef(currentSource, out NavigationNodeRef sourceRef);
+                graph.TryGetNodeState(sourceRef, medium, out NavigationNodeState sourceState);
+                sourceState.TryGetCenteredVolumeFootAnchor(payload.Key.Agent.Shape.Height, out Vector3d sourceAnchor);
+                target = sourceAnchor;
                 nextSourceAddress = currentSource;
+                bool reachesGoal = IsGoalReached(payload, actualFootPosition, sourceAnchor);
                 NavigationGuideStatus destination = RunRay(
                     world,
                     store,
                     graph,
-                    payload,
+                    payload.Key.Agent,
                     areaPolicy,
                     medium,
                     actualFootPosition,
                     sourceAnchor,
                     NavigationRayChainConstraint.SourceOnly(currentSource),
                     ref meter,
-                    immediateRayWorkspace);
+                    immediateRayWorkspace,
+                    reachesGoal && payload.Key.HasGoalRegion
+                        ? NavigationRayEndpointAllowance.None
+                        : NavigationRayEndpointAllowance.StartPrefix);
                 if (destination != NavigationGuideStatus.Success)
                     return destination;
-                if (IsWithinArrivalRadius(
-                        actualFootPosition,
-                        sourceAnchor,
-                        payload.Key.Agent.ArrivalRadius))
+                isGoalApproach = true;
+                if (reachesGoal)
                 {
+                    isGoalReached = true;
                     heading = Vector3d.Zero;
                     return NavigationGuideStatus.Success;
                 }
@@ -494,7 +514,8 @@ internal static class NavigationSelectedEdgeProgressWork
             graph.TryGetNodeState(
                 targetRef,
                 medium,
-                out NavigationNodeState targetState);
+                out NavigationNodeState targetState,
+                out GridCellPrism targetPrism);
             targetState.TryGetCenteredVolumeFootAnchor(
                 payload.Key.Agent.Shape.Height,
                 out Vector3d targetAnchor);
@@ -505,7 +526,7 @@ internal static class NavigationSelectedEdgeProgressWork
                     world,
                     store,
                     graph,
-                    payload,
+                    payload.Key.Agent,
                     areaPolicy,
                     medium,
                     actualFootPosition,
@@ -522,11 +543,44 @@ internal static class NavigationSelectedEdgeProgressWork
                 continue;
             }
 
+            // A foot already inside the next cell cannot seed a ray on the preceding edge's source.
+            if (node.SelectedTargetIsGoal && payload.Key.HasGoalRegion
+                && IsGoalReached(payload, actualFootPosition, targetAnchor))
+            {
+                if (!meter.TryConsumePrismChecks(1))
+                    return NavigationGuideStatus.BudgetExceeded;
+                if (targetPrism.Contains(actualFootPosition))
+                {
+                    NavigationGuideStatus arrival = RunRay(
+                        world,
+                        store,
+                        graph,
+                        payload.Key.Agent,
+                        areaPolicy,
+                        medium,
+                        actualFootPosition,
+                        targetAnchor,
+                        NavigationRayChainConstraint.SourceOnly(node.SelectedEdge.Target),
+                        ref meter,
+                        immediateRayWorkspace,
+                        NavigationRayEndpointAllowance.None);
+                    if (arrival == NavigationGuideStatus.Success)
+                    {
+                        nextSourceAddress = currentSource;
+                        isGoalApproach = true;
+                        isGoalReached = true;
+                        return NavigationGuideStatus.Success;
+                    }
+                    if (arrival != NavigationGuideStatus.LocalRecoveryRequired)
+                        return arrival;
+                }
+            }
+
             NavigationGuideStatus status = RunRay(
                 world,
                 store,
                 graph,
-                payload,
+                payload.Key.Agent,
                 areaPolicy,
                 medium,
                 actualFootPosition,
@@ -540,28 +594,15 @@ internal static class NavigationSelectedEdgeProgressWork
             if (status != NavigationGuideStatus.Success)
                 return status;
             nextSourceAddress = currentSource;
-            if (node.SelectedEdge.Target == payload.Key.DestinationAddress
-                && IsWithinArrivalRadius(
-                    actualFootPosition,
-                    targetAnchor,
-                    payload.Key.Agent.ArrivalRadius))
-            {
-                heading = Vector3d.Zero;
-                return NavigationGuideStatus.Success;
-            }
+            isGoalApproach = node.SelectedTargetIsGoal;
             return TrySetHeadingUnchecked(actualFootPosition, targetAnchor, out heading);
         }
     }
 
-    private static bool IsWithinArrivalRadius(
-        Vector3d actualFootPosition,
-        Vector3d target,
-        Fixed64 arrivalRadius) =>
-        Vector3d.CompareDistanceSquared(
-            actualFootPosition,
-            target,
-            Vector3d.Zero,
-            new Vector3d(arrivalRadius, Fixed64.Zero, Fixed64.Zero)) <= 0;
+    private static bool IsGoalReached(NavigationFlowFieldPayload payload, Vector3d actual, Vector3d anchor) =>
+        actual == anchor || (payload.Key.HasGoalRegion
+            && Vector3d.CompareDistanceSquared(actual, payload.Key.Destination.Position, Vector3d.Zero,
+                new Vector3d(payload.Key.ArrivalRadius, Fixed64.Zero, Fixed64.Zero)) <= 0);
 
     internal static NavigationGuideStatus TrySampleTransitionApproach(
         GridWorld world,
@@ -585,7 +626,7 @@ internal static class NavigationSelectedEdgeProgressWork
             world,
             store,
             graph,
-            payload,
+            payload.Key.Agent,
             areaPolicy,
             medium,
             actualFootPosition,
@@ -600,18 +641,19 @@ internal static class NavigationSelectedEdgeProgressWork
             : status;
     }
 
-    private static NavigationGuideStatus RunRay(
+    internal static NavigationGuideStatus RunRay(
         GridWorld world,
         NavigationWorldGraphStore store,
         NavigationWorldGraph graph,
-        NavigationFlowFieldPayload payload,
+        NavigationAgentProfile agent,
         NavigationAreaPolicy areaPolicy,
         TraversalMedium medium,
         Vector3d start,
         Vector3d end,
         NavigationRayChainConstraint constraint,
         ref GuideSampleWorkMeter meter,
-        NavigationImmediateRayWorkspace immediateRayWorkspace)
+        NavigationImmediateRayWorkspace immediateRayWorkspace,
+        NavigationRayEndpointAllowance endpointAllowance = NavigationRayEndpointAllowance.StartPrefix)
     {
         lock (immediateRayWorkspace.SyncRoot)
         {
@@ -627,12 +669,12 @@ internal static class NavigationSelectedEdgeProgressWork
                 world,
                 store,
                 graph,
-                payload.Key.Agent,
+                agent,
                 areaPolicy,
                 medium,
                 start,
                 end,
-                NavigationRayEndpointAllowance.StartPrefix,
+                endpointAllowance,
                 constraint));
             NavigationRayStatus status;
             try
@@ -954,15 +996,21 @@ internal static class NavigationSelectedEdgeProgressWork
         bool sourceContains,
         bool targetContains,
         Vector3d actualFootPosition,
-        KinematicBodyShape shape,
+        NavigationFlowFieldPayload payload,
         bool targetIsDestination,
-        Fixed64 arrivalRadius,
         ref GuideSampleWorkMeter meter,
         out NavigationCellAddress nextSourceAddress,
-        out Vector3d heading)
+        out Vector3d target,
+        out Vector3d heading,
+        out bool isGoalApproach,
+        out bool isGoalReached)
     {
         nextSourceAddress = sourceAddress;
+        target = targetState.FootAnchor;
         heading = Vector3d.Zero;
+        isGoalApproach = false;
+        isGoalReached = false;
+        KinematicBodyShape shape = payload.Key.Agent.Shape;
         NavigationConnection connection = record.Definition;
         NavigationPagedSequence<GridNavigationPortal>.Enumerator portals =
             record.NavigationPortals.GetEnumerator();
@@ -984,13 +1032,12 @@ internal static class NavigationSelectedEdgeProgressWork
                 shape.Radius,
                 shape.Height,
                 incomingPortal);
-        if (targetIsDestination
-            && zeroWitnessTargetBodyValid
-            && IsWithinArrivalRadius(actualFootPosition, targetState.FootAnchor, arrivalRadius))
+        if (targetIsDestination && zeroWitnessTargetBodyValid && actualFootPosition == targetState.FootAnchor)
         {
+            isGoalApproach = true;
+            isGoalReached = true;
             return NavigationGuideStatus.Success;
         }
-
         bool sourceBodyValid = sourceContains
             && GridCellGeometry.IsNavigationBodyAnchorValid(
                 sourcePrism,
@@ -1114,23 +1161,27 @@ internal static class NavigationSelectedEdgeProgressWork
                     incomingPortal));
         if (targetBodyValid)
         {
-            if (targetIsDestination
-                && IsWithinArrivalRadius(actualFootPosition, targetState.FootAnchor, arrivalRadius))
+            if (targetIsDestination && actualFootPosition == targetState.FootAnchor)
             {
+                isGoalApproach = true;
+                isGoalReached = true;
                 return NavigationGuideStatus.Success;
             }
             NavigationGuideStatus progressStatus = HasReachedOrPassed(
                 incomingTargetAnchor,
                 connection.ExitAnchor,
                 actualFootPosition,
-                out bool passedExit);
+                out bool passedExit,
+                exact: targetIsDestination);
             if (progressStatus != NavigationGuideStatus.Success)
                 return progressStatus;
             if (!passedExit)
             {
+                isGoalApproach = targetIsDestination;
+                target = connection.ExitAnchor;
                 return TrySetHeading(
                     actualFootPosition,
-                    connection.ExitAnchor,
+                    target,
                     ref meter,
                     out heading);
             }
@@ -1138,11 +1189,21 @@ internal static class NavigationSelectedEdgeProgressWork
                 connection.ExitAnchor,
                 targetState.FootAnchor,
                 actualFootPosition,
-                out bool passedTarget);
+                out bool passedTarget,
+                exact: targetIsDestination);
             if (progressStatus != NavigationGuideStatus.Success)
                 return progressStatus;
             if (!passedTarget)
             {
+                isGoalApproach = targetIsDestination;
+                if (targetIsDestination
+                    && GridCellGeometry.IsNavigationBodyAnchorValid(targetPrism, actualFootPosition, shape.Radius,
+                        shape.Height, default)
+                    && IsGoalReached(payload, actualFootPosition, targetState.FootAnchor))
+                {
+                    isGoalReached = true;
+                    return NavigationGuideStatus.Success;
+                }
                 return TrySetHeading(
                     actualFootPosition,
                     targetState.FootAnchor,
@@ -1212,7 +1273,8 @@ internal static class NavigationSelectedEdgeProgressWork
         Vector3d start,
         Vector3d end,
         Vector3d actual,
-        out bool passed)
+        out bool passed,
+        bool exact = false)
     {
         passed = false;
         if (start == end)
@@ -1226,7 +1288,8 @@ internal static class NavigationSelectedEdgeProgressWork
         {
             return NavigationGuideStatus.CostOverflow;
         }
-        passed = projection >= Fixed64.Zero;
+        passed = projection > Fixed64.Zero
+            || (projection == Fixed64.Zero && (!exact || Vector3d.CompareProjection(actual, end, direction) >= 0));
         return NavigationGuideStatus.Success;
     }
 

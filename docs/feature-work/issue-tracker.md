@@ -26,18 +26,7 @@
 
 ## Active Issues
 
-### TRB-Issue-160 - Planar arrival radius has no movement effect
-
-- **Discovered** 2026-11-12 during the Phase 2 hardening review.
-- **Behavior** `NavigationAgentProfile2D.ArrivalRadius` is documented as an
-  arrival tolerance. Positive values participate in profile equality and the
-  planar record, while both planar controller modes still require exact
-  accepted arrival. The field has no controller consumer.
-- **Resolution criteria** Settle the public tolerance contract. If ordinary
-  arrival uses the field, prove the terminal movement and preserve exact
-  acceptance at authored actions and intermediate route stages. If exact
-  ordinary arrival is the public contract, align the profile API, record
-  compatibility, and guides with it.
+None.
 
 ## Closed Investigations
 
@@ -281,6 +270,57 @@ alone do not justify renewed open-ended investigation.
   failures.
 
 ## Resolved Issues
+
+### TRB-Issue-160 - Arrival radius belongs to the request
+
+- **Discovered** 2026-11-12 during the Phase 2 hardening review.
+- **Root cause** The planar profile carried a radius with no movement effect.
+  Spatial steering used its profile radius as a final tolerance after
+  planning to an exact endpoint, so a blocked center could still reject the
+  entire request. The same shape should be usable for both exact and ranged
+  requests.
+- **Resolution** The 2D and 3D profiles contain agent configuration.
+  `PathQuery` and the planar requests take an optional arrival radius.
+  Omitted and zero radius keep exact arrival. A positive radius admits
+  clearance-valid endpoints within inclusive distance of the original
+  target. A* and Flow choose a reachable endpoint under the normal
+  traversal rules. Controllers finish on accepted final motion and preserve
+  intermediate step, support, and action requirements.
+- **Record compatibility** The spatial Navigator schema advances to 10,
+  spatial query and nested planar trek schemas advance to 2, and the
+  develop-only planar Navigator schema advances to 2. Previous schemas
+  reject before live mutation. JSON and MemoryPack round-trip the optional
+  request value and preserve transactional rejection.
+- **Regression coverage** A* and Flow approach blocked centers in spatial,
+  top-down, and side-view fixtures. Tests cover exact null and zero,
+  the inclusive raw-unit boundary, disconnected candidates, accepted
+  clips, snapshot changes, and scheduled acquisition.
+- **Verification** Windows and Ubuntu each passed 3,867 Release and
+  3,750 ReleaseLean tests with `UseLocalLsfStack=true`. Each lane reached
+  35,912/35,912 lines, 15,763/15,763 branches, and 3,592/3,592 fully covered
+  methods across core and adapter, including the focused final-fit case.
+  DocFX passed with zero warnings.
+- **Exact-route control** The Windows 100-agent, 64-frame benchmark matched
+  the Phase 2 baseline's frame checksums, ray counts, 21,600 B of first
+  admission allocations, and zero measured-frame allocations for both
+  algorithms. Median frame sums were 96.151 ms at baseline and 100.792 /
+  102.980 ms in the two A* captures, and 52.965 ms at baseline and
+  67.017 / 56.176 ms for Flow. Each capture had two successful children
+  per algorithm with five measured iterations each. Timing ranges
+  overlapped and the Flow medians varied across captures.
+- **Pre-commit hardening** A* now yields without steering when publication
+  invalidates the final arrival proof. Flow keeps an authored exit as the
+  target one raw unit before the exit and skips the terminal-only volume
+  ray while the accepted foot is outside the terminal prism. Planar
+  controllers share the segment-membership check when committing a
+  regional or lookahead leg. The A* heading loop advances only once
+  before reading the next step, including when consecutive addressed
+  waypoints share the same position. The source-stack matrix passed 3,870
+  Release and 3,753 ReleaseLean tests on each host, with 35,924/35,924
+  lines, 15,771/15,771 branches, and 3,592/3,592 fully covered methods.
+  The matched spatial benchmark preserved exact-route checksums, ray
+  counts, and allocations. The volume budget regression confirmed that
+  the preceding-cell approach now completes with a single trace allowance.
 
 ### TRB-Issue-159 - Stale-guide retry test races the initial direct ray
 

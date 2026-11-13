@@ -12,7 +12,7 @@ using GridForge.Grids;
 namespace Trailblazer.Pathing;
 
 /// <summary>Retains a selected planar route without pinning its graph generation.</summary>
-internal sealed class NavigationPlanarGuidePayload : NavigationAStarPayload
+internal class NavigationPlanarGuidePayload : NavigationAStarPayload
 {
     // Graph version, world spawn token and aligned world version.
     private const long SnapshotBytes = 24;

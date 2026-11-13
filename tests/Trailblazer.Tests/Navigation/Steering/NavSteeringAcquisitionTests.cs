@@ -16,6 +16,48 @@ namespace Trailblazer.Tests.Navigation.Steering;
 public class NavSteeringAcquisitionTests
 {
     [Fact]
+    public void AStarHeading_ShouldAdvanceOneCoincidentWaypointPerCall()
+    {
+        using var context = CreateContext(PathAlgorithm.AStar, out PathQuery query);
+        var start = new NavigationCellAddress("acquisition", new VoxelIndex(0, 0, 0));
+        var coincident = new NavigationCellAddress("acquisition", new VoxelIndex(1, 0, 0));
+        var end = new NavigationCellAddress("acquisition", new VoxelIndex(3, 0, 0));
+        var key = new NavigationAStarPayloadKey(query, start, end, TraversalMedium.Solid, TraversalMedia.Solid);
+        var dependencies = new GraphDependencyStamp(query.AreaPolicy, [], []);
+        // Distinct addressed nodes can retain the same position in an A* guide.
+        var payload = new NavigationAStarPayload(key,
+            [new(start, query.Start.Position, TraversalMedium.Solid),
+                new(coincident, query.Start.Position, TraversalMedium.Solid),
+                new(end, query.End.Position, TraversalMedium.Solid)],
+            [], Fixed64.Three, dependencies, null, NavigationSurfaceAStarStatus.Success);
+        var cache = context.Pathing.NavigationAStarAdmissionGate.PayloadCache;
+        cache.TryReservePayload(payload.RetainedBytes, out var reservation).Should().BeTrue();
+        cache.TryPublish(payload, context.Pathing.NavigationGraphStore, ref reservation, out var cached).Should().BeTrue();
+        cached.Dispose();
+
+        var steering = new NavSteering(context);
+        var agent = new MockSteerAgent(query.Start.Position) { NavigationProfile = query.Agent, Speed = Fixed64.One };
+        steering.ApplyPathQuery(query);
+        try
+        {
+            steering.GetHeading(agent, out _).Should().Be(Vector3d.Zero);
+            var guide = ReflectionUtility.GetPrivateField<NavigationGuideLease?>(steering, "_navigationGuideLease")!.Value;
+            guide.CurrentStepIndex.Should().Be(1);
+            steering.IsAtDestination.Should().BeFalse();
+
+            Vector3d heading = steering.GetHeading(agent, out _);
+            heading.X.Should().BeGreaterThan(Fixed64.Zero);
+            heading.Y.Should().Be(Fixed64.Zero);
+            heading.Z.Should().Be(Fixed64.Zero);
+            guide.CurrentStepIndex.Should().Be(2);
+        }
+        finally
+        {
+            steering.StopMove();
+        }
+    }
+
+    [Fact]
     public void ExhaustedClockLeavesScheduledAcquisitionPendingUntilExplicitReset()
     {
         using var context = CreateContext(PathAlgorithm.AStar, out PathQuery query);
@@ -412,7 +454,7 @@ public class NavSteeringAcquisitionTests
         using var context = CreateContext(algorithm, out PathQuery groundQuery);
         Vector3d start = groundQuery.Start.Position + Vector3d.Up * 2;
         var profile = new NavigationAgentProfile(groundQuery.Agent.Shape, Fixed64.Zero, Fixed64.Zero,
-            Fixed64.Zero, TraversalMedia.Gas, TraversalCapability.None);
+            TraversalMedia.Gas, TraversalCapability.None);
         var query = new PathQuery(new NavigationEndpoint(start, "acquisition"),
             new NavigationEndpoint(start + Vector3d.Right, "acquisition"), profile, groundQuery.AreaPolicy,
             new TraversalIntent(TraversalMedium.Gas, TraversalMedia.Gas), algorithm, groundQuery.Budget, false);
@@ -1127,7 +1169,7 @@ public class NavSteeringAcquisitionTests
             case 3: agent.Reset(); break;
             case 4: agent.ApplyGuidedTrekRequest(query); break;
             case 5:
-                agent.TryReplaceNavigationProfile(WithArrivalRadius(query.Agent))
+                agent.TryReplaceNavigationProfile(WithChangedStepUp(query.Agent))
                     .Should().Be(NavigationProfileReplacementStatus.Applied);
                 break;
             case 6: JsonRecordSerializer.Populate(agent, JsonRecordSerializer.Serialize(agent)); break;
@@ -1159,7 +1201,7 @@ public class NavSteeringAcquisitionTests
         populate.Should().Throw<ArgumentOutOfRangeException>();
         agent.TryReplaceNavigationProfile(query.Agent).Should().Be(NavigationProfileReplacementStatus.Unchanged);
         agent.AcceptPhysicalReplacement = false;
-        agent.TryReplaceNavigationProfile(WithArrivalRadius(query.Agent)).Should().Be(NavigationProfileReplacementStatus.PhysicalFitRejected);
+        agent.TryReplaceNavigationProfile(WithChangedStepUp(query.Agent)).Should().Be(NavigationProfileReplacementStatus.PhysicalFitRejected);
         GetTicket(agent.Steering).Should().BeSameAs(originalTicket);
         agent.Steering.GetHeading(agent, out _).Should().Be(Vector3d.Zero);
         context.Guides.Scheduler.RetainedRequestCount.Should().Be(1);
@@ -1185,6 +1227,61 @@ public class NavSteeringAcquisitionTests
         agent.Steering.ShouldMove.Should().BeFalse();
         invalid.Should().Be(1);
         agent.Reset();
+    }
+
+    [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void ImmediateArrivalRegion_ShouldStopWhenTheHostChangesMediumWithoutAnAction(PathAlgorithm algorithm)
+    {
+        using var context = CreateContext(algorithm, out PathQuery exact);
+        var query = new PathQuery(exact.Start, exact.End, exact.Agent, exact.AreaPolicy,
+            exact.Traversal, exact.Algorithm, exact.Budget, exact.AllowTransitions, arrivalRadius: Fixed64.One);
+        var agent = CreateAgent(context, query, NavigationAcquisitionMode.Immediate);
+        var steering = agent.Steering!;
+        int invalid = 0;
+        int arrived = 0;
+        steering.Events.OnInvalidPath += () => invalid++;
+        steering.Events.OnArrive += () => arrived++;
+        try
+        {
+            steering.GetHeading(agent, out _).Should().Be(Vector3d.Right);
+            steering.HasNavigationGuidance.Should().BeTrue();
+
+            agent.SetTrekCondition(medium: TraversalMedium.Gas);
+            agent.SetTestPosition(query.End.Position - Vector3d.Right);
+            steering.GetHeading(agent, out _).Should().Be(Vector3d.Zero);
+
+            steering.LastAcquisitionStatus.Should().Be(NavigationGuideStatus.Unsupported);
+            steering.ShouldMove.Should().BeFalse();
+            steering.HasNavigationGuidance.Should().BeFalse();
+            steering.IsAtDestination.Should().BeFalse();
+            invalid.Should().Be(1);
+            arrived.Should().Be(0);
+        }
+        finally
+        {
+            agent.Reset();
+        }
+    }
+
+    [Fact]
+    public void ImmediateExactGuide_ShouldKeepItsLegacyMediumChangeBehavior()
+    {
+        using var context = CreateContext(PathAlgorithm.AStar, out PathQuery query);
+        var agent = CreateAgent(context, query, NavigationAcquisitionMode.Immediate);
+        try
+        {
+            var steering = agent.Steering!;
+            steering.GetHeading(agent, out _);
+            steering.HasNavigationGuidance.Should().BeTrue();
+            agent.SetTrekCondition(medium: TraversalMedium.Gas);
+            steering.ShouldMove.Should().BeTrue();
+        }
+        finally
+        {
+            agent.Reset();
+        }
     }
 
     [Theory]
@@ -1285,10 +1382,11 @@ public class NavSteeringAcquisitionTests
             : (NavigationGuideRequest?)state.GetType().GetField("Request", fields)!.GetValue(state);
     }
 
-    private static NavigationAgentProfile WithArrivalRadius(NavigationAgentProfile profile) => new(
-        profile.Shape, profile.MaxStepUp, profile.MaxDropDown, Fixed64.Quarter, profile.AllowedMedia, profile.Capabilities);
+    private static NavigationAgentProfile WithChangedStepUp(NavigationAgentProfile profile) => new(
+        profile.Shape, profile.MaxStepUp + Fixed64.MinIncrement, profile.MaxDropDown, profile.AllowedMedia, profile.Capabilities);
 
-    private static TestNavigator CreateAgent(TrailblazerWorldContext context, PathQuery query)
+    private static TestNavigator CreateAgent(TrailblazerWorldContext context, PathQuery query,
+        NavigationAcquisitionMode mode = NavigationAcquisitionMode.Scheduled)
     {
         var agent = new TestNavigator(context);
         agent.Setup(query.Start.Position, query.Agent);
@@ -1298,7 +1396,7 @@ public class NavSteeringAcquisitionTests
             SurfaceLevel = query.Start.Position.Y,
             GroundState = new GroundCondition { SurfaceNormal = Vector3d.Up }
         });
-        agent.Steering!.ConfigureAcquisitionMode(NavigationAcquisitionMode.Scheduled);
+        agent.Steering!.ConfigureAcquisitionMode(mode);
         agent.ApplyGuidedTrekRequest(query);
         return agent;
     }
@@ -1615,7 +1713,7 @@ public class NavSteeringAcquisitionTests
         NormalizedGridConfiguration binding = PublishAcquisitionMap(context, neutral);
         var key = new NavigationAreaPolicyKey("acquisition", 1);
         var profile = new NavigationAgentProfile(new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         query = new PathQuery(new NavigationEndpoint(GuidedPathTestScene.Anchor(binding, new VoxelIndex(0, 0, 0)), "acquisition"),
             new NavigationEndpoint(GuidedPathTestScene.Anchor(binding, new VoxelIndex(3, 0, 0)), "acquisition"),
             profile, key, new TraversalIntent(TraversalMedium.Solid, TraversalMedia.Solid), algorithm,

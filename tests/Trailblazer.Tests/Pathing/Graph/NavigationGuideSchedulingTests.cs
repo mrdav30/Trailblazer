@@ -76,6 +76,28 @@ public sealed class NavigationGuideSchedulingTests
     }
 
     [Theory]
+    [InlineData(PathAlgorithm.AStar)]
+    [InlineData(PathAlgorithm.FlowField)]
+    public void FrozenCohort_ShouldSeparateDifferentArrivalRegions(PathAlgorithm algorithm)
+    {
+        using var context = CreateContext(algorithm, out PathQuery query,
+            new NavigationSchedulingSettings(operationStepLimit: 1, endpointCandidateStepLimit: 64));
+        using var first = Schedule(context, WithRadius(Fixed64.One));
+        using var different = Schedule(context, WithRadius(Fixed64.Two));
+        using var laterMatch = Schedule(context, WithRadius(Fixed64.One));
+
+        Complete(context, first);
+        different.Status.Should().Be(NavigationGuideStatus.Pending);
+        laterMatch.Status.Should().Be(NavigationGuideStatus.Pending);
+        Complete(context, different);
+        Complete(context, laterMatch);
+        Diagnostics(context, algorithm).SharedFollowerCheckouts.Should().Be(0);
+
+        PathQuery WithRadius(Fixed64 radius) => new(query.Start, query.End, query.Agent, query.AreaPolicy,
+            query.Traversal, query.Algorithm, query.Budget, query.AllowTransitions, query.FlowField, radius);
+    }
+
+    [Theory]
     [InlineData(PathAlgorithm.AStar, false)]
     [InlineData(PathAlgorithm.FlowField, false)]
     [InlineData(PathAlgorithm.AStar, true)]
@@ -506,8 +528,8 @@ public sealed class NavigationGuideSchedulingTests
         using TrailblazerWorldContext context = CreateContext(PathAlgorithm.FlowField, out PathQuery query,
             new NavigationSchedulingSettings(endpointCandidateStepLimit: 16, nodeStepLimit: 14));
         RequestSynchronously(context, query).Should().Be(NavigationGuideStatus.Success);
-        var profile = new NavigationAgentProfile(query.Agent.Shape, query.Agent.MaxStepUp,
-            query.Agent.MaxDropDown, Fixed64.Quarter, query.Agent.AllowedMedia, query.Agent.Capabilities);
+        var profile = new NavigationAgentProfile(query.Agent.Shape, query.Agent.MaxStepUp + Fixed64.MinIncrement,
+            query.Agent.MaxDropDown, query.Agent.AllowedMedia, query.Agent.Capabilities);
         var freshKey = new PathQuery(query.Start, query.End, profile, query.AreaPolicy, query.Traversal,
             query.Algorithm, query.Budget, false);
         using NavigationGuideRequest request = Schedule(context, freshKey);
@@ -1302,7 +1324,7 @@ public sealed class NavigationGuideSchedulingTests
             new NavigationAreaPolicy(key, new[] { new NavigationAreaRule(true, Fixed64.Zero) }), 2);
         var profile = new NavigationAgentProfile(
             new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
+            Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         query = new PathQuery(
             new NavigationEndpoint(GuidedPathTestScene.Anchor(binding, new VoxelIndex(0, 0, 0)), "scheduled"),
             new NavigationEndpoint(GuidedPathTestScene.Anchor(binding, new VoxelIndex(cells - 1, 0, 0)), "scheduled"),

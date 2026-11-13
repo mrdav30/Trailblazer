@@ -7,7 +7,7 @@
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Captures exact immutable component and page dependencies without a global graph version.</summary>
+/// <summary>Captures exact immutable dependencies and optional goal-region publication identity.</summary>
 internal sealed class GraphDependencyStamp
 {
     private const long ObjectHeaderBytes = 16L;
@@ -24,18 +24,23 @@ internal sealed class GraphDependencyStamp
         + Int64Bytes
         + Int64Bytes);
 
+    // An exact graph version subsumes a transition-rule version check.
+    private readonly long _version;
+
     internal GraphDependencyStamp(
         NavigationAreaPolicyKey areaPolicy,
         GraphComponentDependency[] components,
         GraphPageDependency[] pages,
         bool hasTransitionRuleDependency = false,
-        long transitionRuleVersion = 0)
+        long transitionRuleVersion = 0,
+        long requiredGraphVersion = -1)
     {
         AreaPolicy = areaPolicy;
         Components = components;
         Pages = pages;
-        HasTransitionRuleDependency = hasTransitionRuleDependency;
-        TransitionRuleVersion = hasTransitionRuleDependency ? transitionRuleVersion : 0;
+        HasTransitionRuleDependency = hasTransitionRuleDependency && requiredGraphVersion < 0;
+        _version = requiredGraphVersion >= 0 ? ~requiredGraphVersion
+            : hasTransitionRuleDependency ? transitionRuleVersion : 0;
     }
 
     internal NavigationAreaPolicyKey AreaPolicy { get; }
@@ -46,7 +51,9 @@ internal sealed class GraphDependencyStamp
 
     internal bool HasTransitionRuleDependency { get; }
 
-    internal long TransitionRuleVersion { get; }
+    internal long TransitionRuleVersion => HasTransitionRuleDependency ? _version : 0;
+
+    internal long RequiredGraphVersion => _version < 0 ? ~_version : -1;
 
     internal long RetainedBytes => checked(
         BaseRetainedBytes

@@ -66,7 +66,7 @@ overwrite files as authored source. Never edit or commit generated
 | [`src/Trailblazer/Pathing/Search`](src/Trailblazer/Pathing/Search)     | Endpoint admission, A\*, Flow, guide leases, and internal navigation rays             |
 | [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation)             | Navigator, steering, turning, motor, locomotion, occupancy, and controller records    |
 | [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps)             | Context-owned deterministic ground-height storage and sampling                        |
-| [`src/Trailblazer.Gravitas`](src/Trailblazer.Gravitas)                 | Optional collision-backed 3D Navigator adapter                                        |
+| [`src/Trailblazer.Gravitas`](src/Trailblazer.Gravitas)                 | Optional collision-backed 2D and 3D Navigator adapters                                |
 | [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)                   | xUnit v3 behavior, determinism, allocation, serialization, and API coverage           |
 | [`tests/Trailblazer.Gravitas.Tests`](tests/Trailblazer.Gravitas.Tests) | Adapter behavior and snapshot continuation                                            |
 | [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks)         | BenchmarkDotNet performance and semantic preflight scenarios                          |
@@ -80,7 +80,8 @@ each search algorithm keeps its retained payloads beside its own work types.
 
 ## Runtime Architecture
 
-The optional `src/Trailblazer.Gravitas` project packages `GravitasNavigator3D`.
+The optional `src/Trailblazer.Gravitas` project packages `GravitasNavigator2D`
+and `GravitasNavigator3D`.
 Core must not acquire a Gravitas dependency. Follow
 [Gravitas.md](docs/api/guides/Gravitas.md) for the shared-world all-prepare /
 one-resolve / all-commit barrier.

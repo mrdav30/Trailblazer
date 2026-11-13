@@ -34,6 +34,7 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-cold-guide`            | `NavigationColdGuideBenchmarks`                                                            |
 | `navigation-cold-frame`            | `NavigationColdFrameBenchmarks`                                                            |
 | `navigation-guided-frame`          | `NavigationGuidedFrameBenchmarks`                                                          |
+| `navigation-planar-frame`          | `NavigationPlanarFrameBenchmarks`                                                          |
 | `navigation-recovery`              | `NavigationRecoveryBenchmarks`                                                             |
 | `navigation-scheduled-frame`       | `NavigationScheduledFrameBenchmarks`                                                       |
 | `navigation-a-star-contention`     | `NavigationAStarContentionBenchmarks`                                                      |
@@ -53,6 +54,28 @@ dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj 
 ```
 
 Do not treat short-run results as canonical measurements.
+
+### Native planar frames
+
+`navigation-planar-frame` uses a shared Trailblazer and Gravitas world at
+16 Hz with continuous CCD. Both shapes have radius 1/4, and the side-view
+capsule has a 1/4-unit axis. The top-down open, top-down blocked, and side-view
+support rows each measure two complete fixed steps per operation. The blocked
+circle starts tangent to the wall and requests inward motion on both steps.
+The side-view ladder row measures an ascent and a descent, including two
+immediate A* requests, six complete fixed steps, and two action completions.
+Setup checks accepted poses, support, clipping, and ladder exits before timing.
+
+For coordinated source measurement, first build the benchmark project with
+`UseLocalLsfStack=true`. Then set `UsePrebuiltLocalLsfStack=true` for the
+benchmark host and its generated children. From the repository root:
+
+```text
+dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.dll navigation-planar-frame --launchCount 2 --warmupCount 3 --iterationCount 5
+```
+
+Compare timings and allocation per pair within each row. Divide the time by
+the row's frame count for a containing-frame mean.
 
 ## Accepting a capture
 

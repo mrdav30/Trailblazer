@@ -2,7 +2,7 @@
 
 ## Tracker Rules
 
-- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-161`.
+- Issue IDs use `TRB-Issue-NNN`. The next available ID is `TRB-Issue-162`.
 - Assign an ID when an issue enters this tracker, keep it through resolution,
   and never reuse an ID even if an entry is later removed. Check this file's Git
   history before advancing or repairing the counter.
@@ -26,7 +26,33 @@
 
 ## Active Issues
 
-None.
+### TRB-Issue-161 - Native 2D kinematic yaw drifts at rest
+
+- **Discovered:** 2026-11-13 during Phase 3 independent review.
+- **Owner:** Gravitas native 2D kinematic target and accepted-pose publication.
+  Trailblazer's adapter exposes the accepted body angle and also encodes its
+  next request as a host quaternion.
+- **Reproduction:** On Windows with Gravitas `eb785a69` and FixedMathSharp
+  `e2c325a`, attach pure TwoD physics to a rectangular grid from
+  `(-16, 0, -16)` to `(16, 0, 16)` at 16 Hz. Use an unparented,
+  unit-scale transform at `(0, 7, 0)` with
+  `FixedQuaternion.FromAxisAngle(Vector3d.Up, -yaw)`. Initialize a
+  kinematic circle of radius 1/2, mass 1 and continuous CCD at planar
+  zero with `yaw = Fixed64.FromRaw(123456789)`. Call only
+  `physics.Simulate()` and `physics.LateSimulate()` twelve times.
+  The center stays at zero. Accepted yaw at frames 0 through 6 is
+  `123456789, 123456772, 123456772, 123456755, 123456755, 123456739,
+  123456739` raw. Frame 12 accepts `123456691` raw.
+- **Cause:** Gravitas projects the host quaternion to a scalar during
+  kinematic preparation and reconstructs the quaternion from accepted yaw
+  during pose publication, including on unchanged poses. The deterministic
+  fixed-point round trip is not an identity for arbitrary angles. The
+  reproduction uses no Trailblazer navigator or target writes.
+- **Resolution gate:** Fix the target/publication boundary in Gravitas.
+  Preserve exact accepted yaw across idle and translation-only frames at
+  noncardinal angles, including after collision clipping and restore.
+  Re-run the native control and adapter acceptance once the fixed source is
+  pinned. Keep the host transform and accepted collision pose coherent.
 
 ## Closed Investigations
 

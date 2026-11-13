@@ -116,8 +116,7 @@ public abstract partial class Navigator2D
                 _resumeSideView = _binding.Mode == NavigationMode2D.SideView;
                 RefreshGroupTarget();
             }
-            PublishSupport(new NavigationMotionResult2D(Pose, _binding.Mode == NavigationMode2D.SideView
-                ? NavigationSupportStatus2D.Unavailable : NavigationSupportStatus2D.NotApplicable), false);
+            InvalidateSupport();
             _acceptedMapId = acceptedMap ?? _acceptedMapId;
             try
             {

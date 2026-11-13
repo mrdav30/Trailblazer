@@ -11,6 +11,7 @@ using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 using Xunit;
+using static Trailblazer.Gravitas.Tests.Support.GravitasPlanarPhysicsFixture;
 
 namespace Trailblazer.Gravitas.Tests;
 
@@ -102,9 +103,7 @@ public sealed class GravitasNavigator2DGuidanceTests
 
     private static void PublishCorridor(GridWorld world, TrailblazerWorldContext navigation, GravitasWorldContext physics)
     {
-        navigation.SetFrameRate(16);
-        physics.SetFrameRate(16);
-        physics.Settings.RuntimeMode = PhysicsRuntimeMode.TwoD;
+        Configure(navigation, physics);
         var grid = new GridConfiguration(new Vector3d(-1, 0, -1), new Vector3d(5, 1, 3));
         world.TryAddGrid(grid, out _).Should().BeTrue();
         var cell = new NavigationCell(TraversalMedia.Solid, TraversalCapability.None, default,
@@ -122,29 +121,19 @@ public sealed class GravitasNavigator2DGuidanceTests
 
     private static void AddPortalWalls(GravitasWorldContext physics)
     {
-        var lower = new LSAABBoxCollider2D(new Vector2d(3, 1));
-        lower.InitializeWithNoBody(CreateAgent(physics, new Vector2d(2, 0)));
-        var upper = new LSAABBoxCollider2D(new Vector2d(3, 1));
-        upper.InitializeWithNoBody(CreateAgent(physics, new Vector2d(2, 2)));
+        AddBox(physics, new Vector2d(2, 0), new Vector2d(3, 1), HostY);
+        AddBox(physics, new Vector2d(2, 2), new Vector2d(3, 1), HostY);
     }
 
     private static GravitasNavigator2D CreateActor(TrailblazerWorldContext navigation, GravitasWorldContext physics,
         Guid id, Vector2d center, Fixed64 radius)
     {
-        var body = new SolidBody2D(CreateAgent(physics, center), new LSCircleCollider2D(radius))
-        {
-            Mass = Fixed64.One,
-            ContinuousCollisionMode = ContinuousCollisionMode.Continuous,
-        };
-        body.Initialize(center, motionType: PhysicsMobilityType.Kinematic);
+        var body = CreateKinematic(physics, center, HostY, new LSCircleCollider2D(radius));
         var profile = new NavigationAgentProfile2D(NavigationMode2D.TopDown, radius, Fixed64.Zero,
             Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, TraversalMedia.Solid, TraversalCapability.None);
         var settings = new NavigationMotorSettings2D((Fixed64)4, Fixed64.Zero, Fixed64.Zero, Fixed64.Zero);
         return new GravitasNavigator2D(navigation, body, MapId, id, profile, settings);
     }
-
-    private static GravitasFixtureMatterAgent CreateAgent(GravitasWorldContext physics, Vector2d center) =>
-        new(physics, new FixedTransform(center.ToVector3d(HostY), FixedQuaternion.Identity, Vector3d.One));
 
     private static Vector2d Step(TrailblazerWorldContext navigation, GravitasWorldContext physics,
         GravitasNavigator2D first, GravitasNavigator2D? second = null, Vector2d? firstMove = null)

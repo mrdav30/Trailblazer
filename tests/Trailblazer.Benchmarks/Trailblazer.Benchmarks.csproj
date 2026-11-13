@@ -22,6 +22,12 @@
                       Condition="'$(UseLocalLsfStack)' != 'true' Or '$(UsePrebuiltLocalLsfStack)' != 'true'">
       <AdditionalProperties Condition="'$(UseLocalLsfStack)' == 'true'">Configuration=$(Configuration)</AdditionalProperties>
     </ProjectReference>
+    <ProjectReference Include="..\..\src\Trailblazer.Gravitas\Trailblazer.Gravitas.csproj"
+                      Condition="'$(UseLocalLsfStack)' != 'true' Or '$(UsePrebuiltLocalLsfStack)' != 'true'"
+                      AdditionalProperties="Configuration=$(Configuration)" />
+    <ProjectReference Include="..\..\..\Gravitas\src\Gravitas\Gravitas.csproj"
+                      Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"
+                      AdditionalProperties="Configuration=$(Configuration);$(LocalLsfGravitasProperties)" />
     <ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
                       Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"
                       Targets="GetTargetPath"
@@ -49,13 +55,18 @@
        This prevents nested project-reference builds from overwriting versioned LSF binaries. -->
   <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' == 'true'">
     <Reference Include="Trailblazer" HintPath="..\..\src\Trailblazer\bin\$(Configuration)\net10.0\Trailblazer.dll" Private="true" />
+    <Reference Include="Trailblazer.Gravitas" HintPath="..\..\src\Trailblazer.Gravitas\bin\$(Configuration)\net10.0\Trailblazer.Gravitas.dll" Private="true" />
+    <Reference Include="Gravitas" HintPath="..\..\..\Gravitas\src\Gravitas\bin\$(Configuration)\net10.0\Gravitas.dll" Private="true" />
     <Reference Include="GridForge" HintPath="..\..\..\GridForge\src\GridForge\bin\$(Configuration)\net10.0\GridForge.dll" Private="true" />
     <Reference Include="FixedMathSharp" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp\bin\$(Configuration)\net10.0\FixedMathSharp.dll" Private="true" />
     <Reference Include="FixedMathSharp.Chronicler" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\bin\$(Configuration)\net10.0\FixedMathSharp.Chronicler.dll" Private="true" />
     <Reference Include="SwiftCollections" HintPath="..\..\..\SwiftCollections\src\SwiftCollections\bin\$(Configuration)\net10.0\SwiftCollections.dll" Private="true" />
     <Reference Include="SwiftCollections.FixedMathSharp" HintPath="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\bin\$(Configuration)\net10.0\SwiftCollections.FixedMathSharp.dll" Private="true" />
     <Reference Include="Chronicler" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net10.0\Chronicler.dll" Private="true" />
-    <Reference Include="MemoryPack.Core" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net10.0\MemoryPack.Core.dll" Private="true" />
+    <Reference Include="MemoryPack.Core" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net10.0\MemoryPack.Core.dll" Private="true"
+               Condition="'$(DisableMemoryPack)' != 'true'" />
+    <Reference Include="Chronicler.MemoryPackShim" HintPath="..\..\..\Chronicler\src\Chronicler.MemoryPackShim\bin\$(Configuration)\net10.0\Chronicler.MemoryPackShim.dll" Private="true"
+               Condition="'$(DisableMemoryPack)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
     <None Remove=".gitignore" />

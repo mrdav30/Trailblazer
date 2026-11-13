@@ -65,6 +65,17 @@ public abstract partial class Navigator2D
         return false;
     }
 
+    /// <summary>Releases cached host support when navigation invalidates its support sample.</summary>
+    /// <remarks>Release references synchronously. Overrides must avoid exceptions, physics mutations, and notifications.</remarks>
+    protected virtual void ClearHostSupport() { }
+
+    private void InvalidateSupport()
+    {
+        PublishSupport(new NavigationMotionResult2D(Pose, NavigationProfile.Mode == NavigationMode2D.SideView
+            ? NavigationSupportStatus2D.Unavailable : NavigationSupportStatus2D.NotApplicable), false);
+        ClearHostSupport();
+    }
+
     private void ValidateInput(in NavigationInput2D input)
     {
         ChronicleGuard.ThrowIfArgument(input.Move is Vector2d move

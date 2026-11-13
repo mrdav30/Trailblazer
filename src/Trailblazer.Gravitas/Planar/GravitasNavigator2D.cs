@@ -142,6 +142,9 @@ public sealed class GravitasNavigator2D : Navigator2D
     }
 
     /// <inheritdoc/>
+    protected override void ClearHostSupport() => _carrierHit = default;
+
+    /// <inheritdoc/>
     protected override bool TryCommitPhysicalProfileReplacement(NavigationAgentProfile2D replacement,
         Vector2d replacementCenter, Action publishNavigationState, out Exception? notificationException)
     {

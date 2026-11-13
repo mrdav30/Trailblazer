@@ -3429,20 +3429,27 @@ public class NavigatorTests : IDisposable
         var pathing = TestWorld.Context.Pathing;
         var store = pathing.NavigationGraphStore;
         int baselineLeases = store.ActiveLeaseCount;
-        Task<Vector3d> heading;
+        var completion = new TaskCompletionSource<Vector3d>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var worker = new Thread(() =>
+        {
+            try { completion.SetResult(steering.GetHeading(navigator, out _)); }
+            catch (Exception failure) { completion.SetException(failure); }
+        }) { IsBackground = true };
         bool proving;
         lock (pathing.ImmediateRayWorkspace.SyncRoot)
         {
-            heading = Task.Run(() => steering.GetHeading(navigator, out _));
-            proving = SpinWait.SpinUntil(() => store.ActiveLeaseCount > baselineLeases, TimeSpan.FromSeconds(5));
+            worker.Start();
+            // Earlier guide validation also leases the graph. Wait for the worker to block on ray scratch.
+            proving = SpinWait.SpinUntil(() => (worker.ThreadState & ThreadState.WaitSleepJoin) != 0
+                && store.ActiveLeaseCount > baselineLeases, TimeSpan.FromSeconds(5));
             if (proving)
             {
-                var graph = store.Current;
-                store.TryPublish(graph.WithGraphVersion(graph.GraphVersion + 1))
+                // Change a guide dependency while the terminal-foot proof waits for ray scratch.
+                store.TryPublish(NavigationWorldGraph.CreateEmpty(store.Current.GraphVersion + 1))
                     .Should().Be(NavigationCandidatePublication.Published);
             }
         }
-        (await heading).Should().Be(Vector3d.Zero);
+        (await completion.Task).Should().Be(Vector3d.Zero);
         proving.Should().BeTrue();
         steering.IsAtDestination.Should().BeFalse();
         steering.LastAcquisitionStatus.Should().Be(NavigationGuideStatus.Stale);

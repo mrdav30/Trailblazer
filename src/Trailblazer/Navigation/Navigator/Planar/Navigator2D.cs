@@ -505,11 +505,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         LastCommittedCell = null;
         _verticalVelocity = Fixed64.Zero;
         _jumpCount = 0;
-        ClearRestoredCarrier();
-        Support = null;
-        IsGrounded = false;
-        SupportStatus = NavigationProfile.Mode == NavigationMode2D.TopDown
-            ? NavigationSupportStatus2D.NotApplicable : NavigationSupportStatus2D.Unavailable;
+        InvalidateSupport();
         if (releaseOccupancy)
             ReleaseOccupancy();
     }

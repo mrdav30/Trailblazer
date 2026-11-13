@@ -10,10 +10,11 @@ using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 using Xunit;
+using static Trailblazer.Gravitas.Tests.Support.GravitasPlanarPhysicsFixture;
 
 namespace Trailblazer.Gravitas.Tests;
 
-public sealed class GravitasNavigator2DAcceptedMotionTests
+public sealed partial class GravitasNavigator2DAcceptedMotionTests
 {
     private const string MapId = "planar-wall";
     private static readonly Fixed64 HostY = (Fixed64)7;
@@ -227,9 +228,7 @@ public sealed class GravitasNavigator2DAcceptedMotionTests
 
     private static void PublishPlanarMap(GridWorld world, TrailblazerWorldContext navigation, GravitasWorldContext physics)
     {
-        navigation.SetFrameRate(16);
-        physics.SetFrameRate(16);
-        physics.Settings.RuntimeMode = PhysicsRuntimeMode.TwoD;
+        Configure(navigation, physics);
         var grid = new GridConfiguration(new Vector3d(-16, 0, -16), new Vector3d(16, 0, 16));
         world.TryAddGrid(grid, out _).Should().BeTrue();
         var open = new NavigationCell(TraversalMedia.Solid, TraversalCapability.None, default, Fixed64.Zero,
@@ -239,26 +238,8 @@ public sealed class GravitasNavigator2DAcceptedMotionTests
         GravitasPlanarMapFixture.Publish(navigation, physics, builder.Build());
     }
 
-    private static SolidBody2D CreateCircle(GravitasWorldContext context, Vector2d center)
-    {
-        var transform = new FixedTransform(new Vector3d(center.X, HostY, center.Y),
-            FixedQuaternion.Identity, Vector3d.One);
-        var body = new SolidBody2D(new GravitasFixtureMatterAgent(context, transform),
-            new LSCircleCollider2D(CircleProfile.Radius))
-        {
-            Mass = Fixed64.One,
-            ContinuousCollisionMode = ContinuousCollisionMode.Continuous,
-        };
-        body.Initialize(center, motionType: PhysicsMobilityType.Kinematic);
-        return body;
-    }
-
-    private static void AddBox(GravitasWorldContext physics, Vector2d center, Vector2d size, Fixed64 hostY)
-    {
-        var collider = new LSAABBoxCollider2D(size);
-        collider.InitializeWithNoBody(new GravitasFixtureMatterAgent(physics,
-            new FixedTransform(center.ToVector3d(hostY), FixedQuaternion.Identity, Vector3d.One)));
-    }
+    private static SolidBody2D CreateCircle(GravitasWorldContext context, Vector2d center) =>
+        CreateKinematic(context, center, HostY, new LSCircleCollider2D(CircleProfile.Radius));
 
     private static GravitasNavigator2D CreateNavigator(TrailblazerWorldContext context, SolidBody2D body, Guid id,
         Fixed64 speed) => new(context, body, MapId, id, CircleProfile,

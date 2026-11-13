@@ -42,8 +42,10 @@ instead of burying it in notes.
     deterministic record restore. Hard physics-query budgets remain a
     separate 2D/3D workstream.
     [Phase 2 evidence](twoDimensionalNavigationPlan.md#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence)
-  - Phase 3 has a native Gravitas adapter for both planar modes, with initial
-    wall, floor, carrier, and posture tests. The adapter references Gravitas 2.0.0.
+  - Phase 3 verifies both native Gravitas modes with real collision, hosted
+    ladder actions, support and posture, and checkpoint replay. Released-package
+    verification needs GridForge packages with the APIs already at the hosted
+    source pin.
     [Phase 3 checklist](twoDimensionalNavigationPlan.md#phase-3-gravitas2d-integration-and-closeout)
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
@@ -241,10 +243,9 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Continue Phase 3 with the remaining real collision scenarios in both
-   planar modes. Capture matched 3D controls
-   before changing shared runtime paths and validate against the pinned source
-   stack.
+1. Close the remaining Phase 3 dependency gates. Verify the released GridForge
+   navigation APIs and address native kinematic yaw stability at its Gravitas
+   boundary. [Yaw reproduction](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
 2. After every active feature-work plan is complete, release any changed
    dependencies before their consumers and repeat released-package validation at
    each layer. Do not publish an intermediate feature-work checkpoint.

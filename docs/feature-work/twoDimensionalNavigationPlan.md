@@ -11,9 +11,9 @@ scheduler. Side-view navigation verifies ordinary supported legs and
 host-executed ladder, jump, and drop actions. The controller supports atomic
 posture changes, opt-in extra jumps during ascent, and deterministic record
 restore. See the [Phase 2 evidence](#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence).
-Phase 3 has the optional native Gravitas2D adapter and initial real collision
-fixtures for both modes. See the [Phase 3 checklist](#phase-3-gravitas2d-integration-and-closeout)
-for the remaining scenarios and closeout gates. Use `UseLocalLsfStack=true`
+Phase 3 has the native Gravitas2D adapter and real collision fixtures for both
+modes. See the [Phase 3 checklist](#phase-3-gravitas2d-integration-and-closeout)
+for verification and release gates. Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop pins GridForge
 `269da48`, which provides the exact planar coverage-neighbor query.
 The adapter's package reference uses Gravitas 2.0.0. Hard-budgeted
@@ -995,20 +995,20 @@ in the existing test projects.
   host world Y, use exact X/Z conversion, and prepare/resolve/commit once per
   frame for all actors. Reuse the 3D adapter's ordering contract, not its vector
   arithmetic or surface-normal assumptions.
-- [ ] **Run real collision acceptance for both modes.** Cover a top-down wall,
+- [x] **Run real collision acceptance for both modes.** Cover a top-down wall,
   corner, narrow portal and group; then a side-view slope, ceiling, ledge, ladder,
   translating and rotating supports, and posture change. Verify physics/Navigator pose agreement,
   guide cells, collision settings, and appropriate native 2D collider shapes.
   - [x] Top-down wall and two actors through one shared resolve.
   - [x] Side-view floor, translating support, and ceiling-blocked posture.
   - [x] Top-down corner, narrow portal, and guided group.
-  - [ ] Side-view slope, ledge, ladder, and rotating support.
-- [ ] **Verify headless movement quality and frame failures.** Assert bounded
+  - [x] Side-view slope, ledge, ladder, and rotating support.
+- [x] **Verify headless movement quality and frame failures.** Assert bounded
   arrival, retreat/tangent movement, no action-entry oscillation, stable support
   and platform carry, and prepared-frame reset/load/abort behavior. Record exact
   accepted states and repeated event order. Engine-host observations remain
   deferred and are not a completion gate for this engine-agnostic plan.
-- [ ] **Document and run the public integration path.** Add native top-down and
+- [x] **Document and run the public integration path.** Add native top-down and
   side-view examples, coordinate/units guidance, ownership rules, and migration
   notes only where behavior actually changes. Link selected real behavioral
   tests and fixtures instead of maintaining another example application. Verify
@@ -1020,10 +1020,17 @@ in the existing test projects.
   tests, replay, allocations, resource lifetime, and DocFX warnings-as-errors.
   Rerun matched 3D benchmark controls when shared runtime paths change and the
   focused 2D scenarios selected in Phase 0; retain full-frame work/timing context.
+  - [x] Windows and Ubuntu source builds, tests, exact coverage, replay,
+    resource lifetime, DocFX, and matched native planar benchmark controls.
+  - [ ] Released GridForge and GridForge.Lean provide the navigation tracing
+    overload and exact planar coverage-neighbor API. Repeat the matrix against
+    the released dependency chain.
 - [ ] **Complete independent review and evidence reconciliation.** Resolve
   blocking findings, link shared integration evidence, update the overview, and
   archive only when native top-down and side-view deliverables both meet their
   gates. Any scope reduction needs an explicit user decision.
+  - [ ] Verify arbitrary-angle stationary yaw after the native Gravitas fix.
+    [TRB-Issue-161](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
 
 ## Execution record
 
@@ -3722,3 +3729,76 @@ on Windows and Ubuntu, including the existing 3D tests. Both used
 `coverlet.runsettings`. Windows used Gravitas `eb785a69` and Ubuntu used the
 hosted pin `13f73bdc`. Adapter coverage stayed at 287/287 lines and 58/58
 branches in all four runs, with 22/22 fully covered methods on Windows.
+
+### 2026-11-13 - Phase 3 side-view acceptance and hardening
+
+- The 16 Hz side-view tests use native continuous CCD. A radius-1/2 capsule
+  lands on the 45-degree surface at raw center `(0, 5184484148)` and
+  observes normal `(-3037000500, 3037000500)`. It follows the tangent by
+  `(759250125, 759250125)` raw. At the ledge, the rider loses support at
+  `(1, 3/2)`, falls to `(1, 1)`, and clips to `(1, 5/8)` on the lower
+  floor with velocity `(0, -6)` before settling.
+- A* and Flow each hold one ladder instruction at the entry for three
+  frames without displacement or duplicate cell entries. An actual ceiling
+  blocks the first climb. The host then moves the upright capsule in 1/4-unit
+  steps and completes the instruction once at the exact supported landing,
+  after proving that a supported partial dismount cannot complete it.
+  Fresh replays match accepted poses, velocity, support, pending action,
+  and ordered committed-cell events.
+- A static square rotates a compact rider's carrier witness from `(1, 1)`
+  to `(-1, 1)`, carrying the center from `(1, 3/2)` to `(-1, 3/2)`.
+  Body-first checkpoint restore and support refresh reproduce 32 exact
+  continuation frames and ordered cell events through alternating
+  quarter turns in JSON and MemoryPack. Unchanged rotated frames have
+  exact zero carry. Separate lifecycle cases cover reset with a staged
+  transform, rejected and successful loads, and rider checkpoint recovery
+  after a native trigger callback throws during resolution.
+- The second review found that the adapter's private carrier hit could
+  retain a collider after published support was cleared. Reset, load,
+  disposal and successful posture now use the same support invalidation
+  path and release that reference. It adds no dispatch to steady frame
+  preparation or commit. No 3D runtime path changed. The review also
+  reproduced native stationary yaw drift independently of the adapter.
+  The exact control and upstream ownership are in
+  [TRB-Issue-161](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest).
+- The first Windows Release suite exposed a test race in the existing
+  3D gas-arrival invalidation case. Its publisher could observe an earlier
+  validation lease and replace the graph before the terminal ray. The
+  regression now waits for the worker to block with a leased graph and
+  publishes a root that removes the terminal dependency. The correction
+  changes only the test synchronization and publication.
+- The `navigation-planar-frame` BenchmarkDotNet rows use complete native
+  16 Hz host steps. The open, blocked, and side-view support rows each
+  measure two frames. The side-view ladder row measures six frames with
+  two immediate A* requests and two completed actions. Radius is 1/4
+  and the side-view axis is 1/4. Release source captures at the hosted
+  pins compared `12ecc96` with the hardening candidate using
+  `UsePrebuiltLocalLsfStack=true` and
+  `navigation-planar-frame --launchCount 2 --warmupCount 3 --iterationCount 5`.
+  Each capture had eight successful children and 40 measured samples.
+  The first three rows matched 0 B per pair, and the ladder row matched
+  12,368 B per pair. Mean microseconds per pair from baseline to candidate
+  were 290 to 246 for open, 588 to 531 for blocked, 884 to 1,150 for support,
+  and 6,527 to 7,319 for ladder. Timing uncertainty overlaps. The prior 128-route
+  core probes matched 640 top-down frames and 4,096 B, and 896 valley
+  frames and 8,192 B, with exact forward and reverse replay checksums.
+  Evidence is under `artifacts/phase3-verification/benchmark`.
+- Both released package families restore. At the committed baseline and
+  candidate, compilation fails on the released GridForge 10.0.0 family for
+  `TraceNavigationBodyInto` and `ArePlanarCoverageNeighborsOrCoincident`
+  on both library targets. The hosted source pins supply both APIs.
+- The Windows and Ubuntu coordinated-source solution builds passed for
+  `netstandard2.1` and `net10.0` in Release and ReleaseLean. Each host
+  passed 3,780 core and 115 adapter tests in Release and 3,667 core and
+  109 adapter tests in ReleaseLean. The final test-only arrival barrier
+  correction also passed the two focused cases on Ubuntu in each family.
+  Combined coverage is 36,020/36,020 lines, 15,799/15,799 branches, and
+  3,604/3,604 fully covered methods. DocFX passed with warnings as errors.
+  Windows used Gravitas `eb785a69`. Ubuntu used the hosted `13f73bdc` pin.
+  Both used GridForge `269da48`, FixedMathSharp `e2c325a`,
+  SwiftCollections `08b1b38`, and Chronicler `7b90d59`.
+  Commands were `dotnet build Trailblazer.slnx -c <configuration>`,
+  `dotnet test` on each test project with its `coverlet.runsettings` and
+  `--no-build --no-restore`, and
+  `dotnet tool run docfx docs/api/docfx.json --warningsAsErrors`.
+  Raw results are under `artifacts/phase3-verification`.

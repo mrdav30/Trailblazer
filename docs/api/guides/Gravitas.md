@@ -102,27 +102,64 @@ kinematic motion that must clip at blockers.
 Planar `Vector2d.X` and `Vector2d.Y` map to world X and Z. Positive planar
 rotation turns from Right toward Forward. The adapter preserves the physics
 transform's world Y, while navigation uses the map's embedding Y for occupancy.
-Use the shared frame order above. In the prepare step, call
-`PrepareFrameMotion()` for guidance or supply a manual planar input. The
-planar adapter checks for one collision-distribution pass on the prepared
-physics frame. The host must wait
-for `physics.LateSimulate()` to return successfully before committing any actor.
+
+### Move a top-down circle
+
+Use the shared frame order above. The following excerpt assumes both contexts
+and the top-down navigator are initialized and share a fixed frame rate.
+
+```csharp
+navigation.Simulate();
+physics.Simulate();
+navigator.PrepareFrameMotion(Vector2d.Right);
+physics.LateSimulate();
+navigator.CommitFrameMotion();
+navigation.LateSimulate();
+```
+
+For multiple actors, prepare and commit each batch in the host's stable order.
+The planar adapter checks for one collision-distribution pass on the prepared
+physics frame. Commit after `physics.LateSimulate()` returns successfully.
+At 16 Hz with a move speed of 128 world units per second, the rightward
+command requests an eight-unit step. In the wall fixture, Gravitas accepts
+three units before contact. The navigator publishes that pose and a velocity
+of 48 units per second. Call `PrepareFrameMotion()` without input to follow a
+published guide. [Wall and corner tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.AcceptedMotion.Tests.cs)
+and [portal and group tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.Guidance.Tests.cs)
+exercise these host loops.
+
+### Follow side-view support and actions
 
 Side-view needs a positive `supportProbeDistance`. The probe starts at the
 accepted lower cap center and sweeps toward negative planar Y. Gravitas applies
 its physical collision filters and the supplied layer mask, which defaults to
 all layers. The result carries the actual surface point, normal, and material
-friction. Call `RefreshSupport()`
-between frames after construction, restore, or successful posture replacement.
+friction. Side-view bodies remain upright during movement. Call
+`RefreshSupport()` between frames after construction, restore,
+or successful posture replacement. For example, a capsule of radius 1/2 and
+axis length 1 standing on a floor at planar height 1/2 has center height 3/2.
+With a horizontal input at 16 Hz and speed 16 units per second, the accepted pose advances
+one unit along the floor, and the new support witness lies below the new center.
 An optional carrier lookup supplies a positive host-stable ID and registration
 lifetime. Publish carrier poses before rider preparation so Trailblazer can
 apply the difference from the previously committed support pose exactly once.
 
 Between frames, `TryReplaceNavigationProfile(...)` checks navigation clearance
 and native collider fit in the same transaction. Side-view replacement preserves
-the nominal foot. The [wall and shared-step tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.AcceptedMotion.Tests.cs)
-and [support and posture tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.Support.Tests.cs)
-show the setup and calls for both modes.
+the nominal foot. For a ladder, read the exact instruction, use
+`PrepareActionFrameMotion` to submit bounded climbing poses through the same
+physics step, then call `CompletePendingTransition` after the accepted pose
+meets its destination. The host owns the climb commands.
+[Support and posture tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.Support.Tests.cs)
+and [ladder tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.Traversal.Tests.cs)
+show these sequences.
+
+If physics throws, recover the body and navigation from a coordinated
+checkpoint. Restore the body before populating the navigator. A successful
+population retires pending navigation motion. After a navigation reset, the
+host still owns clearing any staged body transform and restoring the
+published maps and policies. [Reset and restore tests](https://github.com/mrdav30/Trailblazer/blob/develop/tests/Trailblazer.Gravitas.Tests/Planar/GravitasNavigator2D.Lifecycle.Tests.cs)
+cover the fixed-frame boundary.
 
 ## Contacts and moving platforms
 

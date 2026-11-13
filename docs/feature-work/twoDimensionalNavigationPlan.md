@@ -1001,7 +1001,7 @@ in the existing test projects.
   guide cells, collision settings, and appropriate native 2D collider shapes.
   - [x] Top-down wall and two actors through one shared resolve.
   - [x] Side-view floor, translating support, and ceiling-blocked posture.
-  - [ ] Top-down corner, narrow portal, and guided group.
+  - [x] Top-down corner, narrow portal, and guided group.
   - [ ] Side-view slope, ledge, ladder, and rotating support.
 - [ ] **Verify headless movement quality and frame failures.** Assert bounded
   arrival, retreat/tangent movement, no action-entry oscillation, stable support
@@ -3695,3 +3695,30 @@ The shared request-level arrival contract is tracked in
 - Ubuntu source-mode adapter tests used the hosted Gravitas pin `13f73bdc`
   and GridForge pin `269da48`. Both configurations matched the Windows
   adapter test counts and exact line and branch coverage.
+
+### 2026-11-13 - Phase 3 top-down corner, portal, and guided group
+
+The native top-down fixtures extend the adapter at `d964a8a`. They use
+16 Hz fixed steps, continuous CCD, and a host world Y of 7.
+
+- A radius-1/2 circle starts tangent to both corner faces. Eight inward
+  requests commit zero displacement and velocity. Explicit tangent and
+  retreat commands each accept a 1/4-unit step at speed 4. The actor stays
+  in the same committed cell and emits one entry notification across all
+  ten steps.
+- The portal is one unit wide at Z = 1. At its midpoint, either lateral
+  command requests a 1/4-unit move and clips to zero. A* and Flow each
+  commit the origin then advance in sixteen exact 1/4-unit steps through
+  the same physical opening. Both arrive at (4, 1) with cost 4 and emit the
+  same five cell entries in order.
+- Two radius-1/4 actors request the same destination (3, 1) and use one
+  shared physics resolve per step through the same corridor. Their accepted
+  centers stay on Z = 1 and at least 1/2 unit apart. They finish at their
+  distinct formation cells (2, 1) and (4, 1) and release group membership.
+
+The full adapter suite passed 105 Release and 101 ReleaseLean tests per host
+on Windows and Ubuntu, including the existing 3D tests. Both used
+`UseLocalLsfStack=true`, GridForge `269da48`, and the adapter's
+`coverlet.runsettings`. Windows used Gravitas `eb785a69` and Ubuntu used the
+hosted pin `13f73bdc`. Adapter coverage stayed at 287/287 lines and 58/58
+branches in all four runs, with 22/22 fully covered methods on Windows.

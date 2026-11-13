@@ -29,10 +29,7 @@ public sealed class GravitasNavigator2DAcceptedMotionTests
         using GravitasWorldContext physics = GravitasWorldContext.Attach(world);
         PublishPlanarMap(world, navigation, physics);
 
-        var wall = new LSAABBoxCollider2D(new Vector2d(Fixed64.One, (Fixed64)4));
-        wall.InitializeWithNoBody(new GravitasFixtureMatterAgent(physics,
-            new FixedTransform(new Vector3d(Fixed64.Zero, (Fixed64)99, Fixed64.Zero),
-                FixedQuaternion.Identity, Vector3d.One)));
+        AddBox(physics, Vector2d.Zero, new Vector2d(1, 4), (Fixed64)99);
         Vector2d start = -Vector2d.Right * (Fixed64)4;
         SolidBody2D body = CreateCircle(physics, start);
         using var navigator = CreateNavigator(navigation, body,
@@ -101,6 +98,51 @@ public sealed class GravitasNavigator2DAcceptedMotionTests
         second.Pose.RotationRadians.Should().BeGreaterThan(Fixed64.Zero);
         firstBody.Agent.Transform.WorldPosition.Y.Should().Be(HostY);
         secondBody.Agent.Transform.WorldPosition.Y.Should().Be(HostY);
+    }
+
+    [Fact]
+    public void TopDownCorner_ShouldHoldInwardMotionAndAcceptExplicitTangentAndRetreat()
+    {
+        using var world = new GridWorld();
+        using TrailblazerWorldContext navigation = TrailblazerWorldContext.Attach(world);
+        using GravitasWorldContext physics = GravitasWorldContext.Attach(world);
+        PublishPlanarMap(world, navigation, physics);
+        AddBox(physics, new Vector2d(1, 0), new Vector2d(1, 4), Fixed64.Zero);
+        AddBox(physics, new Vector2d(0, 1), new Vector2d(4, 1), Fixed64.Zero);
+        SolidBody2D body = CreateCircle(physics, Vector2d.Zero);
+        using var navigator = CreateNavigator(navigation, body,
+            new Guid("d42827f4-46e6-41d6-86ba-145eeec65a41"), (Fixed64)4);
+        int cellEntries = 0;
+        navigator.CommittedCellChanged += _ => cellEntries++;
+
+        var inward = new Vector2d(Fixed64.Half, Fixed64.Half);
+        for (int frame = 0; frame < 8; frame++)
+            Step(inward, inward * Fixed64.Quarter, Vector2d.Zero, Vector2d.Zero);
+
+        Vector2d tangent = -Vector2d.Forward * Fixed64.Quarter;
+        Step(-Vector2d.Forward, tangent, tangent, -Vector2d.Forward * (Fixed64)4);
+        Vector2d retreat = tangent - Vector2d.Right * Fixed64.Quarter;
+        Step(-Vector2d.Right, retreat, retreat, -Vector2d.Right * (Fixed64)4);
+        cellEntries.Should().Be(1);
+
+        void Step(Vector2d input, Vector2d target, Vector2d accepted, Vector2d velocity)
+        {
+            navigation.Simulate();
+            physics.Simulate();
+            navigator.PrepareFrameMotion(input);
+            body.Agent.Transform.WorldPosition.Should().Be(target.ToVector3d(HostY));
+            physics.LateSimulate();
+            navigator.CommitFrameMotion();
+            navigation.LateSimulate();
+
+            navigator.Pose.Center.Should().Be(accepted);
+            navigator.Pose.RotationRadians.Should().Be(body.Rotation);
+            navigator.Velocity.Should().Be(velocity);
+            body.Position.Should().Be(accepted);
+            body.Collider.Center.Should().Be(accepted);
+            body.Agent.Transform.WorldPosition.Should().Be(accepted.ToVector3d(HostY));
+            navigator.LastCommittedCell!.Value.Address.Should().Be(new NavigationCellAddress(MapId, new VoxelIndex(16, 0, 16)));
+        }
     }
 
     [Theory]
@@ -209,6 +251,13 @@ public sealed class GravitasNavigator2DAcceptedMotionTests
         };
         body.Initialize(center, motionType: PhysicsMobilityType.Kinematic);
         return body;
+    }
+
+    private static void AddBox(GravitasWorldContext physics, Vector2d center, Vector2d size, Fixed64 hostY)
+    {
+        var collider = new LSAABBoxCollider2D(size);
+        collider.InitializeWithNoBody(new GravitasFixtureMatterAgent(physics,
+            new FixedTransform(center.ToVector3d(hostY), FixedQuaternion.Identity, Vector3d.One)));
     }
 
     private static GravitasNavigator2D CreateNavigator(TrailblazerWorldContext context, SolidBody2D body, Guid id,

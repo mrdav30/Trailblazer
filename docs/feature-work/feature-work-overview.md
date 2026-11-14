@@ -196,13 +196,11 @@ instead of burying it in notes.
 ## Queued Feature Work
 
 - [Bounded Physics Queries — 2D And 3D](physicsQueryBudgetPlan.md)
-  - Planned before Trailblazer's release. Implementation starts with matched
-    baselines and the contract for opt-in work and storage limits on pure 2D
-    and 3D support queries and posture clearance. The plan preserves the
-    existing synchronous query behavior and complete-result semantics.
-  - Native 2D Phase 3 is complete against the released dependency chain.
-    Phase 0 identifies any additional upstream APIs needed by bounded queries.
-    [Release sequencing](physicsQueryBudgetPlan.md#release-sequencing)
+  - Planned before Trailblazer's release. Phase 0 records the opt-in work and
+    storage contract and matched package baselines for pure 2D and 3D support
+    and posture clearance. The first runtime slice connects Gravitas support
+    to bounded GridForge discovery on a rectangular grid.
+    [Contract and baselines](physicsQueryBudgetPlan.md#phase-0---contract-and-matched-baselines)
 
 ## Deferred / Evidence-Gated
 
@@ -224,9 +222,9 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Establish the bounded query contract and baselines on released GridForge
-   10.1.0 and Gravitas 2.0.1. Release any additional dependencies the
-   implemented bounded path requires.
+1. Implement bounded physics queries using the contract and baselines from
+   released GridForge 10.1.0 and Gravitas 2.0.1. Release any additional
+   dependencies the implemented bounded path requires.
 2. Verify both workstreams against the final released chain before publishing
    Trailblazer.
 

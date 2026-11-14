@@ -1,7 +1,8 @@
 # Bounded Physics Queries in 2D and 3D
 
-Implementation has yet to start. The target is to complete this work before the
-next Trailblazer release. The [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
+Phase 0 defines the shared contract and released-package baselines. Runtime work
+starts in Phase 1 and is planned before the next Trailblazer release. The
+[first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
 support and posture in real physics. This plan owns the opt-in work and storage
 limits for those operations in both dimensions.
@@ -25,9 +26,8 @@ limits for those operations in both dimensions.
   complete blocker set and the accepted transaction's publication semantics.
 - Support discovery can refresh partitions, grow candidate storage, and visit
   scene-dependent addresses and memberships. Posture clearance visits the
-  registered collider set. These are existing synchronous costs. The previous
-  probes established enumeration reuse, and Phase 0 still needs measured
-  support and posture baselines.
+  registered collider set. The [Phase 0 package baselines](#2026-11-14---phase-0-package-baselines)
+  measure those existing synchronous operations and their containing steps.
 
 ## Ownership
 
@@ -39,8 +39,6 @@ Trailblazer adapter owns the host policy for consuming results. Reuse existing
 accounting where contracts match and keep geometry in its dimensional owner.
 
 The current library targets are `netstandard2.1` (C# 11) and `net10.0` (C# 14).
-Phase 0 will settle the public signatures, work units, scratch ownership and host
-failure policy using the current code and existing fixtures.
 
 ## Agreed scope
 
@@ -98,7 +96,6 @@ Preallocated query storage must not grow during a bounded call. Do not hide
 candidate-list materialization, array rental, query-stamp rollover scans or a
 whole-world refresh before applying the allowance. Distinguish storage
 exhaustion from work exhaustion and from stale/unready/unrepresentable input.
-These are semantic outcomes; exact shared type names are a Phase 0 deliverable.
 
 Only a complete query can certify a hit, no support or clear posture. Exhaustion
 clears any usable result: a partial nearest hit is not authoritative and an
@@ -134,9 +131,9 @@ Validate sparse changes, grid replacement, world reset and reused registrations.
 
 Gravitas must sample a current index at its documented host barrier. Today
 `RefreshQueryPartitions` can rebuild both partitions after a topology batch and
-drain deferred 2D updates. Phase 0 must identify what the bounded query charges
-and where any separate maintenance runs. Include both costs in full-frame
-measurements and verify that the normal host step restores readiness.
+drain deferred 2D updates. Bounded support checks readiness at the between-step
+boundary and leaves reconciliation to the existing host step. Measure both
+costs and verify recovery through that step.
 
 ### Geometry and consumer behavior
 
@@ -151,13 +148,181 @@ complete query's admission, hit/witness and ordering contract. Carry existing
 initial-overlap, tiny-positive-distance and scalar-boundary semantics through
 each operation; do not make generic sweeps adopt support-specific behavior.
 
-Before adapter adoption, define one explicit policy for incomplete support in
-both dimensions. It must not masquerade as `NoSupport`, certify a stale carrier,
-freeze gravity/platform/commit work, or retry without a limit inside the same
-frame. Include repeated exhaustion and recovery. Incomplete posture clearance
-must leave body, collider, host pose and navigation state unchanged and must
-not invoke the synchronized-state publisher. Complete accepted transactions
+On incomplete support in either adapter, commit the accepted pose and mark the
+sample unavailable for that frame. Release retained support and carrier evidence,
+skip support-dependent advancement, and continue ordinary airborne gravity and
+frame processing. That is a conservative motor decision while the public sample
+status remains unavailable. Preserve input and jump state under the existing
+airborne rules. Sample again on the next committed frame only. No new serialized
+sample or scratch state is needed.
+
+Incomplete posture leaves body, collider, host pose and navigation state
+unchanged and skips the synchronized-state publisher. Complete transactions
 retain the existing post-commit notification-failure rules.
+
+## Phase 0 API contract
+
+In `Gravitas.Queries`, use an immutable `PhysicsQueryBudget` with `ulong`
+properties `DiscoveryLimit`, `CandidateLimit`, and `GeometryLimit`, and an
+immutable `PhysicsQueryWork` with `ulong` properties `Discovery`, `Candidates`,
+and `Geometry`. Each has a constructor taking its three fields in that order.
+The same units apply to support and posture.
+
+| Counter | One unit accounts for |
+| --- | --- |
+| `Discovery` | An index/binding inspection, including grid records, hash cells and inspected entries, BVH nodes, generation/address probes, and physical voxel lookups. Charge failed inspections and internal lookup probes or precharge their proven bound. |
+| `Candidates` | A collider membership or registered collider visit, including duplicates and rejected candidates. Include inspections of retained candidate identities and variable ordering/cleanup work in this counter. |
+| `Geometry` | A primitive kernel step, compound part visit, convex feature or support-map inspection, or mesh node/feature inspection. Charge repeated passes and iterations or precharge a checked conservative bound for the existing kernel. |
+
+Each call starts with zero work. Charge before inspection, using remaining-budget
+subtraction. For derived precharges, checked overflow reports
+`WorkBudgetExceeded` without entering that work. Report charges already taken on
+every outcome and never exceed a limit. The charged count includes conservative
+precharges and so can exceed the actual number of inspections. Fixed scalar
+admission and assigning outputs require no work units. `default` grants zero
+units. If no inspection is needed, a call may complete with zero work.
+
+Use one `PhysicsQueryExecutionStatus` with `WorldNotReady = 0`, `Completed`,
+`WorkBudgetExceeded`, `ScratchCapacityExceeded`, `Stale`, `Unrepresentable`,
+and `UnsupportedRuntimeMode`. `WorldNotReady` means no stable initial view
+could be sampled. `Stale` means a view was acquired and later invalidated.
+Programmer errors such as null scratch, invalid geometry arguments, or an
+already borrowed scratch throw before query work. Validate the mode and initial
+readiness before traversing. During traversal, charge each inspection before
+attempting it and check room before writing. If an inspection fits but its
+result cannot be retained, return the storage failure with that inspection
+charged. Check freshness before publishing a completed result.
+
+Use a caller-owned `sealed class PhysicsQueryScratch` with constructor
+`PhysicsQueryScratch(int gridCapacity, int traversalCapacity, int candidateCapacity)`
+and read-only properties of the same names in PascalCase. Capacities are
+nonnegative entry counts for generation slots, pending traversal entries, and
+unique collider identities respectively. The scratch owns fixed backing storage
+allocated before use. Hash probing, if used, must have a checked inspection
+limit. Clear only used entries and account for that cleanup by reserving its
+work when retaining an entry. Use a single exclusive borrow per synchronous
+call and release on all exits. Reuse sequentially across queries and worlds
+after cleanup. Scratch has no durable world ownership or serialized identity.
+Posture can use zero discovery capacities while it scans registered colliders.
+Bounded calls report through their return values and counters, with no per-query
+diagnostic callback inside the bounded portion.
+
+Keep existing synchronous entry points. Add these overloads to their owners.
+All signatures shown are planned API declarations.
+
+```csharp
+// GravitasQuery2DService
+PhysicsQueryExecutionStatus QuerySupport(
+    in Physics2DSupportQuery request, in PhysicsQueryBudget budget,
+    PhysicsQueryScratch scratch, out Physics2DSupportHit? support,
+    out PhysicsQueryWork work);
+
+// GravitasQuery3DService. Reuse the directional overload's endpoint calculation.
+PhysicsQueryExecutionStatus SweepSphere(
+    Vector3d origin, Fixed64 radius, Vector3d direction, Fixed64 maxDistance,
+    PhysicsLayerMask layerMask, LSCollider? excludedCollider,
+    in PhysicsQueryBudget budget, PhysicsQueryScratch scratch,
+    out Physics3DHit? hit, out PhysicsQueryWork work);
+
+// SolidBody2D and SolidBody. For SolidBody use ColliderShapeDefinition,
+// Vector3d and LSCollider in place of their 2D counterparts.
+PhysicsQueryExecutionStatus TryReconfigureCollider(
+    ColliderShapeDefinition2D definition, Vector2d localOffset, Vector2d position,
+    in PhysicsQueryBudget budget, PhysicsQueryScratch scratch,
+    out ColliderReconfigurationStatus? result, out LSCollider2D? blocker,
+    out Exception? notificationException, out PhysicsQueryWork work,
+    Action? publishSynchronizedState = null);
+```
+
+For support, `Completed` with a null hit means an exhaustive miss. For posture,
+`Completed` carries `Blocked`, `Unchanged`, or `Applied`. A proven first blocker
+in registration order is a complete negative clearance proof and may terminate
+early. All incomplete outcomes clear hit, posture result, blocker and
+notification exception. Keep positive-penetration and exact-touch semantics.
+The bounded 3D sweep reports `Unrepresentable` for an unrepresentable endpoint
+or padded bounds. The legacy directional overload retains its existing failure
+behavior. Reuse `Physics2DSupportHit`'s sampled frame and lifetime check, and
+consume a 3D hit at the same between-step boundary. A sample is not a retained
+registration proof across frames.
+On each optional adapter, `ConfigureSupportQueryBudget(PhysicsQueryBudget budget,
+PhysicsQueryScratch scratch)` opts into one bounded probe per applicable commit.
+`ClearSupportQueryBudget()` restores synchronous sampling and releases the
+adapter's scratch reference. Both are between-frame changes. Expose nullable
+`LastSupportQueryExecutionStatus` and `LastSupportQueryWork` on the adapters so
+hosts can distinguish no bounded probe this frame from a completed miss or an
+incomplete sample. Reset these diagnostics on reset, load, configuration change,
+and frames without a bounded probe. In 3D, `SupportStatus` exposes the sample
+separately from grounded state. Add `NavigationSupportStatus3D` with the same
+values as `NavigationSupportStatus2D`, and keep the 2D API. Use `NotApplicable`
+before any 3D sample. With bounded 3D sampling, a completed sweep that misses or
+fails the adapter's normal test gives `NoSupport`. An incomplete sweep or
+unrepresentable witness gives `Unavailable`.
+
+Expose `TryReplaceNavigationProfile(replacement, in PhysicsQueryBudget budget,
+PhysicsQueryScratch scratch, out PhysicsQueryExecutionStatus? clearanceStatus,
+out PhysicsQueryWork work)` on the optional adapters, returning the existing
+`NavigationProfileReplacementStatus` with `PhysicalFitUnavailable` appended.
+`clearanceStatus` is null when navigation rejects before calling Gravitas.
+Keep the existing shared profile preflight and publication paths. One caller
+can share scratch across actors that prepare and commit sequentially.
+
+For bounded posture, detached circle or capsule preparation and clearance are
+inside the query boundary, including a geometry precharge for candidate setup.
+Reuse detached preparation with fixed scratch so even rejected calls allocate
+zero bytes after setup.
+Keep authoritative publication, collision cache cleanup, mass updates after
+clearance, and callbacks in the surrounding transaction. Do not hold the scratch
+borrow across those callbacks. There is no caller or mutation boundary between
+successful clearance and the beginning of authoritative publication. Record
+those costs separately in containing-frame measurements. Broader authored shape
+changes stay with existing operations.
+
+### Discovery boundary and first production slice
+
+The existing covered-address cursor accepts sorted eligible generations and
+already meters generation and address probes. Its normal entry points can wait
+for publication. Bounded support needs a non-waiting path that captures the
+world lifetime and published sequence, gathers eligible generations under that
+same view, then binds and visits physically present addresses. Return unavailable
+for an unpublished prefix or busy view, and stale when an acquired view changes.
+Use the existing cursor core or address math and require an exact current
+collider registration before accepting a hit. No query-owned partition refresh,
+unbounded wait, or reuse of the synchronous collider or spatial-hash stamps.
+
+Start with the real side-view box-floor `QuerySupport` caller on one rectangular
+grid, through indexed discovery and one checked candidate and support result.
+Use the 3D sphere sweep through that same discovery seam as the first spatial
+control, before generalizing shapes or adopting posture. GridForge needs a
+bounded, non-waiting discovery/bind entry point for the indexed production path.
+The current SwiftCollections hash and BVH APIs can emit capped outputs only at
+the consumer and cannot stop or account for internal visits. If retained for
+that path, add the minimal bounded visits needed for hash cells/memberships and
+BVH nodes. Reuse existing storage and key lookups where their probe cost can be
+bounded. Gravitas and GridForge should land their first exercised seams together
+in coordinated source before pinning the new commits. No FixedMathSharp change
+has been identified.
+
+For the first box-floor slice, enumerate only fixed-shape kernels whose maximum
+steps can be derived from the current code. Record the checked formula beside
+each production kernel before admitting it. Apply the same requirement to
+compound, convex and mesh paths as they are added. A collider-count precharge
+alone says nothing about the geometry work inside each visit.
+
+### Acceptance before expanding
+
+Require exact equality with the existing operation for complete results,
+including eligibility, winning identity, tie order, fixed-point witness and
+distance, and posture result and publication counts. With the reported work
+and used capacity, rerun a successful representative case at exact limits and
+one below each nonzero unit/capacity in isolation. Check late exhaustion, zero,
+checked overflow, repeats, scratch reuse, and the first ready sample after grid
+or callback mutation. Compare collider touches in both dimensions, including an
+unpartitioned posture blocker. Require zero steady allocation in bounded
+support and the bounded clearance portion, and retain existing synchronous
+allocation counts. Run paired complete-step timing for the matched controls
+with ordinary and mutation frames. Repeat noisy rows before drawing a regression
+conclusion and get user agreement for any confirmed throughput tradeoff. No
+speedup target is needed to prove the work ceiling.
 
 ## Source and test ownership
 
@@ -188,22 +353,23 @@ separate files and dimensional code under its existing owner.
 
 ## Phase 0 - Contract And Matched Baselines
 
-- [ ] Trace both production support and posture paths, partition reconciliation,
+- [x] Trace both production support and posture paths, partition reconciliation,
   scratch lifetime and geometry costs against the current stack. Identify which
   work can be bounded by existing APIs and which needs a new upstream entry point.
   Record source, hosted pin and package readiness separately for each dependency.
-- [ ] Record exact common budget/work/status/scratch signatures and units,
+- [x] Record exact common budget/work/status/scratch signatures and units,
   dimensional request/result types, readiness ownership, failure policy and the
   intended production callers. Decide how 3D distinguishes incomplete support
   and how both posture APIs expose exhaustion while retaining atomicity.
-- [ ] Capture matched support and posture controls using existing fixtures:
+- [x] Capture matched support and posture controls using existing fixtures:
   open/floor/wall, crowded cells, compound/convex geometry, sparse and overlapping
   grids, mutation and query-stamp rollover. Include 3D mesh cases where supported.
   Retain inputs, source/binary identities, allocations and full-frame timings.
-- [ ] Define semantic equivalence checks, exact/one-below accounting cases and
+  [Package baseline record](#2026-11-14---phase-0-package-baselines)
+- [x] Define semantic equivalence checks, exact/one-below accounting cases and
   measured overhead acceptance before implementation. No arbitrary speedup
   target: bounded worst-case work may trade throughput for predictability.
-- [ ] Review the contract and choose a small production slice that reaches the
+- [x] Review the contract and choose a small production slice that reaches the
   shared boundary through the normal caller. Record the dependency changes it
   actually needs and use the matched controls before expanding scope.
 
@@ -286,6 +452,75 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### 2026-11-14 - Phase 0 package baselines
+
+Trailblazer `8fd7e2b` is the pre-change consumer. The hosted source workflow
+passed with GridForge `269da48`, Gravitas `cd1b8322`, SwiftCollections `08b1b38`,
+FixedMathSharp `e2c325a`, and Chronicler `7b90d59`. The measurements below use the
+published GridForge `10.1.0`, Gravitas `2.0.1`, SwiftCollections `8.0.0`,
+FixedMathSharp `8.0.0` and Chronicler `1.0.0` graphs. Loaded DLL hashes matched
+their NuGet assets in both families. No new upstream API is present in those
+packages or the hosted pins. [Hosted baseline](https://github.com/mrdav30/Trailblazer/actions/runs/43567530447)
+
+The package-mode Trailblazer adapter fixtures passed 117 cases in `Release`
+and 110 in `ReleaseLean`, including support, posture, and replay in both
+dimensions. Filter on `GravitasNavigator2D|GravitasNavigator3D` using
+`FullyQualifiedName` and `-p:UseLocalLsfStack=false`.
+
+A disposable console probe adapted the existing support and posture fixture
+patterns to exercise the released native entry points with identical logical
+scenes. It used one kinematic capsule on a unit rectangular grid from -12 to 12
+per active axis (Y = 0 in 2D), at 16 Hz with gravity zero and manual grounding.
+Support starts one unit above the floor with radius 1/2 and downward reach 1.
+The open and wall-only rows assert a miss. Floor rows assert distance 1/2 and an
+upward normal. The full-step column includes `Simulate`, `LateSimulate`, then
+the query or posture operation. Trailblazer host orchestration is covered by
+the adapter fixtures and by the archived planar frame measurements.
+
+- The floor spans 3 horizontally and is 1 thick, with its top at zero. The
+  wall-only blocker has width 1/4 and is centered at horizontal 3/4. Crowded
+  adds 64 radius-1/16 contacts at horizontal 3/4 and height 1/2. Compound uses
+  the same floor plus a unit part 4 units to the side. The convex floor is a
+  four-vertex polygon in 2D and a closed five-vertex pyramid in 3D. The mesh
+  floor is the 3D pyramid's top face as two static surface triangles.
+- Overlap adds a second dense grid from -2 to 2 on the active axes. Sparse
+  materializes only the center cell of that secondary grid. Mutation alternates
+  adding/removing a distant unit grid before the full step, so the isolated call
+  column measures the same floor without an intervening topology change. The
+  rollover control uses the crowded scene and a prebound setter to force the
+  existing collider stamp to `uint.MaxValue` before each call.
+- Posture uses a capsule at zero, radius 1/2, alternating heights 1 and 2 for
+  clear attempts. Both rows have 64 remote registered colliders at horizontal
+  4 and height 1/2. The blocked row repeats a growth attempt into a height-1/2
+  ceiling centered at height 1. The probe asserts `Applied` or `Blocked` each
+  time. The calls include full native transactions, including detached-candidate
+  preparation and any publication; their bytes are not clearance-only bytes.
+
+Windows x64, i7-9700K, SDK 10.0.302, .NET 10.0.10. Two fresh processes per
+package family, 128 warm steps per row, then seven alternating blocks of 128
+operations per column. Timing cells give the range of the four process medians
+in microseconds. B gives managed bytes per call/full step, with the same counts
+in both families. This is a matched workload baseline. The 2D floor warm blocks
+had outliers, and posture full-step medians varied between processes. Repeat
+paired captures before attributing time deltas to the change. Full outputs,
+probe source, dependency graphs and hashes are in `artifacts/query-budget-phase0`.
+
+| Scene | 2D call µs | 2D step µs | 2D B | 3D call µs | 3D step µs | 3D B |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Open | 6.9–7.3 | 14.8–15.4 | 0/0 | 9.3–10.6 | 17.3–21.5 | 0/0 |
+| Wall | 7.0–7.1 | 16.9–17.5 | 0/0 | 11.6–12.7 | 22.5–26.9 | 0/0 |
+| Floor | 74.0–80.6 | 89.3–99.7 | 0/0 | 22.4–23.6 | 36.1–41.6 | 0/0 |
+| Crowded | 64.6–69.1 | 119.0–149.7 | 0/0 | 78.3–83.1 | 179.5–232.0 | 0/0 |
+| Compound | 114.6–118.1 | 128.2–133.5 | 0/0 | 28.0–30.4 | 44.7–47.0 | 0/0 |
+| Convex | 60.5–64.2 | 70.1–78.5 | 0/0 | 93.5–99.3 | 114.1–117.4 | 0/0 |
+| Overlap | 64.2–69.1 | 74.6–79.7 | 0/0 | 29.5–32.8 | 44.1–46.1 | 0/0 |
+| Sparse | 63.4–66.6 | 73.9–78.7 | 0/0 | 20.1–23.1 | 35.4–37.1 | 0/0 |
+| Mutation | 62.0–67.3 | 114.1–129.3 | 0/596 | 19.7–22.6 | 135.5–146.1 | 0/784 |
+| Rollover | 61.4–68.8 | 83.9–150.2 | 0/0 | 69.2–82.7 | 170.1–199.0 | 0/0 |
+| Posture clear | 18.4–26.9 | 38.0–99.7 | 1120/1120 | 32.5–38.2 | 117.7–165.6 | 1424/1424 |
+| Posture blocked | 10.2–12.7 | 28.6–84.9 | 1080/1080 | 45.6–46.2 | 132.7–177.6 | 1384/1384 |
+| Mesh | — | — | — | 50.7–53.6 | 69.8–71.6 | 0/0 |
 
 ### 2026-11-13 - Post-release stack and native consumer review
 

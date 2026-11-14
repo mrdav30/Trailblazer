@@ -57,7 +57,7 @@ Its CPU-cost improvements and full-lifecycle measurements are retained in the
   evidence here. Adapter packaging does not gate the headless scenarios.
 - Phase 2 owns runtime profile replacement. The integration plan consumes that
   contract for coordinated collider changes after the initial 3D slice works.
-- [First-Class 2D Navigation](../twoDimensionalNavigationPlan.md) is separate
+- [First-Class 2D Navigation](twoDimensionalNavigationPlan.md) is separate
   feature work. These hardening scenarios target the current world-Y-up 3D
   controller; a fixed-height projection is not evidence of native 2D support.
 - Retain each shared scenario result once, with its exact adapter/library

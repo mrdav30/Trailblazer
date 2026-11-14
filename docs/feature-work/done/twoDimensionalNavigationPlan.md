@@ -5,21 +5,13 @@
 
 **Created:** 2026-09-03
 
-**Status (2026-11-13):** Phases 0 through 2 are complete in coordinated source
-mode. Native top-down and side-view A* and Flow use the shared graph and
-scheduler. Side-view navigation verifies ordinary supported legs and
-host-executed ladder, jump, and drop actions. The controller supports atomic
-posture changes, opt-in extra jumps during ascent, and deterministic record
-restore. See the [Phase 2 evidence](#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence).
-Phase 3 has the native Gravitas2D adapter and real collision fixtures for both
-modes. See the [Phase 3 checklist](#phase-3-gravitas2d-integration-and-closeout)
-for verification and release gates. Use `UseLocalLsfStack=true`
-with the GridForge hardening changes. Hosted develop pins GridForge
-`269da48`, which provides the exact planar coverage-neighbor query.
-The workflow now pins Gravitas `cd1b8322` for exact stationary yaw.
-The adapter's package reference uses Gravitas 2.0.0. Hard-budgeted
-physics queries remain a separate
-[2D/3D workstream](physicsQueryBudgetPlan.md).
+**Status (2026-11-14):** Phases 0 through 3 are complete. Native top-down
+and side-view A* and Flow share the graph and scheduler. The optional
+Gravitas adapter verifies collision, support, posture, host-executed actions,
+and exact checkpoint replay in both modes. See the
+[released-package closeout](#2026-11-14---released-package-verification-and-closeout)
+for the GridForge 10.1.0 and Gravitas 2.0.1 matrix. Hard-budgeted physics
+queries remain a separate [2D/3D workstream](../physicsQueryBudgetPlan.md).
 
 **Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`
 and Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`. The dated execution
@@ -53,13 +45,13 @@ signatures and file responsibilities before production implementation.
 - A* and Flow guidance, explicit action completion, invalidation, occupancy,
   safe profile replacement, persistence, and deterministic replay for 2D agents.
 - A `SolidBody2D` adapter extension built on the ownership lessons from the
-  [Gravitas integration plan](done/gravitasIntegrationPlan.md).
+  [Gravitas integration plan](gravitasIntegrationPlan.md).
 - Executable headless behavioral tests and readable integration guidance, not
   hollow API checks or a 3D scene viewed by an orthographic camera. No standalone
   sample application or new scenario framework is required. Engine-host visual
   playtesting remains deferred until engine-specific adapter work.
 
-This is separate from [3D navigation hardening](done/navigationHardeningPlan.md).
+This is separate from [3D navigation hardening](navigationHardeningPlan.md).
 The 3D Gravitas integration and hardening profile-replacement contract are now
 complete locally. Reuse their proven ownership and replacement rules, not their
 world-Y arithmetic. A fixed-height top-down projection can inform an early experiment but is
@@ -95,10 +87,10 @@ not the deliverable or a permanent parallel public compatibility API.
   for new runtime paths. Use bounded behavioral sequences, not hollow API tests.
 - Preserve transactional populate-existing-instance serialization; support JSON
   in both package families and MemoryPack in standard Release.
-- Record pre-existing or out-of-scope defects in [issue-tracker.md](issue-tracker.md).
+- Record pre-existing or out-of-scope defects in [issue-tracker.md](../issue-tracker.md).
   Regressions introduced by this feature remain here until resolved. Record
   reproducible out-of-scope performance concerns in the
-  [benchmark backlog](benchmark-signal-hardening-backlog.md); do not reopen the
+  [benchmark backlog](../benchmark-signal-hardening-backlog.md); do not reopen the
   accepted TRB-Benchmark-005 stopping point without its stated evidence.
 - Do not stage, commit, publish, or change sibling repositories without the
   corresponding authorization. This plan records scope, not release readiness.
@@ -136,23 +128,23 @@ world's back or reuse a 3D traversal proof whose geometry means something else.
 
 Review these existing contracts before selecting the 2D files:
 
-- [Navigator.cs](../../src/Trailblazer/Navigation/Navigator/Navigator.cs) and
-  [INavigate.cs](../../src/Trailblazer/Navigation/Navigator/INavigate.cs): current
+- [Navigator.cs](../../../src/Trailblazer/Navigation/Navigator/Navigator.cs) and
+  [INavigate.cs](../../../src/Trailblazer/Navigation/Navigator/INavigate.cs): current
   Vector3d/quaternion state, Y foot offset, frame lifecycle, and committed cells.
-- [KinematicBodyShape.cs](../../src/Trailblazer/Pathing/Query/KinematicBodyShape.cs),
-  [NavigationAgentProfile.cs](../../src/Trailblazer/Pathing/Query/NavigationAgentProfile.cs),
-  and [TraversalEvaluator.cs](../../src/Trailblazer/Pathing/Graph/Traversal/TraversalEvaluator.cs):
+- [KinematicBodyShape.cs](../../../src/Trailblazer/Pathing/Query/KinematicBodyShape.cs),
+  [NavigationAgentProfile.cs](../../../src/Trailblazer/Pathing/Query/NavigationAgentProfile.cs),
+  and [TraversalEvaluator.cs](../../../src/Trailblazer/Pathing/Graph/Traversal/TraversalEvaluator.cs):
   authoritative body dimensions, capability admission, and vertical leg proof.
-- [Motor](../../src/Trailblazer/Navigation/Motor),
-  [steering](../../src/Trailblazer/Navigation/Steering), and
-  [turning](../../src/Trailblazer/Navigation/Turning): separate dimension-neutral
+- [Motor](../../../src/Trailblazer/Navigation/Motor),
+  [steering](../../../src/Trailblazer/Navigation/Steering), and
+  [turning](../../../src/Trailblazer/Navigation/Turning): separate dimension-neutral
   control rules from horizontal/vertical and quaternion assumptions.
-- [Search](../../src/Trailblazer/Pathing/Search),
-  [graph tests](../../tests/Trailblazer.Tests/Pathing/Graph), and
-  [navigation tests](../../tests/Trailblazer.Tests/Navigation): preserve existing
+- [Search](../../../src/Trailblazer/Pathing/Search),
+  [graph tests](../../../tests/Trailblazer.Tests/Pathing/Graph), and
+  [navigation tests](../../../tests/Trailblazer.Tests/Navigation): preserve existing
   costs, stale handling, transition ownership, and 3D regression coverage.
-- [Serialization guide](../api/guides/Serialization.md) and
-  [NavigationAgentProfileRecord.cs](../../src/Trailblazer/Navigation/Serialization/NavigationAgentProfileRecord.cs):
+- [Serialization guide](../../api/guides/Serialization.md) and
+  [NavigationAgentProfileRecord.cs](../../../src/Trailblazer/Navigation/Serialization/NavigationAgentProfileRecord.cs):
   dimensional identity and staged population cannot be inferred from a shell.
 
 In Gravitas, read `AGENTS.md`, `docs/api/guides/DIMENSIONS.md`,
@@ -318,7 +310,7 @@ GridForge behavior tests cover the new paths; existing 3D source stays intact.
 Reuse Gravitas's existing synchronous indexed discovery, as the current 3D
 adapter does. Neither dimension inherently requires a caller-supplied work
 ceiling to be deterministic. Hard discovery/geometry budgets and no-growth
-scratch are a separate [2D/3D workstream](physicsQueryBudgetPlan.md), not an
+scratch are a separate [2D/3D workstream](../physicsQueryBudgetPlan.md), not an
 upstream prerequisite for this operation. Do not add hidden default limits or
 discard candidates to imitate a budget.
 
@@ -1014,8 +1006,8 @@ in the existing test projects.
   notes only where behavior actually changes. Link selected real behavioral
   tests and fixtures instead of maintaining another example application. Verify
   any runnable documentation snippets and update XML and DocFX guides together.
-- [ ] **Run the full verification matrix.** Use the
-  [hardening verification commands](done/navigationHardeningPlan.md#verification-and-closeout),
+- [x] **Run the full verification matrix.** Use the
+  [hardening verification commands](navigationHardeningPlan.md#verification-and-closeout),
   the adapter's recorded commands, and relevant Gravitas2D tests in both package
   families. Verify Windows/Linux behavior, exact new/core coverage, 3D regression
   tests, replay, allocations, resource lifetime, and DocFX warnings-as-errors.
@@ -1023,18 +1015,19 @@ in the existing test projects.
   focused 2D scenarios selected in Phase 0; retain full-frame work/timing context.
   - [x] Windows and Ubuntu source builds, tests, exact coverage, replay,
     resource lifetime, DocFX, and matched native planar benchmark controls.
-  - [ ] Released GridForge and GridForge.Lean provide the navigation tracing
+  - [x] Released GridForge and GridForge.Lean provide the navigation tracing
     overload and exact planar coverage-neighbor API.
-  - [ ] Released Gravitas and Gravitas.Lean contain the stationary yaw fix.
+  - [x] Released Gravitas and Gravitas.Lean contain the stationary yaw fix.
     Repeat the matrix against the released dependency chain.
-- [ ] **Complete independent review and evidence reconciliation.** Resolve
+- [x] **Complete independent review and evidence reconciliation.** Resolve
   blocking findings, link shared integration evidence, update the overview, and
   archive only when native top-down and side-view deliverables both meet their
   gates. Any scope reduction needs an explicit user decision.
   - [x] Verify arbitrary-angle stationary yaw against the native Gravitas source fix.
-    [TRB-Issue-161](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
+    [TRB-Issue-161](../issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
   - [x] Advance the hosted develop pin to Gravitas `cd1b8322`.
-  - [ ] Confirm the hosted develop workflow on the landed Trailblazer commit.
+  - [x] Confirm the hosted develop workflow on the landed Trailblazer commit.
+    [Hosted matrix](https://github.com/mrdav30/Trailblazer/actions/runs/43547586342)
 
 ## Execution record
 
@@ -1072,7 +1065,7 @@ Gravitas `df1915142ec9c8c7937ee7aa8aa6d25a99cee4cd`, GridForge
 `4b5715b2232930480c207fa6e00944713f5000d6`. No authored upstream files changed.
 
 Use the existing process environment `UseLocalLsfStack=true` for the IDE and
-every sibling restore; see [contributor setup](../../CONTRIBUTING.md#coordinated-source-development-and-ide-restore).
+every sibling restore; see [contributor setup](../../../CONTRIBUTING.md#coordinated-source-development-and-ide-restore).
 A root-only props/targets experiment was discarded: reference metadata could
 select source for compilation while NuGet still selected published transitive
 packages. It produced an adapter `TypeLoadException` for `GridTraceSlab` and is
@@ -1114,7 +1107,7 @@ production adapter. It ran twice with all six loaded LSF DLL hashes matching
 their source `bin/Release/net8.0` outputs. Both runs reported **52 passing checks
 and two failing surface-witness expectations**, with nonzero exit. The latter
 are two reproductions of one defect, now
-[TRB-Issue-150](issue-tracker.md#trb-issue-150---gravitas2d-exact-touch-circle-sweeps-return-the-probe-center-as-the-surface-point).
+[TRB-Issue-150](../issue-tracker.md#trb-issue-150---gravitas2d-exact-touch-circle-sweeps-return-the-probe-center-as-the-surface-point).
 This preflight is deliberately not reported as all-green.
 
 Reproduction inputs: pure `PhysicsRuntimeMode.TwoD`, 60 Hz, grid bounds
@@ -1608,7 +1601,7 @@ repair.
 Independent source review confirms the missing bounded generation-discovery
 boundary, world-stamp handoff requirement, quadratic convex-work accounting and
 sampling-barrier obligations. The budget-specific findings are now retained in
-the [separate physics query plan](physicsQueryBudgetPlan.md); current support
+the [separate physics query plan](../physicsQueryBudgetPlan.md); current support
 correctness obligations remain in section 2. Grid-change membership
 reconciliation is a source-identified design risk, not a reproduced new runtime
 defect. No issue ID is allocated for these unimplemented feature prerequisites.
@@ -1628,7 +1621,7 @@ the proposed per-query work ceiling. Existing 2D indexed discovery is also
 usable without that stronger guarantee. Deterministic results and caller-set
 work/storage ceilings are distinct contracts.
 
-[Bounded Physics Queries](physicsQueryBudgetPlan.md) now owns the discovery,
+[Bounded Physics Queries](../physicsQueryBudgetPlan.md) now owns the discovery,
 geometry accounting, no-growth scratch and budget-exhaustion design, including
 the upstream GridForge/SwiftCollections investigation. This is not a dependency
 for completing native 2D support/posture. No measured performance defect or new
@@ -3493,7 +3486,7 @@ Both directions return `NoPath` for the public leg check and for immediate
 and scheduled A* and Flow. Jump capability is available to the profile, and
 no guide or pending request remains after the failures. The existing flat
 step and valley controls still pass. The maintained cases are in
-[`NavigationSideViewTests.Joins.cs`](../../tests/Trailblazer.Tests/Pathing/Search/SideView/NavigationSideViewTests.Joins.cs).
+[`NavigationSideViewTests.Joins.cs`](../../../tests/Trailblazer.Tests/Pathing/Search/SideView/NavigationSideViewTests.Joins.cs).
 The support and motor checklist gate is complete. Bounded authored traversal
 remains the next open gate and keeps execution with the host.
 
@@ -3663,7 +3656,7 @@ fixtures. Timing remains inconclusive.
 Local captures are under `artifacts/phase2-hardening`. The hosted Trailblazer
 develop pin needs an immutable GridForge revision containing the new query.
 The shared request-level arrival contract is tracked in
-[TRB-Issue-160](issue-tracker.md#trb-issue-160---arrival-radius-belongs-to-the-request).
+[TRB-Issue-160](../issue-tracker.md#trb-issue-160---arrival-radius-belongs-to-the-request).
 
 ### 2026-11-13 - Phase 3 native Gravitas adapter and initial collision fixtures
 
@@ -3764,7 +3757,7 @@ branches in all four runs, with 22/22 fully covered methods on Windows.
   preparation or commit. No 3D runtime path changed. The review also
   reproduced native stationary yaw drift independently of the adapter.
   The exact control and upstream ownership are in
-  [TRB-Issue-161](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest).
+  [TRB-Issue-161](../issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest).
 - The first Windows Release suite exposed a test race in the existing
   3D gas-arrival invalidation case. Its publisher could observe an earlier
   validation lease and replace the graph before the terminal ray. The
@@ -3810,7 +3803,7 @@ branches in all four runs, with 22/22 fully covered methods on Windows.
 ### 2026-11-13 - Native kinematic yaw replay
 
 Gravitas GRV-Issue-157 resolves
-[TRB-Issue-161](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
+[TRB-Issue-161](../issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
 at the native body boundary. Gravitas now keeps the accepted scalar when
 the exact host quaternion represents it. A genuine host orientation edit
 still follows the existing projection path. The quaternion memo is derived
@@ -3850,8 +3843,42 @@ on both hosts. Independent review confirmed the pin and replay coverage.
 Logs are under `artifacts/phase3-hosted-yaw`.
 
 Package-mode restore succeeded in Release and ReleaseLean. Both builds
-still stop in GridForge 10.0.0 on the missing 15-argument
+stopped in GridForge 10.0.0 on the missing 15-argument
 `TraceNavigationBodyInto` overload and
-`ArePlanarCoverageNeighborsOrCoincident`. Keep Phase 3 open for the
-hosted develop run and package-mode verification after GridForge and
-Gravitas publish the required fixes.
+`ArePlanarCoverageNeighborsOrCoincident`. At this checkpoint, the hosted
+develop run and released-package verification were pending.
+
+### 2026-11-14 - Released-package verification and closeout
+
+- GridForge and GridForge.Lean `10.1.0` ship both navigation coverage
+  APIs from `269da48`. Gravitas and Gravitas.Lean `2.0.1` ship the accepted
+  yaw fix from `cd1b8322`. The release tags match the existing hosted source
+  pins, and the [hosted source matrix](https://github.com/mrdav30/Trailblazer/actions/runs/43547586342)
+  passed on the landed Trailblazer commit `32209d4`.
+- The package-mode solution restored and built with
+  `-p:UseLocalLsfStack=false` on Windows and Ubuntu. Both target frameworks
+  resolved the correct packages for each family. The generated core packages
+  depend on GridForge and the optional adapter packages depend on Gravitas.
+  Independent review checked the package graphs, dependency metadata and
+  runtime assembly provenance.
+- Each host passed 3,780 core and 117 adapter tests in `Release`, and
+  3,667 core and 110 adapter tests in `ReleaseLean`. The focused #161 filter
+  `TopDownYaw_ShouldReplayIdleTranslationAndClippingAtTheExactAcceptedAngle`
+  passed JSON and MemoryPack in `Release` and JSON in `ReleaseLean` on both
+  hosts. The replay checks exact body, collider and navigator yaw together
+  with accepted pose, velocity and ordered cell events after body-first restore.
+- Ubuntu passed the workflow's exact combined coverage gate in both
+  configurations with 36,020/36,020 lines, 15,799/15,799 branches and
+  3,604/3,604 fully covered methods. DocFX passed with warnings treated as
+  errors on both hosts. Logs and resolved package graphs are under
+  `artifacts/phase3-packages`.
+- The Ubuntu Release `navigation-planar-frame` package run used two launches,
+  three warmups and five measured iterations per row. All eight children
+  exited successfully and produced 40 samples. Generated child binaries
+  matched the published GridForge and Gravitas assets. Mean times were 225 µs
+  for open top-down, 500 µs for blocked top-down, 830 µs for side-view support
+  (two full steps each), and 6,681 µs for the side-view ladder (six steps).
+  Allocations matched the prior controls at 0 B for the first three rows
+  and 12,368 B for the ladder. The short capture verifies these workloads and
+  allocations. Timing remains descriptive. Logs are under
+  `artifacts/phase3-packages/benchmark`.

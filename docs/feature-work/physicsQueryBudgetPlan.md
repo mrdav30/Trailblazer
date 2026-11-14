@@ -1,52 +1,46 @@
-# Bounded Physics Queries — 2D And 3D Implementation Plan
+# Bounded Physics Queries in 2D and 3D
 
-> **For agentic workers:** Use `superpowers:executing-plans` or
-> `superpowers:subagent-driven-development` when implementation is requested.
-> Complete the common contract and baseline review before runtime changes. Use
-> independent correctness/simplicity review and the checkboxes below.
+Implementation has yet to start. The target is to complete this work before the
+next Trailblazer release. The [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
+has its own Phase 3 package verification and already exercises synchronous
+support and posture in real physics. This plan owns the opt-in work and storage
+limits for those operations in both dimensions.
 
-**Created:** 2026-09-24
+## Current baseline
 
-**Status:** Queued scope captured for review; implementation has not started. This is
-a separate follow-up to [first-class 2D navigation](twoDimensionalNavigationPlan.md),
-not a prerequisite for its support queries or posture replacement.
-Execution and release sequencing require an explicit decision when taking this
-plan up; capturing it assigns no release milestone or release-policy exception.
+- In side-view 2D, `GravitasNavigator2D` calls `Query2D.QuerySupport` on the
+  accepted pose after the physics resolve. Gravitas checks the source and
+  partition readiness, finds the nearest eligible support, and reports
+  `Found`, `NoSupport`, `WorldNotReady`, or `Unrepresentable`. The adapter
+  already distinguishes `NoSupport` from `Unavailable` and checks the sampled
+  frame and carrier lifetime. Top-down 2D skips the support query.
+- In 3D, `GravitasContactTranslator` calls `Query3D.SweepSphere` and checks
+  the closest hit's normal and witness afterward. `GravitasNavigator3D`
+  currently treats an empty contact as airborne. Preserve that synchronous
+  selection contract and decide how bounded 3D calls represent incomplete
+  support before wiring retained contact or carrier state to the new result.
+- Both body reconfiguration methods validate a detached posture candidate
+  against registered colliders before publishing. In 2D this explicitly covers
+  unpartitioned blockers that the grid-backed support index omits. Preserve the
+  complete blocker set and the accepted transaction's publication semantics.
+- Support discovery can refresh partitions, grow candidate storage, and visit
+  scene-dependent addresses and memberships. Posture clearance visits the
+  registered collider set. These are existing synchronous costs. The previous
+  probes established enumeration reuse, and Phase 0 still needs measured
+  support and posture baselines.
 
-**Goal:** Give both 2D and 3D physics consumers explicit, deterministic query
-work/storage limits without losing complete-result semantics or changing the
-existing synchronous query behavior.
+## Ownership
 
-**Architecture:** Gravitas owns physics-query budgets, geometry accounting and
-query results. GridForge owns bounded discovery over its existing world/index;
-SwiftCollections changes only if its existing spatial primitives cannot provide
-that boundary. Trailblazer's optional adapter consumes the result. Share resource
-accounting where valid, not geometry or a generic arbitrary-dimension framework.
+Gravitas owns physics-query accounting, readiness, native geometry and results.
+GridForge owns any new bounded world discovery required by an implemented query.
+SwiftCollections owns any missing reusable spatial primitive, and FixedMathSharp
+remains the owner of deterministic geometry shared across libraries. The optional
+Trailblazer adapter owns the host policy for consuming results. Reuse existing
+accounting where contracts match and keep geometry in its dimensional owner.
 
-**Tech Stack:** C# 11; `netstandard2.1` and `net8.0`; FixedMathSharp; GridForge;
-SwiftCollections; Gravitas; existing xUnit and benchmark projects.
-
-**Spec:** The agreed scope and contract requirements below capture this work.
-Phase 0 must settle exact public signatures, work units and host failure policy
-before implementation; the former 2D-only budget declarations are not approved
-shared API names.
-
-## Why this is separate
-
-Today's 3D adapter calls `Query3D.SweepSphere`, which discovers covered voxels
-and inspects collider memberships synchronously. Existing 2D circle queries also
-use spatially indexed discovery. Neither provides a caller-set ceiling on all
-inspected work. That is not inherently a correctness or lockstep defect: finite,
-scene-dependent work can still produce deterministic results.
-
-The 2D proposal added a stronger guarantee: explicit limits across discovery,
-membership visits and geometry, with no storage growth and an explicit incomplete
-outcome. That guarantee is useful to investigate for **both** dimensions. It is
-not necessary merely to introduce a first-class 2D controller, and no measured
-support-query performance defect has been established by the existing probes.
-
-Keep this plan as the single cross-stack coordination record. Do not create an
-issue ticket for an unimplemented feature or duplicate the plan in each repo.
+The current library targets are `netstandard2.1` (C# 11) and `net10.0` (C# 14).
+Phase 0 will settle the public signatures, work units, scratch ownership and host
+failure policy using the current code and existing fixtures.
 
 ## Agreed scope
 
@@ -118,24 +112,31 @@ claim they disappeared.
 
 ### Discovery and lifecycle
 
-The covered-address cursor bounds enumeration after eligible generations are
-supplied; it does not supply bounded discovery. A navigation baseline allocates,
-and an output candidate limit does not bound inspected work. Investigate one
-GridForge-owned bounded discovery/bind boundary over the existing spatial index.
-The current candidate is bounded, stamp-free spatial-hash membership access plus
-existing BVH nodes with bounded caller scratch; finalize it only after checking
-both dimensional consumers. Avoid an unconditional all-grid/all-collider scan.
+`GridWorld.TryBeginCoveredAddresses` can bind supplied grid generations for
+covered-address enumeration. Inspect the current `GridSpatialIndex` paths over
+the fixed spatial hash and the BVH, including its active-grid scan fallback.
+An output limit alone leaves internal hash cells, memberships, BVH nodes and
+deduplication unbounded. Choose the smallest traversal that can account for
+inspections and stop within caller limits. Reuse one discovery boundary where
+both support paths share the same requirements.
 
-Preserve one exact world spawn/version/change-sequence stamp through discovery,
-binding and completion. Individually current generations cannot prove a newly
-inserted grid was included. Preserve checked discovery expansion, the relevant
-dimension's partition padding and separate physical-presence checks. Validate
-sparse changes, grid replacement, world reset and reused registrations.
+Posture clearance can start from its existing registered-collider scan, with
+every visit charged and lookup order preserved. Consider indexed discovery for
+posture only if its complete candidate set includes unpartitioned blockers and
+matched measurements justify the change. Account for creation and preparation
+of the detached candidate when placing the bounded-call boundary.
 
-Gravitas must sample a current index at its documented host barrier. Account for
-deferred callback refresh and grid/sparse reconciliation; an empty deferred set
-alone is not proof of readiness. Specify where maintenance happens and include
-it in full-frame measurements. A perpetually unready query is not a solution.
+Preserve the existing world lifetime and change-sequence checks from discovery
+through binding and completion. Individually current generations cannot prove a
+newly inserted grid was included. Preserve checked discovery expansion, the
+relevant dimension's partition padding and separate physical-presence checks.
+Validate sparse changes, grid replacement, world reset and reused registrations.
+
+Gravitas must sample a current index at its documented host barrier. Today
+`RefreshQueryPartitions` can rebuild both partitions after a topology batch and
+drain deferred 2D updates. Phase 0 must identify what the bounded query charges
+and where any separate maintenance runs. Include both costs in full-frame
+measurements and verify that the normal host step restores readiness.
 
 ### Geometry and consumer behavior
 
@@ -160,17 +161,17 @@ retain the existing post-commit notification-failure rules.
 
 ## Source and test ownership
 
-Paths below are relative to the named repository; abbreviated entries share the
-preceding `src/<library>/` or `tests/<project>/` prefix. New public types get
-separate files. Recheck source before execution because 2D work precedes this plan.
+Paths are relative to each repository. Keep new public and internal types in
+separate files and dimensional code under its existing owner.
 
 | Owner | Existing source / test entry points |
 | --- | --- |
-| SwiftCollections | `src/SwiftCollections/Query/SpatialHash/SwiftSpatialHash.cs`, `Query/BoundingVolume/SwiftBVH.cs`; corresponding collection tests |
-| GridForge | `src/GridForge/Grids/Managers/GridWorld.cs`, `Grids/Managers/GridSpatialIndex.cs`, `Grids/Topology/GridCoveredAddressCursor.cs`; world/index/covered-address tests |
-| Gravitas 2D | `src/Gravitas/Queries/2D/GravitasQuery2DService.Sweep.cs`, `Queries/2D/QueryDetection2D.cs`, `Core/2D/GravitasCollision2DService.cs`; `tests/Gravitas.Tests/Physics2D`, including sweep witnesses and host contracts |
-| Gravitas 3D | `src/Gravitas/Queries/3D/GravitasQuery3DService.Raycast.Traversal.cs`, `Core/3D/SolidBody.ColliderReconfiguration.cs`; `tests/Gravitas.Tests/Queries/GravitasQuery3DServiceSweepTests.cs`, `Core/SolidBodyColliderReconfigurationTests.cs` |
-| Trailblazer adapter | `src/Trailblazer.Gravitas/GravitasContactTranslator.cs`, `src/Trailblazer.Gravitas/GravitasNavigator3D.cs`, future native 2D counterparts; `tests/Trailblazer.Gravitas.Tests` |
+| SwiftCollections | `src/SwiftCollections/Query/SpatialHash/SwiftSpatialHash.cs`, `src/SwiftCollections/Query/BoundingVolume/SwiftBVH.cs` and the fixed-point spatial hash integration |
+| GridForge | `src/GridForge/Grids/Managers/GridSpatialIndex.cs`, `src/GridForge/Grids/Managers/GridWorld.CoveredAddresses.cs` and the world/index/covered-address tests |
+| Gravitas readiness | `src/Gravitas/Runtime/GravitasWorldContext.QueryPartitions.cs` and the partition reconciliation tests |
+| Gravitas 2D | `src/Gravitas/Queries/2D/GravitasQuery2DService.SupportQuery.cs`, `src/Gravitas/Queries/2D/Detection/QueryDetection2D.SupportQuery.cs`, `src/Gravitas/Core/2D/Bodies/SolidBody2D.ColliderReconfiguration.cs` and `tests/Gravitas.Tests/Physics2D` |
+| Gravitas 3D | `src/Gravitas/Queries/3D/GravitasQuery3DService.Raycast.cs` and its `Raycast.Traversal` partial, `src/Gravitas/Core/3D/Bodies/SolidBody.ColliderReconfiguration.cs` and the 3D sweep and posture tests |
+| Trailblazer adapter | `src/Trailblazer.Gravitas/Planar/GravitasNavigator2D.cs`, `src/Trailblazer.Gravitas/GravitasContactTranslator.cs`, `src/Trailblazer.Gravitas/GravitasNavigator3D.cs` and the support, posture and replay fixtures in `tests/Trailblazer.Gravitas.Tests` |
 
 ## Review focus
 
@@ -187,11 +188,14 @@ separate files. Recheck source before execution because 2D work precedes this pl
 
 ## Phase 0 - Contract And Matched Baselines
 
-- [ ] Read owning repo instructions, query/lifecycle docs and the completed 2D
-  support/posture contracts. Inventory variable work/storage in both dimensions.
+- [ ] Trace both production support and posture paths, partition reconciliation,
+  scratch lifetime and geometry costs against the current stack. Identify which
+  work can be bounded by existing APIs and which needs a new upstream entry point.
+  Record source, hosted pin and package readiness separately for each dependency.
 - [ ] Record exact common budget/work/status/scratch signatures and units,
-  dimensional request/result types, readiness ownership, failure policy and
-  proposed source files. Share accounting, not dimension-specific geometry.
+  dimensional request/result types, readiness ownership, failure policy and the
+  intended production callers. Decide how 3D distinguishes incomplete support
+  and how both posture APIs expose exhaustion while retaining atomicity.
 - [ ] Capture matched support and posture controls using existing fixtures:
   open/floor/wall, crowded cells, compound/convex geometry, sparse and overlapping
   grids, mutation and query-stamp rollover. Include 3D mesh cases where supported.
@@ -199,21 +203,23 @@ separate files. Recheck source before execution because 2D work precedes this pl
 - [ ] Define semantic equivalence checks, exact/one-below accounting cases and
   measured overhead acceptance before implementation. No arbitrary speedup
   target: bounded worst-case work may trade throughput for predictability.
-- [ ] Review the contract and proceed to implementation. Existing queries being
-  fast does not disprove the feature's value; do not declare success or a no-go
-  without testing the implemented bounded behavior against the same controls.
+- [ ] Review the contract and choose a small production slice that reaches the
+  shared boundary through the normal caller. Record the dependency changes it
+  actually needs and use the matched controls before expanding scope.
 
 ## Phase 1 - Shared Bounded Discovery
 
 - [ ] Write failing owning tests for capped hash-cell/membership and BVH-node
   visits, duplicate/rejected candidates, scratch limits and rollover behavior.
   Add SwiftCollections access only where existing APIs cannot meet the contract.
-- [ ] Implement GridForge's discovery/bind operation with checked bounds and one
-  world stamp. Test insertion between discovery/bind, replacement, reset, sparse
-  presence, dense storage, rectangular/both hex topologies, seams and tiny metrics.
+- [ ] Reuse current GridForge discovery and binding where the contract permits.
+  Introduce only the bounded operations exercised by the Gravitas query slice.
+  Test insertion between discovery/bind, replacement, reset, sparse presence,
+  dense storage, rectangular/both hex topologies, seams and tiny metrics.
 - [ ] Prove exact/one-below allowances and capacities, cleanup after every failure,
   warmed no-growth allocation behavior, and complete discovery equivalence for
-  2D and 3D. Run unchanged index/query controls before reviewing this boundary.
+  2D and 3D. Verify the first production slice for exact results, warm allocations
+  and containing-frame time, then obtain independent review before expanding it.
 
 ## Phase 2 - Native Bounded Queries In Both Dimensions
 
@@ -224,8 +230,8 @@ separate files. Recheck source before execution because 2D work precedes this pl
   precharge every variable kernel, sorting and cleanup path; test counter
   overflow and a budget exhausted immediately before the winning candidate.
 - [ ] Make readiness and failure outcomes explicit. Test recurrent callback
-  mutations, grid changes, stale registrations and reentrancy without relying
-  on an unrelated query to repair the index.
+  mutations, grid changes, stale registrations, unpartitioned posture blockers
+  and reentrancy. Verify recovery through the normal host lifecycle.
 - [ ] Compare complete bounded results against the corresponding synchronous
   operations in both dimensions. Preserve existing public controls and verify
   no usable result escapes an incomplete query. Review both implementations;
@@ -235,7 +241,8 @@ separate files. Recheck source before execution because 2D work precedes this pl
 
 - [ ] Integrate the reviewed explicit policy in 2D and 3D adapters, preserving
   existing caller behavior. Test repeated incomplete support, recovery, moving
-  carriers, gravity and all-prepare/one-resolve/all-commit ownership.
+  carriers, gravity and all-prepare/one-resolve/all-commit ownership. Report
+  actor count and query counts per frame alongside per-call budgets.
 - [ ] Exercise bounded posture clearance at exact/one-below limits. Rejection
   leaves all physical/navigation state and publication counts unchanged;
   acceptance and notification failures retain atomic transaction semantics.
@@ -268,7 +275,26 @@ Record exact coverage denominators, test counts, runtime/OS, benchmark parameter
 and complete/failing captures. Unit tests of counters do not prove frame-time
 bounds; source builds do not prove package readiness.
 
+## Release sequencing
+
+1. Start query-budget baselines and contract work with released GridForge
+   `10.1.0` and Gravitas `2.0.1`, the native 2D Phase 3 package versions.
+2. If the implemented bounded path needs additional APIs, release their owning
+   packages in dependency order.
+3. Before publishing Trailblazer, validate the combined native 2D and budgeted
+   adapter behavior against the final released Standard and Lean chains.
+   Review versioning when the budget API is settled.
+
 ## Execution record
+
+### 2026-11-13 - Post-release stack and native consumer review
+
+The released baseline is Chronicler `1.0.0`, FixedMathSharp `8.0.0`,
+SwiftCollections `8.0.0`, GridForge `10.0.0` and Gravitas `2.0.0`.
+Trailblazer's hosted source matrix passes with GridForge `269da48` and Gravitas
+`cd1b8322`, the candidates for `10.1.0` and `2.0.1`. The Phase 3 package
+matrix was pending at this checkpoint. Matched query-budget baselines and
+implementation are still open. [Pinned-source CI](https://github.com/mrdav30/Trailblazer/actions/runs/43547586342)
 
 ### 2026-09-24 - Scope separated from native 2D delivery
 
@@ -278,7 +304,7 @@ support uses an indexed synchronous query without a hard work budget. The
 This follow-up owns the stronger resource-control guarantee; no runtime changes,
 new test results or performance improvements are claimed by capturing it.
 
-The [earlier support recheck](twoDimensionalNavigationPlan.md#2026-09-24---support-prerequisite-recheck)
+The [earlier support recheck](done/twoDimensionalNavigationPlan.md#2026-09-24---support-prerequisite-recheck)
 retains source revisions and the 20,172-case 2D enumeration comparison. Those
 results are discovery-reuse evidence, not a complete bounded query, a 3D proof
 or a measured performance requirement. Rebaseline both dimensions in Phase 0.

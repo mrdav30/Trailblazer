@@ -304,9 +304,10 @@ alone do not justify renewed open-ended investigation.
   collider and navigator yaw, accepted position and velocity, and cell
   events through idle, movement, wall clipping, retreat, and an explicit
   turn before and after body-first restore.
-- **Integration:** The develop workflow pins Gravitas
-  `cd1b832272bdc28d4b57b4f11b073053c0341f2d`. Released-package replay requires
-  a Gravitas release containing that fix.
+- **Integration:** Gravitas and Gravitas.Lean `2.0.1` ship the fix from the
+  hosted source pin `cd1b8322`. The exact replay passed on Windows and Ubuntu
+  in JSON and MemoryPack in `Release`, and in JSON in `ReleaseLean`.
+  [Package verification](done/twoDimensionalNavigationPlan.md#2026-11-14---released-package-verification-and-closeout)
 
 ### TRB-Issue-160 - Arrival radius belongs to the request
 
@@ -675,7 +676,7 @@ alone do not justify renewed open-ended investigation.
   GridForge suites pass 1,162 tests in each configuration; downstream Gravitas,
   Trailblazer and adapter suites also pass against the source-built
   dependencies. See the
-  [cross-stack verification record](twoDimensionalNavigationPlan.md#2026-09-22---upstream-contact-and-hex-defects-resolved).
+  [cross-stack verification record](done/twoDimensionalNavigationPlan.md#2026-09-22---upstream-contact-and-hex-defects-resolved).
 - **Boundary:** The inverse requires unsaturated intermediate arithmetic.
   Previously affected inputs can produce corrected dimensions/configuration
   keys; rebuild derived data from authored inputs. Native planar tracing keeps
@@ -704,7 +705,7 @@ alone do not justify renewed open-ended investigation.
   witnesses pass. Gravitas collision, overlap and sweep consumers pass their
   owning regressions in both configurations. Full cross-stack suite counts and
   source-DLL checks are recorded in the
-  [verification record](twoDimensionalNavigationPlan.md#2026-09-22---upstream-contact-and-hex-defects-resolved).
+  [verification record](done/twoDimensionalNavigationPlan.md#2026-09-22---upstream-contact-and-hex-defects-resolved).
 - **Boundary:** This closes the contact defect, not the remaining bounded
   support/posture implementation, native controller acceptance or
   package-release gates.
@@ -732,9 +733,9 @@ alone do not justify renewed open-ended investigation.
   52 checks with zero witness gaps. This resolves the query defect, not the
   remaining 2D geometry/controller gates or package-release verification.
 - **Evidence:**
-  [Original reproduction](twoDimensionalNavigationPlan.md#2026-09-21---source-development-and-native-2d-preflight)
+  [Original reproduction](done/twoDimensionalNavigationPlan.md#2026-09-21---source-development-and-native-2d-preflight)
   and
-  [fix/slope follow-up](twoDimensionalNavigationPlan.md#2026-09-21---correct-witnesses-and-slope-anchor-proof).
+  [fix/slope follow-up](done/twoDimensionalNavigationPlan.md#2026-09-21---correct-witnesses-and-slope-anchor-proof).
 
 ### TRB-Issue-146 - Guided action approaches can oscillate across exact entry
 

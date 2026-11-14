@@ -54,7 +54,7 @@ retain the approved direction and the pre-implementation decisions in this plan.
 5. Package and document the verified integration with executable examples.
 
 The first 3D slice is intentionally independent of profile replacement and
-first-class 2D. The [2D plan](../twoDimensionalNavigationPlan.md) owns the later
+first-class 2D. The [2D plan](twoDimensionalNavigationPlan.md) owns the later
 `SolidBody2D` adapter extension and planar acceptance cases. Finishing this 3D
 plan does not imply that 2D support exists, and 2D does not gate its closeout.
 

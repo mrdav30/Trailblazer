@@ -22,31 +22,6 @@ instead of burying it in notes.
 
 ## Active Coordination
 
-- [First-Class 2D Navigation](twoDimensionalNavigationPlan.md)
-  - Phase 0 contract review is complete. FixedMathSharp 8.0.0 and
-    GridForge 10.0.0 ship exact planar capsule clearance and layer-bound body
-    tracing. Pinned Gravitas source supplies native support queries and atomic
-    2D posture replacement. The September contact and hex issues are resolved.
-    Trailblazer now references GridForge 10.0.0 in both package families.
-    [Phase 0 evidence](twoDimensionalNavigationPlan.md#2026-11-09---phase-0-contract-closeout)
-  - Phase 1 is complete. Native top-down A* and Flow share the graph,
-    search kernels, and acquisition queue. The controller follows certified
-    cross-map legs, formation goals, and opted-in actions through accepted
-    motion. Matched 3D controls preserved exact replay, work, and allocations.
-    [Phase 1 evidence](twoDimensionalNavigationPlan.md#phase-1-top-down-integration)
-    The hardening pass verified mixed-world volume coverage and accepted
-    controller motion in coordinated source mode.
-    [Hardening evidence](twoDimensionalNavigationPlan.md#2026-11-10---phase-1-hardening)
-  - Phase 2 completes side-view support and guidance, host-executed authored
-    traversal, atomic posture replacement, airborne motor continuation, and
-    deterministic record restore. Hard physics-query budgets remain a
-    separate 2D/3D workstream.
-    [Phase 2 evidence](twoDimensionalNavigationPlan.md#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence)
-  - Phase 3 verifies both native Gravitas modes with real collision, hosted
-    ladder actions, support and posture, and checkpoint replay. The hosted
-    source configuration pins the Gravitas yaw fix and both GridForge APIs.
-    Released-package verification needs new packages from both providers.
-    [Phase 3 checklist](twoDimensionalNavigationPlan.md#phase-3-gravitas2d-integration-and-closeout)
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
@@ -65,6 +40,15 @@ instead of burying it in notes.
     library change. Do not broaden this into speculative optimization work.
 
 ## Recently Completed
+
+- [First-Class 2D Navigation](done/twoDimensionalNavigationPlan.md)
+  - Native top-down and side-view A* and Flow reuse the shared graph, search,
+    and acquisition queue. The 2D controller supports host-executed actions,
+    atomic posture replacement, and deterministic restore.
+  - The optional Gravitas adapter verifies real collision, support, posture,
+    traversal and exact checkpoint replay in both modes. Phase 3 validates
+    released GridForge 10.1.0 and Gravitas 2.0.1 in both package families.
+    [Phase 3 closeout](done/twoDimensionalNavigationPlan.md#2026-11-14---released-package-verification-and-closeout)
 
 - Shared Deterministic Simulation Timing (canonical plan in Chronicler:
   `docs/feature-work/done/deterministicSimulationTimingPlan.md`)
@@ -212,16 +196,13 @@ instead of burying it in notes.
 ## Queued Feature Work
 
 - [Bounded Physics Queries — 2D And 3D](physicsQueryBudgetPlan.md)
-  - Scope captured; implementation has not started. Give both dimensions explicit
-    query work/storage limits and complete-result semantics through the existing
-    spatial indexes and native geometry. Includes support and posture-clearance
-    consumers, potential GridForge/SwiftCollections prerequisites, and matched
-    existing-query controls. Keep existing synchronous behavior intact; no
-    scheduler, mixed-query expansion or new benchmark framework is implied.
-  - Separate from native 2D delivery and not a prerequisite for its support/posture
-    implementation. Review its contract and agree execution/release sequencing
-    when taking it up. Scope capture assigns no release milestone and does not
-    waive the existing coordinated-release policy.
+  - Planned before Trailblazer's release. Implementation starts with matched
+    baselines and the contract for opt-in work and storage limits on pure 2D
+    and 3D support queries and posture clearance. The plan preserves the
+    existing synchronous query behavior and complete-result semantics.
+  - Native 2D Phase 3 is complete against the released dependency chain.
+    Phase 0 identifies any additional upstream APIs needed by bounded queries.
+    [Release sequencing](physicsQueryBudgetPlan.md#release-sequencing)
 
 ## Deferred / Evidence-Gated
 
@@ -243,17 +224,15 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Plan the GridForge and Gravitas releases that supply the remaining Phase 3
-   dependencies. [Yaw resolution](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
-2. Repeat the released-package matrix and close Phase 3 before promoting
-   Trailblazer for release.
+1. Establish the bounded query contract and baselines on released GridForge
+   10.1.0 and Gravitas 2.0.1. Release any additional dependencies the
+   implemented bounded path requires.
+2. Verify both workstreams against the final released chain before publishing
+   Trailblazer.
 
 The 3D Gravitas integration, navigation hardening, and separately approved
 scheduling/performance work are complete locally. Public release validation
 remains separate.
-The shared physics query budget plan is queued separately; settle its execution
-and release sequencing explicitly when taking it up. It does not gate native 2D
-implementation or reopen TRB-Benchmark-005.
 The cross-stack rules apply throughout:
 
 1. Keep the benchmark backlog and issue tracker as intake buckets; promote new

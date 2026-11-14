@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
 using GridForge.Grids;
+using GridForge.Spatial;
 using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
+using Trailblazer.Pathing;
 using Xunit;
 using static Trailblazer.Gravitas.Tests.Support.GravitasPlanarPhysicsFixture;
 
@@ -66,6 +69,81 @@ public sealed partial class GravitasNavigator2DAcceptedMotionTests
         navigator.Pose.Center.Should().Be(body.Position);
         navigator.Velocity.Should().Be(Vector2d.Right * (Fixed64)16);
         cellEntries.Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void TopDownYaw_ShouldReplayIdleTranslationAndClippingAtTheExactAcceptedAngle(bool memoryPack)
+    {
+        using var world = new GridWorld();
+        using var navigation = TrailblazerWorldContext.Attach(world);
+        using var physics = GravitasWorldContext.Attach(world);
+        PublishPlanarMap(world, navigation, physics);
+        AddBox(physics, new Vector2d(2, 0), new Vector2d(1, 4), HostY);
+
+        var facing = new Vector2d(2, 1);
+        Fixed64 yaw = FixedMath.Atan2(facing.Y, facing.X);
+        var transform = new FixedTransform(Vector2d.Zero.ToVector3d(HostY),
+            FixedQuaternion.FromAxisAngle(Vector3d.Up, -yaw), Vector3d.One);
+        var body = new SolidBody2D(new GravitasFixtureMatterAgent(physics, transform),
+            new LSCircleCollider2D(CircleProfile.Radius))
+        {
+            Mass = Fixed64.One,
+            ContinuousCollisionMode = ContinuousCollisionMode.Continuous,
+        };
+        body.Initialize(Vector2d.Zero, yaw, PhysicsMobilityType.Kinematic);
+        using var navigator = CreateNavigator(navigation, body, LifecycleActorId, (Fixed64)16);
+
+        var idle = new NavigationInput2D(null, false);
+        Step(idle, Vector2d.Zero, Vector2d.Zero, yaw);
+        object bodyRecord = GravitasRecordSnapshot.Save(body, memoryPack);
+        object navigatorRecord = GravitasRecordSnapshot.Save(navigator, memoryPack);
+        var entries = new List<NavigationCellAddress?>();
+        navigator.CommittedCellChanged += state => entries.Add(state?.Address);
+
+        Replay();
+        entries.Should().Equal(Cell(1), Cell(0));
+        entries.Clear();
+        GravitasRecordSnapshot.Load(body, bodyRecord);
+        GravitasRecordSnapshot.Load(navigator, navigatorRecord);
+        entries.Should().BeEmpty();
+        Replay();
+        entries.Should().Equal(Cell(1), Cell(0));
+
+        void Replay()
+        {
+            for (int i = 0; i < 4; i++)
+                Step(idle, Vector2d.Zero, Vector2d.Zero, yaw);
+            var right = new NavigationInput2D(Vector2d.Right, false, facing);
+            Step(right, Vector2d.Right, Vector2d.Right * (Fixed64)16, yaw);
+            Step(right, Vector2d.Right, Vector2d.Zero, yaw);
+            Step(idle, Vector2d.Right, Vector2d.Zero, yaw);
+            Step(new NavigationInput2D(-Vector2d.Right, false, facing), Vector2d.Zero, -Vector2d.Right * (Fixed64)16, yaw);
+            Step(new NavigationInput2D(null, false, Vector2d.Right), Vector2d.Zero, Vector2d.Zero, Fixed64.Zero);
+            Step(idle, Vector2d.Zero, Vector2d.Zero, Fixed64.Zero);
+        }
+
+        void Step(NavigationInput2D input, Vector2d center, Vector2d velocity, Fixed64 rotation)
+        {
+            navigation.Simulate();
+            physics.Simulate();
+            navigator.PrepareFrameMotion(input);
+            physics.LateSimulate();
+            navigator.CommitFrameMotion();
+            navigation.LateSimulate();
+            body.Position.Should().Be(center);
+            body.Rotation.Should().Be(rotation);
+            body.Collider.Rotation.Should().Be(rotation);
+            body.Agent.Transform.WorldPosition.Should().Be(center.ToVector3d(HostY));
+            navigator.Pose.Should().Be(new NavigationPose2D(center, rotation));
+            navigator.Velocity.Should().Be(velocity);
+            navigator.LastCommittedCell?.Address.Should().Be(Cell(center == Vector2d.Zero ? 0 : 1));
+        }
+
+        static NavigationCellAddress Cell(int x) => new(MapId, new VoxelIndex(x + 16, 0, 16));
     }
 
     [Fact]

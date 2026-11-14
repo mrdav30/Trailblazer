@@ -43,9 +43,9 @@ instead of burying it in notes.
     separate 2D/3D workstream.
     [Phase 2 evidence](twoDimensionalNavigationPlan.md#2026-11-12---phase-2-authored-traversal-posture-airborne-and-persistence)
   - Phase 3 verifies both native Gravitas modes with real collision, hosted
-    ladder actions, support and posture, and checkpoint replay. Released-package
-    verification needs GridForge packages with the APIs already at the hosted
-    source pin.
+    ladder actions, support and posture, and checkpoint replay. The hosted
+    source configuration pins the Gravitas yaw fix and both GridForge APIs.
+    Released-package verification needs new packages from both providers.
     [Phase 3 checklist](twoDimensionalNavigationPlan.md#phase-3-gravitas2d-integration-and-closeout)
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
@@ -243,12 +243,10 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Close the remaining Phase 3 dependency gates. Verify the released GridForge
-   navigation APIs and address native kinematic yaw stability at its Gravitas
-   boundary. [Yaw reproduction](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
-2. After every active feature-work plan is complete, release any changed
-   dependencies before their consumers and repeat released-package validation at
-   each layer. Do not publish an intermediate feature-work checkpoint.
+1. Plan the GridForge and Gravitas releases that supply the remaining Phase 3
+   dependencies. [Yaw resolution](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
+2. Repeat the released-package matrix and close Phase 3 before promoting
+   Trailblazer for release.
 
 The 3D Gravitas integration, navigation hardening, and separately approved
 scheduling/performance work are complete locally. Public release validation

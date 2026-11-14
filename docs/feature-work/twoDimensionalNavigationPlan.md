@@ -16,6 +16,7 @@ modes. See the [Phase 3 checklist](#phase-3-gravitas2d-integration-and-closeout)
 for verification and release gates. Use `UseLocalLsfStack=true`
 with the GridForge hardening changes. Hosted develop pins GridForge
 `269da48`, which provides the exact planar coverage-neighbor query.
+The workflow now pins Gravitas `cd1b8322` for exact stationary yaw.
 The adapter's package reference uses Gravitas 2.0.0. Hard-budgeted
 physics queries remain a separate
 [2D/3D workstream](physicsQueryBudgetPlan.md).
@@ -1023,14 +1024,17 @@ in the existing test projects.
   - [x] Windows and Ubuntu source builds, tests, exact coverage, replay,
     resource lifetime, DocFX, and matched native planar benchmark controls.
   - [ ] Released GridForge and GridForge.Lean provide the navigation tracing
-    overload and exact planar coverage-neighbor API. Repeat the matrix against
-    the released dependency chain.
+    overload and exact planar coverage-neighbor API.
+  - [ ] Released Gravitas and Gravitas.Lean contain the stationary yaw fix.
+    Repeat the matrix against the released dependency chain.
 - [ ] **Complete independent review and evidence reconciliation.** Resolve
   blocking findings, link shared integration evidence, update the overview, and
   archive only when native top-down and side-view deliverables both meet their
   gates. Any scope reduction needs an explicit user decision.
-  - [ ] Verify arbitrary-angle stationary yaw after the native Gravitas fix.
+  - [x] Verify arbitrary-angle stationary yaw against the native Gravitas source fix.
     [TRB-Issue-161](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
+  - [x] Advance the hosted develop pin to Gravitas `cd1b8322`.
+  - [ ] Confirm the hosted develop workflow on the landed Trailblazer commit.
 
 ## Execution record
 
@@ -3802,3 +3806,52 @@ branches in all four runs, with 22/22 fully covered methods on Windows.
   `--no-build --no-restore`, and
   `dotnet tool run docfx docs/api/docfx.json --warningsAsErrors`.
   Raw results are under `artifacts/phase3-verification`.
+
+### 2026-11-13 - Native kinematic yaw replay
+
+Gravitas GRV-Issue-157 resolves
+[TRB-Issue-161](issue-tracker.md#trb-issue-161---native-2d-kinematic-yaw-drifts-at-rest)
+at the native body boundary. Gravitas now keeps the accepted scalar when
+the exact host quaternion represents it. A genuine host orientation edit
+still follows the existing projection path. The quaternion memo is derived
+from yaw and adds 40 bytes per native 2D body. There are no public signature,
+record schema, or Trailblazer runtime changes.
+
+The downstream regression failed before the fix in JSON and MemoryPack.
+With the corrected sibling source, a 16 Hz actor starting at
+`FixedMath.Atan2(1, 2)` preserves its exact body, collider and navigator
+yaw through four idle steps, a one-unit advance, wall clipping at X = 1,
+another idle step, and retreat. A subsequent explicit turn accepts zero
+yaw. Body-first population replays the same poses, velocities and ordered
+cell entries. The downstream regression uses `UseLocalLsfStack=true`
+for coordinated source verification.
+
+The focused Ubuntu native suite covered every line and branch in the
+changed yaw helpers in both configurations. The stationary test measured
+0 managed bytes across 64 warm fixed steps after stabilization. The
+downstream replay passed on Ubuntu in JSON and MemoryPack, with JSON
+also passing in ReleaseLean. Both Gravitas library targets built in both
+configurations and the Gravitas DocFX build passed with warnings as errors.
+The full Windows coordinated-source suites passed 8,500 Gravitas tests and
+117 Trailblazer adapter tests in Release, and 8,428 and 110 in ReleaseLean.
+
+Trailblazer's develop workflow now pins the published Gravitas develop
+commit `cd1b832272bdc28d4b57b4f11b073053c0341f2d` alongside the replay
+regression. Local source validation used clean Windows checkouts and an
+isolated Ubuntu snapshot of the five workflow pins. Both library targets
+built in each configuration. The focused replay passed in JSON and
+MemoryPack in Release and JSON in ReleaseLean on both hosts.
+The full source matrix passed 3,780 core and 117 adapter tests per host
+in Release, and 3,667 core and 110 adapter tests per host in ReleaseLean.
+Ubuntu passed the workflow's exact combined coverage gate in both
+configurations with 36,020/36,020 lines, 15,799/15,799 branches, and
+3,604/3,604 fully covered methods. DocFX passed with warnings as errors
+on both hosts. Independent review confirmed the pin and replay coverage.
+Logs are under `artifacts/phase3-hosted-yaw`.
+
+Package-mode restore succeeded in Release and ReleaseLean. Both builds
+still stop in GridForge 10.0.0 on the missing 15-argument
+`TraceNavigationBodyInto` overload and
+`ArePlanarCoverageNeighborsOrCoincident`. Keep Phase 3 open for the
+hosted develop run and package-mode verification after GridForge and
+Gravitas publish the required fixes.

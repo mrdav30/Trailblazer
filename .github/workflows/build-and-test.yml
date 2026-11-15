@@ -72,7 +72,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/GridForge
-          ref: 72740cc7420d59cf948bfb76d8a69e74b5066f0f
+          ref: a3849968bd19d95f546fea9bdf706de93d31739f
           path: GridForge
           persist-credentials: false
 

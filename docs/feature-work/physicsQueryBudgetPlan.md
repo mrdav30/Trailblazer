@@ -428,11 +428,14 @@ separate files and dimensional code under its existing owner.
 ## Phase 2 - Expand Native Support, Then Add Posture Clearance
 
 - [ ] Make the existing box-floor slice replayable across checkpoint rebuilds
-  before expanding shape support. Start with GridForge live-grid discovery and
-  Gravitas partition membership, then prove partition lookup, linked-collider
+  before expanding shape support. Prove partition lookup, linked-collider
   filtering, and candidate deduplication under the same equivalence contract.
   Require the same charged work and terminal status at exact and one-below
   limits. Preserve the existing tie contract for matching collider order.
+  - [x] Visit live GridForge grids in existing normalized configuration order.
+    Cover vacant slots, remapped slots, and reset followed by slot reuse.
+  - [ ] Make Gravitas membership traversal and candidate work independent of
+    removal history in equivalent worlds.
 - [ ] Repeat the many-grid and dense-member controls, including full steps
   with publication and mutation. Measure where any prepared view shifts work or
   retains extra storage. Review the proof through both native query callers
@@ -504,6 +507,57 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 2 - Canonical live-grid discovery
+
+GridForge now visits live grids in the existing normalized configuration order.
+The world keeps one dense list of references under its current registration,
+removal, and reset locks. Removal and reset release those references before
+returning grids to the pool. The bounded query charges each grid before reading
+it. This adds four net runtime lines, no new types or public APIs, and one list
+reference per grid plus spare list capacity. Discovery still scans every live
+grid. The synchronous spatial index follows its existing path.
+
+Two regression tests failed on the old slot scan. The passing cases cover the
+same overlapping grids at different slot IDs and insertion orders, identical
+prefixes at tight limits, and active reset followed by slot reuse. Two
+independent reviews checked mutation lifetime, configuration order, and
+pre-inspection accounting.
+
+The native checkpoint probe now returns the same exact hit and work on both
+sides of restore for the removed-grid history. Both worlds complete at
+`38/26/10` in 2D and `101/53/58` in 3D. With discovery reduced by one, both
+worlds exhaust without a hit, charging `37/25/10` in 2D and `100/51/58` in 3D.
+Standard JSON and MemoryPack and Lean JSON agree. The separate removed-collider
+history still exhausts in the live world at the restored budget. Gravitas
+membership work is the next replay gap.
+
+GridForge passed 1,183 tests per configuration on both Windows and Ubuntu.
+Both library targets built on Windows, and DocFX passed with warnings treated
+as errors. The five focused Gravitas tests passed in `Release` and `ReleaseLean`
+against the coordinated sources. The GridForge change uses the existing
+SwiftCollections package contract. Hosted and released validation of the
+downstream bounded query chain remains pending.
+
+The many-grid control used one box-floor probe per step with one or 512 base
+grids. The mutation rows add or remove one remote grid before every containing
+step. Four paired Windows x64 Release captures used the same Gravitas binary,
+changed only the GridForge binary, and disabled tiering in both lanes. Each
+scene used 64 warm steps and seven alternating blocks of 32 calls and 32 full
+steps. Selected ranges of per-process medians are in µs.
+
+| Bounded scene, 512 base grids | Before call | After call | Before step | After step |
+| --- | ---: | ---: | ---: | ---: |
+| 2D stable | 74.8–86.7 | 77.4–81.7 | 80.8–88.0 | 81.0–84.9 |
+| 2D mutation | 76.9–86.8 | 77.1–83.8 | 99.4–105.6 | 99.0–114.3 |
+| 3D stable | 17.1–22.6 | 18.2–18.8 | 26.0–34.9 | 25.9–27.7 |
+| 3D mutation | 17.8–19.5 | 17.0–20.8 | 67.8–88.7 | 71.9–81.9 |
+
+The paired ranges overlap. Warm query allocations stayed at 0 B. The mutation
+steps retained their prior measured allocation maxima of 220 B in 2D and
+380 B in 3D. The captures do not establish the cost of cold list growth.
+Raw results, binary hashes, and disposable probes are under
+`artifacts/query-budget-phase2-grid`.
 
 ### 2026-11-14 - Checkpoint replay and scaling
 

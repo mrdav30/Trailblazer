@@ -1,7 +1,9 @@
 # Bounded Physics Queries in 2D and 3D
 
 Phase 0 defines the shared contract and released-package baselines. Phase 1
-proves the first bounded support paths in Gravitas before native expansion.
+proves the first bounded support paths in Gravitas. The checkpoint probe shows
+that tight budgets can change after equivalent state is restored. Resolve that
+before native expansion or adapter adoption.
 The work is planned before the next Trailblazer release. The
 [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
@@ -22,10 +24,10 @@ where they can size and validate the allowance for their workload.
   in the existing order can deny a posture change. A clear result must exhaust
   the eligible blocker set, and a support hit must be proved to win under the
   existing selection rules.
-- Identical prepared storage, requests, budgets, and scratch capacities must
-  replay the same complete result or explicit exhaustion outcome. Before
-  lockstep adoption, verify that reconstruction and checkpoint restore preserve
-  budget outcomes or make the charged storage layout canonical. Measure full
+- The Phase 1 prototype replays with identical prepared storage. For lockstep
+  adoption, logically equivalent ready worlds must reproduce the same complete
+  result or explicit exhaustion outcome after restore, with the same request,
+  budget, scratch capacity, and logical collider order. Measure full
   fixed steps as well, since per-query limits give the host control over only
   one part of the frame.
 
@@ -425,6 +427,16 @@ separate files and dimensional code under its existing owner.
 
 ## Phase 2 - Expand Native Support, Then Add Posture Clearance
 
+- [ ] Make the existing box-floor slice replayable across checkpoint rebuilds
+  before expanding shape support. Start with GridForge live-grid discovery and
+  Gravitas partition membership, then prove partition lookup, linked-collider
+  filtering, and candidate deduplication under the same equivalence contract.
+  Require the same charged work and terminal status at exact and one-below
+  limits. Preserve the existing tie contract for matching collider order.
+- [ ] Repeat the many-grid and dense-member controls, including full steps
+  with publication and mutation. Measure where any prepared view shifts work or
+  retains extra storage. Review the proof through both native query callers
+  before taking on new shapes.
 - [ ] Extend verified support in both dimensions. Cover filters, initial contact,
   narrow scalar margins, compound/convex/mesh inputs where supported, sparse
   presence, both hex topologies, seams, and dense duplicate memberships. Bound
@@ -492,6 +504,98 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### 2026-11-14 - Checkpoint replay and scaling
+
+On Gravitas `b406bd98`, GridForge `72740cc`, and SwiftCollections `b7f5f2c`,
+a tight budget changes a correct box-floor hit into an incomplete query solely
+because the live world has a different storage history from the restored world.
+Standard JSON and MemoryPack and Lean JSON reproduce the same split in both
+dimensions. Ample budgets find the same floor at distance 1/2 with its contact
+at the origin.
+
+The replay probe uses pure 2D or 3D, manual grounding on the 2D source,
+16 Hz, zero gravity, and a dense rectangular grid from -4 to 4 on each active
+axis. The static floor is a 3-by-1 planar box or 3-by-1-by-3 cuboid, centered
+half a unit below zero. Probe from height 1 with radius 1/2 and reach 1. In
+one history, register 16 additional identical floors and deactivate them,
+retaining the first floor. In the other, add two remote unit grids at 16 and
+24 and remove the first. Keep the remote grid at 24 in the restored world.
+Prepare fresh matching host shells for the surviving objects, populate the
+body and floor records, and match the live and restored frame at 1. Query both
+with ample budgets, then retry both at the restored world's exact three limits.
+The live and restored floor IDs match in these experiments.
+
+| History | Live work | Restored work |
+| --- | ---: | ---: |
+| 2D removed colliders | 37/122/10 | 37/26/10 |
+| 2D removed grid | 39/26/10 | 38/26/10 |
+| 3D removed colliders | 100/485/58 | 100/53/58 |
+| 3D removed grid | 102/53/58 | 101/53/58 |
+
+Work is discovery / candidates / geometry. At the restored limits, each live
+query returns `WorkBudgetExceeded` and clears the hit. Each restored query
+returns `Completed` with the exact hit. The grid scan charges vacant physical
+slots, and membership enumeration prepays slots left by removed colliders.
+Scratch and budgets are rebuilt by the host. The recorded body and collider
+fields matched between the live and restored shells.
+
+Independent review identified additional paths that need equivalence tests:
+voxel partition lookup can charge retained empty payloads, linked-collider
+lookup prepays dictionary capacity, and linear scratch deduplication depends
+on encounter order. The existing closest-hit tie rule uses the collider ID.
+Keep the host's logical registration order matched in these controls and test
+equal-distance winners separately from budget work.
+
+The Windows Release scale probe used one support call per 16 Hz host step
+with the same floor geometry and an excluded 3D kinematic source. The grid
+control adds distant nonintersecting rectangles at `X = 16 + 4*i` and
+`Z = 16`, each one unit wide and deep, for 1, 64, or 512 total grids. The
+membership control registers 1, 16, 64, or 256 coincident static floors on
+one grid. Both paths found the first registered floor with the exact normal,
+point, and distance. Every bounded row repeated the exact charged work and
+cleared its hit at one below the limiting counter.
+
+| Case | 2D work | 3D work |
+| --- | ---: | ---: |
+| 1 grid, 1 floor | 37/26/10 | 109/107/58 |
+| 512 grids, 1 floor | 548/26/10 | 620/107/58 |
+| 1 grid, 16 floors | 37/911/160 | 109/4,142/928 |
+| 1 grid, 64 floors | 37/12,815/640 | 109/57,878/3,712 |
+| 1 grid, 256 floors | 37/198,671/2,560 | 109/894,902/14,848 |
+
+The grid scan adds exactly one discovery unit per remote grid in this input.
+Increasing floors from 64 to 256 increases 3D candidate work 15.5 times for
+four times the geometry work. Physical memberships repeat across voxels, and
+each identity lookup can scan the previously retained candidate prefix. Both
+layouts matter when redesigning the budgeted view.
+
+Four fresh timing processes alternated synchronous and bounded query order
+on Windows x64, i7-9700K, .NET 10.0.10, with tiered compilation disabled.
+Each path measured seven alternating query-only and complete-step blocks of
+32 calls, reduced to 16 at 64 floors and eight at 256. Each path warmed two
+blocks of complete steps first. Ranges below are the four process medians in µs.
+
+| Case | Sync call | Bounded call | Sync step | Bounded step |
+| --- | ---: | ---: | ---: | ---: |
+| 2D 512 grids | 67.4–69.5 | 71.3–71.9 | 71.5–72.3 | 75.2–77.1 |
+| 3D 512 grids | 13.8–14.2 | 17.1–17.5 | 20.9–21.4 | 23.8–26.7 |
+| 2D 256 floors | 16,902–17,242 | 17,105–17,505 | 17,007–17,434 | 17,310–17,901 |
+| 3D 64 floors | 517–529 | 573–608 | 588–614 | 646–661 |
+| 3D 256 floors | 2,074–2,128 | 3,051–3,168 | 2,329–2,360 | 3,303–3,390 |
+
+All warm samples allocated 0 B on the calling thread. Coincident floors
+stress duplicate memberships with one query per step. The measurements describe
+that case. Raw logs, probes, and DLL hashes are in
+`artifacts/query-budget-checkpoint` and `artifacts/query-budget-scale-checkpoint`.
+
+Start with live-grid discovery in GridForge and a deterministic membership
+view at Gravitas's existing publication boundary. Prefer the existing owner
+and a dense logical order over storing runtime holes in checkpoints. Account
+for changes at the publication barrier and measure its frame cost. Once the
+raw traversal order and charged work are stable, compare bounded ways to
+deduplicate identities based on measured dense-member cost. Keep construction,
+lookup, and clearing within their respective measured boundaries.
 
 ### Phase 1 - Bounded support through the native queries
 

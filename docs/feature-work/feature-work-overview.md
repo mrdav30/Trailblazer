@@ -198,8 +198,9 @@ instead of burying it in notes.
 - [Bounded Physics Queries — 2D And 3D](physicsQueryBudgetPlan.md)
   - Planned before Trailblazer's release. Phase 0 records the opt-in work and
     storage contract and matched package baselines for pure 2D and 3D support
-    and posture clearance. The first runtime slice connects Gravitas support
-    to bounded GridForge discovery on a rectangular grid.
+    and posture clearance. Phase 1 proves exact support results and replayable
+    exhaustion through shared bounded discovery in both dimensions before
+    expanding native coverage or adopting the opt-in policy in the adapters.
     [Contract and baselines](physicsQueryBudgetPlan.md#phase-0---contract-and-matched-baselines)
 
 ## Deferred / Evidence-Gated

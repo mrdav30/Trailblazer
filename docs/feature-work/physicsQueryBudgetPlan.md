@@ -7,6 +7,30 @@ has its own Phase 3 package verification and already exercises synchronous
 support and posture in real physics. This plan owns the opt-in work and storage
 limits for those operations in both dimensions.
 
+## End-user goal
+
+Give hosts predictable physics-query work in fixed steps, especially for large
+crowds or scenes with dense geometry. Gravitas owns the bounded operations.
+Trailblazer keeps synchronous sampling as the default and lets hosts opt in
+where they can size and validate the allowance for their workload.
+
+- Fixed caller-owned scratch sets a storage ceiling. Count discovery, candidate
+  visits, and geometry separately so a small result or buffer cannot conceal
+  expensive traversal.
+- Early exit is useful once the result is conclusive. The first proven blocker
+  in the existing order can deny a posture change. A clear result must exhaust
+  the eligible blocker set, and a support hit must be proved to win under the
+  existing selection rules.
+- Identical authoritative state, requests, budgets, and scratch capacities must
+  replay the same complete result or explicit exhaustion outcome. Measure full
+  fixed steps as well, since per-query limits give the host control over only
+  one part of the frame.
+
+Repeated exhaustion can visibly drop grounding or carrier motion, or delay a
+posture change. Treat it as an exceptional, observable outcome. Judge the
+opt-in policy by the frequency and consecutive duration of unavailable samples
+in representative workloads as well as by frame cost.
+
 ## Current baseline
 
 - In side-view 2D, `GravitasNavigator2D` calls `Query2D.QuerySupport` on the
@@ -161,6 +185,10 @@ unchanged and skips the synchronized-state publisher. Complete transactions
 retain the existing post-commit notification-failure rules.
 
 ## Phase 0 API contract
+
+The declarations below are the implementation draft. The result semantics and
+deterministic ceilings are acceptance criteria. Review the API and scratch
+layout after the Phase 1 production slice, before expanding or publishing them.
 
 In `Gravitas.Queries`, use an immutable `PhysicsQueryBudget` with `ulong`
 properties `DiscoveryLimit`, `CandidateLimit`, and `GeometryLimit`, and an
@@ -341,7 +369,7 @@ separate files and dimensional code under its existing owner.
 ## Review focus
 
 - Exhaustion after discovering a plausible hit must not produce false support
-  or authorize posture growth (Phases 2–3).
+  or authorize posture growth (Phases 1–3).
 - New grids, sparse cells and recycled collider IDs must not escape the proof's
   world/lifetime boundary (Phases 1–2).
 - Tiny metrics, scalar faces and dense duplicate memberships must not bypass
@@ -373,35 +401,38 @@ separate files and dimensional code under its existing owner.
   shared boundary through the normal caller. Record the dependency changes it
   actually needs and use the matched controls before expanding scope.
 
-## Phase 1 - Shared Bounded Discovery
+## Phase 1 - Prove Support End To End In 2D And 3D
 
-- [ ] Write failing owning tests for capped hash-cell/membership and BVH-node
-  visits, duplicate/rejected candidates, scratch limits and rollover behavior.
-  Add SwiftCollections access only where existing APIs cannot meet the contract.
-- [ ] Reuse current GridForge discovery and binding where the contract permits.
-  Introduce only the bounded operations exercised by the Gravitas query slice.
-  Test insertion between discovery/bind, replacement, reset, sparse presence,
-  dense storage, rectangular/both hex topologies, seams and tiny metrics.
-- [ ] Prove exact/one-below allowances and capacities, cleanup after every failure,
-  warmed no-growth allocation behavior, and complete discovery equivalence for
-  2D and 3D. Verify the first production slice for exact results, warm allocations
-  and containing-frame time, then obtain independent review before expanding it.
+- [ ] Start with a failing box-floor support contract through the real Gravitas
+  2D `QuerySupport` entry point on a rectangular grid. Prototype bounded,
+  non-waiting GridForge discovery and reuse the existing candidate and geometry
+  rules. Add only the index visits this slice needs.
+- [ ] Exercise the same discovery and accounting boundary through the 3D sphere
+  sweep on the corresponding box-floor scene. Match each dimension's synchronous
+  hit or miss, exact witness, and winner, including a tie or duplicate candidate.
+- [ ] Prove exact and one-below work and scratch limits, including exhaustion
+  after a plausible hit, safe reuse after failure, deterministic replay, and
+  readiness recovery through a complete host step. Measure warm allocation and
+  full-step timings in both dimensions against the Phase 0 controls.
+- [ ] Obtain independent review of both entry points and the shared boundary.
+  Record runtime cost, production dependencies, and any API or scratch changes
+  justified by the results. Use this checkpoint to decide how much of the
+  planned surface earns expansion and publication.
 
-## Phase 2 - Native Bounded Queries In Both Dimensions
+## Phase 2 - Expand Native Support, Then Add Posture Clearance
 
-- [ ] Add failing support/clearance tests for each dimension before implementing
-  its accounting. Exercise accepted/rejected filters and compound parts,
-  initial contact, narrow scalar margins and large convex/mesh inputs.
-- [ ] Reuse the existing narrowphase and stable reductions. Meter or conservatively
-  precharge every variable kernel, sorting and cleanup path; test counter
-  overflow and a budget exhausted immediately before the winning candidate.
-- [ ] Make readiness and failure outcomes explicit. Test recurrent callback
-  mutations, grid changes, stale registrations, unpartitioned posture blockers
-  and reentrancy. Verify recovery through the normal host lifecycle.
-- [ ] Compare complete bounded results against the corresponding synchronous
-  operations in both dimensions. Preserve existing public controls and verify
-  no usable result escapes an incomplete query. Review both implementations;
-  a completed 2D path alone does not finish this phase.
+- [ ] Extend verified support in both dimensions. Cover filters, initial contact,
+  narrow scalar margins, compound/convex/mesh inputs where supported, sparse
+  presence, both hex topologies, seams, and dense duplicate memberships. Bound
+  the hash, BVH, and scan paths exercised by the supported cases, including
+  generation changes, stamp rollover controls, and checked accounting overflow.
+- [ ] Reuse the existing narrowphase and stable reductions. Prove ready, stale,
+  and exhausted behavior under recurrent callback mutations, resets, and
+  registration reuse. Compare complete results to the synchronous operations.
+- [ ] Once native support passes in both dimensions, add bounded posture. Test
+  exact touch, a conclusive early blocker including an unpartitioned blocker,
+  full clearance, and exhaustion before clearance completes. Verify fixed
+  scratch and transactional rejection before adopting posture in the adapters.
 
 ## Phase 3 - Adapter Adoption And Closeout
 
@@ -409,6 +440,11 @@ separate files and dimensional code under its existing owner.
   existing caller behavior. Test repeated incomplete support, recovery, moving
   carriers, gravity and all-prepare/one-resolve/all-commit ownership. Report
   actor count and query counts per frame alongside per-call budgets.
+- [ ] Run representative crowded scenes at a useful allowance and under
+  sustained pressure. Record support exhaustion rate, longest consecutive
+  unavailable stretch per actor, and grounding or carrier losses alongside
+  complete-step times. Review whether the opt-in policy is usable on those
+  workloads before finalizing the adapter surface.
 - [ ] Exercise bounded posture clearance at exact/one-below limits. Rejection
   leaves all physical/navigation state and publication counts unchanged;
   acceptance and notification failures retain atomic transaction semantics.

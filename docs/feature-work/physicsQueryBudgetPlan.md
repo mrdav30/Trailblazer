@@ -1,7 +1,8 @@
 # Bounded Physics Queries in 2D and 3D
 
-Phase 0 defines the shared contract and released-package baselines. Runtime work
-starts in Phase 1 and is planned before the next Trailblazer release. The
+Phase 0 defines the shared contract and released-package baselines. Phase 1
+proves the first bounded support paths in Gravitas before native expansion.
+The work is planned before the next Trailblazer release. The
 [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
 support and posture in real physics. This plan owns the opt-in work and storage
@@ -21,8 +22,10 @@ where they can size and validate the allowance for their workload.
   in the existing order can deny a posture change. A clear result must exhaust
   the eligible blocker set, and a support hit must be proved to win under the
   existing selection rules.
-- Identical authoritative state, requests, budgets, and scratch capacities must
-  replay the same complete result or explicit exhaustion outcome. Measure full
+- Identical prepared storage, requests, budgets, and scratch capacities must
+  replay the same complete result or explicit exhaustion outcome. Before
+  lockstep adoption, verify that reconstruction and checkpoint restore preserve
+  budget outcomes or make the charged storage layout canonical. Measure full
   fixed steps as well, since per-query limits give the host control over only
   one part of the frame.
 
@@ -212,8 +215,9 @@ units. If no inspection is needed, a call may complete with zero work.
 
 Use one `PhysicsQueryExecutionStatus` with `WorldNotReady = 0`, `Completed`,
 `WorkBudgetExceeded`, `ScratchCapacityExceeded`, `Stale`, `Unrepresentable`,
-and `UnsupportedRuntimeMode`. `WorldNotReady` means no stable initial view
-could be sampled. `Stale` means a view was acquired and later invalidated.
+`UnsupportedRuntimeMode`, `UnsupportedTopology`, and `UnsupportedGeometry`.
+`WorldNotReady` means a ready world or partition view could not be sampled.
+`Stale` means an acquired world view could no longer be certified.
 Programmer errors such as null scratch, invalid geometry arguments, or an
 already borrowed scratch throw before query work. Validate the mode and initial
 readiness before traversing. During traversal, charge each inspection before
@@ -222,16 +226,16 @@ result cannot be retained, return the storage failure with that inspection
 charged. Check freshness before publishing a completed result.
 
 Use a caller-owned `sealed class PhysicsQueryScratch` with constructor
-`PhysicsQueryScratch(int gridCapacity, int traversalCapacity, int candidateCapacity)`
-and read-only properties of the same names in PascalCase. Capacities are
-nonnegative entry counts for generation slots, pending traversal entries, and
-unique collider identities respectively. The scratch owns fixed backing storage
-allocated before use. Hash probing, if used, must have a checked inspection
-limit. Clear only used entries and account for that cleanup by reserving its
-work when retaining an entry. Use a single exclusive borrow per synchronous
+`PhysicsQueryScratch(int traversalCapacity, int candidateCapacity)` and
+read-only `TraversalCapacity` and `CandidateCapacity`. Capacities are
+nonnegative entry counts for retained voxel references and unique collider
+identities. Grid slots are streamed and charged to discovery. The scratch owns
+fixed backing storage allocated before use. Hash probing, if used, must have a
+checked inspection limit. Reserve cleanup work when retaining each entry and
+clear only used entries. Use a single exclusive borrow per synchronous
 call and release on all exits. Reuse sequentially across queries and worlds
 after cleanup. Scratch has no durable world ownership or serialized identity.
-Posture can use zero discovery capacities while it scans registered colliders.
+Posture can use zero traversal capacity while it scans registered colliders.
 Bounded calls report through their return values and counters, with no per-query
 diagnostic callback inside the bounded portion.
 
@@ -318,7 +322,7 @@ collider registration before accepting a hit. No query-owned partition refresh,
 unbounded wait, or reuse of the synchronous collider or spatial-hash stamps.
 
 Start with the real side-view box-floor `QuerySupport` caller on one rectangular
-grid, through indexed discovery and one checked candidate and support result.
+grid, through bounded discovery and one checked candidate and support result.
 Use the 3D sphere sweep through that same discovery seam as the first spatial
 control, before generalizing shapes or adopting posture. GridForge needs a
 bounded, non-waiting discovery/bind entry point for the indexed production path.
@@ -403,18 +407,18 @@ separate files and dimensional code under its existing owner.
 
 ## Phase 1 - Prove Support End To End In 2D And 3D
 
-- [ ] Start with a failing box-floor support contract through the real Gravitas
+- [x] Start with a failing box-floor support contract through the real Gravitas
   2D `QuerySupport` entry point on a rectangular grid. Prototype bounded,
   non-waiting GridForge discovery and reuse the existing candidate and geometry
-  rules. Add only the index visits this slice needs.
-- [ ] Exercise the same discovery and accounting boundary through the 3D sphere
+  rules. Charge the grid-slot and address visits that this slice needs.
+- [x] Exercise the same discovery and accounting boundary through the 3D sphere
   sweep on the corresponding box-floor scene. Match each dimension's synchronous
   hit or miss, exact witness, and winner, including a tie or duplicate candidate.
-- [ ] Prove exact and one-below work and scratch limits, including exhaustion
+- [x] Prove exact and one-below work and scratch limits, including exhaustion
   after a plausible hit, safe reuse after failure, deterministic replay, and
   readiness recovery through a complete host step. Measure warm allocation and
   full-step timings in both dimensions against the Phase 0 controls.
-- [ ] Obtain independent review of both entry points and the shared boundary.
+- [x] Obtain independent review of both entry points and the shared boundary.
   Record runtime cost, production dependencies, and any API or scratch changes
   justified by the results. Use this checkpoint to decide how much of the
   planned surface earns expansion and publication.
@@ -488,6 +492,90 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 1 - Bounded support through the native queries
+
+The prototype adds the bounded overloads to Gravitas `Query2D.QuerySupport`
+and `Query3D.SweepSphere`. It supports pure dimensional worlds with dense
+rectangular grids and box targets. Intersecting unsupported grids and eligible
+unsupported shapes return an incomplete status. Both paths use the existing
+native geometry and lowest-ID tie reducers. The 2D contract test initially
+failed compilation on the missing public API. The new tests exercise exact
+support, all three work limits one below, scratch exhaustion, and recovery
+through the host step. GridForge separately checks exact and one-below voxel
+capacity, overlapping grids, and non-waiting readiness.
+
+GridForge initially uses a metered grid-slot scan, then the existing rectangle
+range and planar filter. This keeps the box-floor slice small and makes vacant
+slots, address lookups, partition probes, and retained-reference cleanup
+visible. SwiftCollections exposes physical enumeration and lookup bounds
+because a small number of live members can hide deleted slots or long probe
+chains. Gravitas prepays those bounds and fixed box geometry stages. Candidate
+deduplication scans only the used scratch prefix and charges its comparisons.
+Review the slot scan and deduplication against many-grid and crowded workloads
+before expanding the surface. Work units can include conservative fixed-kernel
+precharges, and do not correspond to individual arithmetic operations.
+
+Independent review identified and the prototype addressed uncharged hash-set
+holes, partition lookup work, atomic scratch borrowing, and inconsistent status
+on a stale view. Repeated success and exhaustion are deterministic for the same
+prepared storage. A checkpoint can rebuild partition sets with different slot
+high-water marks or dictionary capacities. Verify or canonicalize that boundary
+before relying on tight bounded outcomes after restore in lockstep.
+
+The coordinated source baseline is Trailblazer `a73f959`, Gravitas `cd1b8322`,
+GridForge `269da48`, and SwiftCollections `08b1b38`, plus the working changes.
+The new APIs are available only in coordinated source. Hosted pins and released
+packages still validate the prior synchronous paths. Provider order for this
+slice is SwiftCollections, GridForge, then Gravitas. Trailblazer's adapters have
+no runtime dependency on the new overloads yet.
+
+The bounded paths share scratch and work accounting. Each dimension owns its
+partition admission and geometry. Runtime growth in this slice is 12 net lines in
+SwiftCollections, 240 in GridForge, and 590 in Gravitas, including XML and
+license headers. Tests and guides are separate. Existing synchronous entry
+points continue to use their existing discovery and result semantics.
+
+The Windows coordinated-source suites passed in both configurations. Gravitas
+and its source dependencies also built for `netstandard2.1` and `net10.0`.
+The five focused Gravitas tests passed on Ubuntu in each configuration.
+
+| Windows suite | Release | ReleaseLean |
+| --- | ---: | ---: |
+| SwiftCollections core | 1,411 | 1,381 |
+| GridForge | 1,182 | 1,182 |
+| Gravitas | 8,505 | 8,433 |
+| Trailblazer core | 3,780 | 3,667 |
+| Trailblazer adapter | 117 | 110 |
+
+The timing probe reused the Phase 0 open, wall, floor, and grid mutation
+inputs in both dimensions. It compared synchronous and bounded calls on the
+same Release source assemblies on Windows x64, .NET 10.0.10, with four fresh
+processes in alternating query order. Each row warmed 128 steps, then measured
+seven alternating 128-operation call and containing-step blocks per path.
+Default tiering produced noisy 2D floor captures. The repeat below disables
+tiering for both paths and is a within-run comparison. Values are the range of
+the four process medians in µs. The containing step includes partition
+maintenance, `Simulate`, `LateSimulate`, and one query.
+
+| Scene | Sync call | Sync step | Bounded call | Bounded step | Discovery / candidates / geometry |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2D open | 1.1–1.2 | 2.5–2.6 | 1.1–1.2 | 2.5–2.5 | 34/9/0 |
+| 2D wall | 1.2–1.3 | 2.9–3.0 | 1.2–1.2 | 2.8–2.9 | 35/17/0 |
+| 2D floor | 67.0–67.7 | 70.3–71.7 | 66.9–67.8 | 70.6–71.3 | 37/26/10 |
+| 2D mutation | 66.9–68.1 | 84.3–85.4 | 67.0–67.4 | 84.7–86.6 | 37/26/10 |
+| 3D open | 3.2–3.4 | 6.8–7.4 | 2.8–2.9 | 6.4–6.9 | 100/27/0 |
+| 3D wall | 3.8–4.0 | 8.8–9.7 | 3.3–3.3 | 8.3–8.4 | 106/98/1 |
+| 3D floor | 12.7–12.9 | 19.4–19.8 | 11.9–12.0 | 18.9–19.2 | 109/107/58 |
+| 3D mutation | 12.8–13.0 | 57.2–58.8 | 11.8–12.0 | 58.0–59.3 | 109/107/58 |
+
+Warm calls allocated 0 B, and mutation-containing steps retained their
+synchronous allocation counts in both dimensions. The runtime and plan now
+have enough evidence for the narrow Phase 1 proof. Before expanding, measure
+many-grid and dense-member cases and verify checkpoint/rebuild budget outcomes.
+Linux full-suite coverage, exact coverage gates, released packages, and
+adapter adoption remain open. Logs, the disposable probe, and its binary
+hashes are under `artifacts/query-budget-phase1`.
 
 ### 2026-11-14 - Phase 0 package baselines
 

@@ -1,9 +1,10 @@
 # Bounded Physics Queries in 2D and 3D
 
 Phase 0 defines the shared contract and released-package baselines. Phase 1
-proves the first bounded support paths in Gravitas. The checkpoint probe shows
-that tight budgets can change after equivalent state is restored. Resolve that
-before native expansion or adapter adoption.
+proves the first bounded support paths in Gravitas. Phase 2 now visits live
+grids and collider memberships in canonical order across checkpoint rebuilds.
+Retained partitions and linked-collider filtering are the remaining replay
+gaps before native expansion or adapter adoption.
 The work is planned before the next Trailblazer release. The
 [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
@@ -434,8 +435,12 @@ separate files and dimensional code under its existing owner.
   limits. Preserve the existing tie contract for matching collider order.
   - [x] Visit live GridForge grids in existing normalized configuration order.
     Cover vacant slots, remapped slots, and reset followed by slot reuse.
-  - [ ] Make Gravitas membership traversal and candidate work independent of
-    removal history in equivalent worlds.
+  - [x] Visit live Gravitas memberships in collider ID order within each
+    mobility class. Keep deduplication charges independent of removed slots.
+  - [ ] Make GridForge partition lookup charge the same work when the requested
+    partition was retained empty or was never attached.
+  - [ ] Make Gravitas linked-collider filtering charge from live pairs
+    independently of retained lookup capacity.
 - [ ] Repeat the many-grid and dense-member controls, including full steps
   with publication and mutation. Measure where any prepared view shifts work or
   retains extra storage. Review the proof through both native query callers
@@ -445,6 +450,8 @@ separate files and dimensional code under its existing owner.
   presence, both hex topologies, seams, and dense duplicate memberships. Bound
   the hash, BVH, and scan paths exercised by the supported cases, including
   generation changes, stamp rollover controls, and checked accounting overflow.
+  Close the remaining coverage gaps in the bounded query paths and shared
+  readiness, linked filtering, and scratch status handling before release.
 - [ ] Reuse the existing narrowphase and stable reductions. Prove ready, stale,
   and exhausted behavior under recurrent callback mutations, resets, and
   registration reuse. Compare complete results to the synchronous operations.
@@ -507,6 +514,109 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 2 - SwiftCollections membership storage
+
+Gravitas uses SwiftCollections' `SwiftSortedList<int>` for the three pure
+mobility roles. `TryAddUnique` rejects comparer-equivalent IDs and shares
+insertion with the existing duplicate-allowing `Add`. This removes Gravitas's
+local sorted-membership helper. The solver still snapshots memberships before
+processing callbacks, using bulk copies from the live span.
+
+The upstream regressions reproduced growth from 8 to 16 slots at a fixed live
+count of six, and a removed reference left in the backing array. Insertion now
+reuses available space and shifts the shorter side when both sides have room.
+Removal releases vacated references and recenters once when crossing below a
+quarter full. This avoids repeated recentering during a drain.
+
+The matched Windows x64 Release probes used .NET 10.0.10 with tiering off.
+The three-way dense control reuses the same GridForge and other dependency
+binaries. Each lane ran in two fresh processes, in forward and reverse order.
+Each frame runs one support query. Times are medians of process medians.
+
+| 256 coincident floors | Original hash-backed | Staged BCL list | SwiftSortedList |
+| --- | ---: | ---: | ---: |
+| 2D bounded containing frame | 16.25 ms | 16.18 ms | 16.12 ms |
+| 3D bounded call | 3.02 ms | 2.10 ms | 2.06 ms |
+| 3D bounded containing frame | 3.25 ms | 2.32 ms | 2.29 ms |
+
+The Swift and BCL list lanes produced the same exact charged work, hit
+witnesses and one-below outcomes at all four floor counts. Both kept the
+candidate-work reduction from the earlier membership change. Every measured
+warm query and frame allocated 0 B on the calling thread.
+
+The separate 128-mover churn control compared the final Swift implementation
+with the staged BCL list and with the previous Swift implementation between
+reverse-order captures. It measured 479.5 vs. 473.7 microseconds per full 2D
+step and 1,631.5 vs. 1,633.7 in 3D. The 2D difference was about 1.2% in this
+synthetic case. The 3D process ranges overlapped. The original hash-backed
+before control measured 471.3 and 1,634.6 microseconds in the same fixture,
+respectively. Raw results and input hashes are in
+`artifacts/query-budget-phase2-swift-membership`.
+
+Local source-mode verification built both library targets and ran both
+configurations. SwiftCollections passed 1,460 Release and 1,430 ReleaseLean
+tests across core and companion, with all instrumented lines and branches
+covered. Gravitas passed the focused replay, partition, and query checks
+(526 and 514). Trailblazer's adapter passed 117 and 110 tests. SwiftCollections
+DocFX passed with warnings treated as errors. The new API is available to
+the coordinated source build. Hosted source pins and package validation are
+pending an upstream commit and package.
+
+### Phase 2 - Canonical collider memberships
+
+Gravitas bounded support and sphere sweeps now enumerate live collider IDs in
+ascending order within the existing dynamic, kinematic, and static roles.
+Each role replaces its hash set with one sorted list. The solver keeps its
+existing callback-safe snapshot and can skip sorting the dynamic copy. The
+mixed partitions and awake subsets retain their current storage.
+
+Candidate deduplication binary-searches the existing fixed scratch array.
+It charges each comparison and reserves the work for any shift before
+moving entries. Repeated IDs across voxels now need logarithmic comparisons.
+Inserting IDs out of order can still shift the array, and sorted partition
+publication can still move IDs during updates.
+
+The replay regressions started red after removing 16 colliders. They now also
+move the lower-ID floor away and back while preserving both eligible floor IDs.
+The exact budget gives the same hit, witness, and charged work. One fewer
+candidate unit gives the same incomplete status and clears the hit. An
+additional scratch test verifies that failed shift admission preserves the
+IDs for retry. Standard JSON and MemoryPack and Lean JSON agree. The original
+one-floor probe completes at `37/20/10` in 2D and `100/53/58` in 3D. With one
+fewer candidate unit, both worlds exhaust and charge `37/19/10` and
+`100/52/58`, respectively.
+
+The dense coincident-floor control retained the same selected hit, discovery
+work, and geometry work on both binaries. Candidate work at 256 floors fell
+from 198,671 to 12,348 in 2D and from 894,902 to 55,584 in 3D. Four paired
+Windows x64 Release captures changed only the Gravitas binary and disabled
+tiering. The 256-floor 3D bounded query went from 3.42 to 3.50 ms per call
+to 2.49 to 2.65 ms. Its containing step went from 3.68 to 3.87 ms to 2.82
+to 2.99 ms. The 2D timings overlapped across the two binaries. Every warm
+dense control allocated 0 B on the calling thread.
+
+
+A separate publication control moved 16 or 128 coincident kinematic colliders
+between disjoint voxel sets every frame and ran one floor query per step. The
+first sorted-list version added about 9% to the 128-mover 2D median. The final
+list appends IDs already in order and removes a matching head without a binary
+search. Across four paired captures of the final version, the 128-mover median
+was 594.0 vs. 600.2 microseconds in 2D and 2,189.5 vs. 2,089.4 in 3D. The paired
+absolute differences varied in sign in both dimensions. The 2D churn-to-stable
+ratio rose from 2.81 to 2.90, so a smaller publication cost remains plausible.
+All warm steps allocated 0 B on the calling thread. Packed removals can still
+shift members. The probe sources, raw timings, and binary hashes are in
+`artifacts/query-budget-phase2-membership`.
+
+Coordinated Windows source validation passed 8,510 Gravitas tests in Release
+and 8,436 in ReleaseLean. Both library targets and the benchmark project built
+in both configurations. Ubuntu passed the focused suites (91 Standard and
+89 Lean). Trailblazer's adapter passed 117 Standard and 110 Lean tests,
+including exact stationary yaw replay. Gravitas DocFX passed with warnings
+treated as errors. The full Release coverage capture exposed remaining gaps
+in the bounded query paths and their readiness, linked filtering, and
+status handling. Hosted and released-package validation remain pending.
 
 ### Phase 2 - Canonical live-grid discovery
 

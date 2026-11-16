@@ -63,7 +63,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/SwiftCollections
-          ref: b7f5f2cc96b96621e159b37d7ee097bd59121303
+          ref: d3ecac6b5f1b6d366091abc3f94b70e1e9dc0f01
           path: SwiftCollections
           persist-credentials: false
 
@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/Gravitas
-          ref: b406bd98052c05ac3ae3c8ae72d72971b534cc43
+          ref: dc4492bd084ef59400ae6db2f74389b9709c1a3a
           path: Gravitas
           persist-credentials: false
 

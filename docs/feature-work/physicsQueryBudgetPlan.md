@@ -3,9 +3,9 @@
 Phase 0 defines the shared contract and released-package baselines. Phase 1
 proves the first bounded support paths in Gravitas. Phase 2 now visits live
 grids and collider memberships in canonical order across checkpoint rebuilds.
-Lookup work now replays with or without a retained empty partition.
-Linked-collider filtering is the remaining replay gap before native expansion
-or adapter adoption.
+The box-floor slice now replays with or without a retained empty partition
+or removed collision links. Repeat the combined scaling controls before
+expanding native shape and topology support.
 The work is planned before the next Trailblazer release. The
 [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
@@ -429,7 +429,7 @@ separate files and dimensional code under its existing owner.
 
 ## Phase 2 - Expand Native Support, Then Add Posture Clearance
 
-- [ ] Make the existing box-floor slice replayable across checkpoint rebuilds
+- [x] Make the existing box-floor slice replayable across checkpoint rebuilds
   before expanding shape support. Prove partition lookup, linked-collider
   filtering, and candidate deduplication under the same equivalence contract.
   Require the same charged work and terminal status at exact and one-below
@@ -440,7 +440,7 @@ separate files and dimensional code under its existing owner.
     mobility class. Keep deduplication charges independent of removed slots.
   - [x] Make GridForge partition lookup charge the same work when the requested
     partition was retained empty or was never attached.
-  - [ ] Make Gravitas linked-collider filtering charge from live pairs
+  - [x] Make Gravitas linked-collider filtering charge from live pairs
     independently of retained lookup capacity.
 - [ ] Repeat the many-grid and dense-member controls, including full steps
   with publication and mutation. Measure where any prepared view shifts work or
@@ -515,6 +515,63 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 2 - Linked-collider filtering
+
+Both constraint services now use one implementation of the suppressed pair
+index. Each distinct collider pair occupies one sorted entry and counts its
+suppressing joint and ragdoll owners. The same binary lookup serves synchronous
+collision filters and bounded queries. The maximum comparisons equal the bit
+length of the live pair count and are reserved before lookup. Capacity and
+discarded entries do not contribute to this bound.
+
+The native 2D and 3D checkpoint tests retain a suppressed, lower-ID box
+coincident with an eligible floor. They register and deactivate 32 additional
+linked bodies in the live world, then populate the surviving joint in the
+rebuilt world. The baseline exhausted the live query at the restored candidate
+allowance. The new queries agree on the exact winner, witness and charged
+work, and both exhaust without a hit one candidate unit below. Standard JSON
+and MemoryPack and Lean JSON exercise the same contract.
+
+The 32-link constraint chain control changes only the Gravitas binary. Four
+fresh Windows x64 processes per lane ran in balanced order with tiering
+disabled under .NET 10.0.10. The table gives medians of process medians.
+
+| Workload | Before | After |
+| --- | ---: | ---: |
+| 2D linked lookup hit | 24.60 ns | 9.89 ns |
+| 2D lookup miss | 12.96 ns | 13.04 ns |
+| 2D complete step | 2.614 ms | 2.627 ms |
+| 3D linked lookup hit | 25.52 ns | 9.78 ns |
+| 3D lookup miss | 12.73 ns | 12.71 ns |
+| 3D complete step | 3.467 ms | 3.408 ms |
+
+The complete-step and miss ranges overlap. All captures agree on authoritative
+hashes at frames 16 and 280 and exact constraint row totals. Lookup allocated
+0 B on the calling thread. Maximum measured step allocations matched at 57 B
+in 2D and 114 B in 3D. A separate control removed and re-registered one joint
+at a time between physics steps with the remaining links live. At 31 pairs,
+2D cycles took 510 vs. 440 ns and 3D took 601 vs. 524 ns. At 127 pairs, the
+medians were 873 vs. 487 ns and 952 vs. 567 ns. Allocation ranges matched,
+including joint creation and occasional growth of the joint arrays. The
+control exercised chains. Arbitrarily ordered all-links ragdolls can cause
+more shifts and were outside these captures.
+
+The combined source stack also passed the many-grid and dense-member semantic
+checks at up to 512 grids and 256 coincident floors per query. These checks
+replayed the hit witnesses and exact and one-below work outcomes.
+
+Windows source validation passed 8,514 Release and 8,438 ReleaseLean
+Gravitas tests. Ubuntu passed 208 and 197 focused tests, and both Trailblazer
+adapter suites passed (117 and 110). Both Gravitas targets built on Windows
+in both configurations. DocFX passed with warnings as errors. Both constraint
+services and their shared pair index reached full line and branch coverage.
+The other bounded query and readiness paths still have 23 uncovered lines
+and 34 uncovered branches in each configuration. Hosted and released-package
+validation remain pending.
+
+Probe sources, binary hashes, and logs are under
+`artifacts/query-budget-phase2-linked`.
 
 ### Phase 2 - Retained empty partition lookup
 

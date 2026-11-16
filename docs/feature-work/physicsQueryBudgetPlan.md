@@ -3,8 +3,9 @@
 Phase 0 defines the shared contract and released-package baselines. Phase 1
 proves the first bounded support paths in Gravitas. Phase 2 now visits live
 grids and collider memberships in canonical order across checkpoint rebuilds.
-Retained partitions and linked-collider filtering are the remaining replay
-gaps before native expansion or adapter adoption.
+Lookup work now replays with or without a retained empty partition.
+Linked-collider filtering is the remaining replay gap before native expansion
+or adapter adoption.
 The work is planned before the next Trailblazer release. The
 [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
@@ -437,7 +438,7 @@ separate files and dimensional code under its existing owner.
     Cover vacant slots, remapped slots, and reset followed by slot reuse.
   - [x] Visit live Gravitas memberships in collider ID order within each
     mobility class. Keep deduplication charges independent of removed slots.
-  - [ ] Make GridForge partition lookup charge the same work when the requested
+  - [x] Make GridForge partition lookup charge the same work when the requested
     partition was retained empty or was never attached.
   - [ ] Make Gravitas linked-collider filtering charge from live pairs
     independently of retained lookup capacity.
@@ -514,6 +515,53 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 2 - Retained empty partition lookup
+
+GridForge reserves one unit for the requested type and one per other attached
+partition. The lookup holds the same non-waiting lock for the provider count
+and the existing inline/overflow search. It reserves the attached count before
+inspection and accounts for the requested type explicitly on a miss. An
+insufficient allowance is fully charged. With two other payloads, both an
+absent request and an attached request complete with three units and exhaust
+with the same work at every smaller allowance.
+
+The 2D and 3D box-floor checkpoint fixtures now register and deactivate a box
+at the probe start. They verify the live world has the retained empty payload
+and the rebuilt world has no requested payload there. The old lookup failed
+the exact restored budget in both dimensions and both Standard transports.
+Both worlds now agree on the exact witness and work, and on exhaustion and
+cleared results one unit below the discovery or candidate limit. Standard JSON
+and MemoryPack and Lean JSON agree.
+
+The Windows x64 probes used .NET 10.0.10 with tiering off. Matched captures
+changed only the GridForge binary and ran four fresh processes per lane in
+balanced order. Floor-hit allowances held steady. With no floor and one grid,
+discovery went from 31 to 46 in 2D and from 91 to 136 in 3D, with one new unit
+per queried voxel lacking the requested payload. Candidate and geometry work
+stayed at zero.
+
+| Bounded step with 512 base grids | Before, microseconds | After, microseconds |
+| --- | ---: | ---: |
+| 2D floor, stable | 75.52 | 75.48 |
+| 3D floor, stable | 23.51 | 23.91 |
+| 2D miss, grid mutation | 13.06 | 13.22 |
+| 3D miss, grid mutation | 23.66 | 23.54 |
+
+The table shows medians of process medians. The before and after process ranges
+overlap in each row. Warm queries allocated 0 B on the calling thread. Grid
+mutation frames retained their prior maxima of 220 B in 2D and 380 B in 3D.
+Probe sources, hashes, and logs are under
+`artifacts/query-budget-phase2-empty-partition`.
+
+
+GridForge passed 1,185 tests per configuration on Windows and Ubuntu. Both
+library targets built on Windows, and DocFX passed with warnings as errors.
+The Windows runs covered all lines and branches in the changed lookup. Six
+uncovered branches remain in the existing bounded voxel discovery path.
+Gravitas passed 22 Release and 20 ReleaseLean focused tests on both platforms.
+Hosted Gravitas must pin the updated GridForge commit when it is available.
+Released-package validation remains pending.
 
 ### Phase 2 - SwiftCollections membership storage
 

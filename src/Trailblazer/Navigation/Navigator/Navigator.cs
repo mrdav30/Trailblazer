@@ -280,10 +280,11 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <param name="context">The world context that owns this navigator.</param>
     /// <param name="condition">The condition that determines how the object is initialized and activated.</param>
     /// <param name="position">The position in world coordinates where the object will be placed.</param>
-    /// <param name="rotation">The optional rotation to apply to the object. If null, a default rotation is used.</param>
+    /// <param name="rotation">The starting rotation. Null selects <see cref="FixedQuaternion.Identity"/>.</param>
     /// <param name="velocity">The optional initial velocity of the object. If null, the object is initialized with zero velocity.</param>
     /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">The optional global identifier for the object. If null, a new identifier may be generated.</param>
+    /// <exception cref="ArgumentException"><paramref name="rotation"/> is zero.</exception>
     public virtual void Activate(
         TrailblazerWorldContext context,
         TrekCondition condition,
@@ -293,6 +294,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         Vector3d? velocity = null,
         Guid? globalId = null)
     {
+        ValidateStartingRotation(rotation);
         BindContext(context);
         Activate(condition, position, navigationProfile, rotation, velocity, globalId);
     }
@@ -302,10 +304,11 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     /// <param name="condition">The condition that determines how the object is initialized and activated.</param>
     /// <param name="position">The position in world coordinates where the object will be placed.</param>
-    /// <param name="rotation">The optional rotation to apply to the object. If null, a default rotation is used.</param>
+    /// <param name="rotation">The starting rotation. Null selects <see cref="FixedQuaternion.Identity"/>.</param>
     /// <param name="velocity">The optional initial velocity of the object. If null, the object is initialized with zero velocity.</param>
     /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">The optional global identifier for the object. If null, a new identifier may be generated.</param>
+    /// <exception cref="ArgumentException"><paramref name="rotation"/> is zero.</exception>
     public virtual void Activate(
         TrekCondition condition,
         Vector3d position,
@@ -323,10 +326,11 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     /// <param name="context">The world context that owns this navigator.</param>
     /// <param name="position">Initial world-space position.</param>
-    /// <param name="rotation">Optional starting rotation.</param>
+    /// <param name="rotation">The starting rotation. Null selects <see cref="FixedQuaternion.Identity"/>.</param>
     /// <param name="velocity">Optional initial velocity.</param>
     /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">Optional host-provided stable identity. When omitted, Trailblazer assigns one deterministically from setup order.</param>
+    /// <exception cref="ArgumentException"><paramref name="rotation"/> is zero.</exception>
     public virtual void Setup(
         TrailblazerWorldContext context,
         Vector3d position,
@@ -335,6 +339,7 @@ public abstract partial class Navigator : INavigate, IRecordable
         Vector3d? velocity = null,
         Guid? globalId = null)
     {
+        ValidateStartingRotation(rotation);
         BindContext(context);
         Setup(position, navigationProfile, rotation, velocity, globalId);
     }
@@ -343,10 +348,11 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Sets the initial position, exact navigation profile, rotation, velocity, and optional stable identity.
     /// </summary>
     /// <param name="position">Initial world-space position.</param>
-    /// <param name="rotation">Optional starting rotation.</param>
+    /// <param name="rotation">The starting rotation. Null selects <see cref="FixedQuaternion.Identity"/>.</param>
     /// <param name="velocity">Optional initial velocity.</param>
     /// <param name="navigationProfile">The exact body geometry and traversal capabilities owned by the object.</param>
     /// <param name="globalId">Optional host-provided stable identity. When omitted, Trailblazer assigns one deterministically from setup order.</param>
+    /// <exception cref="ArgumentException"><paramref name="rotation"/> is zero.</exception>
     public virtual void Setup(
         Vector3d position,
         NavigationAgentProfile navigationProfile,
@@ -358,6 +364,7 @@ public abstract partial class Navigator : INavigate, IRecordable
             _isSet || _isInitialized,
             message: "Navigator is already set up. Call Reset() before setting it up again.");
 
+        ValidateStartingRotation(rotation);
         EnsureContextForSetup();
         navigationProfile.Validate(nameof(navigationProfile));
 
@@ -379,6 +386,10 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         _isSet = true;
     }
+
+    private static void ValidateStartingRotation(FixedQuaternion? rotation) =>
+        ChronicleGuard.ThrowIfArgument(rotation == FixedQuaternion.Zero, nameof(rotation),
+            "A starting rotation must be nonzero. Use FixedQuaternion.Identity for an unchanged orientation.");
 
     /// <summary>
     /// Initializes the object by setting up its defaults, events, traversal state, and movement controller.
@@ -776,14 +787,12 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         ValidatePendingFrameMotion();
 
+        FixedQuaternion rotation = GetPendingFrameRotation();
+
         _lastPosition = _position;
         _position += _positionDelta + _locomotionDisplacement;
-
-        if (_rotationDelta != FixedQuaternion.Identity)
-        {
-            _rotation *= _rotationDelta;
-            _rotationDelta = FixedQuaternion.Identity;
-        }
+        _rotation = rotation;
+        _rotationDelta = FixedQuaternion.Identity;
 
         if (_rotation != FixedQuaternion.Identity)
             Forward = _rotation.Rotate(Vector3d.Forward);
@@ -828,6 +837,19 @@ public abstract partial class Navigator : INavigate, IRecordable
     {
         if (Motor!.TraversalInProgress)
             Motor.ValidatePendingTraversalFrame();
+    }
+
+    /// <summary>Computes the orientation that the pending frame would publish.</summary>
+    /// <returns>The current orientation composed with the queued rotation delta.</returns>
+    /// <exception cref="InvalidOperationException">The resulting quaternion is zero.</exception>
+    protected FixedQuaternion GetPendingFrameRotation()
+    {
+        FixedQuaternion rotation = _rotationDelta == FixedQuaternion.Identity
+            ? _rotation
+            : _rotation * _rotationDelta;
+        ChronicleGuard.ThrowIfTrue(rotation == FixedQuaternion.Zero,
+            message: "The pending rotation cannot be represented as a nonzero quaternion.");
+        return rotation;
     }
 
     /// <summary>
@@ -1012,14 +1034,18 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Applies the specified rotation delta to the current rotation state.
     /// </summary>
     /// <param name="delta">
-    /// The rotation delta to apply. Must not be <see cref="FixedQuaternion.Identity"/>; otherwise, no change is made.
+    /// The rotation delta to apply. <see cref="FixedQuaternion.Identity"/> has no effect.
     /// </param>
+    /// <exception cref="ArgumentException">The delta or the accumulated delta is zero.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ApplyRotationDelta(FixedQuaternion delta)
     {
         if (delta == FixedQuaternion.Identity) return;
 
-        _rotationDelta *= delta;
+        FixedQuaternion accumulated = _rotationDelta * delta;
+        ChronicleGuard.ThrowIfArgument(accumulated == FixedQuaternion.Zero, nameof(delta),
+            "The rotation delta must compose to a nonzero quaternion.");
+        _rotationDelta = accumulated;
     }
 
     /// <summary>

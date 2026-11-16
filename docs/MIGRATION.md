@@ -2,17 +2,34 @@
 
 ## Upcoming release
 
+### Zero spatial rotations
+
+Use `FixedQuaternion.Identity` for an unchanged orientation. Omit the starting
+rotation to select identity. `Navigator.Setup` and `Activate` reject an explicit
+zero quaternion, and `ApplyRotationDelta` rejects a zero delta.
+`TrekRequest.Rotation` is now a property. A default request uses identity and an
+assignment of zero is rejected. Rebuild callers and replace ref access to the
+old field with reading or assigning the property.
+
+Spatial Navigator writes schema 11. It reads schema 10 and converts an explicit
+zero pose rotation to identity during load. Schema 11 rejects an explicit zero
+pose rotation. Re-record migrated saves before distributing them. A legacy
+replay containing zero can continue differently after migration because
+subsequent rotation deltas now compose with identity. Use the original build to
+reproduce historical frames that used zero poses.
+
 ### Request-level arrival range
 
 Remove the arrival-radius constructor argument from navigation profiles. Pass
-`arrivalRadius` on each `PathQuery` or planar route, guide, or trek request
-that allows a reachable approach inside a positive range. Omit the argument
-or pass zero for exact arrival at the resolved endpoint.
+`arrivalRadius` on each `PathQuery` or planar route, guide, or trek request that
+allows a reachable approach inside a positive range. Omit the argument or pass
+zero for exact arrival at the resolved endpoint.
 
-Re-record spatial Navigator schema 9 and standalone query or trek records
-from before this change. Spatial Navigator uses schema 10, spatial queries
-and sessions use schema 2, and the planar Navigator and its trek both use
-schema 2. Older records reject before population.
+Re-record spatial Navigator schema 9 and standalone query or trek records from
+before this change. Spatial Navigator uses schema 11, spatial queries and
+sessions use schema 2, and the planar Navigator and its trek both use schema 2.
+Spatial Navigator schemas 9 and earlier and retired query or trek schemas reject
+before population.
 
 ### Shared diagnostics extraction
 

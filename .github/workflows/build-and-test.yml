@@ -54,7 +54,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/FixedMathSharp
-          ref: e2c325a827506419b1a04b2427d9bc77e629ab6f
+          ref: 30d76f1b9d7dcc7c5939574353da36e0492dff3c
           path: FixedMathSharp
           persist-credentials: false
 
@@ -63,7 +63,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/SwiftCollections
-          ref: d3ecac6b5f1b6d366091abc3f94b70e1e9dc0f01
+          ref: 53935383ab8fc64facf7aebd710fec9219ba9ba0
           path: SwiftCollections
           persist-credentials: false
 
@@ -72,7 +72,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/GridForge
-          ref: a3849968bd19d95f546fea9bdf706de93d31739f
+          ref: 5799c46b90a5b4717053e3e3e3698efdf449fc0a
           path: GridForge
           persist-credentials: false
 
@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/Gravitas
-          ref: dc4492bd084ef59400ae6db2f74389b9709c1a3a
+          ref: a83b76e365554d8d1848cfe679e6b65a532c3814
           path: Gravitas
           persist-credentials: false
 

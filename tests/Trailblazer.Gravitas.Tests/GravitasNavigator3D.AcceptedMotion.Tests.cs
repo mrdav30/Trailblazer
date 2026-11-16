@@ -1,3 +1,4 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Spatial;
@@ -10,6 +11,22 @@ namespace Trailblazer.Gravitas.Tests;
 
 public sealed class GravitasNavigator3DAcceptedMotionTests
 {
+    [Fact]
+    public void UnrepresentableRotationComposition_ShouldRejectBeforePublishingHostPose()
+    {
+        using var fixture = new GravitasNavigatorScenarioFixture(addWall: false);
+        var tiny = new FixedQuaternion(Fixed64.Zero, Fixed64.Zero, Fixed64.Zero, Fixed64.MinIncrement);
+        using GravitasNavigatorActor actor = fixture.CreateActor(rotation: tiny);
+        Vector3d position = actor.Body.PositionTransform.WorldPosition;
+        FixedQuaternion rotation = actor.Body.PositionTransform.WorldRotation;
+        actor.Navigator.AddPositionDelta(Vector3d.Right);
+        actor.Navigator.ApplyRotationDelta(tiny);
+
+        Assert.Throws<InvalidOperationException>(() => actor.Navigator.Simulate());
+        actor.Body.PositionTransform.WorldPosition.Should().Be(position);
+        actor.Body.PositionTransform.WorldRotation.Should().Be(rotation);
+    }
+
     [Fact]
     public void UnobstructedMotion_ShouldCommitTheCompleteResolvedPath()
     {

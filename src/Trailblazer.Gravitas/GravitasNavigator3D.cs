@@ -114,7 +114,7 @@ public sealed class GravitasNavigator3D : Navigator
 
         base.Simulate();
         Vector3d requestedPosition = Position + _positionDelta + _locomotionDisplacement;
-        FixedQuaternion requestedRotation = Rotation * _rotationDelta;
+        FixedQuaternion requestedRotation = GetPendingFrameRotation();
         ChronicleGuard.ThrowIfTrue(
             !_body.PositionTransform.TrySetWorldPose(requestedPosition, requestedRotation),
             nameof(FixedTransform),

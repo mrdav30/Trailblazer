@@ -29,10 +29,20 @@ public struct TrekRequest : IRecordable
     /// </summary>
     public Vector3d? FootPosition;
 
-    /// <summary>
-    /// The desired rotation of the scout in world space, used for orientation and facing direction.
-    /// </summary>
-    public FixedQuaternion Rotation;
+    private FixedQuaternion _rotation;
+
+    /// <summary>Gets or sets the requested world-space orientation.</summary>
+    /// <value>The supplied orientation, or <see cref="FixedQuaternion.Identity"/> for an uninitialized request.</value>
+    /// <exception cref="ArgumentException">The assigned orientation is zero.</exception>
+    public FixedQuaternion Rotation
+    {
+        readonly get => _rotation == FixedQuaternion.Zero ? FixedQuaternion.Identity : _rotation;
+        set
+        {
+            ValidateRotation(value, nameof(value));
+            _rotation = EncodeRotation(value);
+        }
+    }
 
     /// <summary>
     /// Normalized distance of movement
@@ -137,6 +147,7 @@ public struct TrekRequest : IRecordable
     /// <param name="footPosition">The foot position to set for the transient state, or null to leave it unset.</param>
     /// <param name="rotation">The rotation to apply to the transient state.</param>
     /// <param name="direction">The direction to set for the transient state, or null to preserve the existing direction.</param>
+    /// <exception cref="ArgumentException"><paramref name="rotation"/> is zero.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetTransientState(
         Vector3d origin,
@@ -144,9 +155,10 @@ public struct TrekRequest : IRecordable
         FixedQuaternion rotation,
         Vector3d? direction)
     {
+        ValidateRotation(rotation, nameof(rotation));
         Origin = origin;
         FootPosition = footPosition;
-        Rotation = rotation;
+        _rotation = EncodeRotation(rotation);
 
         // Only update direction if a new value is provided,
         // otherwise preserve the existing direction for this frame.
@@ -213,7 +225,10 @@ public struct TrekRequest : IRecordable
     {
         RecordValues.Look(chronicler, ref Origin, "Origin", Vector3d.Zero);
         RecordValues.Look(chronicler, ref FootPosition, "FootPosition", null);
-        RecordValues.Look(chronicler, ref Rotation, "Rotation", FixedQuaternion.Identity);
+        FixedQuaternion rotation = Rotation;
+        RecordValues.Look(chronicler, ref rotation, "Rotation", FixedQuaternion.Identity);
+        if (chronicler.Mode == SerializationMode.Loading)
+            _rotation = EncodeRotation(rotation); // Legacy explicit zero means an omitted orientation.
         RecordValues.Look(chronicler, ref Direction, "Direction", Vector3d.Zero);
         RecordValues.Look(chronicler, ref FacingDirection, "FacingDirection", null);
         RecordValues.Look(chronicler, ref Rate, "Rate", TrekRate.Stationary);
@@ -224,4 +239,11 @@ public struct TrekRequest : IRecordable
         RecordValues.Look(chronicler, ref IsRequestingSwim, "IsRequestingSwim", false);
         RecordValues.Look(chronicler, ref IsRequestingClimb, "IsRequestingClimb", false);
     }
+
+    private static void ValidateRotation(FixedQuaternion rotation, string parameterName) =>
+        ChronicleGuard.ThrowIfArgument(rotation == FixedQuaternion.Zero, parameterName,
+            "A request rotation must be nonzero. Use FixedQuaternion.Identity for an unchanged orientation.");
+
+    private static FixedQuaternion EncodeRotation(FixedQuaternion rotation) =>
+        rotation == FixedQuaternion.Identity ? default : rotation;
 }

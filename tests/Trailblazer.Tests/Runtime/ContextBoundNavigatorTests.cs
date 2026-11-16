@@ -42,6 +42,25 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     }
 
     [Fact]
+    public void SetupAndRotationDelta_ShouldRejectExplicitZeroBeforePublishingPose()
+    {
+        using TrailblazerWorldContext context = CreateContextWithGrid();
+        var navigator = new TestNavigator(context);
+        var unbound = new TestNavigator();
+        var profile = PathTestFactory.DefaultNavigationProfile;
+        Assert.Throws<ArgumentException>(() => unbound.Setup(context, Vector3d.Right, profile, FixedQuaternion.Zero));
+        unbound.Context.Should().BeNull();
+        Assert.Throws<ArgumentException>(() => navigator.Setup(Vector3d.Right, profile, FixedQuaternion.Zero));
+        navigator.Position.Should().Be(Vector3d.Zero);
+        navigator.Setup(Vector3d.Zero, profile);
+        navigator.Initialize(new TrekCondition());
+        Assert.Throws<ArgumentException>(() => navigator.ApplyRotationDelta(FixedQuaternion.Zero));
+        navigator.CommitFrameMotion();
+        navigator.Rotation.Should().Be(FixedQuaternion.Identity);
+        navigator.Forward.Should().Be(Vector3d.Forward);
+    }
+
+    [Fact]
     public void SetupAndActivate_ContextOverloads_ShouldBindBeforeInitializing()
     {
         using TrailblazerWorldContext context = CreateContextWithGrid();

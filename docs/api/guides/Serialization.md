@@ -72,19 +72,24 @@ This distinction is intentional. A resumed moving controller must start from its
 restored physical state, while a standalone `PathQueryRecord` is an exact value
 round trip.
 
-The outer Navigator record is schema version 10. The nested path-session and
-standalone `PathQueryRecord` schemas are version 2. These versions store
-the arrival radius with the query. Population rejects outer version 9 and
-earlier, and version 1 path-session and standalone query records. Navigator
-records include the explicit world-space ground `SurfaceNormal`,
-controlled-descent state, periodic direct-LOS interval and nullable phase,
-durable acquisition policy, and active/buffered turn continuation.
+The outer Navigator record is schema version 11 and also accepts version 10.
+Version 10 maps a stored zero pose rotation to `FixedQuaternion.Identity`.
+Version 11 rejects a stored zero pose rotation before updating the existing
+navigator. An omitted pose rotation selects identity. Active and pending turn
+targets must be nonzero whenever present. `TrekRequest` records read a legacy
+zero request orientation as identity. The nested path-session and standalone
+`PathQueryRecord` schemas are version 2. These versions store the arrival radius
+with the query. Population rejects outer version 9 and earlier, and version 1
+path-session and standalone query records. Navigator records include the
+explicit world-space ground `SurfaceNormal`, controlled-descent state, periodic
+direct-LOS interval and nullable phase, durable acquisition policy, and
+active/buffered turn continuation.
 
 Platform locomotion records the exact height-adjusted world attachment point
 when it was sampled against the current carrier pose. A recorded point must
-match the active carrier and the local attachment. A current record that
-omits this optional point uses the local attachment until the next accepted
-sample establishes the exact point.
+match the active carrier and the local attachment. A current record that omits
+this optional point uses the local attachment until the next accepted sample
+establishes the exact point.
 
 `JumpLocomotion` has its own required version-1 schema. `JumpStartTime` is a
 wide timestamp recorded through Chronicler's versioned time-value schema;
@@ -186,36 +191,35 @@ Context-owned world data is separate.
 
 ## Planar Navigator Records
 
-`Navigator2D` uses the record kind `Trailblazer.Navigator2D` and schema version
-2. The nested trek uses schema version 2 and records the optional arrival
-radius with the requested destination. Population rejects version 1 shell
-and trek records before changing the live shell. Create a shell
-with the matching identity, dimensional binding, current profile and motor
-settings. Publish the world and restore the host body's accepted pose before
-populating the controller. For a saved posture, initialize the body and shell
-with that posture's envelope.
+`Navigator2D` uses the record kind `Trailblazer.Navigator2D` and schema
+version 2. The nested trek uses schema version 2 and records the optional
+arrival radius with the requested destination. Population rejects version 1
+shell and trek records before changing the live shell. Create a shell with the
+matching identity, dimensional binding, current profile and motor settings.
+Publish the world and restore the host body's accepted pose before populating
+the controller. For a saved posture, initialize the body and shell with that
+posture's envelope.
 
 The record preserves accepted planar pose and velocity, facing, motor
-continuation, group and acquisition settings, and durable destination intent.
-A ranged trek reacquires a reachable approach to its original requested
-destination after load. The selected route endpoint is transient.
-Turning follows the host's ordered per-frame facing inputs from the restored
-accepted angle. After a successful population, refresh side-view support before
-the first frame's commands. A fresh carrier sample at the recorded prior pose
-with the recorded stable ID rebinds the saved local anchor to its new runtime
+continuation, group and acquisition settings, and durable destination intent. A
+ranged trek reacquires a reachable approach to its original requested
+destination after load. The selected route endpoint is transient. Turning
+follows the host's ordered per-frame facing inputs from the restored accepted
+angle. After a successful population, refresh side-view support before the first
+frame's commands. A fresh carrier sample at the recorded prior pose with the
+recorded stable ID rebinds the saved local anchor to its new runtime
 registration. For side-view guidance saved between anchors, the refreshed
 support witness can identify the current authored support. The fresh route
 proves the return to its first anchor before advancing the cursor.
 
-Successful population silently rebuilds occupancy and the committed-cell
-sample. It retires prepared targets, route leases, scheduled requests, and
-action tokens. A frame already prepared on the same shell and clock lifetime
-remains consumed. The next eligible frame acquires a fresh guide. Capture
-keeps durable trek intent when its addresses and policy belong to the current
-publication, including while a transient acquisition is pending. A rejected
-population preserves the live shell.
-JSON supports both package families. MemoryPack is available in the standard
-package.
+Successful population silently rebuilds occupancy and the committed-cell sample.
+It retires prepared targets, route leases, scheduled requests, and action
+tokens. A frame already prepared on the same shell and clock lifetime remains
+consumed. The next eligible frame acquires a fresh guide. Capture keeps durable
+trek intent when its addresses and policy belong to the current publication,
+including while a transient acquisition is pending. A rejected population
+preserves the live shell. JSON supports both package families. MemoryPack is
+available in the standard package.
 
 ## Maps And Overlays
 

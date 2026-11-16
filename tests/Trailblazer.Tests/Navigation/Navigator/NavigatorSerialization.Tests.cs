@@ -56,12 +56,65 @@ public class NavigatorSerializationTests : IDisposable
         string json = JsonRecordSerializer.Serialize(source);
 
         using JsonDocument document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(10);
+        document.RootElement.GetProperty("SchemaVersion").GetInt32().Should().Be(11);
         JsonElement session = document.RootElement.GetProperty("PathSession");
         session.GetProperty("SchemaVersion").GetInt32().Should().Be(2);
         session.TryGetProperty("ArrivalRadius", out _).Should().BeTrue();
         document.RootElement.GetProperty("NavigationProfile").TryGetProperty("ArrivalRadius", out _).Should().BeFalse();
         document.RootElement.GetProperty("IsGuided").GetBoolean().Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
+    [InlineData(true)]
+#endif
+    public void Restore_ShouldMigrateLegacyZeroAndRejectCurrentZeroWithoutChangingPose(bool useMemoryPack)
+    {
+        var source = CreateNavigator(new Vector3d(2, 0, 2));
+        var target = CreateNavigator(new Vector3d(-2, 0, -2));
+        source.ApplyInputTrekRequest(direction: Vector3d.Right, rate: TrekRate.Moderate);
+        object current = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        object invalid = SerializationUtility.SetPayloadValue(current, useMemoryPack, FixedQuaternion.Zero, "Rotation");
+        Assert.Throws<InvalidOperationException>(() => SerializationUtility.PopulateRecord(target, invalid, useMemoryPack));
+        target.Position.Should().Be(new Vector3d(-2, 0, -2));
+
+        object validLegacy = SerializationUtility.SetPayloadValue(current, useMemoryPack, 10, "SchemaVersion");
+        SerializationUtility.PopulateRecord(target, validLegacy, useMemoryPack);
+        target.Rotation.Should().Be(source.Rotation);
+        target.Forward.Should().Be(source.Forward);
+
+        object identity = SerializationUtility.SetPayloadValue(current, useMemoryPack, FixedQuaternion.Identity, "Rotation");
+        SerializationUtility.PopulateRecord(source, identity, useMemoryPack);
+        object legacy = SerializationUtility.SetPayloadValue(invalid, useMemoryPack, 10, "SchemaVersion");
+        legacy = SerializationUtility.SetPayloadValue(legacy, useMemoryPack, FixedQuaternion.Zero, "FrameRequest", "Rotation");
+        SerializationUtility.PopulateRecord(target, legacy, useMemoryPack);
+        target.Rotation.Should().Be(FixedQuaternion.Identity);
+        target.Forward.Should().Be(Vector3d.Forward);
+        target.FrameRequest.Rotation.Should().Be(FixedQuaternion.Identity);
+
+        FixedQuaternion delta = FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.HalfPi);
+        source.ApplyRotationDelta(delta);
+        target.ApplyRotationDelta(delta);
+        source.CommitFrameMotion();
+        target.CommitFrameMotion();
+        target.Rotation.Should().Be(source.Rotation);
+        target.Forward.Should().Be(source.Forward);
+        target.Position.Should().Be(source.Position);
+    }
+
+    [Theory]
+    [InlineData("TargetRotation")]
+    [InlineData("PendingTarget")]
+    public void Restore_ShouldRejectZeroTurningRotationsBeforeChangingPose(string field)
+    {
+        var source = CreateNavigator(Vector3d.Right);
+        var target = CreateNavigator(Vector3d.Left);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack: false);
+        object invalid = SerializationUtility.SetPayloadValue(payload, false, FixedQuaternion.Zero, "Turning", field);
+
+        Assert.Throws<InvalidOperationException>(() => SerializationUtility.PopulateRecord(target, invalid, false));
+        target.Position.Should().Be(Vector3d.Left);
     }
 
     [Theory]

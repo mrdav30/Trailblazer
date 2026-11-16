@@ -1,3 +1,4 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using Trailblazer.Navigation;
@@ -8,6 +9,22 @@ namespace Trailblazer.Tests.Navigation.Motor;
 
 public class TrekRequestTests
 {
+    [Fact]
+    public void Rotation_ShouldUseIdentityForDefaultAndRejectExplicitZeroBeforeUpdate()
+    {
+        TrekRequest request = default;
+        request.Rotation.Should().Be(FixedQuaternion.Identity);
+        Assert.Equal(request, request.Clone());
+        request.Rotation = FixedQuaternion.Identity;
+        Assert.Equal(default, request);
+        Assert.Throws<ArgumentException>(() => request.Rotation = FixedQuaternion.Zero);
+        Assert.Throws<ArgumentException>(() =>
+            request.SetTransientState(Vector3d.Right, Vector3d.Up, FixedQuaternion.Zero, Vector3d.Forward));
+        request.Origin.Should().Be(Vector3d.Zero);
+        request.FootPosition.Should().BeNull();
+        request.Rotation.Should().Be(FixedQuaternion.Identity);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

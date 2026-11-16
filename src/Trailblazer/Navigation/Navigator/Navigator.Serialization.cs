@@ -19,7 +19,8 @@ namespace Trailblazer.Navigation;
 /// <content>Stages and applies recorded navigator state.</content>
 public abstract partial class Navigator
 {
-    private const int CurrentSerializationSchemaVersion = 10;
+    private const int LegacyZeroRotationSchemaVersion = 10;
+    private const int CurrentSerializationSchemaVersion = 11;
 
     #region Serialization
 
@@ -49,7 +50,7 @@ public abstract partial class Navigator
         if (isLoading)
         {
             ChronicleGuard.ThrowIfTrue(
-                schemaVersion != CurrentSerializationSchemaVersion,
+                schemaVersion != CurrentSerializationSchemaVersion && schemaVersion != LegacyZeroRotationSchemaVersion,
                 message: "Serialized Navigator schema is missing, retired, or unsupported.");
             ChronicleGuard.ThrowIfTrue(
                 !navigationProfileRecord.TryCreate(out NavigationAgentProfile recordedProfile)
@@ -103,6 +104,13 @@ public abstract partial class Navigator
 
         if (isLoading)
         {
+            if (rotation == FixedQuaternion.Zero)
+            {
+                ChronicleGuard.ThrowIfTrue(schemaVersion != LegacyZeroRotationSchemaVersion,
+                    message: "Serialized Navigator rotation must be nonzero.");
+                rotation = FixedQuaternion.Identity;
+            }
+
             GridOccupantManager.TryDeregister(RequireContext().World, this);
             _position = position;
             _lastPosition = lastPosition;

@@ -287,19 +287,31 @@ public partial class NavTurning : IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref CanTurn, "CanTurn", true);
-        RecordValues.Look(chronicler, ref TurnRate, "TurnRate", DefaultTurnRate);
+        bool canTurn = CanTurn;
+        Fixed64 turnRate = TurnRate;
         bool targetReached = TargetReached;
         FixedQuaternion targetRotation = TargetRotation;
+        FixedQuaternion? pendingTarget = _pendingTarget;
+        Fixed64 pendingInterpolation = _pendingInterpolation;
+        bool isColliding = _isColliding;
+        RecordValues.Look(chronicler, ref canTurn, "CanTurn", true);
+        RecordValues.Look(chronicler, ref turnRate, "TurnRate", DefaultTurnRate);
         RecordValues.Look(chronicler, ref targetReached, "TargetReached", true);
         RecordValues.Look(chronicler, ref targetRotation, "TargetRotation", FixedQuaternion.Identity);
-        RecordValues.Look(chronicler, ref _pendingTarget, "PendingTarget", null);
-        RecordValues.Look(chronicler, ref _pendingInterpolation, "PendingInterpolation", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref _isColliding, "IsColliding", false);
+        RecordValues.Look(chronicler, ref pendingTarget, "PendingTarget", null);
+        RecordValues.Look(chronicler, ref pendingInterpolation, "PendingInterpolation", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref isColliding, "IsColliding", false);
         if (chronicler.Mode == SerializationMode.Loading)
         {
+            ChronicleGuard.ThrowIfTrue(targetRotation == FixedQuaternion.Zero || pendingTarget == FixedQuaternion.Zero,
+                message: "Serialized turn rotations must be nonzero.");
+            CanTurn = canTurn;
+            TurnRate = turnRate;
             TargetReached = targetReached;
             TargetRotation = targetRotation;
+            _pendingTarget = pendingTarget;
+            _pendingInterpolation = pendingInterpolation;
+            _isColliding = isColliding;
         }
     }
 }

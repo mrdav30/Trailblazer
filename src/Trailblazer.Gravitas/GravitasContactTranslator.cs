@@ -27,21 +27,40 @@ internal static class GravitasContactTranslator
         Fixed64 supportProbeRadius,
         Fixed64 supportProbeOffset,
         Fixed64 supportProbeDistance,
-        Func<LSCollider, int>? carrierIdResolver)
+        Func<LSCollider, int>? carrierIdResolver,
+        ref SupportQueryPolicy policy,
+        out NavigationSupportStatus supportStatus)
     {
-        Vector3d acceptedFoot = acceptedRoot + Vector3d.Down * rootToFootOffset;
-        Vector3d origin = acceptedFoot + Vector3d.Up * supportProbeOffset;
-        if (!body.Context.Query3D.SweepSphere(
-                origin,
-                supportProbeRadius,
-                Vector3d.Down,
-                supportProbeDistance,
-                out Physics3DHit hit,
-                supportLayers,
-                body.Collider)
-            || hit.Normal.Y <= Fixed64.Zero
-            || !hit.TryGetPoint(out Vector3d point))
+        supportStatus = NavigationSupportStatus.NoSupport;
+        Physics3DHit hit;
+        if (policy.Scratch is { } scratch)
         {
+            var sampled = SweepBounded(body, acceptedRoot, rootToFootOffset, supportLayers,
+                supportProbeRadius, supportProbeOffset, supportProbeDistance, scratch, ref policy);
+            if (policy.ExecutionStatus != PhysicsQueryExecutionStatus.Completed)
+            {
+                supportStatus = NavigationSupportStatus.Unavailable;
+                return default;
+            }
+            if (sampled is not Physics3DHit certified)
+                return default;
+            hit = certified;
+        }
+        else
+        {
+            Vector3d acceptedFoot = acceptedRoot + Vector3d.Down * rootToFootOffset;
+            Vector3d origin = acceptedFoot + Vector3d.Up * supportProbeOffset;
+            if (!body.Context.Query3D.SweepSphere(origin, supportProbeRadius, Vector3d.Down,
+                supportProbeDistance, out hit, supportLayers, body.Collider))
+                return default;
+        }
+
+        if (hit.Normal.Y <= Fixed64.Zero)
+            return default;
+        if (!hit.TryGetPoint(out Vector3d point))
+        {
+            if (policy.Scratch != null)
+                supportStatus = NavigationSupportStatus.Unavailable;
             return default;
         }
 
@@ -61,10 +80,30 @@ internal static class GravitasContactTranslator
             carrierId,
             transform,
             inert: carrierId == 0);
+        supportStatus = NavigationSupportStatus.Found;
         return new GravitasContact(
             point.Y,
             hit.Normal,
             collider.Material.DynamicFriction,
             platform);
+    }
+
+    private static Physics3DHit? SweepBounded(
+        SolidBody body, Vector3d acceptedRoot, Fixed64 rootToFootOffset, PhysicsLayerMask supportLayers,
+        Fixed64 supportProbeRadius, Fixed64 supportProbeOffset, Fixed64 supportProbeDistance,
+        PhysicsQueryScratch scratch, ref SupportQueryPolicy policy)
+    {
+        if (!Fixed64.TrySubtract(acceptedRoot.Y, rootToFootOffset, out var footY)
+            || !Fixed64.TryAdd(footY, supportProbeOffset, out var originY))
+        {
+            policy.Record(PhysicsQueryExecutionStatus.Unrepresentable, default);
+            return null;
+        }
+
+        var origin = new Vector3d(acceptedRoot.X, originY, acceptedRoot.Z);
+        var status = body.Context.Query3D.SweepSphere(origin, supportProbeRadius, Vector3d.Down, supportProbeDistance,
+            supportLayers, body.Collider, policy.Budget, scratch, out var sampled, out var work);
+        policy.Record(status, work);
+        return sampled;
     }
 }

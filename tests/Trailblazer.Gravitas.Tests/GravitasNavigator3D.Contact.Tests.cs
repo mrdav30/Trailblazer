@@ -1,7 +1,9 @@
 using System;
 using FixedMathSharp;
 using FluentAssertions;
+using Gravitas.Queries;
 using Trailblazer.Gravitas.Tests.Support;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Xunit;
 
@@ -28,8 +30,10 @@ public sealed class GravitasNavigator3DContactTests
         motor.Handler.Platform.ActivePlatform.Should().BeNull();
     }
 
-    [Fact]
-    public void DownwardFacingSweepHit_ShouldRemainAirborneWithoutReplacingLaunchContact()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DownwardFacingSweepHit_ShouldRemainAirborneWithoutReplacingLaunchContact(bool bounded)
     {
         using var fixture = new GravitasNavigatorScenarioFixture(
             addWall: false,
@@ -37,9 +41,15 @@ public sealed class GravitasNavigator3DContactTests
             supportCenterY: Fixed64.Zero);
         using GravitasNavigatorActor actor = fixture.CreateActor(
             carrierIdResolver: _ => 3);
+        if (bounded)
+            actor.Navigator.ConfigureSupportQueryBudget(new PhysicsQueryBudget(8192, 8192, 8192),
+                new PhysicsQueryScratch(128, 16));
 
         fixture.Step(actor);
 
+        actor.Navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
+        actor.Navigator.LastSupportQueryExecutionStatus.Should().Be(bounded
+            ? PhysicsQueryExecutionStatus.Completed : null);
         actor.Navigator.Motor!.IsInGas.Should().BeTrue();
         GroundCondition launchContact = actor.Navigator.Motor.CurrentState.GroundState.GetValueOrDefault();
         launchContact.SurfaceNormal.Should().Be(Vector3d.Up);

@@ -76,7 +76,7 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         GlobalId = globalId;
         Pose = initialPose;
         SupportStatus = profile.Mode == NavigationMode2D.TopDown
-            ? NavigationSupportStatus2D.NotApplicable : NavigationSupportStatus2D.Unavailable;
+            ? NavigationSupportStatus.NotApplicable : NavigationSupportStatus.Unavailable;
         _resetHook = context.RegisterOnReset($"Navigator2D:{globalId:N}", 0, ResetNavigation);
         context.World.OnReset += ResetWorld;
     }
@@ -524,7 +524,8 @@ public abstract partial class Navigator2D : IDisposable, IVoxelOccupant
         ChronicleGuard.ThrowIfTrue(_busy || !_context.World.IsActive, message: "The controller cannot start a frame operation.");
     }
 
-    private void EnsureIdle()
+    /// <summary>Requires a live controller with no prepared motion or operation in progress.</summary>
+    protected void EnsureIdle()
     {
         EnsureAvailable();
         ChronicleGuard.ThrowIfTrue(_pending.HasValue, message: "Commit the prepared motion before starting another operation.");

@@ -57,7 +57,7 @@ public sealed partial class Navigator2DSupportTests
         {
             context.Simulate();
             host.PrepareFrameMotion(new NavigationInput2D(null, false, Vector2d.Forward));
-            host.Result = new NavigationMotionResult2D(host.Request.Target, NavigationSupportStatus2D.NotApplicable);
+            host.Result = new NavigationMotionResult2D(host.Request.Target, NavigationSupportStatus.NotApplicable);
             host.CommitFrameMotion();
             context.LateSimulate();
         }

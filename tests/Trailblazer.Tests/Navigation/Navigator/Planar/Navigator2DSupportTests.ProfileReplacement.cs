@@ -609,8 +609,8 @@ public sealed partial class Navigator2DSupportTests
                 HostCenter = motion.Target.Center;
             var pose = new NavigationPose2D(HostCenter, Fixed64.Zero);
             return HostProfile.Mode == NavigationMode2D.TopDown
-                ? new NavigationMotionResult2D(pose, NavigationSupportStatus2D.NotApplicable)
-                : new NavigationMotionResult2D(pose, NavigationSupportStatus2D.Found, SupportSample);
+                ? new NavigationMotionResult2D(pose, NavigationSupportStatus.NotApplicable)
+                : new NavigationMotionResult2D(pose, NavigationSupportStatus.Found, SupportSample);
         }
 
         protected override bool TryCommitPhysicalProfileReplacement(NavigationAgentProfile2D replacement,

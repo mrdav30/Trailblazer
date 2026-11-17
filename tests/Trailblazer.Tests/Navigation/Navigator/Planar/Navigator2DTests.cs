@@ -563,7 +563,7 @@ public sealed partial class Navigator2DTests
         protected override NavigationMotionResult2D ReadAcceptedMotion(NavigationMotionRequest2D? request)
         {
             OnRead?.Invoke();
-            return new NavigationMotionResult2D(_accepted, NavigationSupportStatus2D.NotApplicable);
+            return new NavigationMotionResult2D(_accepted, NavigationSupportStatus.NotApplicable);
         }
     }
 }

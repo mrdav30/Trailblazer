@@ -162,7 +162,8 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
         Vector3d? position = null,
         FixedQuaternion? rotation = null,
         Func<LSCollider, int>? carrierIdResolver = null,
-        NavigationAgentProfile? profile = null)
+        NavigationAgentProfile? profile = null,
+        Fixed64? supportProbeOffset = null)
     {
         NavigationAgentProfile resolvedProfile = profile ?? Profile;
         Vector3d resolvedPosition = position
@@ -186,7 +187,7 @@ internal class GravitasNavigatorScenarioFixture : IDisposable
             body,
             _supportLayers,
             Fixed64.Quarter,
-            Fixed64.FromFraction(1, 8),
+            supportProbeOffset ?? Fixed64.FromFraction(1, 8),
             Fixed64.Quarter,
             carrierIdResolver);
         ActivateNavigator(

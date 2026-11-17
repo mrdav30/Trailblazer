@@ -26,7 +26,7 @@ public abstract partial class Navigator2D
     /// <summary>Gets the bound body geometry and navigation permissions.</summary>
     public NavigationAgentProfile2D NavigationProfile { get; private set; }
     /// <summary>Gets the status of the most recently committed physical support sample.</summary>
-    public NavigationSupportStatus2D SupportStatus { get; private set; }
+    public NavigationSupportStatus SupportStatus { get; private set; }
     /// <summary>Gets the fresh physical witness, if available.</summary>
     public NavigationSupport2D? Support { get; private set; }
     /// <summary>Gets whether the fresh support meets slope policy and the motor is not departing upward.</summary>
@@ -72,7 +72,7 @@ public abstract partial class Navigator2D
     private void InvalidateSupport()
     {
         PublishSupport(new NavigationMotionResult2D(Pose, NavigationProfile.Mode == NavigationMode2D.SideView
-            ? NavigationSupportStatus2D.Unavailable : NavigationSupportStatus2D.NotApplicable), false);
+            ? NavigationSupportStatus.Unavailable : NavigationSupportStatus.NotApplicable), false);
         ClearHostSupport();
     }
 
@@ -172,8 +172,8 @@ public abstract partial class Navigator2D
     {
         result.Validate();
         ChronicleGuard.ThrowIfArgument(NavigationProfile.Mode == NavigationMode2D.TopDown
-            ? result.SupportStatus != NavigationSupportStatus2D.NotApplicable
-            : result.SupportStatus == NavigationSupportStatus2D.NotApplicable || result.Accepted.RotationRadians != Fixed64.Zero,
+            ? result.SupportStatus != NavigationSupportStatus.NotApplicable
+            : result.SupportStatus == NavigationSupportStatus.NotApplicable || result.Accepted.RotationRadians != Fixed64.Zero,
             nameof(result));
     }
 

@@ -158,7 +158,7 @@ public class NavigationPlanarFrameBenchmarks
             Check(_sideView
                 ? _navigator.IsGrounded && _navigator.Support is { } support && support.Normal == Vector2d.Forward
                     && support.Point == new Vector2d(accepted.X, -Fixed64.Half)
-                : _navigator.SupportStatus == NavigationSupportStatus2D.NotApplicable, "Unexpected support state.");
+                : _navigator.SupportStatus == NavigationSupportStatus.NotApplicable, "Unexpected support state.");
             Check(_navigator.LastCommittedCell?.Address == new NavigationCellAddress(MapId, new VoxelIndex(4, 1, 1)),
                 "Unexpected committed cell.");
         }

@@ -1,5 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
+using Gravitas.Queries;
 using Gravitas.Support;
 using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
@@ -15,13 +16,15 @@ public sealed class GravitasNavigator3DPlatformReplayTests
     public GravitasNavigator3DPlatformReplayTests(ITestOutputHelper output) => _output = output;
 
     [Theory]
-    [InlineData(false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
 #endif
-    public void ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace(bool memoryPack)
+    public void ChangedPostureOnMovingPlatform_ShouldRestoreAndContinueTheExactTrace(bool memoryPack, bool boundedReplay)
     {
-        _output.WriteLine($"platform replay memoryPack={memoryPack}: platform-position|navigator-request|host-request|accepted|velocity|local-attachment");
+        _output.WriteLine($"platform replay memoryPack={memoryPack} boundedReplay={boundedReplay}: platform-position|navigator-request|host-request|accepted|velocity|local-attachment");
         using var sourceFixture = new GravitasProfileReplacementScenarioFixture(addSupport: true);
         using GravitasNavigatorActor source = sourceFixture.CreateActor(carrierIdResolver: _ => 71);
         source.Body.Collider.IgnoredCollisionLayers = PhysicsLayerMask.None;
@@ -51,6 +54,9 @@ public sealed class GravitasNavigator3DPlatformReplayTests
         restoredFixture.Step();
         using GravitasNavigatorActor restored = restoredFixture.CreateActor(
             profile: compact, carrierIdResolver: _ => 71);
+        if (boundedReplay)
+            restored.Navigator.ConfigureSupportQueryBudget(new PhysicsQueryBudget(8192, 8192, 8192),
+                new PhysicsQueryScratch(128, 16));
         GravitasRecordSnapshot.Load(restored.Body, bodySnapshot);
         GravitasRecordSnapshot.Load(restored.Navigator, navigatorSnapshot);
         restored.Navigator.NavigationProfile.Should().Be(compact);
@@ -67,6 +73,9 @@ public sealed class GravitasNavigator3DPlatformReplayTests
             MovePlatform(restoredFixture, frame);
             sourceFixture.Step(source);
             restoredFixture.Step(restored);
+            restored.Navigator.SupportStatus.Should().Be(NavigationSupportStatus.Found);
+            restored.Navigator.LastSupportQueryExecutionStatus.Should().Be(boundedReplay
+                ? PhysicsQueryExecutionStatus.Completed : null);
             restored.NavigatorRequestedPosition.Should().Be(source.NavigatorRequestedPosition, "replay frame {0}", frame);
             restored.Navigator.Position.Should().Be(source.Navigator.Position, "replay frame {0}", frame);
             restored.Navigator.Velocity.Should().Be(source.Navigator.Velocity, "replay frame {0}", frame);
@@ -90,12 +99,20 @@ public sealed class GravitasNavigator3DPlatformReplayTests
         for (int frame = 0; frame < 10; frame++)
         {
             if (frame == 2)
+            {
                 GravitasRecordSnapshot.Load(restored.Navigator, GravitasRecordSnapshot.Save(source.Navigator, memoryPack));
+                restored.Navigator.SupportStatus.Should().Be(NavigationSupportStatus.NotApplicable);
+                restored.Navigator.LastSupportQueryExecutionStatus.Should().BeNull();
+                restored.Navigator.LastSupportQueryWork.Should().BeNull();
+            }
 
             Vector3d coastingPosition = source.Navigator.Position
                 + source.Navigator.Velocity * Fixed64.FromFraction(3, 4) * sourceFixture.Trailblazer.DeltaTime;
             sourceFixture.Step(source);
             restoredFixture.Step(restored);
+            restored.Navigator.SupportStatus.Should().Be(NavigationSupportStatus.Found);
+            restored.Navigator.LastSupportQueryExecutionStatus.Should().Be(boundedReplay
+                ? PhysicsQueryExecutionStatus.Completed : null);
             restored.NavigatorRequestedPosition.Should().Be(source.NavigatorRequestedPosition, "stationary platform frame {0}", frame);
             restored.Navigator.Position.Should().Be(source.Navigator.Position, "stationary platform frame {0}", frame);
             restored.Navigator.Velocity.Should().Be(source.Navigator.Velocity);

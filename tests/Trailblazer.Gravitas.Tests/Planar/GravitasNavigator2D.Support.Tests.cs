@@ -5,6 +5,7 @@ using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
 using Gravitas.Materials;
+using Gravitas.Queries;
 using Gravitas.Support;
 using GridForge.Configuration;
 using GridForge.Grids;
@@ -23,6 +24,7 @@ public sealed class GravitasNavigator2DSupportTests
     private static readonly Fixed64 HostY = (Fixed64)7;
     private static readonly NavigationAgentProfile2D Standing = CreateProfile(Fixed64.One);
     private static readonly NavigationAgentProfile2D Compact = CreateProfile(Fixed64.Zero);
+    private static readonly PhysicsQueryBudget SupportBudget = new(4096, 4096, 4096);
 
     [Fact]
     public void SideView_ShouldReportUnavailableForAnUnrepresentableSupportProbe()
@@ -40,7 +42,7 @@ public sealed class GravitasNavigator2DSupportTests
 
         navigator.RefreshSupport();
 
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.Unavailable);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.Unavailable);
         navigator.Support.Should().BeNull();
         navigator.IsGrounded.Should().BeFalse();
         navigator.Pose.Center.Should().Be(start);
@@ -60,7 +62,7 @@ public sealed class GravitasNavigator2DSupportTests
 
         navigator.RefreshSupport();
         navigator.IsGrounded.Should().BeTrue();
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.Found);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.Found);
         navigator.Support!.Value.Point.Should().Be(Vector2d.Forward * Fixed64.Half);
         navigator.Support.Value.Normal.Should().Be(Vector2d.Forward);
         navigator.Support.Value.Friction.Should().Be(floor.Material.DynamicFriction);
@@ -76,7 +78,7 @@ public sealed class GravitasNavigator2DSupportTests
 
         floor.Deactivate();
         navigator.RefreshSupport();
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.NoSupport);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
         navigator.IsGrounded.Should().BeFalse();
         navigator.Support.Should().BeNull();
     }
@@ -95,7 +97,7 @@ public sealed class GravitasNavigator2DSupportTests
         using var navigator = CreateNavigator(navigation, body, Standing, gravity: (Fixed64)256);
 
         navigator.RefreshSupport();
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.NoSupport);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
         AdvanceRider(navigation, physics, navigator, Vector2d.Zero);
 
         // The upper edge is z = x. The lower cap touches one radius above this line.
@@ -140,14 +142,14 @@ public sealed class GravitasNavigator2DSupportTests
 
         Vector2d ledgeExit = start + Vector2d.Right;
         AssertAcceptedPose(navigator, ledgeExit);
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.NoSupport);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
         navigator.IsGrounded.Should().BeFalse();
         AdvanceRider(navigation, physics, navigator, Vector2d.Zero);
 
         Vector2d falling = ledgeExit - Vector2d.Forward * Fixed64.Half;
         AssertAcceptedPose(navigator, falling);
         navigator.Velocity.Should().Be(-Vector2d.Forward * (Fixed64)8);
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.NoSupport);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
         AdvanceRider(navigation, physics, navigator, Vector2d.Zero);
 
         var landed = new Vector2d(Fixed64.One, lowerTop + Fixed64.One);
@@ -228,11 +230,13 @@ public sealed class GravitasNavigator2DSupportTests
     }
 
     [Theory]
-    [InlineData(false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
 #endif
-    public void SideView_ShouldReplayTheRotatingCarrierFromABodyFirstCheckpoint(bool memoryPack)
+    public void SideView_ShouldReplayTheRotatingCarrierFromABodyFirstCheckpoint(bool memoryPack, bool bounded)
     {
         using var world = new GridWorld();
         using var navigation = TrailblazerWorldContext.Attach(world);
@@ -248,6 +252,8 @@ public sealed class GravitasNavigator2DSupportTests
         long lifetime = 1;
         using var navigator = CreateNavigator(navigation, body, Compact,
             collider => ReferenceEquals(collider, square) ? (19, lifetime) : null);
+        if (bounded)
+            navigator.ConfigureSupportQueryBudget(SupportBudget, new PhysicsQueryScratch(128, 16));
         navigator.RefreshSupport();
         navigator.IsGrounded.Should().BeTrue();
         var corner = new Vector2d(1, 1);
@@ -280,8 +286,12 @@ public sealed class GravitasNavigator2DSupportTests
         carrier.SetRotation(Fixed64.HalfPi);
         GravitasRecordSnapshot.Load(body, bodyRecord);
         GravitasRecordSnapshot.Load(navigator, navigationRecord);
+        navigator.LastSupportQueryExecutionStatus.Should().BeNull();
+        navigator.LastSupportQueryWork.Should().BeNull();
         lifetime++;
         navigator.RefreshSupport();
+        navigator.LastSupportQueryExecutionStatus.Should().Be(bounded
+            ? PhysicsQueryExecutionStatus.Completed : (PhysicsQueryExecutionStatus?)null);
         var restored = navigator.Support!.Value.Carrier!.Value;
         restored.Lifetime.Should().Be(lifetime);
         restored.LocalAnchor.Should().Be(corner);
@@ -311,6 +321,89 @@ public sealed class GravitasNavigator2DSupportTests
         }
 
         static NavigationCellAddress CarrierCell(int x) => new(MapId, new VoxelIndex(x + 4, 0, 5));
+    }
+
+    [Fact]
+    public void SideView_BoundedSupportShouldDropStaleCarryAndContinueGravityUntilRecovery()
+    {
+        using var world = new GridWorld();
+        using var navigation = TrailblazerWorldContext.Attach(world);
+        using var physics = GravitasWorldContext.Attach(world);
+        PublishFloorMap(world, navigation, physics);
+        LSAABBoxCollider2D floor = AddBox(physics, Vector2d.Zero, new Vector2d(9, 1));
+        Vector2d standing = Vector2d.Forward * (Fixed64.One + Fixed64.Half);
+        Vector2d start = standing + Vector2d.Forward * Fixed64.FromFraction(1, 8);
+        SolidBody2D body = CreateCapsule(physics, start, Standing);
+        using var navigator = CreateNavigator(navigation, body, Standing,
+            collider => ReferenceEquals(collider, floor) ? (19, 1L) : null);
+        var scratch = new PhysicsQueryScratch(128, 16);
+
+        Action missingScratch = () => navigator.ConfigureSupportQueryBudget(SupportBudget, null!);
+        missingScratch.Should().Throw<ArgumentNullException>().WithParameterName("scratch");
+        navigator.ConfigureSupportQueryBudget(SupportBudget, scratch);
+        navigator.RefreshSupport();
+        navigator.IsGrounded.Should().BeTrue();
+        navigator.Support!.Value.Carrier!.Value.StableId.Should().Be(19);
+        navigator.LastSupportQueryExecutionStatus.Should().Be(PhysicsQueryExecutionStatus.Completed);
+        navigator.LastSupportQueryWork!.Value.Discovery.Should().BeGreaterThan(0UL);
+
+        navigator.ConfigureSupportQueryBudget(default, scratch);
+        navigator.LastSupportQueryExecutionStatus.Should().BeNull();
+        navigator.LastSupportQueryWork.Should().BeNull();
+        navigation.Simulate();
+        physics.Simulate();
+        navigator.PrepareFrameMotion();
+        Action configure = () => navigator.ConfigureSupportQueryBudget(SupportBudget, scratch);
+        configure.Should().Throw<InvalidOperationException>();
+        Action clear = navigator.ClearSupportQueryBudget;
+        clear.Should().Throw<InvalidOperationException>();
+        physics.LateSimulate();
+        navigator.CommitFrameMotion();
+        navigation.LateSimulate();
+        AssertUnavailable(start);
+
+        MoveFloor(Fixed64.One);
+        AdvanceRider(navigation, physics, navigator);
+        AssertUnavailable(start - Vector2d.Forward * Fixed64.FromFraction(1, 16));
+        navigator.Velocity.Should().Be(-Vector2d.Forward);
+
+        navigator.ConfigureSupportQueryBudget(SupportBudget, scratch);
+        AdvanceRider(navigation, physics, navigator);
+        AssertAcceptedPose(navigator, standing);
+        navigator.IsGrounded.Should().BeTrue();
+        navigator.Support!.Value.Carrier!.Value.Pose.Center.Should().Be(Vector2d.Right);
+        navigator.LastSupportQueryExecutionStatus.Should().Be(PhysicsQueryExecutionStatus.Completed);
+
+        MoveFloor(Fixed64.Two);
+        AdvanceRider(navigation, physics, navigator);
+        AssertAcceptedPose(navigator, standing + Vector2d.Right);
+
+        floor.Deactivate();
+        AdvanceRider(navigation, physics, navigator);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
+        navigator.LastSupportQueryExecutionStatus.Should().Be(PhysicsQueryExecutionStatus.Completed);
+
+        navigator.ClearSupportQueryBudget();
+        navigator.RefreshSupport();
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
+        navigator.LastSupportQueryExecutionStatus.Should().BeNull();
+        navigator.LastSupportQueryWork.Should().BeNull();
+
+        void AssertUnavailable(Vector2d accepted)
+        {
+            AssertAcceptedPose(navigator, accepted);
+            navigator.SupportStatus.Should().Be(NavigationSupportStatus.Unavailable);
+            navigator.IsGrounded.Should().BeFalse();
+            navigator.Support.Should().BeNull();
+            navigator.LastSupportQueryExecutionStatus.Should().Be(PhysicsQueryExecutionStatus.WorkBudgetExceeded);
+            navigator.LastSupportQueryWork.Should().Be(default(PhysicsQueryWork));
+        }
+
+        void MoveFloor(Fixed64 x)
+        {
+            floor.Agent.Transform.TrySetWorldPosition(new Vector3d(x, HostY, Fixed64.Zero)).Should().BeTrue();
+            floor.Simulate();
+        }
     }
 
     [Fact]
@@ -353,7 +446,7 @@ public sealed class GravitasNavigator2DSupportTests
         body.Collider.Should().BeSameAs(originalCollider);
         body.Collider.Should().BeOfType<LSCapsuleCollider2D>().Which.Height.Should().Be((Fixed64)2);
         body.Collider.Material.Should().Be(PhysicsMaterial.Frictionless);
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.Unavailable);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.Unavailable);
 
         navigator.RefreshSupport();
         navigator.Support!.Value.Point.Should().Be(foot);

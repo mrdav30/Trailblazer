@@ -172,6 +172,13 @@ Public APIs should be explicit, difficult to misuse, and documented with concise
 XML summaries. Breaking changes are acceptable only when they intentionally
 improve the long-term contract.
 
+For 2D/3D parity, first reuse existing types and logic whose contracts match.
+Share enums, policies, validation, and algorithms at their common owner when
+their semantics are dimension-independent, as with `NavigationSupportStatus`.
+Keep dimension-specific code where geometry, state, or lifecycle requires it.
+Dimensional naming or matching file structure alone does not justify duplication.
+Verify shared changes through both dimensions' production callers.
+
 When changing public behavior:
 
 1. add or update behavior tests;

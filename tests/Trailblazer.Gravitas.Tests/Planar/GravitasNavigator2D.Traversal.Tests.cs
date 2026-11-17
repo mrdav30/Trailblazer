@@ -36,7 +36,7 @@ public sealed class GravitasNavigator2DTraversalTests
         replay.Entries.Should().Equal(first.Entries);
     }
 
-    private static (List<(NavigationPose2D Pose, Vector2d Velocity, NavigationSupportStatus2D Support,
+    private static (List<(NavigationPose2D Pose, Vector2d Velocity, NavigationSupportStatus Support,
         bool Grounded, bool ActionPending, NavigationCellAddress? Cell)> Frames,
         List<(int Frame, NavigationCellAddress? Address, TraversalMedium? Medium)> Entries) Climb(PathAlgorithm algorithm)
     {
@@ -75,7 +75,7 @@ public sealed class GravitasNavigator2DTraversalTests
             new NavigationMotorSettings2D((Fixed64)4, Fixed64.Zero, (Fixed64)16, Fixed64.Zero),
             supportProbeDistance: Fixed64.Quarter);
 
-        var frames = new List<(NavigationPose2D, Vector2d, NavigationSupportStatus2D, bool, bool, NavigationCellAddress?)>();
+        var frames = new List<(NavigationPose2D, Vector2d, NavigationSupportStatus, bool, bool, NavigationCellAddress?)>();
         var entries = new List<(int Frame, NavigationCellAddress? Address, TraversalMedium? Medium)>();
         navigator.CommittedCellChanged += state => entries.Add((frames.Count, state?.Address, state?.Medium));
         navigator.RefreshSupport();
@@ -125,7 +125,7 @@ public sealed class GravitasNavigator2DTraversalTests
             navigator.Pose.Center.Should().Be(center);
             AssertHeld();
         }
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.NoSupport);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NoSupport);
         for (int i = 1; i <= 4; i++)
         {
             var center = landingCenter - Vector2d.Right * ((4 - i) * Fixed64.Quarter);

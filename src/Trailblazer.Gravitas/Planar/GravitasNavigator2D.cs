@@ -34,6 +34,7 @@ public sealed class GravitasNavigator2D : Navigator2D
     private long _preparedPhysicsFrame;
     private ChronicleTimestamp _preparedPhysicsTime;
     private uint _expectedDistributionVersion;
+    private SupportQueryPolicy _supportQuery;
 
     /// <summary>Attaches to an active kinematic body with a centered circle or upright capsule.</summary>
     /// <param name="context">The navigation context sharing the body's GridWorld.</param>
@@ -66,6 +67,27 @@ public sealed class GravitasNavigator2D : Navigator2D
     /// <summary>Gets the host-owned kinematic body.</summary>
     public SolidBody2D Body { get; }
 
+    /// <summary>Gets the execution status of the last bounded support probe, if one was issued.</summary>
+    public PhysicsQueryExecutionStatus? LastSupportQueryExecutionStatus => _supportQuery.ExecutionStatus;
+
+    /// <summary>Gets the work reported by the last bounded support probe, if one was issued.</summary>
+    public PhysicsQueryWork? LastSupportQueryWork => _supportQuery.Work;
+
+    /// <summary>Opts into bounded side-view support probes with caller-owned scratch.</summary>
+    /// <remarks>Call between motion operations. Scratch may be shared across sequential probes.</remarks>
+    public void ConfigureSupportQueryBudget(PhysicsQueryBudget budget, PhysicsQueryScratch scratch)
+    {
+        EnsureIdle();
+        _supportQuery.Configure(budget, scratch);
+    }
+
+    /// <summary>Restores synchronous support sampling and releases the scratch reference.</summary>
+    public void ClearSupportQueryBudget()
+    {
+        EnsureIdle();
+        _supportQuery = default;
+    }
+
     /// <inheritdoc/>
     protected override void SubmitMotionTarget(in NavigationMotionRequest2D request)
     {
@@ -96,7 +118,7 @@ public sealed class GravitasNavigator2D : Navigator2D
 
         var accepted = new NavigationPose2D(Body.Position, Body.Rotation);
         if (NavigationProfile.Mode == NavigationMode2D.TopDown)
-            return new NavigationMotionResult2D(accepted, NavigationSupportStatus2D.NotApplicable);
+            return new NavigationMotionResult2D(accepted, NavigationSupportStatus.NotApplicable);
 
         _carrierHit = default;
         ChronicleGuard.ThrowIfTrue(!FixedSegment2d.TryGetCenteredAxisEndpoint(accepted.Center, Vector2d.Forward,
@@ -105,12 +127,12 @@ public sealed class GravitasNavigator2D : Navigator2D
 
         var probe = new Physics2DSupportQuery(Body.Collider, lowerCap, NavigationProfile.Radius, Vector2d.Forward,
             _supportProbeDistance, NavigationProfile.MinimumSupportNormalDot, _supportLayers);
-        var status = physics.Query2D.QuerySupport(probe, out var support);
-        if (status == Physics2DSupportQueryStatus.NoSupport)
-            return new NavigationMotionResult2D(accepted, NavigationSupportStatus2D.NoSupport);
-        if ((status != Physics2DSupportQueryStatus.Found) | (support.SampledFrame != physics.FrameCount)
+        var status = QuerySupport(probe, out var support);
+        if (status == NavigationSupportStatus.NoSupport)
+            return new NavigationMotionResult2D(accepted, NavigationSupportStatus.NoSupport);
+        if ((status != NavigationSupportStatus.Found) | (support.SampledFrame != physics.FrameCount)
             | !support.IsCurrentLifetime | !support.Hit.TryGetPoint(out Vector2d point))
-            return new NavigationMotionResult2D(accepted, NavigationSupportStatus2D.Unavailable);
+            return new NavigationMotionResult2D(accepted, NavigationSupportStatus.Unavailable);
 
         var collider = support.Hit.Collider;
         NavigationCarrier2D? carrier = null;
@@ -124,7 +146,7 @@ public sealed class GravitasNavigator2D : Navigator2D
             _carrierHit = support;
         }
 
-        return new NavigationMotionResult2D(accepted, NavigationSupportStatus2D.Found,
+        return new NavigationMotionResult2D(accepted, NavigationSupportStatus.Found,
             new NavigationSupport2D(point, support.Hit.Normal, collider.Material.DynamicFriction, carrier));
     }
 
@@ -142,7 +164,31 @@ public sealed class GravitasNavigator2D : Navigator2D
     }
 
     /// <inheritdoc/>
-    protected override void ClearHostSupport() => _carrierHit = default;
+    protected override void ClearHostSupport()
+    {
+        _carrierHit = default;
+        _supportQuery.ResetDiagnostics();
+    }
+
+    private NavigationSupportStatus QuerySupport(in Physics2DSupportQuery probe, out Physics2DSupportHit support)
+    {
+        var query = Body.Context.Query2D;
+        if (_supportQuery.Scratch is not { } scratch)
+            return query.QuerySupport(probe, out support) switch
+            {
+                Physics2DSupportQueryStatus.Found => NavigationSupportStatus.Found,
+                Physics2DSupportQueryStatus.NoSupport => NavigationSupportStatus.NoSupport,
+                _ => NavigationSupportStatus.Unavailable
+            };
+
+        var status = query.QuerySupport(probe, _supportQuery.Budget, scratch, out var sampled, out var work);
+        _supportQuery.Record(status, work);
+        support = sampled.GetValueOrDefault();
+        if (status != PhysicsQueryExecutionStatus.Completed)
+            return NavigationSupportStatus.Unavailable;
+
+        return sampled.HasValue ? NavigationSupportStatus.Found : NavigationSupportStatus.NoSupport;
+    }
 
     /// <inheritdoc/>
     protected override bool TryCommitPhysicalProfileReplacement(NavigationAgentProfile2D replacement,

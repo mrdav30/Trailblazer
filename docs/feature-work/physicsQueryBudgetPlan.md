@@ -285,13 +285,14 @@ registration proof across frames.
 On each optional adapter, `ConfigureSupportQueryBudget(PhysicsQueryBudget budget,
 PhysicsQueryScratch scratch)` opts into one bounded probe per applicable commit.
 `ClearSupportQueryBudget()` restores synchronous sampling and releases the
-adapter's scratch reference. Both are between-frame changes. Expose nullable
+adapter's scratch reference. Both are between-motion changes. Explicit planar
+`RefreshSupport()` uses the same policy. Expose nullable
 `LastSupportQueryExecutionStatus` and `LastSupportQueryWork` on the adapters so
 hosts can distinguish no bounded probe this frame from a completed miss or an
 incomplete sample. Reset these diagnostics on reset, load, configuration change,
 and frames without a bounded probe. In 3D, `SupportStatus` exposes the sample
-separately from grounded state. Add `NavigationSupportStatus3D` with the same
-values as `NavigationSupportStatus2D`, and keep the 2D API. Use `NotApplicable`
+separately from grounded state. Both dimensions use the core
+`NavigationSupportStatus` enum. Use `NotApplicable`
 before any 3D sample. With bounded 3D sampling, a completed sweep that misses or
 fails the adapter's normal test gives `NoSupport`. An incomplete sweep or
 unrepresentable witness gives `Unavailable`.
@@ -466,7 +467,7 @@ separate files and dimensional code under its existing owner.
 
 ## Phase 3 - Adapter Adoption And Closeout
 
-- [ ] Integrate the reviewed explicit policy in 2D and 3D adapters, preserving
+- [x] Integrate the reviewed explicit policy in 2D and 3D adapters, preserving
   existing caller behavior. Test repeated incomplete support, recovery, moving
   carriers, gravity and all-prepare/one-resolve/all-commit ownership. Report
   actor count and query counts per frame alongside per-call budgets.
@@ -519,6 +520,66 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 3 - Opt-in adapter support
+
+Both adapters now use the same host-owned budget policy and preserve their
+synchronous default. The 2D adapter applies the policy on an explicit support
+refresh as well as on side-view commit. The 3D adapter checks the foot and
+probe origin separately before starting bounded work. The same witness,
+normal, and carrier translation serves bounded and synchronous hits within
+each dimension. `SupportStatus` and the bounded status/work are separate from
+the grounded decision and are transient. A load uses the host policy already
+set on that navigator and clears prior diagnostics. Both dimensions expose
+the core `NavigationSupportStatus` enum with the same byte values. The shared
+type replaces the dimension-specific names in the public support contracts.
+
+Two actors can prepare and commit against one resolved 3D frame with the same
+scratch. A one-below geometry allowance on the rider clears its carrier and
+retains the accepted pose, while the second actor's probe still completes.
+The following frames continue ordinary gravity and sample support once each.
+The 2D fixture also checks repeated exhaustion, gravity, and exact recovery
+on a moving surface. Completed misses and unavailable samples stay distinct.
+The edge witness fixture demonstrates that an upstream completed hit can have
+an unmaterializable world point. It leaves the bounded adapter unavailable.
+Guided arrival and action completion still require their existing support
+proofs. Policy changes are rejected during prepared motion and steering
+callbacks. Scratch remains outside snapshots, with no record schema change.
+
+Moving-carrier fixtures compare the same synchronous and bounded poses,
+velocities, rotations, and attachment state through checkpoint continuation
+in JSON and, in Standard, MemoryPack. The Windows and Ubuntu x64 coordinated
+source suites passed 3,786 core / 130 adapter tests in `Release` and 3,672
+core / 121 adapter tests in `ReleaseLean`. All four exact coverage reports
+contain both assemblies and cover 36,134 lines, 15,847 branches, and 3,624
+methods. Both library targets built and DocFX passed with warnings as errors.
+The Ubuntu run used the exact hosted
+dependency closure, including Gravitas `becdd5d6`, GridForge `24ca0f51`, and
+FixedMathSharp `3da3a8ad`. Gravitas `2.0.1` packages lack the bounded APIs.
+Released Standard/Lean verification follows the upstream package releases.
+
+The matched Windows x64 `Release` control uses the committed `43d9859`
+adapter and the new adapter against the same upstream binaries. Each fixture
+has one actor and one support probe per full host frame (2D at 16 Hz and 3D
+at 32 Hz). Four processes per lane alternate revision and dimension order
+with tiered compilation disabled on .NET 10.0.10. Each uses seven batches
+of 3,000 invocations. The planar invocation is a two-frame motion pair.
+All lanes pass the same floor and accepted-pose oracles and allocate zero
+bytes per warm frame. The `8,192/8,192/8,192` allowance completes using
+`12/5/175` work in 2D and `56/53/58` in 3D (discovery/candidates/geometry).
+
+| Full step | Prior synchronous | Current synchronous | Current bounded |
+| --- | ---: | ---: | ---: |
+| 2D floor | 62.026 μs | 62.207 μs | 63.474 μs |
+| 3D floor | 24.074 μs | 24.142 μs | 22.372 μs |
+
+Keeping bounded preparation in the shared sampler raised the synchronous 3D
+process medians by roughly 0.4–0.6 μs in two runs. Separating it from
+the shared hit translation brought the default back within the committed
+baseline's process range. The final comparisons establish the one-actor floor
+control. Crowded scenes, readiness changes, and bounded posture remain the
+next checks. Inputs, binary hashes, replays, and raw timings are in
+`artifacts/query-budget-phase3-support`.
 
 ### Phase 2 - Native shapes, topology, and posture
 

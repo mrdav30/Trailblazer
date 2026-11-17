@@ -22,7 +22,7 @@ public sealed partial class Navigator2DSupportTests
     {
         using var context = Scene();
         using var host = new Host(context);
-        host.SupportStatus.Should().Be(NavigationSupportStatus2D.Unavailable);
+        host.SupportStatus.Should().Be(NavigationSupportStatus.Unavailable);
         host.ReadCount.Should().Be(0);
         host.Sample(Ground);
         host.RefreshSupport();
@@ -102,9 +102,9 @@ public sealed partial class Navigator2DSupportTests
     }
 
     [Theory]
-    [InlineData(NavigationSupportStatus2D.NoSupport)]
-    [InlineData(NavigationSupportStatus2D.Unavailable)]
-    public void LosingSupportFallsAndNeverReusesThePreviousSample(NavigationSupportStatus2D status)
+    [InlineData(NavigationSupportStatus.NoSupport)]
+    [InlineData(NavigationSupportStatus.Unavailable)]
+    public void LosingSupportFallsAndNeverReusesThePreviousSample(NavigationSupportStatus status)
     {
         using var context = Scene();
         using var host = new Host(context);
@@ -182,7 +182,7 @@ public sealed partial class Navigator2DSupportTests
     {
         using var context = Scene();
         using var host = new Host(context);
-        host.Result = new NavigationMotionResult2D(new NavigationPose2D(Vector2d.Right, Fixed64.Zero), NavigationSupportStatus2D.NoSupport);
+        host.Result = new NavigationMotionResult2D(new NavigationPose2D(Vector2d.Right, Fixed64.Zero), NavigationSupportStatus.NoSupport);
         host.Invoking(h => h.RefreshSupport()).Should().Throw<ArgumentException>();
         host.Pose.Center.Should().Be(Vector2d.Zero);
         context.Simulate();
@@ -204,7 +204,7 @@ public sealed partial class Navigator2DSupportTests
         host.Invoking(h => h.PrepareFrameMotion(new NavigationInput2D(null, false, Vector2d.Forward)))
             .Should().Throw<ArgumentException>();
         host.PrepareFrameMotion(Vector2d.Zero);
-        host.Result = new NavigationMotionResult2D(new NavigationPose2D(Vector2d.Zero, Fixed64.One), NavigationSupportStatus2D.NoSupport);
+        host.Result = new NavigationMotionResult2D(new NavigationPose2D(Vector2d.Zero, Fixed64.One), NavigationSupportStatus.NoSupport);
         host.Invoking(h => h.CommitFrameMotion()).Should().Throw<ArgumentException>();
         host.Pose.RotationRadians.Should().Be(Fixed64.Zero);
     }
@@ -250,7 +250,7 @@ public sealed partial class Navigator2DSupportTests
         internal bool UseBaseCarrierLookup { get; set; }
         internal void Sample(NavigationSupport2D? support) => Accept(Pose.Center, support);
         internal void Accept(Vector2d center, NavigationSupport2D? support) => Result = new NavigationMotionResult2D(
-            new NavigationPose2D(center, Fixed64.Zero), support.HasValue ? NavigationSupportStatus2D.Found : NavigationSupportStatus2D.NoSupport, support);
+            new NavigationPose2D(center, Fixed64.Zero), support.HasValue ? NavigationSupportStatus.Found : NavigationSupportStatus.NoSupport, support);
         protected override void SubmitMotionTarget(in NavigationMotionRequest2D request) => Request = request;
         protected override NavigationMotionResult2D ReadAcceptedMotion(NavigationMotionRequest2D? request)
         {

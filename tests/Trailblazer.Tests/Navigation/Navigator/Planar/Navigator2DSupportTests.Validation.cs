@@ -99,13 +99,13 @@ public sealed partial class Navigator2DSupportTests
         create.Should().Throw<ArgumentException>();
         create = () => new NavigationSupport2D(default, Vector2d.Forward, Fixed64.One, default(NavigationCarrier2D));
         create.Should().Throw<ArgumentException>();
-        create = () => new NavigationMotionResult2D(default, NavigationSupportStatus2D.Found, default(NavigationSupport2D));
+        create = () => new NavigationMotionResult2D(default, NavigationSupportStatus.Found, default(NavigationSupport2D));
         create.Should().Throw<ArgumentException>();
-        create = () => new NavigationMotionResult2D(default, NavigationSupportStatus2D.Found);
+        create = () => new NavigationMotionResult2D(default, NavigationSupportStatus.Found);
         create.Should().Throw<ArgumentException>();
-        create = () => new NavigationMotionResult2D(default, NavigationSupportStatus2D.NoSupport, Ground);
+        create = () => new NavigationMotionResult2D(default, NavigationSupportStatus.NoSupport, Ground);
         create.Should().Throw<ArgumentException>();
-        create = () => new NavigationMotionResult2D(default, (NavigationSupportStatus2D)99);
+        create = () => new NavigationMotionResult2D(default, (NavigationSupportStatus)99);
         create.Should().Throw<ArgumentException>();
     }
 
@@ -117,7 +117,7 @@ public sealed partial class Navigator2DSupportTests
         host.Sample(Ground);
         host.OnRead = context.Reset;
         host.Invoking(h => h.RefreshSupport()).Should().Throw<InvalidOperationException>();
-        host.SupportStatus.Should().Be(NavigationSupportStatus2D.Unavailable);
+        host.SupportStatus.Should().Be(NavigationSupportStatus.Unavailable);
         host.Pose.Center.Should().Be(Vector2d.Zero);
     }
 
@@ -148,11 +148,11 @@ public sealed partial class Navigator2DSupportTests
         host.Request.Target.RotationRadians.Should().Be(Fixed64.Quarter);
         host.Pose.RotationRadians.Should().Be(Fixed64.Zero);
         host.Result = new NavigationMotionResult2D(new NavigationPose2D(host.Request.Target.Center, Fixed64.FromFraction(1, 8)),
-            NavigationSupportStatus2D.NotApplicable);
+            NavigationSupportStatus.NotApplicable);
         host.CommitFrameMotion();
         context.LateSimulate();
         host.Facing.Should().Be(Vector2d.Rotate(Vector2d.Right, Fixed64.FromFraction(1, 8)));
-        host.SupportStatus.Should().Be(NavigationSupportStatus2D.NotApplicable);
+        host.SupportStatus.Should().Be(NavigationSupportStatus.NotApplicable);
         context.Simulate();
         host.PrepareFrameMotion(Vector2d.Zero);
         host.Accept(host.Pose.Center, Ground);

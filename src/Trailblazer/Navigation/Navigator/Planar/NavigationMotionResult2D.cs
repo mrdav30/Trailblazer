@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation;
 public readonly struct NavigationMotionResult2D
 {
     /// <summary>Creates an accepted result. Only Found carries a support snapshot.</summary>
-    public NavigationMotionResult2D(NavigationPose2D accepted, NavigationSupportStatus2D supportStatus,
+    public NavigationMotionResult2D(NavigationPose2D accepted, NavigationSupportStatus supportStatus,
         NavigationSupport2D? support = null)
     {
         Accepted = accepted;
@@ -23,15 +23,15 @@ public readonly struct NavigationMotionResult2D
     public NavigationPose2D Accepted { get; }
 
     /// <summary>Gets the freshness and applicability of the support sample.</summary>
-    public NavigationSupportStatus2D SupportStatus { get; }
+    public NavigationSupportStatus SupportStatus { get; }
 
     /// <summary>Gets the physical support witness, only for Found.</summary>
     public NavigationSupport2D? Support { get; }
 
     internal void Validate()
     {
-        ChronicleGuard.ThrowIfArgument(SupportStatus > NavigationSupportStatus2D.Unavailable
-            || (SupportStatus == NavigationSupportStatus2D.Found) != Support.HasValue, nameof(SupportStatus));
+        ChronicleGuard.ThrowIfArgument(SupportStatus > NavigationSupportStatus.Unavailable
+            || (SupportStatus == NavigationSupportStatus.Found) != Support.HasValue, nameof(SupportStatus));
         Support?.Validate();
     }
 }

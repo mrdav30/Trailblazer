@@ -11,6 +11,7 @@ using Chronicler.Diagnostics;
 using FixedMathSharp;
 using Gravitas;
 using Gravitas.Colliders;
+using Gravitas.Queries;
 using Gravitas.Support;
 using Trailblazer.Pathing;
 
@@ -37,6 +38,8 @@ public sealed class GravitasNavigator3D : Navigator
     private FixedQuaternion _requestedRotation = FixedQuaternion.Identity;
     private long _preparedFrame = -1;
     private bool _hasPreparedFrame;
+    private bool _preparingFrame;
+    private SupportQueryPolicy _supportQuery;
 
     /// <summary>
     /// Creates an adapter bound to contexts that share the same GridForge world.
@@ -92,6 +95,30 @@ public sealed class GravitasNavigator3D : Navigator
     /// <summary>Gets the physical layers sampled for support after resolution.</summary>
     public PhysicsLayerMask SupportLayers { get; }
 
+    /// <summary>Gets the physical support sample from the last accepted motion commit.</summary>
+    public NavigationSupportStatus SupportStatus { get; private set; }
+
+    /// <summary>Gets the execution status of the last bounded support probe, if one was issued.</summary>
+    public PhysicsQueryExecutionStatus? LastSupportQueryExecutionStatus => _supportQuery.ExecutionStatus;
+
+    /// <summary>Gets the work reported by the last bounded support probe, if one was issued.</summary>
+    public PhysicsQueryWork? LastSupportQueryWork => _supportQuery.Work;
+
+    /// <summary>Opts into bounded support probes with caller-owned scratch.</summary>
+    /// <remarks>Call between motion operations. Scratch may be shared across sequential probes.</remarks>
+    public void ConfigureSupportQueryBudget(PhysicsQueryBudget budget, PhysicsQueryScratch scratch)
+    {
+        EnsureSupportQueryPolicyMutable();
+        _supportQuery.Configure(budget, scratch);
+    }
+
+    /// <summary>Restores synchronous support sampling and releases the scratch reference.</summary>
+    public void ClearSupportQueryBudget()
+    {
+        EnsureSupportQueryPolicyMutable();
+        _supportQuery = default;
+    }
+
     /// <inheritdoc/>
     public override void BindContext(TrailblazerWorldContext context)
     {
@@ -107,12 +134,21 @@ public sealed class GravitasNavigator3D : Navigator
     public override void Simulate()
     {
         ChronicleGuard.ThrowIfTrue(
-            _hasPreparedFrame,
+            _preparingFrame || _hasPreparedFrame,
             nameof(GravitasNavigator3D),
             "The current frame is already prepared and must be committed or reset.");
         ValidateBody();
 
-        base.Simulate();
+        // Steering can invoke host callbacks before motor traversal opens.
+        _preparingFrame = true;
+        try
+        {
+            base.Simulate();
+        }
+        finally
+        {
+            _preparingFrame = false;
+        }
         Vector3d requestedPosition = Position + _positionDelta + _locomotionDisplacement;
         FixedQuaternion requestedRotation = GetPendingFrameRotation();
         ChronicleGuard.ThrowIfTrue(
@@ -150,7 +186,10 @@ public sealed class GravitasNavigator3D : Navigator
             _supportProbeRadius,
             _supportProbeOffset,
             _supportProbeDistance,
-            _carrierIdResolver);
+            _carrierIdResolver,
+            ref _supportQuery,
+            out var supportStatus);
+        SupportStatus = supportStatus;
 
         _positionDelta = acceptedPosition - Position;
         _locomotionDisplacement = Vector3d.Zero;
@@ -179,9 +218,10 @@ public sealed class GravitasNavigator3D : Navigator
             return;
         }
 
-        SetAirborne(
-            surfaceLevel: FootPosition.Y,
-            updateMotorState: false);
+        if (SupportStatus == NavigationSupportStatus.Unavailable)
+            SetTrekCondition(medium: TraversalMedium.Gas, surfaceLevel: FootPosition.Y);
+        else
+            SetAirborne(surfaceLevel: FootPosition.Y, updateMotorState: false);
     }
 
     /// <inheritdoc/>
@@ -248,6 +288,8 @@ public sealed class GravitasNavigator3D : Navigator
     private void ClearPreparedMotion()
     {
         _contact = default;
+        SupportStatus = NavigationSupportStatus.NotApplicable;
+        _supportQuery.ResetDiagnostics();
         _requestedPosition = Vector3d.Zero;
         _requestedRotation = FixedQuaternion.Identity;
         _hasPreparedFrame = false;
@@ -265,4 +307,8 @@ public sealed class GravitasNavigator3D : Navigator
             nameof(SolidBody),
             "GravitasNavigator3D requires a kinematic body.");
     }
+
+    private void EnsureSupportQueryPolicyMutable() => ChronicleGuard.ThrowIfTrue(
+        _preparingFrame || _hasPreparedFrame || Motor?.TraversalInProgress == true,
+        message: "Commit the prepared motion before changing the support query policy.");
 }

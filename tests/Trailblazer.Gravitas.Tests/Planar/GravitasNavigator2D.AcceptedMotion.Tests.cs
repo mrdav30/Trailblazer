@@ -3,6 +3,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
+using Gravitas.Queries;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
@@ -55,7 +56,7 @@ public sealed partial class GravitasNavigator2DAcceptedMotionTests
         navigator.Pose.Center.Should().Be(accepted);
         navigator.Pose.RotationRadians.Should().Be(body.Rotation);
         navigator.Velocity.Should().Be(Vector2d.Right * (Fixed64)48);
-        navigator.SupportStatus.Should().Be(NavigationSupportStatus2D.NotApplicable);
+        navigator.SupportStatus.Should().Be(NavigationSupportStatus.NotApplicable);
         navigator.LastCommittedCell!.Value.Address.Should().Be(new NavigationCellAddress(MapId, new VoxelIndex(15, 0, 16)));
     }
 
@@ -75,6 +76,7 @@ public sealed partial class GravitasNavigator2DAcceptedMotionTests
             new Guid("d42827f4-46e6-41d6-86ba-145eeec65a41"), (Fixed64)16);
         using var second = CreateNavigator(navigation, secondBody,
             new Guid("d42827f4-46e6-41d6-86ba-145eeec65a42"), (Fixed64)16);
+        first.ConfigureSupportQueryBudget(default, new PhysicsQueryScratch(0, 0));
 
         navigation.Simulate();
         physics.Simulate();
@@ -96,6 +98,9 @@ public sealed partial class GravitasNavigator2DAcceptedMotionTests
         second.Pose.Center.Should().Be(secondBody.Position);
         first.Pose.RotationRadians.Should().Be(firstBody.Rotation);
         second.Pose.RotationRadians.Should().Be(secondBody.Rotation);
+        first.SupportStatus.Should().Be(NavigationSupportStatus.NotApplicable);
+        first.LastSupportQueryExecutionStatus.Should().BeNull();
+        first.LastSupportQueryWork.Should().BeNull();
         second.Pose.RotationRadians.Should().BeGreaterThan(Fixed64.Zero);
         firstBody.Agent.Transform.WorldPosition.Y.Should().Be(HostY);
         secondBody.Agent.Transform.WorldPosition.Y.Should().Be(HostY);

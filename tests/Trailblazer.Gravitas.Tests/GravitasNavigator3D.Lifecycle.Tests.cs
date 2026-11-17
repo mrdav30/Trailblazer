@@ -2,6 +2,7 @@ using System;
 using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
+using Gravitas.Queries;
 using Gravitas.Support;
 using GridForge.Spatial;
 using Trailblazer.Gravitas.Tests.Support;
@@ -273,6 +274,9 @@ public sealed class GravitasNavigator3DLifecycleTests
             Fixed64.Quarter);
         uninitialized.Body.Should().BeSameAs(actor.Body);
         uninitialized.SupportLayers.Should().Be(PhysicsLayerMask.FromLayer(3));
+        uninitialized.ConfigureSupportQueryBudget(default, new PhysicsQueryScratch(0, 0));
+        uninitialized.ClearSupportQueryBudget();
+        uninitialized.LastSupportQueryExecutionStatus.Should().BeNull();
 
         Action resetBeforeSetup = uninitialized.Reset;
         resetBeforeSetup.Should().NotThrow();

@@ -185,6 +185,36 @@ Requested/accepted pose divergence is the adapter's obstruction signal. Generic
 collider callbacks are not treated as obstructions because they cannot
 distinguish a supporting floor from a blocking wall.
 
+### Opt into bounded support sampling
+
+Both adapters use synchronous support sampling by default. To bound the work of
+each support probe in a pure 2D or pure 3D world, call
+`ConfigureSupportQueryBudget(budget, scratch)` between motion operations. The
+host supplies a `Gravitas.Queries.PhysicsQueryBudget` and a
+`Gravitas.Queries.PhysicsQueryScratch`. Reuse the scratch across sequential
+commits on the simulation thread. `ClearSupportQueryBudget()` restores
+synchronous sampling and releases the adapter's scratch reference.
+
+Each applicable commit issues one probe after Gravitas resolves motion.
+Explicit planar `RefreshSupport()` uses the same policy. Top-down actors issue
+no support probe. A bounded query can report `WorldNotReady` after topology
+changes. Advance the normal host physics step to reconcile the query view.
+`LastSupportQueryExecutionStatus` and `LastSupportQueryWork`
+describe bounded attempts and are null before an attempt and after a policy
+change, reset, or successful load. The host supplies the policy and scratch on
+a new navigator before resuming a bounded replay.
+
+Both adapters expose the core `NavigationSupportStatus` enum through
+`SupportStatus`. For bounded probes it distinguishes a support witness, a
+completed miss, and an unavailable sample. Synchronous 3D sampling reports
+`NoSupport` when its sweep provides no usable witness. An incomplete bounded
+probe leaves the resolved body pose eligible
+for commit. The adapter releases its support and carrier evidence and continues
+the existing airborne motor rules. A later committed frame can reacquire
+support. The adapter issues no automatic retry or synchronous fallback. The
+allowance limits counted work for the individual probe. The rest of the shared
+physics and navigation step has its own costs.
+
 ## Collision and traversal limits
 
 The contract is **stop at a blocker, accept an explicitly requested tangent, and

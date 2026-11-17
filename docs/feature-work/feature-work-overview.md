@@ -38,14 +38,19 @@ instead of burying it in notes.
 - [`Benchmark Signal Hardening`](benchmark-signal-hardening-backlog.md)
   - Reproduce and close confirmed release-relevant signals alongside the owning
     library change. Do not broaden this into speculative optimization work.
-- [Bounded Physics Queries — 2D And 3D](physicsQueryBudgetPlan.md)
-  - Native Gravitas support and posture clearance use caller-owned budgets and
-    scratch. The Phase 2 record covers exact replay, sparse and hex discovery,
-    fixed-storage mesh queries, and matched scale controls.
-  - [Phase 3](physicsQueryBudgetPlan.md#phase-3---adapter-adoption-and-closeout)
-    covers opt-in Trailblazer adapter policy, crowded scenes, and release gates.
-
 ## Recently Completed
+
+- [Bounded Physics Queries — 2D And 3D](done/physicsQueryBudgetPlan.md)
+  - All four phases are complete in the coordinated source stack. Native support
+    and posture clearance use caller-owned work limits and fixed scratch in both
+    dimensions. Adapters retain synchronous defaults, expose incomplete support,
+    and support per-call bounded profile replacement with atomic publication.
+  - Windows/Linux Release and ReleaseLean source suites retain exact core and
+    adapter coverage, matched baseline allocations, and exact posture, crowd and
+    native replay. The [closeout record](done/physicsQueryBudgetPlan.md#phase-3---bounded-posture-and-final-hardening)
+    separates native query costs from navigation and complete-frame costs.
+    Final committed-consumer CI, native ARM64 replay and released-package
+    verification remain coordinated release gates below.
 
 - [First-Class 2D Navigation](done/twoDimensionalNavigationPlan.md)
   - Native top-down and side-view A* and Flow reuse the shared graph, search,
@@ -219,11 +224,10 @@ target is deferred. Keep its existing measurements and reopening criteria in
 the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
 The remaining feature sequence is:
 
-1. Implement bounded physics queries using the contract and baselines from
-   released GridForge 10.1.0 and Gravitas 2.0.1. Release any additional
-   dependencies the implemented bounded path requires.
-2. Verify both workstreams against the final released chain before publishing
-   Trailblazer.
+1. Validate the final committed bounded-query consumer in hosted CI, including
+   native ARM64 replay. Release the changed upstream packages in dependency order.
+2. Verify native 2D navigation and bounded physics queries against the final
+   released Standard/Lean chain before publishing Trailblazer.
 
 The 3D Gravitas integration, navigation hardening, and separately approved
 scheduling/performance work are complete locally. Public release validation
@@ -244,7 +248,8 @@ The cross-stack rules apply throughout:
 ## Coordinated Release Gates
 
 Hardening, acquisition scheduling, LOS phase spreading, certified direct
-visibility, and 3D Gravitas integration are complete locally and archived;
+visibility, 3D Gravitas integration and bounded physics queries are complete
+locally and archived;
 release readiness is a separate cross-stack checkpoint. Do not infer these
 gates passed from exact local coverage, private-package consumers, or benchmark
 results.
@@ -252,6 +257,8 @@ results.
 - [ ] After all active feature work is complete, run Windows/Linux CI in
   Release and ReleaseLean against the exact intended release commit, including
   both library targets and exact reachable coverage.
+- [ ] Run native ARM64 replay for the intended bounded-query dependency chain
+  and compare the exact payloads with the verified x64 lanes.
 - [ ] Release changed dependencies before their consumers, restore package-based
   references and repeat the full test, replay, allocation, coverage and relevant
   benchmark matrix against that final released chain. Select final upstream

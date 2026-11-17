@@ -38,5 +38,8 @@ public enum NavigationProfileReplacementStatus : byte
     GuidanceIncompatible,
 
     /// <summary>The host rejected the corresponding physical body replacement.</summary>
-    PhysicalFitRejected
+    PhysicalFitRejected,
+
+    /// <summary>The host could not complete the physical clearance query.</summary>
+    PhysicalFitUnavailable
 }

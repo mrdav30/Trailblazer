@@ -23,6 +23,22 @@ internal sealed class TestNavigator : Navigator
 
     public Vector3d LastPhysicalReplacementRoot { get; private set; }
 
+    internal NavigationProfileReplacementStatus ReplaceProfileWithCommit(
+        NavigationAgentProfile replacement, bool unavailable)
+    {
+        return TryReplaceNavigationProfile(replacement, Commit);
+
+        NavigationProfileReplacementStatus Commit(NavigationAgentProfile profile, Vector3d position,
+            Action publish, out Exception? failure)
+        {
+            failure = null;
+            if (unavailable)
+                return NavigationProfileReplacementStatus.PhysicalFitUnavailable;
+            return TryCommitPhysicalProfileReplacement(profile, position, publish, out failure)
+                ? NavigationProfileReplacementStatus.Applied : NavigationProfileReplacementStatus.PhysicalFitRejected;
+        }
+    }
+
     public TestNavigator() { }
 
     public TestNavigator(TrailblazerWorldContext context)

@@ -23,7 +23,15 @@ public abstract partial class Navigator2D
     /// Refresh side-view support at the new pose before using it for locomotion.
     /// Notification failures propagate after commitment.
     /// </remarks>
-    public NavigationProfileReplacementStatus TryReplaceNavigationProfile(NavigationAgentProfile2D replacement)
+    public NavigationProfileReplacementStatus TryReplaceNavigationProfile(NavigationAgentProfile2D replacement) =>
+        TryReplaceNavigationProfile(replacement, null);
+
+    /// <summary>Runs the normal replacement transaction with an invocation-specific physical commit.</summary>
+    /// <param name="replacement">The complete replacement profile.</param>
+    /// <param name="commit">The physical commit, or null to use the host override.</param>
+    /// <returns>The navigation preflight or physical transaction outcome.</returns>
+    protected NavigationProfileReplacementStatus TryReplaceNavigationProfile(NavigationAgentProfile2D replacement,
+        NavigationProfileReplacementCommit<NavigationAgentProfile2D, Vector2d>? commit)
     {
         if (_disposed | _context.IsDisposed | !_context.World.IsActive | _busy | _pending.HasValue)
             return NavigationProfileReplacementStatus.UnsafeLifecycle;
@@ -57,7 +65,7 @@ public abstract partial class Navigator2D
         if (!cell.HasValue && _hasIntent)
             return NavigationProfileReplacementStatus.NavigationClearanceRejected;
 
-        return CommitProfileReplacement(replacement, center, grid, voxel, cell, acceptedMap);
+        return CommitProfileReplacement(replacement, center, grid, voxel, cell, acceptedMap, commit);
     }
 
     /// <summary>Commits the complete host-owned envelope and invokes the supplied state publisher synchronously.</summary>
@@ -74,7 +82,8 @@ public abstract partial class Navigator2D
     }
 
     private NavigationProfileReplacementStatus CommitProfileReplacement(NavigationAgentProfile2D replacement,
-        Vector2d center, VoxelGrid? grid, Voxel? voxel, NavigationCommittedCellState? cell, string? acceptedMap)
+        Vector2d center, VoxelGrid? grid, Voxel? voxel, NavigationCommittedCellState? cell, string? acceptedMap,
+        NavigationProfileReplacementCommit<NavigationAgentProfile2D, Vector2d>? commit)
     {
         bool published = false;
         bool open = true;
@@ -82,10 +91,17 @@ public abstract partial class Navigator2D
         _busy = true;
         try
         {
-            bool accepted = TryCommitPhysicalProfileReplacement(replacement, center, Publish, out var physicalFailure);
+            Exception? physicalFailure;
+            NavigationProfileReplacementStatus status;
+            if (commit != null)
+                status = commit(replacement, center, Publish, out physicalFailure);
+            else
+                status = TryCommitPhysicalProfileReplacement(replacement, center, Publish, out physicalFailure)
+                    ? NavigationProfileReplacementStatus.Applied : NavigationProfileReplacementStatus.PhysicalFitRejected;
+            bool accepted = status == NavigationProfileReplacementStatus.Applied;
             ChronicleGuard.ThrowIfTrue(accepted != published, message: "The host must publish exactly once on acceptance.");
             if (!accepted)
-                return NavigationProfileReplacementStatus.PhysicalFitRejected;
+                return status;
             if (navigationFailure != null && physicalFailure != null)
                 throw new AggregateException(navigationFailure, physicalFailure);
             if ((navigationFailure ?? physicalFailure) is Exception failure)

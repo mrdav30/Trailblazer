@@ -11,7 +11,7 @@ Gravitas adapter verifies collision, support, posture, host-executed actions,
 and exact checkpoint replay in both modes. See the
 [released-package closeout](#2026-11-14---released-package-verification-and-closeout)
 for the GridForge 10.1.0 and Gravitas 2.0.1 matrix. Hard-budgeted physics
-queries remain a separate [2D/3D workstream](../physicsQueryBudgetPlan.md).
+queries remain a separate [2D/3D workstream](physicsQueryBudgetPlan.md).
 
 **Original draft baselines:** Trailblazer `cb0d744b76a377807a253f0efa1c480ba169a7e9`
 and Gravitas `6ade2f0bb373665efc5b7b85a3d21d1a371aa936`. The dated execution
@@ -310,7 +310,7 @@ GridForge behavior tests cover the new paths; existing 3D source stays intact.
 Reuse Gravitas's existing synchronous indexed discovery, as the current 3D
 adapter does. Neither dimension inherently requires a caller-supplied work
 ceiling to be deterministic. Hard discovery/geometry budgets and no-growth
-scratch are a separate [2D/3D workstream](../physicsQueryBudgetPlan.md), not an
+scratch are a separate [2D/3D workstream](physicsQueryBudgetPlan.md), not an
 upstream prerequisite for this operation. Do not add hidden default limits or
 discard candidates to imitate a budget.
 
@@ -1601,7 +1601,7 @@ repair.
 Independent source review confirms the missing bounded generation-discovery
 boundary, world-stamp handoff requirement, quadratic convex-work accounting and
 sampling-barrier obligations. The budget-specific findings are now retained in
-the [separate physics query plan](../physicsQueryBudgetPlan.md); current support
+the [separate physics query plan](physicsQueryBudgetPlan.md); current support
 correctness obligations remain in section 2. Grid-change membership
 reconciliation is a source-identified design risk, not a reproduced new runtime
 defect. No issue ID is allocated for these unimplemented feature prerequisites.
@@ -1621,7 +1621,7 @@ the proposed per-query work ceiling. Existing 2D indexed discovery is also
 usable without that stronger guarantee. Deterministic results and caller-set
 work/storage ceilings are distinct contracts.
 
-[Bounded Physics Queries](../physicsQueryBudgetPlan.md) now owns the discovery,
+[Bounded Physics Queries](physicsQueryBudgetPlan.md) now owns the discovery,
 geometry accounting, no-growth scratch and budget-exhaustion design, including
 the upstream GridForge/SwiftCollections investigation. This is not a dependency
 for completing native 2D support/posture. No measured performance defect or new

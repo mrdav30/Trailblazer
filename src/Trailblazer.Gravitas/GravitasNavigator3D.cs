@@ -232,6 +232,69 @@ public sealed class GravitasNavigator3D : Navigator
         out Exception? notificationException)
     {
         notificationException = null;
+        if (!TryGetProfileReplacementGeometry(replacement, out var definition, out var localOffset))
+            return false;
+
+        ValidateBody();
+        ColliderReconfigurationStatus status = _body.TryReconfigureCollider(
+            definition, localOffset, replacementRootPosition, out _, out notificationException,
+            publishSynchronizedState: publishNavigationState);
+        return status is ColliderReconfigurationStatus.Applied or ColliderReconfigurationStatus.Unchanged;
+    }
+
+    /// <summary>Replaces the navigation profile using bounded native physical clearance.</summary>
+    /// <remarks>
+    /// Call between motion operations with caller-owned scratch. Work covers native detached preparation
+    /// and clearance. Navigation preflight, publication, and notifications surround that query.
+    /// An incomplete query preserves state. Notification failures propagate after commitment.
+    /// </remarks>
+    /// <param name="replacement">The complete immutable replacement profile.</param>
+    /// <param name="budget">Native clearance work limits.</param>
+    /// <param name="scratch">Scratch reusable across sequential queries.</param>
+    /// <param name="clearanceStatus">The native result, or null when rejected before the query.</param>
+    /// <param name="work">The native clearance work, including when notifications fail.</param>
+    /// <returns>The complete navigation and physical replacement outcome.</returns>
+    public NavigationProfileReplacementStatus TryReplaceNavigationProfile(NavigationAgentProfile replacement,
+        in PhysicsQueryBudget budget, PhysicsQueryScratch scratch,
+        out PhysicsQueryExecutionStatus? clearanceStatus, out PhysicsQueryWork work)
+    {
+        clearanceStatus = null;
+        work = default;
+        ChronicleGuard.ThrowIfNull(scratch, nameof(scratch));
+        if (_preparingFrame || _hasPreparedFrame)
+            return NavigationProfileReplacementStatus.UnsafeLifecycle;
+
+        PhysicsQueryBudget limits = budget;
+        PhysicsQueryExecutionStatus? observedStatus = null;
+        PhysicsQueryWork observedWork = default;
+        try
+        {
+            return TryReplaceNavigationProfile(replacement, Commit);
+        }
+        finally
+        {
+            clearanceStatus = observedStatus;
+            work = observedWork;
+        }
+
+        NavigationProfileReplacementStatus Commit(NavigationAgentProfile profile, Vector3d position,
+            Action publish, out Exception? failure)
+        {
+            failure = null;
+            if (!TryGetProfileReplacementGeometry(profile, out var definition, out var localOffset))
+                return NavigationProfileReplacementStatus.PhysicalFitRejected;
+            ValidateBody();
+            observedStatus = _body.TryReconfigureCollider(definition, localOffset, position, limits, scratch,
+                out var result, out _, out failure, out observedWork, publish);
+            return ProfileReplacementQueryResult.Resolve(observedStatus.Value, result);
+        }
+    }
+
+    private bool TryGetProfileReplacementGeometry(NavigationAgentProfile replacement,
+        out ColliderShapeDefinition definition, out Vector3d localOffset)
+    {
+        definition = default;
+        localOffset = default;
         KinematicBodyShape shape = replacement.Shape;
         bool hasUnitScale = _body.PositionTransform.TryGetLossyScale(
                 out Vector3d physicalScale)
@@ -248,18 +311,9 @@ public sealed class GravitasNavigator3D : Navigator
             return false;
         }
 
-        Fixed64 localOffsetY = shape.Height * Fixed64.Half
-            - shape.RootToFootOffsetY;
-        ValidateBody();
-        ColliderReconfigurationStatus status = _body.TryReconfigureCollider(
-            ColliderShapeDefinition.Capsule(shape.Radius, shape.Height),
-            Vector3d.Up * localOffsetY,
-            replacementRootPosition,
-            out _,
-            out notificationException,
-            publishSynchronizedState: publishNavigationState);
-        return status is ColliderReconfigurationStatus.Applied
-            or ColliderReconfigurationStatus.Unchanged;
+        localOffset = Vector3d.Up * (shape.Height * Fixed64.Half - shape.RootToFootOffsetY);
+        definition = ColliderShapeDefinition.Capsule(shape.Radius, shape.Height);
+        return true;
     }
 
     /// <inheritdoc/>

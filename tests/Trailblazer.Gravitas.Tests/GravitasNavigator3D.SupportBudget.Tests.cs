@@ -138,6 +138,11 @@ public sealed class GravitasNavigator3DSupportBudgetTests
             Assert.False(navigator.Motor!.TraversalInProgress);
             Assert.Throws<InvalidOperationException>(navigator.Simulate);
             Assert.Throws<InvalidOperationException>(navigator.ClearSupportQueryBudget);
+            Assert.Equal(NavigationProfileReplacementStatus.UnsafeLifecycle,
+                navigator.TryReplaceNavigationProfile(default, Ample, new PhysicsQueryScratch(0, 0),
+                    out var clearanceStatus, out var clearanceWork));
+            Assert.Null(clearanceStatus);
+            Assert.Equal(default(PhysicsQueryWork), clearanceWork);
             invalidPaths++;
         };
         navigator.ApplyGuidedTrekRequest(fixture.CreateQuery());

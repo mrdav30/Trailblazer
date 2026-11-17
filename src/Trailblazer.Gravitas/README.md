@@ -31,6 +31,11 @@ presentation poses never become simulation input. The contexts own independent
 long-lived clocks. Configure matching fixed steps; the adapter neither advances
 time nor resets one context when the other resets.
 
+Both adapters offer opt-in support-query budgets and per-call bounded profile
+clearance with caller-owned scratch. Incomplete support follows the airborne
+motor rules; incomplete profile clearance preserves the live body and profile.
+The integration guide describes query results, work limits, and recovery.
+
 ## Repository development
 
 For coordinated source development, use matching sibling `Chronicler`,

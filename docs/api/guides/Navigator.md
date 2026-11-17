@@ -256,6 +256,8 @@ position, occupancy, and guidance unchanged. In particular:
   represented with the replacement profile;
 - `PhysicalFitRejected` means the host-owned collision shape cannot be changed
   at the foot-preserving candidate root.
+- `PhysicalFitUnavailable` means the host could not complete physical clearance.
+  The bounded Gravitas overload reports its query status and charged work.
 
 `CommittedCellChanged` and capability-loss callbacks run only after the
 replacement is fully committed. Host callback exceptions propagate; they do not

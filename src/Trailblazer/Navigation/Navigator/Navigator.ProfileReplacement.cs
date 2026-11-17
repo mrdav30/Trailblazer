@@ -35,7 +35,14 @@ public abstract partial class Navigator
     /// <param name="replacement">The complete immutable replacement profile.</param>
     /// <returns>The exact replacement outcome.</returns>
     public NavigationProfileReplacementStatus TryReplaceNavigationProfile(
-        NavigationAgentProfile replacement)
+        NavigationAgentProfile replacement) => TryReplaceNavigationProfile(replacement, null);
+
+    /// <summary>Runs the normal replacement transaction with an invocation-specific physical commit.</summary>
+    /// <param name="replacement">The complete replacement profile.</param>
+    /// <param name="commit">The physical commit, or null to use the host override.</param>
+    /// <returns>The navigation preflight or physical transaction outcome.</returns>
+    protected NavigationProfileReplacementStatus TryReplaceNavigationProfile(NavigationAgentProfile replacement,
+        NavigationProfileReplacementCommit<NavigationAgentProfile, Vector3d>? commit)
     {
         if (!IsActive
             || Motor!.TraversalInProgress
@@ -100,17 +107,17 @@ public abstract partial class Navigator
             return NavigationProfileReplacementStatus.NavigationClearanceRejected;
         }
 
-        if (!TryCommitPhysicalProfileReplacement(
-                replacement,
-                replacementPosition,
-                () => CommitNavigationProfileReplacement(
-                    replacement,
-                    replacementPosition,
-                    replacementLastPosition,
-                    replacementQuery,
-                    context),
-                out Exception? physicalNotificationException))
-            return NavigationProfileReplacementStatus.PhysicalFitRejected;
+        Action publish = () => CommitNavigationProfileReplacement(
+            replacement, replacementPosition, replacementLastPosition, replacementQuery, context);
+        Exception? physicalNotificationException;
+        NavigationProfileReplacementStatus status;
+        if (commit != null)
+            status = commit(replacement, replacementPosition, publish, out physicalNotificationException);
+        else
+            status = TryCommitPhysicalProfileReplacement(replacement, replacementPosition, publish, out physicalNotificationException)
+                ? NavigationProfileReplacementStatus.Applied : NavigationProfileReplacementStatus.PhysicalFitRejected;
+        if (status != NavigationProfileReplacementStatus.Applied)
+            return status;
 
         if (physicalNotificationException != null)
             ExceptionDispatchInfo.Capture(physicalNotificationException).Throw();

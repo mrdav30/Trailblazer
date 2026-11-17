@@ -195,12 +195,54 @@ public sealed class GravitasNavigator2D : Navigator2D
         Vector2d replacementCenter, Action publishNavigationState, out Exception? notificationException)
     {
         ValidateBodyAtNavigationPose();
-        var definition = replacement.Mode == NavigationMode2D.TopDown
-            ? ColliderShapeDefinition2D.Circle(replacement.Radius)
-            : ColliderShapeDefinition2D.Capsule(replacement.Radius, replacement.AxisLength + replacement.Radius * (Fixed64)2);
-        return Body.TryReconfigureCollider(definition, Vector2d.Zero, replacementCenter,
+        return Body.TryReconfigureCollider(GetProfileReplacementGeometry(replacement), Vector2d.Zero, replacementCenter,
             out _, out notificationException, publishNavigationState) != ColliderReconfigurationStatus.Blocked;
     }
+
+    /// <summary>Replaces the navigation profile using bounded native physical clearance.</summary>
+    /// <remarks>
+    /// Call between motion operations with caller-owned scratch. Work covers native detached preparation
+    /// and clearance. Navigation preflight, publication, and notifications surround that query.
+    /// An incomplete query preserves state. Notification failures propagate after commitment.
+    /// </remarks>
+    /// <param name="replacement">The complete immutable replacement profile.</param>
+    /// <param name="budget">Native clearance work limits.</param>
+    /// <param name="scratch">Scratch reusable across sequential queries.</param>
+    /// <param name="clearanceStatus">The native result, or null when rejected before the query.</param>
+    /// <param name="work">The native clearance work, including when notifications fail.</param>
+    /// <returns>The complete navigation and physical replacement outcome.</returns>
+    public NavigationProfileReplacementStatus TryReplaceNavigationProfile(NavigationAgentProfile2D replacement,
+        in PhysicsQueryBudget budget, PhysicsQueryScratch scratch,
+        out PhysicsQueryExecutionStatus? clearanceStatus, out PhysicsQueryWork work)
+    {
+        ChronicleGuard.ThrowIfNull(scratch, nameof(scratch));
+        PhysicsQueryBudget limits = budget;
+        PhysicsQueryExecutionStatus? observedStatus = null;
+        PhysicsQueryWork observedWork = default;
+        try
+        {
+            return TryReplaceNavigationProfile(replacement, Commit);
+        }
+        finally
+        {
+            clearanceStatus = observedStatus;
+            work = observedWork;
+        }
+
+        NavigationProfileReplacementStatus Commit(NavigationAgentProfile2D profile, Vector2d position,
+            Action publish, out Exception? failure)
+        {
+            ValidateBodyAtNavigationPose();
+            observedStatus = Body.TryReconfigureCollider(GetProfileReplacementGeometry(profile), Vector2d.Zero,
+                position, limits, scratch, out var result, out _, out failure, out observedWork, publish);
+            return ProfileReplacementQueryResult.Resolve(observedStatus.Value, result);
+        }
+    }
+
+    private static ColliderShapeDefinition2D GetProfileReplacementGeometry(NavigationAgentProfile2D replacement) =>
+        replacement.Mode == NavigationMode2D.TopDown
+            ? ColliderShapeDefinition2D.Circle(replacement.Radius)
+            : ColliderShapeDefinition2D.Capsule(replacement.Radius, replacement.AxisLength + replacement.Radius * (Fixed64)2);
 
     private static NavigationPose2D ReadCarrierPose(LSCollider2D collider) => new(collider.Center, collider.Rotation);
 

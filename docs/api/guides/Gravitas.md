@@ -247,6 +247,38 @@ physical fit, and publishes the capsule plus profile before physical separation
 callbacks observe them. A rejected growth leaves both live shapes unchanged. Do
 not resize the collider independently and then try to repair navigation.
 
+Both adapters also accept a per-call physics budget and scratch for profile
+replacement. Given a configured adapter `navigator` and a matching
+`replacementProfile`, the following partial snippet requests bounded clearance.
+
+```csharp
+using Gravitas.Queries;
+using Trailblazer.Navigation;
+
+var budget = new PhysicsQueryBudget(8192, 8192, 8192);
+var scratch = new PhysicsQueryScratch(0, 0);
+NavigationProfileReplacementStatus outcome = navigator.TryReplaceNavigationProfile(
+    replacementProfile, budget, scratch,
+    out PhysicsQueryExecutionStatus? clearanceStatus, out PhysicsQueryWork work);
+```
+
+The same navigation preflight runs before physical clearance. A completed
+blocked query returns `PhysicalFitRejected`. An incomplete query returns
+`PhysicalFitUnavailable` and leaves physical and navigation state intact.
+`clearanceStatus` is null and work is zero when the operation ends before the
+native query, including an unchanged profile or a navigation rejection. The
+scratch is reusable by subsequent sequential calls and is released before
+notifications. Support-query configuration is independent of this per-call
+clearance budget.
+
+The native allowance covers detached geometry preparation and the clearance
+scan, including registered blockers outside grid coverage. Navigation preflight,
+the surrounding transaction, publication, and notifications have their own
+allocation and execution costs. If a notification throws after acceptance,
+the profile and body remain committed, and the clearance outputs still describe
+the completed query. Use the normal checkpoint recovery rules after an
+unexpected simulation failure.
+
 Restore the host world/settings, maps/policies, platform transforms, and
 physical body/collider first. Publish each restored bodyless platform pose to
 its collider before applying the first resumed platform command. For a host

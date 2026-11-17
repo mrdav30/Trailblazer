@@ -23,6 +23,39 @@ public sealed class NavigatorProfileReplacementTests : IDisposable
         PathTestFactory.CreateContextWithGrid();
 
     [Fact]
+    public void InvocationSpecificCommit_ShouldRejectWithoutPublicationAndPreserveTheNormalHostPath()
+    {
+        var standing = CreateProfile(height: (Fixed64)2, rootToFootOffset: Fixed64.One);
+        var compact = CreateProfile(height: Fixed64.Half, rootToFootOffset: Fixed64.Quarter);
+        var position = new Vector3d(0, 2, 0);
+        var navigator = CreateNavigator(position, standing);
+        Vector3d foot = navigator.FootPosition;
+        Voxel occupied = PathTestFactory.RequireVoxel(_context, position);
+        byte occupants = occupied.OccupantCount;
+
+        navigator.ReplaceProfileWithCommit(compact, unavailable: true)
+            .Should().Be(NavigationProfileReplacementStatus.PhysicalFitUnavailable);
+
+        navigator.NavigationProfile.Should().Be(standing);
+        navigator.Position.Should().Be(position);
+        navigator.FootPosition.Should().Be(foot);
+        occupied.OccupantCount.Should().Be(occupants);
+        navigator.PhysicalReplacementCallCount.Should().Be(0);
+
+        navigator.TryReplaceNavigationProfile(compact).Should().Be(NavigationProfileReplacementStatus.Applied);
+        navigator.NavigationProfile.Should().Be(compact);
+        navigator.FootPosition.Should().Be(foot);
+        navigator.PhysicalReplacementCallCount.Should().Be(1);
+
+        navigator.ReplaceProfileWithCommit(standing, unavailable: false)
+            .Should().Be(NavigationProfileReplacementStatus.Applied);
+        navigator.NavigationProfile.Should().Be(standing);
+        navigator.Position.Should().Be(position);
+        navigator.FootPosition.Should().Be(foot);
+        navigator.PhysicalReplacementCallCount.Should().Be(2);
+    }
+
+    [Fact]
     public void TryReplaceNavigationProfile_ShouldPreserveFootIdentityAndLiveControllerState()
     {
         NavigationAgentProfile standing = CreateProfile(

@@ -18,7 +18,7 @@ using static Trailblazer.Gravitas.Tests.Support.GravitasPlanarPhysicsFixture;
 
 namespace Trailblazer.Gravitas.Tests;
 
-public sealed class GravitasNavigator2DSupportTests
+public sealed partial class GravitasNavigator2DSupportTests
 {
     private const string MapId = "side-view-floor";
     private static readonly Fixed64 HostY = (Fixed64)7;

@@ -4,6 +4,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using Gravitas;
 using Gravitas.Colliders;
+using Gravitas.Queries;
 using Trailblazer.Gravitas.Tests.Support;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
@@ -12,7 +13,7 @@ using Xunit;
 
 namespace Trailblazer.Gravitas.Tests;
 
-public sealed class GravitasNavigator3DProfileReplacementTests
+public sealed partial class GravitasNavigator3DProfileReplacementTests
 {
     [Fact]
     public void Replacement_ShouldRejectNonCapsuleBodiesWithoutMutatingEitherSystem()
@@ -318,11 +319,13 @@ public sealed class GravitasNavigator3DProfileReplacementTests
     }
 
     [Theory]
-    [InlineData(false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
 #if !TRAILBLAZER_DISABLE_MEMORYPACK
-    [InlineData(true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
 #endif
-    public void CompactPostureRestore_ShouldLoadTheBodyBeforeNavigatorAndFinishThePassage(bool memoryPack)
+    public void CompactPostureRestore_ShouldLoadTheBodyBeforeNavigatorAndFinishThePassage(bool memoryPack, bool bounded)
     {
         using var fixture = new GravitasProfileReplacementScenarioFixture(
             addSupport: true);
@@ -342,8 +345,17 @@ public sealed class GravitasNavigator3DProfileReplacementTests
         fixture.AddCeiling(
             passageCenter,
             new Vector3d(Fixed64.One, Fixed64.Half, (Fixed64)2));
-        source.Navigator.TryReplaceNavigationProfile(compact)
-            .Should().Be(NavigationProfileReplacementStatus.Applied);
+        if (bounded)
+        {
+            fixture.Step(source);
+            source.Navigator.TryReplaceNavigationProfile(compact, PostureBudget,
+                new PhysicsQueryScratch(0, 0), out var status, out var work)
+                .Should().Be(NavigationProfileReplacementStatus.Applied);
+            status.Should().Be(PhysicsQueryExecutionStatus.Completed);
+            _output.WriteLine($"Posture3D|compact|{status}|{work.Discovery}/{work.Candidates}/{work.Geometry}");
+        }
+        else
+            source.Navigator.TryReplaceNavigationProfile(compact).Should().Be(NavigationProfileReplacementStatus.Applied);
         source.Navigator.ApplyGuidedTrekRequest(
             fixture.CreateQueryForProfile(PathAlgorithm.AStar, compact),
             TrekRate.Fast);
@@ -371,23 +383,50 @@ public sealed class GravitasNavigator3DProfileReplacementTests
                 - compact.Shape.RootToFootOffsetY));
         restored.Navigator.Steering!.CurrentQuery!.Value.Agent.Should().Be(compact);
         restored.Navigator.Steering.HasNavigationGuidance.Should().BeFalse();
+        if (bounded)
+            WriteObservation(-1);
 
         for (int frame = 0;
              frame < 512 && !restored.Navigator.Steering.IsAtDestination;
              frame++)
         {
             fixture.Step(restored);
+            if (bounded)
+                WriteObservation(frame);
         }
 
         restored.Navigator.Steering.IsAtDestination.Should().BeTrue();
-        restored.Navigator.TryReplaceNavigationProfile(standing)
-            .Should().Be(NavigationProfileReplacementStatus.Applied);
+        if (bounded)
+        {
+            restored.Navigator.TryReplaceNavigationProfile(standing, PostureBudget,
+                new PhysicsQueryScratch(0, 0), out var status, out var work)
+                .Should().Be(NavigationProfileReplacementStatus.Applied);
+            status.Should().Be(PhysicsQueryExecutionStatus.Completed);
+            _output.WriteLine($"Posture3D|standing|{status}|{work.Discovery}/{work.Candidates}/{work.Geometry}");
+            WriteObservation(512);
+        }
+        else
+            restored.Navigator.TryReplaceNavigationProfile(standing).Should().Be(NavigationProfileReplacementStatus.Applied);
         restored.Navigator.FootPosition.Should().Be(restored.Body.Position3d
             - Vector3d.Up * standing.Shape.RootToFootOffsetY);
         collider.Radius.Should().Be(standing.Shape.Radius);
         collider.Size.Y.Should().Be(standing.Shape.Height);
         restored.Dispose();
         fixture.Gravitas.Physics.BodyCount.Should().Be(0);
+
+        void WriteObservation(int frame)
+        {
+            var navigator = restored.Navigator;
+            var rotation = navigator.Rotation;
+            var state = navigator.Motor!.CurrentState;
+            _output.WriteLine($"Posture3D|{frame}|{fixture.Gravitas.ComputeReplayHash()}|{navigator.SupportStatus}"
+                + $"|{state.Medium}|{state.SurfaceLevel.ToRawString()}|{navigator.LastCommittedCell?.Address}"
+                + $"|{rotation.X.ToRawString()},{rotation.Y.ToRawString()},{rotation.Z.ToRawString()},{rotation.W.ToRawString()}"
+                + $"|{collider.Radius.ToRawString()},{collider.Size.Y.ToRawString()}"
+                + $"|{navigator.Steering!.IsAtDestination}");
+            GravitasMotionTrace.WriteFrame(_output, frame, navigator.Position, navigator.FootPosition,
+                restored.Body.Position3d, navigator.Velocity, state.SurfaceNormal, collider.LocalOffset);
+        }
     }
 
     [Theory]

@@ -1,11 +1,15 @@
 # Bounded Physics Queries in 2D and 3D
 
+Completed in coordinated source on 2026-11-17. All four phase checklists are
+complete. Final committed-consumer CI, native ARM64 replay and released-package
+validation remain in the [coordinated release gates](../feature-work-overview.md#coordinated-release-gates).
+
 Phase 0 defines the shared contract and released-package baselines. Phase 1
 proves the first bounded support paths in Gravitas. Phase 2 extends those
 paths to native shapes and grid topologies, adds bounded posture clearance,
 and verifies exact results and work across equivalent ready worlds.
 The work is planned before the next Trailblazer release. The
-[first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
+[first-class 2D navigation plan](twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
 support and posture in real physics. This plan owns the opt-in work and storage
 limits for those operations in both dimensions.
@@ -36,7 +40,7 @@ posture change. Treat it as an exceptional, observable outcome. Judge the
 opt-in policy by the frequency and consecutive duration of unavailable samples
 in representative workloads as well as by frame cost.
 
-## Current baseline
+## Starting baseline
 
 - In side-view 2D, `GravitasNavigator2D` calls `Query2D.QuerySupport` on the
   accepted pose after the physics resolve. Gravitas checks the source and
@@ -106,7 +110,7 @@ rather than silently skipping blockers. Wider query coverage needs a scope revie
 - Build both library targets; verify Release and ReleaseLean without mixing
   package families. Preserve exact reachable coverage for introduced paths.
 - Use coordinated source validation for unreleased dependencies, then the
-  [released-chain gates](feature-work-overview.md#coordinated-release-gates).
+  [released-chain gates](../feature-work-overview.md#coordinated-release-gates).
 - No staging, commits, upstream edits or releases without the applicable user
   authorization. This plan is not execution or publication approval.
 
@@ -476,19 +480,19 @@ separate files and dimensional code under its existing owner.
   unavailable stretch per actor, and grounding or carrier losses alongside
   complete-step times. Review whether the opt-in policy is usable on those
   workloads before finalizing the adapter surface.
-- [ ] Exercise bounded posture clearance at exact/one-below limits. Rejection
+- [x] Exercise bounded posture clearance at exact/one-below limits. Rejection
   leaves all physical/navigation state and publication counts unchanged;
   acceptance and notification failures retain atomic transaction semantics.
-- [ ] Repeat matched pre-change controls, allocation/replay tests and complete
+- [x] Repeat matched pre-change controls, allocation/replay tests and complete
   containing-frame measurements, including maintenance and readiness latency.
   Report overhead and incomplete-query rates as well as any saved work.
   - [x] Capture single-actor and crowded support, pressure/recovery, moving-floor,
     and topology readiness controls with exact replay.
-  - [ ] Add bounded posture controls and repeat affected final checks.
-- [ ] Run owning and downstream Windows/Linux Release/ReleaseLean suites, both
+  - [x] Add bounded posture controls and repeat affected final checks.
+- [x] Run owning and downstream Windows/Linux Release/ReleaseLean suites, both
   library targets, exact introduced-path coverage and DocFX. Verify source-stack
   binary provenance; keep final released-package verification separate.
-- [ ] Document current public behavior in XML and DocFX guides with verified
+- [x] Document current public behavior in XML and DocFX guides with verified
   examples, without feature-plan links in evergreen pages. Obtain independent
   review, resolve findings, record evidence here and archive only after both
   dimensions meet the contract and consumer gates.
@@ -523,6 +527,152 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 3 - Bounded posture and final hardening
+
+Both adapters now expose per-call bounded `TryReplaceNavigationProfile` with
+caller-owned budget and scratch. `PhysicalFitUnavailable` is appended to the
+shared outcome enum, preserving its existing numeric values. Completed blockage
+returns `PhysicalFitRejected`; incomplete clearance preserves the complete live
+physical/navigation state. Preflight rejection or an unchanged profile reports
+null native status and zero work. Existing synchronous calls retain their hooks
+and behavior. No serialized schema changed.
+
+The core transaction accepts one invocation-specific commit delegate. Both
+adapters reuse the existing navigation preflight and publisher, with shared
+geometry construction within each dimension and one common native-result mapper.
+Budget and diagnostics remain local to the call. The existing 2D busy guard and
+exactly-once publisher rules remain intact. 3D retains its existing notification
+reentrancy, including a nested synchronous profile change. Scratch is released
+before notifications; committed state and native diagnostics remain observable
+when a notification throws. No ambient policy, second transaction framework,
+new physics kernel, or record field was introduced.
+
+Regression fixtures cover upright capsules in both dimensions and planar
+top-down circles. Exact work reproduces the conclusive blocker; independently
+reducing discovery, candidates, or geometry by one leaves the world hash,
+navigation record, collider identity, cell publication and contact events intact.
+The same checks include blockers outside every indexed voxel. A direct unready
+world attempt rejects transactionally and succeeds with the same scratch after
+an ordinary reconciliation step. Acceptance preserves the foot, publishes both
+systems before callbacks, and survives post-commit notification failures.
+JSON and Standard MemoryPack tests restore the body before the navigator and
+compare exact continuation through real host steps.
+
+The source baseline is Trailblazer `d581c64be0589c370ec1c5c88f94cc6f7ec14ff8`.
+Both platforms use Gravitas `becdd5d61cd8608f508af4ef9933433a7cbf107c`,
+GridForge `24ca0f51600c3f1ade727bc1e57ac85d2b22c2b3`, FixedMathSharp
+`3da3a8ad9964d3e0413080737fec12ba107b48e4`, and SwiftCollections
+`17307f1460313e64043da7995fbc4a4458da09a3`. Windows uses local Chronicler
+`3c1cfb536fb009e43d4667158607611dd94ba854`; Ubuntu uses its hosted pin
+`7b90d5923d4bb6e0e42c033ec697b9678d6b8ece`. Ubuntu source checks run in an
+isolated WSL snapshot with SDK 10.0.203. Actual runtime assemblies are hashed
+for every lane. The final Windows Release runtime hashes match the measured
+candidate payload.
+All 40 consumer assembly bindings (ten per platform/configuration lane) match
+their owning source project's output. The posture slice adds 164 net runtime
+C# lines across seven files, including the shared commit delegate and native
+result mapper in two new type files; tests and documentation are separate.
+
+The matched timing control starts from Trailblazer `d581c64` and holds the
+upstream binaries fixed. Windows x64 Release uses .NET 10.0.10, SDK 10.0.302,
+tiered compilation disabled and concurrent GC disabled. Four fresh processes
+per dimension and mode balance revision, policy and dimension order. Each
+warms 1,500 replacement attempts, measures seven batches of 3,000, then warms
+64 complete host steps and measures seven batches of 500. Every measured step
+includes navigation simulation, preparation, physics resolution, commit and
+late simulation before one blocked posture attempt. Before/after oracles prove
+unchanged accepted poses and physics hashes. The table gives medians of the
+four process medians, in microseconds.
+
+| Dimension / operation | Query or transaction | Complete containing step | Warm bytes per attempt |
+| --- | ---: | ---: | ---: |
+| 2D / prior synchronous | 225.475 | 269.735 | 1,376 |
+| 2D / current synchronous | 222.305 | 266.389 | 1,376 |
+| 2D / bounded adapter | 224.225 | 265.598 | 440 |
+| 2D / native bounded clearance | 11.857 | 49.068 | 0 |
+| 2D / adapter with zero native work | 205.118 | 256.583 | 440 |
+| 3D / prior synchronous | 8.483 | 41.756 | 1,888 |
+| 3D / current synchronous | 8.382 | 43.039 | 1,888 |
+| 3D / bounded adapter | 7.608 | 41.724 | 648 |
+| 3D / native bounded clearance | 5.717 | 38.633 | 0 |
+| 3D / adapter with zero native work | 1.336 | 30.303 | 648 |
+
+The 2D scene reuses the one-actor crowd fixture, including its eight local side
+obstacles and floor. It starts with radius 1/2, shrinks the capsule axis from
+1 to 0, and registers a ceiling centered at height 15/8 with height 1/4.
+The 3D profile-replacement fixture uses a floor and a capsule compacted to
+radius 1/4 and height 1/2, with a ceiling at foot + 7/8 and height 1/4.
+Both scenes attempt blocked growth while preserving the current foot. Ample
+native limits of `8,192/8,192/8,192` complete every measured attempt with
+`2/11/93` work in 2D and `2/3/3` in 3D. Zero limits make every adapter attempt
+unavailable with zero native work, zero publication and unchanged physical state.
+
+Native detached preparation/clearance remains zero-allocation after setup.
+The surrounding navigation transaction allocates 440 bytes in 2D and 648 in
+3D, including when native work is zero. The existing navigation preflight is
+outside the native allowance and dominates the 2D rejected transaction. These
+limits therefore do not certify complete transaction or frame time. Existing
+synchronous allocation counts are unchanged. Complete-step process ranges
+are 266.017-272.521 us before and 263.008-269.490 us after in 2D, and
+41.582-45.271 us before and 40.774-44.664 us after in 3D. The overlapping
+ranges do not establish zero overhead or a repeatable default-path regression.
+The 2D zero-work control retains an adverse 413.896 us process median;
+its complete-step range is 241.476-413.896 us. No sample was discarded.
+
+Raw inputs, probes, executable/dependency hashes, individual timing rows,
+source revisions, validation commands and replay captures are under
+`artifacts/query-budget-phase3-closeout`. The disposable timing command is
+`pwsh -NoProfile -File artifacts/query-budget-phase3-closeout/measure.ps1`.
+The source tests above retain the executable behavioral inputs; this record
+retains the timing protocol and limits if disposable artifacts are removed.
+Reopen performance investigation on a reproducible matched default-path increase
+or an actual target-workload budget miss, retaining inputs and loaded binaries.
+
+The final Windows and Ubuntu x64 source suites pass 3,788 core / 150 adapter
+tests in Release and 3,674 core / 139 adapter tests in ReleaseLean, with no
+skips. Every combined report contains both assemblies and covers all 36,164
+lines, 15,865 branches and 3,631 methods. Core alone covers 35,776 lines,
+15,765 branches and 3,589 methods; the adapter covers 388 lines, 100 branches
+and 42 methods. Both library targets build in both configurations. The full
+unchanged Gravitas suites pass 8,572 Release and 8,495 ReleaseLean tests on
+each platform. DocFX passes with warnings as errors, and all local links in
+its 176 generated HTML pages resolve.
+
+Twelve bounded-posture traces match across platforms, configurations and JSON /
+Standard MemoryPack. They retain native physics hashes and raw accepted poses,
+motion, support, geometry and committed-cell observations. All 112 final
+crowded-support captures, each containing 160 observed frames, match the earlier
+crowd baseline byte for byte. All 32 shared native replay payloads match the
+rotation-admission baseline after CRLF/LF normalization only; values and field
+ordering are unchanged. Final capture provenance records the source mode,
+configuration, runtime and actual assembly identities. Windows uses .NET
+10.0.10; Ubuntu 24.04.1 under WSL uses .NET 10.0.7.
+
+Validation uses `UseLocalLsfStack=true` with
+`DisableTransitiveProjectReferences=true`, `-m:1`, and `BuildInParallel=false`.
+Core and adapter tests use their separate checked-in coverage settings; no
+coverage exclusions or workflow changes were added. Refreshing the Ubuntu
+snapshot initially reused older Lean test outputs because copied source
+preserved older timestamps. Those results are excluded from closeout. Forced
+`--no-incremental -p:BuildProjectReferences=false` builds of both Lean test
+projects, followed by their full suites, produce the final counts above.
+The final runtime binaries are unchanged by that test-only rebuild.
+
+Independent reviews covered the first runtime seam, final runtime/tests/docs,
+and the final readiness and core-hook regressions. No actionable findings
+remain. The synchronous path retains its original host override. Geometry
+construction and result mapping are shared where the contracts match, and
+existing dimensional publication rules remain with their current owners.
+
+Phases 0-3 are complete in the coordinated source stack. The completed plan is
+archived with these results. Hosted validation of the final committed consumer,
+native ARM64 replay, and final released Standard/Lean dependency-chain checks
+remain explicit coordinated release gates in the feature overview. They are
+not inferred from local source runs. Release the changed upstream packages in
+dependency order before validating and publishing Trailblazer. No dependency
+pins, versions, commits or release artifacts were published by this closeout.
+
 
 ### Phase 3 - Crowded support and readiness
 
@@ -1380,7 +1530,7 @@ support uses an indexed synchronous query without a hard work budget. The
 This follow-up owns the stronger resource-control guarantee; no runtime changes,
 new test results or performance improvements are claimed by capturing it.
 
-The [earlier support recheck](done/twoDimensionalNavigationPlan.md#2026-09-24---support-prerequisite-recheck)
+The [earlier support recheck](twoDimensionalNavigationPlan.md#2026-09-24---support-prerequisite-recheck)
 retains source revisions and the 20,172-case 2D enumeration comparison. Those
 results are discovery-reuse evidence, not a complete bounded query, a 3D proof
 or a measured performance requirement. Rebaseline both dimensions in Phase 0.

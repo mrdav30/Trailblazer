@@ -14,6 +14,42 @@ namespace Trailblazer.Tests.Navigation;
 
 public sealed partial class Navigator2DSupportTests
 {
+    [Fact]
+    public void InvocationSpecificCommitRejectsWithoutPublicationAndPreservesTheNormalHostPath()
+    {
+        using var context = GuidedStepScene(flat: true);
+        using var host = new PostureHost(context);
+        var compact = Posture(Fixed64.Zero);
+        host.RefreshSupport();
+        NavigationSupport2D? support = host.Support;
+
+        host.ReplaceProfileWithCommit(compact, unavailable: true)
+            .Should().Be(NavigationProfileReplacementStatus.PhysicalFitUnavailable);
+
+        host.NavigationProfile.Should().Be(Profile);
+        host.HostProfile.Should().Be(Profile);
+        host.Pose.Center.Should().Be(Vector2d.Zero);
+        host.HostCenter.Should().Be(Vector2d.Zero);
+        host.Support.Should().Be(support);
+        host.IsGrounded.Should().BeTrue();
+        host.HostCalls.Should().Be(0);
+
+        host.TryReplaceNavigationProfile(compact).Should().Be(NavigationProfileReplacementStatus.Applied);
+        host.NavigationProfile.Should().Be(compact);
+        host.HostProfile.Should().Be(compact);
+        host.Pose.Center.Should().Be(new Vector2d(Fixed64.Zero, -Fixed64.Quarter));
+        host.HostCalls.Should().Be(1);
+
+        host.ReplaceProfileWithCommit(Profile, unavailable: false)
+            .Should().Be(NavigationProfileReplacementStatus.Applied);
+        host.NavigationProfile.Should().Be(Profile);
+        host.HostProfile.Should().Be(Profile);
+        host.Pose.Center.Should().Be(Vector2d.Zero);
+        host.HostCenter.Should().Be(Vector2d.Zero);
+        host.HostCalls.Should().Be(2);
+        host.LastPublisher!.Should().Throw<InvalidOperationException>();
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -600,6 +636,22 @@ public sealed partial class Navigator2DSupportTests
         internal Action? LastPublisher { get; private set; }
         internal bool SkipPublisher { get; set; }
         internal NavigationSupport2D SupportSample { get; set; } = Ground;
+
+        internal NavigationProfileReplacementStatus ReplaceProfileWithCommit(
+            NavigationAgentProfile2D replacement, bool unavailable)
+        {
+            return TryReplaceNavigationProfile(replacement, Commit);
+
+            NavigationProfileReplacementStatus Commit(NavigationAgentProfile2D profile, Vector2d position,
+                Action publish, out Exception? failure)
+            {
+                failure = null;
+                if (unavailable)
+                    return NavigationProfileReplacementStatus.PhysicalFitUnavailable;
+                return TryCommitPhysicalProfileReplacement(profile, position, publish, out failure)
+                    ? NavigationProfileReplacementStatus.Applied : NavigationProfileReplacementStatus.PhysicalFitRejected;
+            }
+        }
 
         protected override void SubmitMotionTarget(in NavigationMotionRequest2D request) { }
 

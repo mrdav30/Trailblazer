@@ -38,6 +38,12 @@ instead of burying it in notes.
 - [`Benchmark Signal Hardening`](benchmark-signal-hardening-backlog.md)
   - Reproduce and close confirmed release-relevant signals alongside the owning
     library change. Do not broaden this into speculative optimization work.
+- [Bounded Physics Queries — 2D And 3D](physicsQueryBudgetPlan.md)
+  - Native Gravitas support and posture clearance use caller-owned budgets and
+    scratch. The Phase 2 record covers exact replay, sparse and hex discovery,
+    fixed-storage mesh queries, and matched scale controls.
+  - [Phase 3](physicsQueryBudgetPlan.md#phase-3---adapter-adoption-and-closeout)
+    covers opt-in Trailblazer adapter policy, crowded scenes, and release gates.
 
 ## Recently Completed
 
@@ -192,16 +198,6 @@ instead of burying it in notes.
   - Superseded by the unified map/graph transition query and cache model.
 - [`Managed-transition lifecycle research`](done/managedTransitionLifecyclePlan.md)
   - Superseded by explicit transition definitions, rules, and overlay publication.
-
-## Queued Feature Work
-
-- [Bounded Physics Queries — 2D And 3D](physicsQueryBudgetPlan.md)
-  - Planned before Trailblazer's release. Phase 0 records the opt-in work and
-    storage contract and matched package baselines for pure 2D and 3D support
-    and posture clearance. Phase 1 proves exact support results and replayable
-    exhaustion through shared bounded discovery in both dimensions before
-    expanding native coverage or adopting the opt-in policy in the adapters.
-    [Contract and baselines](physicsQueryBudgetPlan.md#phase-0---contract-and-matched-baselines)
 
 ## Deferred / Evidence-Gated
 

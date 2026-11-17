@@ -1,11 +1,9 @@
 # Bounded Physics Queries in 2D and 3D
 
 Phase 0 defines the shared contract and released-package baselines. Phase 1
-proves the first bounded support paths in Gravitas. Phase 2 now visits live
-grids and collider memberships in canonical order across checkpoint rebuilds.
-The box-floor slice now replays with or without a retained empty partition
-or removed collision links. Repeat the combined scaling controls before
-expanding native shape and topology support.
+proves the first bounded support paths in Gravitas. Phase 2 extends those
+paths to native shapes and grid topologies, adds bounded posture clearance,
+and verifies exact results and work across equivalent ready worlds.
 The work is planned before the next Trailblazer release. The
 [first-class 2D navigation plan](done/twoDimensionalNavigationPlan.md)
 has its own Phase 3 package verification and already exercises synchronous
@@ -22,10 +20,10 @@ where they can size and validate the allowance for their workload.
 - Fixed caller-owned scratch sets a storage ceiling. Count discovery, candidate
   visits, and geometry separately so a small result or buffer cannot conceal
   expensive traversal.
-- Early exit is useful once the result is conclusive. The first proven blocker
-  in the existing order can deny a posture change. A clear result must exhaust
-  the eligible blocker set, and a support hit must be proved to win under the
-  existing selection rules.
+- Early exit is useful once the result is conclusive. Bounded posture visits
+  blockers in stable registration order and can stop at the first proven
+  penetration. Clear posture must exhaust the eligible blocker set, and a
+  support hit must win under the existing selection rules.
 - The Phase 1 prototype replays with identical prepared storage. For lockstep
   adoption, logically equivalent ready worlds must reproduce the same complete
   result or explicit exhaustion outcome after restore, with the same request,
@@ -148,8 +146,8 @@ deduplication unbounded. Choose the smallest traversal that can account for
 inspections and stop within caller limits. Reuse one discovery boundary where
 both support paths share the same requirements.
 
-Posture clearance can start from its existing registered-collider scan, with
-every visit charged and lookup order preserved. Consider indexed discovery for
+Posture clearance uses the registered-collider scan in live registration
+order, with every visit charged. Consider indexed discovery for
 posture only if its complete candidate set includes unpartitioned blockers and
 matched measurements justify the change. Account for creation and preparation
 of the detached candidate when placing the bounded-call boundary.
@@ -234,12 +232,16 @@ Use a caller-owned `sealed class PhysicsQueryScratch` with constructor
 read-only `TraversalCapacity` and `CandidateCapacity`. Capacities are
 nonnegative entry counts for retained voxel references and unique collider
 identities. Grid slots are streamed and charged to discovery. The scratch owns
-fixed backing storage allocated before use. Hash probing, if used, must have a
+fixed backing storage allocated before use. The 3D mesh overload of the
+scratch constructor adds `meshTriangleCapacity`, with a matching read-only
+`MeshTriangleCapacity` property. The BVH stack and candidate triangle buffer
+reuse that capacity across sweep and witness passes. Hash probing, if used, must have a
 checked inspection limit. Reserve cleanup work when retaining each entry and
 clear only used entries. Use a single exclusive borrow per synchronous
 call and release on all exits. Reuse sequentially across queries and worlds
 after cleanup. Scratch has no durable world ownership or serialized identity.
-Posture can use zero traversal capacity while it scans registered colliders.
+Posture can use zero traversal and mesh capacity while it scans registered
+colliders. Scratch retains one detached shape per supported posture family.
 Bounded calls report through their return values and counters, with no per-query
 diagnostic callback inside the bounded portion.
 
@@ -346,9 +348,11 @@ alone says nothing about the geometry work inside each visit.
 
 ### Acceptance before expanding
 
-Require exact equality with the existing operation for complete results,
-including eligibility, winning identity, tie order, fixed-point witness and
-distance, and posture result and publication counts. With the reported work
+Require exact equality with the existing support operation for complete
+results, including eligibility, winning identity, tie order, fixed-point
+witness and distance. Match posture decisions and publication counts. For
+multiple blockers, verify the bounded result against registration order and
+replay it after deletion and slot reuse. With the reported work
 and used capacity, rerun a successful representative case at exact limits and
 one below each nonzero unit/capacity in isolation. Check late exhaustion, zero,
 checked overflow, repeats, scratch reuse, and the first ready sample after grid
@@ -442,21 +446,19 @@ separate files and dimensional code under its existing owner.
     partition was retained empty or was never attached.
   - [x] Make Gravitas linked-collider filtering charge from live pairs
     independently of retained lookup capacity.
-- [ ] Repeat the many-grid and dense-member controls, including full steps
+- [x] Repeat the many-grid and dense-member controls, including full steps
   with publication and mutation. Measure where any prepared view shifts work or
   retains extra storage. Review the proof through both native query callers
   before taking on new shapes.
-- [ ] Extend verified support in both dimensions. Cover filters, initial contact,
+- [x] Extend verified support in both dimensions. Cover filters, initial contact,
   narrow scalar margins, compound/convex/mesh inputs where supported, sparse
   presence, both hex topologies, seams, and dense duplicate memberships. Bound
   the hash, BVH, and scan paths exercised by the supported cases, including
   generation changes, stamp rollover controls, and checked accounting overflow.
-  Close the remaining coverage gaps in the bounded query paths and shared
-  readiness, linked filtering, and scratch status handling before release.
-- [ ] Reuse the existing narrowphase and stable reductions. Prove ready, stale,
+- [x] Reuse the existing narrowphase and stable reductions. Prove ready, stale,
   and exhausted behavior under recurrent callback mutations, resets, and
   registration reuse. Compare complete results to the synchronous operations.
-- [ ] Once native support passes in both dimensions, add bounded posture. Test
+- [x] Once native support passes in both dimensions, add bounded posture. Test
   exact touch, a conclusive early blocker including an unpartitioned blocker,
   full clearance, and exhaustion before clearance completes. Verify fixed
   scratch and transactional rejection before adopting posture in the adapters.
@@ -508,13 +510,123 @@ bounds; source builds do not prove package readiness.
 
 1. Start query-budget baselines and contract work with released GridForge
    `10.1.0` and Gravitas `2.0.1`, the native 2D Phase 3 package versions.
-2. If the implemented bounded path needs additional APIs, release their owning
-   packages in dependency order.
+2. Publish the SwiftCollections fixed BVH API and sorted-list support first,
+   then update and publish GridForge and Gravitas in dependency order.
+   Update hosted source pins after the corresponding upstream changes land.
 3. Before publishing Trailblazer, validate the combined native 2D and budgeted
    adapter behavior against the final released Standard and Lean chains.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 2 - Native shapes, topology, and posture
+
+GridForge reuses its normalized grid order, physical coverage rules, and
+quantized hex range in bounded discovery. Sparse lookup charges the
+direct block lookup plus the comparison bound from the block's live voxel
+count. The address loop includes physically present voxels only. For hex,
+the one-address halo uses widened arithmetic before narrowing to the
+grid's range. The bounded prepared view uses `SwiftSortedList`. Grid
+publication and interval tracing share one allocation-free key comparer.
+
+Gravitas support reuses the synchronous hit reducers and reserves the final
+view check in both dimensions. The 2D path admits boxes, circles, capsules,
+convex polygons, and flat compounds. The 3D sweep admits cuboids, spheres,
+capsules, finite cylinders and cones, meshes, and authored compounds.
+Meshes use a caller-sized triangle buffer and traversal span. The ordinary
+and fixed-storage Swift BVH queries share traversal order. The reservation
+covers both traversals, patch inspection, the sweep, and the closest witness.
+One box costs 175 geometry units in 2D and 58 in 3D, including admission.
+The earlier 2D box cost of 10 omitted work inside the convex kernel.
+
+Bounded posture uses the same strict penetration kernels as synchronous
+posture, including exact touch and blockers outside indexed voxels. Live
+registration links allow early exit in the same relative order after
+removal and ID reuse, with constant-time link maintenance. The synchronous
+scan retains service order. The first bounded blocker can differ when
+multiple colliders penetrate after churn. Circle and capsule changes in
+2D and sphere and capsule changes in 3D reuse detached scratch. Finite
+cylinder replacement remains available through the synchronous API.
+An unrepresentable host position leaves both poses and collider state
+unchanged, even when the strict parent transform precheck succeeds and
+the position setter rejects a saturated intermediate. Warm, valid clearance
+rejections allocate zero bytes in the fixtures. Existing exceptional
+shape-validation failures can allocate the exception caught by preparation.
+
+Four paired Windows x64 processes per binary ran each control in balanced
+order with tiering disabled under .NET 10.0.10. They verified exact witnesses
+and exact/one-below work at one and 512 grids and one, 16, 64 and 256 coincident
+members. The table reports the median of process medians for one containing
+step, including the query. Mutation adds and removes a remote grid each step.
+The dense check uses a geometry ceiling of 100,000 in both lanes so the new
+44,800-unit 2D query and the 2,560-unit baseline both complete.
+
+| Bounded workload | Before | After |
+| --- | ---: | ---: |
+| 2D, 512 grids, stable with floor | 74.20 μs | 74.73 μs |
+| 2D, 512 grids, mutation with floor | 88.55 μs | 88.46 μs |
+| 3D, 512 grids, stable with floor | 23.39 μs | 23.94 μs |
+| 3D, 512 grids, mutation with floor | 64.41 μs | 65.50 μs |
+| 2D, 256 coincident floors | 16.308 ms | 16.325 ms |
+| 3D, 256 coincident floors | 2.316 ms | 2.285 ms |
+| 2D, 512 grids, stable miss | 5.13 μs | 5.03 μs |
+| 3D, 512 grids, stable miss | 9.38 μs | 9.43 μs |
+
+Queries and stable/dense steps allocated zero bytes in all sampled rows.
+Grid churn returned to 220 B per 2D step and 380 B per 3D step after removing
+48 B of enum boxing from the published-grid comparison. The 3D floor
+control showed a small containing-step increase at 512 grids. The absolute
+change was 0.55 μs stable and 1.09 μs with publication. The equivalent
+synchronous steps moved from 20.81 to 21.45 μs and 61.99 to 63.19 μs.
+Phase 3 still needs useful-allowance selection and crowded adapter scenes.
+Matched sources, hashes and captures are under
+`artifacts/query-budget-phase2-native`. The dense timings preceded the
+shared comparer cleanup and final posture fixes, which those stable floor
+queries do not exercise.
+
+Independent review checked the sparse and hex discovery boundary, scratch
+capacity and traversal order, geometry reservations, and transactional
+posture publication. Both source configurations built both library targets.
+Windows x64 (.NET SDK 10.0.302) and Ubuntu x64 under WSL (.NET SDK 10.0.203)
+passed the same test counts:
+
+| Suite | Release | ReleaseLean |
+| --- | ---: | ---: |
+| SwiftCollections core and FixedMathSharp companion | 1,463 | 1,433 |
+| GridForge | 1,206 | 1,206 |
+| Gravitas | 8,548 | 8,471 |
+| Trailblazer core | 3,786 | 3,672 |
+| Trailblazer Gravitas adapter | 118 | 111 |
+
+The SwiftCollections core suites covered all 2,398 branches in both Windows
+source configurations. GridForge covered all 9,428 lines and 4,207 branches in
+both configurations. DocFX passed with warnings as errors in SwiftCollections,
+GridForge, and Gravitas.
+
+The coverage follow-up exercises discovery and partition exhaustion, pending
+publication, native shape admission, fixed mesh scratch, and transactional
+posture rejection. The capsule-blocker case checks the first blocker, exact
+work, and authoritative hashes after collider ID reuse. Both support paths
+share the same view check at discovery and result certification. They retain
+the underlying non-waiting snapshot checks. The 24 matched controls preserved
+their exact work and one-below outcomes. Eight shared replay fixtures matched
+frame for frame across Windows and Ubuntu x64 under WSL in Release and
+ReleaseLean. The raw reports and captures are under
+`artifacts/query-budget-phase2-coverage`.
+
+The final Windows source runs passed 8,568 Gravitas tests in Release and
+8,491 in ReleaseLean. The Ubuntu focused runs passed 232 and 228 tests,
+including the replay fixtures. The downstream Ubuntu adapter suites passed
+118 and 111 tests. The exact Gravitas reports have no uncovered Phase 2
+points. Release covered 54,826 of 54,830 lines and 5,786 of 5,786 methods.
+ReleaseLean covered 54,824 of 54,828 lines and 5,785 of 5,785 methods.
+Both covered 22,853 of 22,857 branches.
+
+The four uncovered lines and four branches belong to rotation-admission
+guards from Gravitas commit `a83b76e3` in `ConvexShape`,
+`CollisionDetectionMixed`, and `PhysicsMesh.GetFaceNormalWorld`. They remain
+open for the repository-wide coverage gate. Hosted pins, native ARM64 replay,
+and released packages remain release verification.
 
 ### Phase 2 - Linked-collider filtering
 

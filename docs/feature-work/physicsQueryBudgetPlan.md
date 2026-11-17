@@ -622,11 +622,23 @@ points. Release covered 54,826 of 54,830 lines and 5,786 of 5,786 methods.
 ReleaseLean covered 54,824 of 54,828 lines and 5,785 of 5,785 methods.
 Both covered 22,853 of 22,857 branches.
 
-The four uncovered lines and four branches belong to rotation-admission
-guards from Gravitas commit `a83b76e3` in `ConvexShape`,
-`CollisionDetectionMixed`, and `PhysicsMesh.GetFaceNormalWorld`. They remain
-open for the repository-wide coverage gate. Hosted pins, native ARM64 replay,
-and released packages remain release verification.
+The rotation-admission follow-up closed the four remaining Gravitas coverage
+gaps from `a83b76e3`. Mesh candidate discovery uses the committed source
+bounds. Cuboid witness refinement uses the same checked inverse rotation as
+sweep support. Mixed contact and mesh face normals retain their exact rotations
+and assert the representability guaranteed by geometry and pose admission.
+
+The full Windows source suites passed 8,568 Release tests and 8,491
+ReleaseLean tests. Release covered all 54,808 sequence points and 5,786
+methods. ReleaseLean covered all 54,806 sequence points and 5,785 methods.
+Both covered all 22,843 branches. DocFX passed with warnings as errors.
+Ubuntu passed 595 focused tests in each configuration, plus 118 Release
+and 111 ReleaseLean Trailblazer adapter tests. All 32 payloads from the
+four x64 replay lanes matched the previous Phase 2 captures byte for byte.
+Raw reports and captures are under `artifacts/rotation-admission-coverage`.
+
+Hosted pins, native ARM64 replay, and released packages remain release
+verification.
 
 ### Phase 2 - Linked-collider filtering
 

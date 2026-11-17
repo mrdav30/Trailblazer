@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: mrdav30/Gravitas
-          ref: 883999db2e7f942da7da1a801aa010aca01fc21b
+          ref: 89701a48889a52e71bb6709d8370a24f715e63ae
           path: Gravitas
           persist-credentials: false
 

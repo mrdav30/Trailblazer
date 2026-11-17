@@ -471,7 +471,7 @@ separate files and dimensional code under its existing owner.
   existing caller behavior. Test repeated incomplete support, recovery, moving
   carriers, gravity and all-prepare/one-resolve/all-commit ownership. Report
   actor count and query counts per frame alongside per-call budgets.
-- [ ] Run representative crowded scenes at a useful allowance and under
+- [x] Run representative crowded scenes at a useful allowance and under
   sustained pressure. Record support exhaustion rate, longest consecutive
   unavailable stretch per actor, and grounding or carrier losses alongside
   complete-step times. Review whether the opt-in policy is usable on those
@@ -482,6 +482,9 @@ separate files and dimensional code under its existing owner.
 - [ ] Repeat matched pre-change controls, allocation/replay tests and complete
   containing-frame measurements, including maintenance and readiness latency.
   Report overhead and incomplete-query rates as well as any saved work.
+  - [x] Capture single-actor and crowded support, pressure/recovery, moving-floor,
+    and topology readiness controls with exact replay.
+  - [ ] Add bounded posture controls and repeat affected final checks.
 - [ ] Run owning and downstream Windows/Linux Release/ReleaseLean suites, both
   library targets, exact introduced-path coverage and DocFX. Verify source-stack
   binary provenance; keep final released-package verification separate.
@@ -520,6 +523,79 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### Phase 3 - Crowded support and readiness
+
+The crowd fixtures exercise the existing adapters with one floor, eight nearby
+box obstacles, and distinct actors two units apart. Native 2D uses one row of
+upright capsules at 16 Hz. Native 3D uses a square group of spheres at 32 Hz.
+Both use actual floor collisions, gravity, a stable carrier identity, and the
+all-prepare/one-resolve/all-commit barrier. Maintained tests cover 4 and 16
+actors. They compare complete bounded and synchronous batches by physics replay
+hash and navigation pose, velocity, support, and carrier state.
+
+Alternating insufficient and useful allowances on one shared scratch lets the
+next actor complete after an earlier probe exhausts. Repeated exhaustion keeps
+accepted body/navigation poses aligned and releases support/carrier evidence.
+Subsequent prepares still request downward gravity and omit stale carry. A
+topology addition after physics resolution makes every commit probe report
+`WorldNotReady` with zero work. Accepted motion commits, and the following
+ordinary host step reconciles partitions and recovers support.
+
+The Windows x64 `Release` controls use 16 or 64 actors, with 96 warm frames,
+32 useful frames, a 96-frame comparison window, and 32 recovery frames. One
+support probe runs per actor per frame. All queries share scratch with 256
+voxel slots and 256 candidate slots. Useful per-call limits are
+`8,192/8,192/8,192` (discovery/candidates/geometry). Insufficient geometry
+limits are 174 in 2D and 57 in 3D, one below the least expensive completed
+probe in the respective fixture. Four processes per lane balance policy and
+dimension order with tiered compilation disabled on .NET 10.0.10. Values below
+are medians across the four process medians for complete host steps.
+
+| Scene | Synchronous | Useful bounded | All actors under pressure | Alternating pressure |
+| --- | ---: | ---: | ---: | ---: |
+| 2D / 16 actors | 333.600 μs | 313.700 μs | 1,772.950 μs | 1,069.150 μs |
+| 2D / 64 actors | 1,370.250 μs | 1,258.050 μs | 3,679.800 μs | 2,448.150 μs |
+| 3D / 16 actors | 522.150 μs | 494.850 μs | 333.850 μs | 422.200 μs |
+| 3D / 64 actors | 2,048.500 μs | 1,971.100 μs | 1,324.800 μs | 1,656.950 μs |
+
+Each static 64-actor comparison window contains 6,144 probes. Useful limits complete
+every probe with zero support/ground/carrier losses. Full pressure leaves all
+6,144 probes unavailable, with a maximum consecutive stretch of 96 frames per
+actor and one ground/carrier loss per actor. Alternating pressure makes 3,072
+probes unavailable and loses support on 32 actors. All recover on the first
+useful-budget frame. The largest per-call work components are `29/30/175` in
+2D and `56/182/62` in 3D. These are component-wise maxima, not frame totals.
+
+The useful policy is usable on these fixtures. Sustained insufficient limits
+leave grounded actions unavailable even while physics keeps actors against
+the floor. In 2D, the resulting airborne gravity and collision clipping make
+complete frames slower despite stopping the support kernel early. Budget
+selection must consider that motor and physics response alongside query cost.
+Static synchronous and useful-budget frames allocate zero warm bytes. The
+3D pressure/recovery samples include transition allocations, including up to
+21,472 bytes in a 64-actor recovery frame. Moving-floor and topology
+controls include their publication and reconciliation work. Raw inputs,
+loaded-binary hashes, observations, and all timing samples are under
+`artifacts/query-budget-phase3-crowd`.
+
+The full adapter suites passed 134 `Release` and 125 `ReleaseLean` tests on
+Windows and Ubuntu x64. Both library targets and configurations built. Every
+adapter report covers all 361 sequence points, 90 branches, and 37 methods.
+The core runtime source is untouched by this slice. DocFX passed with warnings
+as errors. The source baseline is `f996aaf`, using the coordinated upstream
+revisions already recorded for the support slice. The Ubuntu run uses the
+hosted dependency closure.
+
+Each of the four x64 platform/configuration lanes captured 28 scenarios with
+160 frames each. All 112 captures matched exactly by authoritative physics
+hash and selected navigator observations. These include stationary,
+moving-floor, insufficient-budget, mixed-budget, readiness, and recovery
+cases at 16 and 64 actors. Synchronous and useful-budget stationary traces
+also match after excluding bounded-query diagnostics. Existing moving-carrier
+checkpoint tests continue to verify full attachment and rotation continuation
+in JSON and Standard MemoryPack. Native ARM64 and released-package checks
+remain release gates. Bounded profile replacement is the next API slice.
 
 ### Phase 3 - Opt-in adapter support
 

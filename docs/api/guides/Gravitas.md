@@ -215,6 +215,14 @@ support. The adapter issues no automatic retry or synchronous fallback. The
 allowance limits counted work for the individual probe. The rest of the shared
 physics and navigation step has its own costs.
 
+Each attempt starts from zero work. Repeating an insufficient allowance in the
+same scene can keep support unavailable on every frame. Physical collision
+resolution can still hold the actor against the floor while its support sample
+is unavailable and ground-dependent actions cannot proceed. Track consecutive
+unavailable frames per actor alongside complete-step latency when choosing
+allowances. Actor count determines the number of probes, while local collider
+memberships and geometry determine the work each probe needs.
+
 ## Collision and traversal limits
 
 The contract is **stop at a blocker, accept an explicitly requested tangent, and

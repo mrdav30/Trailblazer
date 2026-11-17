@@ -443,7 +443,8 @@ separate files and dimensional code under its existing owner.
   - [x] Visit live Gravitas memberships in collider ID order within each
     mobility class. Keep deduplication charges independent of removed slots.
   - [x] Make GridForge partition lookup charge the same work when the requested
-    partition was retained empty or was never attached.
+    partition was retained empty or was never attached. Exclude caches owned
+    by the inactive dimension or mixed solver from native discovery charges.
   - [x] Make Gravitas linked-collider filtering charge from live pairs
     independently of retained lookup capacity.
 - [x] Repeat the many-grid and dense-member controls, including full steps
@@ -639,6 +640,88 @@ Raw reports and captures are under `artifacts/rotation-admission-coverage`.
 
 Hosted pins, native ARM64 replay, and released packages remain release
 verification.
+
+### Phase 2 - Optimization and hardening review
+
+The reviewed baseline is Gravitas `89701a48`, GridForge `32fe579`,
+FixedMathSharp `30d76f1`, and SwiftCollections `17307f1`. The review covered
+grid and collider traversal, pair filtering, support narrowphase, fixed
+scratch, and posture publication.
+
+- A removed, bodyless 2D collider left a native partition on a voxel shared
+  with a 3D sweep. A restored checkpoint lacked that cache, so the restored
+  exact allowance completed in one world and exhausted in the other. The
+  `BoundedSweep_ReplaysAfterRemovedMembershipsAndCheckpointRestore` fixture
+  reproduced the difference in both transports. Its 2D counterpart now also
+  checks that retaining a 3D partition leaves the hit, status, exact work,
+  and one-below results unchanged. The new GridForge lookup omits up to two
+  exact cache types and still charges host partitions. Both pure-mode Gravitas
+  callers use the same lookup and accounting path.
+- A child moved to world X `1,500,000,000` beneath parents translated by
+  `1,000,000,000` and `-1,000,000,000` could pass the combined parent proof
+  while overflowing in child-first composition. The 2D body applied the pose
+  and the 3D body threw during collider publication. A second FixedMathSharp
+  fixture uses parent scales `5/4` and `2048` to show that representable
+  child-first composition can also miss the requested position by 512 raw
+  units, outside the 256-raw tolerance. Both posture paths now check the
+  prospective pose before publication. The 3D path also checks the live
+  collider transform when the host exposes a transform distinct from the
+  body's cached position transform. Regression tests verify unchanged state
+  and replay hash and zero synchronized callbacks on rejection.
+- The shared 3D sphere sweep prepares the convex kernel once, when it first
+  reaches a cylinder or cone. A worker reuse test checks opposite-direction
+  sweeps so prepared state cannot carry across calls.
+
+The paired Windows x64 Release controls used four processes per revision,
+alternated revision and query order, and disabled tiered compilation on .NET
+10.0.10. All 24 many-grid, dense-membership, and empty controls preserved their
+charged work and exact/one-below outcomes. Warm queries still allocated zero
+bytes per operation, and step allocation samples matched. Representative
+medians in microseconds per operation follow.
+
+| Control | Query before → after | Full step before → after |
+| --- | ---: | ---: |
+| Bounded 2D empty, one stable grid | 0.753 → 0.840 | 2.035 → 2.158 |
+| Bounded 3D empty, one stable grid | 2.014 → 2.083 | 5.730 → 6.007 |
+| Synchronous 3D empty, 512 stable grids | 3.055 → 2.849 | 7.015 → 6.717 |
+| Bounded 3D hit, 512 stable grids | 16.578 → 16.727 | 23.296 → 23.560 |
+| Bounded 3D hit, 512 grids with mutation | 16.843 → 16.808 | 66.239 → 64.619 |
+| Bounded 3D hit, 256 memberships | 2,057.544 → 2,070.388 | 2,283.638 → 2,301.369 |
+
+Synchronous 3D empty query medians fell 6.7–7.8%. The bounded empty cases
+showed the clearest cost of partition accounting, about 0.09 μs per 2D query
+in the smallest fixture. Most many-grid hit and dense timings overlapped
+across the two revisions. Phase 3 uses representative adapter scenes for the
+frame-level decision. Raw samples, red reproductions, and replays are under
+`artifacts/query-budget-phase2-hardening`.
+
+All eight shared Gravitas replay fixtures matched the previous captures byte
+for byte on Windows and Ubuntu x64 in `Release` and `ReleaseLean`. Ubuntu
+passed 402 and 398 focused Gravitas tests. The FixedMathSharp transform suite
+passed 43 tests in each Windows configuration and covered every line and
+branch in the changed transform methods. Both GridForge configurations
+passed 1,209 tests and covered all 9,454 sequence points, 4,233 branches,
+and 1,161 methods. GridForge and Gravitas DocFX builds passed with warnings
+as errors.
+
+The full Windows Gravitas runs passed 8,572 tests in `Release` and 8,495
+in `ReleaseLean`. Both covered all 22,847 branches. `Release` covered all
+54,812 sequence points and 5,787 methods. `ReleaseLean` covered all 54,810
+sequence points and 5,786 methods. The Trailblazer Gravitas adapter passed
+118 and 111 tests in both Windows and Ubuntu source mode.
+
+The full Ubuntu FixedMathSharp suites passed 7,440 `Release` core tests,
+7,421 `ReleaseLean` core tests, and 49 Chronicler tests in each configuration.
+The `Release` run preceded two extra transform cases verified in both Windows
+configurations and in the full Ubuntu `ReleaseLean` run. That Lean report
+covers the changed transform code and leaves three branch points at two
+untouched geometry guard sites (`FixedSegment.CenteredAxis.cs` and
+`WideFiniteAxisIntersection.CenteredSurfaceAnchors.cs`).
+
+Coordinated source mode selects the new APIs. Hosted development validation
+requires updating pins after the upstream commits are available. Package-mode
+validation requires new FixedMathSharp and GridForge packages before the
+Gravitas package can consume them. Native ARM64 replay remains a hosted gate.
 
 ### Phase 2 - Linked-collider filtering
 

@@ -90,6 +90,33 @@ environment/global property. NuGet evaluates referenced sibling projects
 separately: build-time reference metadata alone does not make their restore
 graph select the same source stack.
 
+## Coverage validation
+
+Require 100% reported line, branch and executable-method coverage for both
+`Trailblazer` and `Trailblazer.Gravitas` in `Release` and `ReleaseLean`. Core
+and adapter runsettings instrument their owning assembly separately. Use a fresh
+results directory for each configuration and run the raw gate after both test
+projects:
+
+```powershell
+dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c Release -p:UseLocalLsfStack=false --collect:"XPlat Code Coverage" --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage/Release/core
+dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -c Release -p:UseLocalLsfStack=false --collect:"XPlat Code Coverage" --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage/Release/adapter
+./.assets/scripts/assert-full-coverage.ps1 -CoverageDirectory artifacts/coverage/Release
+```
+
+Repeat with `ReleaseLean` in the configuration and output paths. For coordinated
+source validation, use `UseLocalLsfStack=true` and pass
+`-p:DisableTransitiveProjectReferences=true -m:1` on each .NET command, as for
+restore/build. Source validation does not establish released-package readiness.
+
+Every Windows/Linux build/test lane and the Pages workflow use this gate. It
+requires exactly the two expected assembly names across the reports, executable
+methods in each, and zero uncovered line or branch points in every report.
+Review cyclomatic complexity above 10. Accepted exceptions justify cohesive
+methods and their invariants, never partial coverage. Close gaps with behavioral
+tests, or prove and remove unreachable runtime branches; do not add exclusions
+or waive gaps through a complexity register.
+
 ## Pull request process
 
 The [adapter README](src/Trailblazer.Gravitas/README.md) lists focused
@@ -98,7 +125,8 @@ separate gate.
 
 Core and adapter coverage use separate runsettings. Never override the adapter
 with the core-only include filter. CI requires both assemblies to be present and
-fully covered. DocFX consumes both Release DLL/XML pairs.
+fully covered; see [Coverage validation](#coverage-validation). DocFX consumes
+both Release DLL/XML pairs.
 
 1. Keep the change focused and preserve deterministic, engine-agnostic runtime
    behavior.

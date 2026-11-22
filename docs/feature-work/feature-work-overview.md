@@ -24,20 +24,11 @@ instead of burying it in notes.
 
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
-    `SwiftCollections`, `GridForge`, then Trailblazer. Package references are
-    the default; use `UseLocalLsfStack=true` only for coordinated validation of
-    unreleased sibling changes, then revalidate against released packages.
-  - `TRB-Issue-119` is closed as
-    unreproduced, with historical evidence, bounded verification and recurrence
-    capture instructions retained. GridForge's `GF-Issue-006` and
-    FixedMathSharp's `FMS-Issue-018` are likewise closed as unreproduced, not
-    repaired; no shared cause is established. Reopen #119 on a matching
-    recurrence and preserve exact inputs and executed-binary identities before
-    rebuilding. `TRB-Issue-114` remains closed unless new evidence meets its
-    documented reopening criteria.
+    `SwiftCollections`, `GridForge`, then `Trailblazer`.
 - [`Benchmark Signal Hardening`](benchmark-signal-hardening-backlog.md)
   - Reproduce and close confirmed release-relevant signals alongside the owning
     library change. Do not broaden this into speculative optimization work.
+
 ## Recently Completed
 
 - [Bounded Physics Queries — 2D And 3D](done/physicsQueryBudgetPlan.md)
@@ -49,8 +40,6 @@ instead of burying it in notes.
     adapter coverage, matched baseline allocations, and exact posture, crowd and
     native replay. The [closeout record](done/physicsQueryBudgetPlan.md#phase-3---bounded-posture-and-final-hardening)
     separates native query costs from navigation and complete-frame costs.
-    Final committed-consumer CI, native ARM64 replay and released-package
-    verification remain coordinated release gates below.
 
 - [First-Class 2D Navigation](done/twoDimensionalNavigationPlan.md)
   - Native top-down and side-view A* and Flow reuse the shared graph, search,
@@ -216,58 +205,3 @@ Engine-host visual playtesting remains deferred until engine-specific adapter
 work. Individual performance changes remain evidence-gated: the archived
 scheduling plan records remaining cold-readiness limits and useful next
 measurements, not permission for speculative algorithm or cache changes.
-
-## Recommended Execution Order
-
-The performance campaign is closed by user acceptance; the unmet 2 ms stretch
-target is deferred. Keep its existing measurements and reopening criteria in
-the [benchmark tracker](benchmark-signal-hardening-backlog.md#trb-benchmark-005---guided-frames-spend-most-time-in-long-blocked-segment-tracing).
-The remaining feature sequence is:
-
-1. Validate the final committed bounded-query consumer in hosted CI, including
-   native ARM64 replay. Release the changed upstream packages in dependency order.
-2. Verify native 2D navigation and bounded physics queries against the final
-   released Standard/Lean chain before publishing Trailblazer.
-
-The 3D Gravitas integration, navigation hardening, and separately approved
-scheduling/performance work are complete locally. Public release validation
-remains separate.
-The cross-stack rules apply throughout:
-
-1. Keep the benchmark backlog and issue tracker as intake buckets; promote new
-   measured risks into dated plans only when they are broader than a focused
-   patch.
-2. Resolve a cross-stack defect in the repository that owns the behavior.
-3. Validate downstream consumers with `UseLocalLsfStack=true` when coordinated
-   source changes are required.
-4. Release dependencies before their consumers, then restore package-based
-   validation at each layer.
-5. Run Trailblazer `Release`, `ReleaseLean`, coverage, replay, allocation, and
-   relevant benchmark gates against the released package chain.
-
-## Coordinated Release Gates
-
-Hardening, acquisition scheduling, LOS phase spreading, certified direct
-visibility, 3D Gravitas integration and bounded physics queries are complete
-locally and archived;
-release readiness is a separate cross-stack checkpoint. Do not infer these
-gates passed from exact local coverage, private-package consumers, or benchmark
-results.
-
-- [ ] After all active feature work is complete, run Windows/Linux CI in
-  Release and ReleaseLean against the exact intended release commit, including
-  both library targets and exact reachable coverage.
-- [ ] Run native ARM64 replay for the intended bounded-query dependency chain
-  and compare the exact payloads with the verified x64 lanes.
-- [ ] Release changed dependencies before their consumers, restore package-based
-  references and repeat the full test, replay, allocation, coverage and relevant
-  benchmark matrix against that final released chain. Select final upstream
-  version pins containing the coordinated changes; private fixture packages
-  bearing existing version numbers are not evidence for public packages.
-- [ ] Revalidate docs/examples and package artifacts against that same chain;
-  verify standard/Lean package dependencies and core-only isolation, retain
-  combined core/adapter coverage gates; build both API assemblies with DocFX.
-  Review remaining issue/benchmark dispositions before publishing Trailblazer.
-
-These gates were transferred from the hardening/scheduling and 3D integration closeouts;
-they remain pending, not waived. Do not release an intermediate checkpoint.

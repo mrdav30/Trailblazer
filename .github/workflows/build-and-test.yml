@@ -120,40 +120,14 @@ jobs:
           echo "Assembly Version: ${{ steps.gitversion.outputs.assemblySemFileVer }}"
           dotnet build Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-restore -p:GitVersion_FullSemVer=${{ steps.gitversion.outputs.fullSemVer }} -p:GitVersion_AssemblySemVer=${{ steps.gitversion.outputs.assemblySemVer }} -p:GitVersion_AssemblySemFileVer=${{ steps.gitversion.outputs.assemblySemFileVer }} -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true -m:1 -p:BuildInParallel=false' || '' }}
 
-      - name: Run Tests
-        if: matrix.os == 'windows-latest'
-        run: dotnet test Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal
-
       - name: Run Tests with coverage
-        if: matrix.os == 'ubuntu-latest'
+        shell: pwsh
         run: |
-          dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage/core
-          dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage/adapter
+          dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal --collect:"XPlat Code Coverage" --settings tests/Trailblazer.Tests/coverlet.runsettings --results-directory artifacts/coverage/core
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj --configuration ${{ matrix.configuration }} --no-build --no-restore -p:UseLocalLsfStack=${{ env.UseLocalLsfStack }} ${{ env.UseLocalLsfStack == 'true' && '-p:DisableTransitiveProjectReferences=true' || '' }} --verbosity normal --collect:"XPlat Code Coverage" --settings tests/Trailblazer.Gravitas.Tests/coverlet.runsettings --results-directory artifacts/coverage/adapter
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install ReportGenerator
-        if: matrix.os == 'ubuntu-latest'
-        run: dotnet tool install --global dotnet-reportgenerator-globaltool
-
-      - name: Add ReportGenerator to PATH
-        if: matrix.os == 'ubuntu-latest'
-        run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-
-      - name: Generate exact coverage summary
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          reportgenerator \
-            "-reports:artifacts/coverage/**/coverage.cobertura.xml" \
-            "-targetdir:artifacts/coverage-report" \
-            "-reporttypes:JsonSummary"
-
-      - name: Enforce exact coverage
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          jq -e '
-            ([.coverage.assemblies[].name] | sort) == ["Trailblazer", "Trailblazer.Gravitas"] and
-            (all(.coverage.assemblies[]; .coverage > 0)) and
-            .summary.coveredlines == .summary.coverablelines and
-            .summary.coveredbranches == .summary.totalbranches and
-            .summary.coveredmethods == .summary.totalmethods and
-            .summary.fullcoveredmethods == .summary.totalmethods
-          ' artifacts/coverage-report/Summary.json
+      - name: Enforce full coverage
+        shell: pwsh
+        run: ./.assets/scripts/assert-full-coverage.ps1 -CoverageDirectory artifacts/coverage

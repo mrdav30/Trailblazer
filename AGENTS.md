@@ -247,10 +247,19 @@ Build CI uses immutable sibling commits on `develop` pushes and PRs targeting
 dependencies. Keep the source pins aligned with the pinned Gravitas dependency
 graph, and verify the released packages before promoting to `main`.
 
-CI enforces exact reachable coverage in both package configurations. After a
-successful push to `main`, the coverage workflow checks out the exact tested
-commit, builds and validates the DocFX site, and deploys one Pages artifact with
-guides and API reference at the root and coverage under `/coverage/`.
+Require 100% reported line, branch and executable-method coverage for both
+`Trailblazer` and `Trailblazer.Gravitas` in `Release` and `ReleaseLean`. Run
+`.assets/scripts/assert-full-coverage.ps1` against fresh results containing both
+assembly-specific test runs. Every Windows/Linux build/test lane and the Pages
+workflow enforce this raw Cobertura gate. Complexity exceptions justify
+complexity only; they cannot waive a coverage gap. Add behavioral tests for
+reachable paths, or prove and remove unreachable runtime branches. Do not hide
+gaps through exclusions or partial-coverage exceptions.
+
+After a successful push to `main`, the coverage workflow checks out the exact
+tested commit, builds and validates the DocFX site, and deploys one Pages
+artifact with guides and API reference at the root and coverage under
+`/coverage/`.
 
 For focused work, filter the test project first:
 
@@ -270,11 +279,13 @@ Keep package mode the default; never infer release readiness from source builds.
 ## Test Design
 
 Use separate core and adapter coverage settings: the adapter's include filter is
-`[Trailblazer.Gravitas]*`. Reports must contain both assemblies, not merely show
-100% for whichever assembly was instrumented. During coordinated feature work
-use `UseLocalLsfStack=true` for source tests; unpublished private-feed consumers
-use the normal package graph, an isolated cache, and source mapping. Do not
-treat source-mode nuspecs or fixture versions as release artifacts.
+`[Trailblazer.Gravitas]*`. The raw gate requires both assemblies across the
+separate reports, meaningful method data for each, and no missed line or branch
+points in any report; overlapping runs cannot hide one another's gaps. During
+coordinated feature work use `UseLocalLsfStack=true` for source tests;
+unpublished private-feed consumers use the normal package graph, an isolated
+cache, and source mapping. Do not treat source-mode nuspecs or fixture versions
+as release artifacts.
 
 Use the existing context-first fixtures:
 

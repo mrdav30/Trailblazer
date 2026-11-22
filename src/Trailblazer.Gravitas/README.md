@@ -52,8 +52,10 @@ dotnet test tests/Trailblazer.Gravitas.Tests/Trailblazer.Gravitas.Tests.csproj -
 Repeat with `ReleaseLean` and a separate results directory. Restore again when
 switching families. The adapter runsettings instrument `Trailblazer.Gravitas`,
 not just core. Core tests use their own
-`tests/Trailblazer.Tests/coverlet.runsettings`. Both assemblies must retain
-exact reachable line, branch, and fully covered method coverage.
+`tests/Trailblazer.Tests/coverlet.runsettings`. Both assemblies must retain 100%
+reported line, branch, and executable-method coverage. Run the shared raw gate
+against fresh core and adapter results for one configuration; see
+[coverage validation](https://github.com/mrdav30/Trailblazer/blob/main/CONTRIBUTING.md#coverage-validation).
 
 Build creates `.nupkg` and `.snupkg` files; it does not publish them. Validate
 private packages with an isolated cache and explicit source mapping; never

@@ -39,17 +39,17 @@
 		</PackageReference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' != 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' == 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
 		<ProjectReference Include="..\..\..\Chronicler\src\Chronicler\Chronicler.csproj"
 		  AdditionalProperties="Configuration=$(Configuration);$(LocalLsfChroniclerProperties)" />
 		<!-- Suppress competing transitive package binaries at the executable host. -->
-		<PackageReference Include="FixedMathSharp" Version="7.1.0" Condition="'$(Configuration)' != 'ReleaseLean' And '$(DisableMemoryPack)' != 'true'" ExcludeAssets="compile;runtime" />
-		<PackageReference Include="FixedMathSharp.Lean" Version="7.1.0" Condition="'$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true'" ExcludeAssets="compile;runtime" />
+		<PackageReference Include="FixedMathSharp" Version="9.0.0" Condition="'$(Configuration)' != 'ReleaseLean' And '$(DisableMemoryPack)' != 'true'" ExcludeAssets="compile;runtime" />
+		<PackageReference Include="FixedMathSharp.Lean" Version="9.0.0" Condition="'$(Configuration)' == 'ReleaseLean' Or '$(DisableMemoryPack)' == 'true'" ExcludeAssets="compile;runtime" />
 		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp\FixedMathSharp.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
 		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.Chronicler\FixedMathSharp.Chronicler.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />
 		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.FluentAssertions\FixedMathSharp.FluentAssertions.csproj" AdditionalProperties="Configuration=$(Configuration);$(LocalLsfFixedMathSharpProperties)" />

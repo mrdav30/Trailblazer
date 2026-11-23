@@ -2,6 +2,20 @@
 
 ## Upcoming release
 
+### FixedMathSharp v9
+
+Use FixedMathSharp 9.0.0 and the matching Chronicler and FluentAssertions
+companions. Keep the entire dependency graph on either the standard family or
+its Lean counterparts; rebuild consumers and adapters together. Runtime targets
+remain `netstandard2.1` and `net10.0`.
+
+Trailblazer already rejects zero orientations at its public pose boundaries and
+retains its explicit schema-10 migration described below. FixedMathSharp v9's
+zero-quaternion validation does not add an identity fallback: pass
+`FixedQuaternion.Identity` for an unchanged orientation. Follow the
+[FixedMathSharp migration guide](https://github.com/mrdav30/FixedMathSharp/blob/v9.0.0/docs/MIGRATION.md#migrating-from-v8x-to-v9x)
+when updating direct math callers.
+
 ### Zero spatial rotations
 
 Use `FixedQuaternion.Identity` for an unchanged orientation. Omit the starting

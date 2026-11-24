@@ -16,6 +16,32 @@ zero-quaternion validation does not add an identity fallback: pass
 [FixedMathSharp migration guide](https://github.com/mrdav30/FixedMathSharp/blob/v9.0.0/docs/MIGRATION.md#migrating-from-v8x-to-v9x)
 when updating direct math callers.
 
+### SwiftCollections v9
+
+Use SwiftCollections 9.0.0 and its matching FixedMathSharp companion, or both
+Lean variants. Rebuild consumers and the Gravitas adapter against the resolved
+package family; local-source builds do not verify released-package references.
+
+The Gravitas adapter's bounded query policy also needs released Gravitas query
+contracts and their GridForge discovery dependency. Update that provider chain
+in GridForge, Gravitas, then Trailblazer order. The
+[released-chain recheck](feature-work/done/physicsQueryBudgetPlan.md#2026-11-24---released-package-dependency-chain-recheck)
+records the pre-existing package prerequisite; it is separate from the
+SwiftCollections v9 owner-format changes below.
+
+Hosts that persist SwiftCollections comparer-owning collections directly must
+upgrade JSON and Standard MemoryPack readers and writers together. The new owner
+format preserves comparison rules and rejects old state-only owner records.
+Custom comparers require registered codecs and reconstruction factories; raw
+state constructors are not compatibility readers. This dependency update does
+not introduce a Navigator-record schema change.
+
+For direct spatial-index consumers, BVH insertion now updates existing keys and
+returns `false`, returns `true` for new keys, and rejects null keys before
+mutation. See the
+[SwiftCollections v9 migration guide](https://github.com/mrdav30/SwiftCollections/blob/v9.0.0/docs/MIGRATION.md#migrating-from-v8-to-v9)
+for affected collection types and persistence contracts.
+
 ### Zero spatial rotations
 
 Use `FixedQuaternion.Identity` for an unchanged orientation. Omit the starting

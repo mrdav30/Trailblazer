@@ -81,8 +81,8 @@
 		<PackageReference Include="MemoryPack" Version="1.21.4" />
 		<PackageReference Include="FixedMathSharp" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 		<PackageReference Include="FixedMathSharp.Chronicler" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
-		<PackageReference Include="SwiftCollections" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
-		<PackageReference Include="SwiftCollections.FixedMathSharp" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="SwiftCollections" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="SwiftCollections.FixedMathSharp" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 		<PackageReference Include="GridForge" Version="10.1.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 		<PackageReference Include="Chronicler.Core" Version="1.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
@@ -90,8 +90,8 @@
 	<ItemGroup Condition="'$(DisableMemoryPack)' == 'true'">
 		<PackageReference Include="FixedMathSharp.Lean" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 		<PackageReference Include="FixedMathSharp.Chronicler.Lean" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
-		<PackageReference Include="SwiftCollections.Lean" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
-		<PackageReference Include="SwiftCollections.FixedMathSharp.Lean" Version="8.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="SwiftCollections.Lean" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+		<PackageReference Include="SwiftCollections.FixedMathSharp.Lean" Version="9.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 		<PackageReference Include="GridForge.Lean" Version="10.1.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 		<PackageReference Include="Chronicler.Core.Lean" Version="1.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 		<PackageReference Include="Chronicler.MemoryPackShim" Version="1.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />

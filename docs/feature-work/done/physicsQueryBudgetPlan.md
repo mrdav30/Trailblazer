@@ -1,8 +1,8 @@
 # Bounded Physics Queries in 2D and 3D
 
 Completed in coordinated source on 2026-11-17. All four phase checklists are
-complete. Final committed-consumer CI, native ARM64 replay and released-package
-validation remain in the [coordinated release gates](../feature-work-overview.md#coordinated-release-gates).
+complete. The [published dependency recheck](#2026-11-24---released-package-dependency-chain-recheck)
+records the separate public-package prerequisites.
 
 Phase 0 defines the shared contract and released-package baselines. Phase 1
 proves the first bounded support paths in Gravitas. Phase 2 extends those
@@ -109,8 +109,9 @@ rather than silently skipping blockers. Wider query coverage needs a scope revie
   Trailblazer core must not acquire a Gravitas dependency.
 - Build both library targets; verify Release and ReleaseLean without mixing
   package families. Preserve exact reachable coverage for introduced paths.
-- Use coordinated source validation for unreleased dependencies, then the
-  [released-chain gates](../feature-work-overview.md#coordinated-release-gates).
+- Use coordinated source validation for unreleased dependencies. Keep public
+  package availability separate, as recorded in the
+  [released-chain recheck](#2026-11-24---released-package-dependency-chain-recheck).
 - No staging, commits, upstream edits or releases without the applicable user
   authorization. This plan is not execution or publication approval.
 
@@ -527,6 +528,91 @@ bounds; source builds do not prove package readiness.
    Review versioning when the budget API is settled.
 
 ## Execution record
+
+### 2026-11-24 - Released-package dependency-chain recheck
+
+The SwiftCollections v9 dependency migration rechecked the existing pending
+released-chain requirement. This is a package-availability result, not a
+reopening of the completed source implementation or evidence of a new
+SwiftCollections runtime defect.
+
+The consumer revisions were GridForge
+`4b2bc64e503a1bd3c8cdf7e81b4e565cfa9651e8`, Gravitas
+`af7a9eb1468e6fc2dc6c2714871a6e6649a92b0b`, and Trailblazer
+`3ac67b18a8351a55b178cdc600dcba0ee250f0f4`. The dependency edit updates
+SwiftCollections and its FixedMathSharp companion from `8.0.0` to `9.0.0` in
+both package families; SwiftCollections develop and tag `v9.0.0` resolve to
+`7c2fa696f10d88194f5a895aaafd7debd8e27574` at this check. It changes no
+consumer runtime source or serialized schema.
+
+Run these commands from the corresponding repository root, using the indicated
+consumer revision for the unchanged control and the dependency migration for
+the comparison:
+
+```bash
+dotnet build src/Gravitas/Gravitas.csproj -c Release -f net10.0 -p:UseLocalLsfStack=false -p:DisableTransitiveProjectReferences=false -p:GeneratePackageOnBuild=false -m:1
+dotnet build src/Trailblazer.Gravitas/Trailblazer.Gravitas.csproj -c Release -f net10.0 -p:UseLocalLsfStack=false -p:DisableTransitiveProjectReferences=false -p:GeneratePackageOnBuild=false -m:1
+```
+
+**Expected:** Released dependencies supply the bounded voxel-discovery and
+physics-query contracts required by these already implemented consumers.
+**Observed:**
+
+- Gravitas fails with CS0246 for `GridBoundedVoxelStatus` against its declared
+  GridForge `10.0.0`. A separate check against `10.1.0` confirms that it also
+  lacks the contract introduced by GridForge commit
+  `72740cc7420d59cf948bfb76d8a69e74b5066f0f`.
+- The Trailblazer Gravitas adapter fails against Gravitas `2.0.1`; its missing
+  contracts are `PhysicsQueryScratch`, `PhysicsQueryBudget`,
+  `PhysicsQueryWork`, and `PhysicsQueryExecutionStatus`. The focused command
+  above reports 26 CS0246 errors.
+- Both failures also occur in unaltered archives of the original consumer
+  revisions with their SwiftCollections `8.0.0` references. They are confirmed
+  pre-existing released-provider gaps, not failures introduced by the
+  SwiftCollections v9 dependency edit. Local-source validation cannot turn
+  these package builds into passing released-chain results.
+
+Both `Release` and `ReleaseLean` solution builds reproduce those missing
+provider contracts with SwiftCollections `9.0.0`. Tests and coverage cannot run
+for these failed package lanes. GridForge itself passes both package families
+against the released SwiftCollections v9 packages: 1,209 tests per configuration
+and 100% reported lines, branches and executable methods.
+
+Coordinated source validation passes both runtime targets (`netstandard2.1`
+and `net10.0`) and the maintained `net10.0` suites:
+
+| Assembly | Release tests | ReleaseLean tests | Reported coverage in both configurations |
+| --- | ---: | ---: | --- |
+| GridForge | 1,209 | 1,209 | 100% lines, branches and executable methods |
+| Gravitas | 8,572 | 8,495 | 100% lines, branches and executable methods |
+| Trailblazer | 3,788 | 3,674 | 100% lines, branches and executable methods |
+| Trailblazer.Gravitas | 150 | 139 | 100% lines, branches and executable methods |
+
+These runs use the consumer revisions above with the dependency/documentation
+patch, SwiftCollections `7c2fa696f10d88194f5a895aaafd7debd8e27574`,
+FixedMathSharp `8fdf889322f1bb82501c2afec63d6bb2f304ace2`, and Chronicler
+`0281469ecc40e65a05867f473bc10f030e7f69f8`. Build each solution with
+`-p:UseLocalLsfStack=true -p:DisableTransitiveProjectReferences=true -m:1`,
+then collect each test project's coverage using its existing runsettings and
+run that repository's unchanged `assert-full-coverage.ps1` gate. Source/package
+caches and fresh configuration-specific results remain separate. No runtime
+source, coverage exclusions, reviewed replay expectations or CI policy changed.
+
+The Gravitas replay comparator also passes the explicit local Windows x64
+Release/ReleaseLean subset: all eight fixtures agree with shared expectations
+and directly across the two lanes. This does not establish the full native
+Windows/Linux x64/ARM64 CI matrix. The `netstandard2.1` assets were built, not
+executed through separate test hosts in this recheck.
+
+**Disposition / next action:** Keep the source phases complete and the existing
+released-chain verification pending. Release the GridForge provider containing
+bounded voxel discovery, then update and release Gravitas against that package,
+then update the Trailblazer adapter to the released Gravitas provider containing
+the bounded query contracts. Choose actual published versions when those
+releases exist; no future minimum is inferred here. Re-run Standard and Lean
+package-mode builds, tests, coverage and adapter continuation checks against the
+resulting chain. Do not substitute local-source builds or weaken assertions to
+claim package completion.
 
 ### Phase 3 - Bounded posture and final hardening
 

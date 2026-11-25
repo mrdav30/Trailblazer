@@ -31,6 +31,15 @@ instead of burying it in notes.
 
 ## Recently Completed
 
+- [SwiftCollections v9 Adoption Evaluation](done/swiftCollectionsV9AdoptionPlan.md)
+  - Closed with retain decisions for heightmap scanning and movement-group
+    SlotMap storage; TicketStore has no demonstrated issuer/consumer. The
+    archived plan preserves the source audit, profiling, isolated dense pilot,
+    focused verification and workload-specific reopening criteria.
+  - No runtime adoption was retained. The full runtime-adoption matrix was not
+    run, and archival does not claim it passed. Separate pre-existing allocation
+    follow-ups remain open in the benchmark backlog.
+
 - [Bounded Physics Queries — 2D And 3D](done/physicsQueryBudgetPlan.md)
   - All four phases are complete in the coordinated source stack. Native support
     and posture clearance use caller-owned work limits and fixed scratch in both
@@ -194,13 +203,6 @@ instead of burying it in notes.
   - Superseded by explicit transition definitions, rules, and overlay publication.
 
 ## Deferred / Evidence-Gated
-
-- [SwiftCollections v9 Adoption](swiftCollectionsV9AdoptionPlan.md)
-  - Source-audited plan for evidence-gated heightmap candidate pruning and
-    optional dense movement-group members. Preserve exact sampling, identity,
-    ordering and lifecycle; retain existing owners when full-frame measurements
-    do not justify adoption. TicketStore has no demonstrated external issuer.
-    Implementation and measurements have not started.
 
 The unmet **2 ms** Flow/500 navigation allowance is a deferred stretch target,
 not an active optimization assignment. The accepted closeout preserves the

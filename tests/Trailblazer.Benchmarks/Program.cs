@@ -20,6 +20,16 @@ internal static class Program
 
         string command = args[0];
 
+        if (string.Equals(command, "group-capture", StringComparison.OrdinalIgnoreCase)
+            && args.Length >= 2 && args.Length <= 3)
+            return NavigationMovementGroupFrameBenchmarks.RunCapture(int.Parse(args[1]),
+                args.Length == 3 ? args[2] : null);
+
+        if (string.Equals(command, "heightmap-capture", StringComparison.OrdinalIgnoreCase)
+            && args.Length >= 2 && args.Length <= 3)
+            return NavigationHeightmapFrameBenchmarks.RunCapture(int.Parse(args[1]),
+                args.Length == 3 && args[2] == "profile");
+
         if (string.Equals(command, "recovery-readiness-smoke", StringComparison.OrdinalIgnoreCase)
             && args.Length == 1)
             return NavigationRecoveryScenario.RunReadinessRegression();

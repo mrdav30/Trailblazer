@@ -7,7 +7,7 @@ using Trailblazer.Pathing;
 namespace Trailblazer.Benchmarks;
 
 /// <summary>A headless Navigator with horizontal ground support and no collision solver.</summary>
-internal sealed class BenchmarkNavigator : Navigator
+internal class BenchmarkNavigator : Navigator
 {
     private readonly TrailblazerWorldContext _worldContext;
     private readonly Vector3d _initialRoot;

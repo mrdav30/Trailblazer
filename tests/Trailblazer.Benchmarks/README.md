@@ -34,6 +34,8 @@ joining the remaining words with hyphens. Useful selections include:
 | `navigation-cold-guide`            | `NavigationColdGuideBenchmarks`                                                            |
 | `navigation-cold-frame`            | `NavigationColdFrameBenchmarks`                                                            |
 | `navigation-guided-frame`          | `NavigationGuidedFrameBenchmarks`                                                          |
+| `navigation-heightmap-frame`       | `NavigationHeightmapFrameBenchmarks`                                                       |
+| `navigation-movement-group-frame`  | `NavigationMovementGroupFrameBenchmarks`                                                   |
 | `navigation-planar-frame`          | `NavigationPlanarFrameBenchmarks`                                                          |
 | `navigation-recovery`              | `NavigationRecoveryBenchmarks`                                                             |
 | `navigation-scheduled-frame`       | `NavigationScheduledFrameBenchmarks`                                                       |
@@ -76,6 +78,103 @@ dotnet tests/Trailblazer.Benchmarks/bin/Release/net10.0/Trailblazer.Benchmarks.d
 
 Compare timings and allocation per pair within each row. Divide the time by
 the row's frame count for a containing-frame mean.
+
+### Heightmap baseline frames
+
+`navigation-heightmap-frame` measures 100/500 input-driven grounded Navigators
+on a published 100x100 rectangular map at 32 Hz. Each operation has 32 untimed
+preparation frames and 64 individually timed complete frames: context simulation,
+input, controller simulation, grounding, commit and late simulation. It reuses
+the existing headless host support and opts into the protected heightmap path;
+there is no guidance, collision solver, root-height correction or rendering.
+
+The 11 workloads cover disabled/empty controls, preferred hits with 1/16/64
+layers, absent XZ coverage with 16/64 layers, natural unit-stripe crossings,
+alternating-name registration churn every 16 frames, 64 overlapping eligible
+layers, and 64 Y-ineligible layers. Compressed samples equal the authored map
+floor. Starting X offsets stagger crossings; the host never clears active-layer
+names to force fallback. Untimed checks independently verify selected layers,
+motion, committed cells, actual occupancy tickets, old-cell removal, replay and
+teardown. Projection behavior remains covered by the existing runtime tests.
+
+For bounded baseline profiling, build the source stack with the normal global
+properties, copy the output files to a frozen directory, and invoke the existing
+benchmark executable directly:
+
+```powershell
+dotnet build tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net10.0 -p:UseLocalLsfStack=true -p:DisableTransitiveProjectReferences=true -m:1 -p:BuildInParallel=false
+dotnet <frozen-host>/Trailblazer.Benchmarks.dll heightmap-capture 1
+dotnet <frozen-host>/Trailblazer.Benchmarks.dll heightmap-capture 2
+dotnet <frozen-host>/Trailblazer.Benchmarks.dll heightmap-capture 3
+dotnet <frozen-host>/Trailblazer.Benchmarks.dll heightmap-capture 4 profile
+```
+
+The capture runs at Below Normal priority without changing affinity, power plan
+or runtime tiering. Each of 22 cases has a replay preflight, at least four warmup
+blocks spanning at least 300 ms, and four exported blocks. Even launch numbers
+reverse workload order. Require exit zero, all **88 sample records / 5,632 timed
+frames per launch**, matching replay hashes, and complete 64-element arrays.
+`HEIGHTMAP_RUNTIME` identifies loaded assemblies; preserve their hashes alongside
+the runtime configuration and dependency manifest. These direct captures do not
+run BenchmarkDotNet children and must not be reported as BDN iterations.
+
+`HEIGHTMAP_FRAME_SAMPLES` includes frame timing/allocation/GC observations,
+preferred/fallback counts, registration and first-frame-after-reset episodes,
+and deterministic hashes. The separate `profile` pass adds inclusive per-call
+grounding timers; it is attribution evidence, not the uninstrumented baseline
+and not exclusive scan time. Churn includes registration allocation in the
+containing frame. Ordinary captures preserve all frames, including GC/outliers.
+
+### Movement-group storage frames
+
+`navigation-movement-group-frame` drives actual guided requests on the same
+100x100 map and 32 Hz host lifecycle. It measures 100/500 controllers, with
+four untimed preparation frames and 16 individually timed complete frames per
+block. The seven cases are Ungrouped, Small8, Large, Sparse8x16,
+SparseLargex4, Churn8 and ChurnLarge. Large groups contain the whole population.
+Sparse cases admit padding before real members, then remove it to leave prefix
+holes at 16x/4x high-water marks. Churn removes and reissues one non-tail member
+per group on every frame, including the request/reacquisition work in the timer.
+
+Requests use FlowField toward (70,-0.5,50), Slow speed, phased 16-frame path
+rechecks and zero local group-force radius; the production coordinator still
+updates formation state on every heading. Compare storage arms within the same
+case. Sparse admission also establishes formation-offset history, so comparing
+different cases is not a pure scan-cost attribution. The scene has no collision
+solver or planar embedding; it is not a whole-game or all-dimensional claim.
+
+The existing launcher supports bounded direct captures:
+
+```text
+dotnet <baseline-host>/Trailblazer.Benchmarks.dll group-capture 5
+dotnet <candidate-host>/Trailblazer.Benchmarks.dll group-capture 6
+dotnet <candidate-host>/Trailblazer.Benchmarks.dll group-capture 7
+dotnet <baseline-host>/Trailblazer.Benchmarks.dll group-capture 8
+```
+
+The candidate host is an identical copy with only the intended core DLL replaced.
+The isolated prototype and source/build identities are described in the
+[adoption plan](../../docs/feature-work/done/swiftCollectionsV9AdoptionPlan.md#phase-2--decide-dense-members-without-forcing-stores).
+Omit the prototype when measuring the retained runtime. An optional final case
+name, such as `Small8`, selects that smoke subset; it is not a full capture.
+
+Each process runs a production saturated-order preflight, then per-case replay,
+at least three warmup blocks spanning at least 750 ms, and three exported blocks.
+Even launch numbers reverse case order. Require zero exit and all **42 records /
+672 timed frames per full launch**, complete 16-element arrays and equal frame
+hashes across repeats and arms. Timings include context simulation, group churn,
+controller simulation/heading, commit and late simulation. The capture runs at
+Below Normal priority without changing affinity, tiering or power plan.
+
+`MOVEMENT_GROUP_SAMPLES` includes full-frame timing, allocation, GC masks,
+destinations/motion/committed-cell hashes, admission cost and array-element-byte
+snapshots. Untimed checks require actual occupancy tickets, correct fresh group
+membership and motion from every controller during the block. A saturated
+fixed-point sum after non-tail removal must retain center zero with three members.
+Session allocation size is measured once before warmup and kept alive, not
+repeated between timed blocks. Array-element bytes exclude array headers and
+other objects; they are not a total retained-heap measurement. These direct
+captures do not launch BenchmarkDotNet children.
 
 ## Accepting a capture
 

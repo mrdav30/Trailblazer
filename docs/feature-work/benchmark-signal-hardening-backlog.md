@@ -16,7 +16,7 @@ this backlog.
 ## Intake Rules
 
 - Signal IDs use `TRB-Benchmark-NNN`. The next available ID is
-  `TRB-Benchmark-007`.
+  `TRB-Benchmark-009`.
 - Assign an ID at intake and never reuse it, including after a signal closes or
   moves into a dated plan. Check this file's Git history before advancing or
   repairing the counter.
@@ -62,7 +62,71 @@ dotnet test Trailblazer.slnx --configuration ReleaseLean -p:UseLocalLsfStack=tru
 
 ## Active Signals
 
-None. The completed investigations and their evidence remain below.
+### TRB-Benchmark-008 - Movement-group updates allocate membership records
+
+- **Discovered:** 2026-11-25 during the
+  [dense-member adoption pilot](done/swiftCollectionsV9AdoptionPlan.md#phase-2-result--retain-slotmap-2026-11-25).
+- **Status:** Open; pre-existing allocation signal, no runtime fix. The pilot
+  retains SlotMap. Source revisions, host, frozen DLLs, inputs and observed frame
+  timings are preserved in the owning adoption plan.
+- **Reproduction:** Build the Release/net10.0 source-mode benchmark with
+  `UseLocalLsfStack=true`, `DisableTransitiveProjectReferences=true`, `-m:1` and
+  `BuildInParallel=false`. Freeze the output, then run
+  `dotnet <host>/Trailblazer.Benchmarks.dll group-capture 5` and `group-capture 8`.
+  Each full process must have 42 records / 672 timed frames and matching replay
+  hashes. The Small8, Large and sparse rows allocate **5,600 bytes per frame at
+  100 controllers** and **28,000 at 500** in all 96 baseline observations per
+  case/population. Ungrouped controls allocate zero.
+- **Owner:** `MovementGroupCoordinatorState.UpdateMembership` constructs a new
+  `MovementGroupMembership` reference object on every owner update, including
+  unchanged membership. The observed regular allocation is **56 bytes per
+  controller update**. The isolated dense prototype retains that same operation
+  and regular allocation; replacing member storage does not resolve it. Churn
+  adds member/request work and is not the steady-state allocation control.
+- **Next action:** Investigate updating the existing context-owned membership
+  record when present, allocating only for a genuinely new owner. Preserve
+  owner/group/destination/freshness changes, removal/reset and planar isolation;
+  verify source behavior and full-frame allocation before retaining a change.
+  Keep this focused owner fix separate from dense storage adoption. No fixture
+  expectation, collection contract or warm-allocation gate is relaxed here.
+
+### TRB-Benchmark-007 - Heightmap fallback allocation depends on executed codegen
+
+- **Discovered:** 2026-11-25 during the
+  [SwiftCollections adoption baseline](done/swiftCollectionsV9AdoptionPlan.md#phase-0-result--retain-scanning-2026-11-25).
+- **Status:** Open; measured pre-existing allocation signal, no runtime fix or
+  index adoption. Trailblazer base `47cdd5692c551f7ae06802309ebc56847e6fdf0e`;
+  provider revisions, host identities and full-frame observations are retained
+  in that plan. Windows x64/.NET 10.0.10, normal tiering/PGO.
+- **Evidence:** Run the frozen Release source-mode benchmark host with
+  `heightmap-capture 1`, `2`, `3`, then `4 profile`, as documented in the plan.
+  At 500 controllers the Missing64 row had 128,000 fallback calls per process.
+  One plain process allocated 6,162,432 bytes: 6,144,000 from a 48-byte-per-fallback
+  increment plus 18,432 also observed in Disabled/Preferred64 controls. The other
+  two plain processes and attribution pass each recorded 18,432 bytes for that
+  row. No allocation saving or universal warmed zero is established.
+- **Independent control:** A disposable net10.0 Release console referenced the
+  frozen DLLs directly. Create one owned context; register two flat 2x2 surfaces
+  with interval 1, compression `(0,1)` and Y selection `[-1,1)`, named `on` at
+  `Vector3d.Zero` and `off` at `(1000,0,1000)`. A `NoInlining` counting loop calls
+  `context.Heightmaps.TrySampleGround(position, preferred, out _)`. For each of
+  three rounds per case, warm 20,000 calls, wait 200 ms for tiering, then measure
+  100,000 calls with `GC.GetAllocatedBytesForCurrentThread`. Query `(10,0,10)`
+  without a preference: false/zero hits and **4,800,000 bytes** in all three
+  rounds. Query origin preferring `on`: 100,000 hits and **zero bytes** in all
+  three rounds. Loaded Trailblazer and SwiftCollections DLL hashes matched the
+  plan; no runtime source was modified for the probe.
+- **Owner/candidate cause:** `TrailblazerHeightmapService.TrySampleGround`
+  enumerates `State.LayersByName.Values`, typed as `ICollection<T>`.
+  SwiftCollections' interface path boxes a value-type enumerator. This is a
+  concrete source candidate consistent with 48 bytes, not a verified JIT or
+  runtime defect; the codegen-dependent disappearance has not been attributed.
+- **Next isolation:** Compare concrete dictionary-entry enumeration at the
+  existing service owner, preserving hash-slot/winner order, preferred behavior,
+  public sample values and lifetime. Require runtime behavior tests, warm
+  allocation checks under ordinary tiering and containing-frame measurements
+  before retaining a fix. Do not add an index or change the provider's public
+  collection API to resolve a consumer enumeration choice.
 
 ## Closed Signals
 

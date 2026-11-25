@@ -195,6 +195,13 @@ instead of burying it in notes.
 
 ## Deferred / Evidence-Gated
 
+- [SwiftCollections v9 Adoption](swiftCollectionsV9AdoptionPlan.md)
+  - Source-audited plan for evidence-gated heightmap candidate pruning and
+    optional dense movement-group members. Preserve exact sampling, identity,
+    ordering and lifecycle; retain existing owners when full-frame measurements
+    do not justify adoption. TicketStore has no demonstrated external issuer.
+    Implementation and measurements have not started.
+
 The unmet **2 ms** Flow/500 navigation allowance is a deferred stretch target,
 not an active optimization assignment. The accepted closeout preserves the
 existing benchmark and its limits; reopen only with the evidence described in

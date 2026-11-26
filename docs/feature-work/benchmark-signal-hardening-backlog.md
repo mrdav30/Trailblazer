@@ -16,7 +16,7 @@ this backlog.
 ## Intake Rules
 
 - Signal IDs use `TRB-Benchmark-NNN`. The next available ID is
-  `TRB-Benchmark-009`.
+  `TRB-Benchmark-010`.
 - Assign an ID at intake and never reuse it, including after a signal closes or
   moves into a dated plan. Check this file's Git history before advancing or
   repairing the counter.
@@ -3357,9 +3357,69 @@ diagnostics, not causal improvements, regressions or steady-state latency gates.
 
 ## Experimental Signals
 
-| Signal | Status | Revisit When |
-| ------ | ------ | ------------ |
-| n/a    | n/a    | n/a          |
+### TRB-Benchmark-009 - Large sparse movement groups warrant scan attribution
+
+- **Discovered:** 2026-11-25 in the
+  [dense-member pilot](done/swiftCollectionsV9AdoptionPlan.md#phase-2-result--retain-slotmap-2026-11-25);
+  follow-up options recorded 2026-11-26 after consultation with the
+  [SwiftCollections feature owner](codex://threads/01a1ecc9-e5c4-7062-be1d-731b88753800).
+- **Status:** Experimental; measured workload signal with untested follow-up
+  hypotheses. Retain `SwiftSlotMap<MovementGroupMember>` and keep the adoption
+  plan closed. No provider defect, new API requirement or accepted memory
+  tradeoff is established. This entry records a conditional investigation,
+  not assigned runtime work.
+- **Evidence/reproduction:** Use the archived plan's frozen Release/net10.0
+  source-mode hosts and exact inputs: baseline `group-capture 5`, candidate
+  `group-capture 6`, candidate `group-capture 7`, baseline `group-capture 8`.
+  All 2,688 timed frames had matching per-case replay hashes. At 500 controllers,
+  SparseLargex4 balanced mean frame cost was **20.652 ms SlotMap / 15.265 ms
+  dense** (-26.08%), but the ungrouped control also shifted **7.826 / 7.264 ms**
+  (-7.18%) despite doing no member scanning. At 100 controllers Sparse8x16 was
+  adverse (**1.322 / 1.603 ms**, +21.31%). These are full-frame observations,
+  not exclusive enumeration costs or proof of a general dense-storage benefit.
+  The pilot added **75% backing-array element storage**, grew sessions from
+  **48 to 64 allocated bytes**, and increased 500 SparseLargex4 population/
+  admission median from **44.654 to 132.354 ms**. The plan retains source/DLL
+  identities, complete rows, allocation exceptions and measurement limits.
+- **First isolation / owner:** Attribute the existing Trailblazer reductions
+  and SwiftCollections `SwiftSlotMap` enumeration in a representative sparse
+  workload before changing storage. The provider enumerator currently checks
+  slots through `_peakCount`; the existing frame measurements do not establish
+  its exclusive cost. Include ungrouped, ordinary small/large, sparse and churn
+  controls. Attribute separately from acceptance timing. Investigate provider
+  hole skipping only if scanning is material, preserving stable indices, exact
+  ascending live-slot order, free-slot reuse, mutation checks and common-case
+  cost. No provider runtime change is selected here.
+- **Conditional consumer experiments:** If an intended large sparse workload
+  meets the archived reopening criteria, compare the prior dense pilot with
+  an incremental `SwiftSortedList<MovementGroupMember>` ordered view instead
+  of rebuilding/sorting the whole view after structural changes. Existing v9
+  `Add`, `Remove` and `AsReadOnlySpan` suffice to test the hypothesis. Keep order
+  keys immutable while indexed, remove before index reuse, reserve before
+  publication and retain one membership authority. Charge shifts, storage and
+  failure handling. This does not solve order divergence when ticket generations
+  retire. Separately inspect the duplicated session index (`GroupIndex` and
+  `GroupTicket.Index`); measure actual allocation size and lookup cost before
+  claiming any layout saving.
+- **Separate cold-storage experiment:** Existing construction from the map's
+  current `State` can rebuild compact dense arrays while preserving ticket
+  generations and free-slot order. Test only at a boundary owned by one logical
+  group, with its stable identity token and no escaping old map references,
+  borrows or enumerators. Fully construct before replacement; never rewind an
+  abandoned snapshot. State extraction/reconstruction allocates, copies and
+  scans issued-slot history; account for transient old/new storage and regrowth.
+  Dense-only compaction leaves the ordered view and larger sessions. This is
+  an unmeasured consumer option, not a promised cheap/in-place trim operation.
+  Consider a provider trim API only if a successful consumer experiment shows
+  reconstruction cost is the remaining material obstacle.
+- **Revisit/acceptance:** Require a justified workload and explicit memory,
+  admission and churn budgets; repeatable containing-frame gains beyond the
+  unchanged-control shift; exact replay/order/issuer behavior; and all archived
+  runtime-adoption gates. Test each change separately for attribution, including
+  retained heap, transient peaks and warm allocation. Prefer the existing
+  focused allocation follow-ups [#008](#trb-benchmark-008---movement-group-updates-allocate-membership-records)
+  and [#007](#trb-benchmark-007---heightmap-fallback-allocation-depends-on-executed-codegen)
+  first. No new timings, implementation or validation runs accompany this intake.
 
 ## Watch Items
 
